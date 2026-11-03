@@ -28,7 +28,7 @@ function load() {
   if (fs.existsSync(legacy)) ({ token, admins, url } = parseSettingsText(fs.readFileSync(legacy, "utf8")));
   if (process.env.TOKEN) token = process.env.TOKEN;
   if (process.env.ADMIN) admins = (toLatinDigits(process.env.ADMIN).match(/\d+/g) ?? []).map(Number);
-  if (process.env.STORE_URL) url = process.env.STORE_URL;
+  if (process.env.STORE_URL) url = process.env.STORE_URL.startsWith("https://") ? process.env.STORE_URL : "";
   return { token, admins, url };
 }
 

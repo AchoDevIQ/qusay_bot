@@ -101,11 +101,11 @@ function Reg({ D }: { D: Data }) {
             <Seg options={CURR_OPTS} value={curr} onPick={(v) => { setCurr(v); clearErr("curr"); }} />
             <Err id="curr" errs={errs} />
 
+            <label>إنت هذه السنة طالب بالمدرسة بأي صف؟</label>
             {gradeLocked ? (
               <div className="lock">🎓 صفك بالمدرسة: <b>{D.x!.gr}</b> 🔒<small>لتغييره تواصل ويا قصي العميري.</small></div>
             ) : (
               <>
-                <label>إنت هذه السنة طالب بالمدرسة بأي صف؟</label>
                 <div className="hint">اختار صفك الحقيقي بالمدرسة، حتى لو تدرس ويانا مادة السادس.</div>
                 <Seg options={GRADE_OPTS} value={grade} onPick={(v) => { setGrade(v); clearErr("grade"); }} />
                 <Err id="grade" errs={errs} />

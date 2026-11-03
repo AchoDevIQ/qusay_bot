@@ -51,3 +51,10 @@ npm run set-webhook -- https://your-domain.com
 ```bash
 npm test
 ```
+
+`tests/parity.test.ts` يقارن البوت ببوت بايثون القديم: كل سيناريو بـ `tests/parity/phase*.json` لازم يطلع نفس رسائل تليجرام، ونفس صفوف قاعدة البيانات، ونفس ملفات HTML المسجلة بـ `tests/parity/golden/`.
+بعد إضافة سيناريو جديد، سجله من البوت القديم (يحتاج Python):
+
+```bash
+python tests/parity/record.py
+```
