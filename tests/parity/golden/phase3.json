@@ -1,0 +1,7189 @@
+{
+"فتح السؤال: غير مفعل، مغلق، فصول ومواضيع ومحاضرات": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة النجاح للبنات (المنصور)\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⚠️ قسم الأسئلة العلمية غير مفعّل حالياً.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"text": "✅ تم ربط هاي المجموعة بالأسئلة العلمية. كل سؤال جديد راح ينفتحله موضوع هنا."
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ مجموعة الأسئلة مربوطة.\n\n<b>طريقة الربط:</b>\n1) سوّي مجموعة تليجرام جديدة (مثلاً: أسئلة الطلاب).\n2) من إعدادات المجموعة فعّل <b>Topics</b> (المواضيع).\n3) ضيف البوت للمجموعة وخليه <b>Admin</b> ويه صلاحية <b>Manage Topics</b>.\n4) داخل المجموعة اكتب: <code>/setgroup</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "الفصل الأول: الأعداد المركبة",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "الفصل الثاني: القطوع المخروطية",
+"callback_data": "qc:2"
+}
+],
+[
+{
+"text": "الفصل الثالث: تطبيقات التفاضل",
+"callback_data": "qc:3"
+}
+],
+[
+{
+"text": "الفصل الرابع: التكامل",
+"callback_data": "qc:4"
+}
+],
+[
+{
+"text": "الفصل الخامس: المعادلات التفاضلية",
+"callback_data": "qc:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ اختر الموضوع:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "ما قبل إيجاد x و y",
+"callback_data": "qt:1"
+}
+],
+[
+{
+"text": "الجذور التربيعية",
+"callback_data": "qt:2"
+}
+],
+[
+{
+"text": "المعادلة التربيعية",
+"callback_data": "qt:3"
+}
+],
+[
+{
+"text": "إيجاد قيم x و y",
+"callback_data": "qt:4"
+}
+],
+[
+{
+"text": "الأوميگا ω",
+"callback_data": "qt:5"
+}
+],
+[
+{
+"text": "الصيغة القطبية وديموافر",
+"callback_data": "qt:6"
+}
+],
+[
+{
+"text": "أشكال آرگاند",
+"callback_data": "qt:7"
+}
+],
+[
+{
+"text": "⬅️ رجوع للفصول",
+"callback_data": "qb:ch"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "الفصل الأول: الأعداد المركبة",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "الفصل الثاني: القطوع المخروطية",
+"callback_data": "qc:2"
+}
+],
+[
+{
+"text": "الفصل الثالث: تطبيقات التفاضل",
+"callback_data": "qc:3"
+}
+],
+[
+{
+"text": "الفصل الرابع: التكامل",
+"callback_data": "qc:4"
+}
+],
+[
+{
+"text": "الفصل الخامس: المعادلات التفاضلية",
+"callback_data": "qc:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "الموضوع غير موجود"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ <b>ما قبل إيجاد x و y</b>\nاختر المحاضرة:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "المحاضرة 1",
+"callback_data": "ql:1:1"
+},
+{
+"text": "المحاضرة 2",
+"callback_data": "ql:1:2"
+}
+],
+[
+{
+"text": "المحاضرة 3",
+"callback_data": "ql:1:3"
+},
+{
+"text": "المحاضرة 4",
+"callback_data": "ql:1:4"
+}
+],
+[
+{
+"text": "المحاضرة 5",
+"callback_data": "ql:1:5"
+},
+{
+"text": "المحاضرة 6",
+"callback_data": "ql:1:6"
+}
+],
+[
+{
+"text": "المحاضرة 7",
+"callback_data": "ql:1:7"
+},
+{
+"text": "المحاضرة 8",
+"callback_data": "ql:1:8"
+}
+],
+[
+{
+"text": "⬅️ رجوع للمواضيع",
+"callback_data": "qc:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "اختر من الأزرار"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "اختر من الأزرار"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "اختر من الأزرار"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ <b>ما قبل إيجاد x و y — المحاضرة 2</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "Chapter 1: Complex Numbers",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "Chapter 2: Conic Sections",
+"callback_data": "qc:2"
+}
+],
+[
+{
+"text": "Chapter 3: Applications of Differentiation",
+"callback_data": "qc:3"
+}
+],
+[
+{
+"text": "Chapter 4: Integration",
+"callback_data": "qc:4"
+}
+],
+[
+{
+"text": "Chapter 5: Differential Equations",
+"callback_data": "qc:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 3,
+"message_id": 50,
+"text": "❓ اختر الموضوع:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "Parabola",
+"callback_data": "qt:8"
+}
+],
+[
+{
+"text": "Ellipse & Hyperbola",
+"callback_data": "qt:9"
+}
+],
+[
+{
+"text": "Linking",
+"callback_data": "qt:10"
+}
+],
+[
+{
+"text": "Translation",
+"callback_data": "qt:11"
+}
+],
+[
+{
+"text": "⬅️ رجوع للفصول",
+"callback_data": "qb:ch"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 3,
+"message_id": 50,
+"text": "❓ <b>Ellipse &amp; Hyperbola</b>\nاختر المحاضرة:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "Lecture 1",
+"callback_data": "ql:9:1"
+},
+{
+"text": "Lecture 2",
+"callback_data": "ql:9:2"
+}
+],
+[
+{
+"text": "Lecture 3",
+"callback_data": "ql:9:3"
+},
+{
+"text": "Lecture 4",
+"callback_data": "ql:9:4"
+}
+],
+[
+{
+"text": "Lecture 5",
+"callback_data": "ql:9:5"
+},
+{
+"text": "Lecture 6",
+"callback_data": "ql:9:6"
+}
+],
+[
+{
+"text": "Lecture 7",
+"callback_data": "ql:9:7"
+},
+{
+"text": "Lecture 8",
+"callback_data": "ql:9:8"
+}
+],
+[
+{
+"text": "Lecture 9",
+"callback_data": "ql:9:9"
+},
+{
+"text": "Lecture 10",
+"callback_data": "ql:9:10"
+}
+],
+[
+{
+"text": "⬅️ رجوع للمواضيع",
+"callback_data": "qc:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 3,
+"message_id": 50,
+"text": "❓ <b>Ellipse &amp; Hyperbola — Lecture 1</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "❌ تم الإلغاء.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "الفصل الأول: الأعداد المركبة",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "الفصل الثاني: القطوع المخروطية",
+"callback_data": "qc:2"
+}
+],
+[
+{
+"text": "الفصل الثالث: تطبيقات التفاضل",
+"callback_data": "qc:3"
+}
+],
+[
+{
+"text": "الفصل الرابع: التكامل",
+"callback_data": "qc:4"
+}
+],
+[
+{
+"text": "الفصل الخامس: المعادلات التفاضلية",
+"callback_data": "qc:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ <b>ما قبل إيجاد x و y</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "❌ تم الإلغاء.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "Chapter 1: Complex Numbers",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "Chapter 2: Conic Sections",
+"callback_data": "qc:2"
+}
+],
+[
+{
+"text": "Chapter 3: Applications of Differentiation",
+"callback_data": "qc:3"
+}
+],
+[
+{
+"text": "Chapter 4: Integration",
+"callback_data": "qc:4"
+}
+],
+[
+{
+"text": "Chapter 5: Differential Equations",
+"callback_data": "qc:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 3,
+"message_id": 50,
+"text": "❓ <b>ما قبل إيجاد x و y — </b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "انتهت صلاحية هذا الزر"
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+},
+{
+"k": "q_group",
+"v": "-1001234"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 2,
+"state": "q:write",
+"data": "{\"t\": 1, \"l\": 0}"
+},
+{
+"user_id": 3,
+"state": "q:write",
+"data": "{\"t\": 1, \"l\": 0}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار قرب الجسر",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:42",
+"updated": "2026-11-04 01:42"
+},
+{
+"user_id": 3,
+"username": "u3",
+"name": "زينب علي حسين جاسم",
+"curr": "إنجليزي",
+"grade": "الخامس العلمي",
+"gov": "بغداد",
+"side": "الكرخ",
+"area": "المنصور شارع الأميرات",
+"phone1": "07711111111",
+"phone2": "07811111111",
+"exam": "حضوري",
+"center_id": 1,
+"created": "2026-11-04 01:42",
+"updated": "2026-11-04 01:42"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "",
+"lectures": 0,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"card_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">زينب علي حسين جاسم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">إنجليزي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">الخامس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">بغداد - الكرخ</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">المنصور شارع الأميرات</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07711111111</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07811111111</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">حضوري</td></tr><tr><td class=\"k\"><span>🏫</span>المركز الامتحاني</td><td class=\"v\">قمة النجاح للبنات (المنصور)</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>"
+}
+},
+"أوقات الاستقبال والفصول من لوحة التحكم": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"text": "✅ تم ربط هاي المجموعة بالأسئلة العلمية. كل سؤال جديد راح ينفتحله موضوع هنا."
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "⬜️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🕓 اكتب الوقت بنظام 24 ساعة، مثلاً:\n<code>16-22</code>  يعني من 4 العصر إلى 10 بالليل\n<code>9:30-23:00</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ اكتب الوقت هيچ: <code>16-22</code> أو <code>16:30-22:00</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تم.\n\n<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 16:00 إلى 22:00\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🕓 اكتب الوقت بنظام 24 ساعة، مثلاً:\n<code>16-22</code>  يعني من 4 العصر إلى 10 بالليل\n<code>9:30-23:00</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تم.\n\n<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 09:30 إلى 23:05\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🕓 اكتب الوقت بنظام 24 ساعة، مثلاً:\n<code>16-22</code>  يعني من 4 العصر إلى 10 بالليل\n<code>9:30-23:00</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تم.\n\n<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🔴 متوقف)\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🟢 تشغيل الاستقبال",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⏰ <b>استقبال الأسئلة مغلق هسه.</b>\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "⬜️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "⬜️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "⬜️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "⬜️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "⬜️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "⬜️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "⬜️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "⬜️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "⬜️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "⬜️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "⬜️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "⬜️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "⬜️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "⬜️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "⬜️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: الأحد\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "⬜️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "⬜️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "⬜️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "⬜️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "⬜️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: لا يوجد\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "⬜️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "⬜️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "⬜️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "⬜️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "⬜️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "⬜️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⏰ <b>استقبال الأسئلة مغلق هسه.</b>\n\nالأيام: لا يوجد\nالوقت: من 00:00 إلى 23:59",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📚 الفصول والمواضيع</b>\n\nهذا الموجود هسه. حتى تعدّل: انسخه، وعدّل عليه (أسماء، عدد محاضرات، ترتيب)، وأرسله برسالة وحدة.\n• السطر اللي يبدي بـ # هو الفصل: الاسم العربي | الاسم الإنجليزي\n• تحته المواضيع: العربي | الإنجليزي = عدد المحاضرات",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<code># الأعداد المركبة | Complex Numbers\nما قبل إيجاد x و y | Before Finding x and y = 8\nالجذور التربيعية | Square Roots = 2\nالمعادلة التربيعية | Quadratic Equation = 4\nإيجاد قيم x و y | Finding x and y = 2\nالأوميگا ω | Omega (Cube Roots of Unity) = 3\nالصيغة القطبية وديموافر | Polar Form and De Moivre&#x27;s Theorem = 6\nأشكال آرگاند | Argand Diagrams = 1\n# القطوع المخروطية | Conic Sections\nالقطع المكافئ | Parabola = 5\nالقطع الناقص والزائد | Ellipse &amp; Hyperbola = 10\nالربط | Linking = 4\nالانسحاب | Translation = 3\n# تطبيقات التفاضل | Applications of Differentiation\nالاشتقاقات | Derivatives = 2\nالساين والكوساين | Sine and Cosine = 2\nالمعدلات الزمنية | Related Rates = 8\nرول والقيمة المتوسطة | Rolle&#x27;s Theorem and the Mean Value Theorem = 4\nالتقريب | Approximation = 5\nرسم الدوال | Curve Sketching = 7\nالثوابت | Constants = 4\nتطبيقات النهايات العظمى والصغرى | Applications of Maxima and Minima = 8\n# التكامل | Integration\nممنوع أو مسموح | Allowed or Not Allowed = 4\nالمتفرقات | Miscellaneous = 2\nln والأسية | ln and Exponential = 2\nالحجوم | Volume of Revolution = 1\nتطبيقات فيزيائية | Physical Applications = 2\nالمجاميع العليا والسفلى | The Lower and Upper Rectangles = 3\nالدالة المقابلة | Antiderivative = 1\nالمساحات | Area = 3\nالساين والكوساين | Sine and Cosine = 6\n# المعادلات التفاضلية | Differential Equations\nالهل والإثبات | Verifying Solutions = 2\nفصل المتغيرات | Separation of Variables = 3</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ ما فهمت النص، تأكد من الشكل.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📚 الفصول والمواضيع</b>\n\nهذا الموجود هسه. حتى تعدّل: انسخه، وعدّل عليه (أسماء، عدد محاضرات، ترتيب)، وأرسله برسالة وحدة.\n• السطر اللي يبدي بـ # هو الفصل: الاسم العربي | الاسم الإنجليزي\n• تحته المواضيع: العربي | الإنجليزي = عدد المحاضرات",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<code># الأعداد المركبة | Complex Numbers\nما قبل إيجاد x و y | Before Finding x and y = 8\nالجذور التربيعية | Square Roots = 2\nالمعادلة التربيعية | Quadratic Equation = 4\nإيجاد قيم x و y | Finding x and y = 2\nالأوميگا ω | Omega (Cube Roots of Unity) = 3\nالصيغة القطبية وديموافر | Polar Form and De Moivre&#x27;s Theorem = 6\nأشكال آرگاند | Argand Diagrams = 1\n# القطوع المخروطية | Conic Sections\nالقطع المكافئ | Parabola = 5\nالقطع الناقص والزائد | Ellipse &amp; Hyperbola = 10\nالربط | Linking = 4\nالانسحاب | Translation = 3\n# تطبيقات التفاضل | Applications of Differentiation\nالاشتقاقات | Derivatives = 2\nالساين والكوساين | Sine and Cosine = 2\nالمعدلات الزمنية | Related Rates = 8\nرول والقيمة المتوسطة | Rolle&#x27;s Theorem and the Mean Value Theorem = 4\nالتقريب | Approximation = 5\nرسم الدوال | Curve Sketching = 7\nالثوابت | Constants = 4\nتطبيقات النهايات العظمى والصغرى | Applications of Maxima and Minima = 8\n# التكامل | Integration\nممنوع أو مسموح | Allowed or Not Allowed = 4\nالمتفرقات | Miscellaneous = 2\nln والأسية | ln and Exponential = 2\nالحجوم | Volume of Revolution = 1\nتطبيقات فيزيائية | Physical Applications = 2\nالمجاميع العليا والسفلى | The Lower and Upper Rectangles = 3\nالدالة المقابلة | Antiderivative = 1\nالمساحات | Area = 3\nالساين والكوساين | Sine and Cosine = 6\n# المعادلات التفاضلية | Differential Equations\nالهل والإثبات | Verifying Solutions = 2\nفصل المتغيرات | Separation of Variables = 3</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تم الحفظ: 2 فصول و 3 موضوع.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📚 الفصول والمواضيع</b>\n\nهذا الموجود هسه. حتى تعدّل: انسخه، وعدّل عليه (أسماء، عدد محاضرات، ترتيب)، وأرسله برسالة وحدة.\n• السطر اللي يبدي بـ # هو الفصل: الاسم العربي | الاسم الإنجليزي\n• تحته المواضيع: العربي | الإنجليزي = عدد المحاضرات",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<code># فصل جديد | New\nموضوع | Topic = 3\nبدون رقم |  = 0\n# ثاني | \nموضوع2 |  = 1</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "❌ تم الإلغاء.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: الاثنين\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "⬜️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "⬜️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "⬜️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "⬜️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "⬜️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: الاثنين، الثلاثاء\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "⬜️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "⬜️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "⬜️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "⬜️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: الاثنين، الثلاثاء، الأربعاء\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "⬜️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "⬜️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "⬜️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: الاثنين، الثلاثاء، الأربعاء، الخميس\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "⬜️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "⬜️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "⬜️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "⬜️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⏰ أوقات استقبال الأسئلة</b> (🟢 شغال)\n\nالأيام: السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة\nالوقت: من 00:00 إلى 23:59\n\nاضغط الأيام حتى تأشرها.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ السبت",
+"callback_data": "a:hrd:5"
+},
+{
+"text": "☑️ الأحد",
+"callback_data": "a:hrd:6"
+},
+{
+"text": "☑️ الاثنين",
+"callback_data": "a:hrd:0"
+}
+],
+[
+{
+"text": "☑️ الثلاثاء",
+"callback_data": "a:hrd:1"
+},
+{
+"text": "☑️ الأربعاء",
+"callback_data": "a:hrd:2"
+},
+{
+"text": "☑️ الخميس",
+"callback_data": "a:hrd:3"
+}
+],
+[
+{
+"text": "☑️ الجمعة",
+"callback_data": "a:hrd:4"
+}
+],
+[
+{
+"text": "🕓 تغيير الوقت",
+"callback_data": "a:hrt"
+}
+],
+[
+{
+"text": "🔴 إيقاف الاستقبال مؤقتاً",
+"callback_data": "a:hro"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "الفصل الأول: فصل جديد",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "الفصل الثاني: ثاني",
+"callback_data": "qc:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ اختر الموضوع:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "موضوع",
+"callback_data": "qt:1"
+}
+],
+[
+{
+"text": "بدون رقم",
+"callback_data": "qt:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع للفصول",
+"callback_data": "qb:ch"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "فصل جديد",
+"en": "New",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "ثاني",
+"en": "",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 0
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 0
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 0
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+},
+{
+"k": "q_group",
+"v": "-1001234"
+},
+{
+"k": "q_hours",
+"v": "{\"on\": true, \"days\": [0, 1, 2, 3, 4, 5, 6], \"from\": \"00:00\", \"to\": \"23:59\"}"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 2,
+"state": "q:pick",
+"data": "{\"c\": 1}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار قرب الجسر",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:42",
+"updated": "2026-11-04 01:42"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "موضوع",
+"en": "Topic",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "بدون رقم",
+"en": "",
+"lectures": 0,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 0
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 0
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 0
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 0
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 0
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "موضوع2",
+"en": "",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 0
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 0
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 0
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>"
+}
+},
+"السؤال والجواب والاستفسار والإخفاء": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة النجاح للبنات (المنصور)\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"text": "✅ تم ربط هاي المجموعة بالأسئلة العلمية. كل سؤال جديد راح ينفتحله موضوع هنا."
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "ما عندك أسئلة بعد. اضغط «❓ سؤال علمي» حتى تسأل.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "الفصل الأول: الأعداد المركبة",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "الفصل الثاني: القطوع المخروطية",
+"callback_data": "qc:2"
+}
+],
+[
+{
+"text": "الفصل الثالث: تطبيقات التفاضل",
+"callback_data": "qc:3"
+}
+],
+[
+{
+"text": "الفصل الرابع: التكامل",
+"callback_data": "qc:4"
+}
+],
+[
+{
+"text": "الفصل الخامس: المعادلات التفاضلية",
+"callback_data": "qc:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ <b>ما قبل إيجاد x و y — المحاضرة 2</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "createForumTopic",
+"p": {
+"chat_id": -1001234,
+"name": "🔴 #1 علي حسن محمد — ف1 ما قبل إيجاد x و y م2"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 107,
+"text": "❓ <b>سؤال جديد #1</b>\n\n<b>علي حسن محمد كاظم</b>\nالمنهج: عربي — السادس العلمي\nالامتحان: إلكتروني\n📞 <code>07701234567</code>\n\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 2\n\n✍️ اكتب جوابك هنا بهذا الموضوع (كتابة أو صورة أو صوت) ويوصل للطالب مباشرة.\nلمن تخلص جوابك اضغط «✅ خلصت» حتى يختفي السؤال من عندك.",
+"parse_mode": "HTML"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5006,
+"message_thread_id": 107
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ <b>وصل سؤالك</b> (رقم <b>#1</b>)\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 2\n\nراح يوصلك الجواب هنا بالبوت. وتگدر تشوف أسئلتك من «📂 أسئلتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "أهلا بك 🌷 اضغط «🛒 المتجر» حتى تشوف المنتجات.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📂 أسئلتك (آخر 10)</b>\n\n\n\n#1 — ف1 › ما قبل إيجاد x و y — المحاضرة 2\n🟡 بانتظار الجواب",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🔁 استفسار على #1",
+"callback_data": "qf:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>❓ الأسئلة اللي تنتظر جواب: 1</b>\n\n\n\n#1 — علي حسن محمد كاظم\nف1 › ما قبل إيجاد x و y — المحاضرة 2  <a href=\"https://t.me/c/1234/107\">افتح</a>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"parse_mode": "HTML",
+"text": "💬 <b>جواب سؤالك #1</b>\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 2"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": 2,
+"from_chat_id": -1001234,
+"message_id": 5016,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ فهمت",
+"callback_data": "qok:1"
+},
+{
+"text": "🔁 عندي استفسار",
+"callback_data": "qf:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "setMessageReaction",
+"p": {
+"chat_id": -1001234,
+"message_id": 5016,
+"reaction": [
+{
+"type": "emoji",
+"emoji": "👍"
+}
+]
+}
+},
+{
+"m": "editForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "107",
+"name": "✅ #1 علي حسن محمد — ف1 ما قبل إيجاد x و y م2"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "107",
+"parse_mode": "HTML",
+"text": "✅ وصل جوابك للطالب.\nإذا خلصت جوابك اضغط الزر حتى يختفي السؤال من عندك.\n(إذا الطالب استفسر بعدين، يرجعلك السؤال نفسه ويا جوابك)",
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ خلصت — أخفِ السؤال",
+"callback_data": "qh:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📂 أسئلتك (آخر 10)</b>\n\n\n\n#1 — ف1 › ما قبل إيجاد x و y — المحاضرة 2\n🟢 تم الجواب",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🔁 استفسار على #1",
+"callback_data": "qf:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"parse_mode": "HTML",
+"text": "💬 <b>جواب سؤالك #1</b>\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 2"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": 2,
+"from_chat_id": -1001234,
+"message_id": 5018,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ فهمت",
+"callback_data": "qok:1"
+},
+{
+"text": "🔁 عندي استفسار",
+"callback_data": "qf:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "setMessageReaction",
+"p": {
+"chat_id": -1001234,
+"message_id": 5018,
+"reaction": [
+{
+"type": "emoji",
+"emoji": "👍"
+}
+]
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "السؤال غير موجود"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "السؤال غير موجود"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "السؤال غير موجود"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "السؤال غير موجود"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🔁 اكتب استفسارك على السؤال <b>#1</b> (كتابة أو صورة أو صوت):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "reopenForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 107
+}
+},
+{
+"m": "editForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 107,
+"name": "🔁 استفسار #1 علي حسن محمد — ف1 ما قبل إيجاد x و y م2"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 107,
+"parse_mode": "HTML",
+"text": "━━━━━━━━━━━━\n🔁 <b>الاستفسار الجديد (ما فهم):</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5019,
+"message_thread_id": 107
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ وصل استفسارك على السؤال <b>#1</b>. راح يوصلك الجواب هنا.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>❓ الأسئلة اللي تنتظر جواب: 1</b>\n\n\n\n#1 — علي حسن محمد كاظم\nف1 › ما قبل إيجاد x و y — المحاضرة 2  <a href=\"https://t.me/c/1234/107\">افتح</a>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"parse_mode": "HTML",
+"text": "💬 <b>جواب سؤالك #1</b>\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 2"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": 2,
+"from_chat_id": -1001234,
+"message_id": 5020,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ فهمت",
+"callback_data": "qok:1"
+},
+{
+"text": "🔁 عندي استفسار",
+"callback_data": "qf:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "setMessageReaction",
+"p": {
+"chat_id": -1001234,
+"message_id": 5020,
+"reaction": [
+{
+"type": "emoji",
+"emoji": "👍"
+}
+]
+}
+},
+{
+"m": "editForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "107",
+"name": "✅ #1 علي حسن محمد — ف1 ما قبل إيجاد x و y م2"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "107",
+"parse_mode": "HTML",
+"text": "✅ وصل جوابك للطالب.\nإذا خلصت جوابك اضغط الزر حتى يختفي السؤال من عندك.\n(إذا الطالب استفسر بعدين، يرجعلك السؤال نفسه ويا جوابك)",
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ خلصت — أخفِ السؤال",
+"callback_data": "qh:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "deleteForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 107
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "✅ اختفى السؤال"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🔁 اكتب استفسارك على السؤال <b>#1</b> (كتابة أو صورة أو صوت):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "createForumTopic",
+"p": {
+"chat_id": -1001234,
+"name": "🔁 استفسار #1 علي حسن محمد — ف1 ما قبل إيجاد x و y م2"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 129,
+"parse_mode": "HTML",
+"text": "🔁 <b>استفسار على سؤال قديم #1</b>\n\n<b>علي حسن محمد كاظم</b>\nالمنهج: عربي — السادس العلمي\nالامتحان: إلكتروني\n📞 <code>07701234567</code>\n\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 2"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 129,
+"parse_mode": "HTML",
+"text": "📜 <b>الطالب:</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5006,
+"message_thread_id": 129
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 129,
+"parse_mode": "HTML",
+"text": "💬 <b>جوابك:</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 115,
+"message_thread_id": 129
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 119,
+"message_thread_id": 129
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 129,
+"parse_mode": "HTML",
+"text": "📜 <b>الطالب:</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5019,
+"message_thread_id": 129
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 129,
+"parse_mode": "HTML",
+"text": "💬 <b>جوابك:</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 126,
+"message_thread_id": 129
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 129,
+"parse_mode": "HTML",
+"text": "━━━━━━━━━━━━\n🔁 <b>الاستفسار الجديد (ما فهم):</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5021,
+"message_thread_id": 129
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ وصل استفسارك على السؤال <b>#1</b>. راح يوصلك الجواب هنا.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"parse_mode": "HTML",
+"text": "💬 <b>جواب سؤالك #1</b>\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 2"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": 2,
+"from_chat_id": -1001234,
+"message_id": 5022,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ فهمت",
+"callback_data": "qok:1"
+},
+{
+"text": "🔁 عندي استفسار",
+"callback_data": "qf:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "setMessageReaction",
+"p": {
+"chat_id": -1001234,
+"message_id": 5022,
+"reaction": [
+{
+"type": "emoji",
+"emoji": "👍"
+}
+]
+}
+},
+{
+"m": "editForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "129",
+"name": "✅ #1 علي حسن محمد — ف1 ما قبل إيجاد x و y م2"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "129",
+"parse_mode": "HTML",
+"text": "✅ وصل جوابك للطالب.\nإذا خلصت جوابك اضغط الزر حتى يختفي السؤال من عندك.\n(إذا الطالب استفسر بعدين، يرجعلك السؤال نفسه ويا جوابك)",
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ خلصت — أخفِ السؤال",
+"callback_data": "qh:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📂 أسئلتك (آخر 10)</b>\n\n\n\n#1 — ف1 › ما قبل إيجاد x و y — المحاضرة 2\n🟢 تم الجواب",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🔁 استفسار على #1",
+"callback_data": "qf:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "deleteForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 129
+}
+},
+{
+"m": "editMessageReplyMarkup",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"reply_markup": {
+"inline_keyboard": []
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ تمام، انغلق السؤال <b>#1</b>. إذا عندك سؤال جديد اضغط «❓ سؤال علمي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📂 أسئلتك (آخر 10)</b>\n\n\n\n#1 — ف1 › ما قبل إيجاد x و y — المحاضرة 2\n✅ مغلق",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🔁 استفسار على #1",
+"callback_data": "qf:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ ماكو أسئلة تنتظر جواب.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "✅ اختفى السؤال"
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+},
+{
+"k": "q_group",
+"v": "-1001234"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [],
+"qmsgs": [
+{
+"id": 1,
+"qid": 1,
+"kind": "q",
+"chat_id": 2,
+"msg_id": 5006
+},
+{
+"id": 2,
+"qid": 1,
+"kind": "a",
+"chat_id": 2,
+"msg_id": 115
+},
+{
+"id": 3,
+"qid": 1,
+"kind": "a",
+"chat_id": 2,
+"msg_id": 119
+},
+{
+"id": 4,
+"qid": 1,
+"kind": "q",
+"chat_id": 2,
+"msg_id": 5019
+},
+{
+"id": 5,
+"qid": 1,
+"kind": "a",
+"chat_id": 2,
+"msg_id": 126
+},
+{
+"id": 6,
+"qid": 1,
+"kind": "q",
+"chat_id": 2,
+"msg_id": 5021
+},
+{
+"id": 7,
+"qid": 1,
+"kind": "a",
+"chat_id": 2,
+"msg_id": 144
+}
+],
+"questions": [
+{
+"id": 1,
+"user_id": 2,
+"chapter_id": 1,
+"topic_id": 1,
+"lecture": 2,
+"status": "closed",
+"thread_id": null,
+"created": "2026-11-04 01:42",
+"updated": "2026-11-04 01:42"
+}
+],
+"sessions": [
+{
+"user_id": 2,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 3,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار قرب الجسر",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:42",
+"updated": "2026-11-04 01:42"
+},
+{
+"user_id": 3,
+"username": "u3",
+"name": "زينب علي حسين جاسم",
+"curr": "إنجليزي",
+"grade": "الخامس العلمي",
+"gov": "بغداد",
+"side": "الكرخ",
+"area": "المنصور شارع الأميرات",
+"phone1": "07711111111",
+"phone2": "07811111111",
+"exam": "حضوري",
+"center_id": 1,
+"created": "2026-11-04 01:42",
+"updated": "2026-11-04 01:42"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"card_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">زينب علي حسين جاسم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">إنجليزي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">الخامس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">بغداد - الكرخ</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">المنصور شارع الأميرات</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07711111111</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07811111111</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">حضوري</td></tr><tr><td class=\"k\"><span>🏫</span>المركز الامتحاني</td><td class=\"v\">قمة النجاح للبنات (المنصور)</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>"
+}
+},
+"الألبوم، الصور، ورسالة الطالب المحظور، وفشل تليجرام": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"text": "✅ تم ربط هاي المجموعة بالأسئلة العلمية. كل سؤال جديد راح ينفتحله موضوع هنا."
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "الفصل الأول: الأعداد المركبة",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "الفصل الثاني: القطوع المخروطية",
+"callback_data": "qc:2"
+}
+],
+[
+{
+"text": "الفصل الثالث: تطبيقات التفاضل",
+"callback_data": "qc:3"
+}
+],
+[
+{
+"text": "الفصل الرابع: التكامل",
+"callback_data": "qc:4"
+}
+],
+[
+{
+"text": "الفصل الخامس: المعادلات التفاضلية",
+"callback_data": "qc:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ <b>ما قبل إيجاد x و y — المحاضرة 1</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "createForumTopic",
+"p": {
+"chat_id": -1001234,
+"name": "🔴 #1 علي حسن محمد — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⚠️ ما گدرت أوصل سؤالك هسه، حاول بعد شوية.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "❓ <b>سؤال علمي</b>\nاختر الفصل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "الفصل الأول: الأعداد المركبة",
+"callback_data": "qc:1"
+}
+],
+[
+{
+"text": "الفصل الثاني: القطوع المخروطية",
+"callback_data": "qc:2"
+}
+],
+[
+{
+"text": "الفصل الثالث: تطبيقات التفاضل",
+"callback_data": "qc:3"
+}
+],
+[
+{
+"text": "الفصل الرابع: التكامل",
+"callback_data": "qc:4"
+}
+],
+[
+{
+"text": "الفصل الخامس: المعادلات التفاضلية",
+"callback_data": "qc:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"text": "❓ <b>ما قبل إيجاد x و y — المحاضرة 1</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "createForumTopic",
+"p": {
+"chat_id": -1001234,
+"name": "🔴 #2 علي حسن محمد — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 108,
+"text": "❓ <b>سؤال جديد #2</b>\n\n<b>علي حسن محمد كاظم</b>\nالمنهج: عربي — السادس العلمي\nالامتحان: إلكتروني\n📞 <code>07701234567</code>\n\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 1\n\n✍️ اكتب جوابك هنا بهذا الموضوع (كتابة أو صورة أو صوت) ويوصل للطالب مباشرة.\nلمن تخلص جوابك اضغط «✅ خلصت» حتى يختفي السؤال من عندك.",
+"parse_mode": "HTML"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5006,
+"message_thread_id": 108
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ <b>وصل سؤالك</b> (رقم <b>#2</b>)\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 1\n\nراح يوصلك الجواب هنا بالبوت. وتگدر تشوف أسئلتك من «📂 أسئلتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5007,
+"message_thread_id": 108
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5008,
+"message_thread_id": 108
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⚠️ اكتب نص فقط.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"parse_mode": "HTML",
+"text": "💬 <b>جواب سؤالك #2</b>\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 1"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": 2,
+"from_chat_id": -1001234,
+"message_id": 5010,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ فهمت",
+"callback_data": "qok:2"
+},
+{
+"text": "🔁 عندي استفسار",
+"callback_data": "qf:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "108",
+"text": "⚠️ ما گدرت أوصل الجواب للطالب (ممكن مسوي حظر للبوت)."
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"parse_mode": "HTML",
+"text": "💬 <b>جواب سؤالك #2</b>\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 1"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": 2,
+"from_chat_id": -1001234,
+"message_id": 5011,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ فهمت",
+"callback_data": "qok:2"
+},
+{
+"text": "🔁 عندي استفسار",
+"callback_data": "qf:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "setMessageReaction",
+"p": {
+"chat_id": -1001234,
+"message_id": 5011,
+"reaction": [
+{
+"type": "emoji",
+"emoji": "👍"
+}
+]
+}
+},
+{
+"m": "editForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "108",
+"name": "✅ #2 علي حسن محمد — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "108",
+"parse_mode": "HTML",
+"text": "✅ وصل جوابك للطالب.\nإذا خلصت جوابك اضغط الزر حتى يختفي السؤال من عندك.\n(إذا الطالب استفسر بعدين، يرجعلك السؤال نفسه ويا جوابك)",
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ خلصت — أخفِ السؤال",
+"callback_data": "qh:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "deleteForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 108
+}
+},
+{
+"m": "editForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 108,
+"name": "✅ #2 علي حسن محمد — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "closeForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 108
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "✅ اختفى السؤال"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🔁 اكتب استفسارك على السؤال <b>#2</b> (كتابة أو صورة أو صوت):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "createForumTopic",
+"p": {
+"chat_id": -1001234,
+"name": "🔁 استفسار #2 علي حسن محمد — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⚠️ ما گدرت أوصل استفسارك هسه، حاول بعد شوية.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🔁 اكتب استفسارك على السؤال <b>#2</b> (كتابة أو صورة أو صوت):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "createForumTopic",
+"p": {
+"chat_id": -1001234,
+"name": "🔁 استفسار #2 علي حسن محمد — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 123,
+"parse_mode": "HTML",
+"text": "🔁 <b>استفسار على سؤال قديم #2</b>\n\n<b>علي حسن محمد كاظم</b>\nالمنهج: عربي — السادس العلمي\nالامتحان: إلكتروني\n📞 <code>07701234567</code>\n\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 123,
+"parse_mode": "HTML",
+"text": "📜 <b>الطالب:</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5006,
+"message_thread_id": 123
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5007,
+"message_thread_id": 123
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5008,
+"message_thread_id": 123
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 123,
+"parse_mode": "HTML",
+"text": "💬 <b>جوابك:</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 118,
+"message_thread_id": 123
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 123,
+"parse_mode": "HTML",
+"text": "━━━━━━━━━━━━\n🔁 <b>الاستفسار الجديد (ما فهم):</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5013,
+"message_thread_id": 123
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ وصل استفسارك على السؤال <b>#2</b>. راح يوصلك الجواب هنا.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "deleteForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 123
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "✅ اختفى السؤال"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🔁 اكتب استفسارك على السؤال <b>#2</b> (كتابة أو صورة أو صوت):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "createForumTopic",
+"p": {
+"chat_id": -1001234,
+"name": "🔁 استفسار #2 علي حسن محمد — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 135,
+"parse_mode": "HTML",
+"text": "🔁 <b>استفسار على سؤال قديم #2</b>\n\n<b>علي حسن محمد كاظم</b>\nالمنهج: عربي — السادس العلمي\nالامتحان: إلكتروني\n📞 <code>07701234567</code>\n\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 135,
+"text": "(السؤال القديم ما محفوظ، لأنه انسأل قبل هذا التحديث)"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 135,
+"parse_mode": "HTML",
+"text": "━━━━━━━━━━━━\n🔁 <b>الاستفسار الجديد (ما فهم):</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5014,
+"message_thread_id": 135
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ وصل استفسارك على السؤال <b>#2</b>. راح يوصلك الجواب هنا.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "deleteForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 135
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "✅ اختفى السؤال"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🔁 اكتب استفسارك على السؤال <b>#2</b> (كتابة أو صورة أو صوت):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "createForumTopic",
+"p": {
+"chat_id": -1001234,
+"name": "🔁 استفسار #2 طالب — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 142,
+"parse_mode": "HTML",
+"text": "🔁 <b>استفسار على سؤال قديم #2</b>\n\n<b>طالب</b>\nالمنهج:  — \nالامتحان: \n📞 <code></code>\n\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 142,
+"parse_mode": "HTML",
+"text": "📜 <b>الطالب:</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5014,
+"message_thread_id": 142
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 142,
+"parse_mode": "HTML",
+"text": "━━━━━━━━━━━━\n🔁 <b>الاستفسار الجديد (ما فهم):</b>"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": -1001234,
+"from_chat_id": 2,
+"message_id": 5015,
+"message_thread_id": 142
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ وصل استفسارك على السؤال <b>#2</b>. راح يوصلك الجواب هنا.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"parse_mode": "HTML",
+"text": "💬 <b>جواب سؤالك #2</b>\n📍 ف1 › ما قبل إيجاد x و y — المحاضرة 1"
+}
+},
+{
+"m": "copyMessage",
+"p": {
+"chat_id": 2,
+"from_chat_id": -1001234,
+"message_id": 5016,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ فهمت",
+"callback_data": "qok:2"
+},
+{
+"text": "🔁 عندي استفسار",
+"callback_data": "qf:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "setMessageReaction",
+"p": {
+"chat_id": -1001234,
+"message_id": 5016,
+"reaction": [
+{
+"type": "emoji",
+"emoji": "👍"
+}
+]
+}
+},
+{
+"m": "editForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "142",
+"name": "✅ #2 طالب — ف1 ما قبل إيجاد x و y م1"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": "142",
+"parse_mode": "HTML",
+"text": "✅ وصل جوابك للطالب.\nإذا خلصت جوابك اضغط الزر حتى يختفي السؤال من عندك.\n(إذا الطالب استفسر بعدين، يرجعلك السؤال نفسه ويا جوابك)",
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ خلصت — أخفِ السؤال",
+"callback_data": "qh:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "deleteForumTopic",
+"p": {
+"chat_id": -1001234,
+"message_thread_id": 142
+}
+},
+{
+"m": "editMessageReplyMarkup",
+"p": {
+"chat_id": 2,
+"message_id": 50,
+"reply_markup": {
+"inline_keyboard": []
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "✅ تمام، انغلق السؤال <b>#2</b>. إذا عندك سؤال جديد اضغط «❓ سؤال علمي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⚠️ صار خطأ، حاول مرة ثانية.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🔁 اكتب استفسارك على السؤال <b>#2</b> (كتابة أو صورة أو صوت):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⚠️ السؤال غير موجود.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "⚠️ صار خطأ، حاول مرة ثانية.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [],
+"qmsgs": [
+{
+"id": 6,
+"qid": 2,
+"kind": "q",
+"chat_id": 2,
+"msg_id": 5014
+},
+{
+"id": 7,
+"qid": 2,
+"kind": "q",
+"chat_id": 2,
+"msg_id": 5015
+},
+{
+"id": 8,
+"qid": 2,
+"kind": "a",
+"chat_id": 2,
+"msg_id": 150
+}
+],
+"questions": [
+{
+"id": 2,
+"user_id": 2,
+"chapter_id": 1,
+"topic_id": 1,
+"lecture": 1,
+"status": "closed",
+"thread_id": null,
+"created": "2026-11-04 01:42",
+"updated": "2026-11-04 01:42"
+}
+],
+"sessions": [
+{
+"user_id": 2,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار قرب الجسر",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:42",
+"updated": "2026-11-04 01:42"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>"
+}
+}
+}
