@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>متجر قصي العميري</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:Boahmed;src:url(boahmed.ttf)}
+:root{--ink:#101929;--ink2:#162238;--ink3:#1d2c47;--line:#2a3b5c;--gold:#F9C445;--gold2:#CEA239;--txt:#F4F1E8;--mut:#9fb0c9;--red:#ff7a6b;--ok:#6ee7a8}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--ink);color:var(--txt);font-family:Cairo,system-ui,sans-serif}
+body{padding-bottom:110px}
+.wrap{max-width:640px;margin:0 auto;padding:0 14px}
+header{position:relative;padding:22px 14px 18px;text-align:center;background:
+ radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.18),transparent 60%),linear-gradient(180deg,#14203a,var(--ink));border-bottom:1px solid var(--line)}
+header img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}
+header h1{font-family:Boahmed,Cairo;font-weight:400;font-size:30px;margin:6px 0 0;color:var(--gold)}
+header p{margin:2px 0 0;color:var(--mut);font-size:14px}
+.steps{display:flex;gap:8px;justify-content:center;margin:16px 0 4px}
+.steps span{font-size:13px;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
+.steps span.on{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:700}
+.card{background:var(--ink2);border:1px solid var(--line);border-radius:18px;margin:16px 0;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.25)}
+.card h2{margin:0;padding:12px 16px;font-size:18px;font-weight:800;color:var(--ink);background:linear-gradient(90deg,var(--gold),var(--gold2));display:flex;align-items:center;gap:8px}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;color:var(--mut);font-weight:600;text-align:right;padding:8px 14px;background:var(--ink3)}
+th.p,td.p{text-align:center;white-space:nowrap}
+th.q,td.q{text-align:center;width:112px;padding-left:8px;padding-right:8px}
+td{padding:11px 12px;line-height:1.45;border-top:1px solid var(--line);font-size:15px;vertical-align:middle}
+tr.sel td{background:rgba(249,196,69,.09)}
+td.p{color:var(--gold);font-weight:700}
+.qty{display:inline-flex;align-items:center;gap:6px}
+.qty button{width:32px;height:32px;border-radius:10px;border:1px solid var(--gold2);background:transparent;color:var(--gold);font-size:20px;line-height:1;font-family:inherit;cursor:pointer}
+.qty button.add{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.qty b{min-width:18px;display:inline-block;text-align:center}
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(16,25,41,.97);border-top:1px solid var(--gold2);padding:12px 14px calc(12px + env(safe-area-inset-bottom));backdrop-filter:blur(6px)}
+.bar .in{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.bar .sum{flex:1}
+.bar small{display:block;color:var(--mut);font-size:12px}
+.bar strong{color:var(--gold);font-size:19px;white-space:nowrap}
+.btn{border:0;border-radius:14px;padding:13px 16px;white-space:nowrap;font-family:inherit;font-size:16px;font-weight:800;background:linear-gradient(90deg,var(--gold),var(--gold2));color:var(--ink);cursor:pointer}
+.btn:disabled{opacity:.4}
+.btn.ghost{background:transparent;color:var(--gold);border:1px solid var(--gold2)}
+.form{padding:16px}
+label{display:block;font-size:14px;color:var(--mut);margin:14px 0 6px;font-weight:600}
+label:first-child{margin-top:0}
+input,select{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:var(--ink);color:var(--txt);font-family:inherit;font-size:16px;outline:none}
+input:focus,select:focus{border-color:var(--gold)}
+input:disabled,select:disabled{opacity:.75;-webkit-text-fill-color:var(--txt)}
+.seg button:disabled{cursor:default}.seg button:disabled:not(.on){opacity:.4}
+input.ltr{direction:ltr;text-align:left;letter-spacing:1px}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--ink);color:var(--txt);font-family:inherit;font-size:16px;font-weight:700;cursor:pointer}
+.seg button.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.err{color:var(--red);font-size:13px;margin-top:5px;min-height:0}
+.sumbox td{font-size:14px}
+.sumbox tr.tot td{font-size:18px;font-weight:800;color:var(--gold);background:var(--ink3)}
+.note{margin:14px 16px 16px;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,122,107,.5);background:rgba(255,122,107,.08);font-size:14px;line-height:1.7}
+.hide{display:none}
+.warn{padding:14px 16px;border-color:var(--gold);background:rgba(249,196,69,.12);font-size:15px;line-height:1.8}
+.empty{padding:40px 10px;text-align:center;color:var(--mut)}
+</style>
+</head>
+<body>
+<header>
+  <img src="logo.png" alt="">
+  <h1>متجر قصي العميري</h1>
+  <p>الرياضيات · السادس الإعدادي</p>
+  <div class="steps"><span id="s1" class="on">1  اختر المنتجات</span><span id="s2">2  معلوماتك</span></div>
+</header>
+
+<div class="wrap">
+  <section id="pg1"></section>
+
+  <section id="pg2" class="hide">
+    <div class="card">
+      <h2>📝 معلومات الطلب</h2>
+      <div class="form">
+        <label>الاسم الرباعي</label>
+        <input id="name" placeholder="بالعربي، مثال: علي حسن محمد كاظم" autocomplete="off">
+        <div class="err" id="e_name"></div>
+
+        <label>المنهج</label>
+        <div class="seg" id="curr"><button data-v="عربي">عربي</button><button data-v="إنجليزي">إنجليزي</button></div>
+        <div class="err" id="e_curr"></div>
+
+        <label>المحافظة</label>
+        <select id="gov"><option value="">اختر المحافظة</option></select>
+        <div class="err" id="e_gov"></div>
+
+        <div id="sideBox" class="hide">
+          <label>الجانب</label>
+          <div class="seg" id="side"><button data-v="الرصافة">الرصافة</button><button data-v="الكرخ">الكرخ</button></div>
+          <div class="err" id="e_side"></div>
+        </div>
+
+        <label>المنطقة</label>
+        <input id="area" placeholder="اسم المنطقة" autocomplete="off">
+        <div class="err" id="e_area"></div>
+
+        <label>رقم الهاتف الأول (بالأرقام الإنجليزية)</label>
+        <input id="ph1" class="ltr" inputmode="tel" maxlength="13" placeholder="07XXXXXXXXX" autocomplete="off">
+        <div class="err" id="e_ph1"></div>
+
+        <label>رقم الهاتف الثاني (بالأرقام الإنجليزية)</label>
+        <input id="ph2" class="ltr" inputmode="tel" maxlength="13" placeholder="07XXXXXXXXX" autocomplete="off">
+        <div class="err" id="e_ph2"></div>
+      </div>
+    </div>
+
+    <div class="card sumbox">
+      <h2>🧾 ملخص الطلب</h2>
+      <table id="sumT"></table>
+      <div class="note">⚠️ <b>للتذكير:</b> جميع المشتريات <b>غير قابلة للإرجاع إطلاقاً ولأي سبب كان</b>.</div>
+    </div>
+  </section>
+</div>
+
+<div class="bar"><div class="in">
+  <div class="sum"><small id="barLbl">مجموع المنتجات</small><strong id="barTot">0 د.ع</strong></div>
+  <button class="btn ghost hide" id="back">رجوع</button>
+  <button class="btn" id="next" disabled>التالي</button>
+</div></div>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { try { tg.ready(); tg.expand(); tg.setHeaderColor('#101929'); tg.setBackgroundColor('#101929'); } catch (e) {} }
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString('en-US') + ' د.ع';
+
+// ---- البيانات تجي من البوت داخل الرابط
+function readData() {
+  try {
+    const d = new URLSearchParams(location.search).get('d');
+    const b = atob(d.replace(/-/g, '+').replace(/_/g, '/'));
+    const bytes = Uint8Array.from(b, c => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch (e) { return null; }
+}
+const D = readData() || {c: [], g: [], f: []};
+const cart = {};               // id -> qty
+const prod = {};               // id -> [name, price]
+let curr = '', side = '', page = 1;
+
+// ---- الصفحة الأولى: الجداول
+function drawProducts() {
+  const box = $('pg1');
+  if (!D.c.length) { box.innerHTML = '<div class="empty">لا توجد منتجات حاليا.</div>'; return; }
+  const warn = (D.w && D.w.length) ? `<div class="card warn">⚠️ <b>تنبيه:</b> امتحانات <b>${D.w.map(esc).join('، ')}</b> <b>إلكترونية فقط</b>.</div>` : '';
+  box.innerHTML = warn + D.c.map(([cname, items]) => `
+    <div class="card"><h2>📂 ${esc(cname)}</h2>
+    <table><tr><th>المنتج</th><th class="p">السعر</th><th class="q">الكمية</th></tr>
+    ${items.map(([id, n, p]) => { prod[id] = [n, p]; return `
+      <tr id="r${id}"><td>${esc(n)}</td><td class="p">${fmt(p)}</td>
+      <td class="q"><span class="qty"><button onclick="chg(${id},-1)">−</button><b id="q${id}">0</b><button class="add" onclick="chg(${id},1)">+</button></span></td></tr>`; }).join('')}
+    </table></div>`).join('');
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c])); }
+function chg(id, d) {
+  cart[id] = Math.max(0, (cart[id] || 0) + d);
+  if (!cart[id]) delete cart[id];
+  $('q' + id).textContent = cart[id] || 0;
+  $('r' + id).classList.toggle('sel', !!cart[id]);
+  if (tg && tg.HapticFeedback) try { tg.HapticFeedback.selectionChanged(); } catch (e) {}
+  update();
+}
+function subtotal() { return Object.entries(cart).reduce((s, [id, q]) => s + prod[id][1] * q, 0); }
+function fee() { const i = D.g.indexOf($('gov').value); return i < 0 ? 0 : D.f[i]; }
+
+function update() {
+  const sub = subtotal();
+  if (page === 1) {
+    $('barLbl').textContent = 'مجموع المنتجات';
+    $('barTot').textContent = fmt(sub);
+    $('next').textContent = 'التالي';
+    $('next').disabled = sub === 0;
+  } else {
+    const f = fee();
+    $('barLbl').textContent = 'المبلغ الكلي' + (f ? ' مع التوصيل' : '');
+    $('barTot').textContent = fmt(sub + f);
+    $('next').textContent = 'تأكيد وإرسال الطلب';
+    $('next').disabled = false;
+    drawSummary();
+  }
+}
+function drawSummary() {
+  const sub = subtotal(), f = fee(), g = $('gov').value;
+  let h = '<tr><th>المنتج</th><th class="p">العدد</th><th class="p">السعر</th></tr>';
+  for (const [id, q] of Object.entries(cart)) h += `<tr><td>${esc(prod[id][0])}</td><td class="p">${q}</td><td class="p">${fmt(prod[id][1] * q)}</td></tr>`;
+  h += `<tr><td colspan="2">مجموع المنتجات</td><td class="p">${fmt(sub)}</td></tr>`;
+  h += `<tr><td colspan="2">التوصيل${g ? ' (' + esc(g) + ')' : ''}</td><td class="p">${g ? fmt(f) : 'اختر المحافظة'}</td></tr>`;
+  h += `<tr class="tot"><td colspan="2">💰 المبلغ الكلي</td><td class="p">${fmt(sub + f)}</td></tr>`;
+  $('sumT').innerHTML = h;
+}
+function go(p) {
+  page = p;
+  $('pg1').classList.toggle('hide', p !== 1); $('pg2').classList.toggle('hide', p !== 2);
+  $('s1').classList.toggle('on', p === 1); $('s2').classList.toggle('on', p === 2);
+  $('back').classList.toggle('hide', p !== 2);
+  window.scrollTo(0, 0); update();
+}
+
+// ---- الفورم
+D.g.forEach((g, i) => { const o = document.createElement('option'); o.value = g; o.textContent = g + '  —  توصيل ' + fmt(D.f[i]); $('gov').appendChild(o); });
+$('gov').onchange = () => { $('sideBox').classList.toggle('hide', $('gov').value !== 'بغداد'); if ($('gov').value !== 'بغداد') side = ''; update(); };
+function segm(id, set) { $(id).querySelectorAll('button').forEach(b => b.onclick = () => { $(id).querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); set(b.dataset.v); }); }
+segm('curr', v => curr = v); segm('side', v => side = v);
+
+const AR = /[٠-٩۰-۹]/;
+function phoneErr(v) {
+  if (!v) return 'اكتب رقم الهاتف';
+  if (AR.test(v)) return 'اكتب الرقم بالأرقام الإنجليزية مو العربية (مثل 07701234567)';
+  if (!/^07\d{9}$/.test(v)) return 'الرقم لازم يكون 11 رقم ويبدأ بـ 07';
+  return '';
+}
+function validate() {
+  const e = {}, name = $('name').value.trim().replace(/\s+/g, ' ');
+  const words = name ? name.split(' ') : [];
+  if (words.length < 4 || !words.every(w => /^[\u0621-\u0652\u0670-\u06D3]+$/.test(w))) e.name = 'اكتب اسمك الرباعي (أربع كلمات على الأقل) بالحروف العربية فقط';
+  if (!curr) e.curr = 'اختر المنهج';
+  if (!$('gov').value) e.gov = 'اختر المحافظة';
+  if ($('gov').value === 'بغداد' && !side) e.side = 'اختر الرصافة أو الكرخ';
+  if ($('area').value.trim().length < 2) e.area = 'اكتب اسم المنطقة';
+  const p1 = $('ph1').value.replace(/[\s-]/g, ''), p2 = $('ph2').value.replace(/[\s-]/g, '');
+  const a = phoneErr(p1), b = phoneErr(p2);
+  if (a) e.ph1 = a;
+  if (b) e.ph2 = b; else if (p1 === p2) e.ph2 = 'الرقم الثاني لازم يختلف عن الأول';
+  ['name', 'curr', 'gov', 'side', 'area', 'ph1', 'ph2'].forEach(k => $('e_' + k).textContent = e[k] || '');
+  const first = Object.keys(e)[0];
+  if (first) { const el = $('e_' + first); el.scrollIntoView({behavior: 'smooth', block: 'center'}); return null; }
+  return {n: name, cu: curr, g: $('gov').value, s: side, a: $('area').value.trim(), p1, p2};
+}
+['ph1', 'ph2'].forEach(id => $(id).addEventListener('input', () => { $('e_' + id).textContent = AR.test($(id).value) ? 'اكتب الرقم بالأرقام الإنجليزية مو العربية' : ''; }));
+
+$('next').onclick = () => {
+  if (page === 1) return go(2);
+  const f = validate(); if (!f) return;
+  const order = Object.assign(f, {i: Object.entries(cart).map(([id, q]) => [+id, q]), t: subtotal() + fee()});
+  if (tg && tg.sendData) tg.sendData(JSON.stringify(order));
+  else alert(JSON.stringify(order));
+};
+$('back').onclick = () => go(1);
+
+// تعبئة معلومات الطالب المسجل تلقائياً
+if (D.p) {
+  $('name').value = D.p.n || '';
+  if (D.p.cu) { const b = document.querySelector('#curr button[data-v="' + D.p.cu + '"]'); if (b) b.click(); }
+  if (D.p.g) { $('gov').value = D.p.g; $('gov').onchange(); }
+  if (D.p.s) { const b = document.querySelector('#side button[data-v="' + D.p.s + '"]'); if (b) b.click(); }
+  $('area').value = D.p.a || ''; $('ph1').value = D.p.p1 || ''; $('ph2').value = D.p.p2 || '';
+  // المسجل: معلوماته مقفولة
+  ['name', 'gov', 'area'].forEach(id => { $(id).disabled = true; });
+  document.querySelectorAll('#curr button, #side button').forEach(b => { b.disabled = true; });
+  const n = document.createElement('div'); n.className = 'warn'; n.style.cssText = 'margin:0 0 12px;border:1px dashed var(--gold2);border-radius:12px;padding:10px 12px;font-size:14px';
+  n.innerHTML = '🔒 هاي معلوماتك المسجلة، ولتغييرها تواصل ويا قصي العميري.<br>📞 <b>أرقام الهاتف</b> تگدر تغيرها لهذا الطلب بس، إذا تريد الطلب يوصل على رقم ثاني.';
+  document.querySelector('#pg2 .form').prepend(n);
+}
+drawProducts(); update();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# أسرار وبيانات الطلاب - ممنوع ترتفع على GitHub
+settings.txt
+*.db
+*.db-journal
+bot/pdf/
+__pycache__/
+*.pyc
+*_backup.py
+node_modules/
+.next/
+.env.local
+app/data/
+*.tsbuildinfo
