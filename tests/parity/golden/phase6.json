@@ -1,0 +1,9722 @@
+{
+"البحث السريع: الإدارة والمكتبة والطالب": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة النجاح للبنات (المنصور)\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 ما لگيت شي لـ «زينب».\nاكتب جزء من الاسم، أو رقم الهاتف، أو المحافظة، أو اسم المركز…",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 <b>1 نتيجة</b> لـ «احمد»\n\n<b>1) أحمد علي حسن مؤمنة</b>\n📞 <code>07711111111</code> · <code>07811111111</code>\n🎓 الخامس العلمي · 📘 إنجليزي\n📍 بغداد - الكرخ — المنصور شارع الأميرات\n📝 حضوري — قمة النجاح للبنات (المنصور)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "1) ✏️ تعديل",
+"callback_data": "a:sv:3"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 ما لگيت شي لـ «مومنه».\nاكتب جزء من الاسم، أو رقم الهاتف، أو المحافظة، أو اسم المركز…",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 <b>1 نتيجة</b> لـ «٠٧٧١»\n\n<b>1) أحمد علي حسن مؤمنة</b>\n📞 <code>07711111111</code> · <code>07811111111</code>\n🎓 الخامس العلمي · 📘 إنجليزي\n📍 بغداد - الكرخ — المنصور شارع الأميرات\n📝 حضوري — قمة النجاح للبنات (المنصور)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "1) ✏️ تعديل",
+"callback_data": "a:sv:3"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 <b>1 نتيجة</b> لـ «بغداد الكرخ»\n\n<b>1) أحمد علي حسن مؤمنة</b>\n📞 <code>07711111111</code> · <code>07811111111</code>\n🎓 الخامس العلمي · 📘 إنجليزي\n📍 بغداد - الكرخ — المنصور شارع الأميرات\n📝 حضوري — قمة النجاح للبنات (المنصور)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "1) ✏️ تعديل",
+"callback_data": "a:sv:3"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 <b>1 نتيجة</b> لـ «قمة النجاح»\n\n<b>1) أحمد علي حسن مؤمنة</b>\n📞 <code>07711111111</code> · <code>07811111111</code>\n🎓 الخامس العلمي · 📘 إنجليزي\n📍 بغداد - الكرخ — المنصور شارع الأميرات\n📝 حضوري — قمة النجاح للبنات (المنصور)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "1) ✏️ تعديل",
+"callback_data": "a:sv:3"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 <b>1 نتيجة</b> لـ «المنصور»\n\n<b>1) أحمد علي حسن مؤمنة</b>\n📞 <code>07711111111</code> · <code>07811111111</code>\n🎓 الخامس العلمي · 📘 إنجليزي\n📍 بغداد - الكرخ — المنصور شارع الأميرات\n📝 حضوري — قمة النجاح للبنات (المنصور)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "1) ✏️ تعديل",
+"callback_data": "a:sv:3"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 ما لگيت شي لـ «&lt;b&gt;».\nاكتب جزء من الاسم، أو رقم الهاتف، أو المحافظة، أو اسم المركز…",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 <b>2 نتيجة</b> لـ «07»\n\n<b>1) أحمد علي حسن مؤمنة</b>\n📞 <code>07711111111</code> · <code>07811111111</code>\n🎓 الخامس العلمي · 📘 إنجليزي\n📍 بغداد - الكرخ — المنصور شارع الأميرات\n📝 حضوري — قمة النجاح للبنات (المنصور)\n\n<b>2) علي حسن محمد كاظم</b>\n📞 <code>07701234567</code> · <code>07801234567</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار قرب الجسر\n📝 إلكتروني",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "1) ✏️ تعديل",
+"callback_data": "a:sv:3"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:3"
+}
+],
+[
+{
+"text": "2) ✏️ تعديل",
+"callback_data": "a:sv:2"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "أهلا بك 🌷 اضغط «🛒 المتجر» حتى تشوف المنتجات.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "أهلا بك 🌷 اضغط «🛒 المتجر» حتى تشوف المنتجات.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم المكتبة (مثلاً: مكتبة 1):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انضافت المكتبة.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🏪 مكتبة</b>\n\n📊 اليوم: <b>0 د.ع</b> (0)\n📅 البارحة: <b>0 د.ع</b> (0)\n🔴 غير محاسب عليه: <b>0 د.ع</b> (0 بيعة)\n✅ كل اللي تحاسبتوا عليه: <b>0 د.ع</b>\n🎯 الرصيد المسموح: <b>بدون حد</b>\n\n<b>👥 الحسابات:</b>\n(ما أكو حساب، ضيف حساب حتى يبيع)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📊 اليوم",
+"callback_data": "a:libd:1:0"
+},
+{
+"text": "📅 البارحة",
+"callback_data": "a:libd:1:1"
+}
+],
+[
+{
+"text": "🔴 غير المحاسب عليها (تفصيل)",
+"callback_data": "a:libu:1"
+}
+],
+[
+{
+"text": "✅ تمت المحاسبة",
+"callback_data": "a:libs:1"
+}
+],
+[
+{
+"text": "🗂 الأرشيف",
+"callback_data": "a:libar:1"
+}
+],
+[
+{
+"text": "👤 إضافة حساب للمكتبة",
+"callback_data": "a:libm:1"
+}
+],
+[
+{
+"text": "🎯 الرصيد المسموح",
+"callback_data": "a:libl:1"
+},
+{
+"text": "✏️ تغيير الاسم",
+"callback_data": "a:libn:1"
+}
+],
+[
+{
+"text": "🗑 حذف المكتبة",
+"callback_data": "a:libx:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع للمكتبات",
+"callback_data": "a:lib"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب رقم حساب صاحب المكتبة (يطلعه من البوت إذا كتب كلمة <code>رقمي</code>):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم صاحب الحساب (مثلاً: أبو أحمد):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انضاف الحساب للمكتبة.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 99999,
+"text": "✅ تمت إضافتك لـ <b>مكتبة</b> بالبوت.\nاضغط زر «🏪 مكتبتي» اللي جوة 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "🏪 مكتبتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🏪 مكتبة</b>\n\n📊 اليوم: <b>0 د.ع</b> (0)\n📅 البارحة: <b>0 د.ع</b> (0)\n🔴 غير محاسب عليه: <b>0 د.ع</b> (0 بيعة)\n✅ كل اللي تحاسبتوا عليه: <b>0 د.ع</b>\n🎯 الرصيد المسموح: <b>بدون حد</b>\n\n<b>👥 الحسابات:</b>\n• صاحبها",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📊 اليوم",
+"callback_data": "a:libd:1:0"
+},
+{
+"text": "📅 البارحة",
+"callback_data": "a:libd:1:1"
+}
+],
+[
+{
+"text": "🔴 غير المحاسب عليها (تفصيل)",
+"callback_data": "a:libu:1"
+}
+],
+[
+{
+"text": "✅ تمت المحاسبة",
+"callback_data": "a:libs:1"
+}
+],
+[
+{
+"text": "🗂 الأرشيف",
+"callback_data": "a:libar:1"
+}
+],
+[
+{
+"text": "👤 إضافة حساب للمكتبة",
+"callback_data": "a:libm:1"
+}
+],
+[
+{
+"text": "🗑 حذف حساب: صاحبها",
+"callback_data": "a:libmd:99999"
+}
+],
+[
+{
+"text": "🎯 الرصيد المسموح",
+"callback_data": "a:libl:1"
+},
+{
+"text": "✏️ تغيير الاسم",
+"callback_data": "a:libn:1"
+}
+],
+[
+{
+"text": "🗑 حذف المكتبة",
+"callback_data": "a:libx:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع للمكتبات",
+"callback_data": "a:lib"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 99999,
+"text": "🔍 <b>1 نتيجة</b> — اضغط الطالب حتى تبيعله 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏪 أحمد علي حسن مؤمنة — 07711111111",
+"callback_data": "of:ps:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 99999,
+"text": "🔍 <b>2 نتيجة</b> — اضغط الطالب حتى تبيعله 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏪 أحمد علي حسن مؤمنة — 07711111111",
+"callback_data": "of:ps:3"
+}
+],
+[
+{
+"text": "🏪 علي حسن محمد كاظم — 07701234567",
+"callback_data": "of:ps:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 99999,
+"text": "🔍 ما لگيت شي لـ «مو موجود».\nاكتب جزء من الاسم، أو رقم الهاتف، أو المحافظة، أو اسم المركز…",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 <b>18 نتيجة</b> (أول 10) لـ «طالب»\n\n<b>1) طالب رقم 1 علي حسن</b>\n📞 <code>07700000001</code> · <code>07800000001</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>2) طالب رقم 10 علي حسن</b>\n📞 <code>07700000000</code> · <code>07800000000</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>3) طالب رقم 11 علي حسن</b>\n📞 <code>07700000001</code> · <code>07800000001</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>4) طالب رقم 12 علي حسن</b>\n📞 <code>07700000002</code> · <code>07800000002</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>5) طالب رقم 13 علي حسن</b>\n📞 <code>07700000003</code> · <code>07800000003</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>6) طالب رقم 14 علي حسن</b>\n📞 <code>07700000004</code> · <code>07800000004</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>7) طالب رقم 15 علي حسن</b>\n📞 <code>07700000005</code> · <code>07800000005</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>8) طالب رقم 16 علي حسن</b>\n📞 <code>07700000006</code> · <code>07800000006</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>9) طالب رقم 17 علي حسن</b>\n📞 <code>07700000007</code> · <code>07800000007</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني\n\n<b>10) طالب رقم 18 علي حسن</b>\n📞 <code>07700000008</code> · <code>07800000008</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — العشار\n📝 إلكتروني",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "1) ✏️ تعديل",
+"callback_data": "a:sv:101"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:101"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:101"
+}
+],
+[
+{
+"text": "2) ✏️ تعديل",
+"callback_data": "a:sv:110"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:110"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:110"
+}
+],
+[
+{
+"text": "3) ✏️ تعديل",
+"callback_data": "a:sv:111"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:111"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:111"
+}
+],
+[
+{
+"text": "4) ✏️ تعديل",
+"callback_data": "a:sv:112"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:112"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:112"
+}
+],
+[
+{
+"text": "5) ✏️ تعديل",
+"callback_data": "a:sv:113"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:113"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:113"
+}
+],
+[
+{
+"text": "6) ✏️ تعديل",
+"callback_data": "a:sv:114"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:114"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:114"
+}
+],
+[
+{
+"text": "7) ✏️ تعديل",
+"callback_data": "a:sv:115"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:115"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:115"
+}
+],
+[
+{
+"text": "8) ✏️ تعديل",
+"callback_data": "a:sv:116"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:116"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:116"
+}
+],
+[
+{
+"text": "9) ✏️ تعديل",
+"callback_data": "a:sv:117"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:117"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:117"
+}
+],
+[
+{
+"text": "10) ✏️ تعديل",
+"callback_data": "a:sv:118"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:118"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:118"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 99999,
+"text": "🔍 <b>18 نتيجة</b> (أول 10) — اضغط الطالب حتى تبيعله 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏪 طالب رقم 1 علي حسن — 07700000001",
+"callback_data": "of:ps:101"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 10 علي حسن — 07700000000",
+"callback_data": "of:ps:110"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 11 علي حسن — 07700000001",
+"callback_data": "of:ps:111"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 12 علي حسن — 07700000002",
+"callback_data": "of:ps:112"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 13 علي حسن — 07700000003",
+"callback_data": "of:ps:113"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 14 علي حسن — 07700000004",
+"callback_data": "of:ps:114"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 15 علي حسن — 07700000005",
+"callback_data": "of:ps:115"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 16 علي حسن — 07700000006",
+"callback_data": "of:ps:116"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 17 علي حسن — 07700000007",
+"callback_data": "of:ps:117"
+}
+],
+[
+{
+"text": "🏪 طالب رقم 18 علي حسن — 07700000008",
+"callback_data": "of:ps:118"
+}
+]
+]
+}
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+}
+],
+"office_users": [
+{
+"user_id": 99999,
+"office_id": 1,
+"name": "صاحبها"
+}
+],
+"offices": [
+{
+"id": 1,
+"name": "مكتبة",
+"lim": 0,
+"active": 1
+}
+],
+"orders": [],
+"products": [],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 2,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 3,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار قرب الجسر",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:39",
+"updated": "2026-11-04 01:39"
+},
+{
+"user_id": 3,
+"username": "u3",
+"name": "أحمد علي حسن مؤمنة",
+"curr": "إنجليزي",
+"grade": "الخامس العلمي",
+"gov": "بغداد",
+"side": "الكرخ",
+"area": "المنصور شارع الأميرات",
+"phone1": "07711111111",
+"phone2": "07811111111",
+"exam": "حضوري",
+"center_id": 1,
+"created": "2026-11-04 01:39",
+"updated": "2026-11-04 01:39"
+},
+{
+"user_id": 101,
+"username": "",
+"name": "طالب رقم 1 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000001",
+"phone2": "07800000001",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 102,
+"username": "",
+"name": "طالب رقم 2 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000002",
+"phone2": "07800000002",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 103,
+"username": "",
+"name": "طالب رقم 3 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000003",
+"phone2": "07800000003",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 104,
+"username": "",
+"name": "طالب رقم 4 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000004",
+"phone2": "07800000004",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 105,
+"username": "",
+"name": "طالب رقم 5 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000005",
+"phone2": "07800000005",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 106,
+"username": "",
+"name": "طالب رقم 6 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000006",
+"phone2": "07800000006",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 107,
+"username": "",
+"name": "طالب رقم 7 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000007",
+"phone2": "07800000007",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 108,
+"username": "",
+"name": "طالب رقم 8 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000008",
+"phone2": "07800000008",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 109,
+"username": "",
+"name": "طالب رقم 9 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000009",
+"phone2": "07800000009",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 110,
+"username": "",
+"name": "طالب رقم 10 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000000",
+"phone2": "07800000000",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 111,
+"username": "",
+"name": "طالب رقم 11 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000001",
+"phone2": "07800000001",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 112,
+"username": "",
+"name": "طالب رقم 12 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000002",
+"phone2": "07800000002",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 113,
+"username": "",
+"name": "طالب رقم 13 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000003",
+"phone2": "07800000003",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 114,
+"username": "",
+"name": "طالب رقم 14 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000004",
+"phone2": "07800000004",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 115,
+"username": "",
+"name": "طالب رقم 15 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000005",
+"phone2": "07800000005",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 116,
+"username": "",
+"name": "طالب رقم 16 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000006",
+"phone2": "07800000006",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 117,
+"username": "",
+"name": "طالب رقم 17 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000007",
+"phone2": "07800000007",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+},
+{
+"user_id": 118,
+"username": "",
+"name": "طالب رقم 18 علي حسن",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار",
+"phone1": "07700000008",
+"phone2": "07800000008",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "x",
+"updated": "x"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"card_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">زينب علي حسين جاسم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">إنجليزي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">الخامس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">بغداد - الكرخ</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">المنصور شارع الأميرات</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07711111111</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07811111111</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">حضوري</td></tr><tr><td class=\"k\"><span>🏫</span>المركز الامتحاني</td><td class=\"v\">قمة النجاح للبنات (المنصور)</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>"
+}
+},
+"القوائم والمنتجات والأقسام والتوصيل": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>⚙️ لوحة التحكم</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📥 إضافة منتجات دفعة وحدة",
+"callback_data": "a:bulk"
+}
+],
+[
+{
+"text": "➕ إضافة منتج واحد",
+"callback_data": "a:add"
+}
+],
+[
+{
+"text": "📋 المنتجات والأقسام",
+"callback_data": "a:list"
+}
+],
+[
+{
+"text": "🚚 أسعار التوصيل",
+"callback_data": "a:fees"
+}
+],
+[
+{
+"text": "💻 فصول امتحانها إلكتروني فقط",
+"callback_data": "a:oo"
+}
+],
+[
+{
+"text": "🖨 الطلبات الجديدة (للطباعة)",
+"callback_data": "a:pend"
+}
+],
+[
+{
+"text": "🗂 الطلبات المطبوعة",
+"callback_data": "a:printed"
+}
+],
+[
+{
+"text": "🏪 بيع بالمكتب",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "📊 مبيعات المكتب",
+"callback_data": "a:of"
+}
+],
+[
+{
+"text": "🎓 الطلاب",
+"callback_data": "a:st"
+}
+],
+[
+{
+"text": "🏫 المراكز الامتحانية",
+"callback_data": "a:ce"
+}
+],
+[
+{
+"text": "❓ الأسئلة اللي تنتظر جواب (0)",
+"callback_data": "a:oq"
+}
+],
+[
+{
+"text": "🏬 المكتبات — اليوم: 0 بيعة · 0 د.ع",
+"callback_data": "a:lib"
+}
+],
+[
+{
+"text": "⏰ أوقات استقبال الأسئلة",
+"callback_data": "a:hr"
+}
+],
+[
+{
+"text": "📚 الفصول والمواضيع",
+"callback_data": "a:cur"
+}
+],
+[
+{
+"text": "👥 المساعدين والصلاحيات",
+"callback_data": "a:sf"
+}
+],
+[
+{
+"text": "🔗 ربط مجموعة الأسئلة",
+"callback_data": "a:grp"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "أهلا بك 🌷 اضغط «🛒 المتجر» حتى تشوف المنتجات.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>⚙️ لوحة التحكم</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📥 إضافة منتجات دفعة وحدة",
+"callback_data": "a:bulk"
+}
+],
+[
+{
+"text": "➕ إضافة منتج واحد",
+"callback_data": "a:add"
+}
+],
+[
+{
+"text": "📋 المنتجات والأقسام",
+"callback_data": "a:list"
+}
+],
+[
+{
+"text": "🚚 أسعار التوصيل",
+"callback_data": "a:fees"
+}
+],
+[
+{
+"text": "💻 فصول امتحانها إلكتروني فقط",
+"callback_data": "a:oo"
+}
+],
+[
+{
+"text": "🖨 الطلبات الجديدة (للطباعة)",
+"callback_data": "a:pend"
+}
+],
+[
+{
+"text": "🗂 الطلبات المطبوعة",
+"callback_data": "a:printed"
+}
+],
+[
+{
+"text": "🏪 بيع بالمكتب",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "📊 مبيعات المكتب",
+"callback_data": "a:of"
+}
+],
+[
+{
+"text": "🎓 الطلاب",
+"callback_data": "a:st"
+}
+],
+[
+{
+"text": "🏫 المراكز الامتحانية",
+"callback_data": "a:ce"
+}
+],
+[
+{
+"text": "❓ الأسئلة اللي تنتظر جواب (0)",
+"callback_data": "a:oq"
+}
+],
+[
+{
+"text": "🏬 المكتبات — اليوم: 0 بيعة · 0 د.ع",
+"callback_data": "a:lib"
+}
+],
+[
+{
+"text": "⏰ أوقات استقبال الأسئلة",
+"callback_data": "a:hr"
+}
+],
+[
+{
+"text": "📚 الفصول والمواضيع",
+"callback_data": "a:cur"
+}
+],
+[
+{
+"text": "👥 المساعدين والصلاحيات",
+"callback_data": "a:sf"
+}
+],
+[
+{
+"text": "🔗 ربط مجموعة الأسئلة",
+"callback_data": "a:grp"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>⚙️ لوحة التحكم</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📥 إضافة منتجات دفعة وحدة",
+"callback_data": "a:bulk"
+}
+],
+[
+{
+"text": "➕ إضافة منتج واحد",
+"callback_data": "a:add"
+}
+],
+[
+{
+"text": "📋 المنتجات والأقسام",
+"callback_data": "a:list"
+}
+],
+[
+{
+"text": "🚚 أسعار التوصيل",
+"callback_data": "a:fees"
+}
+],
+[
+{
+"text": "💻 فصول امتحانها إلكتروني فقط",
+"callback_data": "a:oo"
+}
+],
+[
+{
+"text": "🖨 الطلبات الجديدة (للطباعة)",
+"callback_data": "a:pend"
+}
+],
+[
+{
+"text": "🗂 الطلبات المطبوعة",
+"callback_data": "a:printed"
+}
+],
+[
+{
+"text": "🏪 بيع بالمكتب",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "📊 مبيعات المكتب",
+"callback_data": "a:of"
+}
+],
+[
+{
+"text": "🎓 الطلاب",
+"callback_data": "a:st"
+}
+],
+[
+{
+"text": "🏫 المراكز الامتحانية",
+"callback_data": "a:ce"
+}
+],
+[
+{
+"text": "❓ الأسئلة اللي تنتظر جواب (0)",
+"callback_data": "a:oq"
+}
+],
+[
+{
+"text": "🏬 المكتبات — اليوم: 0 بيعة · 0 د.ع",
+"callback_data": "a:lib"
+}
+],
+[
+{
+"text": "⏰ أوقات استقبال الأسئلة",
+"callback_data": "a:hr"
+}
+],
+[
+{
+"text": "📚 الفصول والمواضيع",
+"callback_data": "a:cur"
+}
+],
+[
+{
+"text": "👥 المساعدين والصلاحيات",
+"callback_data": "a:sf"
+}
+],
+[
+{
+"text": "🔗 ربط مجموعة الأسئلة",
+"callback_data": "a:grp"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "لا توجد أقسام بعد.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "📥 <b>إضافة منتجات دفعة وحدة</b>\n\nأرسل رسالة وحدة بهذا الشكل:\n• السطر اللي يبدي بعلامة <code>#</code> هو اسم القسم.\n• تحته كل منتج بسطر: الاسم بعدين علامة <code>=</code> بعدين السعر.\n\n<code># المحاضرات والامتحانات\nالمحاضرة الأولى مع امتحانها = 5000\nالمحاضرة الثانية مع امتحانها = 5000\n# الملازم\nملزمة الفصل الأول = 15000</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تمت إضافة 5 منتج.\n\n⚠️ هاي السطور ما فهمتها، ما انضافت:\n• سطر غلط\n• بدون سعر =",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 منتجات أخرى  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 قسم | جديد  (3)",
+"callback_data": "a:lc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 منتجات أخرى  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 قسم | جديد  (3)",
+"callback_data": "a:lc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📂 منتجات أخرى</b>\n✏️ تعديل السعر   🗑 حذف\n🏫 حضوري / 💻 إلكتروني / 🔄 كليهما: اضغط الأيقونة حتى تغير نوع المنتج (طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✏️ بدون قسم — 1,000 د.ع",
+"callback_data": "a:ep:1"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:1"
+}
+],
+[
+{
+"text": "✏️ بعد قسم فارغ — 2,000 د.ع",
+"callback_data": "a:ep:2"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع للأقسام",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 منتجات أخرى  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 قسم | جديد  (3)",
+"callback_data": "a:lc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "اختر قسم المنتج:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 منتجات أخرى",
+"callback_data": "a:ac:1"
+}
+],
+[
+{
+"text": "📂 قسم | جديد",
+"callback_data": "a:ac:2"
+}
+],
+[
+{
+"text": "➕ قسم جديد",
+"callback_data": "a:nc"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم المنتج:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "💰 اكتب سعر «منتج &lt;خاص&gt;» بالدينار (أرقام فقط):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ اكتب السعر أرقام فقط، مثل 15000",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تمت إضافة «منتج &lt;خاص&gt;» بسعر 12,500 د.ع",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📂 منتجات أخرى</b>\n✏️ تعديل السعر   🗑 حذف\n🏫 حضوري / 💻 إلكتروني / 🔄 كليهما: اضغط الأيقونة حتى تغير نوع المنتج (طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✏️ بدون قسم — 1,000 د.ع",
+"callback_data": "a:ep:1"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:1"
+}
+],
+[
+{
+"text": "✏️ بعد قسم فارغ — 2,000 د.ع",
+"callback_data": "a:ep:2"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:2"
+}
+],
+[
+{
+"text": "✏️ منتج <خاص> — 12,500 د.ع",
+"callback_data": "a:ep:6"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:6"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:6"
+}
+],
+[
+{
+"text": "⬅️ رجوع للأقسام",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "اختر قسم المنتج:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 منتجات أخرى",
+"callback_data": "a:ac:1"
+}
+],
+[
+{
+"text": "📂 قسم | جديد",
+"callback_data": "a:ac:2"
+}
+],
+[
+{
+"text": "➕ قسم جديد",
+"callback_data": "a:nc"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم القسم الجديد:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم المنتج:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "💰 اكتب سعر «منتج آخر» بالدينار (أرقام فقط):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تمت إضافة «منتج آخر» بسعر 3,000 د.ع",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📂 قسم آخر</b>\n✏️ تعديل السعر   🗑 حذف\n🏫 حضوري / 💻 إلكتروني / 🔄 كليهما: اضغط الأيقونة حتى تغير نوع المنتج (طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✏️ منتج آخر — 3,000 د.ع",
+"callback_data": "a:ep:7"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:7"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:7"
+}
+],
+[
+{
+"text": "⬅️ رجوع للأقسام",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "💰 اكتب السعر الجديد لـ «بدون قسم» (الحالي 1,000 د.ع):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ اكتب السعر أرقام فقط",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تم تعديل السعر إلى 7,000 د.ع",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📂 منتجات أخرى</b>\n✏️ تعديل السعر   🗑 حذف\n🏫 حضوري / 💻 إلكتروني / 🔄 كليهما: اضغط الأيقونة حتى تغير نوع المنتج (طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✏️ بدون قسم — 7,000 د.ع",
+"callback_data": "a:ep:1"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:1"
+}
+],
+[
+{
+"text": "✏️ بعد قسم فارغ — 2,000 د.ع",
+"callback_data": "a:ep:2"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:2"
+}
+],
+[
+{
+"text": "✏️ منتج <خاص> — 12,500 د.ع",
+"callback_data": "a:ep:6"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:6"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:6"
+}
+],
+[
+{
+"text": "⬅️ رجوع للأقسام",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📂 منتجات أخرى</b>\n✏️ تعديل السعر   🗑 حذف\n🏫 حضوري / 💻 إلكتروني / 🔄 كليهما: اضغط الأيقونة حتى تغير نوع المنتج (طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✏️ بدون قسم — 7,000 د.ع",
+"callback_data": "a:ep:1"
+},
+{
+"text": "🏫",
+"callback_data": "a:pm:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:1"
+}
+],
+[
+{
+"text": "✏️ بعد قسم فارغ — 2,000 د.ع",
+"callback_data": "a:ep:2"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:2"
+}
+],
+[
+{
+"text": "✏️ منتج <خاص> — 12,500 د.ع",
+"callback_data": "a:ep:6"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:6"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:6"
+}
+],
+[
+{
+"text": "⬅️ رجوع للأقسام",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📂 منتجات أخرى</b>\n✏️ تعديل السعر   🗑 حذف\n🏫 حضوري / 💻 إلكتروني / 🔄 كليهما: اضغط الأيقونة حتى تغير نوع المنتج (طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✏️ بدون قسم — 7,000 د.ع",
+"callback_data": "a:ep:1"
+},
+{
+"text": "💻",
+"callback_data": "a:pm:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:1"
+}
+],
+[
+{
+"text": "✏️ بعد قسم فارغ — 2,000 د.ع",
+"callback_data": "a:ep:2"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:2"
+}
+],
+[
+{
+"text": "✏️ منتج <خاص> — 12,500 د.ع",
+"callback_data": "a:ep:6"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:6"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:6"
+}
+],
+[
+{
+"text": "⬅️ رجوع للأقسام",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📂 منتجات أخرى</b>\n✏️ تعديل السعر   🗑 حذف\n🏫 حضوري / 💻 إلكتروني / 🔄 كليهما: اضغط الأيقونة حتى تغير نوع المنتج (طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✏️ بدون قسم — 7,000 د.ع",
+"callback_data": "a:ep:1"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:1"
+}
+],
+[
+{
+"text": "✏️ بعد قسم فارغ — 2,000 د.ع",
+"callback_data": "a:ep:2"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:2"
+}
+],
+[
+{
+"text": "✏️ منتج <خاص> — 12,500 د.ع",
+"callback_data": "a:ep:6"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:6"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:6"
+}
+],
+[
+{
+"text": "⬅️ رجوع للأقسام",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "هل تريد حذف «بدون قسم»؟",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "نعم احذف",
+"callback_data": "a:del2:1"
+},
+{
+"text": "لا",
+"callback_data": "a:lc:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "🗑 تم الحذف.\n\n<b>📂 منتجات أخرى</b>\n✏️ تعديل السعر   🗑 حذف\n🏫 حضوري / 💻 إلكتروني / 🔄 كليهما: اضغط الأيقونة حتى تغير نوع المنتج (طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✏️ بعد قسم فارغ — 2,000 د.ع",
+"callback_data": "a:ep:2"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:2"
+}
+],
+[
+{
+"text": "✏️ منتج <خاص> — 12,500 د.ع",
+"callback_data": "a:ep:6"
+},
+{
+"text": "🔄",
+"callback_data": "a:pm:6"
+},
+{
+"text": "🗑",
+"callback_data": "a:del:6"
+}
+],
+[
+{
+"text": "⬅️ رجوع للأقسام",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "هل تريد حذف قسم «قسم | جديد» مع كل منتجاته؟",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "نعم احذف",
+"callback_data": "a:dc2:2"
+},
+{
+"text": "لا",
+"callback_data": "a:list"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "🗑 تم حذف القسم.\n\n<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 منتجات أخرى  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 قسم آخر  (1)",
+"callback_data": "a:lc:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:3"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 منتجات أخرى  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 قسم آخر  (1)",
+"callback_data": "a:lc:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:3"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>🚚 أسعار التوصيل</b>\nاضغط على المحافظة حتى تغير سعرها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد: 5,000",
+"callback_data": "a:fee:0"
+},
+{
+"text": "البصرة: 5,000",
+"callback_data": "a:fee:1"
+}
+],
+[
+{
+"text": "نينوى: 5,000",
+"callback_data": "a:fee:2"
+},
+{
+"text": "أربيل: 5,000",
+"callback_data": "a:fee:3"
+}
+],
+[
+{
+"text": "النجف: 5,000",
+"callback_data": "a:fee:4"
+},
+{
+"text": "كربلاء: 5,000",
+"callback_data": "a:fee:5"
+}
+],
+[
+{
+"text": "بابل: 5,000",
+"callback_data": "a:fee:6"
+},
+{
+"text": "الأنبار: 5,000",
+"callback_data": "a:fee:7"
+}
+],
+[
+{
+"text": "ديالى: 5,000",
+"callback_data": "a:fee:8"
+},
+{
+"text": "ذي قار: 5,000",
+"callback_data": "a:fee:9"
+}
+],
+[
+{
+"text": "ميسان: 5,000",
+"callback_data": "a:fee:10"
+},
+{
+"text": "المثنى: 5,000",
+"callback_data": "a:fee:11"
+}
+],
+[
+{
+"text": "القادسية: 5,000",
+"callback_data": "a:fee:12"
+},
+{
+"text": "واسط: 5,000",
+"callback_data": "a:fee:13"
+}
+],
+[
+{
+"text": "صلاح الدين: 5,000",
+"callback_data": "a:fee:14"
+},
+{
+"text": "كركوك: 5,000",
+"callback_data": "a:fee:15"
+}
+],
+[
+{
+"text": "دهوك: 5,000",
+"callback_data": "a:fee:16"
+},
+{
+"text": "السليمانية: 5,000",
+"callback_data": "a:fee:17"
+}
+],
+[
+{
+"text": "💲 نفس السعر لكل المحافظات",
+"callback_data": "a:feeall"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🚚 اكتب سعر التوصيل لـ أربيل:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ اكتب السعر أرقام فقط",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تم تعديل سعر التوصيل.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🚚 أسعار التوصيل</b>\nاضغط على المحافظة حتى تغير سعرها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد: 5,000",
+"callback_data": "a:fee:0"
+},
+{
+"text": "البصرة: 5,000",
+"callback_data": "a:fee:1"
+}
+],
+[
+{
+"text": "نينوى: 5,000",
+"callback_data": "a:fee:2"
+},
+{
+"text": "أربيل: 7,500",
+"callback_data": "a:fee:3"
+}
+],
+[
+{
+"text": "النجف: 5,000",
+"callback_data": "a:fee:4"
+},
+{
+"text": "كربلاء: 5,000",
+"callback_data": "a:fee:5"
+}
+],
+[
+{
+"text": "بابل: 5,000",
+"callback_data": "a:fee:6"
+},
+{
+"text": "الأنبار: 5,000",
+"callback_data": "a:fee:7"
+}
+],
+[
+{
+"text": "ديالى: 5,000",
+"callback_data": "a:fee:8"
+},
+{
+"text": "ذي قار: 5,000",
+"callback_data": "a:fee:9"
+}
+],
+[
+{
+"text": "ميسان: 5,000",
+"callback_data": "a:fee:10"
+},
+{
+"text": "المثنى: 5,000",
+"callback_data": "a:fee:11"
+}
+],
+[
+{
+"text": "القادسية: 5,000",
+"callback_data": "a:fee:12"
+},
+{
+"text": "واسط: 5,000",
+"callback_data": "a:fee:13"
+}
+],
+[
+{
+"text": "صلاح الدين: 5,000",
+"callback_data": "a:fee:14"
+},
+{
+"text": "كركوك: 5,000",
+"callback_data": "a:fee:15"
+}
+],
+[
+{
+"text": "دهوك: 5,000",
+"callback_data": "a:fee:16"
+},
+{
+"text": "السليمانية: 5,000",
+"callback_data": "a:fee:17"
+}
+],
+[
+{
+"text": "💲 نفس السعر لكل المحافظات",
+"callback_data": "a:feeall"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🚚 اكتب سعر التوصيل لكل المحافظات:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تم تعديل سعر التوصيل.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🚚 أسعار التوصيل</b>\nاضغط على المحافظة حتى تغير سعرها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد: 6,000",
+"callback_data": "a:fee:0"
+},
+{
+"text": "البصرة: 6,000",
+"callback_data": "a:fee:1"
+}
+],
+[
+{
+"text": "نينوى: 6,000",
+"callback_data": "a:fee:2"
+},
+{
+"text": "أربيل: 6,000",
+"callback_data": "a:fee:3"
+}
+],
+[
+{
+"text": "النجف: 6,000",
+"callback_data": "a:fee:4"
+},
+{
+"text": "كربلاء: 6,000",
+"callback_data": "a:fee:5"
+}
+],
+[
+{
+"text": "بابل: 6,000",
+"callback_data": "a:fee:6"
+},
+{
+"text": "الأنبار: 6,000",
+"callback_data": "a:fee:7"
+}
+],
+[
+{
+"text": "ديالى: 6,000",
+"callback_data": "a:fee:8"
+},
+{
+"text": "ذي قار: 6,000",
+"callback_data": "a:fee:9"
+}
+],
+[
+{
+"text": "ميسان: 6,000",
+"callback_data": "a:fee:10"
+},
+{
+"text": "المثنى: 6,000",
+"callback_data": "a:fee:11"
+}
+],
+[
+{
+"text": "القادسية: 6,000",
+"callback_data": "a:fee:12"
+},
+{
+"text": "واسط: 6,000",
+"callback_data": "a:fee:13"
+}
+],
+[
+{
+"text": "صلاح الدين: 6,000",
+"callback_data": "a:fee:14"
+},
+{
+"text": "كركوك: 6,000",
+"callback_data": "a:fee:15"
+}
+],
+[
+{
+"text": "دهوك: 6,000",
+"callback_data": "a:fee:16"
+},
+{
+"text": "السليمانية: 6,000",
+"callback_data": "a:fee:17"
+}
+],
+[
+{
+"text": "💲 نفس السعر لكل المحافظات",
+"callback_data": "a:feeall"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🚚 اكتب سعر التوصيل لـ بغداد:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "❌ تم الإلغاء.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "اختر قسم المنتج:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 منتجات أخرى",
+"callback_data": "a:ac:1"
+}
+],
+[
+{
+"text": "📂 قسم آخر",
+"callback_data": "a:ac:3"
+}
+],
+[
+{
+"text": "➕ قسم جديد",
+"callback_data": "a:nc"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "لا توجد أقسام بعد.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>💻 فصول امتحانها إلكتروني فقط</b>\n\nأشّر ☑️ على الفصل اللي خلص امتحانه الحضوري.\nطالب الحضوري راح يشوف منتجات <b>الإلكتروني</b> لهذا الفصل بدل الحضوري، ويطلعله تنبيه: «امتحانات هذا الفصل إلكترونية فقط».\n(الفصل يتعرف من اسم المنتج، مثل «الفصل الأول»)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 ما لگيت شي لـ «نص بالقائمة».\nاكتب جزء من الاسم، أو رقم الهاتف، أو المحافظة، أو اسم المركز…",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [
+{
+"id": 1,
+"name": "منتجات أخرى",
+"active": 1
+},
+{
+"id": 2,
+"name": "قسم | جديد",
+"active": 1
+},
+{
+"id": 3,
+"name": "قسم آخر",
+"active": 1
+}
+],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 6000
+},
+{
+"gov": "البصرة",
+"fee": 6000
+},
+{
+"gov": "نينوى",
+"fee": 6000
+},
+{
+"gov": "أربيل",
+"fee": 6000
+},
+{
+"gov": "النجف",
+"fee": 6000
+},
+{
+"gov": "كربلاء",
+"fee": 6000
+},
+{
+"gov": "بابل",
+"fee": 6000
+},
+{
+"gov": "الأنبار",
+"fee": 6000
+},
+{
+"gov": "ديالى",
+"fee": 6000
+},
+{
+"gov": "ذي قار",
+"fee": 6000
+},
+{
+"gov": "ميسان",
+"fee": 6000
+},
+{
+"gov": "المثنى",
+"fee": 6000
+},
+{
+"gov": "القادسية",
+"fee": 6000
+},
+{
+"gov": "واسط",
+"fee": 6000
+},
+{
+"gov": "صلاح الدين",
+"fee": 6000
+},
+{
+"gov": "كركوك",
+"fee": 6000
+},
+{
+"gov": "دهوك",
+"fee": 6000
+},
+{
+"gov": "السليمانية",
+"fee": 6000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [
+{
+"id": 1,
+"name": "بدون قسم",
+"price": 7000,
+"active": 0,
+"cat_id": 1,
+"mode": "both"
+},
+{
+"id": 2,
+"name": "بعد قسم فارغ",
+"price": 2000,
+"active": 1,
+"cat_id": 1,
+"mode": "both"
+},
+{
+"id": 3,
+"name": "كتاب حضوري",
+"price": 15000,
+"active": 0,
+"cat_id": 2,
+"mode": "in"
+},
+{
+"id": 4,
+"name": "كتاب الكتروني",
+"price": 1000,
+"active": 0,
+"cat_id": 2,
+"mode": "online"
+},
+{
+"id": 5,
+"name": "كتاب ثالث",
+"price": 5000,
+"active": 0,
+"cat_id": 2,
+"mode": "both"
+},
+{
+"id": 6,
+"name": "منتج <خاص>",
+"price": 12500,
+"active": 1,
+"cat_id": 1,
+"mode": "both"
+},
+{
+"id": 7,
+"name": "منتج آخر",
+"price": 3000,
+"active": 1,
+"cat_id": 3,
+"mode": "both"
+}
+],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {}
+},
+"فصول الإلكتروني فقط": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "📥 <b>إضافة منتجات دفعة وحدة</b>\n\nأرسل رسالة وحدة بهذا الشكل:\n• السطر اللي يبدي بعلامة <code>#</code> هو اسم القسم.\n• تحته كل منتج بسطر: الاسم بعدين علامة <code>=</code> بعدين السعر.\n\n<code># المحاضرات والامتحانات\nالمحاضرة الأولى مع امتحانها = 5000\nالمحاضرة الثانية مع امتحانها = 5000\n# الملازم\nملزمة الفصل الأول = 15000</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تمت إضافة 4 منتج.\n\n⚠️ هاي السطور ما فهمتها، ما انضافت:\n• سطر غلط",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 الملازم  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 محاضرات  (2)",
+"callback_data": "a:lc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>💻 فصول امتحانها إلكتروني فقط</b>\n\nأشّر ☑️ على الفصل اللي خلص امتحانه الحضوري.\nطالب الحضوري راح يشوف منتجات <b>الإلكتروني</b> لهذا الفصل بدل الحضوري، ويطلعله تنبيه: «امتحانات هذا الفصل إلكترونية فقط».\n(الفصل يتعرف من اسم المنتج، مثل «الفصل الأول»)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ الفصل الأول",
+"callback_data": "a:oo:0"
+}
+],
+[
+{
+"text": "⬜️ الفصل الثاني",
+"callback_data": "a:oo:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>💻 فصول امتحانها إلكتروني فقط</b>\n\nأشّر ☑️ على الفصل اللي خلص امتحانه الحضوري.\nطالب الحضوري راح يشوف منتجات <b>الإلكتروني</b> لهذا الفصل بدل الحضوري، ويطلعله تنبيه: «امتحانات هذا الفصل إلكترونية فقط».\n(الفصل يتعرف من اسم المنتج، مثل «الفصل الأول»)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ الفصل الأول",
+"callback_data": "a:oo:0"
+}
+],
+[
+{
+"text": "⬜️ الفصل الثاني",
+"callback_data": "a:oo:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>💻 فصول امتحانها إلكتروني فقط</b>\n\nأشّر ☑️ على الفصل اللي خلص امتحانه الحضوري.\nطالب الحضوري راح يشوف منتجات <b>الإلكتروني</b> لهذا الفصل بدل الحضوري، ويطلعله تنبيه: «امتحانات هذا الفصل إلكترونية فقط».\n(الفصل يتعرف من اسم المنتج، مثل «الفصل الأول»)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ الفصل الأول",
+"callback_data": "a:oo:0"
+}
+],
+[
+{
+"text": "☑️ الفصل الثاني",
+"callback_data": "a:oo:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>💻 فصول امتحانها إلكتروني فقط</b>\n\nأشّر ☑️ على الفصل اللي خلص امتحانه الحضوري.\nطالب الحضوري راح يشوف منتجات <b>الإلكتروني</b> لهذا الفصل بدل الحضوري، ويطلعله تنبيه: «امتحانات هذا الفصل إلكترونية فقط».\n(الفصل يتعرف من اسم المنتج، مثل «الفصل الأول»)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ الفصل الأول",
+"callback_data": "a:oo:0"
+}
+],
+[
+{
+"text": "☑️ الفصل الثاني",
+"callback_data": "a:oo:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [
+{
+"id": 1,
+"name": "الملازم",
+"active": 1
+},
+{
+"id": 2,
+"name": "محاضرات",
+"active": 1
+}
+],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+},
+{
+"k": "online_only",
+"v": "[\"الفصل الثاني\"]"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [
+{
+"id": 1,
+"name": "ملزمة الفصل الأول حضوري",
+"price": 15000,
+"active": 1,
+"cat_id": 1,
+"mode": "in"
+},
+{
+"id": 2,
+"name": "ملزمة الفصل الأول إلكتروني",
+"price": 10000,
+"active": 1,
+"cat_id": 1,
+"mode": "online"
+},
+{
+"id": 3,
+"name": "محاضرة الفصل الثاني",
+"price": 5000,
+"active": 1,
+"cat_id": 2,
+"mode": "both"
+},
+{
+"id": 4,
+"name": "كتاب <خاص> & مميز",
+"price": 2000,
+"active": 1,
+"cat_id": 2,
+"mode": "both"
+}
+],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {}
+},
+"الطلاب: إحصائيات، بحث، قوائم، بطاقة، تعديل، حذف": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة النجاح للبنات (المنصور)\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🎓 الطلاب المسجلين: 2</b>\n\nالسادس العلمي: 1\nالخامس العلمي: 1\n\nحضوري: 1\nإلكتروني: 1\n\nالمنهج العربي: 1\nالمنهج الإنجليزي: 1",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🔍 بحث عن طالب (بالاسم أو الرقم)",
+"callback_data": "a:sts"
+}
+],
+[
+{
+"text": "📄 قائمة طلاب الخامس العلمي PDF",
+"callback_data": "a:5th"
+}
+],
+[
+{
+"text": "📄 قائمة كل الطلاب PDF",
+"callback_data": "a:stall"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 اكتب اسم الطالب (أو جزء منه) أو رقم هاتفه:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "ما لگيت طالب بهذا الاسم أو الرقم.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🔍 اكتب اسم الطالب (أو جزء منه) أو رقم هاتفه:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "نتائج البحث (2):\n👤 اضغط الاسم حتى تشوف معلوماته وتعدلها\n🗑 اضغط السلة حتى تحذف تسجيله",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "👤 زينب علي حسين جاسم — 07711111111",
+"callback_data": "a:sv:3"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:3"
+}
+],
+[
+{
+"text": "👤 علي حسن محمد كاظم — 07701234567",
+"callback_data": "a:sv:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendDocument",
+"p": {
+"chat_id": "1",
+"caption": "طلاب الخامس العلمي"
+},
+"up": true,
+"file": "students_5th.html"
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendDocument",
+"p": {
+"chat_id": "1",
+"caption": "كل الطلاب المسجلين"
+},
+"up": true,
+"file": "students_all.html"
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🎓 بطاقة الطالب</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\nمسجل من: 2026-11-04 01:39",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏫 تغيير المركز الامتحاني",
+"callback_data": "a:sc:2"
+}
+],
+[
+{
+"text": "🔄 تغيير نوع الامتحان",
+"callback_data": "a:se:2"
+}
+],
+[
+{
+"text": "🎓 تغيير صفه بالمدرسة",
+"callback_data": "a:sg:2"
+}
+],
+[
+{
+"text": "✏️ تعديل كل معلوماته (فورمة)",
+"callback_data": "a:sw:2"
+}
+],
+[
+{
+"text": "🗑 حذف تسجيله (يسجل من جديد)",
+"callback_data": "a:sx:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ صار صفه بالمدرسة: <b>الخامس العلمي</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ صار صفه بالمدرسة: <b>السادس العلمي</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "تم تغييره إلى حضوري. هسه اختار مركزه 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "اختر المركز الجديد للطالب:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏫 قمة النجاح للبنات (المنصور)",
+"callback_data": "a:scs:2:1"
+}
+],
+[
+{
+"text": "🏫 قمة المنصور للبنين (المنصور)",
+"callback_data": "a:scs:2:2"
+}
+],
+[
+{
+"text": "🏫 قمة صليخ 2 (الصليخ)",
+"callback_data": "a:scs:2:3"
+}
+],
+[
+{
+"text": "🏫 معهد قصي العميري (البنوك)",
+"callback_data": "a:scs:2:4"
+}
+],
+[
+{
+"text": "🏫 معهد أثر (زيونة)",
+"callback_data": "a:scs:2:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "✅ تم تغيير المركز إلى: قمة صليخ 2 (الصليخ)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"parse_mode": "HTML",
+"text": "ℹ️ تم تغيير مركزك الامتحاني إلى: <b>قمة صليخ 2 (الصليخ)</b>"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ صار نوع امتحانه: إلكتروني.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "اختر المركز الجديد للطالب:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏫 قمة النجاح للبنات (المنصور)",
+"callback_data": "a:scs:3:1"
+}
+],
+[
+{
+"text": "🏫 قمة المنصور للبنين (المنصور)",
+"callback_data": "a:scs:3:2"
+}
+],
+[
+{
+"text": "🏫 قمة صليخ 2 (الصليخ)",
+"callback_data": "a:scs:3:3"
+}
+],
+[
+{
+"text": "🏫 معهد قصي العميري (البنوك)",
+"callback_data": "a:scs:3:4"
+}
+],
+[
+{
+"text": "🏫 معهد أثر (زيونة)",
+"callback_data": "a:scs:3:5"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "✅ تم تغيير المركز إلى: قمة المنصور للبنين (المنصور)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"parse_mode": "HTML",
+"text": "ℹ️ تم تغيير مركزك الامتحاني إلى: <b>قمة المنصور للبنين (المنصور)</b>"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🎓 بطاقة الطالب</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة المنصور للبنين (المنصور)\nمسجل من: 2026-11-04 01:39",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏫 تغيير المركز الامتحاني",
+"callback_data": "a:sc:3"
+}
+],
+[
+{
+"text": "🔄 تغيير نوع الامتحان",
+"callback_data": "a:se:3"
+}
+],
+[
+{
+"text": "🎓 تغيير صفه بالمدرسة",
+"callback_data": "a:sg:3"
+}
+],
+[
+{
+"text": "✏️ تعديل كل معلوماته (فورمة)",
+"callback_data": "a:sw:3"
+}
+],
+[
+{
+"text": "🗑 حذف تسجيله (يسجل من جديد)",
+"callback_data": "a:sx:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة المنصور للبنين (المنصور)\n\n🔒 لتغيير أي معلومة تواصل ويا قصي العميري.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ متأكد تريد تحذف تسجيل <b>زينب علي حسين جاسم</b>؟\nراح يسجل من جديد ويختار كل شي من البداية (الصف ونوع الامتحان والمركز).",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🗑 نعم، احذف",
+"callback_data": "a:sxy:3"
+}
+],
+[
+{
+"text": "↩️ لا",
+"callback_data": "a:sv:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "🗑 تم حذف تسجيل <b>زينب علي حسين جاسم</b>.\nلمن يفتح البوت ويضغط /start يسجل من جديد.\n(طلباته وأسئلته القديمة باقية)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "🗑 تم حذف تسجيل <b>999</b>.\nلمن يفتح البوت ويضغط /start يسجل من جديد.\n(طلباته وأسئلته القديمة باقية)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendPhoto",
+"p": {
+"chat_id": "3",
+"caption": "أهلا بك في <b>QMath</b> 🌷\n\n🛒 <b>المتجر</b>: محاضرات، امتحانات، ملازم\n❓ <b>سؤال علمي</b>: اسأل قصي العميري عن أي محاضرة\n📂 <b>أسئلتي</b>: أسئلتك وأجوبتها\n👤 <b>معلوماتي</b>: معلوماتك المسجلة",
+"parse_mode": "HTML",
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+},
+"up": true
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "📝 <b>التسجيل</b> (مرة وحدة بس، وبعدها معلوماتك تطلع تلقائياً بالمتجر والأسئلة)\n⚠️ بعد الحفظ ما تگدر تغير معلوماتك إلا عن طريق الإدارة، فاكتبها صح.\n\n👇 اضغط زر «📝 افتح فورمة التسجيل» اللي جوة، واملأ الفورمة، وبعدين اضغط «حفظ معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "📝 افتح فورمة التسجيل",
+"web_app": {
+"url": "https://x.test/reg.html?v=1793745557&d=eyJnIjpbItio2LrYr9in2K8iLCLYp9mE2KjYtdix2KkiLCLZhtmK2YbZiNmJIiwi2KPYsdio2YrZhCIsItin2YTZhtis2YEiLCLZg9ix2KjZhNin2KEiLCLYqNin2KjZhCIsItin2YTYo9mG2KjYp9ixIiwi2K_Zitin2YTZiSIsItiw2Yog2YLYp9ixIiwi2YXZitiz2KfZhiIsItin2YTZhdir2YbZiSIsItin2YTZgtin2K_Ys9mK2KkiLCLZiNin2LPYtyIsIti12YTYp9itINin2YTYr9mK2YYiLCLZg9ix2YPZiNmDIiwi2K_Zh9mI2YMiLCLYp9mE2LPZhNmK2YXYp9mG2YrYqSJdLCJtIjpbImJvdGgiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiLCJvbmxpbmUiXSwiYSI6W1sxLCLYqNi62K_Yp9ivIiwi2KfZhNmF2YbYtdmI2LEiLFtbMSwi2YLZhdipINin2YTZhtis2KfYrSDZhNmE2KjZhtin2KoiXSxbMiwi2YLZhdipINin2YTZhdmG2LXZiNixINmE2YTYqNmG2YrZhiJdXV0sWzIsItio2LrYr9in2K8iLCLYp9mE2LXZhNmK2K4iLFtbMywi2YLZhdipINi12YTZitiuIDIiXV1dLFszLCLYqNi62K_Yp9ivIiwi2KfZhNio2YbZiNmDIixbWzQsItmF2LnZh9ivINmC2LXZiiDYp9mE2LnZhdmK2LHZiiJdXV0sWzQsItio2LrYr9in2K8iLCLYstmK2YjZhtipIixbWzUsItmF2LnZh9ivINij2KvYsSJdXV1dfQ"
+}
+}
+],
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🎓 الطلاب المسجلين: 1</b>\n\nالسادس العلمي: 1\nالخامس العلمي: 0\n\nحضوري: 0\nإلكتروني: 1\n\nالمنهج العربي: 1\nالمنهج الإنجليزي: 0",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🔍 بحث عن طالب (بالاسم أو الرقم)",
+"callback_data": "a:sts"
+}
+],
+[
+{
+"text": "📄 قائمة طلاب الخامس العلمي PDF",
+"callback_data": "a:5th"
+}
+],
+[
+{
+"text": "📄 قائمة كل الطلاب PDF",
+"callback_data": "a:stall"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+},
+{
+"k": "banner_id",
+"v": "F122"
+},
+{
+"k": "banner_stamp",
+"v": "1793745557"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 2,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 3,
+"state": "r:form",
+"data": "{\"next\": null, \"edit\": false}"
+},
+{
+"user_id": 999,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار قرب الجسر",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:39",
+"updated": "2026-11-04 01:39"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"card_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>👤 معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">زينب علي حسين جاسم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">إنجليزي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">الخامس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">بغداد - الكرخ</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">المنصور شارع الأميرات</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07711111111</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07811111111</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">حضوري</td></tr><tr><td class=\"k\"><span>🏫</span>المركز الامتحاني</td><td class=\"v\">قمة المنصور للبنين (المنصور)</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"students_5th_2026-11-04_01-39.html": "<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>@page{size:A4;margin:12mm}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#101929}\n.h{display:flex;align-items:center;gap:12px;background:#101929;color:#F9C445;padding:8px 14px;border-radius:10px;border-bottom:4px solid #CEA239}\n.h img{height:44px}.h b{font-size:18px}.h span{color:#cfd7e6;font-size:11px;display:block}\ntable{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th{background:#101929;color:#fff;padding:6px}\ntd{border:1px solid #d9dde5;padding:5px 7px}tr:nth-child(even) td{background:#f6f7fa}.n{text-align:center;width:28px}\n</style></head><body><div class=h><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><div><b>طلاب الخامس العلمي</b><span>العدد: 1 — 2026-11-04 01:39</span></div></div>\n<table><tr><th>#</th><th>الاسم</th><th>الصف</th><th>المنهج</th><th>المحافظة</th><th>الهاتف 1</th><th>الهاتف 2</th><th>الامتحان</th></tr><tr><td class=n>1</td><td>زينب علي حسين جاسم</td><td>الخامس العلمي</td><td>إنجليزي</td><td>بغداد - الكرخ</td><td>07711111111</td><td>07811111111</td><td>حضوري - قمة النجاح للبنات (المنصور)</td></tr></table></body></html>",
+"students_all_2026-11-04_01-39.html": "<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>@page{size:A4;margin:12mm}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#101929}\n.h{display:flex;align-items:center;gap:12px;background:#101929;color:#F9C445;padding:8px 14px;border-radius:10px;border-bottom:4px solid #CEA239}\n.h img{height:44px}.h b{font-size:18px}.h span{color:#cfd7e6;font-size:11px;display:block}\ntable{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th{background:#101929;color:#fff;padding:6px}\ntd{border:1px solid #d9dde5;padding:5px 7px}tr:nth-child(even) td{background:#f6f7fa}.n{text-align:center;width:28px}\n</style></head><body><div class=h><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><div><b>كل الطلاب المسجلين</b><span>العدد: 2 — 2026-11-04 01:39</span></div></div>\n<table><tr><th>#</th><th>الاسم</th><th>الصف</th><th>المنهج</th><th>المحافظة</th><th>الهاتف 1</th><th>الهاتف 2</th><th>الامتحان</th></tr><tr><td class=n>1</td><td>زينب علي حسين جاسم</td><td>الخامس العلمي</td><td>إنجليزي</td><td>بغداد - الكرخ</td><td>07711111111</td><td>07811111111</td><td>حضوري - قمة النجاح للبنات (المنصور)</td></tr><tr><td class=n>2</td><td>علي حسن محمد كاظم</td><td>السادس العلمي</td><td>عربي</td><td>البصرة</td><td>07701234567</td><td>07801234567</td><td>إلكتروني</td></tr></table></body></html>"
+}
+},
+"المراكز والمناطق ونوع الامتحان لكل محافظة": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة النجاح للبنات (المنصور)\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🏫 المراكز الامتحانية</b>\n\n📍 <b>المنصور</b> (بغداد) — 1 طالب\n    🏫 قمة النجاح للبنات: <b>1</b> طالب\n    🏫 قمة المنصور للبنين: <b>0</b> طالب\n📍 <b>الصليخ</b> (بغداد) — 0 طالب\n    🏫 قمة صليخ 2: <b>0</b> طالب\n📍 <b>البنوك</b> (بغداد) — 0 طالب\n    🏫 معهد قصي العميري: <b>0</b> طالب\n📍 <b>زيونة</b> (بغداد) — 0 طالب\n    🏫 معهد أثر: <b>0</b> طالب",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📍 المنصور (بغداد)",
+"callback_data": "a:ca:1"
+}
+],
+[
+{
+"text": "📍 الصليخ (بغداد)",
+"callback_data": "a:ca:2"
+}
+],
+[
+{
+"text": "📍 البنوك (بغداد)",
+"callback_data": "a:ca:3"
+}
+],
+[
+{
+"text": "📍 زيونة (بغداد)",
+"callback_data": "a:ca:4"
+}
+],
+[
+{
+"text": "➕ منطقة جديدة",
+"callback_data": "a:na"
+}
+],
+[
+{
+"text": "🗺 نوع الامتحان لكل محافظة",
+"callback_data": "a:gm"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📍 المنصور</b> (بغداد)\nاضغط على المركز حتى تطلع قائمة طلابه PDF.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏫 قمة النجاح للبنات (1 طالب)",
+"callback_data": "a:cc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:cd:1"
+}
+],
+[
+{
+"text": "🏫 قمة المنصور للبنين (0 طالب)",
+"callback_data": "a:cc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:cd:2"
+}
+],
+[
+{
+"text": "➕ مركز جديد بهاي المنطقة",
+"callback_data": "a:nc2:1"
+}
+],
+[
+{
+"text": "🗑 حذف المنطقة كلها",
+"callback_data": "a:cad:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع للمراكز",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendDocument",
+"p": {
+"chat_id": "1",
+"caption": "طلاب مركز قمة النجاح للبنات (المنصور)"
+},
+"up": true,
+"file": "center_1.html"
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendDocument",
+"p": {
+"chat_id": "1",
+"caption": "طلاب مركز قمة صليخ 2 (الصليخ)"
+},
+"up": true,
+"file": "center_3.html"
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "اختر محافظة المنطقة الجديدة:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد",
+"callback_data": "a:nag:0"
+},
+{
+"text": "البصرة",
+"callback_data": "a:nag:1"
+},
+{
+"text": "نينوى",
+"callback_data": "a:nag:2"
+}
+],
+[
+{
+"text": "أربيل",
+"callback_data": "a:nag:3"
+},
+{
+"text": "النجف",
+"callback_data": "a:nag:4"
+},
+{
+"text": "كربلاء",
+"callback_data": "a:nag:5"
+}
+],
+[
+{
+"text": "بابل",
+"callback_data": "a:nag:6"
+},
+{
+"text": "الأنبار",
+"callback_data": "a:nag:7"
+},
+{
+"text": "ديالى",
+"callback_data": "a:nag:8"
+}
+],
+[
+{
+"text": "ذي قار",
+"callback_data": "a:nag:9"
+},
+{
+"text": "ميسان",
+"callback_data": "a:nag:10"
+},
+{
+"text": "المثنى",
+"callback_data": "a:nag:11"
+}
+],
+[
+{
+"text": "القادسية",
+"callback_data": "a:nag:12"
+},
+{
+"text": "واسط",
+"callback_data": "a:nag:13"
+},
+{
+"text": "صلاح الدين",
+"callback_data": "a:nag:14"
+}
+],
+[
+{
+"text": "كركوك",
+"callback_data": "a:nag:15"
+},
+{
+"text": "دهوك",
+"callback_data": "a:nag:16"
+},
+{
+"text": "السليمانية",
+"callback_data": "a:nag:17"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم المنطقة (مثل: المنصور):",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انضافت المنطقة. هسه اكتب اسم أول مركز امتحاني بيها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انضاف المركز.\n\n<b>📍 العشار</b> (البصرة)\nاضغط على المركز حتى تطلع قائمة طلابه PDF.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏫 مركز العشار (0 طالب)",
+"callback_data": "a:cc:6"
+},
+{
+"text": "🗑",
+"callback_data": "a:cd:6"
+}
+],
+[
+{
+"text": "➕ مركز جديد بهاي المنطقة",
+"callback_data": "a:nc2:5"
+}
+],
+[
+{
+"text": "🗑 حذف المنطقة كلها",
+"callback_data": "a:cad:5"
+}
+],
+[
+{
+"text": "⬅️ رجوع للمراكز",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم المركز الامتحاني:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انضاف المركز.\n\n<b>📍 المنصور</b> (بغداد)\nاضغط على المركز حتى تطلع قائمة طلابه PDF.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏫 قمة النجاح للبنات (1 طالب)",
+"callback_data": "a:cc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:cd:1"
+}
+],
+[
+{
+"text": "🏫 قمة المنصور للبنين (0 طالب)",
+"callback_data": "a:cc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:cd:2"
+}
+],
+[
+{
+"text": "🏫 مركز جديد (0 طالب)",
+"callback_data": "a:cc:7"
+},
+{
+"text": "🗑",
+"callback_data": "a:cd:7"
+}
+],
+[
+{
+"text": "➕ مركز جديد بهاي المنطقة",
+"callback_data": "a:nc2:1"
+}
+],
+[
+{
+"text": "🗑 حذف المنطقة كلها",
+"callback_data": "a:cad:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع للمراكز",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "🗑 انحذف المركز (طلابه يبقون مسجلين عليه، غيّرهم من 🎓 الطلاب).\n\n<b>📍 المنصور</b> (بغداد)\nاضغط على المركز حتى تطلع قائمة طلابه PDF.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏫 قمة النجاح للبنات (1 طالب)",
+"callback_data": "a:cc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:cd:1"
+}
+],
+[
+{
+"text": "🏫 مركز جديد (0 طالب)",
+"callback_data": "a:cc:7"
+},
+{
+"text": "🗑",
+"callback_data": "a:cd:7"
+}
+],
+[
+{
+"text": "➕ مركز جديد بهاي المنطقة",
+"callback_data": "a:nc2:1"
+}
+],
+[
+{
+"text": "🗑 حذف المنطقة كلها",
+"callback_data": "a:cad:1"
+}
+],
+[
+{
+"text": "⬅️ رجوع للمراكز",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "🗑 انحذفت المنطقة.\n\n<b>🏫 المراكز الامتحانية</b>\n\n📍 <b>العشار</b> (البصرة) — 0 طالب\n    🏫 مركز العشار: <b>0</b> طالب\n📍 <b>المنصور</b> (بغداد) — 1 طالب\n    🏫 قمة النجاح للبنات: <b>1</b> طالب\n    🏫 مركز جديد: <b>0</b> طالب\n📍 <b>البنوك</b> (بغداد) — 0 طالب\n    🏫 معهد قصي العميري: <b>0</b> طالب\n📍 <b>زيونة</b> (بغداد) — 0 طالب\n    🏫 معهد أثر: <b>0</b> طالب",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📍 العشار (البصرة)",
+"callback_data": "a:ca:5"
+}
+],
+[
+{
+"text": "📍 المنصور (بغداد)",
+"callback_data": "a:ca:1"
+}
+],
+[
+{
+"text": "📍 البنوك (بغداد)",
+"callback_data": "a:ca:3"
+}
+],
+[
+{
+"text": "📍 زيونة (بغداد)",
+"callback_data": "a:ca:4"
+}
+],
+[
+{
+"text": "➕ منطقة جديدة",
+"callback_data": "a:na"
+}
+],
+[
+{
+"text": "🗺 نوع الامتحان لكل محافظة",
+"callback_data": "a:gm"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>🏫 المراكز الامتحانية</b>\n\n📍 <b>العشار</b> (البصرة) — 0 طالب\n    🏫 مركز العشار: <b>0</b> طالب\n📍 <b>المنصور</b> (بغداد) — 1 طالب\n    🏫 قمة النجاح للبنات: <b>1</b> طالب\n    🏫 مركز جديد: <b>0</b> طالب\n📍 <b>البنوك</b> (بغداد) — 0 طالب\n    🏫 معهد قصي العميري: <b>0</b> طالب\n📍 <b>زيونة</b> (بغداد) — 0 طالب\n    🏫 معهد أثر: <b>0</b> طالب",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📍 العشار (البصرة)",
+"callback_data": "a:ca:5"
+}
+],
+[
+{
+"text": "📍 المنصور (بغداد)",
+"callback_data": "a:ca:1"
+}
+],
+[
+{
+"text": "📍 البنوك (بغداد)",
+"callback_data": "a:ca:3"
+}
+],
+[
+{
+"text": "📍 زيونة (بغداد)",
+"callback_data": "a:ca:4"
+}
+],
+[
+{
+"text": "➕ منطقة جديدة",
+"callback_data": "a:na"
+}
+],
+[
+{
+"text": "🗺 نوع الامتحان لكل محافظة",
+"callback_data": "a:gm"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>🗺 نوع الامتحان لكل محافظة</b>\nاضغط على المحافظة حتى تغيرها:\n🏫 حضوري بس — 💻 إلكتروني بس — 🔄 الطالب يختار",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد: 🔄 كليهما",
+"callback_data": "a:gm:0"
+},
+{
+"text": "البصرة: 💻 إلكتروني",
+"callback_data": "a:gm:1"
+}
+],
+[
+{
+"text": "نينوى: 💻 إلكتروني",
+"callback_data": "a:gm:2"
+},
+{
+"text": "أربيل: 💻 إلكتروني",
+"callback_data": "a:gm:3"
+}
+],
+[
+{
+"text": "النجف: 💻 إلكتروني",
+"callback_data": "a:gm:4"
+},
+{
+"text": "كربلاء: 💻 إلكتروني",
+"callback_data": "a:gm:5"
+}
+],
+[
+{
+"text": "بابل: 💻 إلكتروني",
+"callback_data": "a:gm:6"
+},
+{
+"text": "الأنبار: 💻 إلكتروني",
+"callback_data": "a:gm:7"
+}
+],
+[
+{
+"text": "ديالى: 💻 إلكتروني",
+"callback_data": "a:gm:8"
+},
+{
+"text": "ذي قار: 💻 إلكتروني",
+"callback_data": "a:gm:9"
+}
+],
+[
+{
+"text": "ميسان: 💻 إلكتروني",
+"callback_data": "a:gm:10"
+},
+{
+"text": "المثنى: 💻 إلكتروني",
+"callback_data": "a:gm:11"
+}
+],
+[
+{
+"text": "القادسية: 💻 إلكتروني",
+"callback_data": "a:gm:12"
+},
+{
+"text": "واسط: 💻 إلكتروني",
+"callback_data": "a:gm:13"
+}
+],
+[
+{
+"text": "صلاح الدين: 💻 إلكتروني",
+"callback_data": "a:gm:14"
+},
+{
+"text": "كركوك: 💻 إلكتروني",
+"callback_data": "a:gm:15"
+}
+],
+[
+{
+"text": "دهوك: 💻 إلكتروني",
+"callback_data": "a:gm:16"
+},
+{
+"text": "السليمانية: 💻 إلكتروني",
+"callback_data": "a:gm:17"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>🗺 نوع الامتحان لكل محافظة</b>\nاضغط على المحافظة حتى تغيرها:\n🏫 حضوري بس — 💻 إلكتروني بس — 🔄 الطالب يختار",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد: 🔄 كليهما",
+"callback_data": "a:gm:0"
+},
+{
+"text": "البصرة: 🔄 كليهما",
+"callback_data": "a:gm:1"
+}
+],
+[
+{
+"text": "نينوى: 💻 إلكتروني",
+"callback_data": "a:gm:2"
+},
+{
+"text": "أربيل: 💻 إلكتروني",
+"callback_data": "a:gm:3"
+}
+],
+[
+{
+"text": "النجف: 💻 إلكتروني",
+"callback_data": "a:gm:4"
+},
+{
+"text": "كربلاء: 💻 إلكتروني",
+"callback_data": "a:gm:5"
+}
+],
+[
+{
+"text": "بابل: 💻 إلكتروني",
+"callback_data": "a:gm:6"
+},
+{
+"text": "الأنبار: 💻 إلكتروني",
+"callback_data": "a:gm:7"
+}
+],
+[
+{
+"text": "ديالى: 💻 إلكتروني",
+"callback_data": "a:gm:8"
+},
+{
+"text": "ذي قار: 💻 إلكتروني",
+"callback_data": "a:gm:9"
+}
+],
+[
+{
+"text": "ميسان: 💻 إلكتروني",
+"callback_data": "a:gm:10"
+},
+{
+"text": "المثنى: 💻 إلكتروني",
+"callback_data": "a:gm:11"
+}
+],
+[
+{
+"text": "القادسية: 💻 إلكتروني",
+"callback_data": "a:gm:12"
+},
+{
+"text": "واسط: 💻 إلكتروني",
+"callback_data": "a:gm:13"
+}
+],
+[
+{
+"text": "صلاح الدين: 💻 إلكتروني",
+"callback_data": "a:gm:14"
+},
+{
+"text": "كركوك: 💻 إلكتروني",
+"callback_data": "a:gm:15"
+}
+],
+[
+{
+"text": "دهوك: 💻 إلكتروني",
+"callback_data": "a:gm:16"
+},
+{
+"text": "السليمانية: 💻 إلكتروني",
+"callback_data": "a:gm:17"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>🗺 نوع الامتحان لكل محافظة</b>\nاضغط على المحافظة حتى تغيرها:\n🏫 حضوري بس — 💻 إلكتروني بس — 🔄 الطالب يختار",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد: 🔄 كليهما",
+"callback_data": "a:gm:0"
+},
+{
+"text": "البصرة: 🏫 حضوري",
+"callback_data": "a:gm:1"
+}
+],
+[
+{
+"text": "نينوى: 💻 إلكتروني",
+"callback_data": "a:gm:2"
+},
+{
+"text": "أربيل: 💻 إلكتروني",
+"callback_data": "a:gm:3"
+}
+],
+[
+{
+"text": "النجف: 💻 إلكتروني",
+"callback_data": "a:gm:4"
+},
+{
+"text": "كربلاء: 💻 إلكتروني",
+"callback_data": "a:gm:5"
+}
+],
+[
+{
+"text": "بابل: 💻 إلكتروني",
+"callback_data": "a:gm:6"
+},
+{
+"text": "الأنبار: 💻 إلكتروني",
+"callback_data": "a:gm:7"
+}
+],
+[
+{
+"text": "ديالى: 💻 إلكتروني",
+"callback_data": "a:gm:8"
+},
+{
+"text": "ذي قار: 💻 إلكتروني",
+"callback_data": "a:gm:9"
+}
+],
+[
+{
+"text": "ميسان: 💻 إلكتروني",
+"callback_data": "a:gm:10"
+},
+{
+"text": "المثنى: 💻 إلكتروني",
+"callback_data": "a:gm:11"
+}
+],
+[
+{
+"text": "القادسية: 💻 إلكتروني",
+"callback_data": "a:gm:12"
+},
+{
+"text": "واسط: 💻 إلكتروني",
+"callback_data": "a:gm:13"
+}
+],
+[
+{
+"text": "صلاح الدين: 💻 إلكتروني",
+"callback_data": "a:gm:14"
+},
+{
+"text": "كركوك: 💻 إلكتروني",
+"callback_data": "a:gm:15"
+}
+],
+[
+{
+"text": "دهوك: 💻 إلكتروني",
+"callback_data": "a:gm:16"
+},
+{
+"text": "السليمانية: 💻 إلكتروني",
+"callback_data": "a:gm:17"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>🗺 نوع الامتحان لكل محافظة</b>\nاضغط على المحافظة حتى تغيرها:\n🏫 حضوري بس — 💻 إلكتروني بس — 🔄 الطالب يختار",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد: 🔄 كليهما",
+"callback_data": "a:gm:0"
+},
+{
+"text": "البصرة: 💻 إلكتروني",
+"callback_data": "a:gm:1"
+}
+],
+[
+{
+"text": "نينوى: 💻 إلكتروني",
+"callback_data": "a:gm:2"
+},
+{
+"text": "أربيل: 💻 إلكتروني",
+"callback_data": "a:gm:3"
+}
+],
+[
+{
+"text": "النجف: 💻 إلكتروني",
+"callback_data": "a:gm:4"
+},
+{
+"text": "كربلاء: 💻 إلكتروني",
+"callback_data": "a:gm:5"
+}
+],
+[
+{
+"text": "بابل: 💻 إلكتروني",
+"callback_data": "a:gm:6"
+},
+{
+"text": "الأنبار: 💻 إلكتروني",
+"callback_data": "a:gm:7"
+}
+],
+[
+{
+"text": "ديالى: 💻 إلكتروني",
+"callback_data": "a:gm:8"
+},
+{
+"text": "ذي قار: 💻 إلكتروني",
+"callback_data": "a:gm:9"
+}
+],
+[
+{
+"text": "ميسان: 💻 إلكتروني",
+"callback_data": "a:gm:10"
+},
+{
+"text": "المثنى: 💻 إلكتروني",
+"callback_data": "a:gm:11"
+}
+],
+[
+{
+"text": "القادسية: 💻 إلكتروني",
+"callback_data": "a:gm:12"
+},
+{
+"text": "واسط: 💻 إلكتروني",
+"callback_data": "a:gm:13"
+}
+],
+[
+{
+"text": "صلاح الدين: 💻 إلكتروني",
+"callback_data": "a:gm:14"
+},
+{
+"text": "كركوك: 💻 إلكتروني",
+"callback_data": "a:gm:15"
+}
+],
+[
+{
+"text": "دهوك: 💻 إلكتروني",
+"callback_data": "a:gm:16"
+},
+{
+"text": "السليمانية: 💻 إلكتروني",
+"callback_data": "a:gm:17"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>🗺 نوع الامتحان لكل محافظة</b>\nاضغط على المحافظة حتى تغيرها:\n🏫 حضوري بس — 💻 إلكتروني بس — 🔄 الطالب يختار",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "بغداد: 🏫 حضوري",
+"callback_data": "a:gm:0"
+},
+{
+"text": "البصرة: 💻 إلكتروني",
+"callback_data": "a:gm:1"
+}
+],
+[
+{
+"text": "نينوى: 💻 إلكتروني",
+"callback_data": "a:gm:2"
+},
+{
+"text": "أربيل: 💻 إلكتروني",
+"callback_data": "a:gm:3"
+}
+],
+[
+{
+"text": "النجف: 💻 إلكتروني",
+"callback_data": "a:gm:4"
+},
+{
+"text": "كربلاء: 💻 إلكتروني",
+"callback_data": "a:gm:5"
+}
+],
+[
+{
+"text": "بابل: 💻 إلكتروني",
+"callback_data": "a:gm:6"
+},
+{
+"text": "الأنبار: 💻 إلكتروني",
+"callback_data": "a:gm:7"
+}
+],
+[
+{
+"text": "ديالى: 💻 إلكتروني",
+"callback_data": "a:gm:8"
+},
+{
+"text": "ذي قار: 💻 إلكتروني",
+"callback_data": "a:gm:9"
+}
+],
+[
+{
+"text": "ميسان: 💻 إلكتروني",
+"callback_data": "a:gm:10"
+},
+{
+"text": "المثنى: 💻 إلكتروني",
+"callback_data": "a:gm:11"
+}
+],
+[
+{
+"text": "القادسية: 💻 إلكتروني",
+"callback_data": "a:gm:12"
+},
+{
+"text": "واسط: 💻 إلكتروني",
+"callback_data": "a:gm:13"
+}
+],
+[
+{
+"text": "صلاح الدين: 💻 إلكتروني",
+"callback_data": "a:gm:14"
+},
+{
+"text": "كركوك: 💻 إلكتروني",
+"callback_data": "a:gm:15"
+}
+],
+[
+{
+"text": "دهوك: 💻 إلكتروني",
+"callback_data": "a:gm:16"
+},
+{
+"text": "السليمانية: 💻 إلكتروني",
+"callback_data": "a:gm:17"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 0
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+},
+{
+"id": 5,
+"gov": "البصرة",
+"name": "العشار",
+"active": 1
+}
+],
+"cats": [],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 0
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 0
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+},
+{
+"id": 6,
+"area_id": 5,
+"name": "مركز العشار",
+"active": 1
+},
+{
+"id": 7,
+"area_id": 1,
+"name": "مركز جديد",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "in"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 3,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [
+{
+"user_id": 3,
+"username": "u3",
+"name": "زينب علي حسين جاسم",
+"curr": "إنجليزي",
+"grade": "الخامس العلمي",
+"gov": "بغداد",
+"side": "الكرخ",
+"area": "المنصور شارع الأميرات",
+"phone1": "07711111111",
+"phone2": "07811111111",
+"exam": "حضوري",
+"center_id": 1,
+"created": "2026-11-04 01:39",
+"updated": "2026-11-04 01:39"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">زينب علي حسين جاسم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">إنجليزي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">الخامس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">بغداد - الكرخ</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">المنصور شارع الأميرات</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07711111111</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07811111111</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">حضوري</td></tr><tr><td class=\"k\"><span>🏫</span>المركز الامتحاني</td><td class=\"v\">قمة النجاح للبنات (المنصور)</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"center_1_2026-11-04_01-39.html": "<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>@page{size:A4;margin:12mm}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#101929}\n.h{display:flex;align-items:center;gap:12px;background:#101929;color:#F9C445;padding:8px 14px;border-radius:10px;border-bottom:4px solid #CEA239}\n.h img{height:44px}.h b{font-size:18px}.h span{color:#cfd7e6;font-size:11px;display:block}\ntable{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th{background:#101929;color:#fff;padding:6px}\ntd{border:1px solid #d9dde5;padding:5px 7px}tr:nth-child(even) td{background:#f6f7fa}.n{text-align:center;width:28px}\n</style></head><body><div class=h><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><div><b>طلاب مركز قمة النجاح للبنات (المنصور)</b><span>العدد: 1 — 2026-11-04 01:39</span></div></div>\n<table><tr><th>#</th><th>الاسم</th><th>الصف</th><th>المنهج</th><th>الهاتف 1</th><th>الهاتف 2</th></tr><tr><td class=n>1</td><td>زينب علي حسين جاسم</td><td>الخامس العلمي</td><td>إنجليزي</td><td>07711111111</td><td>07811111111</td></tr></table></body></html>",
+"center_3_2026-11-04_01-39.html": "<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>@page{size:A4;margin:12mm}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#101929}\n.h{display:flex;align-items:center;gap:12px;background:#101929;color:#F9C445;padding:8px 14px;border-radius:10px;border-bottom:4px solid #CEA239}\n.h img{height:44px}.h b{font-size:18px}.h span{color:#cfd7e6;font-size:11px;display:block}\ntable{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th{background:#101929;color:#fff;padding:6px}\ntd{border:1px solid #d9dde5;padding:5px 7px}tr:nth-child(even) td{background:#f6f7fa}.n{text-align:center;width:28px}\n</style></head><body><div class=h><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><div><b>طلاب مركز قمة صليخ 2 (الصليخ)</b><span>العدد: 0 — 2026-11-04 01:39</span></div></div>\n<table><tr><th>#</th><th>الاسم</th><th>الصف</th><th>المنهج</th><th>الهاتف 1</th><th>الهاتف 2</th></tr></table></body></html>"
+}
+},
+"مساعد بصلاحية جزئية: المنتجات والطلاب فقط": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "📥 <b>إضافة منتجات دفعة وحدة</b>\n\nأرسل رسالة وحدة بهذا الشكل:\n• السطر اللي يبدي بعلامة <code>#</code> هو اسم القسم.\n• تحته كل منتج بسطر: الاسم بعدين علامة <code>=</code> بعدين السعر.\n\n<code># المحاضرات والامتحانات\nالمحاضرة الأولى مع امتحانها = 5000\nالمحاضرة الثانية مع امتحانها = 5000\n# الملازم\nملزمة الفصل الأول = 15000</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تمت إضافة 4 منتج.\n\n⚠️ هاي السطور ما فهمتها، ما انضافت:\n• سطر غلط",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 الملازم  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 محاضرات  (2)",
+"callback_data": "a:lc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "➕ <b>إضافة مساعد</b>\n\n1) خلي المساعد يفتح البوت ويكتب <code>/myid</code>\n2) البوت ينطيه رقم حسابه، يرسلك ياه\n3) اكتب الرقم هنا 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم المساعد:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انضاف المساعد، وصلاحيته هسه الأسئلة العلمية بس.\nلازم تضيفه هم لمجموعة الأسئلة حتى يگدر يجاوب.\n\n<b>👤 مساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:44444:q"
+}
+],
+[
+{
+"text": "⬜️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:44444:orders"
+}
+],
+[
+{
+"text": "⬜️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:44444:products"
+}
+],
+[
+{
+"text": "⬜️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:44444:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:44444"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "✅ تمت إضافتك مساعد بالبوت. اكتب /start"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>👤 مساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:44444:q"
+}
+],
+[
+{
+"text": "⬜️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:44444:orders"
+}
+],
+[
+{
+"text": "⬜️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:44444:products"
+}
+],
+[
+{
+"text": "⬜️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:44444:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:44444"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>👤 مساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:44444:q"
+}
+],
+[
+{
+"text": "⬜️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:44444:orders"
+}
+],
+[
+{
+"text": "☑️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:44444:products"
+}
+],
+[
+{
+"text": "⬜️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:44444:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:44444"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "<b>⚙️ لوحة التحكم</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📥 إضافة منتجات دفعة وحدة",
+"callback_data": "a:bulk"
+}
+],
+[
+{
+"text": "➕ إضافة منتج واحد",
+"callback_data": "a:add"
+}
+],
+[
+{
+"text": "📋 المنتجات والأقسام",
+"callback_data": "a:list"
+}
+],
+[
+{
+"text": "🚚 أسعار التوصيل",
+"callback_data": "a:fees"
+}
+],
+[
+{
+"text": "💻 فصول امتحانها إلكتروني فقط",
+"callback_data": "a:oo"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "📥 <b>إضافة منتجات دفعة وحدة</b>\n\nأرسل رسالة وحدة بهذا الشكل:\n• السطر اللي يبدي بعلامة <code>#</code> هو اسم القسم.\n• تحته كل منتج بسطر: الاسم بعدين علامة <code>=</code> بعدين السعر.\n\n<code># المحاضرات والامتحانات\nالمحاضرة الأولى مع امتحانها = 5000\nالمحاضرة الثانية مع امتحانها = 5000\n# الملازم\nملزمة الفصل الأول = 15000</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>👤 مساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:44444:q"
+}
+],
+[
+{
+"text": "⬜️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:44444:orders"
+}
+],
+[
+{
+"text": "⬜️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:44444:products"
+}
+],
+[
+{
+"text": "⬜️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:44444:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:44444"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>👤 مساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:44444:q"
+}
+],
+[
+{
+"text": "⬜️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:44444:orders"
+}
+],
+[
+{
+"text": "⬜️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:44444:products"
+}
+],
+[
+{
+"text": "☑️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:44444:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:44444"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "<b>⚙️ لوحة التحكم</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🎓 الطلاب",
+"callback_data": "a:st"
+}
+],
+[
+{
+"text": "🏫 المراكز الامتحانية",
+"callback_data": "a:ce"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "<b>🎓 الطلاب المسجلين: 1</b>\n\nالسادس العلمي: 1\nالخامس العلمي: 0\n\nحضوري: 0\nإلكتروني: 1\n\nالمنهج العربي: 1\nالمنهج الإنجليزي: 0",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🔍 بحث عن طالب (بالاسم أو الرقم)",
+"callback_data": "a:sts"
+}
+],
+[
+{
+"text": "📄 قائمة طلاب الخامس العلمي PDF",
+"callback_data": "a:5th"
+}
+],
+[
+{
+"text": "📄 قائمة كل الطلاب PDF",
+"callback_data": "a:stall"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "✅ <b>تم تعديل معلومات الطالب</b>\n\nالاسم: <b>علي حسن محمد جاسم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: المعقل\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "🔍 <b>1 نتيجة</b> لـ «علي»\n\n<b>1) علي حسن محمد جاسم</b>\n📞 <code>07701234567</code> · <code>07801234567</code>\n🎓 السادس العلمي · 📘 عربي\n📍 البصرة — المعقل\n📝 إلكتروني",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "1) ✏️ تعديل",
+"callback_data": "a:sv:2"
+},
+{
+"text": "🏪 بيع",
+"callback_data": "a:pss:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:sx:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>👤 مساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬜️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:44444:q"
+}
+],
+[
+{
+"text": "⬜️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:44444:orders"
+}
+],
+[
+{
+"text": "⬜️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:44444:products"
+}
+],
+[
+{
+"text": "⬜️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:44444:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:44444"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>👤 مساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:44444:q"
+}
+],
+[
+{
+"text": "⬜️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:44444:orders"
+}
+],
+[
+{
+"text": "⬜️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:44444:products"
+}
+],
+[
+{
+"text": "⬜️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:44444:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:44444"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "<b>⚙️ لوحة التحكم</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "❓ الأسئلة اللي تنتظر جواب (0)",
+"callback_data": "a:oq"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "✅ ماكو أسئلة تنتظر جواب.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 44444,
+"text": "<b>⚙️ لوحة التحكم</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "❓ الأسئلة اللي تنتظر جواب (0)",
+"callback_data": "a:oq"
+}
+]
+]
+}
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [
+{
+"id": 1,
+"name": "الملازم",
+"active": 1
+},
+{
+"id": 2,
+"name": "محاضرات",
+"active": 1
+}
+],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [],
+"products": [
+{
+"id": 1,
+"name": "ملزمة الفصل الأول حضوري",
+"price": 15000,
+"active": 1,
+"cat_id": 1,
+"mode": "in"
+},
+{
+"id": 2,
+"name": "ملزمة الفصل الأول إلكتروني",
+"price": 10000,
+"active": 1,
+"cat_id": 1,
+"mode": "online"
+},
+{
+"id": 3,
+"name": "محاضرة الفصل الثاني",
+"price": 5000,
+"active": 1,
+"cat_id": 2,
+"mode": "both"
+},
+{
+"id": 4,
+"name": "كتاب <خاص> & مميز",
+"price": 2000,
+"active": 1,
+"cat_id": 2,
+"mode": "both"
+}
+],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 2,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 44444,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [
+{
+"user_id": 44444,
+"name": "مساعد",
+"perms": "q"
+}
+],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد جاسم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "المعقل",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:39",
+"updated": "2026-11-04 01:39"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>"
+}
+}
+}
