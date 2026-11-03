@@ -1,0 +1,29 @@
+{
+  "name": "qmath-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "set-webhook": "node --env-file-if-exists=.env.local scripts/set-webhook.ts",
+    "test": "node --test tests/*.test.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "next": "^15",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^24",
+    "@types/react": "^19"
+  }
+}
