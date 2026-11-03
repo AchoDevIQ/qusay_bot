@@ -17,6 +17,8 @@ function scrub(s: string) {
     .replace(/🕐 \d\d:\d\d/g, "🕐 <HM>")
     .replace(/\(\d\d:\d\d · /g, "(<HM> · ")
     .replace(/<td>\d\d:\d\d<\/td>/g, "<td><HM></td>")
+    // نفس الرابط: بايثون ما يرمز / وجافاسكربت يرمزها %2F، وتليجرام يفهم الاثنين
+    .replace(/share\/url\?url=https%3A(?:\/\/|%2F%2F)t\.me(?:\/|%2F)/g, "share/url?url=https%3A//t.me/")
     .replace(/a:done:\d+/g, "a:done:<BATCH>")
     .replace(/lib_\d{6}/g, "lib_<CODE>")
     .replace(/<code>\d{6}<\/code>/g, "<code><CODE></code>");
@@ -53,7 +55,8 @@ function normalDb(db: Record<string, any[]>) {
   return out;
 }
 const scrubFiles = (f: Record<string, string>) =>
-  Object.fromEntries(Object.entries(f).map(([k, v]) => [scrub(k), scrub(v)]));
+  // السطور الفارغة بالـ HTML ما تأثر على الرسم (الوصل القديم بيه سطر فارغ داخل التنسيق)
+  Object.fromEntries(Object.entries(f).map(([k, v]) => [scrub(k), scrub(v).replace(/\n{2,}/g, "\n")]));
 
 for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).sort()) {
   const golden = JSON.parse(fs.readFileSync(path.join(DIR, "golden", file), "utf8"));

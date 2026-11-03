@@ -1,0 +1,3236 @@
+{
+"البيع بالمكتب من الإدارة: بحث، بيع، وصولات، وسجل الأيام": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "📥 <b>إضافة منتجات دفعة وحدة</b>\n\nأرسل رسالة وحدة بهذا الشكل:\n• السطر اللي يبدي بعلامة <code>#</code> هو اسم القسم.\n• تحته كل منتج بسطر: الاسم بعدين علامة <code>=</code> بعدين السعر.\n\n<code># المحاضرات والامتحانات\nالمحاضرة الأولى مع امتحانها = 5000\nالمحاضرة الثانية مع امتحانها = 5000\n# الملازم\nملزمة الفصل الأول = 15000</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تمت إضافة 4 منتج.\n\n⚠️ هاي السطور ما فهمتها، ما انضافت:\n• سطر غلط",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 الملازم  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 محاضرات  (2)",
+"callback_data": "a:lc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة النجاح للبنات (المنصور)\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📊 مبيعات المكتب — 2026-11-04 (اليوم)</b>\n\nعدد المبيعات: <b>0</b>\nالمجموع: <b>0 د.ع</b>\n",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "◀️ اليوم السابق",
+"callback_data": "a:of:2026-11-03"
+}
+],
+[
+{
+"text": "📅 كل الأيام",
+"callback_data": "a:ofd"
+}
+],
+[
+{
+"text": "📄 سجل هذا اليوم PDF",
+"callback_data": "a:ofp:2026-11-04"
+}
+],
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "ما أكو مبيعات بالمكتب بعد.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:of"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🏪 <b>بيع بالمكتب</b>\n🔍 اكتب اسم الطالب (أو جزء منه) أو رقم هاتفه:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "ما لگيت طالب بهذا الاسم أو الرقم. اكتب مرة ثانية، أو الطالب لازم يسجل بالبوت أول.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "اختار الطالب 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "👤 زينب علي حسين جاسم — 07711111111",
+"callback_data": "a:pss:3"
+}
+],
+[
+{
+"text": "👤 علي حسن محمد كاظم — 07701234567",
+"callback_data": "a:pss:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "اختار الطالب 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "👤 زينب علي حسين جاسم — 07711111111",
+"callback_data": "a:pss:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "👤 <b>زينب علي حسين جاسم</b>\n👇 اضغط «🏪 افتح صفحة البيع» واختار المنتجات، وبعدين «✅ تم البيع».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🏪 افتح صفحة البيع",
+"web_app": {
+"url": "https://x.test/pos.html?v=1793745553&d=eyJjIjpbWyLYp9mE2YXZhNin2LLZhSIsW1sxLCLZhdmE2LLZhdipINin2YTZgdi12YQg2KfZhNij2YjZhCDYrdi22YjYsdmKIiwxNTAwMF0sWzIsItmF2YTYstmF2Kkg2KfZhNmB2LXZhCDYp9mE2KPZiNmEINil2YTZg9iq2LHZiNmG2YoiLDEwMDAwXV1dLFsi2YXYrdin2LbYsdin2KoiLFtbMywi2YXYrdin2LbYsdipINin2YTZgdi12YQg2KfZhNir2KfZhtmKIiw1MDAwXSxbNCwi2YPYqtin2KggPNiu2KfYtT4gJiDZhdmF2YrYsiIsMjAwMF1dXV0sInMiOnsiaWQiOjMsIm4iOiLYstmK2YbYqCDYudmE2Yog2K3Ys9mK2YYg2KzYp9iz2YUiLCJwIjoiMDc3MTExMTExMTEiLCJnIjoi2KfZhNiu2KfZhdizINin2YTYudmE2YXZiiDigJQg2KXZhtis2YTZitiy2YoifX0"
+}
+}
+],
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "❌ تم الإلغاء.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ الطالب غير موجود.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ الطالب غير موجود.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ ما اخترت ولا منتج.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🏪 افتح صفحة البيع",
+"web_app": {
+"url": "https://x.test/pos.html?v=1793745553&d=eyJjIjpbWyLYp9mE2YXZhNin2LLZhSIsW1sxLCLZhdmE2LLZhdipINin2YTZgdi12YQg2KfZhNij2YjZhCDYrdi22YjYsdmKIiwxNTAwMF0sWzIsItmF2YTYstmF2Kkg2KfZhNmB2LXZhCDYp9mE2KPZiNmEINil2YTZg9iq2LHZiNmG2YoiLDEwMDAwXV1dLFsi2YXYrdin2LbYsdin2KoiLFtbMywi2YXYrdin2LbYsdipINin2YTZgdi12YQg2KfZhNir2KfZhtmKIiw1MDAwXSxbNCwi2YPYqtin2KggPNiu2KfYtT4gJiDZhdmF2YrYsiIsMjAwMF1dXV0sInMiOnsiaWQiOjMsIm4iOiLYstmK2YbYqCDYudmE2Yog2K3Ys9mK2YYg2KzYp9iz2YUiLCJwIjoiMDc3MTExMTExMTEiLCJnIjoi2KfZhNiu2KfZhdizINin2YTYudmE2YXZiiDigJQg2KXZhtis2YTZitiy2YoifX0"
+}
+}
+],
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ ما اخترت ولا منتج.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🏪 افتح صفحة البيع",
+"web_app": {
+"url": "https://x.test/pos.html?v=1793745553&d=eyJjIjpbWyLYp9mE2YXZhNin2LLZhSIsW1sxLCLZhdmE2LLZhdipINin2YTZgdi12YQg2KfZhNij2YjZhCDYrdi22YjYsdmKIiwxNTAwMF0sWzIsItmF2YTYstmF2Kkg2KfZhNmB2LXZhCDYp9mE2KPZiNmEINil2YTZg9iq2LHZiNmG2YoiLDEwMDAwXV1dLFsi2YXYrdin2LbYsdin2KoiLFtbMywi2YXYrdin2LbYsdipINin2YTZgdi12YQg2KfZhNir2KfZhtmKIiw1MDAwXSxbNCwi2YPYqtin2KggPNiu2KfYtT4gJiDZhdmF2YrYsiIsMjAwMF1dXV0sInMiOnsiaWQiOjMsIm4iOiLYstmK2YbYqCDYudmE2Yog2K3Ys9mK2YYg2KzYp9iz2YUiLCJwIjoiMDc3MTExMTExMTEiLCJnIjoi2KfZhNiu2KfZhdizINin2YTYudmE2YXZiiDigJQg2KXZhtis2YTZitiy2YoifX0"
+}
+}
+],
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "🧾 <b>وصل شرائك من مكتب QMath</b> (#1)\n\n• ملزمة الفصل الأول حضوري × 2 — 30,000 د.ع\n• كتاب &lt;خاص&gt; &amp; مميز × 50 — 100,000 د.ع\n\n💰 المجموع: <b>130,000 د.ع</b>\nشكراً لك 🌷",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ <b>تم البيع #1</b> — زينب علي حسين جاسم\n💰 130,000 د.ع\n\n📱 وصل الوصل الإلكتروني للطالب.\n📊 وانسجلت بمبيعات اليوم.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "📊 مبيعات اليوم",
+"callback_data": "a:of"
+}
+],
+[
+{
+"text": "🖼 وصل ملون (صورة)",
+"callback_data": "a:ofrc:1"
+},
+{
+"text": "🖨 وصل للطباعة",
+"callback_data": "a:ofr:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🧾 <b>وصل شرائك من مكتب QMath</b> (#2)\n\n• محاضرة الفصل الثاني × 1 — 5,000 د.ع\n\n💰 المجموع: <b>5,000 د.ع</b>\nشكراً لك 🌷",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ <b>تم البيع #2</b> — علي حسن محمد كاظم\n💰 5,000 د.ع\n\n📱 وصل الوصل الإلكتروني للطالب.\n📊 وانسجلت بمبيعات اليوم.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "📊 مبيعات اليوم",
+"callback_data": "a:of"
+}
+],
+[
+{
+"text": "🖼 وصل ملون (صورة)",
+"callback_data": "a:ofrc:2"
+},
+{
+"text": "🖨 وصل للطباعة",
+"callback_data": "a:ofr:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ ما گدرت أسوي الصورة.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ البيعة غير موجودة.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📊 مبيعات المكتب — 2026-11-04 (اليوم)</b>\n\nعدد المبيعات: <b>2</b>\nالمجموع: <b>135,000 د.ع</b>\n\n<b>حسب البائع:</b>\n• قصي العميري: 135,000 د.ع\n\n#1  زينب علي  —  130,000 د.ع  (01:39 · قصي العميري)\n#2  علي حسن  —  5,000 د.ع  (01:39 · قصي العميري)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "◀️ اليوم السابق",
+"callback_data": "a:of:2026-11-03"
+}
+],
+[
+{
+"text": "📅 كل الأيام",
+"callback_data": "a:ofd"
+}
+],
+[
+{
+"text": "📄 سجل هذا اليوم PDF",
+"callback_data": "a:ofp:2026-11-04"
+}
+],
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>📊 مبيعات المكتب — 2026-11-03</b>\n\nعدد المبيعات: <b>0</b>\nالمجموع: <b>0 د.ع</b>\n",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "◀️ اليوم السابق",
+"callback_data": "a:of:2026-11-02"
+},
+{
+"text": "اليوم التالي ▶️",
+"callback_data": "a:of:2026-11-04"
+}
+],
+[
+{
+"text": "📅 كل الأيام",
+"callback_data": "a:ofd"
+}
+],
+[
+{
+"text": "📄 سجل هذا اليوم PDF",
+"callback_data": "a:ofp:2026-11-03"
+}
+],
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما أكو مبيعات بهذا اليوم"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📅 سجل مبيعات المكتب (آخر 31 يوم)</b>\n\n• 2026-11-04 — 2 بيعة — <b>135,000 د.ع</b>\n\nالمجموع: <b>135,000 د.ع</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📊 2026-11-04  (135,000 د.ع)",
+"callback_data": "a:of:2026-11-04"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:of"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📅 سجل مبيعات المكتب (آخر 31 يوم)</b>\n\n• 2026-11-04 — 1 بيعة — <b>130,000 د.ع</b>\n• 2026-01-02 — 1 بيعة — <b>5,000 د.ع</b>\n\nالمجموع: <b>135,000 د.ع</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📊 2026-11-04  (130,000 د.ع)",
+"callback_data": "a:of:2026-11-04"
+}
+],
+[
+{
+"text": "📊 2026-01-02  (5,000 د.ع)",
+"callback_data": "a:of:2026-01-02"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:of"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما أكو مبيعات بهذا اليوم"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما أكو مبيعات بهذا اليوم"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "⚠️ ما گدرت أسوي الصورة.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "ما عندك صلاحية"
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [
+{
+"id": 1,
+"name": "الملازم",
+"active": 1
+},
+{
+"id": 2,
+"name": "محاضرات",
+"active": 1
+}
+],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [
+{
+"id": 1,
+"user_id": 3,
+"username": "u3",
+"name": "زينب علي حسين جاسم",
+"gov": "المكتب",
+"side": "",
+"area": "بيع بالمكتب",
+"phone1": "07711111111",
+"phone2": "07811111111",
+"items": "[{\"id\": 1, \"name\": \"ملزمة الفصل الأول حضوري\", \"price\": 15000, \"qty\": 2}, {\"id\": 4, \"name\": \"كتاب <خاص> & مميز\", \"price\": 2000, \"qty\": 50}]",
+"subtotal": 130000,
+"fee": 0,
+"total": 130000,
+"created": "2026-11-04 01:39",
+"curr": "إنجليزي",
+"printed": 3,
+"seller": 1,
+"office_id": null,
+"settle_id": null
+},
+{
+"id": 2,
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"gov": "المكتب",
+"side": "",
+"area": "بيع بالمكتب",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"items": "[{\"id\": 3, \"name\": \"محاضرة الفصل الثاني\", \"price\": 5000, \"qty\": 1}]",
+"subtotal": 5000,
+"fee": 0,
+"total": 5000,
+"created": "2026-01-02 10:15",
+"curr": "عربي",
+"printed": 3,
+"seller": 1,
+"office_id": null,
+"settle_id": null
+}
+],
+"products": [
+{
+"id": 1,
+"name": "ملزمة الفصل الأول حضوري",
+"price": 15000,
+"active": 1,
+"cat_id": 1,
+"mode": "in"
+},
+{
+"id": 2,
+"name": "ملزمة الفصل الأول إلكتروني",
+"price": 10000,
+"active": 1,
+"cat_id": 1,
+"mode": "online"
+},
+{
+"id": 3,
+"name": "محاضرة الفصل الثاني",
+"price": 5000,
+"active": 1,
+"cat_id": 2,
+"mode": "both"
+},
+{
+"id": 4,
+"name": "كتاب <خاص> & مميز",
+"price": 2000,
+"active": 1,
+"cat_id": 2,
+"mode": "both"
+}
+],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 2,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 3,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار قرب الجسر",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:39",
+"updated": "2026-11-04 01:39"
+},
+{
+"user_id": 3,
+"username": "u3",
+"name": "زينب علي حسين جاسم",
+"curr": "إنجليزي",
+"grade": "الخامس العلمي",
+"gov": "بغداد",
+"side": "الكرخ",
+"area": "المنصور شارع الأميرات",
+"phone1": "07711111111",
+"phone2": "07811111111",
+"exam": "حضوري",
+"center_id": 1,
+"created": "2026-11-04 01:39",
+"updated": "2026-11-04 01:39"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"card_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">زينب علي حسين جاسم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">إنجليزي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">الخامس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">بغداد - الكرخ</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">المنصور شارع الأميرات</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07711111111</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07811111111</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">حضوري</td></tr><tr><td class=\"k\"><span>🏫</span>المركز الامتحاني</td><td class=\"v\">قمة النجاح للبنات (المنصور)</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"rc_1.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;min-height:1600px;padding:24px 30px 40px;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%)}\n.top{text-align:center}.top img{height:86px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:36px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:0;font-family:Boahmed,'Segoe UI';font-size:22px;color:#cfd7e6}\n.card{margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239);display:flex;justify-content:space-between}\n.info{display:flex;flex-wrap:wrap;gap:6px 24px;padding:14px 22px;font-size:19px;color:#cfd7e6;border-bottom:1px solid #2a3b5c}.info b{color:#F4F1E8}\ntable{width:100%;border-collapse:collapse}td{padding:12px 22px;border-top:1px solid #2a3b5c;font-size:20px;font-weight:600}\ntd.n{color:#9fb0c9;white-space:nowrap;direction:ltr;text-align:center}td.m{color:#F9C445;white-space:nowrap;text-align:left;direction:ltr}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.tot{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;background:#1d2c47;font-size:26px;font-weight:800;color:#F9C445}\n.ok{margin:14px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;text-align:center}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2><span>🧾 وصل الشراء</span><span dir=\"ltr\">#1</span></h2>\n<div class=\"info\"><span>👤 <b>زينب علي حسين جاسم</b></span><span>📅 <b dir=\"ltr\">2026-11-04 01:39</b></span><span>🏪 <b>استلام من المكتب</b></span><span>📝 الامتحان: <b>حضوري — قمة النجاح للبنات (المنصور)</b></span></div>\n<table><tr><td>ملزمة الفصل الأول حضوري</td><td class=\"n\">× 2</td><td class=\"m\">30,000 د.ع</td></tr><tr><td>كتاب &lt;خاص&gt; &amp; مميز</td><td class=\"n\">× 50</td><td class=\"m\">100,000 د.ع</td></tr></table>\n<div class=\"tot\"><span>💰 المجموع</span><span dir=\"ltr\">130,000 د.ع</span></div>\n<div class=\"ok\">✅ تم الدفع والاستلام · شكراً لك 🌷<br>جميع المشتريات غير قابلة للإرجاع</div></div>\n</body></html>",
+"rc_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;min-height:1600px;padding:24px 30px 40px;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%)}\n.top{text-align:center}.top img{height:86px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:36px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:0;font-family:Boahmed,'Segoe UI';font-size:22px;color:#cfd7e6}\n.card{margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239);display:flex;justify-content:space-between}\n.info{display:flex;flex-wrap:wrap;gap:6px 24px;padding:14px 22px;font-size:19px;color:#cfd7e6;border-bottom:1px solid #2a3b5c}.info b{color:#F4F1E8}\ntable{width:100%;border-collapse:collapse}td{padding:12px 22px;border-top:1px solid #2a3b5c;font-size:20px;font-weight:600}\ntd.n{color:#9fb0c9;white-space:nowrap;direction:ltr;text-align:center}td.m{color:#F9C445;white-space:nowrap;text-align:left;direction:ltr}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.tot{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;background:#1d2c47;font-size:26px;font-weight:800;color:#F9C445}\n.ok{margin:14px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;text-align:center}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2><span>🧾 وصل الشراء</span><span dir=\"ltr\">#2</span></h2>\n<div class=\"info\"><span>👤 <b>علي حسن محمد كاظم</b></span><span>📅 <b dir=\"ltr\">2026-11-04 01:39</b></span><span>🏪 <b>استلام من المكتب</b></span><span>📝 الامتحان: <b>إلكتروني</b></span></div>\n<table><tr><td>محاضرة الفصل الثاني</td><td class=\"n\">× 1</td><td class=\"m\">5,000 د.ع</td></tr></table>\n<div class=\"tot\"><span>💰 المجموع</span><span dir=\"ltr\">5,000 د.ع</span></div>\n<div class=\"ok\">✅ تم الدفع والاستلام · شكراً لك 🌷<br>جميع المشتريات غير قابلة للإرجاع</div></div>\n</body></html>",
+"receipt_1.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>\n@page{size:58mm 164mm;margin:0}\n*{box-sizing:border-box}body{margin:0;width:58mm;padding:3mm 2.5mm;font-family:Tahoma,'Segoe UI',Arial,sans-serif;color:#000;font-size:10.5pt}\n.c{text-align:center}.logo{height:15mm;filter:grayscale(1) contrast(1.6)}\nh1{margin:1mm 0 0;font-size:15pt;letter-spacing:.5px;font-family:'Segoe UI',Arial}\n.sub{font-size:9.5pt}.hr{border-top:1.4px dashed #000;margin:2mm 0}\n.kv{display:flex;justify-content:space-between;font-size:9.5pt;line-height:1.55}\ntable{width:100%;border-collapse:collapse;font-size:9.5pt}th{border-bottom:1.2px solid #000;padding:1mm 0;text-align:right}\ntd{padding:1.1mm 0;vertical-align:top;border-bottom:.6px dotted #000}.n{text-align:left;white-space:nowrap;padding-right:1.5mm;direction:ltr}\n.tot{display:flex;justify-content:space-between;font-size:13pt;font-weight:bold;margin-top:2mm}\n.note{font-size:8.5pt;text-align:center;margin-top:2mm;line-height:1.5}\n\n</style></head><body>\n<div class=\"c\"><img class=\"logo\" src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><div class=\"sub\">قصي العميري — رياضيات السادس العلمي</div></div>\n<div class=\"hr\"></div>\n<div class=\"c\" style=\"font-weight:bold\">وصل بيع رقم #1</div>\n<div class=\"kv\"><span>التاريخ</span><span dir=\"ltr\">2026-11-04 01:39</span></div>\n<div class=\"kv\"><span>الطالب</span><span>زينب علي حسين جاسم</span></div>\n<div class=\"kv\"><span>الهاتف</span><span dir=\"ltr\">07711111111</span></div>\n<div class=\"kv\"><span>الامتحان</span><span style=\"text-align:left\">حضوري — قمة النجاح للبنات (المنصور)</span></div>\n<div class=\"kv\"><span>البائع</span><span>قصي العميري</span></div>\n<div class=\"hr\"></div>\n<table><tr><th>المنتج</th><th class=\"n\">العدد</th><th class=\"n\">المبلغ</th></tr><tr><td>ملزمة الفصل الأول حضوري</td><td class=\"n\">2</td><td class=\"n\">30,000</td></tr><tr><td>كتاب &lt;خاص&gt; &amp; مميز</td><td class=\"n\">50</td><td class=\"n\">100,000</td></tr></table>\n<div class=\"tot\"><span>المجموع</span><span dir=\"ltr\">130,000 د.ع</span></div>\n<div class=\"hr\"></div>\n<div class=\"note\">جميع المشتريات غير قابلة للإرجاع<br>شكراً لك 🌷</div>\n</body></html>"
+}
+},
+"الوصل للطالب المحظور، والبائع بدون صلاحية، ومساعد برصيد": {
+"trace": [
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "📥 <b>إضافة منتجات دفعة وحدة</b>\n\nأرسل رسالة وحدة بهذا الشكل:\n• السطر اللي يبدي بعلامة <code>#</code> هو اسم القسم.\n• تحته كل منتج بسطر: الاسم بعدين علامة <code>=</code> بعدين السعر.\n\n<code># المحاضرات والامتحانات\nالمحاضرة الأولى مع امتحانها = 5000\nالمحاضرة الثانية مع امتحانها = 5000\n# الملازم\nملزمة الفصل الأول = 15000</code>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ تمت إضافة 4 منتج.\n\n⚠️ هاي السطور ما فهمتها، ما انضافت:\n• سطر غلط",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📋 الأقسام</b>\nاضغط على القسم حتى تشوف منتجاته وتعدلها.\n🗑 يحذف القسم مع منتجاته.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "📂 الملازم  (2)",
+"callback_data": "a:lc:1"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:1"
+}
+],
+[
+{
+"text": "📂 محاضرات  (2)",
+"callback_data": "a:lc:2"
+},
+{
+"text": "🗑",
+"callback_data": "a:dc:2"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>علي حسن محمد كاظم</b>\nالمنهج: عربي\nصفك بالمدرسة هذه السنة: السادس العلمي\nالمحافظة: البصرة\nالعنوان: العشار قرب الجسر\nالهاتف 1: 07701234567\nالهاتف 2: 07801234567\nالامتحان: إلكتروني\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "<b>📋 معلوماتك</b>\n\nالاسم: <b>زينب علي حسين جاسم</b>\nالمنهج: إنجليزي\nصفك بالمدرسة هذه السنة: الخامس العلمي\nالمحافظة: بغداد - الكرخ\nالعنوان: المنصور شارع الأميرات\nالهاتف 1: 07711111111\nالهاتف 2: 07811111111\nالامتحان: حضوري\nالمركز الامتحاني: قمة النجاح للبنات (المنصور)\n\n✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «👤 معلوماتي».",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "⚠️ ما عندك صلاحية.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 2,
+"text": "🧾 <b>وصل شرائك من مكتب QMath</b> (#1)\n\n• ملزمة الفصل الأول حضوري × 1 — 15,000 د.ع\n\n💰 المجموع: <b>15,000 د.ع</b>\nشكراً لك 🌷",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ <b>تم البيع #1</b> — علي حسن محمد كاظم\n💰 15,000 د.ع\n\n⚠️ ما گدرت أرسل الوصل للطالب (ممكن مسوي حظر للبوت).\n📊 وانسجلت بمبيعات اليوم.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "📊 مبيعات اليوم",
+"callback_data": "a:of"
+}
+],
+[
+{
+"text": "🖼 وصل ملون (صورة)",
+"callback_data": "a:ofrc:1"
+},
+{
+"text": "🖨 وصل للطباعة",
+"callback_data": "a:ofr:1"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "➕ <b>إضافة مساعد</b>\n\n1) خلي المساعد يفتح البوت ويكتب <code>/myid</code>\n2) البوت ينطيه رقم حسابه، يرسلك ياه\n3) اكتب الرقم هنا 👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✍️ اكتب اسم المساعد:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انضاف المساعد، وصلاحيته هسه الأسئلة العلمية بس.\nلازم تضيفه هم لمجموعة الأسئلة حتى يگدر يجاوب.\n\n<b>👤 أحمد المساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:555123:q"
+}
+],
+[
+{
+"text": "⬜️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:555123:orders"
+}
+],
+[
+{
+"text": "⬜️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:555123:products"
+}
+],
+[
+{
+"text": "⬜️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:555123:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:555123"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "✅ تمت إضافتك مساعد بالبوت. اكتب /start"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "⚠️ ما عندك صلاحية.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "editMessageText",
+"p": {
+"chat_id": 1,
+"message_id": 50,
+"text": "<b>👤 أحمد المساعد</b>\nاضغط حتى تنطيه الصلاحية أو تسحبها:",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "☑️ ❓ الأسئلة العلمية",
+"callback_data": "a:sfp:555123:q"
+}
+],
+[
+{
+"text": "☑️ 🖨 الطلبات والطباعة",
+"callback_data": "a:sfp:555123:orders"
+}
+],
+[
+{
+"text": "⬜️ 🛒 المنتجات والأسعار والتوصيل",
+"callback_data": "a:sfp:555123:products"
+}
+],
+[
+{
+"text": "⬜️ 🎓 الطلاب والمراكز",
+"callback_data": "a:sfp:555123:students"
+}
+],
+[
+{
+"text": "💰 حساب المبيعات والرصيد",
+"callback_data": "a:sfm:555123"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sf"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🎯 اكتب الرصيد المسموح إله (أكثر مبلغ يگدر يبيع بيه قبل ما يسلمك)\nمثال: <code>20000000</code> أو <code>20 مليون</code>\nاكتب <code>0</code> إذا تريد بدون حد.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انحفظ الرصيد المسموح.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>💰 حساب أحمد المساعد</b>\n\n🎯 الرصيد المسموح: <b>20,000 د.ع</b>\n🛒 كل مبيعاته بالمكتب: <b>0 د.ع</b>\n✅ سلّمك: <b>0 د.ع</b>\n🔴 <b>باقي بذمته (لازم يسلمك): 0 د.ع</b>\n🟢 يگدر يبيع بعد بـ: <b>20,000 د.ع</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ سلّمني مبلغ (تسجيل دفعة)",
+"callback_data": "a:sfy:555123"
+}
+],
+[
+{
+"text": "🎯 تحديد الرصيد المسموح",
+"callback_data": "a:sfl:555123"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sfv:555123"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "⛔ ما يصير تبيع هالبيعة: مبلغها أكثر من الرصيد الباقي إلك.\n🔴 بذمتك: 0 د.ع\n🟢 باقي تگدر تبيع بـ: 20,000 د.ع\n\nسلّم المبلغ لقصي العميري حتى ينفتح رصيدك.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "🧾 <b>وصل شرائك من مكتب QMath</b> (#2)\n\n• ملزمة الفصل الأول حضوري × 1 — 15,000 د.ع\n\n💰 المجموع: <b>15,000 د.ع</b>\nشكراً لك 🌷",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "✅ <b>تم البيع #2</b> — زينب علي حسين جاسم\n💰 15,000 د.ع\n\n📱 وصل الوصل الإلكتروني للطالب.\n📊 وانسجلت بمبيعات اليوم.\n\n🔴 بذمتك هسه: <b>15,000 د.ع</b>\n🟢 باقي تگدر تبيع بـ: <b>5,000 د.ع</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "📊 مبيعات اليوم",
+"callback_data": "a:of"
+}
+],
+[
+{
+"text": "🖼 وصل ملون (صورة)",
+"callback_data": "a:ofrc:2"
+},
+{
+"text": "🖨 وصل للطباعة",
+"callback_data": "a:ofr:2"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "⚠️ ما گدرت أسوي الصورة.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "<b>📊 مبيعات المكتب — 2026-11-04 (اليوم)</b>\n\nعدد المبيعات: <b>2</b>\nالمجموع: <b>30,000 د.ع</b>\n\n<b>حسب البائع:</b>\n• قصي العميري: 15,000 د.ع\n• أحمد المساعد: 15,000 د.ع\n\n#1  علي حسن  —  15,000 د.ع  (01:39 · قصي العميري)\n#2  زينب علي  —  15,000 د.ع  (01:39 · أحمد المساعد)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "◀️ اليوم السابق",
+"callback_data": "a:of:2026-11-03"
+}
+],
+[
+{
+"text": "📅 كل الأيام",
+"callback_data": "a:ofd"
+}
+],
+[
+{
+"text": "📄 سجل هذا اليوم PDF",
+"callback_data": "a:ofp:2026-11-04"
+}
+],
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "⛔ ما يصير تبيع هالبيعة: مبلغها أكثر من الرصيد الباقي إلك.\n🔴 بذمتك: 15,000 د.ع\n🟢 باقي تگدر تبيع بـ: 5,000 د.ع\n\nسلّم المبلغ لقصي العميري حتى ينفتح رصيدك.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "🎯 اكتب الرصيد المسموح إله (أكثر مبلغ يگدر يبيع بيه قبل ما يسلمك)\nمثال: <code>20000000</code> أو <code>20 مليون</code>\nاكتب <code>0</code> إذا تريد بدون حد.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "❌ إلغاء"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "✅ انحفظ الرصيد المسموح.",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>💰 حساب أحمد المساعد</b>\n\n🎯 الرصيد المسموح: <b>بدون حد</b>\n🛒 كل مبيعاته بالمكتب: <b>15,000 د.ع</b>\n✅ سلّمك: <b>0 د.ع</b>\n🔴 <b>باقي بذمته (لازم يسلمك): 15,000 د.ع</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "✅ سلّمني مبلغ (تسجيل دفعة)",
+"callback_data": "a:sfy:555123"
+}
+],
+[
+{
+"text": "🎯 تحديد الرصيد المسموح",
+"callback_data": "a:sfl:555123"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:sfv:555123"
+}
+]
+]
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 3,
+"text": "🧾 <b>وصل شرائك من مكتب QMath</b> (#3)\n\n• ملزمة الفصل الأول حضوري × 1 — 15,000 د.ع\n\n💰 المجموع: <b>15,000 د.ع</b>\nشكراً لك 🌷",
+"parse_mode": "HTML",
+"disable_web_page_preview": true
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "✅ <b>تم البيع #3</b> — زينب علي حسين جاسم\n💰 15,000 د.ع\n\n📱 وصل الوصل الإلكتروني للطالب.\n📊 وانسجلت بمبيعات اليوم.\n\n🔴 بذمتك هسه: <b>30,000 د.ع</b>",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"keyboard": [
+[
+{
+"text": "🛒 المتجر"
+},
+{
+"text": "❓ سؤال علمي"
+}
+],
+[
+{
+"text": "📂 أسئلتي"
+},
+{
+"text": "👤 معلوماتي"
+}
+],
+[
+{
+"text": "⚙️ لوحة التحكم"
+}
+]
+],
+"resize_keyboard": true
+}
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 555123,
+"text": "👇",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "📊 مبيعات اليوم",
+"callback_data": "a:of"
+}
+],
+[
+{
+"text": "🖼 وصل ملون (صورة)",
+"callback_data": "a:ofrc:3"
+},
+{
+"text": "🖨 وصل للطباعة",
+"callback_data": "a:ofr:3"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+},
+{
+"m": "sendMessage",
+"p": {
+"chat_id": 1,
+"text": "<b>📊 مبيعات المكتب — 2026-11-04 (اليوم)</b>\n\nعدد المبيعات: <b>3</b>\nالمجموع: <b>45,000 د.ع</b>\n\n<b>حسب البائع:</b>\n• مساعد: 15,000 د.ع\n• أحمد المساعد: 30,000 د.ع\n\n#1  علي حسن  —  15,000 د.ع  (01:39 · مساعد)\n#2  زينب علي  —  15,000 د.ع  (01:39 · أحمد المساعد)\n#3  زينب علي  —  15,000 د.ع  (01:39 · أحمد المساعد)",
+"parse_mode": "HTML",
+"disable_web_page_preview": true,
+"reply_markup": {
+"inline_keyboard": [
+[
+{
+"text": "◀️ اليوم السابق",
+"callback_data": "a:of:2026-11-03"
+}
+],
+[
+{
+"text": "📅 كل الأيام",
+"callback_data": "a:ofd"
+}
+],
+[
+{
+"text": "📄 سجل هذا اليوم PDF",
+"callback_data": "a:ofp:2026-11-04"
+}
+],
+[
+{
+"text": "🏪 بيع جديد",
+"callback_data": "a:pos"
+}
+],
+[
+{
+"text": "⬅️ رجوع",
+"callback_data": "a:menu"
+}
+]
+]
+}
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c"
+}
+},
+{
+"m": "answerCallbackQuery",
+"p": {
+"callback_query_id": "c",
+"text": "⏳"
+}
+}
+],
+"db": {
+"areas": [
+{
+"id": 1,
+"gov": "بغداد",
+"name": "المنصور",
+"active": 1
+},
+{
+"id": 2,
+"gov": "بغداد",
+"name": "الصليخ",
+"active": 1
+},
+{
+"id": 3,
+"gov": "بغداد",
+"name": "البنوك",
+"active": 1
+},
+{
+"id": 4,
+"gov": "بغداد",
+"name": "زيونة",
+"active": 1
+}
+],
+"cats": [
+{
+"id": 1,
+"name": "الملازم",
+"active": 1
+},
+{
+"id": 2,
+"name": "محاضرات",
+"active": 1
+}
+],
+"centers": [
+{
+"id": 1,
+"area_id": 1,
+"name": "قمة النجاح للبنات",
+"active": 1
+},
+{
+"id": 2,
+"area_id": 1,
+"name": "قمة المنصور للبنين",
+"active": 1
+},
+{
+"id": 3,
+"area_id": 2,
+"name": "قمة صليخ 2",
+"active": 1
+},
+{
+"id": 4,
+"area_id": 3,
+"name": "معهد قصي العميري",
+"active": 1
+},
+{
+"id": 5,
+"area_id": 4,
+"name": "معهد أثر",
+"active": 1
+}
+],
+"chapters": [
+{
+"id": 1,
+"ord": 1,
+"ar": "الأعداد المركبة",
+"en": "Complex Numbers",
+"active": 1
+},
+{
+"id": 2,
+"ord": 2,
+"ar": "القطوع المخروطية",
+"en": "Conic Sections",
+"active": 1
+},
+{
+"id": 3,
+"ord": 3,
+"ar": "تطبيقات التفاضل",
+"en": "Applications of Differentiation",
+"active": 1
+},
+{
+"id": 4,
+"ord": 4,
+"ar": "التكامل",
+"en": "Integration",
+"active": 1
+},
+{
+"id": 5,
+"ord": 5,
+"ar": "المعادلات التفاضلية",
+"en": "Differential Equations",
+"active": 1
+}
+],
+"fees": [
+{
+"gov": "بغداد",
+"fee": 5000
+},
+{
+"gov": "البصرة",
+"fee": 5000
+},
+{
+"gov": "نينوى",
+"fee": 5000
+},
+{
+"gov": "أربيل",
+"fee": 5000
+},
+{
+"gov": "النجف",
+"fee": 5000
+},
+{
+"gov": "كربلاء",
+"fee": 5000
+},
+{
+"gov": "بابل",
+"fee": 5000
+},
+{
+"gov": "الأنبار",
+"fee": 5000
+},
+{
+"gov": "ديالى",
+"fee": 5000
+},
+{
+"gov": "ذي قار",
+"fee": 5000
+},
+{
+"gov": "ميسان",
+"fee": 5000
+},
+{
+"gov": "المثنى",
+"fee": 5000
+},
+{
+"gov": "القادسية",
+"fee": 5000
+},
+{
+"gov": "واسط",
+"fee": 5000
+},
+{
+"gov": "صلاح الدين",
+"fee": 5000
+},
+{
+"gov": "كركوك",
+"fee": 5000
+},
+{
+"gov": "دهوك",
+"fee": 5000
+},
+{
+"gov": "السليمانية",
+"fee": 5000
+}
+],
+"govmode": [
+{
+"gov": "بغداد",
+"mode": "both"
+},
+{
+"gov": "البصرة",
+"mode": "online"
+},
+{
+"gov": "نينوى",
+"mode": "online"
+},
+{
+"gov": "أربيل",
+"mode": "online"
+},
+{
+"gov": "النجف",
+"mode": "online"
+},
+{
+"gov": "كربلاء",
+"mode": "online"
+},
+{
+"gov": "بابل",
+"mode": "online"
+},
+{
+"gov": "الأنبار",
+"mode": "online"
+},
+{
+"gov": "ديالى",
+"mode": "online"
+},
+{
+"gov": "ذي قار",
+"mode": "online"
+},
+{
+"gov": "ميسان",
+"mode": "online"
+},
+{
+"gov": "المثنى",
+"mode": "online"
+},
+{
+"gov": "القادسية",
+"mode": "online"
+},
+{
+"gov": "واسط",
+"mode": "online"
+},
+{
+"gov": "صلاح الدين",
+"mode": "online"
+},
+{
+"gov": "كركوك",
+"mode": "online"
+},
+{
+"gov": "دهوك",
+"mode": "online"
+},
+{
+"gov": "السليمانية",
+"mode": "online"
+}
+],
+"kv": [
+{
+"k": "bot_username",
+"v": "test_bot"
+},
+{
+"k": "limit_555123",
+"v": "0"
+}
+],
+"office_users": [],
+"offices": [],
+"orders": [
+{
+"id": 1,
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"gov": "المكتب",
+"side": "",
+"area": "بيع بالمكتب",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"items": "[{\"id\": 1, \"name\": \"ملزمة الفصل الأول حضوري\", \"price\": 15000, \"qty\": 1}]",
+"subtotal": 15000,
+"fee": 0,
+"total": 15000,
+"created": "2026-11-04 01:39",
+"curr": "عربي",
+"printed": 3,
+"seller": null,
+"office_id": null,
+"settle_id": null
+},
+{
+"id": 2,
+"user_id": 3,
+"username": "u3",
+"name": "زينب علي حسين جاسم",
+"gov": "المكتب",
+"side": "",
+"area": "بيع بالمكتب",
+"phone1": "07711111111",
+"phone2": "07811111111",
+"items": "[{\"id\": 1, \"name\": \"ملزمة الفصل الأول حضوري\", \"price\": 15000, \"qty\": 1}]",
+"subtotal": 15000,
+"fee": 0,
+"total": 15000,
+"created": "2026-11-04 01:39",
+"curr": "إنجليزي",
+"printed": 3,
+"seller": 555123,
+"office_id": null,
+"settle_id": null
+},
+{
+"id": 3,
+"user_id": 3,
+"username": "u3",
+"name": "زينب علي حسين جاسم",
+"gov": "المكتب",
+"side": "",
+"area": "بيع بالمكتب",
+"phone1": "07711111111",
+"phone2": "07811111111",
+"items": "[{\"id\": 1, \"name\": \"ملزمة الفصل الأول حضوري\", \"price\": 15000, \"qty\": 1}]",
+"subtotal": 15000,
+"fee": 0,
+"total": 15000,
+"created": "2026-11-04 01:39",
+"curr": "إنجليزي",
+"printed": 3,
+"seller": 555123,
+"office_id": null,
+"settle_id": null
+}
+],
+"products": [
+{
+"id": 1,
+"name": "ملزمة الفصل الأول حضوري",
+"price": 15000,
+"active": 1,
+"cat_id": 1,
+"mode": "in"
+},
+{
+"id": 2,
+"name": "ملزمة الفصل الأول إلكتروني",
+"price": 10000,
+"active": 1,
+"cat_id": 1,
+"mode": "online"
+},
+{
+"id": 3,
+"name": "محاضرة الفصل الثاني",
+"price": 5000,
+"active": 1,
+"cat_id": 2,
+"mode": "both"
+},
+{
+"id": 4,
+"name": "كتاب <خاص> & مميز",
+"price": 2000,
+"active": 1,
+"cat_id": 2,
+"mode": "both"
+}
+],
+"qmsgs": [],
+"questions": [],
+"sessions": [
+{
+"user_id": 1,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 2,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 3,
+"state": "",
+"data": "{}"
+},
+{
+"user_id": 555123,
+"state": "",
+"data": "{}"
+}
+],
+"settlements": [],
+"staff": [
+{
+"user_id": 555123,
+"name": "أحمد المساعد",
+"perms": "orders,q"
+}
+],
+"staff_pay": [],
+"students": [
+{
+"user_id": 2,
+"username": "u2",
+"name": "علي حسن محمد كاظم",
+"curr": "عربي",
+"grade": "السادس العلمي",
+"gov": "البصرة",
+"side": "",
+"area": "العشار قرب الجسر",
+"phone1": "07701234567",
+"phone2": "07801234567",
+"exam": "إلكتروني",
+"center_id": null,
+"created": "2026-11-04 01:39",
+"updated": "2026-11-04 01:39"
+}
+],
+"topics": [
+{
+"id": 1,
+"chapter_id": 1,
+"ord": 1,
+"ar": "ما قبل إيجاد x و y",
+"en": "Before Finding x and y",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 2,
+"chapter_id": 1,
+"ord": 2,
+"ar": "الجذور التربيعية",
+"en": "Square Roots",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 3,
+"chapter_id": 1,
+"ord": 3,
+"ar": "المعادلة التربيعية",
+"en": "Quadratic Equation",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 4,
+"chapter_id": 1,
+"ord": 4,
+"ar": "إيجاد قيم x و y",
+"en": "Finding x and y",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 5,
+"chapter_id": 1,
+"ord": 5,
+"ar": "الأوميگا ω",
+"en": "Omega (Cube Roots of Unity)",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 6,
+"chapter_id": 1,
+"ord": 6,
+"ar": "الصيغة القطبية وديموافر",
+"en": "Polar Form and De Moivre's Theorem",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 7,
+"chapter_id": 1,
+"ord": 7,
+"ar": "أشكال آرگاند",
+"en": "Argand Diagrams",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 8,
+"chapter_id": 2,
+"ord": 1,
+"ar": "القطع المكافئ",
+"en": "Parabola",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 9,
+"chapter_id": 2,
+"ord": 2,
+"ar": "القطع الناقص والزائد",
+"en": "Ellipse & Hyperbola",
+"lectures": 10,
+"active": 1
+},
+{
+"id": 10,
+"chapter_id": 2,
+"ord": 3,
+"ar": "الربط",
+"en": "Linking",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 11,
+"chapter_id": 2,
+"ord": 4,
+"ar": "الانسحاب",
+"en": "Translation",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 12,
+"chapter_id": 3,
+"ord": 1,
+"ar": "الاشتقاقات",
+"en": "Derivatives",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 13,
+"chapter_id": 3,
+"ord": 2,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 14,
+"chapter_id": 3,
+"ord": 3,
+"ar": "المعدلات الزمنية",
+"en": "Related Rates",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 15,
+"chapter_id": 3,
+"ord": 4,
+"ar": "رول والقيمة المتوسطة",
+"en": "Rolle's Theorem and the Mean Value Theorem",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 16,
+"chapter_id": 3,
+"ord": 5,
+"ar": "التقريب",
+"en": "Approximation",
+"lectures": 5,
+"active": 1
+},
+{
+"id": 17,
+"chapter_id": 3,
+"ord": 6,
+"ar": "رسم الدوال",
+"en": "Curve Sketching",
+"lectures": 7,
+"active": 1
+},
+{
+"id": 18,
+"chapter_id": 3,
+"ord": 7,
+"ar": "الثوابت",
+"en": "Constants",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 19,
+"chapter_id": 3,
+"ord": 8,
+"ar": "تطبيقات النهايات العظمى والصغرى",
+"en": "Applications of Maxima and Minima",
+"lectures": 8,
+"active": 1
+},
+{
+"id": 20,
+"chapter_id": 4,
+"ord": 1,
+"ar": "ممنوع أو مسموح",
+"en": "Allowed or Not Allowed",
+"lectures": 4,
+"active": 1
+},
+{
+"id": 21,
+"chapter_id": 4,
+"ord": 2,
+"ar": "المتفرقات",
+"en": "Miscellaneous",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 22,
+"chapter_id": 4,
+"ord": 3,
+"ar": "ln والأسية",
+"en": "ln and Exponential",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 23,
+"chapter_id": 4,
+"ord": 4,
+"ar": "الحجوم",
+"en": "Volume of Revolution",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 24,
+"chapter_id": 4,
+"ord": 5,
+"ar": "تطبيقات فيزيائية",
+"en": "Physical Applications",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 25,
+"chapter_id": 4,
+"ord": 6,
+"ar": "المجاميع العليا والسفلى",
+"en": "The Lower and Upper Rectangles",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 26,
+"chapter_id": 4,
+"ord": 7,
+"ar": "الدالة المقابلة",
+"en": "Antiderivative",
+"lectures": 1,
+"active": 1
+},
+{
+"id": 27,
+"chapter_id": 4,
+"ord": 8,
+"ar": "المساحات",
+"en": "Area",
+"lectures": 3,
+"active": 1
+},
+{
+"id": 28,
+"chapter_id": 4,
+"ord": 9,
+"ar": "الساين والكوساين",
+"en": "Sine and Cosine",
+"lectures": 6,
+"active": 1
+},
+{
+"id": 29,
+"chapter_id": 5,
+"ord": 1,
+"ar": "الهل والإثبات",
+"en": "Verifying Solutions",
+"lectures": 2,
+"active": 1
+},
+{
+"id": 30,
+"chapter_id": 5,
+"ord": 2,
+"ar": "فصل المتغيرات",
+"en": "Separation of Variables",
+"lectures": 3,
+"active": 1
+}
+]
+},
+"files": {
+"card_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">علي حسن محمد كاظم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">عربي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">السادس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">البصرة</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">العشار قرب الجسر</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07701234567</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07801234567</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">إلكتروني</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"card_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);\ndisplay:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}\n.top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}\n.card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}\ntable{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}\ntd.k{width:38%;color:#9fb0c9;font-weight:600;white-space:nowrap}td.k span{display:inline-block;width:38px}\ntd.v{font-weight:700}td.ltr{direction:ltr;text-align:right;letter-spacing:1px}td em{font-style:normal;font-size:17px;opacity:.75}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.foot{margin:12px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;color:#e9e3d2}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2>✅ تم حفظ معلوماتك</h2><table><tr><td class=\"k\"><span>👤</span>الاسم</td><td class=\"v\">زينب علي حسين جاسم</td></tr><tr><td class=\"k\"><span>📘</span>المنهج</td><td class=\"v\">إنجليزي</td></tr><tr><td class=\"k\"><span>🎓</span>صفك بالمدرسة</td><td class=\"v\">الخامس العلمي</td></tr><tr><td class=\"k\"><span>📍</span>المحافظة</td><td class=\"v\">بغداد - الكرخ</td></tr><tr><td class=\"k\"><span>🏘</span>العنوان</td><td class=\"v\">المنصور شارع الأميرات</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الأول</td><td class=\"v ltr\">07711111111</td></tr><tr><td class=\"k\"><span>📞</span>الهاتف الثاني</td><td class=\"v ltr\">07811111111</td></tr><tr><td class=\"k\"><span>📝</span>نوع الامتحان</td><td class=\"v\">حضوري</td></tr><tr><td class=\"k\"><span>🏫</span>المركز الامتحاني</td><td class=\"v\">قمة النجاح للبنات (المنصور)</td></tr></table>\n<div class=\"foot\">🔒 معلوماتك مقفولة، ولتغيير أي معلومة تواصل ويا قصي العميري.</div></div>\n</body></html>",
+"rc_1.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;min-height:1600px;padding:24px 30px 40px;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%)}\n.top{text-align:center}.top img{height:86px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:36px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:0;font-family:Boahmed,'Segoe UI';font-size:22px;color:#cfd7e6}\n.card{margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239);display:flex;justify-content:space-between}\n.info{display:flex;flex-wrap:wrap;gap:6px 24px;padding:14px 22px;font-size:19px;color:#cfd7e6;border-bottom:1px solid #2a3b5c}.info b{color:#F4F1E8}\ntable{width:100%;border-collapse:collapse}td{padding:12px 22px;border-top:1px solid #2a3b5c;font-size:20px;font-weight:600}\ntd.n{color:#9fb0c9;white-space:nowrap;direction:ltr;text-align:center}td.m{color:#F9C445;white-space:nowrap;text-align:left;direction:ltr}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.tot{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;background:#1d2c47;font-size:26px;font-weight:800;color:#F9C445}\n.ok{margin:14px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;text-align:center}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2><span>🧾 وصل الشراء</span><span dir=\"ltr\">#1</span></h2>\n<div class=\"info\"><span>👤 <b>علي حسن محمد كاظم</b></span><span>📅 <b dir=\"ltr\">2026-11-04 01:39</b></span><span>🏪 <b>استلام من المكتب</b></span><span>📝 الامتحان: <b>إلكتروني</b></span></div>\n<table><tr><td>ملزمة الفصل الأول حضوري</td><td class=\"n\">× 1</td><td class=\"m\">15,000 د.ع</td></tr></table>\n<div class=\"tot\"><span>💰 المجموع</span><span dir=\"ltr\">15,000 د.ع</span></div>\n<div class=\"ok\">✅ تم الدفع والاستلام · شكراً لك 🌷<br>جميع المشتريات غير قابلة للإرجاع</div></div>\n</body></html>",
+"rc_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;min-height:1600px;padding:24px 30px 40px;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%)}\n.top{text-align:center}.top img{height:86px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:36px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:0;font-family:Boahmed,'Segoe UI';font-size:22px;color:#cfd7e6}\n.card{margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239);display:flex;justify-content:space-between}\n.info{display:flex;flex-wrap:wrap;gap:6px 24px;padding:14px 22px;font-size:19px;color:#cfd7e6;border-bottom:1px solid #2a3b5c}.info b{color:#F4F1E8}\ntable{width:100%;border-collapse:collapse}td{padding:12px 22px;border-top:1px solid #2a3b5c;font-size:20px;font-weight:600}\ntd.n{color:#9fb0c9;white-space:nowrap;direction:ltr;text-align:center}td.m{color:#F9C445;white-space:nowrap;text-align:left;direction:ltr}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.tot{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;background:#1d2c47;font-size:26px;font-weight:800;color:#F9C445}\n.ok{margin:14px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;text-align:center}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2><span>🧾 وصل الشراء</span><span dir=\"ltr\">#2</span></h2>\n<div class=\"info\"><span>👤 <b>زينب علي حسين جاسم</b></span><span>📅 <b dir=\"ltr\">2026-11-04 01:39</b></span><span>🏪 <b>استلام من المكتب</b></span><span>📝 الامتحان: <b>حضوري — قمة النجاح للبنات (المنصور)</b></span></div>\n<table><tr><td>ملزمة الفصل الأول حضوري</td><td class=\"n\">× 1</td><td class=\"m\">15,000 د.ع</td></tr></table>\n<div class=\"tot\"><span>💰 المجموع</span><span dir=\"ltr\">15,000 د.ع</span></div>\n<div class=\"ok\">✅ تم الدفع والاستلام · شكراً لك 🌷<br>جميع المشتريات غير قابلة للإرجاع</div></div>\n</body></html>",
+"rc_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@font-face{font-family:Boahmed;src:url(data:font/ttf;base64:09290333b8cbf57e14ef262b851ec9af)}\n*{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}\nbody{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;min-height:1600px;padding:24px 30px 40px;\nbackground:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%)}\n.top{text-align:center}.top img{height:86px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}\n.top h1{margin:0;font-size:36px;font-weight:800;letter-spacing:2px;color:#F9C445}\n.top p{margin:0;font-family:Boahmed,'Segoe UI';font-size:22px;color:#cfd7e6}\n.card{margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}\n.card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239);display:flex;justify-content:space-between}\n.info{display:flex;flex-wrap:wrap;gap:6px 24px;padding:14px 22px;font-size:19px;color:#cfd7e6;border-bottom:1px solid #2a3b5c}.info b{color:#F4F1E8}\ntable{width:100%;border-collapse:collapse}td{padding:12px 22px;border-top:1px solid #2a3b5c;font-size:20px;font-weight:600}\ntd.n{color:#9fb0c9;white-space:nowrap;direction:ltr;text-align:center}td.m{color:#F9C445;white-space:nowrap;text-align:left;direction:ltr}\ntr:nth-child(even) td{background:rgba(255,255,255,.025)}\n.tot{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;background:#1d2c47;font-size:26px;font-weight:800;color:#F9C445}\n.ok{margin:14px 16px 16px;padding:10px 16px;border-radius:14px;border:1px dashed #CEA239;background:rgba(249,196,69,.08);font-size:17px;line-height:1.6;text-align:center}\n</style></head><body>\n<div class=\"top\"><img src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><p>قصي العميري</p></div>\n<div class=\"card\"><h2><span>🧾 وصل الشراء</span><span dir=\"ltr\">#3</span></h2>\n<div class=\"info\"><span>👤 <b>زينب علي حسين جاسم</b></span><span>📅 <b dir=\"ltr\">2026-11-04 01:39</b></span><span>🏪 <b>استلام من المكتب</b></span><span>📝 الامتحان: <b>حضوري — قمة النجاح للبنات (المنصور)</b></span></div>\n<table><tr><td>ملزمة الفصل الأول حضوري</td><td class=\"n\">× 1</td><td class=\"m\">15,000 د.ع</td></tr></table>\n<div class=\"tot\"><span>💰 المجموع</span><span dir=\"ltr\">15,000 د.ع</span></div>\n<div class=\"ok\">✅ تم الدفع والاستلام · شكراً لك 🌷<br>جميع المشتريات غير قابلة للإرجاع</div></div>\n</body></html>",
+"receipt_1.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>\n@page{size:58mm 147mm;margin:0}\n*{box-sizing:border-box}body{margin:0;width:58mm;padding:3mm 2.5mm;font-family:Tahoma,'Segoe UI',Arial,sans-serif;color:#000;font-size:10.5pt}\n.c{text-align:center}.logo{height:15mm;filter:grayscale(1) contrast(1.6)}\nh1{margin:1mm 0 0;font-size:15pt;letter-spacing:.5px;font-family:'Segoe UI',Arial}\n.sub{font-size:9.5pt}.hr{border-top:1.4px dashed #000;margin:2mm 0}\n.kv{display:flex;justify-content:space-between;font-size:9.5pt;line-height:1.55}\ntable{width:100%;border-collapse:collapse;font-size:9.5pt}th{border-bottom:1.2px solid #000;padding:1mm 0;text-align:right}\ntd{padding:1.1mm 0;vertical-align:top;border-bottom:.6px dotted #000}.n{text-align:left;white-space:nowrap;padding-right:1.5mm;direction:ltr}\n.tot{display:flex;justify-content:space-between;font-size:13pt;font-weight:bold;margin-top:2mm}\n.note{font-size:8.5pt;text-align:center;margin-top:2mm;line-height:1.5}\n\n</style></head><body>\n<div class=\"c\"><img class=\"logo\" src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><div class=\"sub\">قصي العميري — رياضيات السادس العلمي</div></div>\n<div class=\"hr\"></div>\n<div class=\"c\" style=\"font-weight:bold\">وصل بيع رقم #1</div>\n<div class=\"kv\"><span>التاريخ</span><span dir=\"ltr\">2026-11-04 01:39</span></div>\n<div class=\"kv\"><span>الطالب</span><span>علي حسن محمد كاظم</span></div>\n<div class=\"kv\"><span>الهاتف</span><span dir=\"ltr\">07701234567</span></div>\n<div class=\"kv\"><span>الامتحان</span><span style=\"text-align:left\">إلكتروني</span></div>\n<div class=\"kv\"><span>البائع</span><span>قصي العميري</span></div>\n<div class=\"hr\"></div>\n<table><tr><th>المنتج</th><th class=\"n\">العدد</th><th class=\"n\">المبلغ</th></tr><tr><td>ملزمة الفصل الأول حضوري</td><td class=\"n\">1</td><td class=\"n\">15,000</td></tr></table>\n<div class=\"tot\"><span>المجموع</span><span dir=\"ltr\">15,000 د.ع</span></div>\n<div class=\"hr\"></div>\n<div class=\"note\">جميع المشتريات غير قابلة للإرجاع<br>شكراً لك 🌷</div>\n</body></html>",
+"receipt_2.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>\n@page{size:58mm 147mm;margin:0}\n*{box-sizing:border-box}body{margin:0;width:58mm;padding:3mm 2.5mm;font-family:Tahoma,'Segoe UI',Arial,sans-serif;color:#000;font-size:10.5pt}\n.c{text-align:center}.logo{height:15mm;filter:grayscale(1) contrast(1.6)}\nh1{margin:1mm 0 0;font-size:15pt;letter-spacing:.5px;font-family:'Segoe UI',Arial}\n.sub{font-size:9.5pt}.hr{border-top:1.4px dashed #000;margin:2mm 0}\n.kv{display:flex;justify-content:space-between;font-size:9.5pt;line-height:1.55}\ntable{width:100%;border-collapse:collapse;font-size:9.5pt}th{border-bottom:1.2px solid #000;padding:1mm 0;text-align:right}\ntd{padding:1.1mm 0;vertical-align:top;border-bottom:.6px dotted #000}.n{text-align:left;white-space:nowrap;padding-right:1.5mm;direction:ltr}\n.tot{display:flex;justify-content:space-between;font-size:13pt;font-weight:bold;margin-top:2mm}\n.note{font-size:8.5pt;text-align:center;margin-top:2mm;line-height:1.5}\n\n</style></head><body>\n<div class=\"c\"><img class=\"logo\" src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><div class=\"sub\">قصي العميري — رياضيات السادس العلمي</div></div>\n<div class=\"hr\"></div>\n<div class=\"c\" style=\"font-weight:bold\">وصل بيع رقم #2</div>\n<div class=\"kv\"><span>التاريخ</span><span dir=\"ltr\">2026-11-04 01:39</span></div>\n<div class=\"kv\"><span>الطالب</span><span>زينب علي حسين جاسم</span></div>\n<div class=\"kv\"><span>الهاتف</span><span dir=\"ltr\">07711111111</span></div>\n<div class=\"kv\"><span>الامتحان</span><span style=\"text-align:left\">حضوري — قمة النجاح للبنات (المنصور)</span></div>\n<div class=\"kv\"><span>البائع</span><span>أحمد المساعد</span></div>\n<div class=\"hr\"></div>\n<table><tr><th>المنتج</th><th class=\"n\">العدد</th><th class=\"n\">المبلغ</th></tr><tr><td>ملزمة الفصل الأول حضوري</td><td class=\"n\">1</td><td class=\"n\">15,000</td></tr></table>\n<div class=\"tot\"><span>المجموع</span><span dir=\"ltr\">15,000 د.ع</span></div>\n<div class=\"hr\"></div>\n<div class=\"note\">جميع المشتريات غير قابلة للإرجاع<br>شكراً لك 🌷</div>\n</body></html>",
+"receipt_3.html": "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><style>\n@page{size:58mm 147mm;margin:0}\n*{box-sizing:border-box}body{margin:0;width:58mm;padding:3mm 2.5mm;font-family:Tahoma,'Segoe UI',Arial,sans-serif;color:#000;font-size:10.5pt}\n.c{text-align:center}.logo{height:15mm;filter:grayscale(1) contrast(1.6)}\nh1{margin:1mm 0 0;font-size:15pt;letter-spacing:.5px;font-family:'Segoe UI',Arial}\n.sub{font-size:9.5pt}.hr{border-top:1.4px dashed #000;margin:2mm 0}\n.kv{display:flex;justify-content:space-between;font-size:9.5pt;line-height:1.55}\ntable{width:100%;border-collapse:collapse;font-size:9.5pt}th{border-bottom:1.2px solid #000;padding:1mm 0;text-align:right}\ntd{padding:1.1mm 0;vertical-align:top;border-bottom:.6px dotted #000}.n{text-align:left;white-space:nowrap;padding-right:1.5mm;direction:ltr}\n.tot{display:flex;justify-content:space-between;font-size:13pt;font-weight:bold;margin-top:2mm}\n.note{font-size:8.5pt;text-align:center;margin-top:2mm;line-height:1.5}\n\n</style></head><body>\n<div class=\"c\"><img class=\"logo\" src=\"data:image/png;base64:7ebef37855c6f2965ec99ced87042462\"><h1>QMath</h1><div class=\"sub\">قصي العميري — رياضيات السادس العلمي</div></div>\n<div class=\"hr\"></div>\n<div class=\"c\" style=\"font-weight:bold\">وصل بيع رقم #3</div>\n<div class=\"kv\"><span>التاريخ</span><span dir=\"ltr\">2026-11-04 01:39</span></div>\n<div class=\"kv\"><span>الطالب</span><span>زينب علي حسين جاسم</span></div>\n<div class=\"kv\"><span>الهاتف</span><span dir=\"ltr\">07711111111</span></div>\n<div class=\"kv\"><span>الامتحان</span><span style=\"text-align:left\">—</span></div>\n<div class=\"kv\"><span>البائع</span><span>أحمد المساعد</span></div>\n<div class=\"hr\"></div>\n<table><tr><th>المنتج</th><th class=\"n\">العدد</th><th class=\"n\">المبلغ</th></tr><tr><td>ملزمة الفصل الأول حضوري</td><td class=\"n\">1</td><td class=\"n\">15,000</td></tr></table>\n<div class=\"tot\"><span>المجموع</span><span dir=\"ltr\">15,000 د.ع</span></div>\n<div class=\"hr\"></div>\n<div class=\"note\">جميع المشتريات غير قابلة للإرجاع<br>شكراً لك 🌷</div>\n</body></html>"
+}
+}
+}
