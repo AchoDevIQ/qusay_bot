@@ -1,0 +1,71 @@
+// الفحص المقارن: كل سيناريو ينعاد على نسخة TypeScript، ولازم يطلع نفس اللي سواه بوت بايثون القديم
+// (نفس رسائل تليجرام بالترتيب، نفس صفوف قاعدة البيانات، ونفس ملفات HTML للوصولات والقوائم).
+// التسجيلات بـ tests/parity/golden/ من tests/parity/record.py
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+
+const DIR = path.join("tests", "parity");
+
+// اللي يتغير من تشغيل لتشغيل (الوقت، الرموز العشوائية)
+function scrub(s: string) {
+  return s
+    .replace(/\d{4}-\d\d-\d\d[ _]\d\d[:-]\d\d/g, "<TIME>")
+    .replace(/\d{4}-\d\d-\d\d/g, "<DAY>")
+    .replace(/🕐 \d\d:\d\d/g, "🕐 <HM>")
+    .replace(/\(\d\d:\d\d · /g, "(<HM> · ")
+    .replace(/<td>\d\d:\d\d<\/td>/g, "<td><HM></td>")
+    .replace(/a:done:\d+/g, "a:done:<BATCH>")
+    .replace(/lib_\d{6}/g, "lib_<CODE>")
+    .replace(/<code>\d{6}<\/code>/g, "<code><CODE></code>");
+}
+// صفحات المتجر انتقلت عمداً: /index + /reg.html + /pos.html صارت /store و/store/reg و/store/pos
+const PAGE: Record<string, string> = { "": "store", "/store": "store", "/reg.html": "reg", "/store/reg": "reg", "/pos.html": "pos", "/store/pos": "pos" };
+function normal(v: any): any {
+  if (typeof v === "string") {
+    const u = /^https:\/\/x\.test([^?]*)\?v=\d+&d=(.*)$/.exec(v);
+    if (u) return { page: PAGE[u[1]] ?? u[1], d: normal(JSON.parse(Buffer.from(u[2], "base64url").toString("utf8"))) };
+    return scrub(v);
+  }
+  if (Array.isArray(v)) return v.map(normal);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, normal(x)]));
+  return v;
+}
+function normalDb(db: Record<string, any[]>) {
+  const out: Record<string, any[]> = {};
+  for (const [t, rows] of Object.entries(db)) {
+    out[t] = rows.map((r) => {
+      const x = { ...r };
+      if (t === "orders" && x.items) x.items = JSON.parse(x.items);
+      if (t === "sessions" && x.data) x.data = JSON.parse(x.data);
+      return normal(x);
+    });
+  }
+  // kv: المفاتيح اللي بيها وقت أو رمز، وقيم JSON
+  out.kv = out.kv.filter((r) => !/_stamp$/.test(r.k)).map((r) => {
+    let v = r.v;
+    if (/^(q_hours|online_only)$/.test(r.k)) v = JSON.parse(v);
+    if (/^libinv_/.test(r.k)) v = String(v).split(":")[0];
+    return { k: String(r.k).replace(/^batch_\d+/, "batch_<ID>").replace(/^libinv_\d+/, "libinv_<CODE>"), v };
+  }).sort((a, b) => (a.k < b.k ? -1 : 1));
+  return out;
+}
+const scrubFiles = (f: Record<string, string>) =>
+  Object.fromEntries(Object.entries(f).map(([k, v]) => [scrub(k), scrub(v)]));
+
+for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).sort()) {
+  const golden = JSON.parse(fs.readFileSync(path.join(DIR, "golden", file), "utf8"));
+  for (const sc of JSON.parse(fs.readFileSync(path.join(DIR, file), "utf8"))) {
+    test(`${file}: ${sc.name}`, () => {
+      const r = spawnSync(process.execPath, [path.join(DIR, "run.ts"), file, sc.name], { encoding: "utf8", maxBuffer: 1 << 28 });
+      assert.equal(r.status, 0, r.stderr);
+      const ts = JSON.parse(r.stdout), py = golden[sc.name];
+      const a = normal(ts.trace), b = normal(py.trace);
+      for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
+      assert.deepEqual(normalDb(ts.db), normalDb(py.db));
+      assert.deepEqual(scrubFiles(ts.files), scrubFiles(py.files));
+    });
+  }
+}
