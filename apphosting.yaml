@@ -28,7 +28,7 @@ env:
   - variable: FIREBASE_STORAGE_BUCKET
     value: "qmath-v2.firebasestorage.app"
     availability: [RUNTIME]
-    - variable: PDF_DIR
+  - variable: PDF_DIR
     value: "/tmp/qmath-pdf"
     availability: [RUNTIME]
   # السيرفر ما بيه مكتبات المتصفح (libnspr4 وغيرها). هذا يخلي @sparticuz/chromium يفك المكتبات اللي وياه
