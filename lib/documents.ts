@@ -40,10 +40,31 @@ async function packagedBrowser() {
   if (process.platform !== "linux" || process.env.CHROME_PATH) return null;
   try { return await (await import("@sparticuz/chromium")).default.executablePath(); } catch (e) { console.error("Browser problem:", e); return null; }
 }
+/** متصفح السيرفر ممكن يكمل الملف وما يطلع، فنراقب الملف ونسكره لمن يخلص. والبوت ينتظر الرسم، فالوقت محدود */
+async function renderPackaged(b: string, out: string, args: string[], url: string) {
+  const flags = ["--headless", "--no-sandbox", "--no-zygote", "--single-process", "--in-process-gpu", "--disable-gpu", "--font-render-hinting=none"];
+  fs.rmSync(out, { force: true });
+  const stop = new AbortController();
+  let finished = false;
+  run(b, [...flags, ...args, url], { timeout: 45_000, signal: stop.signal })
+    .catch((e) => { if (!stop.signal.aborted) console.error("Render problem:", e); })
+    .finally(() => { finished = true; });
+  const sizeOf = () => (fs.existsSync(out) ? fs.statSync(out).size : 0);
+  let last = 0;
+  while (!finished) {
+    await new Promise((r) => setTimeout(r, 500));
+    const size = sizeOf();
+    if (size > 1000 && size === last) { stop.abort(); return true; }
+    last = size;
+  }
+  return sizeOf() > 1000;
+}
 async function render(out: string, profile: string, args: string[], htmlPath: string) {
-  const b = findBrowser() ?? await packagedBrowser();
+  const installed = findBrowser();
+  const b = installed ?? await packagedBrowser();
   if (!b) return false;
   const url = "file:///" + path.resolve(htmlPath).replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!installed) return renderPackaged(b, out, ["--user-data-dir=" + path.join(os.tmpdir(), profile), ...args], url);
   // نجرب بحماية المتصفح أول. بدونها بس إذا السيرفر ما يدعمها، حتى تبقى الوصولات تطلع
   const sandbox: string[][] = process.platform === "win32" ? [[]] : [[], ["--no-sandbox"]];
   for (const extra of sandbox) {
