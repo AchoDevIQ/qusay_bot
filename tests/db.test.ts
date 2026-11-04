@@ -8,17 +8,17 @@ const { initDb, get, all, kvGet, kvSet, getSession, setSession, modeFromName, sa
 const { esc, money, stamp, shiftDay, b64urlEncode, b64urlDecode } = await import("../lib/util.ts");
 const { parseSettingsText } = await import("../lib/config.ts");
 
-test("initDb creates schema and seeds fees/govmode", () => {
-  initDb(); initDb();                       // مرتين بدون أخطاء
-  assert.equal(get("SELECT COUNT(*) n FROM fees")!.n, 18);
-  assert.equal(get("SELECT mode FROM govmode WHERE gov='بغداد'")!.mode, "both");
-  assert.equal(get("SELECT mode FROM govmode WHERE gov='البصرة'")!.mode, "online");
+test("initDb creates schema and seeds fees/govmode", async () => {
+  await initDb(); await initDb();                       // مرتين بدون أخطاء
+  assert.equal((await get("SELECT COUNT(*) n FROM fees"))!.n, 18);
+  assert.equal((await get("SELECT mode FROM govmode WHERE gov='بغداد'"))!.mode, "both");
+  assert.equal((await get("SELECT mode FROM govmode WHERE gov='البصرة'"))!.mode, "online");
 });
-test("kv + sessions roundtrip (Arabic)", () => {
-  kvSet("a", "قيمة"); assert.equal(kvGet("a"), "قيمة"); assert.equal(kvGet("zz"), null);
-  setSession(5, "st", { x: [1, "ب"] });
-  assert.deepEqual(getSession(5), { state: "st", data: { x: [1, "ب"] } });
-  assert.deepEqual(getSession(6), { state: "", data: {} });
+test("kv + sessions roundtrip (Arabic)", async () => {
+  await kvSet("a", "قيمة"); assert.equal(await kvGet("a"), "قيمة"); assert.equal(await kvGet("zz"), null);
+  await setSession(5, "st", { x: [1, "ب"] });
+  assert.deepEqual(await getSession(5), { state: "st", data: { x: [1, "ب"] } });
+  assert.deepEqual(await getSession(6), { state: "", data: {} });
 });
 test("modeFromName", () => {
   assert.equal(modeFromName("ملزمة حضوري"), "in");
@@ -48,13 +48,13 @@ test("opens the REAL Python store.db copy without errors", async () => {
   fs.rmSync(copy, { force: true });
   assert.ok(n >= 15, "tables: " + n);
 });
-test("seeds + saveCurriculum keeps ids and deactivates removed rows", () => {
-  assert.equal(get("SELECT COUNT(*) n FROM areas")!.n, 4);
-  assert.equal(get("SELECT COUNT(*) n FROM chapters WHERE active=1")!.n, 5);
-  const firstId = get("SELECT id FROM chapters WHERE ord=1")!.id;
-  assert.deepEqual(saveCurriculum("# فصل | Ch\nموضوع | Topic = ٣\nبدون رقم"), [1, 2]);
-  assert.equal(get("SELECT ar FROM chapters WHERE id=?", firstId)!.ar, "فصل");
-  assert.equal(get("SELECT COUNT(*) n FROM chapters WHERE active=1")!.n, 1);
-  assert.deepEqual(all("SELECT lectures FROM topics WHERE active=1 AND chapter_id=? ORDER BY ord", firstId).map((r) => r.lectures), [3, 0]);
-  assert.deepEqual(saveCurriculum("بدون فصل"), [0, 0]);
+test("seeds + saveCurriculum keeps ids and deactivates removed rows", async () => {
+  assert.equal((await get("SELECT COUNT(*) n FROM areas"))!.n, 4);
+  assert.equal((await get("SELECT COUNT(*) n FROM chapters WHERE active=1"))!.n, 5);
+  const firstId = (await get("SELECT id FROM chapters WHERE ord=1"))!.id;
+  assert.deepEqual(await saveCurriculum("# فصل | Ch\nموضوع | Topic = ٣\nبدون رقم"), [1, 2]);
+  assert.equal((await get("SELECT ar FROM chapters WHERE id=?", firstId))!.ar, "فصل");
+  assert.equal((await get("SELECT COUNT(*) n FROM chapters WHERE active=1"))!.n, 1);
+  assert.deepEqual((await all("SELECT lectures FROM topics WHERE active=1 AND chapter_id=? ORDER BY ord", firstId)).map((r) => r.lectures), [3, 0]);
+  assert.deepEqual(await saveCurriculum("بدون فصل"), [0, 0]);
 });

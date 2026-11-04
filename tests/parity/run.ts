@@ -45,8 +45,8 @@ globalThis.fetch = (async (url: string, init: any) => {
 
 const { handleUpdate } = await import("../../lib/bot.ts");
 const { all, db, initDb, kvSet } = await import("../../lib/db.ts");
-initDb();
-kvSet("bot_username", "test_bot");
+await initDb();
+await kvSet("bot_username", "test_bot");
 
 const expand = (steps: any[]): any[] => steps.flatMap((s) => (s[0] === "u" ? expand(prelude[s[1]]) : [s]));
 const vars: Record<string, string> = {};
@@ -83,8 +83,8 @@ for (const raw of expand(sc.steps)) {
   } else throw new Error("bad step " + JSON.stringify(s));
 }
 
-const tables = all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").map((r) => r.name as string);
-const dbDump = Object.fromEntries(tables.map((t) => [t, all(`SELECT * FROM ${t} ORDER BY rowid`)]));
+const tables = (await all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")).map((r) => r.name as string);
+const dbDump = Object.fromEntries(await Promise.all(tables.map(async (t) => [t, await all(`SELECT * FROM ${t} ORDER BY rowid`)])));
 const files: Record<string, string> = {};
 for (const n of fs.readdirSync(tmp).sort()) {
   files[n] = fs.readFileSync(path.join(tmp, n), "utf8")

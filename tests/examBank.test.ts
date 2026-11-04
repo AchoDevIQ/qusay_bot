@@ -26,10 +26,10 @@ const { handleUpdate } = await import("../lib/bot.ts");
 const { get, all, initDb, run } = await import("../lib/db.ts");
 const { loadCatalog } = await import("../lib/examBank.ts");
 
-const msg = (uid: number, text?: string, extra: object = {}) => handleUpdate({
+const msg = async (uid: number, text?: string, extra: object = {}) => await handleUpdate({
   message: { message_id: ++nextId, chat: { id: uid, type: "private" }, from: { id: uid, username: "u" + uid }, text, ...extra },
 });
-const cb = (uid: number, data: string) => handleUpdate({ callback_query: { id: "c", from: { id: uid }, message: { chat: { id: uid }, message_id: 50 }, data } });
+const cb = async (uid: number, data: string) => await handleUpdate({ callback_query: { id: "c", from: { id: uid }, message: { chat: { id: uid }, message_id: 50 }, data } });
 const flush = () => { const out = [...calls]; calls.length = 0; return out; };
 const buttons = (c: Call) => (c.p.reply_markup?.inline_keyboard ?? []).flat().map((b: any) => b.callback_data);
 const keys = (c: Call) => (c.p.reply_markup?.keyboard ?? []).flat().map((b: any) => b.text);
@@ -46,25 +46,25 @@ const CATALOG = {
   ] }],
 };
 
-test("الإدخال يسوي الامتحانات، وإعادته ما تكرر ولا تمسح التعديل", () => {
-  initDb();
-  assert.deepEqual(loadCatalog(CATALOG), { exams: 1, versions: 2, questions: 3, needReview: 1 });
-  run("UPDATE bank_questions SET max_mark=7, edited=1 WHERE n=2");
-  loadCatalog(CATALOG);
-  assert.equal(get("SELECT COUNT(*) n FROM bank_questions")!.n, 3);
-  assert.equal(get("SELECT max_mark FROM bank_questions WHERE n=2")!.max_mark, 7);
-  assert.equal(get("SELECT max_mark FROM bank_questions WHERE n=1 LIMIT 1")!.max_mark, 20);
-  run("UPDATE bank_questions SET max_mark=20, edited=0 WHERE n=2");
+test("الإدخال يسوي الامتحانات، وإعادته ما تكرر ولا تمسح التعديل", async () => {
+  await initDb();
+  assert.deepEqual(await loadCatalog(CATALOG), { exams: 1, versions: 2, questions: 3, needReview: 1 });
+  await run("UPDATE bank_questions SET max_mark=7, edited=1 WHERE n=2");
+  await loadCatalog(CATALOG);
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_questions"))!.n, 3);
+  assert.equal((await get("SELECT max_mark FROM bank_questions WHERE n=2"))!.max_mark, 7);
+  assert.equal((await get("SELECT max_mark FROM bank_questions WHERE n=1 LIMIT 1"))!.max_mark, 20);
+  await run("UPDATE bank_questions SET max_mark=20, edited=0 WHERE n=2");
 });
 
-test("امتحان أو نسخة انشالت من الملفات تنشال من البوت", () => {
+test("امتحان أو نسخة انشالت من الملفات تنشال من البوت", async () => {
   const extra = { ...CATALOG, exams: [...CATALOG.exams, { ord: 2, title: "اختياري", info: "", minutes: 60, versions: [{ model: "A", ok: true, issues: [], has_en: false, questions: [{ n: 1, max: 20, q: "q1.png", a: [] }] }] }] };
-  loadCatalog(extra);
-  assert.equal(get("SELECT COUNT(*) n FROM bank_exams")!.n, 2);
-  loadCatalog(CATALOG);
-  assert.equal(get("SELECT COUNT(*) n FROM bank_exams")!.n, 1);
-  assert.equal(get("SELECT COUNT(*) n FROM bank_questions")!.n, 3);
-  assert.equal(get("SELECT COUNT(*) n FROM bank_versions")!.n, 2);
+  await loadCatalog(extra);
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_exams"))!.n, 2);
+  await loadCatalog(CATALOG);
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_exams"))!.n, 1);
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_questions"))!.n, 3);
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_versions"))!.n, 2);
 });
 
 test("التصفح: الفصل، الامتحان، النسخة، والنسخة الناقصة معلمة", async () => {
@@ -83,18 +83,18 @@ test("التصفح: الفصل، الامتحان، النسخة، والنسخ�
 });
 
 test("تغيير نوع النسخة ووقت الامتحان، وكل تعديل ينحفظ باسم صاحبه", async () => {
-  assert.equal(get("SELECT kind FROM bank_versions WHERE id=1")!.kind, "mandatory");
+  assert.equal((await get("SELECT kind FROM bank_versions WHERE id=1"))!.kind, "mandatory");
   await cb(1, "a:exk:1");
-  assert.equal(get("SELECT kind FROM bank_versions WHERE id=1")!.kind, "optional");
+  assert.equal((await get("SELECT kind FROM bank_versions WHERE id=1"))!.kind, "optional");
   flush();
   await cb(1, "a:exm:1");
   await msg(1, "مو رقم");
   assert.match(calls.at(-1)!.p.text, /عدد الدقائق/);
   await msg(1, "75");
-  assert.equal(get("SELECT minutes FROM bank_exams WHERE id=1")!.minutes, 75);
+  assert.equal((await get("SELECT minutes FROM bank_exams WHERE id=1"))!.minutes, 75);
   flush();
-  assert.ok(all("SELECT * FROM bank_edits").every((e) => e.user_id === 1));
-  assert.equal(all("SELECT * FROM bank_edits").length, 2);
+  assert.ok((await all("SELECT * FROM bank_edits")).every((e) => e.user_id === 1));
+  assert.equal((await all("SELECT * FROM bank_edits")).length, 2);
 });
 
 test("فتح السؤال يرسل صورته وجوابه، وتعديل الدرجة والصور", async () => {
@@ -108,13 +108,13 @@ test("فتح السؤال يرسل صورته وجوابه، وتعديل الد
   await msg(1, "12.5");                                     // الدرجات أرقام كاملة بس
   assert.match(calls.at(-1)!.p.text, /رقم كامل/);
   await msg(1, "15");
-  assert.equal(get("SELECT max_mark FROM bank_questions WHERE id=1")!.max_mark, 15);
+  assert.equal((await get("SELECT max_mark FROM bank_questions WHERE id=1"))!.max_mark, 15);
   flush();
   await cb(1, "a:exqi:1");
   await msg(1, "نص");
   assert.match(calls.at(-1)!.p.text, /أرسل صورة/);
   await msg(1, undefined, { photo: [{ file_id: "s" }, { file_id: "NEWQ" }] });
-  assert.equal(get("SELECT q_file FROM bank_questions WHERE id=1")!.q_file, "tg:NEWQ");
+  assert.equal((await get("SELECT q_file FROM bank_questions WHERE id=1"))!.q_file, "tg:NEWQ");
   assert.ok(calls.some((c) => c.method === "sendPhoto" && c.p.photo === "NEWQ"));
   flush();
   await cb(1, "a:exqa:1");
@@ -123,17 +123,17 @@ test("فتح السؤال يرسل صورته وجوابه، وتعديل الد
   await msg(1, undefined, { photo: [{ file_id: "A1" }] });
   await msg(1, undefined, { photo: [{ file_id: "A2" }] });
   await msg(1, "تم");
-  assert.deepEqual(JSON.parse(get("SELECT a_files FROM bank_questions WHERE id=1")!.a_files), ["tg:A1", "tg:A2"]);
-  assert.equal(get("SELECT edited FROM bank_questions WHERE id=1")!.edited, 1);
+  assert.deepEqual(JSON.parse((await get("SELECT a_files FROM bank_questions WHERE id=1"))!.a_files), ["tg:A1", "tg:A2"]);
+  assert.equal((await get("SELECT edited FROM bank_questions WHERE id=1"))!.edited, 1);
   flush();
   await cb(1, "a:exp:1:ar");
   assert.equal(calls[0].method, "sendDocument");
   flush();
   await cb(1, "a:exo:1");
-  assert.equal(get("SELECT ok FROM bank_versions WHERE id=1")!.ok, 0);
+  assert.equal((await get("SELECT ok FROM bank_versions WHERE id=1"))!.ok, 0);
   flush();
   await cb(1, "a:exo:1");
-  assert.equal(get("SELECT ok FROM bank_versions WHERE id=1")!.ok, 1);
+  assert.equal((await get("SELECT ok FROM bank_versions WHERE id=1"))!.ok, 1);
   flush();
 });
 
@@ -143,11 +143,11 @@ test("إضافة امتحان ونسخة وسؤال من اللوحة، والر
   await msg(1, "مو رقم");
   assert.match(calls.at(-1)!.p.text, /عدد الدقائق/);
   await msg(1, "90");
-  const e = get("SELECT * FROM bank_exams WHERE title='امتحان جديد للتجربة'")!;
+  const e = (await get("SELECT * FROM bank_exams WHERE title='امتحان جديد للتجربة'"))!;
   assert.deepEqual([e.minutes, e.manual, e.ord], [90, 1, 2]);
   flush();
   await cb(1, `a:exnv:${e.id}`);
-  const v = get("SELECT * FROM bank_versions WHERE exam_id=?", e.id)!;
+  const v = (await get("SELECT * FROM bank_versions WHERE exam_id=?", e.id))!;
   assert.deepEqual([v.model, v.ok], ["A", 0]);                  // ناقصة لحد ما تكمل
   flush();
   await cb(1, `a:exo:${v.id}`);
@@ -171,33 +171,33 @@ test("إضافة امتحان ونسخة وسؤال من اللوحة، والر
   await msg(1, undefined, { photo: [{ file_id: "NA2" }] });
   await msg(1, "تم");
   flush();
-  const qs = all("SELECT * FROM bank_questions WHERE version_id=? ORDER BY n", v.id);
+  const qs = await all("SELECT * FROM bank_questions WHERE version_id=? ORDER BY n", v.id);
   assert.deepEqual(qs.map((q) => [q.n, q.max_mark, q.q_file]), [[1, 20, "tg:NQ1"], [2, 30, "tg:NQ2"]]);
   assert.deepEqual(JSON.parse(qs[1].a_files), ["tg:NA2"]);
   await cb(1, `a:exo:${v.id}`);
-  assert.equal(get("SELECT ok FROM bank_versions WHERE id=?", v.id)!.ok, 1);
+  assert.equal((await get("SELECT ok FROM bank_versions WHERE id=?", v.id))!.ok, 1);
   flush();
   await cb(1, `a:exu:${v.id}:en`);
   await msg(1, undefined, { document: { file_id: "D1", file_name: "x.docx" } });
   assert.match(calls.at(-1)!.p.text, /أرسل ملف PDF/);
   await msg(1, undefined, { document: { file_id: "D2", file_name: "x.pdf" } });
-  assert.equal(get("SELECT pdf_en FROM bank_versions WHERE id=?", v.id)!.pdf_en, "D2");
+  assert.equal((await get("SELECT pdf_en FROM bank_versions WHERE id=?", v.id))!.pdf_en, "D2");
   flush();
   await cb(1, `a:exp:${v.id}:en`);
   assert.equal(calls[0].p.document, "D2");
   assert.equal(calls[0].p.protect_content, true);
   flush();
-  loadCatalog(CATALOG);                                         // إعادة الإدخال ما تمسح اللي انضاف من اللوحة
-  assert.ok(get("SELECT 1 FROM bank_exams WHERE id=?", e.id));
-  assert.equal(get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id)!.n, 2);
+  await loadCatalog(CATALOG);                                         // إعادة الإدخال ما تمسح اللي انضاف من اللوحة
+  assert.ok(await get("SELECT 1 FROM bank_exams WHERE id=?", e.id));
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id))!.n, 2);
   await cb(1, `a:exqd:${qs[0].id}`);
-  assert.equal(get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id)!.n, 2);   // لازم تأكيد
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id))!.n, 2);   // لازم تأكيد
   await cb(1, `a:exqdy:${qs[0].id}`);
-  assert.equal(get("SELECT n FROM bank_questions WHERE id=?", qs[1].id)!.n, 1);                  // الترقيم يتسلسل
+  assert.equal((await get("SELECT n FROM bank_questions WHERE id=?", qs[1].id))!.n, 1);                  // الترقيم يتسلسل
   await cb(1, `a:exvdy:${v.id}`);
-  assert.equal(get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id)!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id))!.n, 0);
   await cb(1, `a:exdey:${e.id}`);
-  assert.equal(get("SELECT 1 FROM bank_exams WHERE id=?", e.id), null);
+  assert.equal(await get("SELECT 1 FROM bank_exams WHERE id=?", e.id), null);
   flush();
 });
 
@@ -222,7 +222,7 @@ test("الصلاحية مستقلة: الطالب والمساعد بدونها 
   flush();
   await cb(55555, "a:exm:1");
   await msg(55555, "80");
-  assert.equal(get("SELECT minutes FROM bank_exams WHERE id=1")!.minutes, 80);
+  assert.equal((await get("SELECT minutes FROM bank_exams WHERE id=1"))!.minutes, 80);
   flush();
   await cb(1, "a:sfp:55555:exams");                         // سحب الصلاحية بنص العملية
   await cb(55555, "a:exm:1");
@@ -258,14 +258,14 @@ test("شوف كطالب: نفس أزرار الطالب بدون صلاحيات�
 
 test("بوضع الطالب ما يوصل شي إداري أبداً، ويرجع كلشي بعد الرجوع", async () => {
   const { staffIds, myOffice } = await import("../lib/data.ts");
-  run("INSERT INTO offices(name) VALUES('مكتبة')");
-  run("INSERT INTO office_users(user_id, office_id, name) VALUES(1, 1, 'صاحبها')");
-  assert.ok(staffIds("orders").includes(1));
-  assert.ok(myOffice(1));
+  await run("INSERT INTO offices(name) VALUES('مكتبة')");
+  await run("INSERT INTO office_users(user_id, office_id, name) VALUES(1, 1, 'صاحبها')");
+  assert.ok((await staffIds("orders")).includes(1));
+  assert.ok(await myOffice(1));
   await cb(1, "a:asstudent");
   flush();
-  assert.ok(!staffIds("orders").includes(1));
-  assert.equal(myOffice(1), null);
+  assert.ok(!(await staffIds("orders")).includes(1));
+  assert.equal(await myOffice(1), null);
   await msg(1, "🏪 مكتبتي");
   assert.ok(!JSON.stringify(calls).includes("of:pos"));
   flush();
@@ -274,9 +274,9 @@ test("بوضع الطالب ما يوصل شي إداري أبداً، ويرج�
   flush();
   await msg(1, "⚙️ رجوع للوحة التحكم");
   flush();
-  assert.ok(staffIds("orders").includes(1));
-  assert.ok(myOffice(1));
-  run("DELETE FROM office_users WHERE user_id=1");
+  assert.ok((await staffIds("orders")).includes(1));
+  assert.ok(await myOffice(1));
+  await run("DELETE FROM office_users WHERE user_id=1");
 });
 
 test("المساعد يجرب كطالب، والطالب ما يطلعله زر التجربة", async () => {

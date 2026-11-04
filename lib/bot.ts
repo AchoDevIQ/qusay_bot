@@ -19,69 +19,69 @@ const CANCEL_TEXTS = ["/cancel", BTN_CANCEL, "❌ إلغاء الطلب"];
 
 async function onMessage(m: Row) {
   const chat: number = m.chat.id, uid: number | undefined = m.from?.id;
-  if (m.chat.type === "group" || m.chat.type === "supergroup") return onGroupMessage(m);
+  if (m.chat.type === "group" || m.chat.type === "supergroup") return await onGroupMessage(m);
   if (m.chat.type !== "private" || !uid) return;
   if (m.web_app_data) {
     const raw = String(m.web_app_data.data ?? "");
     let o: any = {};
     try { o = JSON.parse(raw); } catch { /* يوصل لـ onStoreOrder ويرد بخطأ */ }
-    if (o?.k === "reg") return onRegForm(chat, uid, o, m.from);
-    if (o?.k === "pos") return onPosSale(chat, uid, o);
-    if (o?.k === "scan") return redeemCode(chat, uid, String(o.code ?? ""));
-    return onStoreOrder(chat, uid, raw, m.from);
+    if (o?.k === "reg") return await onRegForm(chat, uid, o, m.from);
+    if (o?.k === "pos") return await onPosSale(chat, uid, o);
+    if (o?.k === "scan") return await redeemCode(chat, uid, String(o.code ?? ""));
+    return await onStoreOrder(chat, uid, raw, m.from);
   }
   const text = String(m.text ?? "").trim();
-  const { state: st, data } = getSession(uid);
+  const { state: st, data } = await getSession(uid);
   if (text === "/start") {
-    setSession(uid, "", { cart: data.cart ?? {} });
-    await sendBanner(chat, WELCOME, mainKb(uid));
-    if (!student(uid)) await startReg(chat, uid, null);
+    await setSession(uid, "", { cart: data.cart ?? {} });
+    await sendBanner(chat, WELCOME, await mainKb(uid));
+    if (!await student(uid)) await startReg(chat, uid, null);
     return;
   }
-  if (text === BTN_EXIT_VIEW && viewingAsStudent(uid)) {
-    setStudentView(uid, false);
-    setSession(uid, "", {});
-    const [t, kb] = adminMenuFor(uid);
-    await send(chat, "✅ رجعت لحسابك الإداري.", { replyKb: mainKb(uid) });
+  if (text === BTN_EXIT_VIEW && await viewingAsStudent(uid)) {
+    await setStudentView(uid, false);
+    await setSession(uid, "", {});
+    const [t, kb] = await adminMenuFor(uid);
+    await send(chat, "✅ رجعت لحسابك الإداري.", { replyKb: await mainKb(uid) });
     await send(chat, t, { kb });
     return;
   }
   const idWord = text.toLowerCase().split("@")[0].replace(/^[/ ]+|[/ ]+$/g, "").replace(/ /g, "");
   if (["myid", "id", "رقمي", "ايدي", "آيدي"].includes(idWord)) { await send(chat, `رقم حسابك: <code>${uid}</code>`); return; }
-  if (text.startsWith("/start lib_")) return joinOfficeByCode(chat, uid, text.slice(text.indexOf("lib_") + 4).trim(), m.from ?? {});
+  if (text.startsWith("/start lib_")) return await joinOfficeByCode(chat, uid, text.slice(text.indexOf("lib_") + 4).trim(), m.from ?? {});
   const digits = toLatinDigits(text).replace(/ /g, "");
   if (/^\d{8}$/.test(digits)) {
-    if (kvGet("libinv_" + digits) && !tooManyFails("invfail", uid)) return joinOfficeByCode(chat, uid, digits, m.from ?? {});
-    if (!isStaff(uid)) noteFail("invfail", uid);
+    if (await kvGet("libinv_" + digits) && !await tooManyFails("invfail", uid)) return await joinOfficeByCode(chat, uid, digits, m.from ?? {});
+    if (!await isStaff(uid)) await noteFail("invfail", uid);
   }
   if (text === BTN_SHOP) {
-    if (!st.startsWith("a:")) setSession(uid, "", { cart: data.cart ?? {} });
-    return openShop(chat, uid);
+    if (!st.startsWith("a:")) await setSession(uid, "", { cart: data.cart ?? {} });
+    return await openShop(chat, uid);
   }
-  if (text === BTN_ASK) { setSession(uid, "", {}); return askStart(chat, uid); }
-  if (text === BTN_MYQ) return myQuestions(chat, uid);
-  if (text === BTN_ME) return showMe(chat, uid);
-  if (text === BTN_EXAMS) return examsMenu(chat, uid);
-  if (text === BTN_OFFICE && myOffice(uid)) { setSession(uid, "", {}); return officeMenu(chat, uid); }
-  if (st === "o:pos" && text && !CANCEL_TEXTS.includes(text) && myOffice(uid)) {
-    const res = searchStudents(text);
+  if (text === BTN_ASK) { await setSession(uid, "", {}); return await askStart(chat, uid); }
+  if (text === BTN_MYQ) return await myQuestions(chat, uid);
+  if (text === BTN_ME) return await showMe(chat, uid);
+  if (text === BTN_EXAMS) return await examsMenu(chat, uid);
+  if (text === BTN_OFFICE && await myOffice(uid)) { await setSession(uid, "", {}); return await officeMenu(chat, uid); }
+  if (st === "o:pos" && text && !CANCEL_TEXTS.includes(text) && await myOffice(uid)) {
+    const res = await searchStudents(text);
     if (!res.length) { await send(chat, "ما لگيت طالب بهذا الاسم أو الرقم. اكتب مرة ثانية، أو الطالب لازم يسجل بالبوت أول."); return; }
     await send(chat, "اختار الطالب 👇", { kb: res.map((x) => [btn(`👤 ${x.name} — ${x.phone1}`, `of:ps:${x.user_id}`)]) });
     return;
   }
   if (CANCEL_TEXTS.includes(text)) {
-    setSession(uid, "", {});
-    await send(chat, "❌ تم الإلغاء.", { replyKb: mainKb(uid) });
+    await setSession(uid, "", {});
+    await send(chat, "❌ تم الإلغاء.", { replyKb: await mainKb(uid) });
     return;
   }
   if (st === "x:code") {
     if (!text) { await send(chat, "⚠️ اكتب الرمز المطبوع بالوصل."); return; }
-    return redeemCode(chat, uid, text);
+    return await redeemCode(chat, uid, text);
   }
-  if (isStaff(uid)) {
+  if (await isStaff(uid)) {
     if (text === "/admin" || text.startsWith(BTN_ADMIN)) {
-      setSession(uid, "", {});
-      const [t, kb] = adminMenuFor(uid);
+      await setSession(uid, "", {});
+      const [t, kb] = await adminMenuFor(uid);
       await send(chat, t, { kb });
       return;
     }
@@ -89,20 +89,20 @@ async function onMessage(m: Row) {
     if (st.startsWith("a:") && text && await onAdminText(chat, uid, text, st, data)) return;
   }
   if (st === "q:write" || (st === "q:sent" && m.media_group_id && data.mg === m.media_group_id)) {
-    return qNewMessage(chat, uid, m, st === "q:write" ? data : { ...data, t: null });
+    return await qNewMessage(chat, uid, m, st === "q:write" ? data : { ...data, t: null });
   }
-  if (st === "q:follow") return qFollowMessage(chat, uid, m, data);
+  if (st === "q:follow") return await qFollowMessage(chat, uid, m, data);
   if (st === "r:form") {
-    await send(chat, `👇 اضغط زر «${BTN_REG}» اللي جوة حتى تملأ معلوماتك.`, { replyKb: regKb(uid) });
+    await send(chat, `👇 اضغط زر «${BTN_REG}» اللي جوة حتى تملأ معلوماتك.`, { replyKb: await regKb(uid) });
     return;
   }
   if (st.startsWith("r:")) {
     if (!text) { await send(chat, "⚠️ اكتب نص فقط."); return; }
-    return regText(chat, uid, text, st, data);
+    return await regText(chat, uid, text, st, data);
   }
   if (!text) { await send(chat, "⚠️ اكتب نص فقط."); return; }
-  if ((st === "" || st === "cart") && !text.startsWith("/") && (isStaff(uid) || myOffice(uid))) return quickSearch(chat, uid, text);
-  return onStudentText(chat, uid, text, st, data);
+  if ((st === "" || st === "cart") && !text.startsWith("/") && (await isStaff(uid) || await myOffice(uid))) return await quickSearch(chat, uid, text);
+  return await onStudentText(chat, uid, text, st, data);
 }
 
 async function onCallback(q: Row) {
@@ -110,17 +110,17 @@ async function onCallback(q: Row) {
   const m = q.message ?? {};
   const chat: number = m.chat?.id ?? uid, mid: number = m.message_id;
   const d = String(q.data ?? "");
-  const { state: st, data } = getSession(uid);
+  const { state: st, data } = await getSession(uid);
   let note: string | null = null;
   if (d.startsWith("a:")) {
-    note = allowed(uid, d) ? await onAdminCb(chat, uid, mid, d) : "ما عندك صلاحية";
+    note = await allowed(uid, d) ? await onAdminCb(chat, uid, mid, d) : "ما عندك صلاحية";
   } else if (["rc:", "rg:", "rv:", "rd:", "rx:", "ra:", "rb:", "rn:", "rs:"].includes(d.slice(0, 3))) {
     note = await regCb(chat, uid, mid, d, st, data, q.from);
   } else if (d.startsWith("of:")) {
     note = await officeCb(chat, uid, d);
   } else if (d.startsWith("qh:")) {
-    if (can(uid, "q")) {
-      const qq = question(Number(d.slice(3)));
+    if (await can(uid, "q")) {
+      const qq = await question(Number(d.slice(3)));
       if (qq) await hideTopic(qq);
       note = "✅ اختفى السؤال";
     } else note = "ما عندك صلاحية";
@@ -132,7 +132,7 @@ async function onCallback(q: Row) {
     note = await examCb(chat, uid, d);
   } else if (d === "me:edit") {
     note = "لتغيير معلوماتك تواصل ويا قصي العميري";
-    if (!student(uid)) await startReg(chat, uid, null);
+    if (!await student(uid)) await startReg(chat, uid, null);
   } else {
     note = await onStudentCb(chat, uid, mid, d, st, data, q.from);
   }
@@ -142,10 +142,10 @@ async function onCallback(q: Row) {
 let ready = false;
 export async function handleUpdate(u: any) {
   if (!ready) {
-    initDb();
+    await initDb();
     ready = true;
     const me: any = await api("getMe");
-    if (me?.username) kvSet("bot_username", me.username);
+    if (me?.username) await kvSet("bot_username", me.username);
   }
   if (u.message) await onMessage(u.message);
   else if (u.callback_query) await onCallback(u.callback_query);
@@ -171,6 +171,6 @@ export function enqueueUpdate(u: any) {
   const uid: number | undefined = u.message?.from?.id ?? u.callback_query?.from?.id;
   if (pending >= QUEUE_MAX || !allowUpdate(uid)) return tail;
   pending++;
-  tail = tail.then(() => handleUpdate(u)).catch((e) => console.error("handleUpdate error", e)).finally(() => { pending--; });
+  tail = tail.then(async () => await handleUpdate(u)).catch((e) => console.error("handleUpdate error", e)).finally(() => { pending--; });
   return tail;
 }

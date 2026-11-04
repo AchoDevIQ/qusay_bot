@@ -26,30 +26,30 @@ const { handleUpdate } = await import("../lib/bot.ts");
 const { all, get, kvSet, run } = await import("../lib/db.ts");
 const { examChapterOf } = await import("../lib/exams.ts");
 
-const msg = (uid: number, text: string | undefined, extra: object = {}) => handleUpdate({
+const msg = async (uid: number, text: string | undefined, extra: object = {}) => await handleUpdate({
   message: { message_id: ++nextId, chat: { id: uid, type: "private" }, from: { id: uid, username: "u" + uid }, text, ...extra },
 });
-const webapp = (uid: number, o: unknown) => msg(uid, undefined, { web_app_data: { data: JSON.stringify(o) } });
-const cb = (uid: number, data: string) => handleUpdate({ callback_query: { id: "c", from: { id: uid }, message: { chat: { id: uid }, message_id: 50 }, data } });
+const webapp = async (uid: number, o: unknown) => await msg(uid, undefined, { web_app_data: { data: JSON.stringify(o) } });
+const cb = async (uid: number, data: string) => await handleUpdate({ callback_query: { id: "c", from: { id: uid }, message: { chat: { id: uid }, message_id: 50 }, data } });
 const texts = () => calls.map((c) => c.p.text ?? c.p.caption ?? "").join("\n---\n");
 const flush = () => { const out = [...calls]; calls.length = 0; return out; };
 const buttons = (c: Call) => (c.p.reply_markup?.inline_keyboard ?? []).flat().map((b: any) => b.callback_data);
-const access = (uid: number) => all("SELECT chapter FROM exam_access WHERE user_id=? ORDER BY chapter", uid).map((r) => r.chapter);
+const access = async (uid: number) => (await all("SELECT chapter FROM exam_access WHERE user_id=? ORDER BY chapter", uid)).map((r) => r.chapter);
 const mainButtons = (uid: number) => {
   const c = calls.filter((x) => x.p.chat_id === uid && x.p.reply_markup?.keyboard).at(-1)!;
   return c.p.reply_markup.keyboard.flat().map((b: any) => b.text);
 };
-const register = (uid: number, phone: string) => webapp(uid, {
+const register = async (uid: number, phone: string) => await webapp(uid, {
   k: "reg", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "0770" + phone, p2: "0780" + phone, e: "", c: 0,
 });
 /** طلب توصيل من الصفحة، يرجع رقمه */
 async function order(uid: number, pid: number) {
   await msg(uid, "🛒 المتجر");
   for (let i = 0; i < 3; i++) await cb(uid, "agree");
-  const price = get("SELECT price FROM products WHERE id=?", pid)!.price;
-  const fee = get("SELECT fee FROM fees WHERE gov='البصرة'")!.fee;
+  const price = (await get("SELECT price FROM products WHERE id=?", pid))!.price;
+  const fee = (await get("SELECT fee FROM fees WHERE gov='البصرة'"))!.fee;
   await webapp(uid, { p1: "07701234567", p2: "07801234567", i: [[pid, 1]], t: price + fee });
-  return get("SELECT MAX(id) id FROM orders WHERE user_id=?", uid)!.id as number;
+  return (await get("SELECT MAX(id) id FROM orders WHERE user_id=?", uid))!.id as number;
 }
 async function markPrinted(oid: number) {
   await cb(1, `a:t:${oid}`);
@@ -78,7 +78,7 @@ test("أي منتج يفتح الامتحانات (أسماء المنتجات �
 test("الإعداد: منتجات وطلاب", async () => {
   await cb(1, "a:bulk");
   await msg(1, "# امتحانات\nالفصل الأول - امتحانات إلكترونية = 35000\nالفصل الثاني - امتحانات إلكترونية = 35000\n# الملازم\nدفتر امتحانات الفصل الأول = 4000");
-  assert.equal(get("SELECT COUNT(*) n FROM products")!.n, 3);
+  assert.equal((await get("SELECT COUNT(*) n FROM products"))!.n, 3);
   await register(2, "1111111");
   await register(3, "2222222");
   await register(4, "3333333");
@@ -104,35 +104,35 @@ test("بدون شراء: ماكو زر، ولا يفتح امتحان بتزوي
 });
 
 test("المكتبة: البيع يفتح الامتحانات مباشرة وبدون كود، والدفتر ما يفتح", async () => {
-  run("INSERT INTO offices(name) VALUES('مكتبة')");
-  run("INSERT INTO office_users(user_id, office_id, name) VALUES(9, 1, 'صاحبها')");
+  await run("INSERT INTO offices(name) VALUES('مكتبة')");
+  await run("INSERT INTO office_users(user_id, office_id, name) VALUES(9, 1, 'صاحبها')");
   await webapp(9, { k: "pos", sid: 2, i: [[3, 1]] });     // دفتر
-  assert.deepEqual(access(2), []);
+  assert.deepEqual(await access(2), []);
   assert.doesNotMatch(texts(), /انفتحت/);
   flush();
   await webapp(9, { k: "pos", sid: 2, i: [[1, 1]] });
-  assert.deepEqual(access(2), ["الفصل الأول"]);
+  assert.deepEqual(await access(2), ["الفصل الأول"]);
   assert.equal(calls.filter((c) => c.p.chat_id === 2 && /انفتحت امتحاناتك/.test(c.p.text ?? "")).length, 1);
   assert.ok(mainButtons(2).includes("📝 امتحاناتي"));
   assert.ok(calls.some((c) => c.p.chat_id === 9 && /انفتحت عنده امتحانات: الفصل الأول/.test(c.p.text ?? "")));
-  assert.equal(get("SELECT COUNT(*) n FROM order_codes")!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM order_codes"))!.n, 0);
   flush();
 });
 
 let code = "", oid = 0;
 test("التوصيل: الرمز ما ينعطى للطالب، والامتحانات تبقى مقفولة لحد المسح", async () => {
   oid = await order(3, 1);
-  code = get("SELECT code FROM order_codes WHERE order_id=?", oid)!.code;
+  code = (await get("SELECT code FROM order_codes WHERE order_id=?", oid))!.code;
   assert.match(code, /^QM-[A-HJ-NP-Z2-9]{8}$/);
   assert.ok(!JSON.stringify(calls).includes(code), "الرمز ما لازم يوصل برسائل تليجرام");
-  assert.deepEqual(access(3), []);
+  assert.deepEqual(await access(3), []);
   flush();
   await cb(3, `xs:${oid}`);                               // قبل التجهيز
   assert.equal(calls.at(-1)!.p.text, "طلبك لسه ما تجهز");
   flush();
   await webapp(3, { k: "scan", code });                   // حتى لو عرف الرمز
   assert.match(texts(), /لسه ما تجهز/);
-  assert.deepEqual(access(3), []);
+  assert.deepEqual(await access(3), []);
   flush();
 });
 
@@ -146,7 +146,7 @@ test("الوصل المطبوع بيه QR والرمز، وطلب بدون ام�
   assert.ok(html.includes(code));
   assert.ok(html.includes("<svg"));
   const noExam = await order(4, 3);
-  assert.equal(get("SELECT COUNT(*) n FROM order_codes WHERE order_id=?", noExam)!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM order_codes WHERE order_id=?", noExam))!.n, 0);
   flush();
 });
 
@@ -161,7 +161,7 @@ test("رسالة التجهيز بيها زر الكود، والمسح يفتح
 
   await webapp(4, { k: "scan", code });                   // طالب ثاني لگه الوصل
   assert.match(texts(), /غلط، أو مو لطلبك/);
-  assert.deepEqual(access(4), []);
+  assert.deepEqual(await access(4), []);
   flush();
 
   await cb(3, `xs:${oid}`);
@@ -170,13 +170,13 @@ test("رسالة التجهيز بيها زر الكود، والمسح يفتح
   flush();
   await msg(3, "QM-WRONG123");
   assert.match(texts(), /غلط/);
-  assert.deepEqual(access(3), []);
+  assert.deepEqual(await access(3), []);
   flush();
   await webapp(3, { k: "scan", code });
-  assert.deepEqual(access(3), ["الفصل الأول"]);
+  assert.deepEqual(await access(3), ["الفصل الأول"]);
   assert.match(texts(), /انفتحت امتحاناتك/);
-  assert.ok(get("SELECT used_at FROM order_codes WHERE code=?", code)!.used_at);
-  assert.equal(get("SELECT state FROM sessions WHERE user_id=3")!.state, "");
+  assert.ok((await get("SELECT used_at FROM order_codes WHERE code=?", code))!.used_at);
+  assert.equal((await get("SELECT state FROM sessions WHERE user_id=3"))!.state, "");
   flush();
   await webapp(3, { k: "scan", code });                   // مرة ثانية ما يضر
   assert.match(texts(), /انستخدم قبل/);
@@ -186,39 +186,39 @@ test("رسالة التجهيز بيها زر الكود، والمسح يفتح
 test("الكتابة اليدوية للرمز تشتغل بأي شكل", async () => {
   const o2 = await order(3, 2);
   flush();
-  const c2 = get("SELECT code FROM order_codes WHERE order_id=?", o2)!.code as string;
+  const c2 = (await get("SELECT code FROM order_codes WHERE order_id=?", o2))!.code as string;
   await markPrinted(o2);
   flush();
   await cb(3, `xs:${o2}`);
   flush();
   await msg(3, "  " + c2.toLowerCase().replace("qm-", "qm ") + " ");
-  assert.deepEqual(access(3), ["الفصل الأول", "الفصل الثاني"]);
+  assert.deepEqual(await access(3), ["الفصل الأول", "الفصل الثاني"]);
   flush();
 });
 
 test("طلب ملغي ما يفتح، و5 محاولات غلط توقف الحساب ساعة", async () => {
   const o3 = await order(4, 1);
   flush();
-  const c3 = get("SELECT code FROM order_codes WHERE order_id=?", o3)!.code as string;
+  const c3 = (await get("SELECT code FROM order_codes WHERE order_id=?", o3))!.code as string;
   await cb(4, `ocy:${o3}`);
   flush();
   await webapp(4, { k: "scan", code: c3 });
   assert.match(texts(), /ملغي/);
-  assert.deepEqual(access(4), []);
+  assert.deepEqual(await access(4), []);
   flush();
   const o4 = await order(4, 1);
   flush();
-  const c4 = get("SELECT code FROM order_codes WHERE order_id=?", o4)!.code as string;
+  const c4 = (await get("SELECT code FROM order_codes WHERE order_id=?", o4))!.code as string;
   await markPrinted(o4);
   flush();
   for (let i = 0; i < 4; i++) await webapp(4, { k: "scan", code: "QM-AAAAAAAA" });
   flush();
   await webapp(4, { k: "scan", code: c4 });
   assert.match(texts(), /حاولت هوايا/);
-  assert.deepEqual(access(4), []);
+  assert.deepEqual(await access(4), []);
   flush();
-  kvSet("xfail_4", `5:${Math.floor(Date.now() / 1000) - 3700}`);
+  await kvSet("xfail_4", `5:${Math.floor(Date.now() / 1000) - 3700}`);
   await webapp(4, { k: "scan", code: c4 });
-  assert.deepEqual(access(4), ["الفصل الأول"]);
+  assert.deepEqual(await access(4), ["الفصل الأول"]);
   flush();
 });

@@ -60,7 +60,7 @@ const htmlToPng = (htmlPath: string, pngPath: string, w = 760, h = 1000) =>
 // ---------- طلبات التوصيل: كل طلب بورقة A5 مستقلة
 /** كود QR بوصل الطلب اللي بيه امتحانات: الطالب يقراه لمن يوصله الطلب */
 async function examQr(oid: number) {
-  const code = get("SELECT code FROM order_codes WHERE order_id=?", oid)?.code as string | undefined;
+  const code = (await get("SELECT code FROM order_codes WHERE order_id=?", oid))?.code as string | undefined;
   if (!code) return "";
   const svg = await QRCode.toString(code, { type: "svg", margin: 1, errorCorrectionLevel: "M" });
   return `<div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding:8px 10px;border:1.5px solid #101929;border-radius:10px;break-inside:avoid">
@@ -71,7 +71,7 @@ async function examQr(oid: number) {
 
 async function ordersHtml(orders: Row[]) {
   const logo = logoTag();
-  const pages = await Promise.all(orders.map(async (o) => {
+  const pages = await Promise.all(await Promise.all(orders.map(async (o) => {
     const rows = orderItems(o).map((it) => `<tr><td>${esc(it.name)}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
     return `<section class=page>
 <div class=head>${logo}<div class=ht><h1>متجر قصي العميري</h1><p>الرياضيات · السادس الإعدادي</p></div>
@@ -87,7 +87,7 @@ async function ordersHtml(orders: Row[]) {
 <tr class=t><td colspan=2>المبلغ الكلي</td><td class=n>${num(o.total)} د.ع</td></tr></table>
 ${await examQr(o.id)}<div class=foot>⚠️ جميع المشتريات غير قابلة للإرجاع إطلاقاً ولأي سبب كان</div>
 </section>`;
-  }));
+  })));
   return `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>
 @page{size:A5;margin:9mm}
 html,body{margin:0}
@@ -111,13 +111,13 @@ td,th{padding:6px 8px;border:1px solid #d9dde5;text-align:right}
 }
 
 export async function sendOrdersPdf(chat: number, ids: number[]) {
-  const orders = all(`SELECT * FROM orders WHERE id IN (${ids.map(() => "?").join(",")}) ORDER BY id`, ...ids);
+  const orders = await all(`SELECT * FROM orders WHERE id IN (${ids.map(() => "?").join(",")}) ORDER BY id`, ...ids);
   ensureDir();
   const name = "orders_" + fileStamp();
   const hp = path.join(PDF_DIR, name + ".html"), pp = path.join(PDF_DIR, name + ".pdf");
   fs.writeFileSync(hp, await ordersHtml(orders), "utf8");
   const bid = String(Math.floor(Date.now() / 1000));
-  kvSet("batch_" + bid, orders.map((o) => o.id).join(","));
+  await kvSet("batch_" + bid, orders.map((o) => o.id).join(","));
   const kb: Kb = [[btn("✅ تم الطباعة (إخفاؤها)", "a:done:" + bid)], [btn("↩️ لا، خليها", "a:keep")]];
   const markup = JSON.stringify({ inline_keyboard: kb });
   const cap = `🖨 ملف ${orders.length} طلب: ${orders.map((o) => "#" + o.id).join("، ")}\n\nاطبعه، وبعد الطباعة اضغط «تم الطباعة» حتى تختفي من الطلبات الجديدة.`;
@@ -149,11 +149,11 @@ td{border:1px solid #d9dde5;padding:5px 7px}tr:nth-child(even) td{background:#f6
 }
 
 // ---------- بطاقة معلومات الطالب (صورة)
-function profileCardHtml(s: Row, title: string) {
+async function profileCardHtml(s: Row, title: string) {
   const rows: [string, string, unknown][] = [["👤", "الاسم", s.name], ["📘", "المنهج", s.curr],
     ["🎓", "صفك بالمدرسة", s.grade], ["📍", "المحافظة", placeOf(s)], ["🏘", "العنوان", s.area],
     ["📞", "الهاتف الأول", s.phone1], ["📞", "الهاتف الثاني", s.phone2], ["📝", "نوع الامتحان", s.exam ?? ""]];
-  if (s.exam === "حضوري") rows.push(["🏫", "المركز الامتحاني", centerName(s.center_id) || "—"]);
+  if (s.exam === "حضوري") rows.push(["🏫", "المركز الامتحاني", await centerName(s.center_id) || "—"]);
   const tr = rows.map(([i, k, v]) => `<tr><td class="k"><span>${i}</span>${esc(k)}</td><td class="v${k.startsWith("الهاتف") ? " ltr" : ""}">${esc(v)}</td></tr>`).join("");
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${fontFace()}
 *{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}
@@ -182,7 +182,7 @@ export async function sendProfileCard(chat: number, s: Row, title: string, capti
   try {
     ensureDir();
     const hp = path.join(PDF_DIR, `card_${chat}.html`), pp = path.join(PDF_DIR, `card_${chat}.png`);
-    const html = profileCardHtml(s, title);
+    const html = await profileCardHtml(s, title);
     // نفس البطاقة ما تنرسم مرتين: الرسم يفتح متصفح، والضغط المتكرر لازم ما يكلف شي
     const cached = fs.existsSync(pp) && fs.existsSync(hp) && fs.readFileSync(hp, "utf8") === html;
     if (!cached) fs.writeFileSync(hp, html, "utf8");
@@ -191,12 +191,12 @@ export async function sendProfileCard(chat: number, s: Row, title: string, capti
       if (r) return r;
     }
   } catch (e) { console.error(e); }
-  return send(chat, "<b>📋 معلوماتك</b>\n\n" + profileText(s) + "\n\n" + caption, { replyKb });
+  return send(chat, "<b>📋 معلوماتك</b>\n\n" + await profileText(s) + "\n\n" + caption, { replyKb });
 }
 
 // ---------- الوصولات
 /** وصل ورقي لطابعة الوصولات (عرض 58 ملم) */
-function receiptPaperHtml(o: Row, items: Row[]) {
+async function receiptPaperHtml(o: Row, items: Row[]) {
   const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class="n">${it.qty}</td><td class="n">${num(it.qty * it.price)}</td></tr>`).join("");
   const logo = fs.existsSync(LOGO) ? `<img class="logo" src="data:image/png;base64,${b64(LOGO)}">` : "";
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
@@ -217,8 +217,8 @@ td{padding:1.1mm 0;vertical-align:top;border-bottom:.6px dotted #000}.n{text-ali
 <div class="kv"><span>التاريخ</span><span dir="ltr">${esc(o.created)}</span></div>
 <div class="kv"><span>الطالب</span><span>${esc(o.name)}</span></div>
 <div class="kv"><span>الهاتف</span><span dir="ltr">${esc(o.phone1)}</span></div>
-<div class="kv"><span>الامتحان</span><span style="text-align:left">${esc(examLabel(o.user_id))}</span></div>
-<div class="kv"><span>البائع</span><span>${esc(sellerLabel(o))}</span></div>
+<div class="kv"><span>الامتحان</span><span style="text-align:left">${esc(await examLabel(o.user_id))}</span></div>
+<div class="kv"><span>البائع</span><span>${esc(await sellerLabel(o))}</span></div>
 <div class="hr"></div>
 <table><tr><th>المنتج</th><th class="n">العدد</th><th class="n">المبلغ</th></tr>${rows}</table>
 <div class="tot"><span>المجموع</span><span dir="ltr">${num(o.total)} د.ع</span></div>
@@ -228,7 +228,7 @@ td{padding:1.1mm 0;vertical-align:top;border-bottom:.6px dotted #000}.n{text-ali
 }
 
 /** وصل إلكتروني ملون يوصل للطالب بالبوت */
-function receiptCardHtml(o: Row, items: Row[]) {
+async function receiptCardHtml(o: Row, items: Row[]) {
   const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class="n">× ${it.qty}</td><td class="m">${money(it.qty * it.price)}</td></tr>`).join("");
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${fontFace()}
 *{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}
@@ -248,7 +248,7 @@ tr:nth-child(even) td{background:rgba(255,255,255,.025)}
 </style></head><body>
 <div class="top">${logoTag()}<h1>QMath</h1><p>قصي العميري</p></div>
 <div class="card"><h2><span>🧾 وصل الشراء</span><span dir="ltr">#${o.id}</span></h2>
-<div class="info"><span>👤 <b>${esc(o.name)}</b></span><span>📅 <b dir="ltr">${esc(o.created)}</b></span><span>🏪 <b>استلام من ${esc(o.gov || "المكتب")}</b></span><span>📝 الامتحان: <b>${esc(examLabel(o.user_id))}</b></span></div>
+<div class="info"><span>👤 <b>${esc(o.name)}</b></span><span>📅 <b dir="ltr">${esc(o.created)}</b></span><span>🏪 <b>استلام من ${esc(o.gov || "المكتب")}</b></span><span>📝 الامتحان: <b>${esc(await examLabel(o.user_id))}</b></span></div>
 <table>${rows}</table>
 <div class="tot"><span>💰 المجموع</span><span dir="ltr">${money(o.total)}</span></div>
 <div class="ok">✅ تم الدفع والاستلام · شكراً لك 🌷<br>جميع المشتريات غير قابلة للإرجاع</div></div>
@@ -259,25 +259,25 @@ tr:nth-child(even) td{background:rgba(255,255,255,.025)}
 export async function sendReceiptImage(chat: number, o: Row, items: Row[], caption: string) {
   ensureDir();
   const ch = path.join(PDF_DIR, `rc_${o.id}.html`), cp = path.join(PDF_DIR, `rc_${o.id}.png`);
-  fs.writeFileSync(ch, receiptCardHtml(o, items), "utf8");
+  fs.writeFileSync(ch, await receiptCardHtml(o, items), "utf8");
   if (!await htmlToPng(ch, cp, 760, 640 + 100 * items.length)) return false;
   return !!await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML" }, "photo", cp, "receipt.png", "image/png");
 }
 
 /** نفس الوصل الملون مال الطالب، يوصل للبائع حتى يدزه لأي أحد */
 export async function sendColorReceipt(chat: number, oid: number) {
-  const o = get("SELECT * FROM orders WHERE id=? AND printed=3", oid);
+  const o = await get("SELECT * FROM orders WHERE id=? AND printed=3", oid);
   if (!o) return;
   if (!await sendReceiptImage(chat, o, orderItems(o), `🖼 وصل بيع #${oid} — ${esc(o.name)}`)) await send(chat, "⚠️ ما گدرت أسوي الصورة.");
 }
 
 /** وصل للطباعة (بس إذا طلبه البائع) */
 export async function sendPaperReceipt(chat: number, oid: number) {
-  const o = get("SELECT * FROM orders WHERE id=? AND printed=3", oid);
+  const o = await get("SELECT * FROM orders WHERE id=? AND printed=3", oid);
   if (!o) { await send(chat, "⚠️ البيعة غير موجودة."); return; }
   ensureDir();
   const hp = path.join(PDF_DIR, `receipt_${oid}.html`), pp = path.join(PDF_DIR, `وصل_${oid}.pdf`);
-  fs.writeFileSync(hp, receiptPaperHtml(o, orderItems(o)), "utf8");
+  fs.writeFileSync(hp, await receiptPaperHtml(o, orderItems(o)), "utf8");
   if (await htmlToPdf(hp, pp)) {
     await upload("sendDocument", { chat_id: String(chat), caption: `🧾 وصل بيع #${oid}\n🖨 افتح الملف ← ⋮ ← Print ← طابعة SUNMI` }, "document", pp, `وصل_${oid}.pdf`, "application/pdf");
   }

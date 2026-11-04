@@ -28,12 +28,12 @@ const { allowUpdate, handleUpdate, enqueueUpdate } = await import("../lib/bot.ts
 const { all, get, kvSet, run } = await import("../lib/db.ts");
 const { parseAmount } = await import("../lib/office.ts");
 
-const msg = (uid: number, text: string, extra: object = {}) => handleUpdate({
+const msg = async (uid: number, text: string, extra: object = {}) => await handleUpdate({
   message: { message_id: ++nextId, chat: { id: uid, type: "private" }, from: { id: uid, username: "u" + uid, first_name: "اسم" }, text, ...extra },
 });
-const webapp = (uid: number, o: unknown) => msg(uid, "", { text: undefined, web_app_data: { data: typeof o === "string" ? o : JSON.stringify(o) } });
-const cb = (uid: number, data: string, mid = 50) => handleUpdate({ callback_query: { id: "c", from: { id: uid, username: "u" + uid }, message: { chat: { id: uid }, message_id: mid }, data } });
-const group = (uid: number, text: string, extra: object = {}) => handleUpdate({
+const webapp = async (uid: number, o: unknown) => await msg(uid, "", { text: undefined, web_app_data: { data: typeof o === "string" ? o : JSON.stringify(o) } });
+const cb = async (uid: number, data: string, mid = 50) => await handleUpdate({ callback_query: { id: "c", from: { id: uid, username: "u" + uid }, message: { chat: { id: uid }, message_id: mid }, data } });
+const group = async (uid: number, text: string, extra: object = {}) => await handleUpdate({
   message: { message_id: ++nextId, chat: { id: -1001, type: "supergroup" }, from: { id: uid }, text, ...extra },
 });
 const texts = () => calls.map((c) => c.p.text ?? c.p.caption ?? "").join("\n---\n");
@@ -45,7 +45,7 @@ const lastUrl = (c: Call) => c.p.reply_markup.keyboard[0][0].web_app.url as stri
 const pageData = (url: string) => JSON.parse(Buffer.from(new URL(url).searchParams.get("d")!, "base64url").toString("utf8"));
 
 const REG = { k: "reg", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 };
-const register = (uid: number, over: object = {}) => webapp(uid, { ...REG, ...over });
+const register = async (uid: number, over: object = {}) => await webapp(uid, { ...REG, ...over });
 
 test("/start يرحب ويطلب التسجيل بفورمة صفحة /store/reg", async () => {
   await msg(2, "/start");
@@ -63,16 +63,16 @@ test("/start يرحب ويطلب التسجيل بفورمة صفحة /store/reg
 test("التسجيل يرفض البيانات الغلط ويقبل الصحيحة، وبعدها يقفل", async () => {
   await register(2, { n: "علي", p2: "07701234567" });
   assert.match(texts(), /ما انحفظت[\s\S]*رباعي[\s\S]*أرقام الهاتف/);
-  assert.equal(get("SELECT COUNT(*) n FROM students")!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM students"))!.n, 0);
   flush();
   await register(2);
-  const s = get("SELECT * FROM students WHERE user_id=2")!;
+  const s = (await get("SELECT * FROM students WHERE user_id=2"))!;
   assert.equal(s.exam, "إلكتروني");   // البصرة إلكتروني بس
   assert.match(texts(), /تم الحفظ بنجاح/);
   flush();
   await register(2, { n: "زينب علي حسين جاسم" });
   assert.match(texts(), /مقفولة/);
-  assert.equal(get("SELECT name FROM students WHERE user_id=2")!.name, REG.n);
+  assert.equal((await get("SELECT name FROM students WHERE user_id=2"))!.name, REG.n);
   flush();
 });
 
@@ -80,9 +80,9 @@ test("بغداد: الحضوري يلزمه مركز صالح", async () => {
   await register(3, { g: "بغداد", s: "الكرخ", e: "حضوري", c: 0 });
   assert.match(texts(), /اختر المركز الامتحاني/);
   flush();
-  const c = get("SELECT id FROM centers LIMIT 1")!.id;
+  const c = (await get("SELECT id FROM centers LIMIT 1"))!.id;
   await register(3, { g: "بغداد", s: "الكرخ", e: "حضوري", c });
-  assert.equal(get("SELECT center_id FROM students WHERE user_id=3")!.center_id, c);
+  assert.equal((await get("SELECT center_id FROM students WHERE user_id=3"))!.center_id, c);
   flush();
 });
 
@@ -93,7 +93,7 @@ test("الإدارة تضيف منتجات دفعة وحدة", async () => {
   flush();
   await msg(1, "# الملازم\nملزمة الفصل الأول حضوري = 15,000\nملزمة الفصل الأول إلكتروني = ١٠٠٠٠\nسطر غلط\n# محاضرات\nمحاضرة : 5000 دينار");
   assert.match(texts(), /تمت إضافة 3 منتج[\s\S]*سطر غلط/);
-  const ps = all("SELECT name, price, mode FROM products ORDER BY id");
+  const ps = await all("SELECT name, price, mode FROM products ORDER BY id");
   assert.deepEqual(ps.map((p) => [p.price, p.mode]), [[15000, "in"], [10000, "online"], [5000, "both"]]);
   flush();
 });
@@ -122,13 +122,13 @@ test("المتجر: 3 موافقات، وطالب الإلكتروني يشوف 
 });
 
 test("طلب من الصفحة: تغيّر السعر يطلب موافقة، والتأكيد ينشئ الطلب ويبلغ الإدارة", async () => {
-  const pid = get("SELECT id FROM products WHERE name LIKE '%إلكتروني'")!.id;
+  const pid = (await get("SELECT id FROM products WHERE name LIKE '%إلكتروني'"))!.id;
   await webapp(2, { n: "أي شي", p1: "07701234567", p2: "07801234567", i: [[pid, 2]], t: 1 });
   assert.match(texts(), /تحدثت بعض الأسعار/);
-  assert.equal(get("SELECT COUNT(*) n FROM orders")!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM orders"))!.n, 0);
   flush();
   await cb(2, "confirm");
-  const o = get("SELECT * FROM orders ORDER BY id DESC LIMIT 1")!;
+  const o = (await get("SELECT * FROM orders ORDER BY id DESC LIMIT 1"))!;
   assert.equal(o.name, REG.n);                 // الاسم من التسجيل مو من الصفحة
   assert.equal(o.total, 25000);                // 2×10000 + توصيل 5000
   assert.match(texts(), /تم استلام طلبك[\s\S]*طلب جديد/);
@@ -141,19 +141,19 @@ test("بالسعر الصحيح يكمل مباشرة، وأخطاء الجلس�
   flush();
   for (let i = 0; i < 3; i++) await cb(2, "agree");
   flush();
-  const pid = get("SELECT id FROM products WHERE name LIKE '%إلكتروني'")!.id;
+  const pid = (await get("SELECT id FROM products WHERE name LIKE '%إلكتروني'"))!.id;
   await webapp(2, { p1: "07701234567", p2: "07701234567", i: [[pid, 1]], t: 15000 });
   assert.match(texts(), /أرقام الهاتف/);
   flush();
   await webapp(2, { p1: "07701234567", p2: "07801234567", i: [[pid, 1]], t: 15000 });
-  assert.equal(get("SELECT COUNT(*) n FROM orders")!.n, 2);
+  assert.equal((await get("SELECT COUNT(*) n FROM orders"))!.n, 2);
   flush();
 });
 
 test("إلغاء الطلب، وبعد الطباعة ما ينلغي", async () => {
-  const [a, b] = all("SELECT id FROM orders ORDER BY id").map((r) => r.id);
+  const [a, b] = (await all("SELECT id FROM orders ORDER BY id")).map((r) => r.id);
   await cb(2, `oc:${a}`); await cb(2, `ocy:${a}`);
-  assert.equal(get("SELECT printed FROM orders WHERE id=?", a)!.printed, 2);
+  assert.equal((await get("SELECT printed FROM orders WHERE id=?", a))!.printed, 2);
   assert.match(texts(), /ألغى الطلب/);
   flush();
   await cb(1, "a:pend");
@@ -167,11 +167,11 @@ test("إلغاء الطلب، وبعد الطباعة ما ينلغي", async ()
   const bid = /a:done:(\d+)/.exec(doc.p.reply_markup)![1];
   flush();
   await cb(1, `a:done:${bid}`);
-  assert.equal(get("SELECT printed FROM orders WHERE id=?", b)!.printed, 1);
+  assert.equal((await get("SELECT printed FROM orders WHERE id=?", b))!.printed, 1);
   assert.match(texts(), /تم تجهيز طلبك/);
   flush();
   await cb(2, `ocy:${b}`);
-  assert.equal(get("SELECT printed FROM orders WHERE id=?", b)!.printed, 1);
+  assert.equal((await get("SELECT printed FROM orders WHERE id=?", b))!.printed, 1);
   flush();
 });
 
@@ -180,31 +180,31 @@ test("الأسئلة: موضوع بالمجموعة، جواب للطالب، و
   assert.match(texts(), /غير مفعّل/);
   flush();
   await group(1, "/setgroup");
-  assert.equal(get("SELECT v FROM kv WHERE k='q_group'")!.v, "-1001");
+  assert.equal((await get("SELECT v FROM kv WHERE k='q_group'"))!.v, "-1001");
   flush();
   await msg(2, "❓ سؤال علمي");
-  const ch = get("SELECT id FROM chapters ORDER BY ord LIMIT 1")!.id;
-  const t = get("SELECT id FROM topics WHERE chapter_id=? ORDER BY ord LIMIT 1", ch)!.id;
+  const ch = (await get("SELECT id FROM chapters ORDER BY ord LIMIT 1"))!.id;
+  const t = (await get("SELECT id FROM topics WHERE chapter_id=? ORDER BY ord LIMIT 1", ch))!.id;
   await cb(2, `qc:${ch}`); await cb(2, `qt:${t}`); await cb(2, `ql:${t}:2`);
   flush();
   await msg(2, "شلون أحل هاي؟");
-  const q = get("SELECT * FROM questions ORDER BY id DESC LIMIT 1")!;
+  const q = (await get("SELECT * FROM questions ORDER BY id DESC LIMIT 1"))!;
   assert.equal(q.lecture, 2);
   assert.ok(q.thread_id);
   assert.ok(calls.some((c) => c.method === "createForumTopic"));
   assert.ok(calls.some((c) => c.method === "copyMessage"));
   flush();
   await group(1, "الجواب", { message_thread_id: q.thread_id, is_topic_message: true });
-  assert.equal(get("SELECT status FROM questions WHERE id=?", q.id)!.status, "answered");
+  assert.equal((await get("SELECT status FROM questions WHERE id=?", q.id))!.status, "answered");
   assert.ok(calls.some((c) => c.method === "copyMessage" && c.p.chat_id === 2));
   flush();
   await cb(1, `qh:${q.id}`);
-  assert.equal(get("SELECT thread_id FROM questions WHERE id=?", q.id)!.thread_id, null);
+  assert.equal((await get("SELECT thread_id FROM questions WHERE id=?", q.id))!.thread_id, null);
   flush();
   await cb(2, `qf:${q.id}`);
   flush();
   await msg(2, "ما فهمت");
-  assert.equal(get("SELECT status FROM questions WHERE id=?", q.id)!.status, "open");
+  assert.equal((await get("SELECT status FROM questions WHERE id=?", q.id))!.status, "open");
   assert.equal(calls.filter((c) => c.method === "createForumTopic").length, 1);
   flush();
 });
@@ -222,26 +222,26 @@ test("أوقات الأسئلة تقفل الاستقبال", async () => {
 test("المكتبة: انضمام بالرمز، رصيد، بيع، ومحاسبة", async () => {
   await cb(1, "a:liba");
   await msg(1, "مكتبة 1");
-  const oid = get("SELECT id FROM offices")!.id;
+  const oid = (await get("SELECT id FROM offices"))!.id;
   flush();
   await cb(1, `a:libm:${oid}`);
   const code = /<code>(\d{8})<\/code>/.exec(lastSent().p.text)![1];
   flush();
   await msg(9, code);
-  assert.equal(get("SELECT office_id FROM office_users WHERE user_id=9")!.office_id, oid);
+  assert.equal((await get("SELECT office_id FROM office_users WHERE user_id=9"))!.office_id, oid);
   flush();
   await msg(8, code);   // الرمز مرة وحدة بس
-  assert.equal(get("SELECT COUNT(*) n FROM office_users WHERE user_id=8")!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM office_users WHERE user_id=8"))!.n, 0);
   flush();
 
-  run("UPDATE offices SET lim=20000 WHERE id=?", oid);
-  const pid = get("SELECT id FROM products WHERE name='محاضرة'")!.id;
+  await run("UPDATE offices SET lim=20000 WHERE id=?", oid);
+  const pid = (await get("SELECT id FROM products WHERE name='محاضرة'"))!.id;
   await webapp(9, { k: "pos", sid: 2, i: [[pid, 5]] });
   assert.match(texts(), /أكثر من الرصيد/);
-  assert.equal(get("SELECT COUNT(*) n FROM orders WHERE printed=3")!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM orders WHERE printed=3"))!.n, 0);
   flush();
   await webapp(9, { k: "pos", sid: 2, i: [[pid, 2]] });
-  const sale = get("SELECT * FROM orders WHERE printed=3")!;
+  const sale = (await get("SELECT * FROM orders WHERE printed=3"))!;
   assert.deepEqual([sale.total, sale.office_id, sale.seller], [10000, oid, 9]);
   assert.ok(calls.some((c) => c.p.chat_id === 2 && /وصل شرائك/.test(c.p.text ?? "")));
   flush();
@@ -253,7 +253,7 @@ test("المكتبة: انضمام بالرمز، رصيد، بيع، ومحاس
   assert.match(calls.at(-1)!.p.text, /صارت مبيعات جديدة/);
   flush();
   await cb(1, `a:libsy:${oid}:10000`);
-  assert.ok(get("SELECT settle_id FROM orders WHERE id=?", sale.id)!.settle_id);
+  assert.ok((await get("SELECT settle_id FROM orders WHERE id=?", sale.id))!.settle_id);
   assert.ok(calls.some((c) => c.p.chat_id === 9 && /تمت المحاسبة/.test(c.p.text ?? "")));
   flush();
 });
@@ -261,14 +261,14 @@ test("المكتبة: انضمام بالرمز، رصيد، بيع، ومحاس
 test("البائع العادي ما يبيع، وطالب مو موجود مرفوض", async () => {
   await webapp(2, { k: "pos", sid: 3, i: [[1, 1]] });
   assert.match(texts(), /ما عندك صلاحية/);
-  assert.equal(get("SELECT COUNT(*) n FROM orders WHERE seller=2")!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM orders WHERE seller=2"))!.n, 0);
   flush();
 });
 
 test("الفورمة من الطالب ما تعدل غيره", async () => {
   await register(2, { adm: 3, n: "زينب علي حسين جاسم" });
   assert.match(texts(), /ما عندك صلاحية/);
-  assert.notEqual(get("SELECT name FROM students WHERE user_id=3")!.name, "زينب علي حسين جاسم");
+  assert.notEqual((await get("SELECT name FROM students WHERE user_id=3"))!.name, "زينب علي حسين جاسم");
   flush();
 });
 
@@ -291,7 +291,7 @@ test("البحث السريع يطابق بدون همزات", async () => {
   await msg(1, "زينب");   // ما موجود
   assert.match(texts(), /ما لگيت/);
   flush();
-  run("UPDATE students SET name='أحمد علي حسن كاظم' WHERE user_id=3");
+  await run("UPDATE students SET name='أحمد علي حسن كاظم' WHERE user_id=3");
   await msg(1, "احمد");
   assert.match(texts(), /1 نتيجة/);
   flush();
@@ -335,23 +335,23 @@ test("البطاقة ما تنرسم مرتين إذا ما تغيرت", async (
 });
 
 test("رمز الدعوة: 5 محاولات غلط بالساعة، وبعدها حتى الصحيح ينرفض", async () => {
-  const oid = run("INSERT INTO offices(name) VALUES('مكتبة الحد')");
+  const oid = await run("INSERT INTO offices(name) VALUES('مكتبة الحد')");
   await cb(1, `a:libm:${oid}`);
   const code = /<code>(\d{8})<\/code>/.exec(lastSent().p.text)![1];
   flush();
   for (let i = 0; i < 5; i++) await msg(70, "12345678");
   flush();
   await msg(70, code);
-  assert.equal(get("SELECT COUNT(*) n FROM office_users WHERE user_id=70")!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM office_users WHERE user_id=70"))!.n, 0);
   flush();
   await msg(70, `/start lib_${code}`);
   assert.match(texts(), /حاولت هوايا/);
-  assert.equal(get("SELECT COUNT(*) n FROM office_users WHERE user_id=70")!.n, 0);
+  assert.equal((await get("SELECT COUNT(*) n FROM office_users WHERE user_id=70"))!.n, 0);
   flush();
   await msg(71, code);                                   // غيره يدخل عادي
-  assert.equal(get("SELECT office_id FROM office_users WHERE user_id=71")!.office_id, oid);
+  assert.equal((await get("SELECT office_id FROM office_users WHERE user_id=71"))!.office_id, oid);
   flush();
-  kvSet("invfail_70", `5:${Math.floor(Date.now() / 1000) - 3700}`);   // بعد ساعة ترجع المحاولات
+  await kvSet("invfail_70", `5:${Math.floor(Date.now() / 1000) - 3700}`);   // بعد ساعة ترجع المحاولات
   await msg(70, `/start lib_11111111`);
   assert.match(texts(), /غير صالح/);
   flush();
@@ -366,16 +366,16 @@ test("parseAmount", () => {
 });
 
 test("فشل فتح الموضوع يلغي السؤال", async () => {
-  const before = get("SELECT COUNT(*) n FROM questions")!.n;
-  kvSet("q_hours", "");
+  const before = (await get("SELECT COUNT(*) n FROM questions"))!.n;
+  await kvSet("q_hours", "");
   await msg(2, "❓ سؤال علمي");
-  const t = get("SELECT id FROM topics ORDER BY id DESC LIMIT 1")!;
+  const t = (await get("SELECT id FROM topics ORDER BY id DESC LIMIT 1"))!;
   await cb(2, `qt:${t.id}`); flush();
   await cb(2, `ql:${t.id}:1`); flush();
   failMethods = ["createForumTopic"];
   await msg(2, "سؤال");
   failMethods = [];
-  assert.equal(get("SELECT COUNT(*) n FROM questions")!.n, before);
+  assert.equal((await get("SELECT COUNT(*) n FROM questions"))!.n, before);
   assert.match(texts(), /ما گدرت أوصل سؤالك/);
   flush();
 });

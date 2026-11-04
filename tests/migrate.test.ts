@@ -22,20 +22,20 @@ old.close();
 process.env.DB_PATH = file;
 const { all, closeDb, get, initDb } = await import("../lib/db.ts");
 
-test("الترقية تحفظ البيانات وتضيف الأعمدة والأقسام", () => {
-  initDb();
-  assert.deepEqual(all("SELECT name, mode FROM products ORDER BY id").map((p) => [p.name, p.mode]),
+test("الترقية تحفظ البيانات وتضيف الأعمدة والأقسام", async () => {
+  await initDb();
+  assert.deepEqual((await all("SELECT name, mode FROM products ORDER BY id")).map((p) => [p.name, p.mode]),
     [["ملزمة حضوري", "in"], ["ملزمة إلكتروني", "online"], ["كتاب", "both"]]);
-  const cat = get("SELECT id FROM cats WHERE name='منتجات أخرى'")!.id;
-  assert.equal(get("SELECT COUNT(*) n FROM products WHERE cat_id=?", cat)!.n, 3);
-  assert.equal(get("SELECT fee FROM fees WHERE gov='بغداد'")!.fee, 3000);   // ما يرجع للافتراضي
-  assert.equal(get("SELECT fee FROM fees WHERE gov='البصرة'")!.fee, 5000);
-  const o = get("SELECT * FROM orders")!;
+  const cat = (await get("SELECT id FROM cats WHERE name='منتجات أخرى'"))!.id;
+  assert.equal((await get("SELECT COUNT(*) n FROM products WHERE cat_id=?", cat))!.n, 3);
+  assert.equal((await get("SELECT fee FROM fees WHERE gov='بغداد'"))!.fee, 3000);   // ما يرجع للافتراضي
+  assert.equal((await get("SELECT fee FROM fees WHERE gov='البصرة'"))!.fee, 5000);
+  const o = (await get("SELECT * FROM orders"))!;
   assert.equal(o.total, 3);
   assert.equal(o.printed, 0);
   assert.equal(o.curr, null);
-  initDb();                                                                 // مرة ثانية ما يغير شي
-  assert.equal(get("SELECT COUNT(*) n FROM cats")!.n, 1);
+  await initDb();                                                                 // مرة ثانية ما يغير شي
+  assert.equal((await get("SELECT COUNT(*) n FROM cats"))!.n, 1);
   closeDb();
   fs.rmSync(tmp, { recursive: true, force: true });
 });

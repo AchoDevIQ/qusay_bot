@@ -12,6 +12,6 @@ if (!file || !fs.existsSync(file)) {
   console.error("الاستخدام: npm run load-exams -- ch1   (لازم يكون الملف موجود: data/content/ch1/catalog.json)");
   process.exit(1);
 }
-initDb();
-const r = loadCatalog(JSON.parse(fs.readFileSync(file, "utf8")));
+await initDb();
+const r = await loadCatalog(JSON.parse(fs.readFileSync(file, "utf8")));
 console.log(`انضاف: ${r.exams} امتحان، ${r.versions} نسخة، ${r.questions} سؤال. نسخ تحتاج تصليح: ${r.needReview}`);
