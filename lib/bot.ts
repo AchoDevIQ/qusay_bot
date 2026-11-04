@@ -1,6 +1,7 @@
 // نقطة دخول كل رسالة/ضغطة زر من تليجرام
 import { getSession, initDb, kvGet, kvSet, setSession, type Row } from "./db.ts";
-import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
+import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
+import { examAdminMessage, examCb, examsMenu, redeemCode } from "./exams.ts";
 import { allowed, can, isAdmin, isStaff, myOffice, noteFail, question, searchStudents, student, tooManyFails } from "./data.ts";
 import { mainKb, regKb } from "./keyboards.ts";
 import { api, answerCb, send } from "./telegram.ts";
@@ -24,6 +25,7 @@ async function onMessage(m: Row) {
     try { o = JSON.parse(raw); } catch { /* يوصل لـ onStoreOrder ويرد بخطأ */ }
     if (o?.k === "reg") return onRegForm(chat, uid, o, m.from);
     if (o?.k === "pos") return onPosSale(chat, uid, o);
+    if (o?.k === "scan") return redeemCode(chat, uid, String(o.code ?? ""));
     return onStoreOrder(chat, uid, raw, m.from);
   }
   const text = String(m.text ?? "").trim();
@@ -49,6 +51,7 @@ async function onMessage(m: Row) {
   if (text === BTN_ASK) { setSession(uid, "", {}); return askStart(chat, uid); }
   if (text === BTN_MYQ) return myQuestions(chat, uid);
   if (text === BTN_ME) return showMe(chat, uid);
+  if (text === BTN_EXAMS) return examsMenu(chat, uid);
   if (text === BTN_OFFICE && myOffice(uid)) { setSession(uid, "", {}); return officeMenu(chat, uid); }
   if (st === "o:pos" && text && !CANCEL_TEXTS.includes(text) && myOffice(uid)) {
     const res = searchStudents(text);
@@ -61,6 +64,10 @@ async function onMessage(m: Row) {
     await send(chat, "❌ تم الإلغاء.", { replyKb: mainKb(uid) });
     return;
   }
+  if (st === "x:code") {
+    if (!text) { await send(chat, "⚠️ اكتب الرمز المطبوع بالوصل."); return; }
+    return redeemCode(chat, uid, text);
+  }
   if (isStaff(uid)) {
     if (text === "/admin" || text.startsWith(BTN_ADMIN)) {
       setSession(uid, "", {});
@@ -68,6 +75,7 @@ async function onMessage(m: Row) {
       await send(chat, t, { kb });
       return;
     }
+    if (st === "a:exa" && await examAdminMessage(chat, uid, m, data)) return;
     if (st.startsWith("a:") && text && await onAdminText(chat, uid, text, st, data)) return;
   }
   if (st === "q:write" || (st === "q:sent" && m.media_group_id && data.mg === m.media_group_id)) {
@@ -110,6 +118,8 @@ async function onCallback(q: Row) {
     note = await qCb(chat, uid, mid, d);
   } else if (["oc:", "ocy:", "ocn:"].some((p) => d.startsWith(p))) {
     note = await orderCancelCb(chat, uid, mid, d);
+  } else if (d === "xm" || ["xs:", "xc:", "xo:"].some((p) => d.startsWith(p))) {
+    note = await examCb(chat, uid, d);
   } else if (d === "me:edit") {
     note = "لتغيير معلوماتك تواصل ويا قصي العميري";
     if (!student(uid)) await startReg(chat, uid, null);

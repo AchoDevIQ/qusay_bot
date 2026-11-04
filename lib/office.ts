@@ -7,6 +7,7 @@ import {
 } from "./data.ts";
 import { flowKb, mainKb, posKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendPaperReceipt, sendReceiptImage } from "./documents.ts";
+import { unlockFromSale } from "./exams.ts";
 import { edit, send, type Kb } from "./telegram.ts";
 import { btn, cut, esc, money, num, shiftDay, stamp, toInt, todayStr, words } from "./util.ts";
 
@@ -54,8 +55,10 @@ export async function onPosSale(chat: number, uid: number, o: any) {
       "", `💰 المجموع: <b>${money(total)}</b>`, "شكراً لك 🌷"];
     sent = !!await send(sid, lines.join("\n"));
   }
+  const unlocked = await unlockFromSale(sid, items, oid);
   let msg = `✅ <b>تم البيع #${oid}</b> — ${esc(s.name)}\n💰 ${money(total)}\n\n` +
-    (sent ? "📱 وصل الوصل الإلكتروني للطالب." : "⚠️ ما گدرت أرسل الوصل للطالب (ممكن مسوي حظر للبوت).") + "\n📊 وانسجلت بمبيعات اليوم.";
+    (sent ? "📱 وصل الوصل الإلكتروني للطالب." : "⚠️ ما گدرت أرسل الوصل للطالب (ممكن مسوي حظر للبوت).") + "\n📊 وانسجلت بمبيعات اليوم." +
+    (unlocked.length ? `\n🔓 انفتحت عنده امتحانات: ${esc(unlocked.join("، "))}` : "");
   if (off) {
     const un = officeUnsettled(off.id);
     msg += `\n\n🔴 غير محاسب عليه: <b>${money(un.total)}</b>`;

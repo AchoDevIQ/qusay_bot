@@ -7,6 +7,7 @@ import {
 } from "./data.ts";
 import { chapterLabel, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
+import { examAdminCb, readyExtras } from "./exams.ts";
 import { officeDays, officeKb, officeView, libCb, libText, parseAmount } from "./office.ts";
 import { orderKb, orderText } from "./student.ts";
 import { api, edit, send, type Kb } from "./telegram.ts";
@@ -19,7 +20,7 @@ export function adminMenuFor(uid: number): View {
   const kb: Kb = [];
   if (can(uid, "products")) {
     kb.push([btn("📥 إضافة منتجات دفعة وحدة", "a:bulk")], [btn("➕ إضافة منتج واحد", "a:add")], [btn("📋 المنتجات والأقسام", "a:list")],
-      [btn("🚚 أسعار التوصيل", "a:fees")], [btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")]);
+      [btn("🚚 أسعار التوصيل", "a:fees")], [btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")], [btn("📝 الامتحانات", "a:ex")]);
   }
   if (can(uid, "orders")) {
     const n = newOrdersCount();
@@ -310,6 +311,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
   const sendV = ([t, kb]: View, prefix = "") => send(chat, prefix + t, { kb });
   const editV = ([t, kb]: View, prefix = "") => edit(chat, mid, prefix + t, kb);
 
+  if (d.startsWith("a:ex")) return examAdminCb(chat, uid, mid, d);
   if (d === "a:oo" || d.startsWith("a:oo:")) {
     const v = onlineOnlyView();
     if (d.startsWith("a:oo:")) {
@@ -593,7 +595,8 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
           await api("editMessageReplyMarkup", { chat_id: student_id, message_id: Number(cm), reply_markup: { inline_keyboard: [] } });
         }
       }
-      await send(student_id, orderReady(i));
+      const extra = readyExtras(i);
+      await send(student_id, orderReady(i) + extra.text, extra.kb ? { kb: extra.kb } : {});
     }
     if (gone.length) await send(chat, `⚠️ <b>انتبه:</b> الطالب ألغى هالطلبات قبل التجهيز، <b>لا ترسلها</b>: ${gone.map((i) => "#" + i).join("، ")}`);
     const { data } = getSession(uid);

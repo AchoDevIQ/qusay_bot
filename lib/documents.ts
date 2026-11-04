@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import QRCode from "qrcode";
 import { all, get, kvSet, type Row } from "./db.ts";
 import { FONT, LOGO, PDF_DIR } from "./config.ts";
 import { btn, esc, fileStamp, money, num, stamp } from "./util.ts";
@@ -57,9 +58,20 @@ const htmlToPng = (htmlPath: string, pngPath: string, w = 760, h = 1000) =>
   render(pngPath, "qstore_png", ["--hide-scrollbars", "--force-device-scale-factor=2", `--window-size=${w},${h}`, "--screenshot=" + path.resolve(pngPath)], htmlPath);
 
 // ---------- طلبات التوصيل: كل طلب بورقة A5 مستقلة
-function ordersHtml(orders: Row[]) {
+/** كود QR بوصل الطلب اللي بيه امتحانات: الطالب يقراه لمن يوصله الطلب */
+async function examQr(oid: number) {
+  const code = get("SELECT code FROM order_codes WHERE order_id=?", oid)?.code as string | undefined;
+  if (!code) return "";
+  const svg = await QRCode.toString(code, { type: "svg", margin: 1, errorCorrectionLevel: "M" });
+  return `<div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding:8px 10px;border:1.5px solid #101929;border-radius:10px;break-inside:avoid">
+<div style="width:92px;height:92px;flex:none">${svg}</div>
+<div style="font-size:11.5px;line-height:1.7"><b style="font-size:13px">🔓 افتح امتحاناتك</b><br>اضغط زر «وصلني الطلب» بالبوت، ووجه الكاميرا على هذا الكود.<br>أو اكتب الرمز: <b dir="ltr" style="font-size:14px;letter-spacing:.5px">${code}</b></div>
+</div>`;
+}
+
+async function ordersHtml(orders: Row[]) {
   const logo = logoTag();
-  const pages = orders.map((o) => {
+  const pages = await Promise.all(orders.map(async (o) => {
     const rows = orderItems(o).map((it) => `<tr><td>${esc(it.name)}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
     return `<section class=page>
 <div class=head>${logo}<div class=ht><h1>متجر قصي العميري</h1><p>الرياضيات · السادس الإعدادي</p></div>
@@ -73,9 +85,9 @@ function ordersHtml(orders: Row[]) {
 <tr class=s><td colspan=2>مجموع المنتجات</td><td class=n>${num(o.subtotal)}</td></tr>
 <tr class=s><td colspan=2>التوصيل</td><td class=n>${num(o.fee)}</td></tr>
 <tr class=t><td colspan=2>المبلغ الكلي</td><td class=n>${num(o.total)} د.ع</td></tr></table>
-<div class=foot>⚠️ جميع المشتريات غير قابلة للإرجاع إطلاقاً ولأي سبب كان</div>
+${await examQr(o.id)}<div class=foot>⚠️ جميع المشتريات غير قابلة للإرجاع إطلاقاً ولأي سبب كان</div>
 </section>`;
-  });
+  }));
   return `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>
 @page{size:A5;margin:9mm}
 html,body{margin:0}
@@ -103,7 +115,7 @@ export async function sendOrdersPdf(chat: number, ids: number[]) {
   ensureDir();
   const name = "orders_" + fileStamp();
   const hp = path.join(PDF_DIR, name + ".html"), pp = path.join(PDF_DIR, name + ".pdf");
-  fs.writeFileSync(hp, ordersHtml(orders), "utf8");
+  fs.writeFileSync(hp, await ordersHtml(orders), "utf8");
   const bid = String(Math.floor(Date.now() / 1000));
   kvSet("batch_" + bid, orders.map((o) => o.id).join(","));
   const kb: Kb = [[btn("✅ تم الطباعة (إخفاؤها)", "a:done:" + bid)], [btn("↩️ لا، خليها", "a:keep")]];

@@ -96,6 +96,8 @@ export const BTN_ASK = "❓ سؤال علمي";
 export const BTN_MYQ = "📂 أسئلتي";
 export const BTN_ME = "👤 معلوماتي";
 export const BTN_OFFICE = "🏪 مكتبتي";
+export const BTN_EXAMS = "📝 امتحاناتي";
+export const BTN_SCAN = "📷 افتح الكاميرا";
 export const AR_WORD = /^[ء-ْٰ-ۓ]+$/;
 
 export const SEED_CURRIC = `# الأعداد المركبة | Complex Numbers

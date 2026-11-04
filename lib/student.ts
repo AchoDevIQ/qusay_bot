@@ -10,6 +10,7 @@ import { flowKb, govKb, mainKb, regKb, storeKb } from "./keyboards.ts";
 import { sendProfileCard } from "./documents.ts";
 import { edit, send, sendImage, type Kb } from "./telegram.ts";
 import { btn, esc, money, num, stamp, toInt, cut, words } from "./util.ts";
+import { createOrderCode } from "./exams.ts";
 import { askStart } from "./questions.ts";
 
 export const sendBanner = (chat: number, caption: string, replyKb: unknown) => sendImage(chat, BANNER, "banner", caption, replyKb);
@@ -263,6 +264,7 @@ async function finalize(chat: number, uid: number, data: Row, items: Row[], sub:
   const oid = run(`INSERT INTO orders(user_id, username, name, curr, gov, side, area, phone1, phone2, items, subtotal, fee, total, created)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, uid, user.username ?? "", data.name, data.curr ?? "", data.gov, data.side ?? "", data.area,
   data.phone1, data.phone2, JSON.stringify(items), sub, fee, sub + fee, stamp());
+  createOrderCode(oid, items);
   setSession(uid, "", {});
   await sendImage(chat, SUCCESS, "success", successText(oid), mainKb(uid));
   const r: any = await send(chat, "↩️ إذا غيرت رأيك، تگدر تلغي الطلب من هذا الزر <b>لحد ما توصلك رسالة «تم تجهيز طلبك»</b>.\n" +

@@ -6,8 +6,17 @@ import { useEffect, useState } from "react";
 type TgWebApp = {
   ready(): void; expand(): void; setHeaderColor(c: string): void; setBackgroundColor(c: string): void;
   sendData(s: string): void; HapticFeedback?: { selectionChanged(): void };
+  isVersionAtLeast?(v: string): boolean;
+  showScanQrPopup?(p: { text?: string }, cb: (text: string) => boolean | void): void;
 };
 const tg = () => (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
+
+/** يفتح كاميرا تليجرام لقراءة QR. يرجع false إذا الجهاز ما يدعمها */
+export function scanQr(text: string, onText: (t: string) => boolean | void) {
+  const w = tg();
+  if (!w?.showScanQrPopup || !w.isVersionAtLeast?.("6.4")) return false;
+  try { w.showScanQrPopup({ text }, onText); return true; } catch { return false; }
+}
 
 export function TelegramInit() {
   return (

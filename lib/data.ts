@@ -65,6 +65,9 @@ export function noteFail(kind: string, uid: number) {
 
 // ---------- الطلاب والمراكز
 export const student = (uid: number) => get("SELECT * FROM students WHERE user_id=?", uid);
+/** زر امتحاناتي يطلع بس للي عنده امتحانات مفتوحة، أو طلب جاهز ينتظر الكود */
+export const hasExamMenu = (uid: number) => !!get(`SELECT 1 WHERE EXISTS(SELECT 1 FROM exam_access WHERE user_id=?)
+  OR EXISTS(SELECT 1 FROM order_codes JOIN orders ON orders.id=order_codes.order_id WHERE orders.user_id=? AND orders.printed=1 AND order_codes.used_at IS NULL)`, uid, uid);
 export function centerName(cid: number | null | undefined) {
   if (!cid) return "";
   const r = get("SELECT centers.name cn, areas.name an FROM centers JOIN areas ON areas.id=centers.area_id WHERE centers.id=?", cid);

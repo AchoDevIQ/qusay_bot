@@ -36,9 +36,17 @@ function normal(v: any): any {
   if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, normal(x)]));
   return v;
 }
+// ميزات جديدة ما موجودة بالبوت القديم: جداول الامتحانات وزر لوحة التحكم
+const NEW_TABLES = ["exams", "exam_access", "order_codes"];
+function dropNewButtons(e: any) {
+  const kb = e.p?.reply_markup?.inline_keyboard;
+  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => b.callback_data === "a:ex"));
+  return e;
+}
 function normalDb(db: Record<string, any[]>) {
   const out: Record<string, any[]> = {};
   for (const [t, rows] of Object.entries(db)) {
+    if (NEW_TABLES.includes(t)) continue;
     out[t] = rows.map((r) => {
       const x = { ...r };
       if (t === "orders" && x.items) x.items = JSON.parse(x.items);
@@ -67,7 +75,7 @@ for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).
       const r = spawnSync(process.execPath, [path.join(DIR, "run.ts"), file, sc.name], { encoding: "utf8", maxBuffer: 1 << 28 });
       assert.equal(r.status, 0, r.stderr);
       const ts = JSON.parse(r.stdout), py = golden[sc.name];
-      const a = normal(ts.trace), b = normal(py.trace);
+      const a = normal(ts.trace.map(dropNewButtons)), b = normal(py.trace);
       for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
       assert.deepEqual(normalDb(ts.db), normalDb(py.db));
       assert.deepEqual(scrubFiles(ts.files), scrubFiles(py.files));

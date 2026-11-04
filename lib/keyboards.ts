@@ -1,7 +1,7 @@
 // لوحات الأزرار وروابط صفحات المتجر (البيانات تنضغط داخل الرابط)
 import { all, kvGet, type Row } from "./db.ts";
-import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SHOP, GOVS, STORE_URL } from "./config.ts";
-import { can, cats, centerName, feeOf, isStaff, myOffice, newOrdersCount, products, student } from "./data.ts";
+import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL } from "./config.ts";
+import { can, cats, centerName, feeOf, hasExamMenu, isStaff, myOffice, newOrdersCount, products, student } from "./data.ts";
 import { b64urlEncode, btn, chunk } from "./util.ts";
 
 export function chapterLabel(name: string | null | undefined) {
@@ -77,8 +77,13 @@ export const posKb = (sid: number) => ({
   keyboard: [[{ text: "🏪 افتح صفحة البيع", web_app: { url: posLink(sid) } }], [{ text: BTN_CANCEL }]], resize_keyboard: true,
 });
 
+export const scanKb = (oid: number) => ({
+  keyboard: [[{ text: BTN_SCAN, web_app: { url: pageUrl("/store/scan", { o: oid }) } }], [{ text: BTN_CANCEL }]], resize_keyboard: true,
+});
+
 export function mainKb(uid: number) {
   const rows: { text: string }[][] = [[{ text: BTN_SHOP }, { text: BTN_ASK }], [{ text: BTN_MYQ }, { text: BTN_ME }]];
+  if (hasExamMenu(uid)) rows.push([{ text: BTN_EXAMS }]);
   if (isStaff(uid)) {
     const n = can(uid, "orders") ? newOrdersCount() : 0;
     rows.push([{ text: BTN_ADMIN + (n ? `  🔴 ${n}` : "") }]);
