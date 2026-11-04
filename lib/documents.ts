@@ -7,6 +7,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import QRCode from "qrcode";
 import { kvSet, one, type Row } from "./db.ts";
+import type { RenderJob } from "./browserRender.ts";
 import { FONT, LOGO, PDF_DIR } from "./config.ts";
 import { btn, esc, fileStamp, money, num, stamp } from "./util.ts";
 import { upload, send, type Kb } from "./telegram.ts";
@@ -40,31 +41,20 @@ async function packagedBrowser() {
   if (process.platform !== "linux" || process.env.CHROME_PATH) return null;
   try { return await (await import("@sparticuz/chromium")).default.executablePath(); } catch (e) { console.error("Browser problem:", e); return null; }
 }
-/** متصفح السيرفر ممكن يكمل الملف وما يطلع، فنراقب الملف ونسكره لمن يخلص. والبوت ينتظر الرسم، فالوقت محدود */
-async function renderPackaged(b: string, out: string, args: string[], url: string) {
-  const flags = ["--headless", "--no-sandbox", "--no-zygote", "--single-process", "--in-process-gpu", "--disable-gpu", "--font-render-hinting=none"];
+async function renderPackaged(b: string, out: string, htmlPath: string, job: RenderJob) {
+  const flags = ["--no-sandbox", "--no-zygote", "--single-process", "--in-process-gpu", "--disable-gpu", "--disable-dev-shm-usage", "--font-render-hinting=none"];
   fs.rmSync(out, { force: true });
-  const stop = new AbortController();
-  let finished = false;
-  run(b, [...flags, ...args, url], { timeout: 45_000, signal: stop.signal })
-    .catch((e) => { if (!stop.signal.aborted) console.error("Render problem:", e); })
-    .finally(() => { finished = true; });
-  const sizeOf = () => (fs.existsSync(out) ? fs.statSync(out).size : 0);
-  let last = 0;
-  while (!finished) {
-    await new Promise((r) => setTimeout(r, 500));
-    const size = sizeOf();
-    if (size > 1000 && size === last) { stop.abort(); return true; }
-    last = size;
-  }
-  return sizeOf() > 1000;
+  try {
+    await (await import("./browserRender.ts")).browserRender(b, flags, htmlPath, out, job);
+  } catch (e) { console.error("Render problem:", e); }
+  return fs.existsSync(out) && fs.statSync(out).size > 1000;
 }
-async function render(out: string, profile: string, args: string[], htmlPath: string) {
+async function render(out: string, profile: string, args: string[], htmlPath: string, job: RenderJob) {
   const installed = findBrowser();
   const b = installed ?? await packagedBrowser();
   if (!b) return false;
+  if (!installed) return renderPackaged(b, out, htmlPath, job);
   const url = "file:///" + path.resolve(htmlPath).replace(/\\/g, "/").replace(/^\/+/, "");
-  if (!installed) return renderPackaged(b, out, ["--user-data-dir=" + path.join(os.tmpdir(), profile), ...args], url);
   // نجرب بحماية المتصفح أول. بدونها بس إذا السيرفر ما يدعمها، حتى تبقى الوصولات تطلع
   const sandbox: string[][] = process.platform === "win32" ? [[]] : [[], ["--no-sandbox"]];
   for (const extra of sandbox) {
@@ -79,9 +69,9 @@ async function render(out: string, profile: string, args: string[], htmlPath: st
   return false;
 }
 const htmlToPdf = (htmlPath: string, pdfPath: string) =>
-  render(pdfPath, "qstore_pdf", ["--no-pdf-header-footer", "--print-to-pdf-no-header", "--print-to-pdf=" + pdfPath], htmlPath);
+  render(pdfPath, "qstore_pdf", ["--no-pdf-header-footer", "--print-to-pdf-no-header", "--print-to-pdf=" + pdfPath], htmlPath, { pdf: true });
 const htmlToPng = (htmlPath: string, pngPath: string, w = 760, h = 1000) =>
-  render(pngPath, "qstore_png", ["--hide-scrollbars", "--force-device-scale-factor=2", `--window-size=${w},${h}`, "--screenshot=" + path.resolve(pngPath)], htmlPath);
+  render(pngPath, "qstore_png", ["--hide-scrollbars", "--force-device-scale-factor=2", `--window-size=${w},${h}`, "--screenshot=" + path.resolve(pngPath)], htmlPath, { png: { w, h } });
 
 // ---------- طلبات التوصيل: كل طلب بورقة A5 مستقلة
 /** كود QR بوصل الطلب اللي بيه امتحانات: الطالب يقراه لمن يوصله الطلب */
