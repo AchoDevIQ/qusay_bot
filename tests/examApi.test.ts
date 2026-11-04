@@ -151,12 +151,12 @@ test("النسخة الجديدة: صور نسخة الطالب، وPDF للجو
   const v = (await get("SELECT id FROM bank_versions WHERE exam_id=?", e.id))!.id as number;
   await assert.rejects(examUpload(form({ initData: init, action: "pagesAr", id: v, file: new Blob(["%PDF-1.7 x"]) })), /صورة/);
   await assert.rejects(examUpload(form({ initData: init, action: "answerPdf", id: v, file: png() })), /PDF/);
-  await assert.rejects(examUpload(form({ initData: init, action: "addQuestion", id: v, mark: 100, q: png() })), /الجواب/);
-  await examUpload(form({ initData: init, action: "answerPdf", id: v, file: new Blob(["%PDF-1.7 x"]) }));
-  const r = await examUpload(form({ initData: init, action: "addQuestion", id: v, mark: 50, q: png() }));   // الـPDF يغني عن صور الجواب
-  await denied(async () => await examAction({ action: "ok", id: v, initData: init }), 400);                  // المجموع مو 100
-  assert.equal(r.chapters[0].exams.at(-1).versions[0].answerPdf.endsWith(".pdf"), true);
   await examUpload(form({ initData: init, action: "addQuestion", id: v, mark: 50, q: png() }));
+  await denied(async () => await examAction({ action: "ok", id: v, initData: init }), 400);                  // المجموع مو 100
+  await examUpload(form({ initData: init, action: "addQuestion", id: v, mark: 50, q: png() }));
+  await denied(async () => await examAction({ action: "ok", id: v, initData: init }), 400);                  // ماكو جواب نموذجي
+  const r = await examUpload(form({ initData: init, action: "answerPdf", id: v, file: new Blob(["%PDF-1.7 x"]) }));
+  assert.equal(r.chapters[0].exams.at(-1).versions[0].answerPdf.endsWith(".pdf"), true);
   await denied(async () => await examAction({ action: "ok", id: v, initData: init }), 400);                  // ماكو صور نسخة الطالب
   const up = await examUpload(form({ initData: init, action: "pagesAr", id: v, file: [png(), png()] }));
   assert.equal(up.chapters[0].exams.at(-1).versions[0].pagesAr.length, 2);
@@ -171,14 +171,14 @@ test("الرفع: يفحص نوع الملف من محتواه، وبالصلا�
   await assert.rejects(examUpload(form({ initData: sign(2), action: "replaceQ", id: 1, file: png() })), (e: any) => e.status === 403);
   await assert.rejects(examUpload(form({ initData: sign(1), action: "replaceQ", id: 1, file: new Blob(["<script>alert(1)</script>"]) })), /صورة/);
   await assert.rejects(examUpload(form({ initData: sign(1), action: "pdfAr", id: 1, file: png() })), /PDF/);
-  await assert.rejects(examUpload(form({ initData: sign(1), action: "addQuestion", id: 1, mark: 20, q: png() })), /صورة الجواب/);
+  
   await examUpload(form({ initData: sign(1), action: "replaceQ", id: 1, file: png() }));
   const q = (await get("SELECT * FROM bank_questions WHERE id=1"))!;
   assert.match(q.q_file, /^uploads\/[\w-]+\.png$/);
   assert.equal(q.edited, 1);
-  await examUpload(form({ initData: sign(1), action: "addQuestion", id: 1, mark: 30, q: png(), a: [png(), png()] }));
+  await examUpload(form({ initData: sign(1), action: "addQuestion", id: 1, mark: 30, q: png() }));
   const n = (await get("SELECT * FROM bank_questions WHERE version_id=1 ORDER BY n DESC LIMIT 1"))!;
-  assert.deepEqual([n.n, n.max_mark, JSON.parse(n.a_files).length], [3, 30, 2]);
+  assert.deepEqual([n.n, n.max_mark], [3, 30]);
   await examUpload(form({ initData: sign(1), action: "pdfAr", id: 1, file: new Blob(["%PDF-1.7 x"]) }));
   assert.match((await get("SELECT pdf_ar FROM bank_versions WHERE id=1"))!.pdf_ar, /^uploads\/.*\.pdf$/);
 });

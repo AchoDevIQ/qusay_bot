@@ -65,7 +65,7 @@ export async function examList(uid: number) {
           id: v.id, model: v.model, kind: v.kind, ok: !!v.ok, issues: JSON.parse(v.issues || "[]"), manual: !!v.manual,
           pdfAr: v.manual && !v.pdf_ar ? null : pdf("ar"), pdfEn: v.manual && !v.pdf_en ? null : pdf("en"),
           pagesAr: pages("ar"), pagesEn: pages("en"), answerPdf: v.answer_pdf ?? null,
-          questions: (qBy.get(v.id) ?? []).map((q) => ({ id: q.id, n: q.n, max: q.max_mark, q: q.q_file, a: JSON.parse(q.a_files || "[]"), edited: !!q.edited })),
+          questions: (qBy.get(v.id) ?? []).map((q) => ({ id: q.id, n: q.n, max: q.max_mark, q: q.q_file, edited: !!q.edited })),
         };
       }),
     });
@@ -92,7 +92,7 @@ export async function examAction(body: Row) {
       const qs = await find("bank_questions", { version_id: id });
       need(qs.length, "ضيف سؤال واحد على الأقل");
       need(sumOf(qs, "max_mark") === 100, "مجموع الدرجات لازم يكون 100");
-      need(v!.answer_pdf || qs.every((q) => JSON.parse(q.a_files || "[]").length), "كل سؤال يحتاج جواب، أو ارفع الجواب النموذجي PDF");
+      need(v!.answer_pdf, "ارفع الجواب النموذجي PDF");
       need(!v!.manual || pageList(v!, "ar").length || v!.pdf_ar, "ارفع صور نسخة الطالب بالعربي");
     }
     await update("bank_versions", { id }, { ok: v!.ok ? 0 : 1, issues: v!.ok ? JSON.stringify(["موقوفة من الإدارة"]) : "[]" });
@@ -210,26 +210,14 @@ export async function examUpload(form: FormData) {
   if (a === "addQuestion") {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
     const mark = intOf(form.get("mark"), 1, 100, "الدرجة لازم رقم كامل من 1 إلى 100");
-    const answers = form.getAll("a");
-    need(answers.length || (await one("bank_versions", { id }))!.answer_pdf, "ضيف صورة الجواب، أو ارفع الجواب النموذجي PDF");
     const q = await saveUpload(form.get("q"), IMAGES);
-    const saved: string[] = [];
-    for (const x of answers) saved.push(await saveUpload(x, IMAGES));
     const n = maxOf(await find("bank_questions", { version_id: id }), "n") + 1;
-    await insert("bank_questions", { version_id: id, n, max_mark: mark, q_file: q, a_files: JSON.stringify(saved), edited: 1 });
+    await insert("bank_questions", { version_id: id, n, max_mark: mark, q_file: q, a_files: "[]", edited: 1 });
     await logEdit(uid, `نسخة ${id}: سؤال جديد ${n}`);
   } else if (a === "replaceQ") {
     need(await one("bank_questions", { id }), "السؤال غير موجود");
     await update("bank_questions", { id }, { q_file: await saveUpload(form.get("file"), IMAGES), edited: 1 });
     await logEdit(uid, `سؤال ${id}: صورة جديدة`);
-  } else if (a === "replaceA") {
-    need(await one("bank_questions", { id }), "السؤال غير موجود");
-    const files = form.getAll("file");
-    need(files.length, "اختار صور الجواب");
-    const saved: string[] = [];
-    for (const x of files) saved.push(await saveUpload(x, IMAGES));
-    await update("bank_questions", { id }, { a_files: JSON.stringify(saved), edited: 1 });
-    await logEdit(uid, `سؤال ${id}: جواب جديد`);
   } else if (a === "pagesAr" || a === "pagesEn") {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
     const files = form.getAll("file");

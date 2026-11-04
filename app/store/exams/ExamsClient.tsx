@@ -2,7 +2,7 @@
 // صفحة وحدة لإدارة الامتحانات: جدول الامتحانات، وكل شي ينفتح داخل نفس الصفحة بدون رسائل بالبوت
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-type Question = { id: number; n: number; max: number; q: string | null; a: string[]; edited: boolean };
+type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
 type Exam = { id: number; ord: number; title: string; info: string; minutes: number; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
@@ -240,7 +240,7 @@ function PaperTab({ pages, pdf, label, action, busy, upload, fileUrl }: {
 function VersionPanel({ version: v, busy, call, fileUrl, openQ, setOpenQ, onDeleted }: {
   version: Version; busy: boolean; call: Call; fileUrl: (r: string) => string; openQ: number | null; setOpenQ: (q: number | null) => void; onDeleted: () => void;
 }) {
-  const [tab, setTab] = useState<"ar" | "en" | "answers">("ar");
+  const [tab, setTab] = useState<"ar" | "en" | "questions" | "answer">("ar");
   const total = v.questions.reduce((s, q) => s + q.max, 0);
   const upload = (action: string, files: File[]) => { const fd = new FormData(); fd.set("action", action); fd.set("id", String(v.id)); files.forEach((f) => fd.append("file", f)); void call(fd); };
   const box = useRef<HTMLDivElement>(null);
@@ -255,19 +255,25 @@ function VersionPanel({ version: v, busy, call, fileUrl, openQ, setOpenQ, onDele
       <div className="chips extabs">
         <button type="button" className={tab === "ar" ? "on" : ""} onClick={() => setTab("ar")}>🇮🇶 العربي</button>
         <button type="button" className={tab === "en" ? "on" : ""} onClick={() => setTab("en")}>🇬🇧 الإنجليزي</button>
-        <button type="button" className={tab === "answers" ? "on" : ""} onClick={() => setTab("answers")}>📘 الجواب النموذجي ({v.questions.length})</button>
+        <button type="button" className={tab === "questions" ? "on" : ""} onClick={() => setTab("questions")}>✂️ الأسئلة ({v.questions.length})</button>
+        <button type="button" className={tab === "answer" ? "on" : ""} onClick={() => setTab("answer")}>📘 الجواب النموذجي</button>
       </div>
       {tab === "ar" && <PaperTab pages={v.pagesAr} pdf={v.pdfAr} label="العربي" action="pagesAr" busy={busy} upload={upload} fileUrl={fileUrl} />}
       {tab === "en" && <PaperTab pages={v.pagesEn} pdf={v.pdfEn} label="الإنجليزي" action="pagesEn" busy={busy} upload={upload} fileUrl={fileUrl} />}
-      {tab === "answers" && (
+      {tab === "questions" && (
         <div>
-          <div className="exhint">الجواب نفسه للعربي والإنجليزي، والسؤال يطلع للمصحح بالعربي.</div>
+          <div className="exhint">الأسئلة المقطعة تطلع للمصحح بالعربي، كل سؤال لوحده.</div>
+          {v.questions.map((q) => <QuestionRow key={q.id} q={q} open={openQ === q.id} toggle={() => setOpenQ(openQ === q.id ? null : q.id)} busy={busy} call={call} fileUrl={fileUrl} />)}
+          <AddQuestion versionId={v.id} busy={busy} call={call} />
+        </div>
+      )}
+      {tab === "answer" && (
+        <div>
+          <div className="exhint">ملف واحد كامل، يطلع نفسه للمصحح وللطالب.</div>
           <div className="exline">
-            {v.answerPdf && <a className="exbtn" href={fileUrl(v.answerPdf)} target="_blank" rel="noreferrer">📄 افتح الجواب النموذجي كامل</a>}
             <FileButton label={`📘 ${v.answerPdf ? "تبديل" : "رفع"} الجواب النموذجي (PDF)`} accept="application/pdf" disabled={busy} onFiles={(f) => upload("answerPdf", f)} />
           </div>
-          {v.questions.map((q) => <QuestionRow key={q.id} q={q} hasPdf={!!v.answerPdf} open={openQ === q.id} toggle={() => setOpenQ(openQ === q.id ? null : q.id)} busy={busy} call={call} fileUrl={fileUrl} />)}
-          <AddQuestion versionId={v.id} hasPdf={!!v.answerPdf} busy={busy} call={call} />
+          {v.answerPdf ? <PdfPages url={fileUrl(v.answerPdf)} /> : <div className="exempty">لسه ما انرفع الجواب النموذجي</div>}
         </div>
       )}
       <div className="exline exfoot">
@@ -278,12 +284,52 @@ function VersionPanel({ version: v, busy, call, fileUrl, openQ, setOpenQ, onDele
   );
 }
 
-function QuestionRow({ q, hasPdf, open, toggle, busy, call, fileUrl }: { q: Question; hasPdf: boolean; open: boolean; toggle: () => void; busy: boolean; call: Call; fileUrl: (r: string) => string }) {
+/** صفحات PDF كبيرة داخل الصفحة، لأن تليجرام ما يعرض PDF بالموبايل */
+function PdfPages({ url }: { url: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<"loading" | "done" | "failed">("loading");
+  useEffect(() => {
+    let stop = false;
+    setState("loading");
+    void (async () => {
+      try {
+        const pdfjs = await import("pdfjs-dist");
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+        const doc = await pdfjs.getDocument({ url, disableFontFace: true }).promise;
+        box.current?.replaceChildren();
+        for (let i = 1; i <= doc.numPages && !stop; i++) {
+          const page = await doc.getPage(i);
+          const width = box.current?.clientWidth || 800;
+          const scale = (width * Math.max(window.devicePixelRatio || 1, 2)) / page.getViewport({ scale: 1 }).width;
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          canvas.className = "eximg";
+          box.current?.append(canvas);
+          await page.render({ canvas, viewport }).promise;
+        }
+        if (!stop) setState("done");
+      } catch (e) { console.error(e); if (!stop) setState("failed"); }
+    })();
+    return () => { stop = true; };
+  }, [url]);
+  return (
+    <div>
+      {state === "loading" && <div className="exempty">جاري فتح الملف...</div>}
+      {state === "failed" && <div className="exbad">ما انفتح الملف هنا.</div>}
+      <div ref={box} />
+      <div className="exline"><a className="exbtn" href={url} target="_blank" rel="noreferrer">📄 فتح الملف خارج الصفحة</a></div>
+    </div>
+  );
+}
+
+function QuestionRow({ q, open, toggle, busy, call, fileUrl }: { q: Question; open: boolean; toggle: () => void; busy: boolean; call: Call; fileUrl: (r: string) => string }) {
   const send = (action: string, files: File[]) => { const fd = new FormData(); fd.set("action", action); fd.set("id", String(q.id)); files.forEach((f) => fd.append("file", f)); return call(fd); };
   return (
     <div className="exq">
       <button type="button" className={"exqhead" + (open ? " on" : "")} onClick={toggle}>
-        <span>س {q.n}{q.edited ? " ✏️" : ""}</span><span>{q.max} درجة {q.a.length || hasPdf ? "" : "· ⚠️ بدون جواب"}</span>
+        <span>س {q.n}{q.edited ? " ✏️" : ""}</span><span>{q.max} درجة</span>
       </button>
       {open && (
         <div className="exqbody">
@@ -291,33 +337,32 @@ function QuestionRow({ q, hasPdf, open, toggle, busy, call, fileUrl }: { q: Ques
           <div className="exline">
             
             <FileButton label="🖼 تبديل السؤال" accept="image/png,image/jpeg" disabled={busy} onFiles={(f) => send("replaceQ", f)} />
-            <FileButton label="📘 تبديل الجواب" accept="image/png,image/jpeg" multiple disabled={busy} onFiles={(f) => send("replaceA", f)} />
+            
             <Confirm label="🗑 حذف" disabled={busy} onYes={() => call({ action: "delQuestion", id: q.id })} />
           </div>
-          <div className="exlabel">📘 الجواب النموذجي</div>
-          {q.a.map((a) => <BigImage key={a} src={fileUrl(a)} alt="الجواب" />)}
+          
         </div>
       )}
     </div>
   );
 }
 
-function AddQuestion({ versionId, hasPdf, busy, call }: { versionId: number; hasPdf: boolean; busy: boolean; call: Call }) {
+function AddQuestion({ versionId, busy, call }: { versionId: number; busy: boolean; call: Call }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState<File | null>(null);
-  const [a, setA] = useState<File[]>([]);
+  
   const [mark, setMark] = useState("");
   if (!open) return <div className="exline"><button type="button" className="exbtn" onClick={() => setOpen(true)}>➕ إضافة سؤال</button></div>;
   return (
     <div className="exadd">
       <FileButton label={q ? "✅ صورة السؤال بالعربي" : "🖼 صورة السؤال بالعربي"} accept="image/png,image/jpeg" onFiles={(f) => setQ(f[0])} />
-      <FileButton label={a.length ? `✅ صور الجواب (${a.length})` : "📘 صور الجواب"} accept="image/png,image/jpeg" multiple onFiles={setA} />
+      
       <input className="exnum" inputMode="numeric" placeholder="الدرجة" value={mark} onChange={(e) => setMark(e.target.value)} />
-      <button type="button" className="exbtn" disabled={busy || !q || (!a.length && !hasPdf) || !mark} onClick={async () => {
+      <button type="button" className="exbtn" disabled={busy || !q || !mark} onClick={async () => {
         const fd = new FormData();
         fd.set("action", "addQuestion"); fd.set("id", String(versionId)); fd.set("mark", mark); fd.set("q", q!);
-        a.forEach((f) => fd.append("a", f));
-        if (await call(fd)) { setOpen(false); setQ(null); setA([]); setMark(""); }
+        
+        if (await call(fd)) { setOpen(false); setQ(null); setMark(""); }
       }}>حفظ السؤال</button>
       <button type="button" className="exbtn" onClick={() => setOpen(false)}>إلغاء</button>
     </div>
