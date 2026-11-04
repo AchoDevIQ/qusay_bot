@@ -8,6 +8,18 @@ $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [En
 
 function Stop-WithMessage($text) { Write-Host ""; Write-Host $text -ForegroundColor Yellow; Read-Host "Press Enter to close"; exit 1 }
 
+# Closing the window with X leaves the server and link running, and the next run would keep showing the old server
+function Get-OldRun {
+  Get-CimInstance Win32_Process -Filter "Name='node.exe' OR Name='cmd.exe' OR Name='cloudflared.exe'" | Where-Object {
+    $_.CommandLine -match 'next\S*\s+start -p 3000|--env-file-if-exists=\.env\.local scripts/poll\.ts|--logfile \S*qmath-tunnel\.log'
+  }
+}
+function Stop-OldRun {
+  foreach ($p in Get-OldRun) { try { Stop-Process -Id $p.ProcessId -Force -Confirm:$false -ErrorAction Stop } catch {} }
+  Start-Sleep -Seconds 1
+  if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { Stop-WithMessage "Another program is using port 3000. Close it or restart the computer, then try again." }
+}
+
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Stop-WithMessage "Node.js is not installed. Run:  winget install OpenJS.NodeJS.LTS   then open this file again." }
 $major = [int]((node -p "process.versions.node.split('.')[0]") | Out-String).Trim()
 if ($major -lt 24) { Stop-WithMessage "Node.js 24 or newer is needed (found $major). Run:  winget install OpenJS.NodeJS.LTS" }
@@ -28,6 +40,7 @@ if (-not (Test-Path "data\store.db") -and (Test-Path (Join-Path $oldBot "store.d
   Write-Host "Copied the old database to data\store.db for testing."
 }
 
+Stop-OldRun
 if (-not (Test-Path "node_modules")) { & npm.cmd ci; if ($LASTEXITCODE) { Stop-WithMessage "Installing packages failed." } }
 Write-Host "Building the app..."
 & npm.cmd run build | Out-Null
@@ -53,6 +66,12 @@ try {
   if (-not $url) { Stop-WithMessage "Could not open the https link. Check the internet and try again." }
   $env:STORE_URL = $url
   $app = Start-Process cmd -ArgumentList "/c","npx next start -p 3000" -WindowStyle Hidden -PassThru
+  $ready = $false
+  foreach ($i in 1..30) {
+    Start-Sleep -Seconds 1
+    try { Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:3000/store/exams" -TimeoutSec 5 | Out-Null; $ready = $true; break } catch {}
+  }
+  if (-not $ready) { Stop-WithMessage "The app did not start. Close this window and try again." }
   & node --env-file-if-exists=.env.local scripts/poll.ts
 } finally {
   if ($app) { & taskkill /PID $app.Id /T /F 2>$null | Out-Null }
