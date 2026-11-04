@@ -13,7 +13,7 @@ export const EXAM_PERM = "exams";
 const KIND_LABEL: Record<string, string> = { mandatory: "📌 إجباري", optional: "🎯 اختياري" };
 const KIND_NEXT: Record<string, string> = { mandatory: "optional", optional: "mandatory" };
 
-function deleteVersion(id: number) {
+export function deleteVersion(id: number) {
   run("DELETE FROM bank_questions WHERE version_id=?", id);
   run("DELETE FROM bank_versions WHERE id=?", id);
 }
@@ -74,7 +74,7 @@ async function sendImage(chat: number, ref: string | null, caption: string) {
   if (!fs.existsSync(f)) { await send(chat, `⚠️ ${caption}: الملف مفقود من السيرفر.`); return; }
   await upload("sendPhoto", { chat_id: String(chat), caption }, "photo", f, path.basename(f), "image/png");
 }
-function logEdit(uid: number, what: string) {
+export function logEdit(uid: number, what: string) {
   run("INSERT INTO bank_edits(user_id, what, created) VALUES(?,?,?)", uid, what, stamp());
 }
 const fmtMinutes = (m: number) => {
@@ -175,6 +175,10 @@ export async function examBankCb(chat: number, uid: number, mid: number, d: stri
     const e = v && get("SELECT * FROM bank_exams WHERE id=?", v.exam_id);
     if (!v || !e || (lang !== "ar" && lang !== "en")) return "النسخة غير موجودة";
     const uploaded: string | null = v["pdf_" + lang];
+    if (uploaded?.startsWith("uploads/")) {
+      await upload("sendDocument", { chat_id: String(chat), caption: `${e.title} · نسخة ${v.model}`, protect_content: "true" }, "document", contentPath(uploaded), `${v.model}_${lang}.pdf`, "application/pdf");
+      return null;
+    }
     if (uploaded) { await api("sendDocument", { chat_id: chat, document: uploaded, caption: `${e.title} · نسخة ${v.model}`, protect_content: true }); return null; }
     const f = contentPath(path.posix.join(versionDir(e, v), `student_${lang}.pdf`));
     if (!fs.existsSync(f)) return "الملف مفقود من السيرفر";

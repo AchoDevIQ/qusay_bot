@@ -7,7 +7,7 @@ import path from "node:path";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-bank-"));
 Object.assign(process.env, {
-  DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CONTENT_DIR: path.join(tmp, "content"),
+  DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "", PDF_DIR: tmp, CONTENT_DIR: path.join(tmp, "content"),
   CHROME_PATH: path.join(tmp, "no-browser"), ASSETS_DIR: path.join(tmp, "no-assets"), SETTINGS_FILE: path.join(tmp, "no-settings"),
 });
 

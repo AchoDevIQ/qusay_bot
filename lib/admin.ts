@@ -1,11 +1,11 @@
 // لوحة التحكم: المنتجات، الطلبات، الطلاب، المراكز، الأسئلة، المساعدين
 import { all, catIdFor, get, getSession, kvGet, kvSet, modeFromName, run, saveCurriculum, setSession, tx, type Row } from "./db.ts";
-import { BULK_HELP, DAYS, DAY_ORDER, DEFAULT_FEE, GOVS, GRADES, MODE_ICON, MODE_NEXT, PERMS, orderReady, toLatinDigits } from "./config.ts";
+import { BULK_HELP, DAYS, DAY_ORDER, DEFAULT_FEE, GOVS, GRADES, MODE_ICON, MODE_NEXT, PERMS, STORE_URL, orderReady, toLatinDigits } from "./config.ts";
 import {
   allCats, can, cat, centerName, chapters, govMode, groupId, hoursText, isAdmin, newOrdersCount, orderItems, placeOf, product, products, profileText, qHours, qWhere,
   searchStudents, setStudentView, staffAccount, staffName, staffRow, student, topics,
 } from "./data.ts";
-import { chapterLabel, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
+import { chapterLabel, examsPageLink, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
 import { EXAM_PERM, examBankCb } from "./examBank.ts";
 import { readyExtras } from "./exams.ts";
@@ -23,7 +23,8 @@ export function adminMenuFor(uid: number): View {
     kb.push([btn("📥 إضافة منتجات دفعة وحدة", "a:bulk")], [btn("➕ إضافة منتج واحد", "a:add")], [btn("📋 المنتجات والأقسام", "a:list")],
       [btn("🚚 أسعار التوصيل", "a:fees")], [btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")]);
   }
-  if (can(uid, EXAM_PERM)) kb.push([btn("📝 الامتحانات", "a:ex")]);
+  // صفحة كاملة داخل تليجرام. بدون رابط https ترجع شاشات الأزرار
+  if (can(uid, EXAM_PERM)) kb.push([STORE_URL ? { text: "📝 الامتحانات", web_app: { url: examsPageLink() } } : btn("📝 الامتحانات", "a:ex")]);
   if (can(uid, "orders")) {
     const n = newOrdersCount();
     kb.push([btn("🖨 الطلبات الجديدة (للطباعة)" + (n ? `  🔴 ${n}` : ""), "a:pend")], [btn("🗂 الطلبات المطبوعة", "a:printed")],

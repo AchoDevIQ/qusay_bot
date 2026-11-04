@@ -255,6 +255,12 @@ def crop_answers(pdf_path, want, outdir, problems, tag):
     return files
 
 
+def save_pages(doc, outdir, lang):
+    """صور صفحات نسخة الطالب، حتى تنعرض داخل صفحة الإدارة"""
+    for i in range(len(doc)):
+        doc[i].get_pixmap(matrix=pymupdf.Matrix(1.6, 1.6), alpha=False).save(os.path.join(outdir, f"student_{lang}_{i + 1}.png"))
+
+
 def page_map(doc, model_re_words, count):
     """بداية كل نسخة بملف PDF"""
     starts = []
@@ -307,14 +313,14 @@ def main():
             qfiles = crop_question_page(ar_pdf[start], v, outdir, local, tag)
             issues += local
             out_ar = pymupdf.open(); out_ar.insert_pdf(ar_pdf, from_page=start, to_page=end - 1)
-            out_ar.save(os.path.join(outdir, "student_ar.pdf")); out_ar.close()
+            out_ar.save(os.path.join(outdir, "student_ar.pdf")); save_pages(out_ar, outdir, "ar"); out_ar.close()
             ev = next((x for x in e if x["model"] == model), None)
             has_en = False
             if ev:
                 idx = ei + [x["model"] for x in e].index(model)
                 s2, e2 = en_starts[idx], en_starts[idx + 1] if idx + 1 < len(en_starts) else len(en_pdf)
                 out_en = pymupdf.open(); out_en.insert_pdf(en_pdf, from_page=s2, to_page=e2 - 1)
-                out_en.save(os.path.join(outdir, "student_en.pdf")); out_en.close()
+                out_en.save(os.path.join(outdir, "student_en.pdf")); save_pages(out_en, outdir, "en"); out_en.close()
                 has_en = True
                 if len(ev["qs"]) != len(v["qs"]):
                     issues.append(f"{tag}: عدد الأسئلة بالإنجليزي {len(ev['qs'])} والعربي {len(v['qs'])}")

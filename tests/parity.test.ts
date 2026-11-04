@@ -44,7 +44,7 @@ function normal(v: any): any {
 const NEW_TABLES = ["bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
-  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:exams$)/.test(b.callback_data ?? "")));
+  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:exams$)/.test(b.callback_data ?? "") || /\/store\/exams/.test(b.web_app?.url ?? "")));
   return e;
 }
 function normalDb(db: Record<string, any[]>) {
