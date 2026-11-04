@@ -20,7 +20,8 @@ old.exec(`
 `);
 old.close();
 process.env.DB_PATH = file;
-const { all, closeDb, get, initDb } = await import("../lib/db.ts");
+const { initDb } = await import("../lib/db.ts");
+const { all, closeDb, get } = await import("../lib/sqliteDriver.ts");
 
 test("الترقية تحفظ البيانات وتضيف الأعمدة والأقسام", async () => {
   await initDb();

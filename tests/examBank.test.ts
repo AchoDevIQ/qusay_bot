@@ -23,7 +23,8 @@ globalThis.fetch = (async (url: string, init: any) => {
 }) as typeof fetch;
 
 const { handleUpdate } = await import("../lib/bot.ts");
-const { get, all, initDb, run } = await import("../lib/db.ts");
+const { initDb } = await import("../lib/db.ts");
+const { get, all, run } = await import("../lib/sqliteDriver.ts");
 const { loadCatalog } = await import("../lib/examBank.ts");
 
 const msg = async (uid: number, text?: string, extra: object = {}) => await handleUpdate({

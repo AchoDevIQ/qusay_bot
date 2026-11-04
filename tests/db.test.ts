@@ -4,7 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 process.env.DB_PATH = ":memory:";
-const { initDb, get, all, kvGet, kvSet, getSession, setSession, modeFromName, saveCurriculum } = await import("../lib/db.ts");
+const { initDb, kvGet, kvSet, getSession, setSession, modeFromName, saveCurriculum } = await import("../lib/db.ts");
+const { get, all } = await import("../lib/sqliteDriver.ts");
 const { esc, money, stamp, shiftDay, b64urlEncode, b64urlDecode } = await import("../lib/util.ts");
 const { parseSettingsText } = await import("../lib/config.ts");
 

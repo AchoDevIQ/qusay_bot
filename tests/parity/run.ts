@@ -44,7 +44,41 @@ globalThis.fetch = (async (url: string, init: any) => {
 }) as typeof fetch;
 
 const { handleUpdate } = await import("../../lib/bot.ts");
-const { all, db, initDb, kvSet } = await import("../../lib/db.ts");
+const { initDb, kvSet, setDriver } = await import("../../lib/db.ts");
+const { all, db, run, sqliteDriver } = await import("../../lib/sqliteDriver.ts");
+const { docId, firestoreDriver } = await import("../../lib/firestoreDriver.ts");
+const { SCHEMA, keyOf } = await import("../../lib/schema.ts");
+const { fakeFirestore } = await import("../fakeFirestore.ts");
+
+// إذا PARITY_DRIVER=firestore: نفس السيناريو على Firestore الوهمي
+const fake = process.env.PARITY_DRIVER === "firestore" ? fakeFirestore() : null;
+if (fake) {
+  setDriver(firestoreDriver(() => fake.db));
+  await sqliteDriver.init();
+}
+const fakeRows = (t: string) => [...(fake!.store.get(t)?.values() ?? [])];
+/** خطوات السيناريو مكتوبة SQL، فتتنفذ على نسخة SQLite وترجع للوهمي */
+async function execOnFake(sql: string) {
+  for (const t of Object.keys(SCHEMA)) {
+    await run(`DELETE FROM ${t}`);
+    for (const r of fakeRows(t)) {
+      const cols = Object.keys(r);
+      await run(`INSERT INTO ${t}(${cols.join(",")}) VALUES(${cols.map(() => "?").join(",")})`, ...cols.map((c) => r[c]));
+    }
+  }
+  db().exec(sql);
+  for (const t of Object.keys(SCHEMA)) {
+    const docs = new Map<string, any>();
+    for (const r of await all(`SELECT * FROM ${t} ORDER BY rowid`)) docs.set(docId(keyOf(t, r)), r);
+    fake!.store.set(t, docs);
+    if (SCHEMA[t].auto) {
+      const c = fake!.store.get("_counters") ?? new Map();
+      const last = Math.max(Number(c.get(t)?.last ?? 0), ...[...docs.values()].map((r) => r.id));
+      c.set(t, { last });
+      fake!.store.set("_counters", c);
+    }
+  }
+}
 await initDb();
 await kvSet("bot_username", "test_bot");
 
@@ -73,7 +107,7 @@ for (const raw of expand(sc.steps)) {
     await update({ message: { ...msg, ...(s[3] ?? {}) } });
   } else if (k === "c") {
     await update({ callback_query: { id: "c", from: user(s[1]), message: { chat: { id: s[1] }, message_id: 50 }, data: s[2] } });
-  } else if (k === "s") db().exec(s[1]);
+  } else if (k === "s") { if (fake) await execOnFake(s[1]); else db().exec(s[1]); }
   else if (k === "f") fail = s[1];
   else if (k === "cap") {
     const re = new RegExp(s[1]);
@@ -84,7 +118,7 @@ for (const raw of expand(sc.steps)) {
 }
 
 const tables = (await all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")).map((r) => r.name as string);
-const dbDump = Object.fromEntries(await Promise.all(tables.map(async (t) => [t, await all(`SELECT * FROM ${t} ORDER BY rowid`)])));
+const dbDump = Object.fromEntries(await Promise.all(tables.map(async (t) => [t, fake ? fakeRows(t) : await all(`SELECT * FROM ${t} ORDER BY rowid`)])));
 const files: Record<string, string> = {};
 for (const n of fs.readdirSync(tmp).sort()) {
   files[n] = fs.readFileSync(path.join(tmp, n), "utf8")

@@ -13,7 +13,7 @@ type Tx = { get(r: DocRef): Promise<Snap>; get(q: Query): Promise<QSnap>; set(r:
 export type FirestoreLike = { collection(name: string): Coll; runTransaction<T>(fn: (t: Tx) => Promise<T>): Promise<T> };
 
 const COUNTERS = "_counters";
-const docId = (key: unknown[]) => key.map((k) => encodeURIComponent(String(k))).join("|");
+export const docId = (key: unknown[]) => key.map((k) => encodeURIComponent(String(k))).join("|");
 const matches = (r: Row, eq: Row) => Object.entries(eq).every(([k, v]) => (r[k] ?? null) === v);
 const numericFirst = (a: Row, b: Row, keys: string[]) => {
   for (const k of keys) {

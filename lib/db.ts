@@ -173,6 +173,3 @@ export async function getSession(uid: number): Promise<{ state: string; data: Ro
 export async function setSession(uid: number, state: string, data: Row) {
   await put("sessions", { user_id: uid, state, data: JSON.stringify(data) });
 }
-
-// مؤقت لحد ما ينتقل كل البوت. ينشال بآخر خطوة
-export { all, closeDb, db, get, run } from "./sqliteDriver.ts";

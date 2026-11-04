@@ -72,11 +72,12 @@ const scrubFiles = (f: Record<string, string>) =>
   // السطور الفارغة بالـ HTML ما تأثر على الرسم (الوصل القديم بيه سطر فارغ داخل التنسيق)
   Object.fromEntries(Object.entries(f).map(([k, v]) => [scrub(k), scrub(v).replace(/\n{2,}/g, "\n")]));
 
-for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).sort()) {
+const sorted = (db: Record<string, any[]>) => Object.fromEntries(Object.entries(db).map(([t, rows]) => [t, rows.map((r) => JSON.stringify(Object.entries(r).sort())).sort()]));
+for (const driver of ["sqlite", "firestore"]) for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).sort()) {
   const golden = JSON.parse(fs.readFileSync(path.join(DIR, "golden", file), "utf8"));
   for (const sc of JSON.parse(fs.readFileSync(path.join(DIR, file), "utf8"))) {
-    test(`${file}: ${sc.name}`, () => {
-      const r = spawnSync(process.execPath, [path.join(DIR, "run.ts"), file, sc.name], { encoding: "utf8", maxBuffer: 1 << 28 });
+    test(`${driver} ${file}: ${sc.name}`, () => {
+      const r = spawnSync(process.execPath, [path.join(DIR, "run.ts"), file, sc.name], { encoding: "utf8", maxBuffer: 1 << 28, env: { ...process.env, PARITY_DRIVER: driver } });
       assert.equal(r.status, 0, r.stderr);
       const ts = JSON.parse(r.stdout), py = golden[sc.name];
       // طلب من صاحب البوت: صورة نجاح الطلب تطلع لوحدها، لأن نفس الكلام مكتوب داخلها
@@ -84,7 +85,8 @@ for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).
       const dropPhotoMode = (e: any) => { if (e.m === "sendPhoto" && !e.p.caption) delete e.p.parse_mode; return e; };
       const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode)), b = normal(py.trace.map(photoOnly));
       for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
-      assert.deepEqual(normalDb(ts.db), normalDb(py.db));
+      if (driver === "firestore") assert.deepEqual(sorted(normalDb(ts.db)), sorted(normalDb(py.db)));
+      else assert.deepEqual(normalDb(ts.db), normalDb(py.db));
       assert.deepEqual(scrubFiles(ts.files), scrubFiles(py.files));
     });
   }

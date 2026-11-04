@@ -18,7 +18,8 @@ globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, result: 
 const { ApiError, examAction, examFile, examUpload } = await import("../lib/examApi.ts");
 const { fileToken, verifyFileToken, verifyInitData } = await import("../lib/webAuth.ts");
 const { loadCatalog } = await import("../lib/examBank.ts");
-const { get, initDb, run } = await import("../lib/db.ts");
+const { initDb } = await import("../lib/db.ts");
+const { get, run } = await import("../lib/sqliteDriver.ts");
 const { POST } = await import("../app/api/exams/route.ts");
 const { GET } = await import("../app/api/exams/file/route.ts");
 

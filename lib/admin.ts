@@ -1,8 +1,8 @@
 // لوحة التحكم: المنتجات، الطلبات، الطلاب، المراكز، الأسئلة، المساعدين
-import { all, catIdFor, get, getSession, kvGet, kvSet, modeFromName, run, saveCurriculum, setSession, tx, type Row } from "./db.ts";
+import { catIdFor, count, find, getSession, insert, kvGet, kvSet, modeFromName, one, put, remove, saveCurriculum, setSession, sumOf, tx, update, type Row } from "./db.ts";
 import { BULK_HELP, DAYS, DAY_ORDER, DEFAULT_FEE, GOVS, GRADES, MODE_ICON, MODE_NEXT, PERMS, STORE_URL, orderReady, toLatinDigits } from "./config.ts";
 import {
-  allCats, can, cat, centerName, chapters, govMode, groupId, hoursText, isAdmin, newOrdersCount, orderItems, placeOf, product, products, profileText, qHours, qWhere,
+  allCats, can, cat, centerName, chapters, govMode, groupId, hoursText, isAdmin, newOrdersCount, orderItems, ordersByIds, placeOf, product, products, profileText, qHours, qWhere,
   searchStudents, setStudentView, staffAccount, staffName, staffRow, student, topics,
 } from "./data.ts";
 import { chapterLabel, examsPageLink, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
@@ -32,11 +32,12 @@ export async function adminMenuFor(uid: number): Promise<View> {
   }
   if (await can(uid, "students")) kb.push([btn("🎓 الطلاب", "a:st")], [btn("🏫 المراكز الامتحانية", "a:ce")]);
   if (await can(uid, "q")) {
-    const n = (await get("SELECT COUNT(*) n FROM questions WHERE status='open'"))!.n;
+    const n = await count("questions", { status: "open" });
     kb.push([btn(`❓ الأسئلة اللي تنتظر جواب (${n})`, "a:oq")]);
   }
   if (await isAdmin(uid)) {
-    const r = (await get("SELECT COUNT(*) n, IFNULL(SUM(total),0) t FROM orders WHERE printed=3 AND office_id IS NOT NULL AND created LIKE ?", todayStr() + "%"))!;
+    const sold = await find("orders", { printed: 3 }, { where: (o) => o.office_id !== null && String(o.created).startsWith(todayStr()) });
+    const r = { n: sold.length, t: sumOf(sold, "total") };
     kb.push([btn(`🏬 المكتبات — اليوم: ${r.n} بيعة · ${money(r.t)}`, "a:lib")], [btn("⏰ أوقات استقبال الأسئلة", "a:hr")], [btn("📚 الفصول والمواضيع", "a:cur")],
       [btn("👥 المساعدين والصلاحيات", "a:sf")], [btn("🔗 ربط مجموعة الأسئلة", "a:grp")]);
   }
@@ -59,12 +60,12 @@ async function adminCat(cid: number): Promise<View> {
     "(طالب الحضوري يشوف 🏫 و 🔄، وطالب الإلكتروني يشوف 💻 و 🔄)", kb];
 }
 async function adminFees(): Promise<View> {
-  const fees = Object.fromEntries((await all("SELECT * FROM fees")).map((r) => [r.gov, r.fee]));
+  const fees = Object.fromEntries((await find("fees")).map((r) => [r.gov, r.fee]));
   const kb = chunk(GOVS.map((g, i) => btn(`${g}: ${num(fees[g] ?? DEFAULT_FEE)}`, `a:fee:${i}`)), 2);
   kb.push([btn("💲 نفس السعر لكل المحافظات", "a:feeall")], [btn("⬅️ رجوع", "a:menu")]);
   return ["<b>🚚 أسعار التوصيل</b>\nاضغط على المحافظة حتى تغير سعرها:", kb];
 }
-const pendingOrders = async () => await all("SELECT * FROM orders WHERE IFNULL(printed,0)=0 ORDER BY id LIMIT 60");
+const pendingOrders = async () => await find("orders", {}, { where: (o) => !o.printed, order: ["id"], limit: 60 });
 function pendView(pend: Row[], sel: Set<number>): View {
   if (!pend.length) return ["✅ لا توجد طلبات جديدة. كل الطلبات مطبوعة.", [[btn("⬅️ رجوع", "a:menu")]]];
   const kb: Kb = pend.map((o) => [btn(`${sel.has(o.id) ? "☑️" : "⬜️"}  #${o.id}  ${words(o.name).slice(0, 2).join(" ")}  —  ${o.gov}  —  ${num(o.total)}`, `a:t:${o.id}`)]);
@@ -74,18 +75,21 @@ function pendView(pend: Row[], sel: Set<number>): View {
   return [`<b>🖨 الطلبات الجديدة (غير مطبوعة): ${pend.length}</b>\nاضغط على الطلبات حتى تحددها ☑️، بعدين اضغط «إنشاء PDF».`, kb];
 }
 async function studentsStats() {
-  const f = async (q: string, ...a: string[]): Promise<number> => (await get("SELECT COUNT(*) n FROM students" + q, ...a))!.n;
-  return { all: await f(""), g6: await f(" WHERE grade=?", GRADES[0]), g5: await f(" WHERE grade=?", GRADES[1]), in: await f(" WHERE exam='حضوري'"),
-    on: await f(" WHERE exam='إلكتروني'"), ar: await f(" WHERE curr='عربي'"), en: await f(" WHERE curr='إنجليزي'") };
+  const rows = await find("students");
+  const f = (col: string, v: string) => rows.filter((r) => r[col] === v).length;
+  return { all: rows.length, g6: f("grade", GRADES[0]), g5: f("grade", GRADES[1]), in: f("exam", "حضوري"),
+    on: f("exam", "إلكتروني"), ar: f("curr", "عربي"), en: f("curr", "إنجليزي") };
 }
 const studentCardKb = (sid: number): Kb => [[btn("🏫 تغيير المركز الامتحاني", `a:sc:${sid}`)], [btn("🔄 تغيير نوع الامتحان", `a:se:${sid}`)],
   [btn("🎓 تغيير صفه بالمدرسة", `a:sg:${sid}`)], [btn("✏️ تعديل كل معلوماته (فورمة)", `a:sw:${sid}`)], [btn("🗑 حذف تسجيله (يسجل من جديد)", `a:sx:${sid}`)]];
-const centersOf = async (aid: number) => await all(`SELECT centers.*, (SELECT COUNT(*) FROM students WHERE center_id=centers.id) n
-  FROM centers WHERE area_id=? AND active=1 ORDER BY id`, aid);
+const centersOf = async (aid: number): Promise<Row[]> => {
+  const cs = await find("centers", { area_id: aid, active: 1 }, { order: ["id"] });
+  return Promise.all(cs.map(async (c) => ({ ...c, n: await count("students", { center_id: c.id }) })));
+};
 async function centersOverview(): Promise<View> {
   const lines = ["<b>🏫 المراكز الامتحانية</b>", ""];
   const kb: Kb = [];
-  for (const a of await all("SELECT * FROM areas WHERE active=1 ORDER BY gov, id")) {
+  for (const a of await find("areas", { active: 1 }, { order: ["gov", "id"] })) {
     const cs = await centersOf(a.id);
     lines.push(`📍 <b>${esc(a.name)}</b> (${esc(a.gov)}) — ${cs.reduce((s, x) => s + x.n, 0)} طالب`);
     for (const x of cs) lines.push(`    🏫 ${esc(x.name)}: <b>${x.n}</b> طالب`);
@@ -95,13 +99,13 @@ async function centersOverview(): Promise<View> {
   return [lines.join("\n"), kb];
 }
 async function areaView(aid: number): Promise<View> {
-  const a = (await get("SELECT * FROM areas WHERE id=?", aid))!;
+  const a = (await one("areas", { id: aid }))!;
   const kb: Kb = (await centersOf(aid)).map((x) => [btn(`🏫 ${x.name} (${x.n} طالب)`, `a:cc:${x.id}`), btn("🗑", `a:cd:${x.id}`)]);
   kb.push([btn("➕ مركز جديد بهاي المنطقة", `a:nc2:${aid}`)], [btn("🗑 حذف المنطقة كلها", `a:cad:${aid}`)], [btn("⬅️ رجوع للمراكز", "a:ce")]);
   return [`<b>📍 ${esc(a.name)}</b> (${esc(a.gov)})\nاضغط على المركز حتى تطلع قائمة طلابه PDF.`, kb];
 }
 async function govmodeView(): Promise<View> {
-  const modes = Object.fromEntries((await all("SELECT * FROM govmode")).map((r) => [r.gov, r.mode]));
+  const modes = Object.fromEntries((await find("govmode")).map((r) => [r.gov, r.mode]));
   const kb = chunk(GOVS.map((g, i) => btn(`${g}: ${MODE_ICON[modes[g] ?? "online"]}`, `a:gm:${i}`)), 2);
   kb.push([btn("⬅️ رجوع", "a:ce")]);
   return ["<b>🗺 نوع الامتحان لكل محافظة</b>\nاضغط على المحافظة حتى تغيرها:\n🏫 حضوري بس — 💻 إلكتروني بس — 🔄 الطالب يختار", kb];
@@ -115,7 +119,7 @@ async function hoursView(): Promise<View> {
 }
 const curriculumText = async () => (await Promise.all((await chapters()).map(async (ch) => [`# ${ch.ar} | ${ch.en ?? ""}`, ...(await topics(ch.id)).map((t) => `${t.ar} | ${t.en ?? ""} = ${t.lectures}`)]))).flat().join("\n");
 async function staffView(): Promise<View> {
-  const rows = await all("SELECT * FROM staff ORDER BY name");
+  const rows = await find("staff", {}, { order: ["name"] });
   const kb: Kb = rows.map((s) => [btn("👤 " + s.name, `a:sfv:${s.user_id}`), btn("🗑", `a:sfd:${s.user_id}`)]);
   kb.push([btn("➕ إضافة مساعد", "a:sfa")], [btn("⬅️ رجوع", "a:menu")]);
   return [rows.length ? "<b>👥 المساعدين</b>\nاضغط على المساعد حتى تحدد صلاحياته." : "<b>👥 المساعدين</b>\nلا يوجد مساعدين بعد.", kb];
@@ -130,7 +134,7 @@ async function staffOne(sid: number): Promise<View> {
 }
 async function staffAccountView(sid: number): Promise<View> {
   const a = await staffAccount(sid);
-  const pays = await all("SELECT * FROM staff_pay WHERE staff_id=? ORDER BY id DESC LIMIT 8", sid);
+  const pays = await find("staff_pay", { staff_id: sid }, { order: ["-id"], limit: 8 });
   const s = await staffRow(sid) ?? { name: "مساعد" };
   const lines = [`<b>💰 حساب ${esc(s.name)}</b>`, "", `🎯 الرصيد المسموح: <b>${a.limit ? money(a.limit) : "بدون حد"}</b>`,
     `🛒 كل مبيعاته بالمكتب: <b>${money(a.sold)}</b>`, `✅ سلّمك: <b>${money(a.paid)}</b>`, `🔴 <b>باقي بذمته (لازم يسلمك): ${money(a.owed)}</b>`];
@@ -161,6 +165,10 @@ async function bulkAdd(text: string) {
   const added: string[] = [], bad: string[] = [];
   let cur: number | null = null;
   await tx(async () => {
+    // Firestore ممكن يعيد العملية، فتبدي من الصفر كل مرة
+    added.length = 0;
+    bad.length = 0;
+    cur = null;
     for (const raw of text.split(/\r?\n/)) {
       const line = raw.trim();
       if (!line) continue;
@@ -173,7 +181,7 @@ async function bulkAdd(text: string) {
       const pr = m ? parsePrice(m[2]) : null;
       if (!m || pr === null) { bad.push(line); continue; }
       cur ??= await catIdFor("منتجات أخرى");
-      await run("INSERT INTO products(name, price, cat_id, mode) VALUES(?,?,?,?)", m[1].trim(), pr, cur, modeFromName(m[1]));
+      await insert("products", { name: m[1].trim(), price: pr, cat_id: cur, mode: modeFromName(m[1]) });
       added.push(m[1].trim());
     }
   });
@@ -190,7 +198,7 @@ export async function onAdminText(chat: number, uid: number, text: string, st: s
     const sid: number = data.sid;
     await setSession(uid, "", {});
     if (st === "a:sfy") {
-      await run("INSERT INTO staff_pay(staff_id, amount, created) VALUES(?,?,?)", sid, amt, stamp());
+      await insert("staff_pay", { staff_id: sid, amount: amt, created: stamp() });
       await send(sid, `✅ قصي العميري سجّل استلام <b>${money(amt)}</b> منك.\n🔴 باقي بذمتك: <b>${money((await staffAccount(sid)).owed)}</b>`);
       await send(chat, "✅ انسجلت الدفعة.", { replyKb: await mainKb(uid) });
     } else {
@@ -215,13 +223,13 @@ export async function onAdminText(chat: number, uid: number, text: string, st: s
     return true;
   }
   if (st === "a:na2") {
-    const aid = await run("INSERT INTO areas(gov, name) VALUES(?,?)", data.gov, text.trim());
+    const aid = await insert("areas", { gov: data.gov, name: text.trim() });
     await setSession(uid, "a:nc3", { aid });
     await send(chat, "✅ انضافت المنطقة. هسه اكتب اسم أول مركز امتحاني بيها:");
     return true;
   }
   if (st === "a:nc3") {
-    await run("INSERT INTO centers(area_id, name) VALUES(?,?)", data.aid, text.trim());
+    await insert("centers", { area_id: data.aid, name: text.trim() });
     await setSession(uid, "", {});
     await view(await areaView(data.aid), "✅ انضاف المركز.\n\n");
     return true;
@@ -252,7 +260,7 @@ export async function onAdminText(chat: number, uid: number, text: string, st: s
     return true;
   }
   if (st === "a:sfa2") {
-    await run("INSERT OR REPLACE INTO staff(user_id, name, perms) VALUES(?,?,?)", data.sid, text.trim(), "q");
+    await put("staff", { user_id: data.sid, name: text.trim(), perms: "q" });
     await setSession(uid, "", {});
     await view(await staffOne(data.sid), "✅ انضاف المساعد، وصلاحيته هسه الأسئلة العلمية بس.\nلازم تضيفه هم لمجموعة الأسئلة حتى يگدر يجاوب.\n\n");
     await api("sendMessage", { chat_id: data.sid, text: "✅ تمت إضافتك مساعد بالبوت. اكتب /start" });
@@ -281,7 +289,7 @@ export async function onAdminText(chat: number, uid: number, text: string, st: s
   if (st === "a:add_price") {
     const pr = parsePrice(text);
     if (pr === null) { await send(chat, "⚠️ اكتب السعر أرقام فقط، مثل 15000"); return true; }
-    await run("INSERT INTO products(name, price, cat_id, mode) VALUES(?,?,?,?)", data.new_name, pr, data.cat, modeFromName(data.new_name));
+    await insert("products", { name: data.new_name, price: pr, cat_id: data.cat, mode: modeFromName(data.new_name) });
     await setSession(uid, "", {});
     await send(chat, `✅ تمت إضافة «${esc(data.new_name)}» بسعر ${money(pr)}`);
     await view(await adminCat(data.cat));
@@ -290,8 +298,8 @@ export async function onAdminText(chat: number, uid: number, text: string, st: s
   if (st === "a:edit_price") {
     const pr = parsePrice(text);
     if (pr === null) { await send(chat, "⚠️ اكتب السعر أرقام فقط"); return true; }
-    await run("UPDATE products SET price=? WHERE id=?", pr, data.pid);
-    const cid = (await get("SELECT cat_id FROM products WHERE id=?", data.pid))!.cat_id;
+    await update("products", { id: data.pid }, { price: pr });
+    const cid = (await one("products", { id: data.pid }))!.cat_id;
     await setSession(uid, "", {});
     await send(chat, `✅ تم تعديل السعر إلى ${money(pr)}`);
     await view(await adminCat(cid));
@@ -300,8 +308,7 @@ export async function onAdminText(chat: number, uid: number, text: string, st: s
   if (st === "a:fee") {
     const pr = parsePrice(text);
     if (pr === null) { await send(chat, "⚠️ اكتب السعر أرقام فقط"); return true; }
-    if (data.gov === "*") await run("UPDATE fees SET fee=?", pr);
-    else await run("UPDATE fees SET fee=? WHERE gov=?", pr, data.gov);
+    await update("fees", data.gov === "*" ? {} : { gov: data.gov }, { fee: pr });
     await setSession(uid, "", {});
     await send(chat, "✅ تم تعديل سعر التوصيل.");
     await view(await adminFees());
@@ -336,7 +343,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     const pid = Number(d.slice(5));
     const p = await product(pid);
     if (p) {
-      await run("UPDATE products SET mode=? WHERE id=?", MODE_NEXT[p.mode || "both"], pid);
+      await update("products", { id: pid }, { mode: MODE_NEXT[p.mode || "both"] });
       await editV(await adminCat(p.cat_id));
     }
   } else if (d.startsWith("a:lc:")) await editV(await adminCat(Number(d.slice(5))));
@@ -349,7 +356,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     await send(chat, "🔍 اكتب اسم الطالب (أو جزء منه) أو رقم هاتفه:");
   } else if (d === "a:5th" || d === "a:stall") {
     const fifth = d === "a:5th";
-    const rows = fifth ? await all("SELECT * FROM students WHERE grade=? ORDER BY name", GRADES[1]) : await all("SELECT * FROM students ORDER BY grade, name");
+    const rows = fifth ? await find("students", { grade: GRADES[1] }, { order: ["name"] }) : await find("students", {}, { order: ["grade", "name"] });
     await listPdf(chat, fifth ? "طلاب الخامس العلمي" : "كل الطلاب المسجلين", ["الاسم", "الصف", "المنهج", "المحافظة", "الهاتف 1", "الهاتف 2", "الامتحان"],
       await Promise.all(rows.map(async (r) => [r.name, r.grade, r.curr, placeOf(r), r.phone1, r.phone2, (r.exam ?? "") + (r.center_id ? " - " + await centerName(r.center_id) : "")])),
       fifth ? "students_5th" : "students_all");
@@ -376,7 +383,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
   else if (d.startsWith("a:ofr:")) { await sendPaperReceipt(chat, Number(d.slice(6))); return "⏳"; }
   else if (d.startsWith("a:ofp:")) {
     const day = d.slice(6);
-    const rows = await all("SELECT * FROM orders WHERE printed=3 AND created LIKE ? ORDER BY id", day + "%");
+    const rows = await find("orders", { printed: 3 }, { where: (o) => String(o.created).startsWith(day), order: ["id"] });
     if (!rows.length) return "ما أكو مبيعات بهذا اليوم";
     const rowsOut = await Promise.all(rows.map(async (r) => [`#${r.id}`, r.created.slice(11), r.name, orderItems(r).map((i) => `${i.name} ×${i.qty}`).join("، "), num(r.total), await staffName(r.seller)]));
     await listPdf(chat, `مبيعات المكتب — ${day} — المجموع ${money(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ", "البائع"], rowsOut, "office_" + day);
@@ -392,13 +399,13 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     const s = await student(sid);
     if (s) {
       const next = s.grade === GRADES[0] ? GRADES[1] : GRADES[0];
-      await run("UPDATE students SET grade=? WHERE user_id=?", next, sid);
+      await update("students", { user_id: sid }, { grade: next });
       await send(chat, `✅ صار صفه بالمدرسة: <b>${next}</b>`);
     }
   } else if (d.startsWith("a:sxy:")) {
     const sid = Number(d.slice(6));
     const s = await student(sid);
-    await run("DELETE FROM students WHERE user_id=?", sid);
+    await remove("students", { user_id: sid });
     await setSession(sid, "", {});
     await edit(chat, mid, `🗑 تم حذف تسجيل <b>${esc(s ? s.name : sid)}</b>.\nلمن يفتح البوت ويضغط /start يسجل من جديد.\n(طلباته وأسئلته القديمة باقية)`);
   } else if (d.startsWith("a:sx:")) {
@@ -413,7 +420,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     const s = await student(sid);
     if (s) {
       const next = s.exam === "حضوري" ? "إلكتروني" : "حضوري";
-      await run("UPDATE students SET exam=?, center_id=CASE WHEN ?='إلكتروني' THEN NULL ELSE center_id END WHERE user_id=?", next, next, sid);
+      await update("students", { user_id: sid }, (r) => ({ exam: next, center_id: next === "إلكتروني" ? null : r.center_id }));
       if (next === "حضوري") {
         await send(chat, "تم تغييره إلى حضوري. هسه اختار مركزه 👇");
         return await onAdminCb(chat, uid, mid, `a:sc:${sid}`);
@@ -422,31 +429,34 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     }
   } else if (d.startsWith("a:scs:")) {
     const [, , sid, cid] = d.split(":");
-    await run("UPDATE students SET center_id=?, exam='حضوري' WHERE user_id=?", Number(cid), Number(sid));
+    await update("students", { user_id: Number(sid) }, { center_id: Number(cid), exam: "حضوري" });
     await edit(chat, mid, `✅ تم تغيير المركز إلى: ${esc(await centerName(Number(cid)))}`);
     await api("sendMessage", { chat_id: Number(sid), parse_mode: "HTML", text: `ℹ️ تم تغيير مركزك الامتحاني إلى: <b>${esc(await centerName(Number(cid)))}</b>` });
   } else if (d.startsWith("a:sc:")) {
     const sid = Number(d.slice(5));
-    const rows = await all(`SELECT centers.id, centers.name cn, areas.name an FROM centers JOIN areas ON areas.id=centers.area_id
-      WHERE centers.active=1 AND areas.active=1 ORDER BY areas.gov, areas.id, centers.id`);
+    const rows: Row[] = [];
+    const cs = await find("centers", { active: 1 }, { order: ["id"] });
+    for (const a of await find("areas", { active: 1 }, { order: ["gov", "id"] })) {
+      for (const c of cs) if (c.area_id === a.id) rows.push({ id: c.id, cn: c.name, an: a.name });
+    }
     await send(chat, "اختر المركز الجديد للطالب:", { kb: rows.map((r) => [btn(`🏫 ${r.cn} (${r.an})`, `a:scs:${sid}:${r.id}`)]) });
   } else if (d === "a:ce") await sendV(await centersOverview());
   else if (d.startsWith("a:cad:")) {
     const aid = Number(d.slice(6));
     await tx(async () => {
-      await run("UPDATE areas SET active=0 WHERE id=?", aid);
-      await run("UPDATE centers SET active=0 WHERE area_id=?", aid);
+      await update("areas", { id: aid }, { active: 0 });
+      await update("centers", { area_id: aid }, { active: 0 });
     });
     await editV(await centersOverview(), "🗑 انحذفت المنطقة.\n\n");
   } else if (d.startsWith("a:ca:")) await editV(await areaView(Number(d.slice(5))));
   else if (d.startsWith("a:cd:")) {
     const cid = Number(d.slice(5));
-    const aid = (await get("SELECT area_id FROM centers WHERE id=?", cid))!.area_id;
-    await run("UPDATE centers SET active=0 WHERE id=?", cid);
+    const aid = (await one("centers", { id: cid }))!.area_id;
+    await update("centers", { id: cid }, { active: 0 });
     await editV(await areaView(aid), "🗑 انحذف المركز (طلابه يبقون مسجلين عليه، غيّرهم من 🎓 الطلاب).\n\n");
   } else if (d.startsWith("a:cc:")) {
     const cid = Number(d.slice(5));
-    const rows = await all("SELECT * FROM students WHERE center_id=? ORDER BY name", cid);
+    const rows = await find("students", { center_id: cid }, { order: ["name"] });
     await listPdf(chat, "طلاب مركز " + await centerName(cid), ["الاسم", "الصف", "المنهج", "الهاتف 1", "الهاتف 2"],
       rows.map((r) => [r.name, r.grade, r.curr, r.phone1, r.phone2]), `center_${cid}`);
   } else if (d === "a:na") {
@@ -460,10 +470,10 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
   } else if (d === "a:gm") await editV(await govmodeView());
   else if (d.startsWith("a:gm:")) {
     const g = GOVS[Number(d.slice(5))];
-    await run("UPDATE govmode SET mode=? WHERE gov=?", MODE_NEXT[await govMode(g)], g);
+    await update("govmode", { gov: g }, { mode: MODE_NEXT[await govMode(g)] });
     await editV(await govmodeView());
   } else if (d === "a:oq") {
-    const qs = await all("SELECT * FROM questions WHERE status='open' ORDER BY id LIMIT 30");
+    const qs = await find("questions", { status: "open" }, { order: ["id"], limit: 30 });
     const g = await groupId();
     if (!qs.length) { await send(chat, "✅ ماكو أسئلة تنتظر جواب."); return null; }
     const base = g && String(g).startsWith("-100") ? `https://t.me/c/${String(g).slice(4)}/` : null;
@@ -509,11 +519,11 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     if (s) {
       const ps = new Set(String(s.perms ?? "").split(",").filter(Boolean));
       if (ps.has(k)) ps.delete(k); else ps.add(k);
-      await run("UPDATE staff SET perms=? WHERE user_id=?", [...ps].sort().join(","), Number(sid));
+      await update("staff", { user_id: Number(sid) }, { perms: [...ps].sort().join(",") });
     }
     await editV(await staffOne(Number(sid)));
   } else if (d.startsWith("a:sfd:")) {
-    await run("DELETE FROM staff WHERE user_id=?", Number(d.slice(6)));
+    await remove("staff", { user_id: Number(d.slice(6)) });
     await editV(await staffView());
   } else if (d === "a:sfa") {
     await setSession(uid, "a:sfa", {});
@@ -539,8 +549,8 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
   else if (d.startsWith("a:dc2:")) {
     const cid = Number(d.slice(6));
     await tx(async () => {
-      await run("UPDATE cats SET active=0 WHERE id=?", cid);
-      await run("UPDATE products SET active=0 WHERE cat_id=?", cid);
+      await update("cats", { id: cid }, { active: 0 });
+      await update("products", { cat_id: cid }, { active: 0 });
     });
     await editV(await adminCats(), "🗑 تم حذف القسم.\n\n");
   } else if (d.startsWith("a:dc:")) {
@@ -554,8 +564,8 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     }
   } else if (d.startsWith("a:del2:")) {
     const pid = Number(d.slice(7));
-    await run("UPDATE products SET active=0 WHERE id=?", pid);
-    const cid = (await get("SELECT cat_id FROM products WHERE id=?", pid))!.cat_id;
+    await update("products", { id: pid }, { active: 0 });
+    const cid = (await one("products", { id: pid }))!.cat_id;
     await editV(await adminCat(cid), "🗑 تم الحذف.\n\n");
   } else if (d.startsWith("a:del:")) {
     const p = await product(Number(d.slice(6)));
@@ -593,10 +603,10 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
   } else if (d.startsWith("a:done:")) {
     const batch = await kvGet("batch_" + d.slice(7));
     const ids = batch ? batch.split(",").map(Number) : [];
-    const rows = new Map(ids.length ? (await all(`SELECT * FROM orders WHERE id IN (${ids.map(() => "?").join(",")})`, ...ids)).map((r) => [r.id as number, r] as const) : []);
+    const rows = new Map((await ordersByIds(ids)).map((r) => [r.id as number, r] as const));
     const gone = ids.filter((i) => rows.get(i)?.printed === 2);
     const ready = ids.filter((i) => { const p = rows.get(i)?.printed; return rows.has(i) && (p === 0 || p === null); });
-    await tx(async () => { for (const i of ready) await run("UPDATE orders SET printed=1 WHERE id=?", i); });
+    await tx(async () => { for (const i of ready) await update("orders", { id: i }, { printed: 1 }); });
     for (const i of ready) {
       const student_id = rows.get(i)!.user_id;
       const cm = await kvGet(`ocmsg_${i}`);
@@ -617,15 +627,15 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     await sendV(pendView(await pendingOrders(), new Set()));
   } else if (d === "a:keep") await edit(chat, mid, "تمام، الطلبات بقت بالطلبات الجديدة.");
   else if (d === "a:printed") {
-    const os = await all("SELECT * FROM orders WHERE printed=1 ORDER BY id DESC LIMIT 20");
+    const os = await find("orders", { printed: 1 }, { order: ["-id"], limit: 20 });
     if (!os.length) { await send(chat, "لا توجد طلبات مطبوعة بعد."); return null; }
     await send(chat, "<b>🗂 آخر الطلبات المطبوعة</b>\nاضغط على الطلب حتى تشوفه، أو «إرجاع» حتى يرجع للطلبات الجديدة.",
       { kb: os.map((o) => [btn(`#${o.id}  ${words(o.name)[0]}  —  ${o.gov}`, `a:v:${o.id}`), btn("↩️ إرجاع", `a:un:${o.id}`)]) });
   } else if (d.startsWith("a:un:")) {
-    await run("UPDATE orders SET printed=0 WHERE id=?", Number(d.slice(5)));
+    await update("orders", { id: Number(d.slice(5)) }, { printed: 0 });
     return "رجع للطلبات الجديدة";
   } else if (d.startsWith("a:v:")) {
-    const o = await get("SELECT * FROM orders WHERE id=?", Number(d.slice(4)));
+    const o = await one("orders", { id: Number(d.slice(4)) });
     if (o) await send(chat, orderText(o).replace("🆕 <b>طلب جديد", "<b>طلب"), { kb: orderKb(o) });
   }
   return null;

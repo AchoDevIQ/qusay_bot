@@ -1,6 +1,6 @@
 // البيع بالمكتب والمكتبات (نقاط البيع). printed: 0 طلب توصيل جديد، 1 تجهز، 2 ملغي، 3 بيع بالمكتب
 import { randomInt } from "node:crypto";
-import { all, get, kvGet, kvSet, run, setSession, tx, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, one, put, remove, setSession, sumOf, tx, update, type Row } from "./db.ts";
 import { ADMIN_IDS, BTN_OFFICE, toLatinDigits } from "./config.ts";
 import {
   can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, product, staffAccount, staffName, student, tooManyFails, viewingAsStudent,
@@ -39,11 +39,11 @@ export async function onPosSale(chat: number, uid: number, o: any) {
       return;
     }
   }
-  const oid = await run(`INSERT INTO orders(user_id, username, name, curr, gov, side, area, phone1, phone2, items, subtotal, fee, total,
-    created, printed, seller, office_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-  sid, s.username || "", s.name, s.curr || "", off ? off.name : "المكتب", "", "بيع بالمكتب",
-  s.phone1, s.phone2, JSON.stringify(items), total, 0, total, stamp(), 3, uid, off ? off.id : null);
-  const od = (await get("SELECT * FROM orders WHERE id=?", oid))!;
+  const oid = await insert("orders", {
+    user_id: sid, username: s.username || "", name: s.name, curr: s.curr || "", gov: off ? off.name : "المكتب", side: "", area: "بيع بالمكتب",
+    phone1: s.phone1, phone2: s.phone2, items: JSON.stringify(items), subtotal: total, fee: 0, total, created: stamp(), printed: 3, seller: uid, office_id: off ? off.id : null,
+  });
+  const od = (await one("orders", { id: oid }))!;
   await setSession(uid, "", {});
   // الوصل الإلكتروني الملون للطالب
   let sent = false;
@@ -83,14 +83,22 @@ export function officeKb(day: string): Kb {
   return [nav, [btn("📅 كل الأيام", "a:ofd")], [btn("📄 سجل هذا اليوم PDF", `a:ofp:${day}`)], [btn("🏪 بيع جديد", "a:pos")], [btn("⬅️ رجوع", "a:menu")]];
 }
 export async function officeDays(): Promise<[string, Kb]> {
-  const rows = await all("SELECT substr(created,1,10) d, COUNT(*) n, SUM(total) t FROM orders WHERE printed=3 GROUP BY d ORDER BY d DESC LIMIT 31");
+  const days = new Map<string, { d: string; n: number; t: number }>();
+  for (const o of await find("orders", { printed: 3 })) {
+    const d = String(o.created).slice(0, 10);
+    const day = days.get(d) ?? { d, n: 0, t: 0 };
+    day.n++;
+    day.t += o.total;
+    days.set(d, day);
+  }
+  const rows = [...days.values()].sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 31);
   if (!rows.length) return ["ما أكو مبيعات بالمكتب بعد.", [[btn("⬅️ رجوع", "a:of")]]];
   const lines = ["<b>📅 سجل مبيعات المكتب (آخر 31 يوم)</b>", "", ...rows.map((r) => `• ${r.d} — ${r.n} بيعة — <b>${money(r.t)}</b>`),
     "", `المجموع: <b>${money(rows.reduce((s, r) => s + r.t, 0))}</b>`];
   return [lines.join("\n"), [...rows.slice(0, 15).map((r) => [btn(`📊 ${r.d}  (${money(r.t)})`, `a:of:${r.d}`)]), [btn("⬅️ رجوع", "a:of")]]];
 }
 export async function officeView(day = todayStr()) {
-  const rows = await all("SELECT * FROM orders WHERE printed=3 AND created LIKE ? ORDER BY id", day + "%");
+  const rows = await find("orders", { printed: 3 }, { where: (o) => String(o.created).startsWith(day), order: ["id"] });
   const tot = rows.reduce((s, r) => s + r.total, 0);
   const lines = [`<b>📊 مبيعات المكتب — ${day}${day === todayStr() ? " (اليوم)" : ""}</b>`, "", `عدد المبيعات: <b>${rows.length}</b>`, `المجموع: <b>${money(tot)}</b>`, ""];
   const by = new Map<number | null, number>();
@@ -112,8 +120,8 @@ function salesText(title: string, rows: Row[], limit = 30) {
   const t = lines.join("\n");
   return t.length < 3900 ? t : cut(t, 3850) + "\n…";
 }
-const officeDayRows = async (oid: number, day: string) => await all("SELECT * FROM orders WHERE printed=3 AND office_id=? AND created LIKE ? ORDER BY id", oid, day + "%");
-const officeOpenRows = async (oid: number) => await all("SELECT * FROM orders WHERE printed=3 AND office_id=? AND settle_id IS NULL ORDER BY id", oid);
+const officeDayRows = async (oid: number, day: string) => await find("orders", { printed: 3, office_id: oid }, { where: (o) => String(o.created).startsWith(day), order: ["id"] });
+const officeOpenRows = async (oid: number) => await find("orders", { printed: 3, office_id: oid, settle_id: null }, { order: ["id"] });
 function officePdf(chat: number, title: string, rows: Row[], fname: string) {
   const data = rows.map((r) => [`#${r.id}`, r.created, r.name, itemsLine(r), num(r.total)]);
   return listPdf(chat, `${title} — المجموع ${money(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ"], data, fname);
@@ -162,16 +170,16 @@ export async function officeCb(chat: number, uid: number, d: string): Promise<st
   } else if (d.startsWith("of:sv:")) {
     await settleDetail(chat, oid, Number(d.slice(6)));
   } else if (d.startsWith("of:rc:")) {
-    const r = await get("SELECT id FROM orders WHERE id=? AND office_id=?", Number(d.slice(6)), oid);
+    const r = await one("orders", { id: Number(d.slice(6)), office_id: oid });
     if (r) await sendColorReceipt(chat, r.id);
   } else if (d.startsWith("of:r:")) {
-    const r = await get("SELECT id FROM orders WHERE id=? AND office_id=?", Number(d.slice(5)), oid);
+    const r = await one("orders", { id: Number(d.slice(5)), office_id: oid });
     if (r) await sendPaperReceipt(chat, r.id);
   } else if (d === "of:m") await officeMenu(chat, uid);
   return null;
 }
 async function settlementsView(oid: number, pre: "of" | "a"): Promise<[string, Kb]> {
-  const rows = await all("SELECT * FROM settlements WHERE office_id=? ORDER BY id DESC LIMIT 30", oid);
+  const rows = await find("settlements", { office_id: oid }, { order: ["-id"], limit: 30 });
   const back = pre === "of" ? "of:m" : `a:libv:${oid}`;
   if (!rows.length) return ["🗂 ما أكو محاسبات سابقة بعد.", [[btn("⬅️ رجوع", back)]]];
   const lines = ["<b>🗂 المحاسبات السابقة (الأرشيف)</b>", "", ...rows.map((r) => `• ${r.created} — <b>${money(r.amount)}</b> (${r.n} بيعة)`)];
@@ -180,15 +188,15 @@ async function settlementsView(oid: number, pre: "of" | "a"): Promise<[string, K
   return [lines.join("\n"), kb];
 }
 async function settleDetail(chat: number, oid: number, stid: number) {
-  const st = await get("SELECT * FROM settlements WHERE id=? AND office_id=?", stid, oid);
+  const st = await one("settlements", { id: stid, office_id: oid });
   if (!st) return;
-  const rows = await all("SELECT * FROM orders WHERE printed=3 AND office_id=? AND settle_id=? ORDER BY id", oid, stid);
+  const rows = await find("orders", { printed: 3, office_id: oid, settle_id: stid }, { order: ["id"] });
   await officePdf(chat, `${(await office(oid))?.name ?? ""} — محاسبة ${st.created}`, rows, `settle_${stid}`);
 }
 
 // ---------- واجهة الإدارة للمكتبات
 async function libsView(): Promise<[string, Kb]> {
-  const offs = await all("SELECT * FROM offices WHERE active=1 ORDER BY id");
+  const offs = await find("offices", { active: 1 }, { order: ["id"] });
   const lines = ["<b>🏬 المكتبات (نقاط البيع)</b>", `📅 اليوم ${todayStr()}`, ""];
   const kb: Kb = [];
   for (const o of offs) {
@@ -204,8 +212,8 @@ async function libView(oid: number): Promise<[string, Kb]> {
   const o = await office(oid);
   if (!o) return await libsView();
   const un = await officeUnsettled(oid), td = await officeDayRows(oid, todayStr()), yd = await officeDayRows(oid, todayStr(1));
-  const us = await all("SELECT * FROM office_users WHERE office_id=?", oid);
-  const st = (await get("SELECT IFNULL(SUM(amount),0) t FROM settlements WHERE office_id=?", oid))!.t;
+  const us = await find("office_users", { office_id: oid });
+  const st = sumOf(await find("settlements", { office_id: oid }), "amount");
   const t = [`<b>🏪 ${esc(o.name)}</b>`, "", `📊 اليوم: <b>${dayTotal(td)}</b> (${td.length})`, `📅 البارحة: <b>${dayTotal(yd)}</b> (${yd.length})`,
     `🔴 غير محاسب عليه: <b>${money(un.total)}</b> (${un.n} بيعة)`, `✅ كل اللي تحاسبتوا عليه: <b>${money(st)}</b>`,
     `🎯 الرصيد المسموح: <b>${o.lim ? money(o.lim) : "بدون حد"}</b>`, "", "<b>👥 الحسابات:</b>",
@@ -245,10 +253,10 @@ export async function libCb(chat: number, uid: number, mid: number, d: string): 
     const un = await officeUnsettled(oid);
     if (un.total !== amt) return "صارت مبيعات جديدة، اضغط «تمت المحاسبة» مرة ثانية";
     await tx(async () => {
-      const id = await run("INSERT INTO settlements(office_id, amount, n, created) VALUES(?,?,?,?)", oid, amt, un.n, stamp());
-      await run("UPDATE orders SET settle_id=? WHERE printed=3 AND office_id=? AND settle_id IS NULL", id, oid);
+      const id = await insert("settlements", { office_id: oid, amount: amt, n: un.n, created: stamp() });
+      await update("orders", { printed: 3, office_id: oid, settle_id: null }, { settle_id: id });
     });
-    const us = await all("SELECT user_id FROM office_users WHERE office_id=?", oid);
+    const us = await find("office_users", { office_id: oid });
     await edit(chat, mid, `✅ تمت المحاسبة ويا <b>${esc((await office(oid))!.name)}</b>: <b>${money(amt)}</b> (${un.n} بيعة)، وانتقلت للأرشيف.`);
     for (const u of us) await send(u.user_id, `✅ <b>تمت المحاسبة</b> ويا قصي العميري\n💰 ${money(amt)} (${un.n} بيعة)\nالمبيعات انتقلت للأرشيف «🗂 المحاسبات السابقة».`);
     await sendView(chat, await libView(oid));
@@ -261,15 +269,15 @@ export async function libCb(chat: number, uid: number, mid: number, d: string): 
   } else if (d.startsWith("a:libar:")) await sendView(chat, await settlementsView(Number(d.slice(8)), "a"));
   else if (d.startsWith("a:lib:sv:")) {
     const stid = Number(d.slice(9));
-    const r = await get("SELECT office_id FROM settlements WHERE id=?", stid);
+    const r = await one("settlements", { id: stid });
     if (r) await settleDetail(chat, r.office_id, stid);
   } else if (d.startsWith("a:libmn:")) {
     await setSession(uid, "a:libm", { oid: Number(d.slice(8)) });
     await send(chat, "✍️ اكتب رقم حساب صاحب المكتبة (يطلعه من البوت إذا كتب كلمة <code>رقمي</code>):", { replyKb: flowKb() });
   } else if (d.startsWith("a:libmd:")) {
     const u = Number(d.slice(8));
-    const r = await get("SELECT office_id FROM office_users WHERE user_id=?", u);
-    await run("DELETE FROM office_users WHERE user_id=?", u);
+    const r = await one("office_users", { user_id: u });
+    await remove("office_users", { user_id: u });
     await send(u, "ℹ️ انشال حسابك من المكتبة.", { replyKb: await mainKb(u) });
     if (r) await sendView(chat, await libView(r.office_id));
   } else if (d.startsWith("a:libm:")) {
@@ -296,8 +304,8 @@ export async function libCb(chat: number, uid: number, mid: number, d: string): 
   } else if (d.startsWith("a:libxy:")) {
     const oid = Number(d.slice(8));
     await tx(async () => {
-      await run("UPDATE offices SET active=0 WHERE id=?", oid);
-      await run("DELETE FROM office_users WHERE office_id=?", oid);
+      await update("offices", { id: oid }, { active: 0 });
+      await remove("office_users", { office_id: oid });
     });
     await sendView(chat, await libsView());
   } else if (d.startsWith("a:libx:")) {
@@ -322,8 +330,8 @@ export async function joinOfficeByCode(chat: number, uid: number, code: string, 
   if (await isStaff(uid)) { await send(chat, "⚠️ هذا الحساب أدمن أو مساعد، ما يصير ينضاف لمكتبة.", { replyKb: await mainKb(uid) }); return; }
   const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || (user.username ?? "");
   await tx(async () => {
-    await run("INSERT OR REPLACE INTO office_users(user_id, office_id, name) VALUES(?,?,?)", uid, oid, cut(name, 40));
-    await run("DELETE FROM kv WHERE k=?", key);
+    await put("office_users", { user_id: uid, office_id: oid, name: cut(name, 40) });
+    await remove("kv", { k: key });
   });
   await setSession(uid, "", {});
   await send(chat, `✅ <b>تمت إضافتك لـ ${esc(o.name)}</b>\nاضغط زر «${BTN_OFFICE}» اللي جوة حتى تبيع وتشوف مبيعاتك 👇`, { replyKb: await mainKb(uid) });
@@ -346,7 +354,7 @@ export function parseAmount(raw: string | null | undefined) {
 /** حالات الكتابة a:lib. يرجع true إذا عالج الرسالة */
 export async function libText(chat: number, uid: number, text: string, st: string, data: Row) {
   if (st === "a:liba") {
-    const oid = await run("INSERT INTO offices(name) VALUES(?)", cut(text.trim(), 60));
+    const oid = await insert("offices", { name: cut(text.trim(), 60) });
     await setSession(uid, "", {});
     await send(chat, "✅ انضافت المكتبة.", { replyKb: await mainKb(uid) });
     await sendView(chat, await libView(oid));
@@ -361,7 +369,7 @@ export async function libText(chat: number, uid: number, text: string, st: strin
   }
   if (st === "a:libm2") {
     const { u, oid } = data;
-    await run("INSERT OR REPLACE INTO office_users(user_id, office_id, name) VALUES(?,?,?)", u, oid, cut(text.trim(), 40));
+    await put("office_users", { user_id: u, office_id: oid, name: cut(text.trim(), 40) });
     await setSession(uid, "", {});
     await send(chat, "✅ انضاف الحساب للمكتبة.", { replyKb: await mainKb(uid) });
     await send(u, `✅ تمت إضافتك لـ <b>${esc((await office(oid))!.name)}</b> بالبوت.\nاضغط زر «${BTN_OFFICE}» اللي جوة 👇`, { replyKb: await mainKb(u) });
@@ -371,14 +379,14 @@ export async function libText(chat: number, uid: number, text: string, st: strin
   if (st === "a:libl") {
     const amt = parseAmount(text);
     if (amt === null || amt < 0) { await send(chat, "⚠️ اكتب رقم صحيح، مثال: <code>20 مليون</code>"); return true; }
-    await run("UPDATE offices SET lim=? WHERE id=?", amt, data.oid);
+    await update("offices", { id: data.oid }, { lim: amt });
     await setSession(uid, "", {});
     await send(chat, "✅ انحفظ.", { replyKb: await mainKb(uid) });
     await sendView(chat, await libView(data.oid));
     return true;
   }
   if (st === "a:libn") {
-    await run("UPDATE offices SET name=? WHERE id=?", cut(text.trim(), 60), data.oid);
+    await update("offices", { id: data.oid }, { name: cut(text.trim(), 60) });
     await setSession(uid, "", {});
     await send(chat, "✅ تغير الاسم.", { replyKb: await mainKb(uid) });
     await sendView(chat, await libView(data.oid));
@@ -393,8 +401,12 @@ const norm = (t: unknown) => String(t ?? "").replace(/[أإآ]/g, "ا").replace(
 async function smartSearch(q: string, limit = 10): Promise<[Row[], number]> {
   const ws = words(toLatinDigits(q));
   if (!ws.length) return [[], 0];
-  const rows = await all(`SELECT students.*, IFNULL(centers.name,'') cn, IFNULL(areas.name,'') an FROM students
-    LEFT JOIN centers ON centers.id=students.center_id LEFT JOIN areas ON areas.id=centers.area_id`);
+  const centers = new Map((await find("centers")).map((c) => [c.id, c]));
+  const areas = new Map((await find("areas")).map((a) => [a.id, a]));
+  const rows: Row[] = (await find("students")).map((s) => {
+    const c = centers.get(s.center_id);
+    return { ...s, cn: c?.name ?? "", an: areas.get(c?.area_id)?.name ?? "" };
+  });
   const out = rows.filter((r) => {
     const hay = norm(["name", "phone1", "phone2", "gov", "side", "area", "curr", "grade", "exam", "cn", "an"].map((k) => r[k] ?? "").join(" "));
     return ws.every((w) => hay.includes(norm(w)));

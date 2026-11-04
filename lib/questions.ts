@@ -184,7 +184,7 @@ export async function onGroupMessage(m: Row) {
   if (m.chat.id !== await groupId() || !m.message_thread_id || !m.is_topic_message) return;
   if (["forum_topic_created", "forum_topic_closed", "forum_topic_reopened", "forum_topic_edited", "new_chat_members", "left_chat_member", "pinned_message"].some((k) => k in m)) return;
   if (text.startsWith("/") || !await can(uid, "q")) return;
-  const q = await one("questions", { thread_id: m.message_thread_id });
+  const q = await one("questions", { thread_id: Number(m.message_thread_id) });
   if (!q) return;
   const s = await student(q.user_id) ?? { curr: "عربي" };
   await api("sendMessage", { chat_id: q.user_id, parse_mode: "HTML", text: `💬 <b>جواب سؤالك #${q.id}</b>\n📍 ${esc(await qWhere(q, s.curr === "إنجليزي"))}` });

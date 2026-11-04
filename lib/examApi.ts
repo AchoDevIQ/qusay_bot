@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { CONTENT_DIR, TOKEN } from "./config.ts";
-import { all, get, initDb, kvGet, kvSet, run, tx, type Row } from "./db.ts";
+import { find, initDb, insert, kvGet, kvSet, maxOf, one, remove, tx, update, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
 import { files } from "./files.ts";
@@ -32,10 +32,10 @@ async function authed(initData: unknown) {
 const generalMinutes = async () => Number(await kvGet("exam_minutes")) || 75;
 
 export async function examList(uid: number) {
-  const exams = await all("SELECT * FROM bank_exams ORDER BY slug, ord");
+  const exams = await find("bank_exams", {}, { order: ["slug", "ord"] });
   const stored = new Set((await Promise.all([...new Set(exams.map((e) => e.slug as string))].map((s) => files().list(`${s}/`)))).flat());
-  const versions = await all("SELECT * FROM bank_versions ORDER BY model");
-  const questions = await all("SELECT * FROM bank_questions ORDER BY n");
+  const versions = await find("bank_versions", {}, { order: ["model"] });
+  const questions = await find("bank_questions", {}, { order: ["n"] });
   const qBy = new Map<number, Row[]>(), vBy = new Map<number, Row[]>();
   for (const q of questions) qBy.set(q.version_id, [...(qBy.get(q.version_id) ?? []), q]);
   for (const v of versions) vBy.set(v.exam_id, [...(vBy.get(v.exam_id) ?? []), v]);
@@ -74,70 +74,70 @@ export async function examAction(body: Row) {
   const id = Number(body.id);
   if (a === "list") return await examList(uid);
   if (a === "kind") {
-    const v = await get("SELECT * FROM bank_versions WHERE id=?", id);
+    const v = await one("bank_versions", { id });
     need(v, "النسخة غير موجودة");
     const next = v!.kind === "mandatory" ? "optional" : "mandatory";
-    await run("UPDATE bank_versions SET kind=? WHERE id=?", next, id);
+    await update("bank_versions", { id }, { kind: next });
     await logEdit(uid, `نسخة ${id}: ${next}`);
   } else if (a === "ok") {
-    const v = await get("SELECT * FROM bank_versions WHERE id=?", id);
+    const v = await one("bank_versions", { id });
     need(v, "النسخة غير موجودة");
-    need(v!.ok || await get("SELECT 1 FROM bank_questions WHERE version_id=?", id), "ضيف سؤال واحد على الأقل");
-    await run("UPDATE bank_versions SET ok=?, issues=? WHERE id=?", v!.ok ? 0 : 1, v!.ok ? JSON.stringify(["موقوفة من الإدارة"]) : "[]", id);
+    need(v!.ok || await one("bank_questions", { version_id: id }), "ضيف سؤال واحد على الأقل");
+    await update("bank_versions", { id }, { ok: v!.ok ? 0 : 1, issues: v!.ok ? JSON.stringify(["موقوفة من الإدارة"]) : "[]" });
     await logEdit(uid, `نسخة ${id}: ${v!.ok ? "إيقاف" : "جاهزة"}`);
   } else if (a === "minutes") {
     const n = intOf(body.value, 5, 600, "الوقت لازم يكون بالدقائق، من 5 إلى 600");
-    need(await get("SELECT 1 FROM bank_exams WHERE id=?", id), "الامتحان غير موجود");
-    await run("UPDATE bank_exams SET minutes=? WHERE id=?", n, id);
+    need(await one("bank_exams", { id }), "الامتحان غير موجود");
+    await update("bank_exams", { id }, { minutes: n });
     await logEdit(uid, `امتحان ${id}: الوقت ${n} دقيقة`);
   } else if (a === "minutesAll") {
     // الامتحان اللي إله وقت خاص يبقى على وقته
     const n = intOf(body.value, 5, 600, "الوقت لازم يكون بالدقائق، من 5 إلى 600");
     await tx(async () => {
-      await run("UPDATE bank_exams SET minutes=? WHERE minutes=?", n, await generalMinutes());
+      await update("bank_exams", { minutes: await generalMinutes() }, { minutes: n });
       await kvSet("exam_minutes", String(n));
     });
     await logEdit(uid, `الوقت العام للامتحانات ${n} دقيقة`);
   } else if (a === "mark") {
     const n = intOf(body.value, 0, 100, "الدرجة لازم رقم كامل من 0 إلى 100");
-    need(await get("SELECT 1 FROM bank_questions WHERE id=?", id), "السؤال غير موجود");
-    await run("UPDATE bank_questions SET max_mark=?, edited=1 WHERE id=?", n, id);
+    need(await one("bank_questions", { id }), "السؤال غير موجود");
+    await update("bank_questions", { id }, { max_mark: n, edited: 1 });
     await logEdit(uid, `سؤال ${id}: الدرجة ${n}`);
   } else if (a === "addExam") {
     const title = String(body.title ?? "").trim().slice(0, 80);
     need(title, "اكتب عنوان الامتحان");
     const n = intOf(body.minutes, 5, 600, "الوقت لازم يكون بالدقائق، من 5 إلى 600");
-    const c = await get("SELECT chapter FROM bank_exams WHERE slug=? LIMIT 1", String(body.slug ?? ""));
+    const c = await one("bank_exams", { slug: String(body.slug ?? "") });
     need(c, "الفصل غير موجود");
-    const ord = ((await get("SELECT IFNULL(MAX(ord),0) m FROM bank_exams WHERE slug=?", String(body.slug)))!.m as number) + 1;
-    await run("INSERT INTO bank_exams(slug, chapter, ord, title, info, minutes, manual) VALUES(?,?,?,?,?,?,1)", String(body.slug), c!.chapter, ord, title, "", n);
+    const ord = maxOf(await find("bank_exams", { slug: String(body.slug) }), "ord") + 1;
+    await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: "", minutes: n, manual: 1 });
     await logEdit(uid, `امتحان جديد: ${title}`);
   } else if (a === "addVersion") {
-    need(await get("SELECT 1 FROM bank_exams WHERE id=?", id), "الامتحان غير موجود");
-    const models = (await all("SELECT model FROM bank_versions WHERE exam_id=?", id)).map((v) => v.model as string);
+    need(await one("bank_exams", { id }), "الامتحان غير موجود");
+    const models = (await find("bank_versions", { exam_id: id })).map((v) => v.model as string);
     const model = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ").find((x) => !models.includes(x));
     need(model, "ماكو حرف باقي");
     const kind = body.kind === "optional" ? "optional" : "mandatory";
-    await run("INSERT INTO bank_versions(exam_id, model, kind, ok, issues, manual) VALUES(?,?,?,0,?,1)", id, model!, kind, JSON.stringify(["لسه تنضاف أسئلتها"]));
+    await insert("bank_versions", { exam_id: id, model: model!, kind, ok: 0, issues: JSON.stringify(["لسه تنضاف أسئلتها"]), manual: 1 });
     await logEdit(uid, `امتحان ${id}: نسخة جديدة ${model} (${kind})`);
   } else if (a === "delQuestion") {
-    const q = await get("SELECT * FROM bank_questions WHERE id=?", id);
+    const q = await one("bank_questions", { id });
     need(q, "السؤال غير موجود");
     await tx(async () => {
-      await run("DELETE FROM bank_questions WHERE id=?", id);
-      await run("UPDATE bank_questions SET n=n-1 WHERE version_id=? AND n>?", q!.version_id, q!.n);
+      await remove("bank_questions", { id });
+      await update("bank_questions", { version_id: q!.version_id }, (r) => ({ n: r.n - 1 }), { where: (r) => r.n > q!.n });
     });
     await logEdit(uid, `نسخة ${q!.version_id}: حذف س ${q!.n}`);
   } else if (a === "delVersion") {
-    need(await get("SELECT 1 FROM bank_versions WHERE id=?", id), "النسخة غير موجودة");
+    need(await one("bank_versions", { id }), "النسخة غير موجودة");
     await tx(async () => await deleteVersion(id));
     await logEdit(uid, `حذف نسخة ${id}`);
   } else if (a === "delExam") {
-    const e = await get("SELECT * FROM bank_exams WHERE id=?", id);
+    const e = await one("bank_exams", { id });
     need(e, "الامتحان غير موجود");
     await tx(async () => {
-      for (const v of await all("SELECT id FROM bank_versions WHERE exam_id=?", id)) await deleteVersion(v.id);
-      await run("DELETE FROM bank_exams WHERE id=?", id);
+      for (const v of await find("bank_versions", { exam_id: id })) await deleteVersion(v.id);
+      await remove("bank_exams", { id });
     });
     await logEdit(uid, `حذف امتحان ${e!.title}`);
   } else throw new ApiError(400, "أمر غير معروف");
@@ -172,31 +172,31 @@ export async function examUpload(form: FormData) {
   const a = String(form.get("action") ?? "");
   const id = Number(form.get("id"));
   if (a === "addQuestion") {
-    need(await get("SELECT 1 FROM bank_versions WHERE id=?", id), "النسخة غير موجودة");
+    need(await one("bank_versions", { id }), "النسخة غير موجودة");
     const mark = intOf(form.get("mark"), 1, 100, "الدرجة لازم رقم كامل من 1 إلى 100");
     const answers = form.getAll("a");
     need(answers.length, "ضيف صورة الجواب");
     const q = await saveUpload(form.get("q"), IMAGES);
     const saved: string[] = [];
     for (const x of answers) saved.push(await saveUpload(x, IMAGES));
-    const n = ((await get("SELECT IFNULL(MAX(n),0) m FROM bank_questions WHERE version_id=?", id))!.m as number) + 1;
-    await run("INSERT INTO bank_questions(version_id, n, max_mark, q_file, a_files, edited) VALUES(?,?,?,?,?,1)", id, n, mark, q, JSON.stringify(saved));
+    const n = maxOf(await find("bank_questions", { version_id: id }), "n") + 1;
+    await insert("bank_questions", { version_id: id, n, max_mark: mark, q_file: q, a_files: JSON.stringify(saved), edited: 1 });
     await logEdit(uid, `نسخة ${id}: سؤال جديد ${n}`);
   } else if (a === "replaceQ") {
-    need(await get("SELECT 1 FROM bank_questions WHERE id=?", id), "السؤال غير موجود");
-    await run("UPDATE bank_questions SET q_file=?, edited=1 WHERE id=?", await saveUpload(form.get("file"), IMAGES), id);
+    need(await one("bank_questions", { id }), "السؤال غير موجود");
+    await update("bank_questions", { id }, { q_file: await saveUpload(form.get("file"), IMAGES), edited: 1 });
     await logEdit(uid, `سؤال ${id}: صورة جديدة`);
   } else if (a === "replaceA") {
-    need(await get("SELECT 1 FROM bank_questions WHERE id=?", id), "السؤال غير موجود");
+    need(await one("bank_questions", { id }), "السؤال غير موجود");
     const files = form.getAll("file");
     need(files.length, "اختار صور الجواب");
     const saved: string[] = [];
     for (const x of files) saved.push(await saveUpload(x, IMAGES));
-    await run("UPDATE bank_questions SET a_files=?, edited=1 WHERE id=?", JSON.stringify(saved), id);
+    await update("bank_questions", { id }, { a_files: JSON.stringify(saved), edited: 1 });
     await logEdit(uid, `سؤال ${id}: جواب جديد`);
   } else if (a === "pdfAr" || a === "pdfEn") {
-    need(await get("SELECT 1 FROM bank_versions WHERE id=?", id), "النسخة غير موجودة");
-    await run(`UPDATE bank_versions SET ${a === "pdfAr" ? "pdf_ar" : "pdf_en"}=? WHERE id=?`, await saveUpload(form.get("file"), ["pdf"]), id);
+    need(await one("bank_versions", { id }), "النسخة غير موجودة");
+    await update("bank_versions", { id }, { [a === "pdfAr" ? "pdf_ar" : "pdf_en"]: await saveUpload(form.get("file"), ["pdf"]) });
     await logEdit(uid, `نسخة ${id}: رفع نسخة الطالب ${a}`);
   } else throw new ApiError(400, "أمر غير معروف");
   return await examList(uid);
