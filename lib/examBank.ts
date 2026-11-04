@@ -97,7 +97,7 @@ async function chapterView(i: number): Promise<[string, Kb]> {
   const c = (await chaptersList())[i];
   if (!c) return await homeView();
   const versions = await find("bank_versions");
-  const kb: Kb = (await find("bank_exams", { slug: c.slug }, { order: ["ord"] })).map((e) => {
+  const kb: Kb = (await find("bank_exams", { slug: c.slug })).sort((a, b) => (a.pos ?? a.ord) - (b.pos ?? b.ord)).map((e) => {
     const vs = versions.filter((v) => v.exam_id === e.id);
     return [btn(`${vs.some((v) => !v.ok) ? "⚠️ " : ""}${e.ord}) ${cut(`${e.title} ${lectureOf(e.info)}`, 40)} · ${vs.length} نسخ`, `a:exe:${e.id}`)];
   });

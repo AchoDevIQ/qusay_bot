@@ -19,7 +19,7 @@ const { ApiError, examAction, examFile, examUpload } = await import("../lib/exam
 const { fileToken, verifyFileToken, verifyInitData } = await import("../lib/webAuth.ts");
 const { loadCatalog } = await import("../lib/examBank.ts");
 const { initDb } = await import("../lib/db.ts");
-const { get, run } = await import("../lib/sqliteDriver.ts");
+const { all, get, run } = await import("../lib/sqliteDriver.ts");
 const { POST } = await import("../app/api/exams/route.ts");
 const { GET } = await import("../app/api/exams/file/route.ts");
 
@@ -70,10 +70,10 @@ test("التعديلات تنحفظ بأسم صاحبها، والقيم الغ�
   assert.equal((await get("SELECT kind FROM bank_versions WHERE id=1"))!.kind, "optional");
   await examAction({ action: "minutes", id: 1, value: "75", initData: init });
   assert.equal((await get("SELECT minutes FROM bank_exams WHERE id=1"))!.minutes, 75);
-  await examAction({ action: "mark", id: 1, value: 15, initData: init });
-  assert.equal((await get("SELECT max_mark FROM bank_questions WHERE id=1"))!.max_mark, 15);
-  await denied(async () => await examAction({ action: "mark", id: 1, value: "12.5", initData: init }), 400);
-  await denied(async () => await examAction({ action: "mark", id: 1, value: "1; DROP TABLE exams", initData: init }), 400);
+  await examAction({ action: "marks", id: 1, marks: [60, 40], initData: init });
+  assert.equal((await get("SELECT max_mark FROM bank_questions WHERE id=1"))!.max_mark, 60);
+  await denied(async () => await examAction({ action: "marks", id: 1, marks: [12, 88.5], initData: init }), 400);
+  await denied(async () => await examAction({ action: "marks", id: 1, marks: ["1; DROP TABLE exams", 99], initData: init }), 400);
   await denied(async () => await examAction({ action: "minutes", id: 1, value: 1, initData: init }), 400);
   await denied(async () => await examAction({ action: "nothing", initData: init }), 400);
   const r = await examAction({ action: "addExam", slug: "ch1", title: "جديد <b>", minutes: 90, initData: init });
@@ -82,8 +82,10 @@ test("التعديلات تنحفظ بأسم صاحبها، والقيم الغ�
   await examAction({ action: "addVersion", id: e.id, initData: init });
   const v = (await get("SELECT * FROM bank_versions WHERE exam_id=?", e.id))!;
   assert.deepEqual([v.model, v.ok, v.kind], ["A", 0, "mandatory"]);
-  await examAction({ action: "addVersion", id: e.id, kind: "optional", initData: init });
-  assert.equal((await get("SELECT kind FROM bank_versions WHERE exam_id=? AND model='B'", e.id))!.kind, "optional");   // إضافة للاختياري
+  await denied(async () => await examAction({ action: "addVersion", id: e.id, initData: init }), 400);   // النسخة الناقصة تمنع اللي بعدها
+  const e2 = (await examAction({ action: "addExam", slug: "ch1", title: "ثاني", minutes: 90, initData: init })).chapters[0].exams.at(-1);
+  await examAction({ action: "addVersion", id: e2.id, kind: "optional", initData: init });
+  assert.equal((await get("SELECT kind FROM bank_versions WHERE exam_id=? AND model='A'", e2.id))!.kind, "optional");   // إضافة للاختياري
   await denied(async () => await examAction({ action: "ok", id: v.id, initData: init }), 400);                       // بدون أسئلة ما تصير جاهزة
   assert.ok((await get("SELECT COUNT(*) n FROM bank_edits"))!.n >= 5);
   assert.ok((await get("SELECT user_id FROM bank_edits LIMIT 1"))!.user_id === 1);
@@ -101,6 +103,67 @@ test("وقت كل الامتحانات يغير اللي على العام، و�
   assert.equal((await get("SELECT minutes FROM bank_exams WHERE id=?", special.id))!.minutes, 95);
   await examAction({ action: "minutesAll", value: 70, initData: init });
   assert.equal((await get("SELECT minutes FROM bank_exams WHERE id=1"))!.minutes, 70);                     // يتبع العام كل مرة
+});
+
+test("الدرجات: مرة وحدة لكل نسخ الامتحان، وما تنحفظ إلا إذا المجموع 100", async () => {
+  const init = sign(1);
+  const e = (await examAction({ action: "addExam", slug: "ch1", title: "درجات", minutes: 60, initData: init })).chapters[0].exams.at(-1);
+  await run("INSERT INTO bank_versions(exam_id, model, ok) VALUES(?,?,1), (?,?,1), (?,?,1)", e.id, "A", e.id, "B", e.id, "C");
+  const vs = await all("SELECT id, model FROM bank_versions WHERE exam_id=? ORDER BY model", e.id);
+  for (const v of vs) {
+    const count = v.model === "C" ? 3 : 2;
+    for (let n = 1; n <= count; n++) await run("INSERT INTO bank_questions(version_id, n, max_mark) VALUES(?,?,?)", v.id, n, 50);
+  }
+  await denied(async () => await examAction({ action: "marks", id: e.id, marks: [12, 50], initData: init }), 400);
+  assert.equal((await all("SELECT 1 FROM bank_questions q JOIN bank_versions v ON v.id=q.version_id WHERE v.exam_id=? AND max_mark=12", e.id)).length, 0);
+  await denied(async () => await examAction({ action: "marks", id: e.id, marks: [0, 100], initData: init }), 400);
+  await examAction({ action: "marks", id: e.id, marks: [30, 70], initData: init });
+  const marks = async (m: string) => (await all("SELECT max_mark FROM bank_questions q JOIN bank_versions v ON v.id=q.version_id WHERE v.exam_id=? AND v.model=? ORDER BY n", e.id, m)).map((r) => r.max_mark);
+  assert.deepEqual(await marks("A"), [30, 70]);
+  assert.deepEqual(await marks("B"), [30, 70]);
+  assert.deepEqual(await marks("C"), [50, 50, 50]);      // عدد أسئلة مختلف
+});
+
+test("ترتيب الامتحانات بالسهم: مكان الملفات ما يتغير", async () => {
+  const init = sign(1);
+  const order = async () => (await examAction({ action: "list", initData: init })).chapters[0].exams.map((e: any) => e.id);
+  const before = await order();
+  const last = before.at(-1), prev = before.at(-2);
+  const ordBefore = (await get("SELECT ord FROM bank_exams WHERE id=?", last))!.ord;
+  await examAction({ action: "moveExam", id: last, dir: "up", initData: init });
+  const after = await order();
+  assert.deepEqual([after.at(-2), after.at(-1)], [last, prev]);
+  assert.equal((await get("SELECT ord FROM bank_exams WHERE id=?", last))!.ord, ordBefore);
+  await examAction({ action: "moveExam", id: last, dir: "down", initData: init });
+  assert.deepEqual(await order(), before);
+  await examAction({ action: "moveExam", id: last, dir: "down", initData: init });       // الأخير يبقى مكانه
+  assert.deepEqual(await order(), before);
+  await denied(async () => await examAction({ action: "moveExam", id: last, dir: "up", initData: sign(5) }), 403);
+  const fresh = (await examAction({ action: "addExam", slug: "ch1", title: "بالآخر", minutes: 60, initData: init })).chapters[0].exams.at(-1);
+  assert.equal((await order()).at(-1), fresh.id);
+});
+
+test("النسخة الجديدة: صور نسخة الطالب، وPDF للجواب، وما تصير جاهزة وهي ناقصة", async () => {
+  const init = sign(1);
+  const form = (o: Record<string, any>) => { const f = new FormData(); for (const [k, v] of Object.entries(o)) for (const x of [v].flat()) f.append(k, x); return f; };
+  const e = (await examAction({ action: "addExam", slug: "ch1", title: "نسخة كاملة", minutes: 60, initData: init })).chapters[0].exams.at(-1);
+  await examAction({ action: "addVersion", id: e.id, initData: init });
+  const v = (await get("SELECT id FROM bank_versions WHERE exam_id=?", e.id))!.id as number;
+  await assert.rejects(examUpload(form({ initData: init, action: "pagesAr", id: v, file: new Blob(["%PDF-1.7 x"]) })), /صورة/);
+  await assert.rejects(examUpload(form({ initData: init, action: "answerPdf", id: v, file: png() })), /PDF/);
+  await assert.rejects(examUpload(form({ initData: init, action: "addQuestion", id: v, mark: 100, q: png() })), /الجواب/);
+  await examUpload(form({ initData: init, action: "answerPdf", id: v, file: new Blob(["%PDF-1.7 x"]) }));
+  const r = await examUpload(form({ initData: init, action: "addQuestion", id: v, mark: 50, q: png() }));   // الـPDF يغني عن صور الجواب
+  await denied(async () => await examAction({ action: "ok", id: v, initData: init }), 400);                  // المجموع مو 100
+  assert.equal(r.chapters[0].exams.at(-1).versions[0].answerPdf.endsWith(".pdf"), true);
+  await examUpload(form({ initData: init, action: "addQuestion", id: v, mark: 50, q: png() }));
+  await denied(async () => await examAction({ action: "ok", id: v, initData: init }), 400);                  // ماكو صور نسخة الطالب
+  const up = await examUpload(form({ initData: init, action: "pagesAr", id: v, file: [png(), png()] }));
+  assert.equal(up.chapters[0].exams.at(-1).versions[0].pagesAr.length, 2);
+  await examAction({ action: "ok", id: v, initData: init });
+  assert.equal((await get("SELECT ok FROM bank_versions WHERE id=?", v))!.ok, 1);
+  await examAction({ action: "addVersion", id: e.id, initData: init });                                       // هسه تنضاف اللي بعدها
+  assert.equal((await get("SELECT COUNT(*) n FROM bank_versions WHERE exam_id=?", e.id))!.n, 2);
 });
 
 test("الرفع: يفحص نوع الملف من محتواه، وبالصلاحية بس", async () => {

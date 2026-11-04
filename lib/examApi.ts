@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { CONTENT_DIR, TOKEN } from "./config.ts";
-import { find, initDb, insert, kvGet, kvSet, maxOf, one, remove, tx, update, type Row } from "./db.ts";
+import { find, initDb, insert, kvGet, kvSet, maxOf, one, remove, sumOf, tx, update, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
 import { files } from "./files.ts";
@@ -30,9 +30,14 @@ async function authed(initData: unknown) {
 }
 
 const generalMinutes = async () => Number(await kvGet("exam_minutes")) || 75;
+// ord يحدد مكان ملفات الامتحان فما يتغير، والترتيب بالجدول من pos
+const examPos = (e: Row): number => e.pos ?? e.ord;
+const chapterExams = async (slug: string) => (await find("bank_exams", { slug })).sort((a, b) => examPos(a) - examPos(b) || a.id - b.id);
+const pageList = (v: Row, lang: "ar" | "en"): string[] => JSON.parse(v["pages_" + lang] || "[]");
+const maxPos = (list: Row[]) => list.reduce((m, e) => Math.max(m, examPos(e)), 0);
 
 export async function examList(uid: number) {
-  const exams = await find("bank_exams", {}, { order: ["slug", "ord"] });
+  const exams = (await find("bank_exams", {}, { order: ["slug"] })).sort((a, b) => (a.slug === b.slug ? examPos(a) - examPos(b) || a.id - b.id : 0));
   const stored = new Set((await Promise.all([...new Set(exams.map((e) => e.slug as string))].map((s) => files().list(`${s}/`)))).flat());
   const versions = await find("bank_versions", {}, { order: ["model"] });
   const questions = await find("bank_questions", {}, { order: ["n"] });
@@ -50,6 +55,7 @@ export async function examList(uid: number) {
         const pdf = (lang: "ar" | "en") => v["pdf_" + lang] || (lang === "ar" || v.has_en ? `${dir}/${v.model}/student_${lang}.pdf` : null);
         // صور الصفحات تنعرض داخل الصفحة. إذا انرفع PDF بديل، ينفتح الملف نفسه
         const pages = (lang: "ar" | "en") => {
+          if (pageList(v, lang).length) return pageList(v, lang);
           if (v["pdf_" + lang]) return [];
           const out: string[] = [];
           for (let i = 1; stored.has(`${dir}/${v.model}/student_${lang}_${i}.png`); i++) out.push(`${dir}/${v.model}/student_${lang}_${i}.png`);
@@ -58,7 +64,7 @@ export async function examList(uid: number) {
         return {
           id: v.id, model: v.model, kind: v.kind, ok: !!v.ok, issues: JSON.parse(v.issues || "[]"), manual: !!v.manual,
           pdfAr: v.manual && !v.pdf_ar ? null : pdf("ar"), pdfEn: v.manual && !v.pdf_en ? null : pdf("en"),
-          pagesAr: pages("ar"), pagesEn: pages("en"),
+          pagesAr: pages("ar"), pagesEn: pages("en"), answerPdf: v.answer_pdf ?? null,
           questions: (qBy.get(v.id) ?? []).map((q) => ({ id: q.id, n: q.n, max: q.max_mark, q: q.q_file, a: JSON.parse(q.a_files || "[]"), edited: !!q.edited })),
         };
       }),
@@ -82,7 +88,13 @@ export async function examAction(body: Row) {
   } else if (a === "ok") {
     const v = await one("bank_versions", { id });
     need(v, "النسخة غير موجودة");
-    need(v!.ok || await one("bank_questions", { version_id: id }), "ضيف سؤال واحد على الأقل");
+    if (!v!.ok) {
+      const qs = await find("bank_questions", { version_id: id });
+      need(qs.length, "ضيف سؤال واحد على الأقل");
+      need(sumOf(qs, "max_mark") === 100, "مجموع الدرجات لازم يكون 100");
+      need(v!.answer_pdf || qs.every((q) => JSON.parse(q.a_files || "[]").length), "كل سؤال يحتاج جواب، أو ارفع الجواب النموذجي PDF");
+      need(!v!.manual || pageList(v!, "ar").length || v!.pdf_ar, "ارفع صور نسخة الطالب بالعربي");
+    }
     await update("bank_versions", { id }, { ok: v!.ok ? 0 : 1, issues: v!.ok ? JSON.stringify(["موقوفة من الإدارة"]) : "[]" });
     await logEdit(uid, `نسخة ${id}: ${v!.ok ? "إيقاف" : "جاهزة"}`);
   } else if (a === "minutes") {
@@ -98,11 +110,31 @@ export async function examAction(body: Row) {
       await kvSet("exam_minutes", String(n));
     });
     await logEdit(uid, `الوقت العام للامتحانات ${n} دقيقة`);
-  } else if (a === "mark") {
-    const n = intOf(body.value, 0, 100, "الدرجة لازم رقم كامل من 0 إلى 100");
-    need(await one("bank_questions", { id }), "السؤال غير موجود");
-    await update("bank_questions", { id }, { max_mark: n, edited: 1 });
-    await logEdit(uid, `سؤال ${id}: الدرجة ${n}`);
+  } else if (a === "marks") {
+    need(await one("bank_exams", { id }), "الامتحان غير موجود");
+    need(Array.isArray(body.marks) && body.marks.length, "اكتب الدرجات");
+    const marks = (body.marks as unknown[]).map((m) => intOf(m, 1, 100, "كل درجة لازم رقم كامل من 1 إلى 100"));
+    need(marks.reduce((s, m) => s + m, 0) === 100, "مجموع الدرجات لازم يكون 100");
+    await tx(async () => {
+      // الدرجات للامتحان كله، فتتطبق على كل نسخة بيها نفس عدد الأسئلة
+      for (const v of await find("bank_versions", { exam_id: id })) {
+        const qs = await find("bank_questions", { version_id: v.id }, { order: ["n"] });
+        if (qs.length !== marks.length) continue;
+        for (const [i, q] of qs.entries()) await update("bank_questions", { id: q.id }, { max_mark: marks[i], edited: 1 });
+      }
+    });
+    await logEdit(uid, `امتحان ${id}: الدرجات ${marks.join(",")}`);
+  } else if (a === "moveExam") {
+    const e = await one("bank_exams", { id });
+    need(e, "الامتحان غير موجود");
+    await tx(async () => {
+      const list = await chapterExams(e!.slug);
+      const i = list.findIndex((x) => x.id === id), j = i + (body.dir === "up" ? -1 : 1);
+      if (j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j], list[i]];
+      for (const [p, x] of list.entries()) if (x.pos !== p + 1) await update("bank_exams", { id: x.id }, { pos: p + 1 });
+    });
+    await logEdit(uid, `امتحان ${id}: نقل ${body.dir === "up" ? "لفوق" : "لجوة"}`);
   } else if (a === "addExam") {
     const title = String(body.title ?? "").trim().slice(0, 80);
     need(title, "اكتب عنوان الامتحان");
@@ -110,11 +142,15 @@ export async function examAction(body: Row) {
     const c = await one("bank_exams", { slug: String(body.slug ?? "") });
     need(c, "الفصل غير موجود");
     const ord = maxOf(await find("bank_exams", { slug: String(body.slug) }), "ord") + 1;
-    await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: "", minutes: n, manual: 1 });
+    const list = await chapterExams(String(body.slug));
+    await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: "", minutes: n, manual: 1, pos: maxPos(list) + 1 });
     await logEdit(uid, `امتحان جديد: ${title}`);
   } else if (a === "addVersion") {
     need(await one("bank_exams", { id }), "الامتحان غير موجود");
-    const models = (await find("bank_versions", { exam_id: id })).map((v) => v.model as string);
+    const versions = await find("bank_versions", { exam_id: id }, { order: ["model"] });
+    const unfinished = versions.find((v) => !v.ok);
+    need(!unfinished, `كمل نسخة ${unfinished?.model} أول، واضغط «النسخة جاهزة»`);
+    const models = (versions).map((v) => v.model as string);
     const model = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ").find((x) => !models.includes(x));
     need(model, "ماكو حرف باقي");
     const kind = body.kind === "optional" ? "optional" : "mandatory";
@@ -175,7 +211,7 @@ export async function examUpload(form: FormData) {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
     const mark = intOf(form.get("mark"), 1, 100, "الدرجة لازم رقم كامل من 1 إلى 100");
     const answers = form.getAll("a");
-    need(answers.length, "ضيف صورة الجواب");
+    need(answers.length || (await one("bank_versions", { id }))!.answer_pdf, "ضيف صورة الجواب، أو ارفع الجواب النموذجي PDF");
     const q = await saveUpload(form.get("q"), IMAGES);
     const saved: string[] = [];
     for (const x of answers) saved.push(await saveUpload(x, IMAGES));
@@ -194,6 +230,18 @@ export async function examUpload(form: FormData) {
     for (const x of files) saved.push(await saveUpload(x, IMAGES));
     await update("bank_questions", { id }, { a_files: JSON.stringify(saved), edited: 1 });
     await logEdit(uid, `سؤال ${id}: جواب جديد`);
+  } else if (a === "pagesAr" || a === "pagesEn") {
+    need(await one("bank_versions", { id }), "النسخة غير موجودة");
+    const files = form.getAll("file");
+    need(files.length, "اختار صور النسخة");
+    const saved: string[] = [];
+    for (const x of files) saved.push(await saveUpload(x, IMAGES));
+    await update("bank_versions", { id }, { [a === "pagesAr" ? "pages_ar" : "pages_en"]: JSON.stringify(saved) });
+    await logEdit(uid, `نسخة ${id}: صور نسخة الطالب ${a}`);
+  } else if (a === "answerPdf") {
+    need(await one("bank_versions", { id }), "النسخة غير موجودة");
+    await update("bank_versions", { id }, { answer_pdf: await saveUpload(form.get("file"), ["pdf"]) });
+    await logEdit(uid, `نسخة ${id}: الجواب النموذجي PDF`);
   } else if (a === "pdfAr" || a === "pdfEn") {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
     await update("bank_versions", { id }, { [a === "pdfAr" ? "pdf_ar" : "pdf_en"]: await saveUpload(form.get("file"), ["pdf"]) });

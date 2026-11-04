@@ -1,13 +1,14 @@
 "use client";
 // صفحة وحدة لإدارة الامتحانات: جدول الامتحانات، وكل شي ينفتح داخل نفس الصفحة بدون رسائل بالبوت
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type Question = { id: number; n: number; max: number; q: string | null; a: string[]; edited: boolean };
-type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; questions: Question[] };
+type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
 type Exam = { id: number; ord: number; title: string; info: string; minutes: number; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string };
 
+const webApp = () => (window as unknown as { Telegram?: { WebApp?: { initData?: string; expand?: () => void } } }).Telegram?.WebApp;
 const initData = () => (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData ?? "";
 const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info)?.[0] ?? "";
 const fmtTime = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -43,7 +44,7 @@ export default function ExamsClient() {
   useEffect(() => {
     let tries = 0;
     const t = setInterval(() => {
-      if (initData()) { clearInterval(t); void call({ action: "list" }); }
+      if (initData()) { clearInterval(t); webApp()?.expand?.(); void call({ action: "list" }); }
       else if (++tries > 25) { clearInterval(t); setError("افتح هاي الصفحة من زر «📝 الامتحانات» داخل البوت."); }
     }, 200);
     return () => clearInterval(t);
@@ -59,7 +60,7 @@ export default function ExamsClient() {
         <h1 className="plain">QMath</h1>
         <p>📝 إدارة الامتحانات</p>
       </header>
-      <div className="wrap" style={{ maxWidth: 820 }}>
+      <div className="wrap" style={{ maxWidth: 1100 }}>
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && data.chapters.length > 1 && (
@@ -71,17 +72,21 @@ export default function ExamsClient() {
             <h2>📚 {ch.chapter}</h2>
             <table className="extable"><tbody>
               <tr><th>#</th><th>الامتحان</th><th className="p">النسخ</th><th className="p">الوقت</th></tr>
-              {ch.exams.map((e) => {
+              {ch.exams.map((e, index) => {
                 const bad = e.versions.filter((v) => !v.ok).length;
                 const open = openExam === e.id;
                 return (
                   <ExamRows key={e.id} open={open} head={
                     <tr className={"exrow" + (open ? " sel" : "")} onClick={() => { setOpenExam(open ? null : e.id); setOpenVersion(null); setOpenQ(null); }}>
-                      <td>{e.ord}</td><td><b>{e.title}</b> {lectureOf(e.info)}{bad ? <span className="exbad"> ⚠️ {bad}</span> : null}</td>
+                      <td className="exorder">
+                        <button type="button" aria-label="لفوق" disabled={busy || index === 0} onClick={(ev) => { ev.stopPropagation(); void call({ action: "moveExam", id: e.id, dir: "up" }); }}>▲</button>
+                        <span>{index + 1}</span>
+                        <button type="button" aria-label="لجوة" disabled={busy || index === ch.exams.length - 1} onClick={(ev) => { ev.stopPropagation(); void call({ action: "moveExam", id: e.id, dir: "down" }); }}>▼</button>
+                      </td><td><b>{e.title}</b> {lectureOf(e.info)}{bad ? <span className="exbad"> ⚠️ {bad}</span> : null}</td>
                       <td className="p">{e.versions.length}</td><td className="p">{fmtTime(e.minutes)}{e.minutes !== data!.generalMinutes ? <small className="exown"> خاص</small> : null}</td>
                     </tr>
                   }>
-                    <ExamPanel exam={e} busy={busy} call={call} fileUrl={fileUrl} openVersion={openVersion} setOpenVersion={(v) => { setOpenVersion(v); setOpenQ(null); }} openQ={openQ} setOpenQ={setOpenQ} />
+                    <ExamPanel key={e.id + ":" + e.versions.map((v) => v.questions.map((q) => q.max).join()).join("|")} exam={e} busy={busy} call={call} fileUrl={fileUrl} openVersion={openVersion} setOpenVersion={(v) => { setOpenVersion(v); setOpenQ(null); }} openQ={openQ} setOpenQ={setOpenQ} />
                   </ExamRows>
                 );
               })}
@@ -107,6 +112,22 @@ function GeneralTime({ value, busy, call }: { value: number; busy: boolean; call
       </div>
       <div className="exhint">اللي مكتوب يمه «خاص» يبقى على وقته. تغير وقت امتحان واحد من داخل الامتحان.</div>
     </div>
+  );
+}
+
+/** صورة كبيرة بعرض الصفحة، وتنفتح بملء الشاشة لمن تنضغط */
+function BigImage({ src, alt }: { src: string; alt: string }) {
+  const [full, setFull] = useState(false);
+  return (
+    <>
+      <img className="eximg" src={src} alt={alt} loading="lazy" onClick={() => setFull(true)} />
+      {full && (
+        <div className="exfull" onClick={() => setFull(false)}>
+          <button type="button" className="exbtn">✕ سكر</button>
+          <img src={src} alt={alt} />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -140,11 +161,13 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
   const version = exam.versions.find((v) => v.id === openVersion);
   return (
     <div>
+      {version && <VersionPanel version={version} busy={busy} call={call} fileUrl={fileUrl} openQ={openQ} setOpenQ={setOpenQ} onDeleted={() => setOpenVersion(null)} />}
       <div className="exline">
         <span>🕓 الوقت بالدقائق:</span>
         <input className="exnum" inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
         <button type="button" className="exbtn" disabled={busy || minutes === String(exam.minutes)} onClick={() => call({ action: "minutes", id: exam.id, value: minutes })}>حفظ</button>
       </div>
+      <MarksEditor exam={exam} busy={busy} call={call} />
       <div className="excols">
         {(["mandatory", "optional"] as const).map((kind) => {
           const list = exam.versions.filter((v) => v.kind === kind);
@@ -169,22 +192,46 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
           );
         })}
       </div>
-      {version && <VersionPanel version={version} busy={busy} call={call} fileUrl={fileUrl} openQ={openQ} setOpenQ={setOpenQ} onDeleted={() => setOpenVersion(null)} />}
       <div className="exline"><Confirm label="🗑 حذف الامتحان كله" disabled={busy} onYes={() => call({ action: "delExam", id: exam.id })} /></div>
     </div>
   );
 }
 
+/** درجات الامتحان كله: تتغير كلها سوية، وما تنحفظ إلا إذا مجموعها 100 */
+function MarksEditor({ exam, busy, call }: { exam: Exam; busy: boolean; call: Call }) {
+  const shapes = new Map(exam.versions.filter((v) => v.questions.length).map((v) => [v.questions.length, v.questions.map((q) => q.max)]));
+  const [count] = [...shapes.keys()];
+  const start = shapes.get(count) ?? [];
+  const [marks, setMarks] = useState(start.map(String));
+  if (!start.length) return null;
+  const total = marks.reduce((s, m) => s + (Number(m) || 0), 0);
+  return (
+    <div className="exversion">
+      <div className="excolhead">🔢 درجات الأسئلة لكل نسخ هذا الامتحان</div>
+      <div className="exmarks">
+        {marks.map((m, i) => (
+          <label key={i}>س {i + 1}<input className="exnum" inputMode="numeric" value={m} onChange={(e) => setMarks(marks.map((x, j) => (j === i ? e.target.value : x)))} /></label>
+        ))}
+      </div>
+      <div className="exline">
+        <b className={total === 100 ? "" : "exbad"}>المجموع {total} من 100</b>
+        <button type="button" className="exbtn" disabled={busy || total !== 100 || marks.join() === start.join()} onClick={() => call({ action: "marks", id: exam.id, marks })}>حفظ كل الدرجات</button>
+      </div>
+      {shapes.size > 1 && <div className="exhint exbad">هذا الامتحان بيه نسخ بعدد أسئلة مختلف. هاي الدرجات تتطبق بس على النسخ اللي بيها {count} أسئلة.</div>}
+    </div>
+  );
+}
+
 function PaperTab({ pages, pdf, label, action, busy, upload, fileUrl }: {
-  pages: string[]; pdf: string | null; label: string; action: string; busy: boolean; upload: (a: string, f: File) => void; fileUrl: (r: string) => string;
+  pages: string[]; pdf: string | null; label: string; action: string; busy: boolean; upload: (a: string, f: File[]) => void; fileUrl: (r: string) => string;
 }) {
   return (
     <div>
-      {pages.map((p) => <img className="eximg" key={p} src={fileUrl(p)} alt={label} loading="lazy" />)}
+      {pages.map((p) => <BigImage key={p} src={fileUrl(p)} alt={label} />)}
       {!pages.length && pdf && <div className="exline"><a className="exbtn" href={fileUrl(pdf)} target="_blank" rel="noreferrer">📄 افتح نسخة {label}</a></div>}
       {!pages.length && !pdf && <div className="exempty">ماكو نسخة {label} بعد</div>}
       <div className="exline">
-        <FileButton label={`⬆️ ${pdf ? "تبديل" : "رفع"} نسخة ${label} (PDF)`} accept="application/pdf" disabled={busy} onFiles={(f) => upload(action, f[0])} />
+        <FileButton label={`🖼 ${pages.length ? "تبديل" : "رفع"} صور نسخة ${label}`} accept="image/png,image/jpeg" multiple disabled={busy} onFiles={(f) => upload(action, f)} />
       </div>
     </div>
   );
@@ -195,9 +242,11 @@ function VersionPanel({ version: v, busy, call, fileUrl, openQ, setOpenQ, onDele
 }) {
   const [tab, setTab] = useState<"ar" | "en" | "answers">("ar");
   const total = v.questions.reduce((s, q) => s + q.max, 0);
-  const upload = (action: string, f: File) => { const fd = new FormData(); fd.set("action", action); fd.set("id", String(v.id)); fd.set("file", f); void call(fd); };
+  const upload = (action: string, files: File[]) => { const fd = new FormData(); fd.set("action", action); fd.set("id", String(v.id)); files.forEach((f) => fd.append("file", f)); void call(fd); };
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => { box.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [v.id]);
   return (
-    <div className="exversion">
+    <div className="exversion" ref={box}>
       <div className="exline">
         <b>نسخة {v.model}</b><span>{KIND[v.kind]}</span><span className={total === 100 ? "" : "exbad"}>المجموع {total}</span>
         <span>{v.ok ? "✅ جاهزة" : "⚠️ موقوفة"}</span>
@@ -208,13 +257,17 @@ function VersionPanel({ version: v, busy, call, fileUrl, openQ, setOpenQ, onDele
         <button type="button" className={tab === "en" ? "on" : ""} onClick={() => setTab("en")}>🇬🇧 الإنجليزي</button>
         <button type="button" className={tab === "answers" ? "on" : ""} onClick={() => setTab("answers")}>📘 الجواب النموذجي ({v.questions.length})</button>
       </div>
-      {tab === "ar" && <PaperTab pages={v.pagesAr} pdf={v.pdfAr} label="العربي" action="pdfAr" busy={busy} upload={upload} fileUrl={fileUrl} />}
-      {tab === "en" && <PaperTab pages={v.pagesEn} pdf={v.pdfEn} label="الإنجليزي" action="pdfEn" busy={busy} upload={upload} fileUrl={fileUrl} />}
+      {tab === "ar" && <PaperTab pages={v.pagesAr} pdf={v.pdfAr} label="العربي" action="pagesAr" busy={busy} upload={upload} fileUrl={fileUrl} />}
+      {tab === "en" && <PaperTab pages={v.pagesEn} pdf={v.pdfEn} label="الإنجليزي" action="pagesEn" busy={busy} upload={upload} fileUrl={fileUrl} />}
       {tab === "answers" && (
         <div>
           <div className="exhint">الجواب نفسه للعربي والإنجليزي، والسؤال يطلع للمصحح بالعربي.</div>
-          {v.questions.map((q) => <QuestionRow key={q.id} q={q} open={openQ === q.id} toggle={() => setOpenQ(openQ === q.id ? null : q.id)} busy={busy} call={call} fileUrl={fileUrl} />)}
-          <AddQuestion versionId={v.id} busy={busy} call={call} />
+          <div className="exline">
+            {v.answerPdf && <a className="exbtn" href={fileUrl(v.answerPdf)} target="_blank" rel="noreferrer">📄 افتح الجواب النموذجي كامل</a>}
+            <FileButton label={`📘 ${v.answerPdf ? "تبديل" : "رفع"} الجواب النموذجي (PDF)`} accept="application/pdf" disabled={busy} onFiles={(f) => upload("answerPdf", f)} />
+          </div>
+          {v.questions.map((q) => <QuestionRow key={q.id} q={q} hasPdf={!!v.answerPdf} open={openQ === q.id} toggle={() => setOpenQ(openQ === q.id ? null : q.id)} busy={busy} call={call} fileUrl={fileUrl} />)}
+          <AddQuestion versionId={v.id} hasPdf={!!v.answerPdf} busy={busy} call={call} />
         </div>
       )}
       <div className="exline exfoot">
@@ -225,35 +278,31 @@ function VersionPanel({ version: v, busy, call, fileUrl, openQ, setOpenQ, onDele
   );
 }
 
-function QuestionRow({ q, open, toggle, busy, call, fileUrl }: { q: Question; open: boolean; toggle: () => void; busy: boolean; call: Call; fileUrl: (r: string) => string }) {
-  const [mark, setMark] = useState(String(q.max));
-  useEffect(() => setMark(String(q.max)), [q.max]);
+function QuestionRow({ q, hasPdf, open, toggle, busy, call, fileUrl }: { q: Question; hasPdf: boolean; open: boolean; toggle: () => void; busy: boolean; call: Call; fileUrl: (r: string) => string }) {
   const send = (action: string, files: File[]) => { const fd = new FormData(); fd.set("action", action); fd.set("id", String(q.id)); files.forEach((f) => fd.append("file", f)); return call(fd); };
   return (
     <div className="exq">
       <button type="button" className={"exqhead" + (open ? " on" : "")} onClick={toggle}>
-        <span>س {q.n}{q.edited ? " ✏️" : ""}</span><span>{q.max} درجة {q.a.length ? "" : "· ⚠️ بدون جواب"}</span>
+        <span>س {q.n}{q.edited ? " ✏️" : ""}</span><span>{q.max} درجة {q.a.length || hasPdf ? "" : "· ⚠️ بدون جواب"}</span>
       </button>
       {open && (
         <div className="exqbody">
-          {q.q ? <img className="eximg" src={fileUrl(q.q)} alt={`س ${q.n}`} loading="lazy" /> : <div className="exbad">ماكو صورة للسؤال</div>}
+          {q.q ? <BigImage src={fileUrl(q.q)} alt={`س ${q.n}`} /> : <div className="exbad">ماكو صورة للسؤال</div>}
           <div className="exline">
-            <span>الدرجة:</span>
-            <input className="exnum" inputMode="numeric" value={mark} onChange={(e) => setMark(e.target.value)} />
-            <button type="button" className="exbtn" disabled={busy || mark === String(q.max)} onClick={() => call({ action: "mark", id: q.id, value: mark })}>حفظ</button>
+            
             <FileButton label="🖼 تبديل السؤال" accept="image/png,image/jpeg" disabled={busy} onFiles={(f) => send("replaceQ", f)} />
             <FileButton label="📘 تبديل الجواب" accept="image/png,image/jpeg" multiple disabled={busy} onFiles={(f) => send("replaceA", f)} />
             <Confirm label="🗑 حذف" disabled={busy} onYes={() => call({ action: "delQuestion", id: q.id })} />
           </div>
           <div className="exlabel">📘 الجواب النموذجي</div>
-          {q.a.map((a) => <img className="eximg" key={a} src={fileUrl(a)} alt="الجواب" loading="lazy" />)}
+          {q.a.map((a) => <BigImage key={a} src={fileUrl(a)} alt="الجواب" />)}
         </div>
       )}
     </div>
   );
 }
 
-function AddQuestion({ versionId, busy, call }: { versionId: number; busy: boolean; call: Call }) {
+function AddQuestion({ versionId, hasPdf, busy, call }: { versionId: number; hasPdf: boolean; busy: boolean; call: Call }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState<File | null>(null);
   const [a, setA] = useState<File[]>([]);
@@ -264,7 +313,7 @@ function AddQuestion({ versionId, busy, call }: { versionId: number; busy: boole
       <FileButton label={q ? "✅ صورة السؤال بالعربي" : "🖼 صورة السؤال بالعربي"} accept="image/png,image/jpeg" onFiles={(f) => setQ(f[0])} />
       <FileButton label={a.length ? `✅ صور الجواب (${a.length})` : "📘 صور الجواب"} accept="image/png,image/jpeg" multiple onFiles={setA} />
       <input className="exnum" inputMode="numeric" placeholder="الدرجة" value={mark} onChange={(e) => setMark(e.target.value)} />
-      <button type="button" className="exbtn" disabled={busy || !q || !a.length || !mark} onClick={async () => {
+      <button type="button" className="exbtn" disabled={busy || !q || (!a.length && !hasPdf) || !mark} onClick={async () => {
         const fd = new FormData();
         fd.set("action", "addQuestion"); fd.set("id", String(versionId)); fd.set("mark", mark); fd.set("q", q!);
         a.forEach((f) => fd.append("a", f));
