@@ -57,6 +57,16 @@ test("الإدخال يسوي الامتحانات، وإعادته ما تكر�
   run("UPDATE bank_questions SET max_mark=20, edited=0 WHERE n=2");
 });
 
+test("امتحان أو نسخة انشالت من الملفات تنشال من البوت", () => {
+  const extra = { ...CATALOG, exams: [...CATALOG.exams, { ord: 2, title: "اختياري", info: "", minutes: 60, versions: [{ model: "A", ok: true, issues: [], has_en: false, questions: [{ n: 1, max: 20, q: "q1.png", a: [] }] }] }] };
+  loadCatalog(extra);
+  assert.equal(get("SELECT COUNT(*) n FROM bank_exams")!.n, 2);
+  loadCatalog(CATALOG);
+  assert.equal(get("SELECT COUNT(*) n FROM bank_exams")!.n, 1);
+  assert.equal(get("SELECT COUNT(*) n FROM bank_questions")!.n, 3);
+  assert.equal(get("SELECT COUNT(*) n FROM bank_versions")!.n, 2);
+});
+
 test("التصفح: الفصل، الامتحان، النسخة، والنسخة الناقصة معلمة", async () => {
   await cb(1, "a:ex");
   assert.ok(buttons(calls[0]).includes("a:exh:0"));
@@ -124,6 +134,70 @@ test("فتح السؤال يرسل صورته وجوابه، وتعديل الد
   flush();
   await cb(1, "a:exo:1");
   assert.equal(get("SELECT ok FROM bank_versions WHERE id=1")!.ok, 1);
+  flush();
+});
+
+test("إضافة امتحان ونسخة وسؤال من اللوحة، والرقم الغلط مرفوض، وتبقى بعد إعادة الإدخال", async () => {
+  await cb(1, "a:exna:0");
+  await msg(1, "امتحان جديد للتجربة");
+  await msg(1, "مو رقم");
+  assert.match(calls.at(-1)!.p.text, /عدد الدقائق/);
+  await msg(1, "90");
+  const e = get("SELECT * FROM bank_exams WHERE title='امتحان جديد للتجربة'")!;
+  assert.deepEqual([e.minutes, e.manual, e.ord], [90, 1, 2]);
+  flush();
+  await cb(1, `a:exnv:${e.id}`);
+  const v = get("SELECT * FROM bank_versions WHERE exam_id=?", e.id)!;
+  assert.deepEqual([v.model, v.ok], ["A", 0]);                  // ناقصة لحد ما تكمل
+  flush();
+  await cb(1, `a:exo:${v.id}`);
+  assert.equal(calls.at(-1)!.p.text, "ضيف سؤال واحد على الأقل");
+  flush();
+  await cb(1, `a:exnq:${v.id}`);
+  await msg(1, "نص بدل الصورة");
+  assert.match(calls.at(-1)!.p.text, /أرسل صورة السؤال/);
+  await msg(1, undefined, { photo: [{ file_id: "NQ1" }] });
+  await msg(1, "12.5");
+  assert.match(calls.at(-1)!.p.text, /رقم كامل/);
+  await msg(1, "20");
+  await msg(1, "تم");
+  assert.match(calls.at(-1)!.p.text, /أرسل صورة الجواب/);
+  await msg(1, undefined, { photo: [{ file_id: "NA1" }] });
+  await msg(1, "تم");
+  flush();
+  await cb(1, `a:exnq:${v.id}`);
+  await msg(1, undefined, { photo: [{ file_id: "NQ2" }] });
+  await msg(1, "30");
+  await msg(1, undefined, { photo: [{ file_id: "NA2" }] });
+  await msg(1, "تم");
+  flush();
+  const qs = all("SELECT * FROM bank_questions WHERE version_id=? ORDER BY n", v.id);
+  assert.deepEqual(qs.map((q) => [q.n, q.max_mark, q.q_file]), [[1, 20, "tg:NQ1"], [2, 30, "tg:NQ2"]]);
+  assert.deepEqual(JSON.parse(qs[1].a_files), ["tg:NA2"]);
+  await cb(1, `a:exo:${v.id}`);
+  assert.equal(get("SELECT ok FROM bank_versions WHERE id=?", v.id)!.ok, 1);
+  flush();
+  await cb(1, `a:exu:${v.id}:en`);
+  await msg(1, undefined, { document: { file_id: "D1", file_name: "x.docx" } });
+  assert.match(calls.at(-1)!.p.text, /أرسل ملف PDF/);
+  await msg(1, undefined, { document: { file_id: "D2", file_name: "x.pdf" } });
+  assert.equal(get("SELECT pdf_en FROM bank_versions WHERE id=?", v.id)!.pdf_en, "D2");
+  flush();
+  await cb(1, `a:exp:${v.id}:en`);
+  assert.equal(calls[0].p.document, "D2");
+  assert.equal(calls[0].p.protect_content, true);
+  flush();
+  loadCatalog(CATALOG);                                         // إعادة الإدخال ما تمسح اللي انضاف من اللوحة
+  assert.ok(get("SELECT 1 FROM bank_exams WHERE id=?", e.id));
+  assert.equal(get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id)!.n, 2);
+  await cb(1, `a:exqd:${qs[0].id}`);
+  assert.equal(get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id)!.n, 2);   // لازم تأكيد
+  await cb(1, `a:exqdy:${qs[0].id}`);
+  assert.equal(get("SELECT n FROM bank_questions WHERE id=?", qs[1].id)!.n, 1);                  // الترقيم يتسلسل
+  await cb(1, `a:exvdy:${v.id}`);
+  assert.equal(get("SELECT COUNT(*) n FROM bank_questions WHERE version_id=?", v.id)!.n, 0);
+  await cb(1, `a:exdey:${e.id}`);
+  assert.equal(get("SELECT 1 FROM bank_exams WHERE id=?", e.id), null);
   flush();
 });
 

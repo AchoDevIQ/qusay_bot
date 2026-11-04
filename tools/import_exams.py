@@ -21,6 +21,7 @@ QRE = re.compile(r"^\s*(?:س|Q)\s*/?\s*(\d+)(?!\d)", re.I)
 BARE = re.compile(r"^\s*س\s*/")   # «س / جد...» بدون رقم
 AR_MODEL = re.compile(r"^(.*?)\s*·\s*نموذج\s*([A-Za-z]+)\s*$")
 EN_MODEL = re.compile(r"^(.*?)\s*·\s*Model\s*([A-Za-z]+)\s*$", re.I)
+SKIP = re.compile(r"اختيارية")
 MARKS = {5: [20] * 5, 6: [15, 15, 15, 15, 20, 20], 7: [15] * 6 + [10]}
 SCALE = 2.5
 CONTENT_TOP, CONTENT_BOTTOM = 95, 800     # بين رأس الصفحة وذيلها، بالنقاط
@@ -241,9 +242,8 @@ def crop_answers(pdf_path, want, outdir, problems, tag):
     files = {}
     for n, segs in parts.items():
         names = []
+        segs = [s for s in segs if s[2] - s[1] >= 60]    # أقل من هيچ يعني خط زينة، مو كتابة
         for k, seg in enumerate(segs):
-            if seg[2] - seg[1] < 60:
-                problems.append(f"{tag}: قصة رفيعة بجواب س {n} (جزء {k + 1})")
             name = f"a{n}_{k + 1}.png"
             stack(([note] if note and k == 0 else []) + [seg], os.path.join(outdir, name))
             names.append(name)
@@ -286,6 +286,11 @@ def main():
     ans_dirs = {int(d): d for d in os.listdir(a.answers) if d.isdigit()}
     for number, g in enumerate(ar, 1):
         e = en[number - 1] if number <= len(en) else []
+        if SKIP.search(g[0]["title"]):      # ملغية بطلب صاحب الامتحانات
+            print(f"تخطي: {g[0]['title']}")
+            ai += len(g)
+            ei += len(e)
+            continue
         info = g[0]["info"]
         exam = {"ord": number, "title": g[0]["title"], "info": info if "الوقت" in info else "", "minutes": minutes_of(info) or 75, "versions": []}
         for v in g:

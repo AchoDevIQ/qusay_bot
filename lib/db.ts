@@ -91,6 +91,10 @@ export function initDb() {
   addColumn("orders", "settle_id", "INTEGER");
   addColumn("products", "cat_id", "INTEGER");
   addColumn("products", "mode", "TEXT");
+  addColumn("bank_exams", "manual", "INTEGER DEFAULT 0");
+  addColumn("bank_versions", "manual", "INTEGER DEFAULT 0");
+  addColumn("bank_versions", "pdf_ar", "TEXT");
+  addColumn("bank_versions", "pdf_en", "TEXT");
 
   if (get("SELECT COUNT(*) n FROM products WHERE active=1 AND cat_id IS NULL")!.n) {
     run("UPDATE products SET cat_id=? WHERE cat_id IS NULL", catIdFor("منتجات أخرى"));
