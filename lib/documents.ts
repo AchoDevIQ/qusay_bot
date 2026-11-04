@@ -35,8 +35,13 @@ export function findBrowser(): string | null {
   return cands.find((p) => fs.existsSync(p)) ?? null;
 }
 
+/** على السيرفر ماكو متصفح منصب، فنستخدم النسخة اللي وية التطبيق */
+async function packagedBrowser() {
+  if (process.platform !== "linux" || process.env.CHROME_PATH) return null;
+  try { return await (await import("@sparticuz/chromium")).default.executablePath(); } catch (e) { console.error("Browser problem:", e); return null; }
+}
 async function render(out: string, profile: string, args: string[], htmlPath: string) {
-  const b = findBrowser();
+  const b = findBrowser() ?? await packagedBrowser();
   if (!b) return false;
   const url = "file:///" + path.resolve(htmlPath).replace(/\\/g, "/").replace(/^\/+/, "");
   // نجرب بحماية المتصفح أول. بدونها بس إذا السيرفر ما يدعمها، حتى تبقى الوصولات تطلع

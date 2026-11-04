@@ -63,6 +63,7 @@ export function firestoreDriver(getDb: () => FirestoreLike): Driver {
   }
 
   const driver: Driver = {
+    seedOnce: true,
     async init() {},
     async list(table, eq) {
       const keys = keyCols(table);

@@ -60,7 +60,7 @@ function normalDb(db: Record<string, any[]>) {
   }
   // kv: المفاتيح اللي بيها وقت أو رمز، وقيم JSON
   // invfail_: عداد المحاولات الغلط، إضافة أمنية ما موجودة بالبوت القديم
-  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_|^asstudent_/.test(r.k)).map((r) => {
+  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_|^asstudent_|^seeded$/.test(r.k)).map((r) => {
     let v = r.v;
     if (/^(q_hours|online_only)$/.test(r.k)) v = JSON.parse(v);
     if (/^libinv_/.test(r.k)) v = String(v).split(":")[0];

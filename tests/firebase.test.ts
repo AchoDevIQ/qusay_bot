@@ -7,8 +7,9 @@ for (const k of KEYS) delete process.env[k];
 const { firebaseConfig, firestore } = await import("../lib/firebase.ts");
 
 test("الناقص ينذكر بالأسماء", () => {
-  assert.deepEqual(firebaseConfig({}).missing, KEYS);
-  assert.deepEqual(firebaseConfig({ FIREBASE_PROJECT_ID: "p", FIREBASE_STORAGE_BUCKET: " " }).missing, ["FIREBASE_CLIENT_EMAIL", "FIREBASE_PRIVATE_KEY", "FIREBASE_STORAGE_BUCKET"]);
+  assert.deepEqual(firebaseConfig({}).missing, ["FIREBASE_PROJECT_ID", "FIREBASE_STORAGE_BUCKET"]);
+  assert.deepEqual(firebaseConfig({ FIREBASE_PROJECT_ID: "p", FIREBASE_STORAGE_BUCKET: "b" }).missing, []);        // حساب السيرفر
+  assert.deepEqual(firebaseConfig({ FIREBASE_PROJECT_ID: "p", FIREBASE_STORAGE_BUCKET: " ", FIREBASE_CLIENT_EMAIL: "e" }).missing, ["FIREBASE_PRIVATE_KEY", "FIREBASE_STORAGE_BUCKET"]);
 });
 
 test("المفتاح المكتوب بسطر واحد يرجع لأسطره", () => {

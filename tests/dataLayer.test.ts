@@ -125,3 +125,33 @@ test("Firestore: البحث بالمفتاح يقرا وثيقة وحدة بس",
   await dbm.kvGet("k5");
   assert.equal(f.stats.reads, 1);
 });
+
+test("نسخ store.db إلى Firestore: نفس الأرقام، والعداد يكمل، وما يكتب فوق بيانات موجودة", async () => {
+  const { copyToFirestore } = await import("../lib/copyData.ts");
+  const f = fakeFirestore();
+  const rows: Record<string, any[]> = {
+    orders: [{ id: 3, user_id: 1, printed: 1 }, { id: 7, user_id: 2, printed: null }],
+    kv: [{ k: "a/b", v: "1" }],
+    exam_access: [{ user_id: 1, chapter: "الفصل", order_id: 3, created: "x" }],
+  };
+  const counts = await copyToFirestore(async (t) => rows[t] ?? [], () => f.db);
+  assert.deepEqual([counts.orders, counts.kv, counts.exam_access], [2, 1, 1]);
+  dbm.setDriver(firestoreDriver(() => f.db));
+  assert.equal((await dbm.one("orders", { id: 7 }))!.user_id, 2);
+  assert.equal(await dbm.kvGet("a/b"), "1");
+  assert.equal((await dbm.one("exam_access", { user_id: 1, chapter: "الفصل" }))!.order_id, 3);
+  assert.equal(await dbm.insert("orders", { user_id: 9 }), 8);
+  await assert.rejects(copyToFirestore(async (t) => rows[t] ?? [], () => f.db), /--force/);
+  await copyToFirestore(async (t) => rows[t] ?? [], () => f.db, { force: true });
+});
+
+test("Firestore: القيم الأولى تنكتب مرة وحدة", async () => {
+  const f = fakeFirestore();
+  dbm.setDriver(firestoreDriver(() => f.db));
+  await dbm.initDb();
+  assert.ok(await dbm.one("fees"));
+  await dbm.update("fees", {}, { fee: 1 });
+  await dbm.remove("areas", {});
+  await dbm.initDb();
+  assert.equal(await dbm.one("areas"), null);
+});

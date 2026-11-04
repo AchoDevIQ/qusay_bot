@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
   const update = await req.json();
-  // نرد فوراً على تليجرام ونكمل المعالجة بالخلفية (حتى ما يعيد الإرسال)
-  void enqueueUpdate(update);
+  // نخلص الرسالة قبل الرد، لأن سيرفر Firebase ممكن يوقف المعالج بعد الرد
+  await enqueueUpdate(update);
   return NextResponse.json({ ok: true });
 }

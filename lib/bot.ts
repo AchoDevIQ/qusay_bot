@@ -167,8 +167,15 @@ export function allowUpdate(uid: number | undefined, now = Date.now()) {
 // تليجرام يرسل الرسائل بالتوازي؛ ننفذها وحدة وحدة حتى ما تتداخل حالات الجلسة (مثل صور الألبوم)
 let tail: Promise<unknown> = Promise.resolve();
 let pending = 0;
+// تليجرام يعيد نفس الرسالة إذا تأخر الرد، فما تتنفذ مرتين
+const seenUpdates = new Set<number>();
 export function enqueueUpdate(u: any) {
   const uid: number | undefined = u.message?.from?.id ?? u.callback_query?.from?.id;
+  if (u.update_id !== undefined) {
+    if (seenUpdates.has(u.update_id)) return tail;
+    if (seenUpdates.size > 5000) seenUpdates.clear();
+    seenUpdates.add(u.update_id);
+  }
   if (pending >= QUEUE_MAX || !allowUpdate(uid)) return tail;
   pending++;
   tail = tail.then(async () => await handleUpdate(u)).catch((e) => console.error("handleUpdate error", e)).finally(() => { pending--; });

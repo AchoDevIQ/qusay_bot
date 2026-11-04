@@ -14,4 +14,6 @@ export type Driver = {
   tx<T>(fn: () => Promise<T>): Promise<T>;
   /** تجهيز قاعدة البيانات أول مرة */
   init(): Promise<void>;
+  /** القيم الأولى تنكتب مرة وحدة بس، حتى السيرفر يقوم بسرعة */
+  seedOnce?: boolean;
 };

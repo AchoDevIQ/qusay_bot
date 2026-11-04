@@ -99,7 +99,9 @@ export async function catIdFor(name: string) {
 }
 
 export async function initDb() {
-  await (await driver()).init();
+  const d = await driver();
+  await d.init();
+  if (d.seedOnce && await kvGet("seeded")) return;
   const orphan = await find("products", { cat_id: null });
   if (orphan.some((p) => p.active === 1)) await update("products", { cat_id: null }, { cat_id: await catIdFor("منتجات أخرى") });
   await update("products", { mode: null }, (p) => ({ mode: modeFromName(p.name) }));
@@ -114,6 +116,7 @@ export async function initDb() {
     }
   }
   if (!await one("chapters")) await saveCurriculum(SEED_CURRIC);
+  if (d.seedOnce) await kvSet("seeded", "1");
 }
 
 /** يحفظ الفصول والمواضيع من نص، ويحدّث الموجود بمكانه حتى ما تضيع ارتباطات الأسئلة القديمة */

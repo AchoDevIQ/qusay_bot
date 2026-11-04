@@ -1,0 +1,34 @@
+# إعدادات Firebase App Hosting. الأسرار تنحفظ داخل Firebase، مو هنا:
+#   firebase apphosting:secrets:set TOKEN
+#   firebase apphosting:secrets:set WEBHOOK_SECRET
+runConfig:
+  # نسخة وحدة: البوت يرتب رسائل كل طالب بالذاكرة، ونسختين يخربن الترتيب
+  minInstances: 0
+  maxInstances: 1
+  concurrency: 80
+  cpu: 2
+  memoryMiB: 2048
+
+env:
+  - variable: TOKEN
+    secret: TOKEN
+    availability: [RUNTIME]
+  - variable: WEBHOOK_SECRET
+    secret: WEBHOOK_SECRET
+    availability: [RUNTIME]
+  # غير هاي القيم الأربع قبل النشر
+  - variable: ADMIN
+    value: "PUT_ADMIN_TELEGRAM_ID"
+    availability: [RUNTIME]
+  - variable: STORE_URL
+    value: "https://PUT_YOUR_APP_HOSTING_DOMAIN"
+    availability: [RUNTIME]
+  - variable: FIREBASE_PROJECT_ID
+    value: "PUT_PROJECT_ID"
+    availability: [RUNTIME]
+  - variable: FIREBASE_STORAGE_BUCKET
+    value: "PUT_PROJECT_ID.firebasestorage.app"
+    availability: [RUNTIME]
+  - variable: PDF_DIR
+    value: "/tmp/qmath-pdf"
+    availability: [RUNTIME]

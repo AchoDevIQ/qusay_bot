@@ -10,6 +10,7 @@
     "set-webhook": "node --env-file-if-exists=.env.local scripts/set-webhook.ts",
     "firebase-check": "node --env-file-if-exists=.env.local scripts/firebase-check.ts",
     "upload-content": "node --env-file-if-exists=.env.local scripts/upload-content.ts",
+    "copy-to-firestore": "node --env-file-if-exists=.env.local scripts/copy-to-firestore.ts",
     "test": "node --test tests/*.test.ts",
     "load-exams": "node --env-file-if-exists=.env.local scripts/load-exams.ts"
   },
@@ -17,6 +18,7 @@
     "node": ">=24"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^153.0.0",
     "firebase-admin": "^14.5.0",
     "next": "^15",
     "qrcode": "^1.5.4",
