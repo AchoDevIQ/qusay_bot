@@ -38,13 +38,16 @@ async function render(out: string, profile: string, args: string[], htmlPath: st
   const b = findBrowser();
   if (!b) return false;
   const url = "file:///" + path.resolve(htmlPath).replace(/\\/g, "/").replace(/^\/+/, "");
-  for (const flag of ["--headless=new", "--headless"]) {
-    try {
-      fs.rmSync(out, { force: true });
-      const extra = process.platform === "win32" ? [] : ["--no-sandbox"];
-      await run(b, [flag, ...extra, "--disable-gpu", ...args, "--user-data-dir=" + path.join(os.tmpdir(), profile), url], { timeout: 90_000 });
-    } catch (e) { console.error("Render problem:", e); }
-    if (fs.existsSync(out) && fs.statSync(out).size > 1000) return true;
+  // نجرب بحماية المتصفح أول. بدونها بس إذا السيرفر ما يدعمها، حتى تبقى الوصولات تطلع
+  const sandbox: string[][] = process.platform === "win32" ? [[]] : [[], ["--no-sandbox"]];
+  for (const extra of sandbox) {
+    for (const flag of ["--headless=new", "--headless"]) {
+      try {
+        fs.rmSync(out, { force: true });
+        await run(b, [flag, ...extra, "--disable-gpu", ...args, "--user-data-dir=" + path.join(os.tmpdir(), profile), url], { timeout: 90_000 });
+      } catch (e) { console.error("Render problem:", e); }
+      if (fs.existsSync(out) && fs.statSync(out).size > 1000) return true;
+    }
   }
   return false;
 }
@@ -167,8 +170,11 @@ export async function sendProfileCard(chat: number, s: Row, title: string, capti
   try {
     ensureDir();
     const hp = path.join(PDF_DIR, `card_${chat}.html`), pp = path.join(PDF_DIR, `card_${chat}.png`);
-    fs.writeFileSync(hp, profileCardHtml(s, title), "utf8");
-    if (await htmlToPng(hp, pp, 760, s.exam === "حضوري" ? 960 : 905)) {
+    const html = profileCardHtml(s, title);
+    // نفس البطاقة ما تنرسم مرتين: الرسم يفتح متصفح، والضغط المتكرر لازم ما يكلف شي
+    const cached = fs.existsSync(pp) && fs.existsSync(hp) && fs.readFileSync(hp, "utf8") === html;
+    if (!cached) fs.writeFileSync(hp, html, "utf8");
+    if (cached || await htmlToPng(hp, pp, 760, s.exam === "حضوري" ? 960 : 905)) {
       const r = await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", reply_markup: JSON.stringify(replyKb) }, "photo", pp, "card.png", "image/png");
       if (r) return r;
     }

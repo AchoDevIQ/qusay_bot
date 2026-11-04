@@ -20,8 +20,9 @@ function scrub(s: string) {
     // نفس الرابط: بايثون ما يرمز / وجافاسكربت يرمزها %2F، وتليجرام يفهم الاثنين
     .replace(/share\/url\?url=https%3A(?:\/\/|%2F%2F)t\.me(?:\/|%2F)/g, "share/url?url=https%3A//t.me/")
     .replace(/a:done:\d+/g, "a:done:<BATCH>")
-    .replace(/lib_\d{6}/g, "lib_<CODE>")
-    .replace(/<code>\d{6}<\/code>/g, "<code><CODE></code>");
+    // رمز الدعوة صار 8 أرقام عمداً (كان 6 بالبوت القديم)، حتى ما ينخمن
+    .replace(/lib_\d{6,8}/g, "lib_<CODE>")
+    .replace(/<code>\d{6,8}<\/code>/g, "<code><CODE></code>");
 }
 // صفحات المتجر انتقلت عمداً: /index + /reg.html + /pos.html صارت /store و/store/reg و/store/pos
 const PAGE: Record<string, string> = { "": "store", "/store": "store", "/reg.html": "reg", "/store/reg": "reg", "/pos.html": "pos", "/store/pos": "pos" };
@@ -46,7 +47,8 @@ function normalDb(db: Record<string, any[]>) {
     });
   }
   // kv: المفاتيح اللي بيها وقت أو رمز، وقيم JSON
-  out.kv = out.kv.filter((r) => !/_stamp$/.test(r.k)).map((r) => {
+  // invfail_: عداد المحاولات الغلط، إضافة أمنية ما موجودة بالبوت القديم
+  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_/.test(r.k)).map((r) => {
     let v = r.v;
     if (/^(q_hours|online_only)$/.test(r.k)) v = JSON.parse(v);
     if (/^libinv_/.test(r.k)) v = String(v).split(":")[0];

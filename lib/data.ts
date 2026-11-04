@@ -1,5 +1,5 @@
 // الاستعلامات المشتركة والصلاحيات
-import { all, get, kvGet, run, type Row } from "./db.ts";
+import { all, get, kvGet, kvSet, run, type Row } from "./db.ts";
 import { ADMIN_IDS, DEFAULT_FEE, DAYS, DAY_ORDER, ORD_AR, toLatinDigits } from "./config.ts";
 import { esc, nowIQ, stamp } from "./util.ts";
 
@@ -50,6 +50,17 @@ export function allowed(uid: number, d: string) {
   if (p === "any") return isStaff(uid);
   if (p === "owner") return isAdmin(uid);
   return can(uid, p);
+}
+
+// ---------- حد المحاولات الغلط للرموز (5 بالساعة لكل حساب)
+const FAIL_MAX = 5, FAIL_WINDOW_S = 3600;
+function fails(kind: string, uid: number) {
+  const [n, ts] = (kvGet(`${kind}_${uid}`) ?? "0:0").split(":").map(Number);
+  return Date.now() / 1000 - ts < FAIL_WINDOW_S ? n : 0;
+}
+export const tooManyFails = (kind: string, uid: number) => fails(kind, uid) >= FAIL_MAX;
+export function noteFail(kind: string, uid: number) {
+  kvSet(`${kind}_${uid}`, `${fails(kind, uid) + 1}:${Math.floor(Date.now() / 1000)}`);
 }
 
 // ---------- الطلاب والمراكز

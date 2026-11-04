@@ -1,7 +1,7 @@
 // نقطة دخول كل رسالة/ضغطة زر من تليجرام
 import { getSession, initDb, kvGet, kvSet, setSession, type Row } from "./db.ts";
 import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
-import { allowed, can, isStaff, myOffice, question, searchStudents, student } from "./data.ts";
+import { allowed, can, isAdmin, isStaff, myOffice, noteFail, question, searchStudents, student, tooManyFails } from "./data.ts";
 import { mainKb, regKb } from "./keyboards.ts";
 import { api, answerCb, send } from "./telegram.ts";
 import { btn } from "./util.ts";
@@ -38,7 +38,10 @@ async function onMessage(m: Row) {
   if (["myid", "id", "رقمي", "ايدي", "آيدي"].includes(idWord)) { await send(chat, `رقم حسابك: <code>${uid}</code>`); return; }
   if (text.startsWith("/start lib_")) return joinOfficeByCode(chat, uid, text.slice(text.indexOf("lib_") + 4).trim(), m.from ?? {});
   const digits = toLatinDigits(text).replace(/ /g, "");
-  if (/^\d{6}$/.test(digits) && kvGet("libinv_" + digits)) return joinOfficeByCode(chat, uid, digits, m.from ?? {});
+  if (/^\d{8}$/.test(digits)) {
+    if (kvGet("libinv_" + digits) && !tooManyFails("invfail", uid)) return joinOfficeByCode(chat, uid, digits, m.from ?? {});
+    if (!isStaff(uid)) noteFail("invfail", uid);
+  }
   if (text === BTN_SHOP) {
     if (!st.startsWith("a:")) setSession(uid, "", { cart: data.cart ?? {} });
     return openShop(chat, uid);
@@ -128,9 +131,26 @@ export async function handleUpdate(u: any) {
   else if (u.callback_query) await onCallback(u.callback_query);
 }
 
+// حماية من الإغراق: اللي يرسل أكثر من الحد تنهمل رسائله الزايدة، حتى ما يعطل البوت على الباقين
+const RATE_WINDOW_MS = 10_000, RATE_MAX = 20, QUEUE_MAX = 2000;
+const recent = new Map<number, number[]>();
+export function allowUpdate(uid: number | undefined, now = Date.now()) {
+  if (!uid || isAdmin(uid)) return true;
+  if (recent.size > 10_000) recent.clear();
+  const hits = (recent.get(uid) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  const ok = hits.length < RATE_MAX;
+  if (ok) hits.push(now);
+  recent.set(uid, hits);
+  return ok;
+}
+
 // تليجرام يرسل الرسائل بالتوازي؛ ننفذها وحدة وحدة حتى ما تتداخل حالات الجلسة (مثل صور الألبوم)
 let tail: Promise<unknown> = Promise.resolve();
+let pending = 0;
 export function enqueueUpdate(u: any) {
-  tail = tail.then(() => handleUpdate(u)).catch((e) => console.error("handleUpdate error", e));
+  const uid: number | undefined = u.message?.from?.id ?? u.callback_query?.from?.id;
+  if (pending >= QUEUE_MAX || !allowUpdate(uid)) return tail;
+  pending++;
+  tail = tail.then(() => handleUpdate(u)).catch((e) => console.error("handleUpdate error", e)).finally(() => { pending--; });
   return tail;
 }

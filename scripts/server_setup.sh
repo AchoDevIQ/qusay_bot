@@ -17,6 +17,19 @@ echo ">>> 2/4 بناء التطبيق..."
 npm ci
 npm run build
 echo ">>> 3/4 تشغيل البوت كخدمة دائمية..."
+# البوت يشتغل بمستخدم بلا صلاحيات: إذا صار اختراق، ما يوصل لباقي السيرفر
+id qmath >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin qmath
+mkdir -p "$APP_DIR/data"
+chown -R qmath:qmath "$APP_DIR"
+chmod 700 "$APP_DIR/data"
+if [ -f "$APP_DIR/.env.local" ]; then chmod 600 "$APP_DIR/.env.local"; fi
+if [ -f "$APP_DIR/settings.txt" ]; then chmod 600 "$APP_DIR/settings.txt"; fi
+DB_FILE="$(sed -n 's/^DB_PATH=//p' "$APP_DIR/.env.local" 2>/dev/null | head -1)"
+case "$DB_FILE" in /*) chown -R qmath:qmath "$(dirname "$DB_FILE")" ;; esac
+if ! runuser -u qmath -- test -r "$APP_DIR/package.json"; then
+  echo "!!! المستخدم qmath ما يوصل لمجلد المشروع. انقل المشروع إلى مكان مثل /opt/qmath (مو داخل /root) وشغل الملف مرة ثانية."
+  exit 1
+fi
 cat > /etc/systemd/system/qmath.service <<UNIT
 [Unit]
 Description=QMath Telegram bot (Next.js)
@@ -24,11 +37,15 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+User=qmath
+Group=qmath
 WorkingDirectory=$APP_DIR
 ExecStart=$(command -v npm) run start
 Restart=always
 RestartSec=5
+UMask=0077
 Environment=NODE_ENV=production
+Environment=HOME=/home/qmath
 
 [Install]
 WantedBy=multi-user.target

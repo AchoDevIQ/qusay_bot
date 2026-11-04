@@ -24,7 +24,7 @@ globalThis.fetch = (async (url: string, init: any) => {
   return new Response(JSON.stringify({ ok: true, result }));
 }) as typeof fetch;
 
-const { handleUpdate, enqueueUpdate } = await import("../lib/bot.ts");
+const { allowUpdate, handleUpdate, enqueueUpdate } = await import("../lib/bot.ts");
 const { all, get, kvSet, run } = await import("../lib/db.ts");
 const { parseAmount } = await import("../lib/office.ts");
 
@@ -225,7 +225,7 @@ test("المكتبة: انضمام بالرمز، رصيد، بيع، ومحاس
   const oid = get("SELECT id FROM offices")!.id;
   flush();
   await cb(1, `a:libm:${oid}`);
-  const code = /<code>(\d{6})<\/code>/.exec(lastSent().p.text)![1];
+  const code = /<code>(\d{8})<\/code>/.exec(lastSent().p.text)![1];
   flush();
   await msg(9, code);
   assert.equal(get("SELECT office_id FROM office_users WHERE user_id=9")!.office_id, oid);
@@ -310,6 +310,51 @@ test("الرسائل بالطابور تتنفذ بالترتيب، والخطأ
   await Promise.all([enqueueUpdate(mk(2)), enqueueUpdate({ message: { chat: null } }), enqueueUpdate(mk(3))]);
   globalThis.fetch = realFetch;
   assert.deepEqual(order, [2, 3]);
+});
+
+test("الإغراق: الرسائل الزايدة تنهمل، والمدير ما ينحد، وبعد المهلة يرجع عادي", () => {
+  const t = 1_000_000;
+  for (let i = 0; i < 20; i++) assert.equal(allowUpdate(77, t + i), true);
+  assert.equal(allowUpdate(77, t + 21), false);
+  assert.equal(allowUpdate(78, t + 21), true);          // غيره ما يتأثر
+  assert.equal(allowUpdate(77, t + 10_100), true);
+  for (let i = 0; i < 50; i++) assert.equal(allowUpdate(1, t + i), true);
+});
+
+test("البطاقة ما تنرسم مرتين إذا ما تغيرت", async () => {
+  flush();
+  const card = path.join(tmp, "card_3.png");
+  await msg(3, "👤 معلوماتي");                          // بدون متصفح: يرسل نص
+  assert.match(texts(), /معلوماتك/);
+  flush();
+  fs.writeFileSync(card, "x".repeat(2000));              // صورة جاهزة من مرة سابقة
+  await msg(3, "👤 معلوماتي");
+  assert.equal(calls.filter((c) => c.method === "sendPhoto").length, 1);
+  flush();
+  fs.rmSync(card);
+});
+
+test("رمز الدعوة: 5 محاولات غلط بالساعة، وبعدها حتى الصحيح ينرفض", async () => {
+  const oid = run("INSERT INTO offices(name) VALUES('مكتبة الحد')");
+  await cb(1, `a:libm:${oid}`);
+  const code = /<code>(\d{8})<\/code>/.exec(lastSent().p.text)![1];
+  flush();
+  for (let i = 0; i < 5; i++) await msg(70, "12345678");
+  flush();
+  await msg(70, code);
+  assert.equal(get("SELECT COUNT(*) n FROM office_users WHERE user_id=70")!.n, 0);
+  flush();
+  await msg(70, `/start lib_${code}`);
+  assert.match(texts(), /حاولت هوايا/);
+  assert.equal(get("SELECT COUNT(*) n FROM office_users WHERE user_id=70")!.n, 0);
+  flush();
+  await msg(71, code);                                   // غيره يدخل عادي
+  assert.equal(get("SELECT office_id FROM office_users WHERE user_id=71")!.office_id, oid);
+  flush();
+  kvSet("invfail_70", `5:${Math.floor(Date.now() / 1000) - 3700}`);   // بعد ساعة ترجع المحاولات
+  await msg(70, `/start lib_11111111`);
+  assert.match(texts(), /غير صالح/);
+  flush();
 });
 
 test("parseAmount", () => {

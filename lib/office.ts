@@ -3,7 +3,7 @@ import { randomInt } from "node:crypto";
 import { all, get, kvGet, kvSet, run, setSession, tx, type Row } from "./db.ts";
 import { ADMIN_IDS, BTN_OFFICE, toLatinDigits } from "./config.ts";
 import {
-  can, isAdmin, isStaff, myOffice, office, officeUnsettled, orderItems, product, staffAccount, staffName, student,
+  can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, product, staffAccount, staffName, student, tooManyFails,
 } from "./data.ts";
 import { flowKb, mainKb, posKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendPaperReceipt, sendReceiptImage } from "./documents.ts";
@@ -271,8 +271,8 @@ export async function libCb(chat: number, uid: number, mid: number, d: string): 
     if (r) await sendView(chat, libView(r.office_id));
   } else if (d.startsWith("a:libm:")) {
     const oid = Number(d.slice(7));
-    let code = String(randomInt(100000, 1000000));
-    while (kvGet("libinv_" + code)) code = String(randomInt(100000, 1000000));
+    let code = String(randomInt(10000000, 100000000));
+    while (kvGet("libinv_" + code)) code = String(randomInt(10000000, 100000000));
     kvSet("libinv_" + code, `${oid}:${Math.floor(Date.now() / 1000)}`);
     const link = `https://t.me/${kvGet("bot_username") || "Qusay_Alomairi_Bot"}?start=lib_${code}`;
     await send(chat, `👤 <b>إضافة حساب لـ ${esc(office(oid)!.name)}</b>\n\n` +
@@ -306,8 +306,13 @@ export async function libCb(chat: number, uid: number, mid: number, d: string): 
 
 export async function joinOfficeByCode(chat: number, uid: number, code: string, user: Row) {
   const key = "libinv_" + code.replace(/[^\p{L}\p{N}_]/gu, "");
+  if (tooManyFails("invfail", uid)) { await send(chat, "⚠️ حاولت هوايا برموز غلط. حاول بعد ساعة.", { replyKb: mainKb(uid) }); return; }
   const v = kvGet(key);
-  if (!v) { await send(chat, "⚠️ الرابط غير صالح أو انستخدم قبل. اطلب رابط جديد من قصي العميري.", { replyKb: mainKb(uid) }); return; }
+  if (!v) {
+    if (!isStaff(uid)) noteFail("invfail", uid);
+    await send(chat, "⚠️ الرابط غير صالح أو انستخدم قبل. اطلب رابط جديد من قصي العميري.", { replyKb: mainKb(uid) });
+    return;
+  }
   const [oid, ts] = v.split(":").map(Number);
   const o = office(oid);
   if (!o || !o.active || Date.now() / 1000 - ts > 3 * 86400) { await send(chat, "⚠️ الرابط انتهى. اطلب رابط جديد من قصي العميري.", { replyKb: mainKb(uid) }); return; }
