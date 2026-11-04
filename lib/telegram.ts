@@ -25,10 +25,10 @@ export async function api<T = any>(method: string, params: Record<string, unknow
 
 /** رفع ملف (صورة/PDF) */
 export async function upload(method: string, fields: Record<string, string>, fileField: string,
-  filePath: string, fname = path.basename(filePath), ctype = "application/octet-stream") {
+  file: string | Buffer, fname = typeof file === "string" ? path.basename(file) : "file", ctype = "application/octet-stream") {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) fd.append(k, v);
-  fd.append(fileField, new Blob([fs.readFileSync(filePath)], { type: ctype }), fname);
+  fd.append(fileField, new Blob([typeof file === "string" ? fs.readFileSync(file) : new Uint8Array(file)], { type: ctype }), fname);
   try {
     const r = await fetch(base() + method, { method: "POST", body: fd, signal: AbortSignal.timeout(120_000) });
     const j: any = await r.json();

@@ -9,6 +9,7 @@
     "start": "next start",
     "set-webhook": "node --env-file-if-exists=.env.local scripts/set-webhook.ts",
     "firebase-check": "node --env-file-if-exists=.env.local scripts/firebase-check.ts",
+    "upload-content": "node --env-file-if-exists=.env.local scripts/upload-content.ts",
     "test": "node --test tests/*.test.ts",
     "load-exams": "node --env-file-if-exists=.env.local scripts/load-exams.ts"
   },

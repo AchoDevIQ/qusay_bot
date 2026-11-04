@@ -29,7 +29,7 @@ const sign = (uid: number, when = Math.floor(Date.now() / 1000), token = TOKEN) 
   p.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
   return p.toString();
 };
-const denied = (fn: () => unknown, status: number) => assert.throws(fn as () => void, (e: any) => e instanceof ApiError && e.status === status);
+const denied = (fn: () => Promise<unknown>, status: number) => assert.rejects(fn, (e: any) => e instanceof ApiError && e.status === status);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
 const png = () => new Blob([PNG], { type: "image/png" });
 
@@ -50,55 +50,55 @@ test("توقيع تليجرام: الصحيح ينقبل، والمزور وال
   for (const bad of ["", "x=1", null, undefined, 5]) assert.equal(verifyInitData(bad), null);
 });
 
-test("بدون توقيع أو صلاحية ممنوع، وصلاحية الامتحانات تفتح", () => {
-  denied(() => examAction({ action: "list" }), 401);
-  denied(() => examAction({ action: "list", initData: "user=%7B%22id%22%3A1%7D" }), 401);
-  denied(() => examAction({ action: "list", initData: sign(2) }), 403);                            // طالب
+test("بدون توقيع أو صلاحية ممنوع، وصلاحية الامتحانات تفتح", async () => {
+  await denied(() => examAction({ action: "list" }), 401);
+  await denied(() => examAction({ action: "list", initData: "user=%7B%22id%22%3A1%7D" }), 401);
+  await denied(() => examAction({ action: "list", initData: sign(2) }), 403);                            // طالب
   run("INSERT INTO staff(user_id, name, perms) VALUES(5, 'مساعد', 'orders')");
-  denied(() => examAction({ action: "list", initData: sign(5) }), 403);                            // مساعد بدون الصلاحية
-  denied(() => examAction({ action: "delExam", id: 1, initData: sign(5) }), 403);
+  await denied(() => examAction({ action: "list", initData: sign(5) }), 403);                            // مساعد بدون الصلاحية
+  await denied(() => examAction({ action: "delExam", id: 1, initData: sign(5) }), 403);
   assert.ok(get("SELECT 1 FROM bank_exams WHERE id=1"));
   run("UPDATE staff SET perms='orders,exams' WHERE user_id=5");
-  assert.equal(examAction({ action: "list", initData: sign(5) }).chapters[0].exams.length, 1);
+  assert.equal((await examAction({ action: "list", initData: sign(5) })).chapters[0].exams.length, 1);
   run("UPDATE staff SET perms='orders' WHERE user_id=5");
 });
 
-test("التعديلات تنحفظ بأسم صاحبها، والقيم الغلط ترفض", () => {
+test("التعديلات تنحفظ بأسم صاحبها، والقيم الغلط ترفض", async () => {
   const init = sign(1);
-  examAction({ action: "kind", id: 1, initData: init });
+  await examAction({ action: "kind", id: 1, initData: init });
   assert.equal(get("SELECT kind FROM bank_versions WHERE id=1")!.kind, "optional");
-  examAction({ action: "minutes", id: 1, value: "75", initData: init });
+  await examAction({ action: "minutes", id: 1, value: "75", initData: init });
   assert.equal(get("SELECT minutes FROM bank_exams WHERE id=1")!.minutes, 75);
-  examAction({ action: "mark", id: 1, value: 15, initData: init });
+  await examAction({ action: "mark", id: 1, value: 15, initData: init });
   assert.equal(get("SELECT max_mark FROM bank_questions WHERE id=1")!.max_mark, 15);
-  denied(() => examAction({ action: "mark", id: 1, value: "12.5", initData: init }), 400);
-  denied(() => examAction({ action: "mark", id: 1, value: "1; DROP TABLE exams", initData: init }), 400);
-  denied(() => examAction({ action: "minutes", id: 1, value: 1, initData: init }), 400);
-  denied(() => examAction({ action: "nothing", initData: init }), 400);
-  const r = examAction({ action: "addExam", slug: "ch1", title: "جديد <b>", minutes: 90, initData: init });
+  await denied(() => examAction({ action: "mark", id: 1, value: "12.5", initData: init }), 400);
+  await denied(() => examAction({ action: "mark", id: 1, value: "1; DROP TABLE exams", initData: init }), 400);
+  await denied(() => examAction({ action: "minutes", id: 1, value: 1, initData: init }), 400);
+  await denied(() => examAction({ action: "nothing", initData: init }), 400);
+  const r = await examAction({ action: "addExam", slug: "ch1", title: "جديد <b>", minutes: 90, initData: init });
   assert.equal(r.chapters[0].exams.length, 2);
   const e = r.chapters[0].exams[1];
-  examAction({ action: "addVersion", id: e.id, initData: init });
+  await examAction({ action: "addVersion", id: e.id, initData: init });
   const v = get("SELECT * FROM bank_versions WHERE exam_id=?", e.id)!;
   assert.deepEqual([v.model, v.ok, v.kind], ["A", 0, "mandatory"]);
-  examAction({ action: "addVersion", id: e.id, kind: "optional", initData: init });
+  await examAction({ action: "addVersion", id: e.id, kind: "optional", initData: init });
   assert.equal(get("SELECT kind FROM bank_versions WHERE exam_id=? AND model='B'", e.id)!.kind, "optional");   // إضافة للاختياري
-  denied(() => examAction({ action: "ok", id: v.id, initData: init }), 400);                       // بدون أسئلة ما تصير جاهزة
+  await denied(() => examAction({ action: "ok", id: v.id, initData: init }), 400);                       // بدون أسئلة ما تصير جاهزة
   assert.ok(get("SELECT COUNT(*) n FROM bank_edits")!.n >= 5);
   assert.ok(get("SELECT user_id FROM bank_edits LIMIT 1")!.user_id === 1);
 });
 
-test("وقت كل الامتحانات يغير اللي على العام، واللي إله وقت خاص يبقى", () => {
+test("وقت كل الامتحانات يغير اللي على العام، واللي إله وقت خاص يبقى", async () => {
   const init = sign(1);
-  examAction({ action: "minutes", id: 1, value: 75, initData: init });
-  const special = examAction({ action: "addExam", slug: "ch1", title: "خاص", minutes: 95, initData: init }).chapters[0].exams.at(-1);
-  denied(() => examAction({ action: "minutesAll", value: 80, initData: sign(5) }), 403);
-  denied(() => examAction({ action: "minutesAll", value: 1, initData: init }), 400);
-  assert.equal(examAction({ action: "list", initData: init }).generalMinutes, 75);
-  assert.equal(examAction({ action: "minutesAll", value: 80, initData: init }).generalMinutes, 80);
+  await examAction({ action: "minutes", id: 1, value: 75, initData: init });
+  const special = (await examAction({ action: "addExam", slug: "ch1", title: "خاص", minutes: 95, initData: init })).chapters[0].exams.at(-1);
+  await denied(() => examAction({ action: "minutesAll", value: 80, initData: sign(5) }), 403);
+  await denied(() => examAction({ action: "minutesAll", value: 1, initData: init }), 400);
+  assert.equal((await examAction({ action: "list", initData: init })).generalMinutes, 75);
+  assert.equal((await examAction({ action: "minutesAll", value: 80, initData: init })).generalMinutes, 80);
   assert.equal(get("SELECT minutes FROM bank_exams WHERE id=1")!.minutes, 80);
   assert.equal(get("SELECT minutes FROM bank_exams WHERE id=?", special.id)!.minutes, 95);
-  examAction({ action: "minutesAll", value: 70, initData: init });
+  await examAction({ action: "minutesAll", value: 70, initData: init });
   assert.equal(get("SELECT minutes FROM bank_exams WHERE id=1")!.minutes, 70);                     // يتبع العام كل مرة
 });
 

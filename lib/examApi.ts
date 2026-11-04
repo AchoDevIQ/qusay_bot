@@ -1,11 +1,11 @@
 // واجهة صفحة إدارة الامتحانات: كل طلب لازم صاحبه يكون عنده صلاحية الامتحانات
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
 import path from "node:path";
 import { CONTENT_DIR, TOKEN } from "./config.ts";
 import { all, get, initDb, kvGet, kvSet, run, tx, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
+import { files } from "./files.ts";
 import { api } from "./telegram.ts";
 import { fileToken, verifyFileToken, verifyInitData } from "./webAuth.ts";
 
@@ -31,8 +31,9 @@ function authed(initData: unknown) {
 
 const generalMinutes = () => Number(kvGet("exam_minutes")) || 75;
 
-export function examList(uid: number) {
+export async function examList(uid: number) {
   const exams = all("SELECT * FROM bank_exams ORDER BY slug, ord");
+  const stored = new Set((await Promise.all([...new Set(exams.map((e) => e.slug as string))].map((s) => files().list(`${s}/`)))).flat());
   const versions = all("SELECT * FROM bank_versions ORDER BY model");
   const questions = all("SELECT * FROM bank_questions ORDER BY n");
   const qBy = new Map<number, Row[]>(), vBy = new Map<number, Row[]>();
@@ -51,7 +52,7 @@ export function examList(uid: number) {
         const pages = (lang: "ar" | "en") => {
           if (v["pdf_" + lang]) return [];
           const out: string[] = [];
-          for (let i = 1; fs.existsSync(path.join(CONTENT_DIR, dir, v.model, `student_${lang}_${i}.png`)); i++) out.push(`${dir}/${v.model}/student_${lang}_${i}.png`);
+          for (let i = 1; stored.has(`${dir}/${v.model}/student_${lang}_${i}.png`); i++) out.push(`${dir}/${v.model}/student_${lang}_${i}.png`);
           return out;
         };
         return {
@@ -67,7 +68,7 @@ export function examList(uid: number) {
 }
 
 /** الأوامر اللي ما بيها ملفات. يرجع القائمة المحدثة */
-export function examAction(body: Row) {
+export async function examAction(body: Row) {
   const uid = authed(body?.initData);
   const a = String(body.action ?? "");
   const id = Number(body.id);
@@ -143,6 +144,8 @@ export function examAction(body: Row) {
   return examList(uid);
 }
 
+const TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".pdf": "application/pdf" };
+
 // ---------- رفع الملفات
 const MAX_UPLOAD = 15 * 1024 * 1024;
 /** نوع الملف من محتواه، مو من اسمه */
@@ -159,11 +162,9 @@ async function saveUpload(f: unknown, kinds: string[]) {
   const buf = Buffer.from(await blob.arrayBuffer());
   const ext = sniff(buf);
   need(ext && kinds.includes(ext), kinds.includes("pdf") ? "لازم ملف PDF" : "لازم صورة PNG أو JPG");
-  const dir = path.join(CONTENT_DIR, "uploads");
-  fs.mkdirSync(dir, { recursive: true });
-  const name = `${randomUUID()}.${ext}`;
-  fs.writeFileSync(path.join(dir, name), buf);
-  return `uploads/${name}`;
+  const ref = `uploads/${randomUUID()}.${ext}`;
+  await files().write(ref, buf, TYPES[`.${ext}`]);
+  return ref;
 }
 const IMAGES = ["png", "jpg"];
 export async function examUpload(form: FormData) {
@@ -202,7 +203,6 @@ export async function examUpload(form: FormData) {
 }
 
 // ---------- قراءة الملفات
-const TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".pdf": "application/pdf" };
 /** يرجع محتوى ملف من المحتوى السري، بس لصاحب الصلاحية، وبس من داخل مجلد المحتوى */
 export async function examFile(token: unknown, ref: unknown) {
   ensure();
@@ -224,6 +224,7 @@ export async function examFile(token: unknown, ref: unknown) {
   need(full.startsWith(root + path.sep), "ملف غير معروف", 403);
   const type = TYPES[path.extname(full).toLowerCase()];
   need(type, "ملف غير معروف", 403);
-  need(fs.existsSync(full), "الملف غير موجود", 404);
-  return { body: fs.readFileSync(full), type };
+  const body = await files().read(path.relative(root, full).replace(/\\/g, "/"));
+  need(body, "الملف غير موجود", 404);
+  return { body: body!, type };
 }

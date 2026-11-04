@@ -1,10 +1,9 @@
 // بنك الامتحانات: كل امتحان بنسخه وأسئلته وأجوبته المقصوصة، وتعديلها من الإدارة
 // الملفات داخل data/content (ما تنرفع على GitHub)، وتنضاف بـ npm run load-exams
-import fs from "node:fs";
 import path from "node:path";
 import { all, get, run, setSession, tx, type Row } from "./db.ts";
-import { CONTENT_DIR } from "./config.ts";
 import { can } from "./data.ts";
+import { files } from "./files.ts";
 import { flowKb } from "./keyboards.ts";
 import { api, edit, send, upload, type Kb } from "./telegram.ts";
 import { btn, cut, esc, stamp } from "./util.ts";
@@ -64,15 +63,14 @@ export function loadCatalog(catalog: Row) {
 }
 
 // ---------- الملفات
-const contentPath = (rel: string) => path.join(CONTENT_DIR, rel);
 const versionDir = (e: Row, v: Row) => path.posix.join(e.slug, `e${e.ord}`, v.model);
 /** صورة أو ملف من المحتوى: رقم تليجرام إذا انبدلت من الإدارة، أو ملف من القرص */
 async function sendImage(chat: number, ref: string | null, caption: string) {
   if (!ref) { await send(chat, `⚠️ ${caption}: ماكو ملف.`); return; }
   if (ref.startsWith("tg:")) { await api("sendPhoto", { chat_id: chat, photo: ref.slice(3), caption }); return; }
-  const f = contentPath(ref);
-  if (!fs.existsSync(f)) { await send(chat, `⚠️ ${caption}: الملف مفقود من السيرفر.`); return; }
-  await upload("sendPhoto", { chat_id: String(chat), caption }, "photo", f, path.basename(f), "image/png");
+  const body = await files().read(ref);
+  if (!body) { await send(chat, `⚠️ ${caption}: الملف مفقود من السيرفر.`); return; }
+  await upload("sendPhoto", { chat_id: String(chat), caption }, "photo", body, path.posix.basename(ref), "image/png");
 }
 export function logEdit(uid: number, what: string) {
   run("INSERT INTO bank_edits(user_id, what, created) VALUES(?,?,?)", uid, what, stamp());
@@ -175,14 +173,10 @@ export async function examBankCb(chat: number, uid: number, mid: number, d: stri
     const e = v && get("SELECT * FROM bank_exams WHERE id=?", v.exam_id);
     if (!v || !e || (lang !== "ar" && lang !== "en")) return "النسخة غير موجودة";
     const uploaded: string | null = v["pdf_" + lang];
-    if (uploaded?.startsWith("uploads/")) {
-      await upload("sendDocument", { chat_id: String(chat), caption: `${e.title} · نسخة ${v.model}`, protect_content: "true" }, "document", contentPath(uploaded), `${v.model}_${lang}.pdf`, "application/pdf");
-      return null;
-    }
-    if (uploaded) { await api("sendDocument", { chat_id: chat, document: uploaded, caption: `${e.title} · نسخة ${v.model}`, protect_content: true }); return null; }
-    const f = contentPath(path.posix.join(versionDir(e, v), `student_${lang}.pdf`));
-    if (!fs.existsSync(f)) return "الملف مفقود من السيرفر";
-    await upload("sendDocument", { chat_id: String(chat), caption: `${e.title} · نسخة ${v.model}`, protect_content: "true" }, "document", f, `${v.model}_${lang}.pdf`, "application/pdf");
+    if (uploaded && !uploaded.startsWith("uploads/")) { await api("sendDocument", { chat_id: chat, document: uploaded, caption: `${e.title} · نسخة ${v.model}`, protect_content: true }); return null; }
+    const body = await files().read(uploaded ?? path.posix.join(versionDir(e, v), `student_${lang}.pdf`));
+    if (!body) return "الملف مفقود من السيرفر";
+    await upload("sendDocument", { chat_id: String(chat), caption: `${e.title} · نسخة ${v.model}`, protect_content: "true" }, "document", body, `${v.model}_${lang}.pdf`, "application/pdf");
   } else if (d.startsWith("a:exm:")) {
     setSession(uid, "a:exm", { id: Number(d.slice(6)) });
     await send(chat, "🕓 اكتب وقت هذا الامتحان بالدقائق، مثل <code>75</code> لساعة وربع:", { replyKb: flowKb() });
