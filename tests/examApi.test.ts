@@ -88,6 +88,20 @@ test("التعديلات تنحفظ بأسم صاحبها، والقيم الغ�
   assert.ok(get("SELECT user_id FROM bank_edits LIMIT 1")!.user_id === 1);
 });
 
+test("وقت كل الامتحانات يغير اللي على العام، واللي إله وقت خاص يبقى", () => {
+  const init = sign(1);
+  examAction({ action: "minutes", id: 1, value: 75, initData: init });
+  const special = examAction({ action: "addExam", slug: "ch1", title: "خاص", minutes: 95, initData: init }).chapters[0].exams.at(-1);
+  denied(() => examAction({ action: "minutesAll", value: 80, initData: sign(5) }), 403);
+  denied(() => examAction({ action: "minutesAll", value: 1, initData: init }), 400);
+  assert.equal(examAction({ action: "list", initData: init }).generalMinutes, 75);
+  assert.equal(examAction({ action: "minutesAll", value: 80, initData: init }).generalMinutes, 80);
+  assert.equal(get("SELECT minutes FROM bank_exams WHERE id=1")!.minutes, 80);
+  assert.equal(get("SELECT minutes FROM bank_exams WHERE id=?", special.id)!.minutes, 95);
+  examAction({ action: "minutesAll", value: 70, initData: init });
+  assert.equal(get("SELECT minutes FROM bank_exams WHERE id=1")!.minutes, 70);                     // يتبع العام كل مرة
+});
+
 test("الرفع: يفحص نوع الملف من محتواه، وبالصلاحية بس", async () => {
   const form = (o: Record<string, any>) => { const f = new FormData(); for (const [k, v] of Object.entries(o)) for (const x of [v].flat()) f.append(k, x); return f; };
   await assert.rejects(examUpload(form({ initData: sign(2), action: "replaceQ", id: 1, file: png() })), (e: any) => e.status === 403);

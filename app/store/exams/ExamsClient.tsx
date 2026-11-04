@@ -6,7 +6,7 @@ type Question = { id: number; n: number; max: number; q: string | null; a: strin
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; questions: Question[] };
 type Exam = { id: number; ord: number; title: string; info: string; minutes: number; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
-type Data = { chapters: Chapter[]; fileToken: string };
+type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string };
 
 const initData = () => (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData ?? "";
 const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info)?.[0] ?? "";
@@ -65,6 +65,7 @@ export default function ExamsClient() {
         {data && data.chapters.length > 1 && (
           <div className="chips">{data.chapters.map((c, i) => <button type="button" key={c.slug} className={i === openChapter ? "on" : ""} onClick={() => { setOpenChapter(i); setOpenExam(null); }}>{c.chapter}</button>)}</div>
         )}
+        {data && <GeneralTime value={data.generalMinutes} busy={busy} call={call} />}
         {ch && (
           <div className="card">
             <h2>📚 {ch.chapter}</h2>
@@ -77,7 +78,7 @@ export default function ExamsClient() {
                   <ExamRows key={e.id} open={open} head={
                     <tr className={"exrow" + (open ? " sel" : "")} onClick={() => { setOpenExam(open ? null : e.id); setOpenVersion(null); setOpenQ(null); }}>
                       <td>{e.ord}</td><td><b>{e.title}</b> {lectureOf(e.info)}{bad ? <span className="exbad"> ⚠️ {bad}</span> : null}</td>
-                      <td className="p">{e.versions.length}</td><td className="p">{fmtTime(e.minutes)}</td>
+                      <td className="p">{e.versions.length}</td><td className="p">{fmtTime(e.minutes)}{e.minutes !== data!.generalMinutes ? <small className="exown"> خاص</small> : null}</td>
                     </tr>
                   }>
                     <ExamPanel exam={e} busy={busy} call={call} fileUrl={fileUrl} openVersion={openVersion} setOpenVersion={(v) => { setOpenVersion(v); setOpenQ(null); }} openQ={openQ} setOpenQ={setOpenQ} />
@@ -85,12 +86,27 @@ export default function ExamsClient() {
                 );
               })}
             </tbody></table>
-            <AddExam slug={ch.slug} busy={busy} call={call} />
+            <AddExam slug={ch.slug} generalMinutes={data!.generalMinutes} busy={busy} call={call} />
           </div>
         )}
       </div>
       {busy && <div className="bar"><div className="in"><div className="sum"><small>جاري الحفظ...</small></div></div></div>}
     </>
+  );
+}
+
+function GeneralTime({ value, busy, call }: { value: number; busy: boolean; call: Call }) {
+  const [minutes, setMinutes] = useState(String(value));
+  useEffect(() => setMinutes(String(value)), [value]);
+  return (
+    <div className="card expad exgeneral">
+      <div className="exline">
+        <b>🕓 وقت كل الامتحانات بالدقائق:</b>
+        <input className="exnum" inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+        <button type="button" className="exbtn" disabled={busy || minutes === String(value)} onClick={() => call({ action: "minutesAll", value: minutes })}>حفظ</button>
+      </div>
+      <div className="exhint">اللي مكتوب يمه «خاص» يبقى على وقته. تغير وقت امتحان واحد من داخل الامتحان.</div>
+    </div>
   );
 }
 
@@ -120,6 +136,7 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
   openVersion: number | null; setOpenVersion: (v: number | null) => void; openQ: number | null; setOpenQ: (q: number | null) => void;
 }) {
   const [minutes, setMinutes] = useState(String(exam.minutes));
+  useEffect(() => setMinutes(String(exam.minutes)), [exam.minutes]);
   const version = exam.versions.find((v) => v.id === openVersion);
   return (
     <div>
@@ -258,16 +275,16 @@ function AddQuestion({ versionId, busy, call }: { versionId: number; busy: boole
   );
 }
 
-function AddExam({ slug, busy, call }: { slug: string; busy: boolean; call: Call }) {
+function AddExam({ slug, generalMinutes, busy, call }: { slug: string; generalMinutes: number; busy: boolean; call: Call }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [minutes, setMinutes] = useState("75");
+  const [minutes, setMinutes] = useState("");
   if (!open) return <div className="exline expad"><button type="button" className="exbtn" onClick={() => setOpen(true)}>➕ امتحان جديد</button></div>;
   return (
     <div className="exadd expad">
       <input placeholder="عنوان الامتحان، مثل: ديموافر المحاضرة (6)" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <input className="exnum" inputMode="numeric" placeholder="الدقائق" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-      <button type="button" className="exbtn" disabled={busy || !title.trim()} onClick={async () => { if (await call({ action: "addExam", slug, title, minutes })) { setOpen(false); setTitle(""); } }}>حفظ</button>
+      <input className="exnum" inputMode="numeric" placeholder={`${generalMinutes} دقيقة`} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+      <button type="button" className="exbtn" disabled={busy || !title.trim()} onClick={async () => { if (await call({ action: "addExam", slug, title, minutes: minutes || generalMinutes })) { setOpen(false); setTitle(""); setMinutes(""); } }}>حفظ</button>
       <button type="button" className="exbtn" onClick={() => setOpen(false)}>إلغاء</button>
     </div>
   );

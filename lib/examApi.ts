@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { CONTENT_DIR, TOKEN } from "./config.ts";
-import { all, get, initDb, run, tx, type Row } from "./db.ts";
+import { all, get, initDb, kvGet, kvSet, run, tx, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
 import { api } from "./telegram.ts";
@@ -28,6 +28,8 @@ function authed(initData: unknown) {
   need(can(uid!, EXAM_PERM), "ما عندك صلاحية", 403);
   return uid!;
 }
+
+const generalMinutes = () => Number(kvGet("exam_minutes")) || 75;
 
 export function examList(uid: number) {
   const exams = all("SELECT * FROM bank_exams ORDER BY slug, ord");
@@ -61,7 +63,7 @@ export function examList(uid: number) {
       }),
     });
   }
-  return { chapters, fileToken: fileToken(uid) };
+  return { chapters, generalMinutes: generalMinutes(), fileToken: fileToken(uid) };
 }
 
 /** الأوامر اللي ما بيها ملفات. يرجع القائمة المحدثة */
@@ -87,6 +89,14 @@ export function examAction(body: Row) {
     need(get("SELECT 1 FROM bank_exams WHERE id=?", id), "الامتحان غير موجود");
     run("UPDATE bank_exams SET minutes=? WHERE id=?", n, id);
     logEdit(uid, `امتحان ${id}: الوقت ${n} دقيقة`);
+  } else if (a === "minutesAll") {
+    // الامتحان اللي إله وقت خاص يبقى على وقته
+    const n = intOf(body.value, 5, 600, "الوقت لازم يكون بالدقائق، من 5 إلى 600");
+    tx(() => {
+      run("UPDATE bank_exams SET minutes=? WHERE minutes=?", n, generalMinutes());
+      kvSet("exam_minutes", String(n));
+    });
+    logEdit(uid, `الوقت العام للامتحانات ${n} دقيقة`);
   } else if (a === "mark") {
     const n = intOf(body.value, 0, 100, "الدرجة لازم رقم كامل من 0 إلى 100");
     need(get("SELECT 1 FROM bank_questions WHERE id=?", id), "السؤال غير موجود");

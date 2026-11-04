@@ -66,7 +66,7 @@ input.ltr{direction:ltr;text-align:left;letter-spacing:1px}
 .exline{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0;font-size:14px}.expad{padding:0 14px 14px}
 .exbtn{display:inline-block;border:1px solid var(--gold2);background:transparent;color:var(--gold);border-radius:10px;padding:8px 12px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none}
 .exbtn:disabled,.exbtn.off{opacity:.45}.exbtn.danger{background:var(--red);color:var(--ink);border-color:var(--red)}
-.exnum{width:96px;padding:8px 10px;font-size:15px}.exchips{padding:4px 0}
+.exown{display:block;color:var(--gold);font-size:11px}.exgeneral{padding-top:4px}.exnum{width:96px;padding:8px 10px;font-size:15px}.exchips{padding:4px 0}
 .exversion{border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin:10px 0;background:var(--ink2)}.exissue{font-size:13px;margin:2px 0}
 .exq{margin:6px 0}.exqhead{width:100%;display:flex;justify-content:space-between;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--ink);color:var(--txt);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
 .exqhead.on{border-color:var(--gold);color:var(--gold)}.exqbody{padding:8px 2px}.eximg{display:block;width:100%;height:auto;background:#fff;border-radius:8px;margin:6px 0}
