@@ -23,8 +23,13 @@ export const newOrdersCount = (): number => get("SELECT COUNT(*) n FROM orders W
 export const orderItems = (o: Row): Row[] => JSON.parse(o.items);
 
 // ---------- الصلاحيات
-export const staffRow = (uid: number) => get("SELECT * FROM staff WHERE user_id=?", uid);
-export const isAdmin = (uid: number) => ADMIN_IDS.includes(uid);
+// «شوف كطالب»: المدير أو المساعد يجرب البوت مثل طالب عادي، بدون صلاحياته لحد ما يرجع
+const realStaffRow = (uid: number) => get("SELECT * FROM staff WHERE user_id=?", uid);
+export const isRealStaff = (uid: number) => ADMIN_IDS.includes(uid) || realStaffRow(uid) !== null;
+export const viewingAsStudent = (uid: number) => kvGet(`asstudent_${uid}`) === "1";
+export const setStudentView = (uid: number, on: boolean) => kvSet(`asstudent_${uid}`, on ? "1" : "0");
+export const staffRow = (uid: number) => (viewingAsStudent(uid) ? null : realStaffRow(uid));
+export const isAdmin = (uid: number) => ADMIN_IDS.includes(uid) && !viewingAsStudent(uid);
 const permList = (s: Row) => String(s.perms ?? "").split(",");
 export function can(uid: number, perm: string) {
   if (isAdmin(uid)) return true;
@@ -34,11 +39,12 @@ export function can(uid: number, perm: string) {
 export const isStaff = (uid: number) => isAdmin(uid) || staffRow(uid) !== null;
 export function staffIds(perm: string): number[] {
   const rows = all("SELECT user_id, perms FROM staff").filter((r) => permList(r).includes(perm)).map((r) => r.user_id as number);
-  return [...new Set([...ADMIN_IDS, ...rows])];
+  return [...new Set([...ADMIN_IDS, ...rows])].filter((id) => !viewingAsStudent(id));   // اللي يجرب كطالب ما يوصله شي إداري
 }
 const starts = (d: string, ...p: string[]) => p.some((x) => d.startsWith(x));
 function permOf(d: string) {
-  if (d === "a:menu") return "any";
+  if (d === "a:menu" || d === "a:asstudent") return "any";
+  if (d.startsWith("a:ex")) return "exams";
   if (starts(d, "a:sf", "a:hr", "a:grp", "a:cur", "a:lib")) return "owner";
   if (starts(d, "a:q", "a:oq")) return "q";
   if (starts(d, "a:pend", "a:t:", "a:all", "a:none", "a:pdf", "a:done", "a:keep", "a:printed", "a:un:", "a:v:", "a:pos", "a:ps", "a:of")) return "orders";
@@ -144,8 +150,8 @@ export function qOpenNow() {
 }
 
 // ---------- المكتبات والمساعدين
-export const myOffice = (uid: number) => get(`SELECT offices.* FROM office_users JOIN offices ON offices.id=office_users.office_id
-  WHERE office_users.user_id=? AND offices.active=1`, uid);
+export const myOffice = (uid: number) => (viewingAsStudent(uid) ? null : get(`SELECT offices.* FROM office_users JOIN offices ON offices.id=office_users.office_id
+  WHERE office_users.user_id=? AND offices.active=1`, uid));
 export const office = (oid: number) => get("SELECT * FROM offices WHERE id=?", oid);
 export function officeUnsettled(oid: number) {
   const r = get("SELECT COUNT(*) n, IFNULL(SUM(total),0) t FROM orders WHERE printed=3 AND office_id=? AND settle_id IS NULL", oid)!;

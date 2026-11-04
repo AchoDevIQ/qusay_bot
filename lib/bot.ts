@@ -1,8 +1,10 @@
 // نقطة دخول كل رسالة/ضغطة زر من تليجرام
 import { getSession, initDb, kvGet, kvSet, setSession, type Row } from "./db.ts";
-import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
-import { examAdminMessage, examCb, examsMenu, redeemCode } from "./exams.ts";
-import { allowed, can, isAdmin, isStaff, myOffice, noteFail, question, searchStudents, student, tooManyFails } from "./data.ts";
+import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
+import { examBankMessage } from "./examBank.ts";
+import { examCb, examsMenu, redeemCode } from "./exams.ts";
+import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setStudentView, student, tooManyFails, viewingAsStudent } from "./data.ts";
+import { ADMIN_IDS } from "./config.ts";
 import { mainKb, regKb } from "./keyboards.ts";
 import { api, answerCb, send } from "./telegram.ts";
 import { btn } from "./util.ts";
@@ -34,6 +36,14 @@ async function onMessage(m: Row) {
     setSession(uid, "", { cart: data.cart ?? {} });
     await sendBanner(chat, WELCOME, mainKb(uid));
     if (!student(uid)) await startReg(chat, uid, null);
+    return;
+  }
+  if (text === BTN_EXIT_VIEW && viewingAsStudent(uid)) {
+    setStudentView(uid, false);
+    setSession(uid, "", {});
+    const [t, kb] = adminMenuFor(uid);
+    await send(chat, "✅ رجعت لحسابك الإداري.", { replyKb: mainKb(uid) });
+    await send(chat, t, { kb });
     return;
   }
   const idWord = text.toLowerCase().split("@")[0].replace(/^[/ ]+|[/ ]+$/g, "").replace(/ /g, "");
@@ -75,7 +85,7 @@ async function onMessage(m: Row) {
       await send(chat, t, { kb });
       return;
     }
-    if (st === "a:exa" && await examAdminMessage(chat, uid, m, data)) return;
+    if (st.startsWith("a:ex") && await examBankMessage(chat, uid, m, st, data)) return;
     if (st.startsWith("a:") && text && await onAdminText(chat, uid, text, st, data)) return;
   }
   if (st === "q:write" || (st === "q:sent" && m.media_group_id && data.mg === m.media_group_id)) {
@@ -118,7 +128,7 @@ async function onCallback(q: Row) {
     note = await qCb(chat, uid, mid, d);
   } else if (["oc:", "ocy:", "ocn:"].some((p) => d.startsWith(p))) {
     note = await orderCancelCb(chat, uid, mid, d);
-  } else if (d === "xm" || ["xs:", "xc:", "xo:"].some((p) => d.startsWith(p))) {
+  } else if (d === "xm" || ["xs:", "xc:"].some((p) => d.startsWith(p))) {
     note = await examCb(chat, uid, d);
   } else if (d === "me:edit") {
     note = "لتغيير معلوماتك تواصل ويا قصي العميري";
@@ -145,7 +155,7 @@ export async function handleUpdate(u: any) {
 const RATE_WINDOW_MS = 10_000, RATE_MAX = 20, QUEUE_MAX = 2000;
 const recent = new Map<number, number[]>();
 export function allowUpdate(uid: number | undefined, now = Date.now()) {
-  if (!uid || isAdmin(uid)) return true;
+  if (!uid || ADMIN_IDS.includes(uid)) return true;
   if (recent.size > 10_000) recent.clear();
   const hits = (recent.get(uid) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
   const ok = hits.length < RATE_MAX;

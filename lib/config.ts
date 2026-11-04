@@ -46,6 +46,7 @@ export const SUCCESS = path.join(ASSETS_DIR, "success.jpg");
 export const LOGO = path.join(PUBLIC_DIR, "logo.png");
 export const FONT = path.join(PUBLIC_DIR, "boahmed.ttf");
 export const PDF_DIR = process.env.PDF_DIR ?? path.join(process.cwd(), "data", "pdf");
+export const CONTENT_DIR = process.env.CONTENT_DIR ?? path.join(process.cwd(), "data", "content");
 
 export const DEFAULT_FEE = 5000;
 export const CURRENCY = "د.ع";
@@ -85,6 +86,7 @@ export const ORD_AR = ["الأول", "الثاني", "الثالث", "الراب
 export const PERMS: Record<string, string> = {
   q: "❓ الأسئلة العلمية", orders: "🖨 الطلبات والطباعة",
   products: "🛒 المنتجات والأسعار والتوصيل", students: "🎓 الطلاب والمراكز",
+  exams: "📄 إدارة الامتحانات",
 };
 
 export const BTN_SHOP = "🛒 المتجر";
@@ -98,6 +100,7 @@ export const BTN_ME = "👤 معلوماتي";
 export const BTN_OFFICE = "🏪 مكتبتي";
 export const BTN_EXAMS = "📝 امتحاناتي";
 export const BTN_SCAN = "📷 افتح الكاميرا";
+export const BTN_EXIT_VIEW = "⚙️ رجوع للوحة التحكم";
 export const AR_WORD = /^[ء-ْٰ-ۓ]+$/;
 
 export const SEED_CURRIC = `# الأعداد المركبة | Complex Numbers

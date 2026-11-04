@@ -85,36 +85,6 @@ test("الإعداد: منتجات وطلاب", async () => {
   flush();
 });
 
-test("الإدارة تضيف امتحانات: ملف وصورة ونص، والحذف", async () => {
-  await msg(1, "/admin");
-  assert.ok(buttons(calls.at(-1)!).includes("a:ex"));
-  flush();
-  await cb(1, "a:ex");
-  assert.match(calls[0].p.text, /الامتحانات/);
-  assert.ok(buttons(calls[0]).includes("a:exc:0"));
-  assert.ok(!buttons(calls[0]).includes("a:exc:2"));     // الدفتر ما يطلع كفصل
-  flush();
-  await cb(1, "a:exa:0");
-  await msg(1, undefined, { document: { file_id: "DOC1", file_name: "ch1.pdf" }, caption: "امتحان 1 <أ>" });
-  await msg(1, undefined, { document: { file_id: "DOC2", file_name: "ch1b.pdf" } });
-  await msg(1, undefined, { photo: [{ file_id: "small" }, { file_id: "PHOTO1" }] });
-  await msg(1, "https://example.test/quiz");
-  await msg(1, undefined, { sticker: { file_id: "S" } });
-  assert.match(calls.at(-1)!.p.text ?? "", /أرسل ملف/);
-  await msg(1, "❌ إلغاء");
-  flush();
-  const rows = all("SELECT chapter, title, kind, file_id FROM exams ORDER BY id");
-  assert.deepEqual(rows.map((r) => [r.title, r.kind, r.file_id]), [
-    ["امتحان 1 <أ>", "document", "DOC1"], ["ch1b.pdf", "document", "DOC2"], ["امتحان", "photo", "PHOTO1"], ["https://example.test/quiz", "text", null],
-  ]);
-  assert.ok(rows.every((r) => r.chapter === "الفصل الأول"));
-  await cb(1, "a:exc:0");
-  flush();
-  await cb(1, "a:exd:0:2");
-  assert.equal(get("SELECT COUNT(*) n FROM exams WHERE active=1")!.n, 3);
-  flush();
-});
-
 test("الطالب العادي ما يدير الامتحانات", async () => {
   await cb(2, "a:ex");
   assert.equal(calls.at(-1)!.p.text, "ما عندك صلاحية");
@@ -127,10 +97,6 @@ test("بدون شراء: ماكو زر، ولا يفتح امتحان بتزوي
   flush();
   await msg(2, "📝 امتحاناتي");
   assert.match(texts(), /ما عندك امتحانات/);
-  flush();
-  await cb(2, "xo:1");
-  assert.equal(calls.at(-1)!.p.text, "ما عندك صلاحية");
-  assert.equal(calls.length, 1);
   flush();
   await cb(2, "xc:0");
   assert.equal(calls.at(-1)!.p.text, "الفصل غير موجود");
@@ -150,42 +116,6 @@ test("المكتبة: البيع يفتح الامتحانات مباشرة وب
   assert.ok(mainButtons(2).includes("📝 امتحاناتي"));
   assert.ok(calls.some((c) => c.p.chat_id === 9 && /انفتحت عنده امتحانات: الفصل الأول/.test(c.p.text ?? "")));
   assert.equal(get("SELECT COUNT(*) n FROM order_codes")!.n, 0);
-  flush();
-});
-
-test("الطالب يفتح امتحانه، والإرسال محمي من التحويل والحفظ", async () => {
-  await msg(2, "📝 امتحاناتي");
-  assert.ok(buttons(calls.at(-1)!).includes("xc:0"));
-  flush();
-  await cb(2, "xc:0");
-  const list = buttons(calls[0]);
-  assert.deepEqual(list, ["xo:1", "xo:3", "xo:4", "xm"]);
-  flush();
-  await cb(2, "xo:1");
-  assert.equal(calls[0].method, "sendDocument");
-  assert.equal(calls[0].p.document, "DOC1");
-  assert.equal(calls[0].p.protect_content, true);
-  flush();
-  await cb(2, "xo:3");
-  assert.equal(calls[0].method, "sendPhoto");
-  assert.equal(calls[0].p.protect_content, true);
-  flush();
-  await cb(2, "xo:4");
-  assert.equal(calls[0].p.protect_content, true);
-  flush();
-  await cb(2, "xo:2");                                    // انحذف
-  assert.equal(calls.at(-1)!.p.text, "ما عندك صلاحية");
-  flush();
-  await cb(3, "xo:1");                                    // طالب ثاني ما شترى
-  assert.equal(calls.at(-1)!.p.text, "ما عندك صلاحية");
-  flush();
-});
-
-test("فصل ما بيه امتحانات بعد يطلع تنبيه", async () => {
-  await webapp(9, { k: "pos", sid: 2, i: [[2, 1]] });
-  flush();
-  await cb(2, "xc:1");
-  assert.match(texts(), /لسه ما انضافت/);
   flush();
 });
 
@@ -250,9 +180,6 @@ test("رسالة التجهيز بيها زر الكود، والمسح يفتح
   flush();
   await webapp(3, { k: "scan", code });                   // مرة ثانية ما يضر
   assert.match(texts(), /انستخدم قبل/);
-  flush();
-  await cb(3, "xo:1");
-  assert.equal(calls[0].method, "sendDocument");
   flush();
 });
 

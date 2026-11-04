@@ -181,7 +181,7 @@ export async function onStudentCb(chat: number, uid: number, mid: number, d: str
     await edit(chat, mid, NO_REFUND + "\n\n✅ <b>تمت الموافقة</b>");
     if (data.agreed < AGREE_TIMES) {
       setSession(uid, "agree", data);
-      await send(chat, NO_REFUND, { kb: agreeKb() });
+      await send(chat, NO_REFUND + "\n\n👇 لتأكيد موافقتك على هذا الشرط، اضغط مرة أخرى.", { kb: agreeKb() });
     } else await afterAgree(chat, uid, data);
     return null;
   }
@@ -266,9 +266,10 @@ async function finalize(chat: number, uid: number, data: Row, items: Row[], sub:
   data.phone1, data.phone2, JSON.stringify(items), sub, fee, sub + fee, stamp());
   createOrderCode(oid, items);
   setSession(uid, "", {});
-  await sendImage(chat, SUCCESS, "success", successText(oid), mainKb(uid));
-  const r: any = await send(chat, "↩️ إذا غيرت رأيك، تگدر تلغي الطلب من هذا الزر <b>لحد ما توصلك رسالة «تم تجهيز طلبك»</b>.\n" +
-    "بعد ما تتجهز، ما يمكن إلغاؤه.", { kb: [[btn(`❌ إلغاء الطلب #${oid}`, `oc:${oid}`)]] });
+  // الكلام مكتوب داخل صورة النجاح، والنص يطلع بس إذا الصورة ما وصلت
+  await sendImage(chat, SUCCESS, "success", "", mainKb(uid), successText(oid));
+  const r: any = await send(chat, `↩️ <b>طلبك رقم #${oid}</b>\nيمكنك إلغاء الطلب ما دامت رسالة إلغاء الطلب ظاهرة، وعندما تختفي لا يمكن بعدها إلغاء الطلب، لأنه تم تجهيز الطلب.`,
+    { kb: [[btn(`❌ إلغاء الطلب #${oid}`, `oc:${oid}`)]] });
   if (r) kvSet(`ocmsg_${oid}`, String(r.message_id ?? ""));
   await notifyAdmins(oid);
 }

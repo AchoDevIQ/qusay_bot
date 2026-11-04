@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "set-webhook": "node --env-file-if-exists=.env.local scripts/set-webhook.ts",
-    "test": "node --test tests/*.test.ts"
+    "test": "node --test tests/*.test.ts",
+    "load-exams": "node --env-file-if-exists=.env.local scripts/load-exams.ts"
   },
   "engines": {
     "node": ">=24"

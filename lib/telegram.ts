@@ -56,18 +56,19 @@ export const answerCb = (id: string, text?: string) =>
   api("answerCallbackQuery", { callback_query_id: id, ...(text ? { text } : {}) });
 
 /** صورة من ملف: أول مرة ترفع، بعدين تستخدم file_id المحفوظ */
-export async function sendImage(chat: number | string, filePath: string, key: string, caption: string, replyKb: unknown) {
-  if (!fs.existsSync(filePath)) return send(chat, caption, { replyKb });
+export async function sendImage(chat: number | string, filePath: string, key: string, caption: string, replyKb: unknown, fallback = caption) {
+  if (!fs.existsSync(filePath)) return send(chat, fallback, { replyKb });
   const stamp = String(Math.floor(fs.statSync(filePath).mtimeMs / 1000));
   const fid = kvGet(key + "_id");
+  const text: Record<string, string> = caption ? { caption, parse_mode: "HTML" } : {};   // بدون نص: الصورة لوحدها
   if (fid && kvGet(key + "_stamp") === stamp) {
-    const r = await api("sendPhoto", { chat_id: chat, photo: fid, caption, parse_mode: "HTML", reply_markup: replyKb });
+    const r = await api("sendPhoto", { chat_id: chat, photo: fid, ...text, reply_markup: replyKb });
     if (r) return r;
   }
   const r: any = await upload("sendPhoto", {
-    chat_id: String(chat), caption, parse_mode: "HTML", reply_markup: JSON.stringify(replyKb ?? {}),
+    chat_id: String(chat), ...text, reply_markup: JSON.stringify(replyKb ?? {}),
   }, "photo", filePath, "image.jpg", "image/jpeg");
   if (r?.photo) { kvSet(key + "_id", r.photo.at(-1).file_id); kvSet(key + "_stamp", stamp); }
-  else if (!r) await send(chat, caption, { replyKb });
+  else if (!r) await send(chat, fallback, { replyKb });
   return r;
 }

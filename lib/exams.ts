@@ -2,10 +2,10 @@
 import { randomInt } from "node:crypto";
 import { all, get, run, setSession, tx, type Row } from "./db.ts";
 import { BTN_EXAMS, STORE_URL } from "./config.ts";
-import { can, noteFail, products, tooManyFails } from "./data.ts";
+import { noteFail, tooManyFails } from "./data.ts";
 import { chapterLabel, flowKb, mainKb, scanKb } from "./keyboards.ts";
-import { api, edit, send, type Kb } from "./telegram.ts";
-import { btn, cut, esc, stamp } from "./util.ts";
+import { send, type Kb } from "./telegram.ts";
+import { btn, esc, stamp } from "./util.ts";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // بدون 0 وO و1 وI حتى ما تتشابه بالقراءة
 const FAILS = "xfail";
@@ -90,14 +90,6 @@ export async function examsMenu(chat: number, uid: number) {
   const kb: Kb = [...chapters.map((c, i) => [btn("📝 " + c, `xc:${i}`)]), ...pend.map((o) => [btn(`📷 وصلني الطلب #${o.id}: افتح الامتحانات`, `xs:${o.id}`)])];
   await send(chat, chapters.length ? "<b>📝 امتحاناتك</b>\nاختر الفصل:" : "<b>📝 امتحاناتك</b>\nلمن يوصلك الطلب، اضغط الزر جوة 👇", { kb });
 }
-async function deliverExam(chat: number, e: Row) {
-  const base = { chat_id: chat, protect_content: true };   // تليجرام يمنع التحويل والحفظ
-  const caption = e.title ? { caption: e.title } : {};
-  if (e.kind === "document") return api("sendDocument", { ...base, ...caption, document: e.file_id });
-  if (e.kind === "photo") return api("sendPhoto", { ...base, ...caption, photo: e.file_id });
-  if (e.kind === "video") return api("sendVideo", { ...base, ...caption, video: e.file_id });
-  return send(chat, esc(e.body), { extra: { protect_content: true } });
-}
 export async function examCb(chat: number, uid: number, d: string): Promise<string | null> {
   if (d === "xm") await examsMenu(chat, uid);
   else if (d.startsWith("xs:")) {
@@ -114,70 +106,8 @@ export async function examCb(chat: number, uid: number, d: string): Promise<stri
     const chapters = myChapters(uid);
     const ch = chapters[Number(d.slice(3))];
     if (!ch) return "الفصل غير موجود";
-    const es = all("SELECT id, title FROM exams WHERE chapter=? AND active=1 ORDER BY id", ch);
-    if (!es.length) { await send(chat, `📝 <b>${esc(ch)}</b>\nلسه ما انضافت امتحانات لهذا الفصل. راح تطلع هنا لمن تنضاف.`); return null; }
-    await send(chat, `📝 <b>${esc(ch)}</b>\nاختر الامتحان:`, { kb: [...es.map((e) => [btn(cut(e.title || "امتحان", 60), `xo:${e.id}`)]), [btn("⬅️ رجوع", "xm")]] });
-  } else if (d.startsWith("xo:")) {
-    const e = get("SELECT * FROM exams WHERE id=? AND active=1", Number(d.slice(3)));
-    if (!e || !get("SELECT 1 FROM exam_access WHERE user_id=? AND chapter=?", uid, e.chapter)) return "ما عندك صلاحية";
-    await deliverExam(chat, e);
+    const n = get(`SELECT COUNT(*) n FROM bank_exams WHERE chapter=?`, ch)!.n;
+    await send(chat, `📝 <b>${esc(ch)}</b>\nعدد الامتحانات: ${n}\nجدول امتحاناتك راح يطلع هنا.`, { kb: [[btn("⬅️ رجوع", "xm")]] });
   }
   return null;
-}
-
-// ---------- الإدارة
-function adminChapters() {
-  const labels: string[] = [];
-  for (const p of products()) {
-    const c = examChapterOf(p.name);
-    if (c && !labels.includes(c)) labels.push(c);
-  }
-  for (const r of all("SELECT DISTINCT chapter FROM exams WHERE active=1 ORDER BY id")) if (!labels.includes(r.chapter)) labels.push(r.chapter);
-  return labels;
-}
-function adminHome(): [string, Kb] {
-  const count = (ch: string) => get("SELECT COUNT(*) n FROM exams WHERE chapter=? AND active=1", ch)!.n;
-  const labels = adminChapters();
-  const kb: Kb = labels.map((c, i) => [btn(`📝 ${c} (${count(c)})`, `a:exc:${i}`)]);
-  kb.push([btn("⬅️ رجوع", "a:menu")]);
-  return [labels.length ? "<b>📝 الامتحانات</b>\nاختر الفصل حتى تضيف امتحاناته أو تحذفها:"
-    : "<b>📝 الامتحانات</b>\nماكو منتجات امتحانات بعد. لازم اسم المنتج يكون بيه «امتحانات» واسم الفصل، مثل: الفصل الأول - امتحانات إلكترونية", kb];
-}
-function adminChapter(i: number): [string, Kb] {
-  const ch = adminChapters()[i];
-  if (!ch) return adminHome();
-  const es = all("SELECT id, title FROM exams WHERE chapter=? AND active=1 ORDER BY id", ch);
-  const kb: Kb = es.map((e) => [btn("🗑 " + cut(e.title || "امتحان", 50), `a:exd:${i}:${e.id}`)]);
-  kb.push([btn("➕ إضافة امتحان", `a:exa:${i}`)], [btn("⬅️ رجوع", "a:ex")]);
-  return [`<b>📝 ${esc(ch)}</b>\nالامتحانات: ${es.length}\n🗑 يحذف الامتحان.`, kb];
-}
-export async function examAdminCb(chat: number, uid: number, mid: number, d: string): Promise<string | null> {
-  const show = ([t, kb]: [string, Kb]) => edit(chat, mid, t, kb);
-  if (d === "a:ex") await show(adminHome());
-  else if (d.startsWith("a:exc:")) await show(adminChapter(Number(d.slice(6))));
-  else if (d.startsWith("a:exa:")) {
-    const i = Number(d.slice(6));
-    const ch = adminChapters()[i];
-    if (!ch) return "الفصل غير موجود";
-    setSession(uid, "a:exa", { chapter: ch, i });
-    await send(chat, `➕ أرسل امتحان <b>${esc(ch)}</b>: ملف PDF، أو صورة، أو فيديو، أو رابط بنص.\nالكلام اللي تكتبه ويا الملف يصير اسم الامتحان.\nتگدر ترسل أكثر من امتحان، ولمن تخلص اضغط «❌ إلغاء».`, { replyKb: flowKb() });
-  } else if (d.startsWith("a:exd:")) {
-    const [i, id] = d.slice(6).split(":").map(Number);
-    run("UPDATE exams SET active=0 WHERE id=?", id);
-    await show(adminChapter(i));
-  }
-  return null;
-}
-/** رسالة الإدارة وهي تضيف امتحان. يرجع true إذا عالجها */
-export async function examAdminMessage(chat: number, uid: number, m: Row, data: Row) {
-  if (!can(uid, "products")) return false;
-  const photo = m.photo?.at?.(-1);
-  const kind = m.document ? "document" : photo ? "photo" : m.video ? "video" : m.text ? "text" : null;
-  if (!kind) { await send(chat, "⚠️ أرسل ملف PDF، أو صورة، أو فيديو، أو نص."); return true; }
-  const fileId: string | null = m.document?.file_id ?? photo?.file_id ?? m.video?.file_id ?? null;
-  const body: string = String(m.text ?? "");
-  const title = cut(String(m.caption ?? "").trim() || String(m.document?.file_name ?? "") || body.trim().split("\n")[0] || "امتحان", 60);
-  run("INSERT INTO exams(chapter, title, kind, file_id, body) VALUES(?,?,?,?,?)", data.chapter, title, kind, fileId, body);
-  await send(chat, `✅ انضاف «${esc(title)}» إلى ${esc(data.chapter)}.\nأرسل غيره، أو اضغط «❌ إلغاء» إذا خلصت.`);
-  return true;
 }

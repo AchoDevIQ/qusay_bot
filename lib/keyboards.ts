@@ -1,7 +1,7 @@
 // لوحات الأزرار وروابط صفحات المتجر (البيانات تنضغط داخل الرابط)
 import { all, kvGet, type Row } from "./db.ts";
-import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL } from "./config.ts";
-import { can, cats, centerName, feeOf, hasExamMenu, isStaff, myOffice, newOrdersCount, products, student } from "./data.ts";
+import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL } from "./config.ts";
+import { can, cats, centerName, feeOf, hasExamMenu, isRealStaff, isStaff, myOffice, newOrdersCount, products, student, viewingAsStudent } from "./data.ts";
 import { b64urlEncode, btn, chunk } from "./util.ts";
 
 export function chapterLabel(name: string | null | undefined) {
@@ -88,6 +88,7 @@ export function mainKb(uid: number) {
     const n = can(uid, "orders") ? newOrdersCount() : 0;
     rows.push([{ text: BTN_ADMIN + (n ? `  🔴 ${n}` : "") }]);
   } else if (myOffice(uid)) rows.push([{ text: BTN_OFFICE }]);
+  if (viewingAsStudent(uid) && isRealStaff(uid)) rows.push([{ text: BTN_EXIT_VIEW }]);
   return { keyboard: rows, resize_keyboard: true };
 }
 export const flowKb = () => ({ keyboard: [[{ text: BTN_CANCEL }]], resize_keyboard: true });

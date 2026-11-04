@@ -3,11 +3,12 @@ import { all, catIdFor, get, getSession, kvGet, kvSet, modeFromName, run, saveCu
 import { BULK_HELP, DAYS, DAY_ORDER, DEFAULT_FEE, GOVS, GRADES, MODE_ICON, MODE_NEXT, PERMS, orderReady, toLatinDigits } from "./config.ts";
 import {
   allCats, can, cat, centerName, chapters, govMode, groupId, hoursText, isAdmin, newOrdersCount, orderItems, placeOf, product, products, profileText, qHours, qWhere,
-  searchStudents, staffAccount, staffName, staffRow, student, topics,
+  searchStudents, setStudentView, staffAccount, staffName, staffRow, student, topics,
 } from "./data.ts";
 import { chapterLabel, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
-import { examAdminCb, readyExtras } from "./exams.ts";
+import { EXAM_PERM, examBankCb } from "./examBank.ts";
+import { readyExtras } from "./exams.ts";
 import { officeDays, officeKb, officeView, libCb, libText, parseAmount } from "./office.ts";
 import { orderKb, orderText } from "./student.ts";
 import { api, edit, send, type Kb } from "./telegram.ts";
@@ -20,8 +21,9 @@ export function adminMenuFor(uid: number): View {
   const kb: Kb = [];
   if (can(uid, "products")) {
     kb.push([btn("📥 إضافة منتجات دفعة وحدة", "a:bulk")], [btn("➕ إضافة منتج واحد", "a:add")], [btn("📋 المنتجات والأقسام", "a:list")],
-      [btn("🚚 أسعار التوصيل", "a:fees")], [btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")], [btn("📝 الامتحانات", "a:ex")]);
+      [btn("🚚 أسعار التوصيل", "a:fees")], [btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")]);
   }
+  if (can(uid, EXAM_PERM)) kb.push([btn("📝 الامتحانات", "a:ex")]);
   if (can(uid, "orders")) {
     const n = newOrdersCount();
     kb.push([btn("🖨 الطلبات الجديدة (للطباعة)" + (n ? `  🔴 ${n}` : ""), "a:pend")], [btn("🗂 الطلبات المطبوعة", "a:printed")],
@@ -37,6 +39,7 @@ export function adminMenuFor(uid: number): View {
     kb.push([btn(`🏬 المكتبات — اليوم: ${r.n} بيعة · ${money(r.t)}`, "a:lib")], [btn("⏰ أوقات استقبال الأسئلة", "a:hr")], [btn("📚 الفصول والمواضيع", "a:cur")],
       [btn("👥 المساعدين والصلاحيات", "a:sf")], [btn("🔗 ربط مجموعة الأسئلة", "a:grp")]);
   }
+  kb.push([btn("👁 شوف كطالب", "a:asstudent")]);
   return ["<b>⚙️ لوحة التحكم</b>", kb];
 }
 function adminCats(): View {
@@ -311,7 +314,13 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
   const sendV = ([t, kb]: View, prefix = "") => send(chat, prefix + t, { kb });
   const editV = ([t, kb]: View, prefix = "") => edit(chat, mid, prefix + t, kb);
 
-  if (d.startsWith("a:ex")) return examAdminCb(chat, uid, mid, d);
+  if (d.startsWith("a:ex")) return examBankCb(chat, uid, mid, d);
+  if (d === "a:asstudent") {
+    setStudentView(uid, true);
+    setSession(uid, "", {});
+    await send(chat, "👁 <b>صرت تشوف البوت مثل الطالب.</b>\nكل الأزرار والرسائل مثله بالضبط. ولمن تخلص، اضغط زر الرجوع جوة.", { replyKb: mainKb(uid) });
+    return null;
+  }
   if (d === "a:oo" || d.startsWith("a:oo:")) {
     const v = onlineOnlyView();
     if (d.startsWith("a:oo:")) {

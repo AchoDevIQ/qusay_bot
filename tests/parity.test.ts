@@ -19,6 +19,10 @@ function scrub(s: string) {
     .replace(/<td>\d\d:\d\d<\/td>/g, "<td><HM></td>")
     // نفس الرابط: بايثون ما يرمز / وجافاسكربت يرمزها %2F، وتليجرام يفهم الاثنين
     .replace(/share\/url\?url=https%3A(?:\/\/|%2F%2F)t\.me(?:\/|%2F)/g, "share/url?url=https%3A//t.me/")
+    // طلب من صاحب البوت: رسالة الموافقة المتكررة تشرح ليش تتكرر
+    .replace("\n\n👇 لتأكيد موافقتك على هذا الشرط، اضغط مرة أخرى.", "")
+    // وكذلك صياغة رسالة إلغاء الطلب
+    .replace(/↩️ إذا غيرت رأيك،[\s\S]*ما يمكن إلغاؤه\.|↩️ <b>طلبك رقم #\d+<\/b>[\s\S]*تم تجهيز الطلب\./, "<CANCEL_NOTE>")
     .replace(/a:done:\d+/g, "a:done:<BATCH>")
     // رمز الدعوة صار 8 أرقام عمداً (كان 6 بالبوت القديم)، حتى ما ينخمن
     .replace(/lib_\d{6,8}/g, "lib_<CODE>")
@@ -37,10 +41,10 @@ function normal(v: any): any {
   return v;
 }
 // ميزات جديدة ما موجودة بالبوت القديم: جداول الامتحانات وزر لوحة التحكم
-const NEW_TABLES = ["exams", "exam_access", "order_codes"];
+const NEW_TABLES = ["bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
-  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => b.callback_data === "a:ex"));
+  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:exams$)/.test(b.callback_data ?? "")));
   return e;
 }
 function normalDb(db: Record<string, any[]>) {
@@ -56,7 +60,7 @@ function normalDb(db: Record<string, any[]>) {
   }
   // kv: المفاتيح اللي بيها وقت أو رمز، وقيم JSON
   // invfail_: عداد المحاولات الغلط، إضافة أمنية ما موجودة بالبوت القديم
-  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_/.test(r.k)).map((r) => {
+  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_|^asstudent_/.test(r.k)).map((r) => {
     let v = r.v;
     if (/^(q_hours|online_only)$/.test(r.k)) v = JSON.parse(v);
     if (/^libinv_/.test(r.k)) v = String(v).split(":")[0];
@@ -75,7 +79,10 @@ for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).
       const r = spawnSync(process.execPath, [path.join(DIR, "run.ts"), file, sc.name], { encoding: "utf8", maxBuffer: 1 << 28 });
       assert.equal(r.status, 0, r.stderr);
       const ts = JSON.parse(r.stdout), py = golden[sc.name];
-      const a = normal(ts.trace.map(dropNewButtons)), b = normal(py.trace);
+      // طلب من صاحب البوت: صورة نجاح الطلب تطلع لوحدها، لأن نفس الكلام مكتوب داخلها
+      const photoOnly = (e: any) => { if (e.m === "sendPhoto" && /تم استلام طلبك/.test(e.p.caption ?? "")) { delete e.p.caption; delete e.p.parse_mode; } return e; };
+      const dropPhotoMode = (e: any) => { if (e.m === "sendPhoto" && !e.p.caption) delete e.p.parse_mode; return e; };
+      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode)), b = normal(py.trace.map(photoOnly));
       for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
       assert.deepEqual(normalDb(ts.db), normalDb(py.db));
       assert.deepEqual(scrubFiles(ts.files), scrubFiles(py.files));

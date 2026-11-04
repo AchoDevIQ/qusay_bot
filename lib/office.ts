@@ -3,7 +3,7 @@ import { randomInt } from "node:crypto";
 import { all, get, kvGet, kvSet, run, setSession, tx, type Row } from "./db.ts";
 import { ADMIN_IDS, BTN_OFFICE, toLatinDigits } from "./config.ts";
 import {
-  can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, product, staffAccount, staffName, student, tooManyFails,
+  can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, product, staffAccount, staffName, student, tooManyFails, viewingAsStudent,
 } from "./data.ts";
 import { flowKb, mainKb, posKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendPaperReceipt, sendReceiptImage } from "./documents.ts";
@@ -327,7 +327,7 @@ export async function joinOfficeByCode(chat: number, uid: number, code: string, 
   });
   setSession(uid, "", {});
   await send(chat, `✅ <b>تمت إضافتك لـ ${esc(o.name)}</b>\nاضغط زر «${BTN_OFFICE}» اللي جوة حتى تبيع وتشوف مبيعاتك 👇`, { replyKb: mainKb(uid) });
-  for (const a of ADMIN_IDS) {
+  for (const a of ADMIN_IDS.filter((id) => !viewingAsStudent(id))) {
     await send(a, `✅ <b>${esc(name || String(uid))}</b> انضاف لـ <b>${esc(o.name)}</b> عن طريق الرابط.`, { kb: [[btn("🏪 فتح " + o.name, `a:libv:${oid}`)]] });
   }
 }
