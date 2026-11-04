@@ -12,7 +12,7 @@ export async function linkAnswerFiles(dir: string, slug: string, log: (line: str
       // الملف اللي انرفع من اللوحة يبقى
       if (v.answer_pdf) { out.kept++; continue; }
       const folder = path.join(dir, String(e.ord));
-      const name = fs.existsSync(folder) ? fs.readdirSync(folder).find((f) => /.pdf$/i.test(f) && /^([A-Za-z]+)s*d+./.exec(f)?.[1].toUpperCase() === v.model) : null;
+      const name = fs.existsSync(folder) ? fs.readdirSync(folder).find((f) => /\.pdf$/i.test(f) && /^([A-Za-z]+)\s*\d+\./.exec(f)?.[1].toUpperCase() === v.model) : null;
       if (!name) { out.missing.push(`${e.ord} ${v.model}`); continue; }
       const source = path.join(folder, name);
       const ref = path.posix.join("answers", slug, `e${e.ord}`, `${v.model}.pdf`);
