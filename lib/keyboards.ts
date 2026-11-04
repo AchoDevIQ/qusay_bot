@@ -1,7 +1,7 @@
 // لوحات الأزرار وروابط صفحات المتجر (البيانات تنضغط داخل الرابط)
-import { all, kvGet, type Row } from "./db.ts";
+import { find, kvGet, type Row } from "./db.ts";
 import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL } from "./config.ts";
-import { can, cats, centerName, feeOf, hasExamMenu, isRealStaff, isStaff, myOffice, newOrdersCount, products, student, viewingAsStudent } from "./data.ts";
+import { areasWithCenters, can, cats, centerName, feeOf, hasExamMenu, isRealStaff, isStaff, myOffice, newOrdersCount, products, student, viewingAsStudent } from "./data.ts";
 import { b64urlEncode, btn, chunk } from "./util.ts";
 
 export function chapterLabel(name: string | null | undefined) {
@@ -49,10 +49,9 @@ export const storeKb = async (uid?: number) => ({
 });
 
 export async function regLink(uid: number, adminFor?: number | null) {
-  const modes = Object.fromEntries((await all("SELECT * FROM govmode")).map((r) => [r.gov, r.mode]));
-  const areas = await Promise.all((await all(`SELECT * FROM areas WHERE active=1
-    AND EXISTS(SELECT 1 FROM centers WHERE area_id=areas.id AND active=1) ORDER BY gov, id`)).map(async (a) => [a.id, a.gov, a.name,
-    (await all("SELECT * FROM centers WHERE area_id=? AND active=1 ORDER BY id", a.id)).map((x) => [x.id, x.name])]));
+  const modes = Object.fromEntries((await find("govmode")).map((r) => [r.gov, r.mode]));
+  const areas = await Promise.all((await areasWithCenters()).map(async (a) => [a.id, a.gov, a.name,
+    (await find("centers", { area_id: a.id, active: 1 }, { order: ["id"] })).map((x) => [x.id, x.name])]));
   const d: Row = { g: GOVS, m: GOVS.map((g) => modes[g] ?? "online"), a: areas };
   const s = await student(adminFor || uid);
   if (s) d.p = { n: s.name, cu: s.curr, gr: s.grade, g: s.gov, s: s.side || "", a: s.area, p1: s.phone1, p2: s.phone2, e: s.exam || "", c: s.center_id || 0 };

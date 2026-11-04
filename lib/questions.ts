@@ -1,5 +1,5 @@
 // الأسئلة العلمية: الطالب يسأل، وكل سؤال ينفتحله موضوع بمجموعة الأساتذة
-import { all, get, kvSet, run, setSession, type Row } from "./db.ts";
+import { find, insert, kvSet, one, remove, setSession, type Row } from "./db.ts";
 import { ADMIN_IDS, BTN_ASK, BTN_MYQ } from "./config.ts";
 import {
   can, centerName, chLabel, chapters, groupId, hoursText, qHours, qOpenNow, qWhere, question, setQ, student, topic, topics,
@@ -82,7 +82,7 @@ async function topicTitle(q: Row, done = false, follow = false) {
 }
 /** نحفظ رسائل السؤال والجواب حتى نرجعها إذا الطالب استفسر بعدين */
 async function logMsg(qid: number, kind: string, chatId: number, msgId: number | null | undefined) {
-  if (msgId) await run("INSERT INTO qmsgs(qid, kind, chat_id, msg_id) VALUES(?,?,?,?)", qid, kind, chatId, msgId);
+  if (msgId) await insert("qmsgs", { qid, kind, chat_id: chatId, msg_id: msgId });
 }
 /** يخفي موضوع السؤال من المجموعة (السؤال يبقى محفوظ ويرجع إذا الطالب استفسر) */
 export async function hideTopic(q: Row) {
@@ -116,14 +116,13 @@ export async function qNewMessage(chat: number, uid: number, m: Row, data: Row) 
     return;
   }
   if (!data.t) return;
-  const qid = await run("INSERT INTO questions(user_id, chapter_id, topic_id, lecture, status, created, updated) VALUES(?,?,?,?,?,?,?)",
-    uid, (await topic(data.t))?.chapter_id ?? null, data.t, data.l || 0, "open", stamp(), stamp());
+  const qid = await insert("questions", { user_id: uid, chapter_id: (await topic(data.t))?.chapter_id ?? null, topic_id: data.t, lecture: data.l || 0, status: "open", created: stamp(), updated: stamp() });
   const q = (await question(qid))!;
   const r: any = await api("createForumTopic", { chat_id: g, name: await topicTitle(q) });
   if (!r) {
     await setSession(uid, "", {});
     await send(chat, "⚠️ ما گدرت أوصل سؤالك هسه، حاول بعد شوية.", { replyKb: await mainKb(uid) });
-    await run("DELETE FROM questions WHERE id=?", qid);
+    await remove("questions", { id: qid });
     return;
   }
   const tid = r.message_thread_id;
@@ -153,7 +152,7 @@ export async function qFollowMessage(chat: number, uid: number, m: Row, data: Ro
     tid = r.message_thread_id;
     await setQ(q.id, { thread_id: tid });
     await api("sendMessage", { chat_id: g, message_thread_id: tid, parse_mode: "HTML", text: await studentHead(q, s, `🔁 <b>استفسار على سؤال قديم #${q.id}</b>`) });
-    const logs = await all("SELECT * FROM qmsgs WHERE qid=? ORDER BY id", q.id);
+    const logs = await find("qmsgs", { qid: q.id }, { order: ["id"] });
     let last: string | null = null;
     for (const lg of logs) {
       if (lg.kind !== last) {
@@ -185,7 +184,7 @@ export async function onGroupMessage(m: Row) {
   if (m.chat.id !== await groupId() || !m.message_thread_id || !m.is_topic_message) return;
   if (["forum_topic_created", "forum_topic_closed", "forum_topic_reopened", "forum_topic_edited", "new_chat_members", "left_chat_member", "pinned_message"].some((k) => k in m)) return;
   if (text.startsWith("/") || !await can(uid, "q")) return;
-  const q = await get("SELECT * FROM questions WHERE thread_id=?", m.message_thread_id);
+  const q = await one("questions", { thread_id: m.message_thread_id });
   if (!q) return;
   const s = await student(q.user_id) ?? { curr: "عربي" };
   await api("sendMessage", { chat_id: q.user_id, parse_mode: "HTML", text: `💬 <b>جواب سؤالك #${q.id}</b>\n📍 ${esc(await qWhere(q, s.curr === "إنجليزي"))}` });
@@ -212,7 +211,7 @@ export async function onGroupMessage(m: Row) {
 }
 
 export async function myQuestions(chat: number, uid: number) {
-  const qs = await all("SELECT * FROM questions WHERE user_id=? ORDER BY id DESC LIMIT 10", uid);
+  const qs = await find("questions", { user_id: uid }, { order: ["-id"], limit: 10 });
   if (!qs.length) { await send(chat, `ما عندك أسئلة بعد. اضغط «${BTN_ASK}» حتى تسأل.`); return; }
   const st: Record<string, string> = { open: "🟡 بانتظار الجواب", answered: "🟢 تم الجواب", closed: "✅ مغلق" };
   const en = isEn(await student(uid));

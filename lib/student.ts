@@ -1,5 +1,5 @@
 // واجهة الطالب: التسجيل، المتجر، الطلبات
-import { all, get, getSession, kvSet, run, setSession, type Row } from "./db.ts";
+import { find, getSession, insert, kvSet, one, put, setSession, update, type Row } from "./db.ts";
 import {
   AGREE_TIMES, AR_WORD, BANNER, BTN_ME, BTN_OPEN, BTN_REG, BTN_SHOP, CURRS, EXAMS, GOVS, GRADES, NO_REFUND, SIDES, STORE_URL, SUCCESS, successText,
 } from "./config.ts";
@@ -150,7 +150,7 @@ export async function onStudentText(chat: number, uid: number, text: string, st:
 /** الطالب يلغي طلبه قبل ما يتجهز (printed: 0 جديد، 1 تجهز/انطبع، 2 ملغي) */
 export async function orderCancelCb(chat: number, uid: number, mid: number, d: string): Promise<string | null> {
   const oid = Number(d.split(":")[1]);
-  const o = await get("SELECT * FROM orders WHERE id=? AND user_id=?", oid, uid);
+  const o = await one("orders", { id: oid, user_id: uid });
   if (!o) return "الطلب غير موجود";
   const p = o.printed ?? 0;
   if (p === 2) { await edit(chat, mid, `❌ الطلب #${oid} ملغي.`); return null; }
@@ -163,7 +163,7 @@ export async function orderCancelCb(chat: number, uid: number, mid: number, d: s
   } else if (d.startsWith("ocn:")) {
     await edit(chat, mid, `تمام، طلبك #${oid} باقي ✅\n↩️ تگدر تلغيه <b>لحد ما توصلك رسالة «تم تجهيز طلبك»</b>.`, [[btn(`❌ إلغاء الطلب #${oid}`, `oc:${oid}`)]]);
   } else if (d.startsWith("ocy:")) {
-    await run("UPDATE orders SET printed=2 WHERE id=? AND IFNULL(printed,0)=0", oid);
+    await update("orders", { id: oid }, { printed: 2 }, { where: (r) => !r.printed });
     await edit(chat, mid, `❌ تم إلغاء طلبك <b>#${oid}</b>.\nتگدر تطلب من جديد بأي وقت من 🛒 المتجر.`);
     const n = await newOrdersCount();
     for (const a of await staffIds("orders")) {
@@ -261,9 +261,10 @@ export async function onStudentCb(chat: number, uid: number, mid: number, d: str
 }
 
 async function finalize(chat: number, uid: number, data: Row, items: Row[], sub: number, fee: number, user: Row) {
-  const oid = await run(`INSERT INTO orders(user_id, username, name, curr, gov, side, area, phone1, phone2, items, subtotal, fee, total, created)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, uid, user.username ?? "", data.name, data.curr ?? "", data.gov, data.side ?? "", data.area,
-  data.phone1, data.phone2, JSON.stringify(items), sub, fee, sub + fee, stamp());
+  const oid = await insert("orders", {
+    user_id: uid, username: user.username ?? "", name: data.name, curr: data.curr ?? "", gov: data.gov, side: data.side ?? "", area: data.area,
+    phone1: data.phone1, phone2: data.phone2, items: JSON.stringify(items), subtotal: sub, fee, total: sub + fee, created: stamp(),
+  });
   await createOrderCode(oid, items);
   await setSession(uid, "", {});
   // الكلام مكتوب داخل صورة النجاح، والنص يطلع بس إذا الصورة ما وصلت
@@ -342,7 +343,7 @@ export function orderKb(o: Row): Kb {
     [cbtn("الهاتف 1", o.phone1), cbtn("الهاتف 2", o.phone2)], [cbtn("المنتجات", items), cbtn("المبلغ الكلي", num(o.total))]];
 }
 async function notifyAdmins(oid: number) {
-  const o = (await get("SELECT * FROM orders WHERE id=?", oid))!;
+  const o = (await one("orders", { id: oid }))!;
   const n = await newOrdersCount();
   for (const a of await staffIds("orders")) {
     await send(a, orderText(o), { kb: orderKb(o) });
@@ -425,9 +426,10 @@ export async function onRegForm(chat: number, uid: number, o: any, user: Row) {
   await afterReg(chat, uid, nxt);
 }
 async function saveStudent(uid: number, username: string, r: Row, old: Row | null) {
-  await run(`INSERT OR REPLACE INTO students(user_id, username, name, curr, grade, gov, side, area, phone1, phone2, exam,
-    center_id, created, updated) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, uid, username, r.name, r.curr, r.grade, r.gov, r.side ?? "", r.area,
-  r.phone1, r.phone2, r.exam, r.center_id ?? null, old ? old.created : stamp(), stamp());
+  await put("students", {
+    user_id: uid, username, name: r.name, curr: r.curr, grade: r.grade, gov: r.gov, side: r.side ?? "", area: r.area,
+    phone1: r.phone1, phone2: r.phone2, exam: r.exam, center_id: r.center_id ?? null, created: old ? old.created : stamp(), updated: stamp(),
+  });
 }
 
 // التسجيل بالمحادثة (إذا ماكو STORE_URL)
@@ -524,8 +526,8 @@ export async function regCb(chat: number, uid: number, mid: number, d: string, s
     else { r.center_id = null; await regConfirm(chat, uid, data); }
   } else if (d.startsWith("ra:") && st === "r:carea") {
     const aid = Number(d.slice(3));
-    const a = await get("SELECT * FROM areas WHERE id=?", aid);
-    const cs = await all("SELECT * FROM centers WHERE area_id=? AND active=1 ORDER BY id", aid);
+    const a = await one("areas", { id: aid });
+    const cs = await find("centers", { area_id: aid, active: 1 }, { order: ["id"] });
     if (!a || !cs.length) return "اختر منطقة ثانية";
     await setSession(uid, "r:center", data);
     await edit(chat, mid, `🏫 المنطقة: <b>${esc(a.name)}</b>\nاختر المركز الامتحاني:`,

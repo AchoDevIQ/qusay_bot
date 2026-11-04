@@ -6,11 +6,11 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import QRCode from "qrcode";
-import { all, get, kvSet, type Row } from "./db.ts";
+import { kvSet, one, type Row } from "./db.ts";
 import { FONT, LOGO, PDF_DIR } from "./config.ts";
 import { btn, esc, fileStamp, money, num, stamp } from "./util.ts";
 import { upload, send, type Kb } from "./telegram.ts";
-import { centerName, examLabel, orderItems, placeOf, profileText, sellerLabel } from "./data.ts";
+import { centerName, examLabel, orderItems, ordersByIds, placeOf, profileText, sellerLabel } from "./data.ts";
 
 const run = promisify(execFile);
 const ensureDir = () => fs.mkdirSync(PDF_DIR, { recursive: true });
@@ -60,7 +60,7 @@ const htmlToPng = (htmlPath: string, pngPath: string, w = 760, h = 1000) =>
 // ---------- طلبات التوصيل: كل طلب بورقة A5 مستقلة
 /** كود QR بوصل الطلب اللي بيه امتحانات: الطالب يقراه لمن يوصله الطلب */
 async function examQr(oid: number) {
-  const code = (await get("SELECT code FROM order_codes WHERE order_id=?", oid))?.code as string | undefined;
+  const code = (await one("order_codes", { order_id: oid }))?.code as string | undefined;
   if (!code) return "";
   const svg = await QRCode.toString(code, { type: "svg", margin: 1, errorCorrectionLevel: "M" });
   return `<div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding:8px 10px;border:1.5px solid #101929;border-radius:10px;break-inside:avoid">
@@ -111,7 +111,7 @@ td,th{padding:6px 8px;border:1px solid #d9dde5;text-align:right}
 }
 
 export async function sendOrdersPdf(chat: number, ids: number[]) {
-  const orders = await all(`SELECT * FROM orders WHERE id IN (${ids.map(() => "?").join(",")}) ORDER BY id`, ...ids);
+  const orders = await ordersByIds(ids);
   ensureDir();
   const name = "orders_" + fileStamp();
   const hp = path.join(PDF_DIR, name + ".html"), pp = path.join(PDF_DIR, name + ".pdf");
@@ -266,14 +266,14 @@ export async function sendReceiptImage(chat: number, o: Row, items: Row[], capti
 
 /** نفس الوصل الملون مال الطالب، يوصل للبائع حتى يدزه لأي أحد */
 export async function sendColorReceipt(chat: number, oid: number) {
-  const o = await get("SELECT * FROM orders WHERE id=? AND printed=3", oid);
+  const o = await one("orders", { id: oid, printed: 3 });
   if (!o) return;
   if (!await sendReceiptImage(chat, o, orderItems(o), `🖼 وصل بيع #${oid} — ${esc(o.name)}`)) await send(chat, "⚠️ ما گدرت أسوي الصورة.");
 }
 
 /** وصل للطباعة (بس إذا طلبه البائع) */
 export async function sendPaperReceipt(chat: number, oid: number) {
-  const o = await get("SELECT * FROM orders WHERE id=? AND printed=3", oid);
+  const o = await one("orders", { id: oid, printed: 3 });
   if (!o) { await send(chat, "⚠️ البيعة غير موجودة."); return; }
   ensureDir();
   const hp = path.join(PDF_DIR, `receipt_${oid}.html`), pp = path.join(PDF_DIR, `وصل_${oid}.pdf`);

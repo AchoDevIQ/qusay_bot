@@ -1,8 +1,8 @@
 // الامتحانات: تنفتح بعد الشراء، مباشرة من المكتبة، أو برمز QR بوصل التوصيل لمن يوصل الطلب
 import { randomInt } from "node:crypto";
-import { all, get, run, setSession, tx, type Row } from "./db.ts";
+import { count, find, insert, insertIgnore, one, setSession, tx, update, type Row } from "./db.ts";
 import { BTN_EXAMS, STORE_URL } from "./config.ts";
-import { noteFail, tooManyFails } from "./data.ts";
+import { noteFail, pendingCodes, tooManyFails } from "./data.ts";
 import { chapterLabel, flowKb, mainKb, scanKb } from "./keyboards.ts";
 import { send, type Kb } from "./telegram.ts";
 import { btn, esc, stamp } from "./util.ts";
@@ -20,12 +20,10 @@ export function chaptersOf(items: Row[]) {
   return [...new Set(items.map((i) => examChapterOf(i.name)).filter((c): c is string => !!c))];
 }
 export async function grantExams(uid: number, chapters: string[], oid: number | null) {
-  for (const ch of chapters) await run("INSERT OR IGNORE INTO exam_access(user_id, chapter, order_id, created) VALUES(?,?,?,?)", uid, ch, oid, stamp());
+  for (const ch of chapters) await insertIgnore("exam_access", { user_id: uid, chapter: ch }, { order_id: oid, created: stamp() });
 }
-const myChapters = async (uid: number) => (await all("SELECT chapter FROM exam_access WHERE user_id=? ORDER BY created, chapter", uid)).map((r) => r.chapter as string);
-/** الطلبات الجاهزة اللي رمزها لسه ما انستخدم */
-const pendingCodes = async (uid: number) => await all(`SELECT orders.id FROM order_codes JOIN orders ON orders.id=order_codes.order_id
-  WHERE orders.user_id=? AND orders.printed=1 AND order_codes.used_at IS NULL ORDER BY orders.id`, uid);
+const myChapters = async (uid: number) => (await find("exam_access", { user_id: uid }, { order: ["created", "chapter"] })).map((r) => r.chapter as string);
+
 const chaptersText = (chapters: string[]) => chapters.map((c) => "• " + esc(c)).join("\n");
 
 // ---------- البيع من المكتبة: تنفتح مباشرة
@@ -44,13 +42,13 @@ export async function createOrderCode(oid: number, items: Row[]) {
   if (!chapters.length) return null;
   const make = () => "QM-" + Array.from({ length: 8 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
   let code = make();
-  while (await get("SELECT 1 FROM order_codes WHERE code=?", code)) code = make();
-  await run("INSERT INTO order_codes(code, order_id, chapters) VALUES(?,?,?)", code, oid, JSON.stringify(chapters));
+  while (await one("order_codes", { code })) code = make();
+  await insert("order_codes", { code, order_id: oid, chapters: JSON.stringify(chapters) });
   return code;
 }
 /** زر رسالة «تم تجهيز طلبك»، إذا الطلب بيه امتحانات */
 export async function readyExtras(oid: number): Promise<{ text: string; kb?: Kb }> {
-  if (!await get("SELECT 1 FROM order_codes WHERE order_id=? AND used_at IS NULL", oid)) return { text: "" };
+  if (!await one("order_codes", { order_id: oid, used_at: null })) return { text: "" };
   return {
     text: "\n\n📝 طلبك بيه امتحانات. <b>لمن يوصلك الطلب</b> اضغط الزر جوة، ووجه الكاميرا على الكود المطبوع بالوصل، وتنفتح امتحاناتك.",
     kb: [[btn("📷 وصلني الطلب: افتح الامتحانات", `xs:${oid}`)]],
@@ -63,8 +61,9 @@ function normalCode(raw: string) {
 /** الرمز يشتغل بس لصاحب الطلب، وبعد ما يتجهز الطلب */
 export async function redeemCode(chat: number, uid: number, raw: string) {
   if (await tooManyFails(FAILS, uid)) { await send(chat, "⚠️ حاولت هوايا برموز غلط. حاول بعد ساعة، أو تواصل ويا قصي العميري."); return; }
-  const r = await get(`SELECT order_codes.*, orders.user_id, orders.printed FROM order_codes JOIN orders ON orders.id=order_codes.order_id
-    WHERE order_codes.code=?`, normalCode(raw));
+  const c = await one("order_codes", { code: normalCode(raw) });
+  const ord = c && await one("orders", { id: c.order_id });
+  const r: Row | null = ord ? { ...c!, user_id: ord.user_id, printed: ord.printed } : null;
   if (!r || r.user_id !== uid) {
     await noteFail(FAILS, uid);
     await send(chat, "⚠️ هذا الكود غلط، أو مو لطلبك. جرب مرة ثانية، أو اكتب الرمز المطبوع تحت الكود.");
@@ -77,7 +76,7 @@ export async function redeemCode(chat: number, uid: number, raw: string) {
   const chapters: string[] = JSON.parse(r.chapters);
   await tx(async () => {
     await grantExams(uid, chapters, r.order_id);
-    await run("UPDATE order_codes SET used_at=? WHERE code=?", stamp(), r.code);
+    await update("order_codes", { code: r.code }, { used_at: stamp() });
   });
   await send(chat, `🔓 <b>انفتحت امتحاناتك</b>\n${chaptersText(chapters)}`, { replyKb: await mainKb(uid) });
   await examsMenu(chat, uid);
@@ -94,9 +93,10 @@ export async function examCb(chat: number, uid: number, d: string): Promise<stri
   if (d === "xm") await examsMenu(chat, uid);
   else if (d.startsWith("xs:")) {
     const oid = Number(d.slice(3));
-    const o = await get(`SELECT orders.printed, order_codes.used_at FROM order_codes JOIN orders ON orders.id=order_codes.order_id
-      WHERE orders.id=? AND orders.user_id=?`, oid, uid);
-    if (!o) return "الطلب غير موجود";
+    const ord = await one("orders", { id: oid, user_id: uid });
+    const c = ord && await one("order_codes", { order_id: oid });
+    if (!c) return "الطلب غير موجود";
+    const o = { printed: ord!.printed, used_at: c.used_at };
     if (o.used_at) { await examsMenu(chat, uid); return null; }
     if (o.printed !== 1) return "طلبك لسه ما تجهز";
     await setSession(uid, "x:code", { oid });
@@ -106,7 +106,7 @@ export async function examCb(chat: number, uid: number, d: string): Promise<stri
     const chapters = await myChapters(uid);
     const ch = chapters[Number(d.slice(3))];
     if (!ch) return "الفصل غير موجود";
-    const n = (await get(`SELECT COUNT(*) n FROM bank_exams WHERE chapter=?`, ch))!.n;
+    const n = await count("bank_exams", { chapter: ch });
     await send(chat, `📝 <b>${esc(ch)}</b>\nعدد الامتحانات: ${n}\nجدول امتحاناتك راح يطلع هنا.`, { kb: [[btn("⬅️ رجوع", "xm")]] });
   }
   return null;

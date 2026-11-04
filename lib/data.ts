@@ -1,30 +1,36 @@
 // الاستعلامات المشتركة والصلاحيات
-import { all, get, kvGet, kvSet, run, type Row } from "./db.ts";
+import { count, find, kvGet, kvSet, one, sumOf, update, type Row } from "./db.ts";
 import { ADMIN_IDS, DEFAULT_FEE, DAYS, DAY_ORDER, ORD_AR, toLatinDigits } from "./config.ts";
 import { esc, nowIQ, stamp } from "./util.ts";
 
 // ---------- المتجر
 /** الأقسام اللي بيها منتجات */
-export const cats = async () => await all(`SELECT cats.id, cats.name, COUNT(products.id) n FROM cats
-  JOIN products ON products.cat_id=cats.id AND products.active=1
-  WHERE cats.active=1 GROUP BY cats.id ORDER BY cats.id`);
-export const allCats = async () => await all(`SELECT cats.id, cats.name, COUNT(products.id) n FROM cats
-  LEFT JOIN products ON products.cat_id=cats.id AND products.active=1
-  WHERE cats.active=1 GROUP BY cats.id ORDER BY cats.id`);
-export const cat = async (cid: number) => await get("SELECT * FROM cats WHERE id=? AND active=1", cid);
-export const products = async (cid?: number | null) => cid == null
-  ? await all(`SELECT products.* FROM products JOIN cats ON cats.id=products.cat_id AND cats.active=1
-         WHERE products.active=1 ORDER BY products.id`)
-  : await all("SELECT * FROM products WHERE active=1 AND cat_id=? ORDER BY id", cid);
-export const product = async (pid: number) => await get(`SELECT products.* FROM products JOIN cats ON cats.id=products.cat_id AND cats.active=1
-  WHERE products.id=? AND products.active=1`, pid);
-export const feeOf = async (gov: string): Promise<number> => (await get("SELECT fee FROM fees WHERE gov=?", gov))?.fee ?? DEFAULT_FEE;
-export const newOrdersCount = async (): Promise<number> => (await get("SELECT COUNT(*) n FROM orders WHERE IFNULL(printed,0)=0"))!.n;
+export const allCats = async () => {
+  const ps = await find("products", { active: 1 });
+  return (await find("cats", { active: 1 }, { order: ["id"] })).map((c) => ({ id: c.id, name: c.name, n: ps.filter((p) => p.cat_id === c.id).length }));
+};
+export const cats = async () => (await allCats()).filter((c) => c.n);
+export const cat = async (cid: number) => await one("cats", { id: cid, active: 1 });
+export async function products(cid?: number | null) {
+  if (cid != null) return find("products", { active: 1, cat_id: cid }, { order: ["id"] });
+  const live = new Set((await find("cats", { active: 1 })).map((c) => c.id));
+  return find("products", { active: 1 }, { where: (p) => live.has(p.cat_id), order: ["id"] });
+}
+export async function product(pid: number) {
+  const p = await one("products", { id: pid, active: 1 });
+  return p && await cat(p.cat_id) ? p : null;
+}
+export const feeOf = async (gov: string): Promise<number> => (await one("fees", { gov }))?.fee ?? DEFAULT_FEE;
+export const newOrdersCount = async (): Promise<number> => count("orders", {}, { where: (o) => !o.printed });
+export async function ordersByIds(ids: number[]) {
+  const rows = await Promise.all([...new Set(ids)].map((id) => one("orders", { id })));
+  return rows.filter((r): r is Row => !!r).sort((a, b) => a.id - b.id);
+}
 export const orderItems = (o: Row): Row[] => JSON.parse(o.items);
 
 // ---------- الصلاحيات
 // «شوف كطالب»: المدير أو المساعد يجرب البوت مثل طالب عادي، بدون صلاحياته لحد ما يرجع
-const realStaffRow = async (uid: number) => await get("SELECT * FROM staff WHERE user_id=?", uid);
+const realStaffRow = async (uid: number) => await one("staff", { user_id: uid });
 export const isRealStaff = async (uid: number) => ADMIN_IDS.includes(uid) || await realStaffRow(uid) !== null;
 export const viewingAsStudent = async (uid: number) => await kvGet(`asstudent_${uid}`) === "1";
 export const setStudentView = async (uid: number, on: boolean) => await kvSet(`asstudent_${uid}`, on ? "1" : "0");
@@ -38,7 +44,7 @@ export async function can(uid: number, perm: string) {
 }
 export const isStaff = async (uid: number) => await isAdmin(uid) || await staffRow(uid) !== null;
 export async function staffIds(perm: string): Promise<number[]> {
-  const rows = (await all("SELECT user_id, perms FROM staff")).filter((r) => permList(r).includes(perm)).map((r) => r.user_id as number);
+  const rows = (await find("staff")).filter((r) => permList(r).includes(perm)).map((r) => r.user_id as number);
   const out: number[] = [];
   for (const id of new Set([...ADMIN_IDS, ...rows])) if (!await viewingAsStudent(id)) out.push(id);   // اللي يجرب كطالب ما يوصله شي إداري
   return out;
@@ -72,16 +78,22 @@ export async function noteFail(kind: string, uid: number) {
 }
 
 // ---------- الطلاب والمراكز
-export const student = async (uid: number) => await get("SELECT * FROM students WHERE user_id=?", uid);
+export const student = async (uid: number) => await one("students", { user_id: uid });
 /** زر امتحاناتي يطلع بس للي عنده امتحانات مفتوحة، أو طلب جاهز ينتظر الكود */
-export const hasExamMenu = async (uid: number) => !!await get(`SELECT 1 WHERE EXISTS(SELECT 1 FROM exam_access WHERE user_id=?)
-  OR EXISTS(SELECT 1 FROM order_codes JOIN orders ON orders.id=order_codes.order_id WHERE orders.user_id=? AND orders.printed=1 AND order_codes.used_at IS NULL)`, uid, uid);
+export const hasExamMenu = async (uid: number) => !!await one("exam_access", { user_id: uid }) || (await pendingCodes(uid)).length > 0;
+/** الطلبات الجاهزة اللي رمزها لسه ما انستخدم */
+export async function pendingCodes(uid: number) {
+  const out: Row[] = [];
+  for (const o of await find("orders", { user_id: uid, printed: 1 }, { order: ["id"] })) if (await one("order_codes", { order_id: o.id, used_at: null })) out.push(o);
+  return out;
+}
 export async function centerName(cid: number | null | undefined) {
   if (!cid) return "";
-  const r = await get("SELECT centers.name cn, areas.name an FROM centers JOIN areas ON areas.id=centers.area_id WHERE centers.id=?", cid);
-  return r ? `${r.cn} (${r.an})` : "";
+  const c = await one("centers", { id: cid });
+  const a = c && await one("areas", { id: c.area_id });
+  return a ? `${c!.name} (${a.name})` : "";
 }
-export const govMode = async (gov: string): Promise<string> => (await get("SELECT mode FROM govmode WHERE gov=?", gov))?.mode ?? "online";
+export const govMode = async (gov: string): Promise<string> => (await one("govmode", { gov }))?.mode ?? "online";
 export const placeOf = (s: Row) => s.gov + (s.side ? " - " + s.side : "");
 export async function profileText(s: Row) {
   const lines = [`الاسم: <b>${esc(s.name)}</b>`, `المنهج: ${esc(s.curr)}`, `صفك بالمدرسة هذه السنة: ${esc(s.grade)}`,
@@ -90,11 +102,15 @@ export async function profileText(s: Row) {
   if (s.exam === "حضوري") lines.push(`المركز الامتحاني: ${esc(await centerName(s.center_id) || "—")}`);
   return lines.join("\n");
 }
+/** المناطق اللي بيها مراكز شغالة */
+export async function areasWithCenters() {
+  const used = new Set((await find("centers", { active: 1 })).map((c) => c.area_id));
+  return find("areas", { active: 1 }, { where: (a) => used.has(a.id), order: ["gov", "id"] });
+}
 export async function centerAreas(gov: string) {
-  const rows = await all(`SELECT areas.* FROM areas WHERE active=1 AND gov=? AND EXISTS(SELECT 1 FROM centers WHERE area_id=areas.id AND active=1)
-    ORDER BY id`, gov);
-  return rows.length ? rows : await all(`SELECT areas.* FROM areas WHERE active=1
-    AND EXISTS(SELECT 1 FROM centers WHERE area_id=areas.id AND active=1) ORDER BY gov, id`);
+  const rows = await areasWithCenters();
+  const mine = rows.filter((a) => a.gov === gov);
+  return mine.length ? mine.sort((a, b) => a.id - b.id) : rows;
 }
 export async function examLabel(sid: number) {
   const st = await student(sid) ?? {};
@@ -109,14 +125,16 @@ export function checkPhone(raw: string): [string | null, string | null] {
 }
 
 // ---------- الأسئلة
-export const chapters = async () => await all("SELECT * FROM chapters WHERE active=1 ORDER BY ord");
-export const topics = async (chid: number) => await all("SELECT * FROM topics WHERE active=1 AND chapter_id=? ORDER BY ord", chid);
-export const topic = async (tid: number) => await get(`SELECT topics.*, chapters.ar char, chapters.en chen, chapters.ord chord
-  FROM topics JOIN chapters ON chapters.id=topics.chapter_id WHERE topics.id=?`, tid);
-export const question = async (qid: number) => await get("SELECT * FROM questions WHERE id=?", qid);
+export const chapters = async () => await find("chapters", { active: 1 }, { order: ["ord"] });
+export const topics = async (chid: number) => await find("topics", { active: 1, chapter_id: chid }, { order: ["ord"] });
+export async function topic(tid: number): Promise<Row | null> {
+  const t = await one("topics", { id: tid });
+  const c = t && await one("chapters", { id: t.chapter_id });
+  return c ? { ...t, char: c.ar, chen: c.en, chord: c.ord } : null;
+}
+export const question = async (qid: number) => await one("questions", { id: qid });
 export async function setQ(qid: number, fields: Record<string, string | number | null>) {
-  const kw = { ...fields, updated: stamp() };
-  await run(`UPDATE questions SET ${Object.keys(kw).map((k) => k + "=?").join(",")} WHERE id=?`, ...Object.values(kw), qid);
+  await update("questions", { id: qid }, { ...fields, updated: stamp() });
 }
 export function chLabel(ch: Row, en: boolean) {
   if (en) return `Chapter ${ch.ord}: ${ch.en || ch.ar}`;
@@ -152,19 +170,23 @@ export async function qOpenNow() {
 }
 
 // ---------- المكتبات والمساعدين
-export const myOffice = async (uid: number) => (await viewingAsStudent(uid) ? null : await get(`SELECT offices.* FROM office_users JOIN offices ON offices.id=office_users.office_id
-  WHERE office_users.user_id=? AND offices.active=1`, uid));
-export const office = async (oid: number) => await get("SELECT * FROM offices WHERE id=?", oid);
+export async function myOffice(uid: number) {
+  if (await viewingAsStudent(uid)) return null;
+  const u = await one("office_users", { user_id: uid });
+  return u && await one("offices", { id: u.office_id, active: 1 });
+}
+export const office = async (oid: number) => await one("offices", { id: oid });
 export async function officeUnsettled(oid: number) {
-  const r = (await get("SELECT COUNT(*) n, IFNULL(SUM(total),0) t FROM orders WHERE printed=3 AND office_id=? AND settle_id IS NULL", oid))!;
-  return { n: r.n as number, total: r.t as number };
+  const rows = await find("orders", { printed: 3, office_id: oid, settle_id: null });
+  return { n: rows.length, total: sumOf(rows, "total") };
 }
 export async function staffName(uid: number | null | undefined) {
   if (uid != null && await isAdmin(uid)) return "قصي العميري";
-  const u = await get(`SELECT office_users.name un, offices.name onm FROM office_users JOIN offices ON offices.id=office_users.office_id
-    WHERE user_id=?`, uid ?? null);
-  if (u) return u.un ? `${u.onm} (${u.un})` : u.onm;
-  return (await get("SELECT name FROM staff WHERE user_id=?", uid ?? null))?.name || "مساعد";
+  if (uid == null) return "مساعد";
+  const u = await one("office_users", { user_id: uid });
+  const of = u && await one("offices", { id: u.office_id });
+  if (of) return u!.name ? `${of.name} (${u!.name})` : of.name;
+  return (await one("staff", { user_id: uid }))?.name || "مساعد";
 }
 /** البائع بالوصل: اسم المكتبة بس، أو اسمك */
 export async function sellerLabel(o: Row) {
@@ -176,13 +198,14 @@ export async function sellerLabel(o: Row) {
 }
 /** ذمة المساعد = مبيعاته بالمكتب − اللي سلمه إلك */
 export async function staffAccount(sid: number) {
-  const sold: number = (await get("SELECT IFNULL(SUM(total),0) n FROM orders WHERE printed=3 AND seller=?", sid))!.n;
-  const paid: number = (await get("SELECT IFNULL(SUM(amount),0) n FROM staff_pay WHERE staff_id=?", sid))!.n;
+  const sold = sumOf(await find("orders", { printed: 3, seller: sid }), "total");
+  const paid = sumOf(await find("staff_pay", { staff_id: sid }), "amount");
   const limit = Number(await kvGet(`limit_${sid}`) || 0);
   const owed = sold - paid;
   return { sold, paid, owed, limit, left: limit ? limit - owed : 0 };
 }
 export async function searchStudents(q: string) {
-  const s = "%" + toLatinDigits(q.trim()) + "%";
-  return await all("SELECT * FROM students WHERE name LIKE ? OR phone1 LIKE ? OR phone2 LIKE ? ORDER BY name LIMIT 15", s, s, s);
+  const s = toLatinDigits(q.trim()).toLowerCase();
+  const has = (v: unknown) => v !== null && String(v).toLowerCase().includes(s);
+  return find("students", {}, { where: (r) => has(r.name) || has(r.phone1) || has(r.phone2), order: ["name"], limit: 15 });
 }
