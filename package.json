@@ -11,6 +11,7 @@
     "firebase-check": "node --env-file-if-exists=.env.local scripts/firebase-check.ts",
     "upload-content": "node --env-file-if-exists=.env.local scripts/upload-content.ts",
     "copy-to-firestore": "node --env-file-if-exists=.env.local scripts/copy-to-firestore.ts",
+    "upload-answers": "node scripts/upload-answers.ts",
     "test": "node --test tests/*.test.ts",
     "load-exams": "node --env-file-if-exists=.env.local scripts/load-exams.ts"
   },

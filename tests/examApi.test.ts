@@ -214,3 +214,21 @@ test("الروابط الفعلية للصفحة: المنع والنجاح", as
   assert.equal(f.headers.get("x-content-type-options"), "nosniff");
   assert.match(f.headers.get("cache-control")!, /no-store/);
 });
+
+test("ملفات الجواب الكاملة: تنربط بنسختها، والمرفوع من اللوحة يبقى، وتنفتح بالصفحة", async () => {
+  const { linkAnswerFiles } = await import("../lib/answerFiles.ts");
+  const dir = fs.mkdtempSync(path.join(tmp, "answers-"));
+  fs.mkdirSync(path.join(dir, "1"));
+  fs.writeFileSync(path.join(dir, "1", "A 1.pdf"), "%PDF-1.7 full");
+  await run("INSERT INTO bank_versions(exam_id, model, ok, answer_pdf) VALUES(1, 'K', 1, 'uploads/mine.pdf'), (1, 'L', 1, NULL)");
+  await run("UPDATE bank_versions SET answer_pdf=NULL WHERE exam_id=1 AND model='A'");
+  const r = await linkAnswerFiles(dir, "ch1");
+  assert.deepEqual([r.sent, r.kept, r.missing.includes("1 L")], [1, 1, true]);
+  const ref = (await get("SELECT answer_pdf FROM bank_versions WHERE exam_id=1 AND model='A'"))!.answer_pdf;
+  assert.equal(ref, "answers/ch1/e1/A.pdf");
+  assert.equal((await get("SELECT answer_pdf FROM bank_versions WHERE exam_id=1 AND model='K'"))!.answer_pdf, "uploads/mine.pdf");
+  const f = await examFile(fileToken(1), ref);
+  assert.equal(f.type, "application/pdf");
+  await run("DELETE FROM bank_versions WHERE exam_id=1 AND model IN ('K','L')");
+  assert.deepEqual((await linkAnswerFiles(dir, "ch1")).sent, 0);                // الإعادة ما ترفع مرة ثانية
+});
