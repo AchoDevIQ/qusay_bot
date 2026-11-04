@@ -39,7 +39,12 @@ export function findBrowser(): string | null {
 /** على السيرفر ماكو متصفح منصب، فنستخدم النسخة اللي وية التطبيق */
 async function packagedBrowser() {
   if (process.platform !== "linux" || process.env.CHROME_PATH) return null;
-  try { return await (await import("@sparticuz/chromium")).default.executablePath(); } catch (e) { console.error("Browser problem:", e); return null; }
+  try {
+    const browser = await (await import("@sparticuz/chromium")).default.executablePath();
+    // خطوط الوصولات (Segoe وTahoma) ما موجودة على السيرفر، وبدون خط عربي يطلع الكلام فارغ
+    fs.cpSync(path.join(process.cwd(), "assets", "fonts"), path.join(os.tmpdir(), "fonts", "arabic"), { recursive: true });
+    return browser;
+  } catch (e) { console.error("Browser problem:", e); return null; }
 }
 async function renderPackaged(b: string, out: string, htmlPath: string, job: RenderJob) {
   const flags = ["--no-sandbox", "--no-zygote", "--single-process", "--in-process-gpu", "--disable-gpu", "--disable-dev-shm-usage", "--font-render-hinting=none"];
