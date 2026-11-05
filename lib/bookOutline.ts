@@ -27,9 +27,10 @@ export const BOOK: { slug: string; chapter: string; exams: [string, string][] }[
   { slug: "ch5", chapter: "الفصل الخامس", exams: [["هل والإثبات", ""], ["فصل المتغيرات", "Separation of Variables"], ["فاينل", "Final"]] },
 ];
 
-// مجاميع المراكز مثل ما كتبها قصي. كل مجموعة تاخذ نفس الترتيب باليومين. الأيام: 0 = الاثنين
+// أوقات كل مكان مثل ما كتبها قصي: كل يوم إله أوقاته، والطالب يختار وقت لكل يوم بكيفه. الأيام: 0 = الاثنين
 const SAT = 5, SUN = 6, MON = 0, TUE = 1, WED = 2, FRI = 4;
-export const CENTER_GROUPS: { match: string; gender?: string; days: [number, string[]][] }[] = [
+export const PLACE_SLOTS: { match: string | null; gender?: string; days: [number, string[]][] }[] = [
+  { match: null, days: [[SUN, ["16:00", "20:30", "22:00"]], [WED, ["16:00", "20:30", "22:00"]]] },
   { match: "أثر", days: [[SAT, ["11:00", "12:30", "14:00", "15:30"]], [TUE, ["14:00", "15:30", "17:00", "18:30"]]] },
   { match: "قصي العميري", days: [[FRI, ["09:30", "11:00", "12:30", "14:00"]], [MON, ["13:00", "14:30", "16:00", "17:30"]]] },
   { match: "صليخ 2", days: [[SUN, ["14:00", "15:30", "17:00"]], [WED, ["14:00", "15:30", "17:00"]]] },

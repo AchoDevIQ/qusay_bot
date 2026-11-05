@@ -5,10 +5,10 @@ import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { haptic } from "../shared";
 
 type Item = { id: number; title: string; chapter: string; minutes: number; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
-type GroupPreview = { id: number; name: string; items: { title: string; at: string; locked: boolean }[]; waiting: number };
+type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  inPerson: boolean; place: string; mode: string | null; groupName: string; needsChoice: boolean; late: { title: string; at: string }[]; groups: { id: number; name: string; hour: number; label: string }[]; groupPreview?: GroupPreview;
+  inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
   preview?: Preview; notice?: string; error?: string;
@@ -44,10 +44,11 @@ export default function MyExamsClient() {
       <div className="wrap">
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!info && !error && <div className="empty">جاري التحميل...</div>}
+        {info?.repick && <Picker info={info} busy={busy} call={call} />}
         {info && info.late.length > 0 && <LateAsk info={info} busy={busy} call={call} />}
         {info?.needsChoice && <Choice info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
-        {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيد مجموعتك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
+        {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info && !!info.items.length && <List info={info} />}
       </div>
     </>
@@ -69,49 +70,57 @@ function LateAsk({ info, busy, call }: { info: Info; busy: boolean; call: (b: Re
   );
 }
 
-/** أول مرة: ويا الطلاب بمجموعة ثابتة، لو جدول خاص */
+/** وقت لكل يوم، بكيف الطالب */
+function Picker({ info, busy, call, back }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null>; back?: () => void }) {
+  const [picks, setPicks] = useState<Record<string, string>>(info.picks ?? {});
+  const [seen, setSeen] = useState<PlacePreview | null>(null);
+  const ready = info.days.every((d) => d.times.some((x) => x.t === picks[String(d.d)]));
+  return (
+    <div className="card">
+      <h2>👥 أوقات {info.place}</h2>
+      <div className="form">
+        {back && <button type="button" className="exbtn" onClick={back}>⬅️ رجوع</button>}
+        {info.days.map((d) => (
+          <div key={d.d}>
+            <label>وقتك يوم {d.name}</label>
+            <div className="seg wrap2">
+              {d.times.map((x) => <button type="button" key={x.t} className={picks[String(d.d)] === x.t ? "on" : ""} onClick={() => { haptic(); setSeen(null); setPicks({ ...picks, [String(d.d)]: x.t }); }}>{x.label}</button>)}
+            </div>
+          </div>
+        ))}
+        {!seen && <button type="button" className="btn agbtn adtop" disabled={busy || !ready} onClick={async () => { const r = await call({ action: "placePreview", picks }); if (r?.placePreview) setSeen(r.placePreview); }}>شوف جدولي</button>}
+        {seen && (
+          <>
+            {seen.items.length ? <table className="extable adtop"><tbody>{seen.items.map((i) => <tr key={i.title + i.at} className={i.locked ? "mxlocked" : ""}><td>{i.locked ? "🔒 " : ""}{i.title}</td><td className="adphone">{prettyAt(i.at)}</td></tr>)}</tbody></table> : <div className="hint adtop">المواعيد لسه ما نزلت.</div>}
+            {seen.waiting > 0 && !!seen.items.length && <div className="hint adtop">و{seen.waiting} امتحان موعده ينزل بعدين.</div>}
+            <div className="rgalert adtop">⚠️ بعد التثبيت ما تتغير أوقاتك إلا عن طريق الإدارة.</div>
+            <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void call({ action: "joinPlace", picks })}>✅ ثبت أوقاتي</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** أول مرة: ويا الطلاب بمواعيد المكان، لو جدول خاص */
 function Choice({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
-  const [way, setWay] = useState<"" | "group" | "private">(info.groups.length ? "" : "private");
-  const [seen, setSeen] = useState<GroupPreview | null>(null);
+  const [way, setWay] = useState<"" | "general" | "private">(info.days.length ? "" : "private");
   if (way === "private") {
     return (
       <>
-        {!!info.groups.length && <button type="button" className="exbtn adtop" onClick={() => setWay("")}>⬅️ رجوع</button>}
+        {!!info.days.length && <button type="button" className="exbtn adtop" onClick={() => setWay("")}>⬅️ رجوع</button>}
         <Build info={info} busy={busy} call={call} />
       </>
     );
   }
-  if (way === "group") {
-    return (
-      <div className="card">
-        <h2>👥 مجاميع {info.place}</h2>
-        <div className="form">
-          <button type="button" className="exbtn" onClick={() => { setWay(""); setSeen(null); }}>⬅️ رجوع</button>
-          <label>اختار الوقت اللي يناسبك</label>
-          <div className="seg wrap2">
-            {info.groups.map((g) => (
-              <button type="button" key={g.id} className={seen?.id === g.id ? "on" : ""} disabled={busy} onClick={async () => { haptic(); const r = await call({ action: "groupPreview", group: g.id }); if (r?.groupPreview) setSeen(r.groupPreview); }}>{g.name}<small className="pdmode">{g.label}</small></button>
-            ))}
-          </div>
-          {seen && (
-            <>
-              {seen.items.length ? <table className="extable adtop"><tbody>{seen.items.map((i) => <tr key={i.title + i.at} className={i.locked ? "mxlocked" : ""}><td>{i.locked ? "🔒 " : ""}{i.title}</td><td className="adphone">{prettyAt(i.at)}</td></tr>)}</tbody></table> : <div className="hint adtop">مواعيد هذي المجموعة لسه ما نزلت.</div>}
-              {seen.waiting > 0 && !!seen.items.length && <div className="hint adtop">و{seen.waiting} امتحان موعده ينزل بعدين.</div>}
-              <div className="rgalert adtop">⚠️ بعد التثبيت ما تتغير مجموعتك إلا عن طريق الإدارة.</div>
-              <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void call({ action: "joinGroup", group: seen.id })}>✅ ثبتني ويا {seen.name}</button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
+  if (way === "general") return <Picker info={info} busy={busy} call={call} back={() => setWay("")} />;
   return (
     <div className="card">
       <h2>🗓 شلون تمتحن؟</h2>
       <div className="hmlink">
         <div>عندك <b>{info.remaining}</b> امتحان · {info.place}</div>
-        <button type="button" className="btn" onClick={() => { haptic(); setWay("group"); }}>👥 ويا الطلاب (جدول عام)</button>
-        <div className="hint">مواعيد ثابتة، تختار بس الوقت اللي يناسبك.</div>
+        <button type="button" className="btn" onClick={() => { haptic(); setWay("general"); }}>👥 ويا الطلاب (جدول عام)</button>
+        <div className="hint">أيام ثابتة، وتختار الوقت اللي يناسبك بكل يوم.</div>
         <button type="button" className="btn ghost" onClick={() => { haptic(); setWay("private"); }}>👤 بدون الطلاب (جدول خاص)</button>
         <div className="hint">إنت تختار أيامك وساعتك.</div>
       </div>
@@ -168,7 +177,7 @@ function List({ info }: { info: Info }) {
   return (
     <div className="card">
       <h2>🗓 جدول امتحاناتك</h2>
-      <div className="who adnopad expad adtop">{info.place} · {info.mode === "general" ? `ويا الطلاب: ${info.groupName}` : "جدول خاص"}</div>
+      <div className="who adnopad expad adtop">{info.place} · {info.mode === "general" ? "ويا الطلاب" : "جدول خاص"}</div>
       <table className="extable"><tbody>
         {info.items.map((i) => (
           <tr key={i.id} className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>

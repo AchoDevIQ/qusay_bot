@@ -68,8 +68,8 @@ async function init() {
     CREATE TABLE IF NOT EXISTS exam_access(user_id INTEGER, chapter TEXT, order_id INTEGER, created TEXT, PRIMARY KEY(user_id, chapter));
     CREATE TABLE IF NOT EXISTS order_codes(code TEXT PRIMARY KEY, order_id INTEGER UNIQUE, chapters TEXT, used_at TEXT);
     CREATE TABLE IF NOT EXISTS schedules(user_id INTEGER PRIMARY KEY, start_day TEXT, end_day TEXT, weekdays TEXT, hour INTEGER, created TEXT);
-    CREATE TABLE IF NOT EXISTS exam_groups(id INTEGER PRIMARY KEY AUTOINCREMENT, center_id INTEGER, name TEXT, hour INTEGER);
-    CREATE TABLE IF NOT EXISTS group_dates(group_id INTEGER, exam_id INTEGER, at TEXT, version_id INTEGER, PRIMARY KEY(group_id, exam_id));
+    CREATE TABLE IF NOT EXISTS place_slots(center_id INTEGER PRIMARY KEY, slots TEXT);
+    CREATE TABLE IF NOT EXISTS place_dates(center_id INTEGER, exam_id INTEGER, day TEXT, versions TEXT, PRIMARY KEY(center_id, exam_id));
     CREATE TABLE IF NOT EXISTS sched_items(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, exam_id INTEGER, at TEXT, status TEXT);
     CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS guardians(guardian_id INTEGER, student_id INTEGER, created TEXT, PRIMARY KEY(guardian_id, student_id));
@@ -94,10 +94,9 @@ async function init() {
   await addColumn("bank_exams", "group_versions", "TEXT");
   await addColumn("students", "gender", "TEXT");
   await addColumn("centers", "gender", "TEXT");
-  await addColumn("exam_groups", "gender", "TEXT");
-  await addColumn("exam_groups", "slots", "TEXT");
   await addColumn("schedules", "mode", "TEXT");
-  await addColumn("schedules", "group_id", "INTEGER");
+  await addColumn("schedules", "center_id", "INTEGER");
+  await addColumn("schedules", "picks", "TEXT");
   await addColumn("bank_versions", "pages_ar", "TEXT");
   await addColumn("bank_versions", "pages_en", "TEXT");
   await addColumn("bank_versions", "answer_pdf", "TEXT");

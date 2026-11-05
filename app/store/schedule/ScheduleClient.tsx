@@ -3,24 +3,22 @@
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
-type Data = { window: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; places: { id: number; name: string }[]; groups: G[]; detail: Detail | null; canLoadCenters: boolean; week: { i: number; name: string }[]; schedules: number; notice: string };
-type G = { id: number; center: number; name: string; hour: number; gender: string; label: string; students: number };
-type Row = { exam: number; chapter: string; title: string; date: string; time: string; version: number; versions: { id: number; model: string }[] };
-type Detail = { id: number; name: string; hour: number; gender: string; slots: { d: number; t: string }[]; rows: Row[] };
-const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
+type Slot = { d: number; t: string };
+type Row = { exam: number; chapter: string; title: string; date: string; versions: Record<string, number>; models: { id: number; model: string }[] };
+type Data = { window: number; extra: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; week: { i: number; name: string }[]; schedules: number; notice: string };
+type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
 export default function ScheduleClient() {
   const { data, error, busy, call } = useAdminApi<Data>("/api/schedule", "🗓 جدول الامتحانات");
-  const [open, setOpen] = useState(0);
-  const act = (b: Record<string, unknown>) => call({ open, ...b });
+  const act: Act = (b) => call({ center: data?.center ?? 0, ...b });
   return (
     <>
       <AdminHeader title="🗓 إعدادات جدول الامتحانات" />
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
-        {data && <Groups d={data} busy={busy} open={open} setOpen={(id) => { setOpen(id); void call({ action: "list", open: id }); }} act={act} />}
-        {data && <Form key={JSON.stringify({ ...data, groups: 0, places: 0, detail: 0, notice: 0 })} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
+        {data && <Place d={data} busy={busy} act={act} />}
+        {data && <Form key={JSON.stringify([data.window, data.extra, data.perDay, data.gap, data.holidayStart, data.holidayDays, data.blockedHours, data.excluded])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
@@ -29,6 +27,7 @@ export default function ScheduleClient() {
 
 function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<string, unknown>) => void }) {
   const [window, setWindow] = useState(String(d.window));
+  const [extra, setExtra] = useState(String(d.extra));
   const [perDay, setPerDay] = useState(String(d.perDay));
   const [gap, setGap] = useState(String(d.gap));
   const [holidayStart, setHolidayStart] = useState(d.holidayStart);
@@ -41,7 +40,9 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
       <div className="form">
         <label>وقت الدخول بعد بداية الامتحان (دقيقة)</label>
         <input className="ltr" inputMode="numeric" value={window} onChange={(e) => setWindow(e.target.value)} />
-        <label>أكثر عدد امتحانات باليوم</label>
+        <label>وقت إضافي للطالب الإلكتروني فوق وقت الامتحان (دقيقة)</label>
+        <input className="ltr" inputMode="numeric" value={extra} onChange={(e) => setExtra(e.target.value)} />
+        <label>أكثر عدد امتحانات باليوم بالجدول الخاص</label>
         <input className="ltr" inputMode="numeric" value={perDay} onChange={(e) => setPerDay(e.target.value)} />
         <label>الفاصل بين امتحانين بنفس اليوم (دقيقة)</label>
         <input className="ltr" inputMode="numeric" value={gap} onChange={(e) => setGap(e.target.value)} />
@@ -58,121 +59,111 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
           ))}
         </div>
         <div className="exhint">⚠️ إذا غيرت العطلة أو الأيام المستثناة، جداول الطلاب تنعاد من باجر، وكل طالب يوصله الخبر.</div>
-        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, perDay, gap, holidayStart, holidayDays, excluded, blockedHours: blocked })}>حفظ</button>
+        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, perDay, gap, holidayStart, holidayDays, excluded, blockedHours: blocked })}>حفظ</button>
       </div>
     </div>
   );
 }
 
-function Groups({ d, busy, open, setOpen, act }: { d: Data; busy: boolean; open: number; setOpen: (id: number) => void; act: (b: Record<string, unknown>) => Promise<Data | null> }) {
-  const [center, setCenter] = useState(0);
-  const [hour, setHour] = useState("20");
-  const [name, setName] = useState("");
-  const [gender, setGender] = useState("");
-  const list = d.groups.filter((g) => g.center === center);
+function Place({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   return (
     <div className="card">
-      <h2>👥 مجاميع الطلاب المنتظمين</h2>
+      <h2>👥 الجدول العام (ويا الطلاب)</h2>
       <div className="form">
-        <div className="exhint">الطالب يختار ويا الطلاب لو جدول خاص. إذا ويا الطلاب، يختار وحدة من مجاميع مكانه، وتطلعله مواعيدها اللي تكتبها هنا.</div>
-        {d.canLoadCenters && <button type="button" className="btn agbtn" disabled={busy} onClick={() => void act({ action: "loadCenterGroups" })}>📥 أدخل مجاميع المراكز (زيونة، البنوك، الصليخ، المنصور)</button>}
+        {d.canLoad && <button type="button" className="btn agbtn" disabled={busy} onClick={() => void act({ action: "loadPlaces" })}>📥 أدخل أوقات الأماكن والعطلة</button>}
         <label>المكان</label>
-        <select value={center} onChange={(e) => { setCenter(Number(e.target.value)); setOpen(0); }}>
+        <select value={d.center} disabled={busy} onChange={(e) => void act({ action: "list", center: Number(e.target.value) })}>
           {d.places.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        {list.map((g) => (
-          <div className="adsplit adsale" key={g.id}>
-            <span>{g.name}{g.gender ? ` · ${g.gender}` : ""} · {g.students} طالب<small className="pdmode">{g.label}</small></span>
-            <span className="exline"><button type="button" className="exbtn" disabled={busy} onClick={() => setOpen(open === g.id ? 0 : g.id)}>🗓 المواعيد</button><Confirm label="🗑" disabled={busy} onYes={() => { if (open === g.id) setOpen(0); void act({ action: "delGroup", id: g.id, open: 0 }); }} /></span>
-          </div>
-        ))}
-        {!list.length && <div className="exhint">ماكو مجاميع بهذا المكان، فطلابه يطلعلهم الجدول الخاص بس.</div>}
-        <div className="exadd adtop">
-          <input placeholder="اسم المجموعة، مثل: المجموعة الأولى" value={name} onChange={(e) => setName(e.target.value)} />
-          <select className="exnum" aria-label="ساعة المجموعة" value={hour} onChange={(e) => setHour(e.target.value)}>
-            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}
-          </select>
-          <select className="exnum" aria-label="بنين أو بنات" value={gender} onChange={(e) => setGender(e.target.value)}>
-            <option value="">الكل</option><option value="بنين">بنين</option><option value="بنات">بنات</option>
-          </select>
-          <button type="button" className="exbtn" disabled={busy || !name.trim()} onClick={async () => { if (await act({ action: "addGroup", center, hour, name, gender })) setName(""); }}>➕ إضافة</button>
-        </div>
-        {d.detail && open === d.detail.id && <GroupDates key={JSON.stringify(d.detail)} g={d.detail} others={d.groups.filter((x) => x.id !== open)} week={d.week} busy={busy} act={act} />}
+        <div className="exhint">{d.students} طالب ويا الطلاب بهذا المكان. كل طالب يختار وقت لكل يوم بكيفه.</div>
+        <Slots key={`${d.center}|${JSON.stringify(d.slots)}`} d={d} busy={busy} act={act} />
+        <Dates key={`${d.center}|${JSON.stringify(d.rows)}|${JSON.stringify(d.slots)}`} d={d} busy={busy} act={act} />
       </div>
     </div>
   );
 }
 
-function GroupDates({ g, others, week, busy, act }: { g: Detail; others: G[]; week: Data["week"]; busy: boolean; act: (b: Record<string, unknown>) => Promise<Data | null> }) {
-  const [rows, setRows] = useState(g.rows);
-  const set = (exam: number, o: Partial<Row>) => setRows(rows.map((r) => (r.exam === exam ? { ...r, ...o } : r)));
-  const chapters = [...new Set(rows.map((r) => r.chapter))];
-  const [name, setName] = useState(g.name);
-  const [hour, setHour] = useState(String(g.hour));
-  const [gender, setGender] = useState(g.gender);
-  const [slots, setSlots] = useState(g.slots);
-  const [start, setStart] = useState("");
-  // نسخة وحدة لكل الفصل، وتتبدل بأي وقت. الطالب تتحدد نسخته لمن يفتح الامتحان
-  const fillVersion = (chapter: string, model: string) => setRows(rows.map((r) => {
-    if (r.chapter !== chapter) return r;
-    return { ...r, version: model ? r.versions.find((v) => v.model === model)?.id ?? 0 : 0 };
-  }));
+function Slots({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
+  const [slots, setSlots] = useState(d.slots);
   return (
     <div className="exfoot">
-      <div className="exlabel">🗓 مواعيد {g.name}</div>
-      <div className="exadd">
-        <input aria-label="اسم المجموعة" value={name} onChange={(e) => setName(e.target.value)} />
-        <select className="exnum" aria-label="الساعة" value={hour} onChange={(e) => setHour(e.target.value)}>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}</select>
-        <select className="exnum" aria-label="بنين أو بنات" value={gender} onChange={(e) => setGender(e.target.value)}><option value="">الكل</option><option value="بنين">بنين</option><option value="بنات">بنات</option></select>
-        <button type="button" className="exbtn" disabled={busy || !name.trim()} onClick={() => void act({ action: "editGroup", id: g.id, name, hour, gender, slots })}>حفظ المجموعة</button>
-      </div>
-      <div className="exlabel adtop">أوقاتها بالأسبوع</div>
+      <div className="exlabel">⏰ الأيام وأوقاتها</div>
       {slots.map((x, i) => (
         <div className="exadd" key={i}>
-          <select aria-label="اليوم" value={x.d} onChange={(e) => setSlots(slots.map((y, j) => (j === i ? { ...y, d: Number(e.target.value) } : y)))}>{week.map((w) => <option key={w.i} value={w.i}>{w.name}</option>)}</select>
-          <input type="time" className="ltr" aria-label="الساعة" value={x.t} onChange={(e) => setSlots(slots.map((y, j) => (j === i ? { ...y, t: e.target.value } : y)))} />
+          <select aria-label="اليوم" value={x.d} onChange={(e) => setSlots(slots.map((y, j) => (j === i ? { ...y, d: Number(e.target.value) } : y)))}>{d.week.map((w) => <option key={w.i} value={w.i}>{w.name}</option>)}</select>
+          <input type="time" className="ltr" aria-label="الوقت" value={x.t} onChange={(e) => setSlots(slots.map((y, j) => (j === i ? { ...y, t: e.target.value } : y)))} />
           <button type="button" className="exbtn" onClick={() => setSlots(slots.filter((_, j) => j !== i))}>🗑</button>
         </div>
       ))}
-      <button type="button" className="exbtn" onClick={() => setSlots([...slots, { d: week[0].i, t: hh(Number(hour)) }])}>➕ وقت</button>
-      <div className="exhint adtop">بعد ما تغير الأوقات اضغط «حفظ المجموعة».</div>
-      <div className="exlabel adtop">وزع امتحانات الكتاب بالترتيب على هاي الأوقات</div>
+      <div className="exline">
+        <button type="button" className="exbtn" onClick={() => setSlots([...slots, { d: slots.at(-1)?.d ?? d.week[0].i, t: slots.at(-1)?.t ?? "16:00" }])}>➕ وقت</button>
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "saveSlots", slots })}>حفظ الأوقات</button>
+      </div>
+    </div>
+  );
+}
+
+function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
+  const [rows, setRows] = useState(d.rows);
+  const [start, setStart] = useState("");
+  const chapters = [...new Set(rows.map((r) => r.chapter))];
+  const set = (exam: number, o: Partial<Row>) => setRows(rows.map((r) => (r.exam === exam ? { ...r, ...o } : r)));
+  const timesOf = (date: string) => { if (!date) return []; const w = (new Date(date + "T00:00:00Z").getUTCDay() + 6) % 7; return d.slots.filter((x) => x.d === w).map((x) => x.t).sort(); };
+  const allTimes = [...new Set(d.slots.map((x) => x.t))].sort();
+  // نسخة وحدة لكل الفصل بهذا الوقت، وتتبدل بأي وقت
+  const fill = (chapter: string, time: string, model: string) => setRows(rows.map((r) => {
+    if (r.chapter !== chapter) return r;
+    const id = r.models.find((m) => m.model === model)?.id;
+    const versions = { ...r.versions };
+    if (id) versions[time] = id; else delete versions[time];
+    return { ...r, versions };
+  }));
+  return (
+    <div className="exfoot">
+      <div className="exlabel">🗓 وزع امتحانات الكتاب بالترتيب من تاريخ</div>
       <div className="exadd">
         <input type="date" className="ltr" aria-label="تاريخ البداية" value={start} onChange={(e) => setStart(e.target.value)} />
-        <Confirm label="🗓 وزعها من هذا التاريخ" disabled={busy || !start} onYes={() => void act({ action: "fillGroup", id: g.id, start })} />
+        <Confirm label="🗓 وزعها" disabled={busy || !start} onYes={() => void act({ action: "fillDates", start })} />
       </div>
-      <div className="exhint">تتخطى العطلة والأيام المستثناة، وبعدها تگدر تعدل أي موعد من جوة.</div>
-      {!!others.length && (
-        <select className="adtop" aria-label="نسخ الأيام من مجموعة ثانية" disabled={busy} value="" onChange={(e) => { if (e.target.value) void act({ action: "copyGroup", id: g.id, from: Number(e.target.value) }); }}>
-          <option value="">📋 انسخ الأيام من مجموعة ثانية</option>
-          {others.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-        </select>
-      )}
+      <div className="exhint">كل يوم من أيام المكان ياخذ امتحان، وتتخطى العطلة. بعدها تگدر تغير أي تاريخ أو نسخة.</div>
       {chapters.map((c) => (
         <div key={c}>
-          <div className="adgroup adsplit"><span>{c}</span>
-            <select className="exnum adwide" aria-label={`نسخة كل ${c}`} value="" onChange={(e) => fillVersion(c, e.target.value === "-" ? "" : e.target.value)}>
-              <option value="">نسخة لكل الفصل</option>
-              <option value="-">أول نسخة جاهزة</option>
-              {[...new Set(rows.filter((r) => r.chapter === c).flatMap((r) => r.versions.map((v) => v.model)))].sort().map((m) => <option key={m} value={m}>نسخة {m}</option>)}
-            </select>
-          </div>
+          <div className="adgroup">{c}</div>
+          <ChapterFill chapter={c} times={allTimes} models={[...new Set(rows.filter((r) => r.chapter === c).flatMap((r) => r.models.map((m) => m.model)))].sort()} fill={fill} />
           {rows.filter((r) => r.chapter === c).map((r) => (
             <div className="adexamrow" key={r.exam}>
               <b>{r.title}</b>
               <div className="adexamcells">
-                <input type="date" className="ltr" aria-label={`تاريخ ${r.title}`} value={r.date} onChange={(e) => set(r.exam, { date: e.target.value, time: r.time || hh(g.hour) })} />
-                <input type="time" className="ltr" aria-label={`ساعة ${r.title}`} value={r.time || hh(g.hour)} onChange={(e) => set(r.exam, { time: e.target.value })} />
-                <select aria-label={`نسخة ${r.title}`} value={r.version} onChange={(e) => set(r.exam, { version: Number(e.target.value) })}>
-                  <option value={0}>أول نسخة جاهزة</option>
-                  {r.versions.map((v) => <option key={v.id} value={v.id}>نسخة {v.model}</option>)}
-                </select>
+                <input type="date" className="ltr" aria-label={`تاريخ ${r.title}`} value={r.date} onChange={(e) => set(r.exam, { date: e.target.value })} />
+                {timesOf(r.date).map((t) => (
+                  <label className="adtimev" key={t}><small>{t}</small>
+                    <select aria-label={`نسخة ${r.title} الساعة ${t}`} value={r.versions[t] ?? 0} onChange={(e) => set(r.exam, { versions: { ...r.versions, [t]: Number(e.target.value) } })}>
+                      <option value={0}>أول نسخة جاهزة</option>
+                      {r.models.map((m) => <option key={m.id} value={m.id}>نسخة {m.model}</option>)}
+                    </select>
+                  </label>
+                ))}
               </div>
             </div>
           ))}
         </div>
       ))}
-      <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void act({ action: "saveGroup", id: g.id, rows: rows.map((r) => ({ exam: r.exam, date: r.date, time: r.time || hh(g.hour), version: r.version })) })}>حفظ المواعيد</button>
+      <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void act({ action: "saveDates", rows: rows.map((r) => ({ exam: r.exam, date: r.date, versions: r.versions })) })}>حفظ المواعيد والنسخ</button>
+    </div>
+  );
+}
+
+function ChapterFill({ chapter, times, models, fill }: { chapter: string; times: string[]; models: string[]; fill: (c: string, t: string, m: string) => void }) {
+  const [time, setTime] = useState(times[0] ?? "");
+  if (!times.length || !models.length) return null;
+  return (
+    <div className="exline">
+      <span className="exhint">نسخة لكل الفصل:</span>
+      <select className="exnum" aria-label={`وقت ${chapter}`} value={time} onChange={(e) => setTime(e.target.value)}>{times.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+      <select className="exnum" aria-label={`نسخة ${chapter}`} value="" onChange={(e) => { if (e.target.value) fill(chapter, time, e.target.value === "-" ? "" : e.target.value); }}>
+        <option value="">اختار</option><option value="-">أول جاهزة</option>
+        {models.map((m) => <option key={m} value={m}>{m}</option>)}
+      </select>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 // حساب جدول الامتحانات: بدون قاعدة بيانات حتى ينفحص لوحده. الأيام: 0 = الاثنين، مثل DAYS بالإعدادات
-export type SchedSettings = { window: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[] };
-export const DEFAULT_SETTINGS: SchedSettings = { window: 15, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, blockedHours: [], excluded: [] };
+export type SchedSettings = { window: number; extra: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[] };
+export const DEFAULT_SETTINGS: SchedSettings = { window: 15, extra: 15, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, blockedHours: [], excluded: [] };
 export type PlanExam = { id: number; minutes: number };
 export type PlanItem = { examId: number; at: string };
 export type Plan = { ok: true; items: PlanItem[]; days: number; maxPerDay: number; perWeek: number } | { ok: false; error: string; minWeekdays?: number };
@@ -98,17 +98,20 @@ export function labelChapters(label: string) {
 
 // ---------- أوقات المجموعة بالأسبوع
 export type Slot = { d: number; t: string };
-/** مواعيد متتالية من تاريخ البداية على أوقات المجموعة، بدون العطلة والأيام المستثناة */
-export function slotDates(slots: Slot[], start: string, count: number, s: SchedSettings) {
+/** أيام الامتحان المتتالية من تاريخ البداية: كل يوم إله أوقات بالمكان ينحسب امتحان واحد، بدون العطلة */
+export function slotDays(slots: Slot[], start: string, count: number, s: SchedSettings) {
   const out: string[] = [];
-  if (!slots.length) return out;
-  const sorted = [...slots].sort((a, b) => a.t.localeCompare(b.t));
+  const weekdays = new Set(slots.map((x) => x.d));
+  if (!weekdays.size) return out;
   for (let d = start, guard = 0; out.length < count && guard < 3000; d = addDays(d, 1), guard++) {
-    if (inHoliday(d, s) || s.excluded.includes(d)) continue;
-    for (const sl of sorted) if (sl.d === weekdayOf(d) && out.length < count) out.push(`${d} ${sl.t}`);
+    if (weekdays.has(weekdayOf(d)) && !inHoliday(d, s) && !s.excluded.includes(d)) out.push(d);
   }
   return out;
 }
+/** موعد الامتحان بالوقت اللي اختاره الطالب لهذا اليوم من الأسبوع */
+export const pickedAt = (day: string, picks: Record<string, string>) => { const t = picks[String(weekdayOf(day))]; return t ? `${day} ${t}` : null; };
+/** آخر وقت لرفع الأجوبة: وقت الحل، وفوقه الوقت الإضافي للطالب الإلكتروني */
+export const answersClose = (startedAt: string, minutes: number, extra: number) => addMinutes(startedAt, minutes + extra);
 /** 14:30 تصير 2:30 مساءً */
 export function ampm(t: string) {
   const [h, m] = t.split(":").map(Number);
