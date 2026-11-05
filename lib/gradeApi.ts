@@ -1,13 +1,17 @@
 // صفحة التصحيح: أول مصحح يفتح الورقة تصير إله، يضغط درجة كل سؤال، والبوت يجمع ويبلغ الطالب وولي أمره
+import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
 import { isAdmin, staffName, student } from "./data.ts";
-import { send } from "./telegram.ts";
+import { send, upload } from "./telegram.ts";
+import { pickComment } from "./commentsApi.ts";
+import { files } from "./files.ts";
 import { stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
 
 export const GRADE_PERM = "grade";
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const TEST_PAPERS = 5;
 const isTest = (it: Row) => it.user_id < 0;
 const MAX_INK = 400_000;
@@ -29,6 +33,7 @@ async function listData(uid: number) {
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
     owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid),
     errors: await errorsOf(uid),
+    stickers: (await find("stickers", {})).sort((a, b) => a.lo - b.lo || a.id - b.id).map((s) => ({ id: s.id, name: s.name, lo: s.lo, hi: s.hi })),
     today: papers.filter((p) => p.grader_id === uid && String(p.graded_at ?? "").startsWith(stamp().slice(0, 10))).length,
   };
 }
@@ -139,10 +144,20 @@ export async function gradeAction(body: Row) {
     const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
     await update("sched_items", { id: it.id }, { total, graded_at: stamp() });
     if (!isTest(it)) {
-      const text = `📝 <b>انصحح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
-      await send(it.user_id, text);
+      const head = `📝 <b>انصحح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
+      const c = await pickComment(it.user_id, total);
+      const text = c ? `${head}\n┈┈┈┈┈┈┈┈┈┈┈┈\n💬 «${esc(c.text)}»\n┈┈┈┈┈┈┈┈┈┈┈┈` : head;
+      const pic = c?.sticker ? await files().read(c.sticker.file) : null;
+      const deliver = async (chat: number, caption: string) => {
+        if (pic) {
+          const gif = /\.gif$/i.test(c!.sticker!.file);
+          if (await upload(gif ? "sendAnimation" : "sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", protect_content: "true" }, gif ? "animation" : "photo", pic, path.basename(c!.sticker!.file))) return;
+        }
+        await send(chat, caption);
+      };
+      await deliver(it.user_id, text);
       const g = await guardianOf(it.user_id);
-      if (g) await send(g.guardian_id, `${text}\nالطالب: ${view.name}`);
+      if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
       await logActivity(it.user_id, `📝 انصحح امتحان ${view.title}: ${total} من 100`);
     }
     notice = `✅ انحفظت الدرجة ${total} من 100`;

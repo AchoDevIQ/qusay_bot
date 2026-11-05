@@ -48,7 +48,7 @@ function normal(v: any): any {
   return v;
 }
 // ميزات جديدة ما موجودة بالبوت القديم: جداول الامتحانات وزر لوحة التحكم
-const NEW_TABLES = ["schedules", "place_slots", "place_dates", "exam_answers", "question_marks", "paper_ink", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
+const NEW_TABLES = ["schedules", "place_slots", "place_dates", "exam_answers", "question_marks", "paper_ink", "grade_comments", "stickers", "comment_sent", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
   if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(exams|schedule|exception|grade|sales|company|fees|online|centers)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
@@ -75,7 +75,7 @@ function normalDb(db: Record<string, any[]>) {
   }
   // kv: المفاتيح اللي بيها وقت أو رمز، وقيم JSON
   // invfail_: عداد المحاولات الغلط، إضافة أمنية ما موجودة بالبوت القديم
-  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_|^asstudent_|^seeded$|^last_two_done$|^grade_errors_/.test(r.k)).map((r) => {
+  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_|^asstudent_|^seeded$|^last_two_done$|^grade_errors_|^comments_seeded$/.test(r.k)).map((r) => {
     let v = r.v;
     if (/^(q_hours|online_only)$/.test(r.k)) v = JSON.parse(v);
     if (/^libinv_/.test(r.k)) v = String(v).split(":")[0];

@@ -7,10 +7,11 @@ import PdfPages, { pdfByQuestion, pdfToImages } from "../PdfPages";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
 export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string> };
-type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number };
+type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
+export type Sticker = { id: number; name: string; lo: number; hi: number };
 type Ink = { rot: number; items: Item[] };
 type Page = { src: string | null; q: number | null };
-type Tool = "hand" | "pen" | "eraser" | "text" | "stamp";
+type Tool = "hand" | "pen" | "eraser" | "text" | "stamp" | "sticker";
 
 const COLORS = ["#111111", "#555555", "#9e9e9e", "#ffffff", "#e53935", "#c62828", "#ff5252", "#ff7043", "#fb8c00", "#ffb300", "#fdd835", "#c0ca33",
   "#7cb342", "#1f9d55", "#00897b", "#00acc1", "#039be5", "#1e5bd8", "#3949ab", "#5e35b1", "#8e24aa", "#d81b60", "#ec407a", "#6d4c41"];
@@ -50,7 +51,8 @@ async function buildPages(paper: Paper, url: (r: string) => string): Promise<Pag
   return out;
 }
 
-function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: number, live?: Item | null) {
+const stickerUrl = (id: number) => `/api/sticker?id=${id}`;
+function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: number, live?: Item | null, imgs?: Map<number, HTMLImageElement>) {
   ctx.clearRect(0, 0, w, h);
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   for (const it of live ? [...items, live] : items) {
@@ -63,6 +65,9 @@ function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: n
     } else if (it.t === "x") {
       ctx.fillStyle = it.c; ctx.font = `700 ${it.z * w}px Tahoma, Arial, sans-serif`; ctx.textBaseline = "middle";
       it.s.split("\n").forEach((line, i) => ctx.fillText(line, it.x * w, it.y * h + i * it.z * w * 1.25));
+    } else if (it.t === "i") {
+      const im = imgs?.get(it.id);
+      if (im?.complete && im.naturalWidth) { const dw = it.w * w, dh = (dw * im.naturalHeight) / im.naturalWidth; ctx.drawImage(im, it.x * w - dw / 2, it.y * h - dh / 2, dw, dh); }
     } else {
       const r = 0.028 * w, x = it.x * w, y = it.y * h;
       ctx.fillStyle = GREEN; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
@@ -73,8 +78,8 @@ function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: n
 }
 
 /** صفحة وحدة: الصورة جوة والرسم فوكها */
-function Sheet({ page, ink, zoom, tool, color, width, onAdd, onErase, onTap }: {
-  page: Page; ink: Ink; zoom: number; tool: Tool; color: string; width: number;
+function Sheet({ page, ink, zoom, tool, color, width, sticker, onAdd, onErase, onTap }: {
+  page: Page; ink: Ink; zoom: number; tool: Tool; color: string; width: number; sticker: number;
   onAdd: (it: Item) => void; onErase: (x: number, y: number) => void; onTap: (x: number, y: number) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -84,6 +89,13 @@ function Sheet({ page, ink, zoom, tool, color, width, onAdd, onErase, onTap }: {
   const [failed, setFailed] = useState(false);
   const [boxW, setBoxW] = useState(800);
   const live = useRef<Item | null>(null);
+  const imgs = useRef(new Map<number, HTMLImageElement>());
+  const [loaded, setLoaded] = useState(0);
+  useEffect(() => {
+    for (const it of ink.items) if (it.t === "i" && !imgs.current.has(it.id)) {
+      const im = new Image(); im.onload = () => setLoaded((n) => n + 1); im.src = stickerUrl(it.id); imgs.current.set(it.id, im);
+    }
+  }, [ink.items]);
   useEffect(() => {
     setImg(null); setFailed(false);
     if (!page.src) return;
@@ -113,8 +125,8 @@ function Sheet({ page, ink, zoom, tool, color, width, onAdd, onErase, onTap }: {
   const redraw = useCallback(() => {
     const c = top.current; if (!c) return;
     const ctx = c.getContext("2d")!; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawItems(ctx, ink.items, w, h, live.current);
-  }, [ink.items, w, h, dpr]);
+    drawItems(ctx, ink.items, w, h, live.current, imgs.current);
+  }, [ink.items, w, h, dpr, loaded]);
   useEffect(() => { const c = top.current; if (c) { c.width = w * dpr; c.height = h * dpr; } redraw(); }, [w, h, dpr, redraw]);
   const pt = (e: React.PointerEvent) => { const r = top.current!.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height] as const; };
   function down(e: React.PointerEvent) {
@@ -135,6 +147,7 @@ function Sheet({ page, ink, zoom, tool, color, width, onAdd, onErase, onTap }: {
     const [x, y] = pt(e);
     if (tool === "pen" && live.current) { const s = live.current; live.current = null; onAdd(s); }
     if (tool === "stamp") onAdd({ t: "k", x, y });
+    if (tool === "sticker" && sticker) onAdd({ t: "i", id: sticker, x, y, w: 0.22 });
     if (tool === "text") onTap(x, y);
   }
   return (
@@ -153,12 +166,12 @@ function Sheet({ page, ink, zoom, tool, color, width, onAdd, onErase, onTap }: {
   );
 }
 
-const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "T", stamp: "✅" };
-const TIP: Record<Tool, string> = { hand: "تحريك", pen: "القلم", eraser: "الممحاة", text: "كتابة", stamp: "ختم صح" };
+const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "T", stamp: "✅", sticker: "🖼" };
+const TIP: Record<Tool, string> = { hand: "تحريك", pen: "القلم", eraser: "الممحاة", text: "كتابة", stamp: "ختم صح", sticker: "ملصق" };
 
 const SHOWQ_KEY = "gradeShowQuestion";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinish, today, left: papersLeft, errors }: {
-  paper: Paper; url: (r: string) => string; busy: boolean; errors: string[];
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinish, today, left: papersLeft, errors, stickers }: {
+  paper: Paper; url: (r: string) => string; busy: boolean; errors: string[]; stickers: Sticker[];
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null } | null>;
   onClose: () => void; onSkip: () => void; onFinish: () => void; today: number; left: number;
 }) {
@@ -180,6 +193,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
   const [keepErr, setKeepErr] = useState(false);
   const [saved, setSaved] = useState("");
   const [showQ, setShowQ] = useState(true);
+  const [sticker, setSticker] = useState(0);
+  const [stickerBox, setStickerBox] = useState(false);
   useEffect(() => { try { if (localStorage.getItem(SHOWQ_KEY) === "0") setShowQ(false); } catch { /* بدون حفظ */ } }, []);
   function toggleQ() { const v = !showQ; setShowQ(v); try { localStorage.setItem(SHOWQ_KEY, v ? "1" : "0"); } catch { /* بدون حفظ */ } }
   const undo = useRef<Record<number, Item[][]>>({});
@@ -259,7 +274,10 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
     if (page?.q !== null && pages) { const i = pages.findIndex((p) => p.q === nextQ.n); if (i >= 0) go(i); }
     else setQSel(nextQ.n);
   }
-  function pickTool(t: Tool) { if (t === "pen" && tool === "pen") setPenBox(!penBox); else { setTool(t); setPenBox(false); } }
+  function pickTool(t: Tool) {
+    if (t === "sticker") { setStickerBox(true); setPenBox(false); return; }
+    if (t === "pen" && tool === "pen") setPenBox(!penBox); else { setTool(t); setPenBox(false); }
+  }
   function addText(value = text) {
     const v = value.trim();
     if (textAt && v) addItem({ t: "x", c: color, x: textAt.x, y: textAt.y, s: v, z: 0.032 });
@@ -299,9 +317,9 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
         </div>
         {!locked && <button type="button" className="gk-clear" onClick={() => ink.items.length && change({ ...ink, items: [] })}>🗑 مسح الصفحة</button>}
         {!locked && <div className="gk-tools gk-pens">
-          {(["stamp", "text", "eraser", "pen", "hand"] as Tool[]).map((t) => (
+          {(["sticker", "stamp", "text", "eraser", "pen", "hand"] as Tool[]).map((t) => (
             <button type="button" key={t} title={TIP[t]} className={"gk-ic" + (tool === t ? " on" : "")} onClick={() => pickTool(t)}>
-              {t === "pen" ? <span style={{ color }}>{ICON[t]}</span> : ICON[t]}
+              {t === "pen" ? <span style={{ color }}>{ICON[t]}</span> : t === "sticker" && sticker ? <img className="gk-stic" src={stickerUrl(sticker)} alt="" /> : ICON[t]}
             </button>
           ))}
           {penBox && (
@@ -332,7 +350,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
         {!pages && <div className="gk-empty">جاري تجهيز الورقة...</div>}
         {pages && !pages.length && <div className="gk-empty">⚠️ ماكو صفحات بهذي الورقة.</div>}
         {page && showQ && q && <div className="gk-qtop"><span>السؤال {q.n}</span><img src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
-        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} onAdd={addItem} onErase={erase} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
+        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} onAdd={addItem} onErase={erase} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
       </div>
       {textAt && (
         <div className="gk-modal" onClick={() => setTextAt(null)}>
@@ -352,6 +370,22 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
               </div>
             )}
             <div className="gk-tools"><button type="button" className="gk-finish" onClick={() => addText()}>إضافة</button><button type="button" className="gk-btn" onClick={() => setTextAt(null)}>إلغاء</button></div>
+          </div>
+        </div>
+      )}
+      {stickerBox && (
+        <div className="gk-modal" onClick={() => setStickerBox(false)}>
+          <div className="gk-dialog" onClick={(e) => e.stopPropagation()}>
+            <b>اختار ملصق</b>
+            {!stickers.length && <div>ماكو ملصقات بعد. صاحب البوت يرفعها من «مكتبة الملصقات».</div>}
+            <div className="gk-stgrid">
+              {stickers.map((s) => (
+                <button type="button" key={s.id} className={sticker === s.id ? "on" : ""} onClick={() => { setSticker(s.id); setTool("sticker"); setStickerBox(false); }}>
+                  <img src={stickerUrl(s.id)} alt={s.name} /><span>{s.name}</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="gk-btn" onClick={() => setStickerBox(false)}>إلغاء</button>
           </div>
         </div>
       )}

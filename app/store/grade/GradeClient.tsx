@@ -2,10 +2,10 @@
 // التصحيح: قائمة الأوراق، وشاشة الورقة بكل الشاشة مثل النظام القديم (Grader)
 import { useEffect, useRef, useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
-import Grader, { type Paper } from "./Grader";
+import Grader, { type Paper, type Sticker } from "./Grader";
 
 type Row = { id: number; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
-type Data = { waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[] };
+type Data = { waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -43,7 +43,7 @@ export default function GradeClient() {
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && paper && (
-          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today} errors={data.errors ?? []} left={data.waiting.filter((x) => x.id !== paper.id).length}
+          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today} errors={data.errors ?? []} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id).length}
             onClose={() => { setPaper(null); void call({ action: "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onFinish={async () => { const r = await call({ action: "finish", id: paper.id }); if (r) await next(r); }} />
