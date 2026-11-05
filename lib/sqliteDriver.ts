@@ -70,6 +70,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS schedules(user_id INTEGER PRIMARY KEY, start_day TEXT, end_day TEXT, weekdays TEXT, hour INTEGER, created TEXT);
     CREATE TABLE IF NOT EXISTS place_slots(center_id INTEGER PRIMARY KEY, slots TEXT);
     CREATE TABLE IF NOT EXISTS place_dates(center_id INTEGER, exam_id INTEGER, day TEXT, versions TEXT, PRIMARY KEY(center_id, exam_id));
+    CREATE TABLE IF NOT EXISTS paper_ink(item_id INTEGER, page INTEGER, ink TEXT, PRIMARY KEY(item_id, page));
     CREATE TABLE IF NOT EXISTS question_marks(item_id INTEGER, q INTEGER, mark INTEGER, PRIMARY KEY(item_id, q));
     CREATE TABLE IF NOT EXISTS exam_answers(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER, q INTEGER, file TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS sched_items(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, exam_id INTEGER, at TEXT, status TEXT);

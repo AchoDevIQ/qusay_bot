@@ -66,6 +66,12 @@ test("التصحيح: الصلاحية، أول مصحح ياخذ الورقة،
   await g(20, "mark", { id, q: 1, mark: 30 });
   await assert.rejects(g(20, "finish", { id }), /باقي درجة/);
   await g(20, "mark", { id, q: 2, mark: 45 });
+  const ink = JSON.stringify({ rot: 0, items: [{ t: "s", c: "#e53935", w: 3, p: [0.1, 0.1, 0.2, 0.2] }] });
+  await assert.rejects(g(21, "ink", { id, page: 0, ink }), /مصحح ثاني/);
+  await assert.rejects(g(20, "ink", { id, page: -1, ink }), /صفحة/);
+  await assert.rejects(g(20, "ink", { id, page: 0, ink: "{bad" }), /غير مفهوم/);
+  assert.deepEqual(await g(20, "ink", { id, page: 0, ink }), { ok: true });
+  assert.equal((await g(20, "open", { id })).paper.ink[0], ink);
   calls.length = 0;
   const done = await g(20, "finish", { id });
   assert.match(done.notice, /75 من 100/);
@@ -77,8 +83,10 @@ test("التصحيح: الصلاحية، أول مصحح ياخذ الورقة،
   const rel = await paper(50, e, v);
   await g(20, "open", { id: rel });
   await g(20, "mark", { id: rel, q: 1, mark: 1 });
+  await g(20, "ink", { id: rel, page: 1, ink: '{"items":[]}' });
   await g(20, "release", { id: rel });
   assert.equal((await find("question_marks", { item_id: rel })).length, 0);
+  assert.equal((await find("paper_ink", { item_id: rel })).length, 0);
   assert.equal((await g(21, "list")).waiting.length, 1);
 });
 

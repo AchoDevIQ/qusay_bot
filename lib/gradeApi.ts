@@ -10,6 +10,7 @@ import { fileToken } from "./webAuth.ts";
 export const GRADE_PERM = "grade";
 const TEST_PAPERS = 5;
 const isTest = (it: Row) => it.user_id < 0;
+const MAX_INK = 400_000;
 const nameOf = async (it: Row) => (isTest(it) ? `طالب تجربة ${-it.user_id}` : (await student(it.user_id))?.name ?? "طالب");
 
 async function paperRow(it: Row) {
@@ -24,6 +25,7 @@ async function listData(uid: number) {
   return {
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
     owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid),
+    today: papers.filter((p) => p.grader_id === uid && String(p.graded_at ?? "").startsWith(stamp().slice(0, 10))).length,
   };
 }
 async function paperView(it: Row) {
@@ -31,7 +33,10 @@ async function paperView(it: Row) {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
   const v = await one("bank_versions", { id: it.version_id });
+  const ink: Record<number, string> = {};
+  for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
   return {
+    ink,
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null,
     whole: answers.filter((a) => !a.q).map((a) => a.file),
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null })),
@@ -69,6 +74,7 @@ async function deleteTests() {
   for (const it of (await find("sched_items", { status: "done" })).filter(isTest)) {
     await remove("exam_answers", { item_id: it.id });
     await remove("question_marks", { item_id: it.id });
+    await remove("paper_ink", { item_id: it.id });
     await remove("sched_items", { id: it.id });
   }
 }
@@ -78,6 +84,18 @@ export async function gradeAction(body: Row) {
   const a = String(body.action ?? "");
   let notice = "";
   let paper: Row | null = null;
+  if (a === "ink") {
+    // رسم القلم على صفحة وحدة: ينحفظ وحده أثناء التصحيح، فيرجع بسرعة بدون القائمة
+    const it = await myPaper(uid, body.id);
+    need(!it.graded_at, "الورقة مخلصة");
+    const page = Number(body.page);
+    need(Number.isInteger(page) && page >= 0 && page < 500, "صفحة غير معروفة");
+    const ink = String(body.ink ?? "");
+    need(ink.length <= MAX_INK, "الرسم كبير هواية على هذي الصفحة");
+    try { need(Array.isArray(JSON.parse(ink || "[]").items ?? []), "رسم غير مفهوم"); } catch { need(false, "رسم غير مفهوم"); }
+    await put("paper_ink", { item_id: it.id, page, ink });
+    return { ok: true };
+  }
   if (a === "open") {
     const it = await one("sched_items", { id: Number(body.id) });
     need(it?.status === "done", "الورقة غير موجودة");
@@ -97,6 +115,7 @@ export async function gradeAction(body: Row) {
     const it = await myPaper(uid, body.id);
     need(!it.graded_at, "الورقة مخلصة");
     await remove("question_marks", { item_id: it.id });
+    await remove("paper_ink", { item_id: it.id });
     await update("sched_items", { id: it.id }, { grader_id: null });
     notice = "↩️ رجعت الورقة للقائمة";
   } else if (a === "finish") {
