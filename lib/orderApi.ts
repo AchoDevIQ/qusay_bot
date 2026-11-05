@@ -32,7 +32,7 @@ export async function orderAction(body: Row) {
     const live = new Set((await find("orders", {}, { where: (o) => !o.printed })).map((o) => o.id));
     const ids = idList(body.ids).filter((i) => live.has(i));
     need(ids.length, "الطلبات المحددة ما بقت بالجديدة");
-    await sendOrdersPdf(uid, ids);
+    need(await sendOrdersPdf(uid, ids), "ما گدرت أرسل الملف، حاول مرة ثانية");
     notice = "✅ الملف وصلك بمحادثة البوت. اطبعه، وبعدها اضغط «تم الطباعة»";
   } else if (a === "done") {
     const { ready, gone } = await markPrinted(idList(body.ids));
@@ -89,12 +89,13 @@ export async function salesAction(body: Row) {
     const rows = await dayRows(day);
     need(rows.length, "ما أكو مبيعات بهذا اليوم");
     const out = await Promise.all(rows.map(async (r) => [`#${r.id}`, String(r.created).slice(11), r.name, orderItems(r).map((i) => `${i.name} ×${i.qty}`).join("، "), num(r.total), await staffName(r.seller)]));
-    await listPdf(uid, `مبيعات المكتب — ${day} — المجموع ${num(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ", "البائع"], out, "office_" + day);
+    const sent = await listPdf(uid, `مبيعات المكتب — ${day} — المجموع ${num(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ", "البائع"], out, "office_" + day);
+    need(sent, "ما گدرت أرسل الملف، حاول مرة ثانية");
     extra = { notice: "✅ الملف وصلك بمحادثة البوت" };
   } else if (a === "receipt") {
     const id = Number(body.id);
     need((await one("orders", { id }))?.printed === 3, "البيعة غير موجودة");
-    if (body.kind === "color") await sendColorReceipt(uid, id); else await sendPaperReceipt(uid, id);
+    need(body.kind === "color" ? await sendColorReceipt(uid, id) : await sendPaperReceipt(uid, id), "ما گدرت أرسل الوصل، حاول مرة ثانية");
     extra = { notice: "✅ الوصل وصلك بمحادثة البوت" };
   } else need(a === "list", "أمر غير معروف");
   return { ...await salesData(body.day, body.q), ...extra };

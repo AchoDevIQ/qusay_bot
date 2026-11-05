@@ -15,7 +15,7 @@ const nameOf = (raw: unknown, label: string) => {
 };
 export async function sendCenterPdf(chat: number, cid: number) {
   const rows = await find("students", { center_id: cid }, { order: ["name"] });
-  await listPdf(chat, "طلاب مركز " + await centerName(cid), ["الاسم", "الصف", "المنهج", "الهاتف 1", "الهاتف 2"],
+  return await listPdf(chat, "طلاب مركز " + await centerName(cid), ["الاسم", "الصف", "المنهج", "الهاتف 1", "الهاتف 2"],
     rows.map((r) => [r.name, r.grade, r.curr, r.phone1, r.phone2]), `center_${cid}`);
 }
 async function pageData() {
@@ -78,7 +78,7 @@ export async function centerAction(body: Row) {
     notice = "🗑 انحذف المركز. طلابه يبقون مسجلين عليه، وغيرهم من صفحة الطلاب";
   } else if (a === "pdf") {
     await liveCenter(id);
-    await sendCenterPdf(uid, id);
+    need(await sendCenterPdf(uid, id), "ما گدرت أرسل الملف، حاول مرة ثانية");
     notice = "✅ الملف وصلك بمحادثة البوت";
   } else if (a === "mode") {
     need(GOVS.includes(String(body.gov)), "محافظة غير معروفة");

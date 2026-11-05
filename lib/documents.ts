@@ -147,6 +147,7 @@ export async function sendOrdersPdf(chat: number, ids: number[]) {
     : await upload("sendDocument", { chat_id: String(chat), caption: cap + "\n\n(افتح الملف بالمتصفح واضغط Ctrl + P حتى تطبعه أو تحفظه PDF)", reply_markup: markup },
       "document", hp, name + ".html", "text/html");
   if (!r) await send(chat, "⚠️ ما گدرت أرسل الملف. تلگاه بمجلد البوت داخل مجلد data/pdf.", { kb });
+  return !!r;
 }
 
 // ---------- قائمة عامة PDF
@@ -165,8 +166,8 @@ td{border:1px solid #d9dde5;padding:5px 7px}tr:nth-child(even) td{background:#f6
   const base = path.join(PDF_DIR, `${fname}_${fileStamp()}`);
   fs.writeFileSync(base + ".html", htm, "utf8");
   const fields = { chat_id: String(chat), caption: title };
-  if (await htmlToPdf(base + ".html", base + ".pdf")) await upload("sendDocument", fields, "document", base + ".pdf", fname + ".pdf", "application/pdf");
-  else await upload("sendDocument", fields, "document", base + ".html", fname + ".html", "text/html");
+  if (await htmlToPdf(base + ".html", base + ".pdf")) return !!await upload("sendDocument", fields, "document", base + ".pdf", fname + ".pdf", "application/pdf");
+  return !!await upload("sendDocument", fields, "document", base + ".html", fname + ".html", "text/html");
 }
 
 // ---------- بطاقة معلومات الطالب (صورة)
@@ -288,18 +289,21 @@ export async function sendReceiptImage(chat: number, o: Row, items: Row[], capti
 /** نفس الوصل الملون مال الطالب، يوصل للبائع حتى يدزه لأي أحد */
 export async function sendColorReceipt(chat: number, oid: number) {
   const o = await one("orders", { id: oid, printed: 3 });
-  if (!o) return;
-  if (!await sendReceiptImage(chat, o, orderItems(o), `🖼 وصل بيع #${oid} — ${esc(o.name)}`)) await send(chat, "⚠️ ما گدرت أسوي الصورة.");
+  if (!o) return false;
+  if (await sendReceiptImage(chat, o, orderItems(o), `🖼 وصل بيع #${oid} — ${esc(o.name)}`)) return true;
+  await send(chat, "⚠️ ما گدرت أسوي الصورة.");
+  return false;
 }
 
 /** وصل للطباعة (بس إذا طلبه البائع) */
 export async function sendPaperReceipt(chat: number, oid: number) {
   const o = await one("orders", { id: oid, printed: 3 });
-  if (!o) { await send(chat, "⚠️ البيعة غير موجودة."); return; }
+  if (!o) { await send(chat, "⚠️ البيعة غير موجودة."); return false; }
   ensureDir();
   const hp = path.join(PDF_DIR, `receipt_${oid}.html`), pp = path.join(PDF_DIR, `وصل_${oid}.pdf`);
   fs.writeFileSync(hp, await receiptPaperHtml(o, orderItems(o)), "utf8");
   if (await htmlToPdf(hp, pp)) {
-    await upload("sendDocument", { chat_id: String(chat), caption: `🧾 وصل بيع #${oid}\n🖨 افتح الملف ← ⋮ ← Print ← طابعة SUNMI` }, "document", pp, `وصل_${oid}.pdf`, "application/pdf");
+    return !!await upload("sendDocument", { chat_id: String(chat), caption: `🧾 وصل بيع #${oid}\n🖨 افتح الملف ← ⋮ ← Print ← طابعة SUNMI` }, "document", pp, `وصل_${oid}.pdf`, "application/pdf");
   }
+  return false;
 }

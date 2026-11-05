@@ -193,9 +193,9 @@ async function settlementsView(oid: number, pre: "of" | "a"): Promise<[string, K
 }
 export async function settleDetail(chat: number, oid: number, stid: number) {
   const st = await one("settlements", { id: stid, office_id: oid });
-  if (!st) return;
+  if (!st) return false;
   const rows = await find("orders", { printed: 3, office_id: oid, settle_id: stid }, { order: ["id"] });
-  await officePdf(chat, `${(await office(oid))?.name ?? ""} — محاسبة ${st.created}`, rows, `settle_${stid}`);
+  return await officePdf(chat, `${(await office(oid))?.name ?? ""} — محاسبة ${st.created}`, rows, `settle_${stid}`);
 }
 
 // ---------- واجهة الإدارة للمكتبات

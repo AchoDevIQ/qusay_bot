@@ -68,12 +68,12 @@ export async function libAction(body: Row) {
   } else if (a === "pdf") {
     const o = await liveOffice(body.id);
     const { title, rows, fname } = await rowsFor(o.id, body.kind);
-    await officePdf(uid, `${o.name} — ${title}`, rows, fname);
+    need(await officePdf(uid, `${o.name} — ${title}`, rows, fname), "ما گدرت أرسل الملف، حاول مرة ثانية");
     extra = { notice: "✅ الملف وصلك بمحادثة البوت" };
   } else if (a === "settlePdf") {
     const st = await one("settlements", { id: Number(body.id) });
     need(st, "المحاسبة غير موجودة");
-    await settleDetail(uid, st!.office_id, st!.id);
+    need(await settleDetail(uid, st!.office_id, st!.id), "ما گدرت أرسل الملف، حاول مرة ثانية");
     extra = { notice: "✅ الملف وصلك بمحادثة البوت" };
   } else if (a === "settle") {
     const o = await liveOffice(body.id);

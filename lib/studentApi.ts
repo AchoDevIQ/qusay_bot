@@ -19,7 +19,7 @@ export async function studentsStats() {
 }
 export async function sendStudentsPdf(chat: number, fifth: boolean) {
   const rows = fifth ? await find("students", { grade: GRADES[1] }, { order: ["name"] }) : await find("students", {}, { order: ["grade", "name"] });
-  await listPdf(chat, fifth ? "طلاب الخامس العلمي" : "كل الطلاب المسجلين", ["الاسم", "الصف", "المنهج", "المحافظة", "الهاتف 1", "الهاتف 2", "الامتحان"],
+  return await listPdf(chat, fifth ? "طلاب الخامس العلمي" : "كل الطلاب المسجلين", ["الاسم", "الصف", "المنهج", "المحافظة", "الهاتف 1", "الهاتف 2", "الامتحان"],
     await Promise.all(rows.map(async (r) => [r.name, r.grade, r.curr, placeOf(r), r.phone1, r.phone2, (r.exam ?? "") + (r.center_id ? " - " + await centerName(r.center_id) : "")])),
     fifth ? "students_5th" : "students_all");
 }
@@ -60,7 +60,7 @@ export async function studentAction(body: Row) {
     await setSession(id, "", {});
     notice = "🗑 انحذف تسجيله. لمن يفتح البوت يسجل من جديد، وطلباته القديمة باقية";
   } else if (a === "pdf") {
-    await sendStudentsPdf(uid, body.kind === "fifth");
+    need(await sendStudentsPdf(uid, body.kind === "fifth"), "ما گدرت أرسل الملف، حاول مرة ثانية");
     notice = "✅ الملف وصلك بمحادثة البوت";
   } else need(a === "list", "أمر غير معروف");
   return { ...await pageData(String(body.q ?? "")), notice };
