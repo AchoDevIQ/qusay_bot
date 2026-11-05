@@ -89,5 +89,5 @@ test("قائمة المدير تفتح الصفحة بدل شاشات الأزر
   const kb = (await adminMenuFor(1))[1].flat();
   assert.ok(kb.find((b) => b.text === "🛒 المنتجات والأقسام")?.web_app?.url.includes("/store/products"));
   assert.equal(kb.some((b) => ["a:bulk", "a:add", "a:list"].includes(b.callback_data ?? "")), false);
-  assert.ok(kb.some((b) => b.callback_data === "a:fees"));                           // باقي الأقسام مثل ما هي
+  assert.ok(kb.some((b) => b.callback_data === "a:oo"));                        // باقي الأقسام مثل ما هي
 });

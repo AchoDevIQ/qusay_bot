@@ -5,7 +5,7 @@ import {
   allCats, can, cat, centerName, chapters, govMode, groupId, hoursText, isAdmin, newOrdersCount, orderItems, ordersByIds, placeOf, product, products, profileText, qHours, qWhere,
   searchStudents, setStudentView, staffAccount, staffName, staffRow, student, topics,
 } from "./data.ts";
-import { chapterLabel, examsPageLink, flowKb, mainKb, onlineOnly, posKb, productsPageLink, regKb } from "./keyboards.ts";
+import { adminPageLink, chapterLabel, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
 import { EXAM_PERM, examBankCb } from "./examBank.ts";
 import { readyExtras } from "./exams.ts";
@@ -22,11 +22,11 @@ export async function adminMenuFor(uid: number): Promise<View> {
   const kb: Kb = [];
   // صفحات كاملة داخل تليجرام. بدون رابط https ترجع شاشات الأزرار
   if (await can(uid, "products")) {
-    if (STORE_URL) kb.push([{ text: "🛒 المنتجات والأقسام", web_app: { url: productsPageLink() } }]);
-    else kb.push([btn("📥 إضافة منتجات دفعة وحدة", "a:bulk")], [btn("➕ إضافة منتج واحد", "a:add")], [btn("📋 المنتجات والأقسام", "a:list")]);
-    kb.push([btn("🚚 أسعار التوصيل", "a:fees")], [btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")]);
+    if (STORE_URL) kb.push([{ text: "🛒 المنتجات والأقسام", web_app: { url: adminPageLink("products") } }], [{ text: "🚚 أسعار التوصيل", web_app: { url: adminPageLink("fees") } }]);
+    else kb.push([btn("📥 إضافة منتجات دفعة وحدة", "a:bulk")], [btn("➕ إضافة منتج واحد", "a:add")], [btn("📋 المنتجات والأقسام", "a:list")], [btn("🚚 أسعار التوصيل", "a:fees")]);
+    kb.push([btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")]);
   }
-  if (await can(uid, EXAM_PERM)) kb.push([STORE_URL ? { text: "📝 الامتحانات", web_app: { url: examsPageLink() } } : btn("📝 الامتحانات", "a:ex")]);
+  if (await can(uid, EXAM_PERM)) kb.push([STORE_URL ? { text: "📝 الامتحانات", web_app: { url: adminPageLink("exams") } } : btn("📝 الامتحانات", "a:ex")]);
   if (await can(uid, "orders")) {
     const n = await newOrdersCount();
     kb.push([btn("🖨 الطلبات الجديدة (للطباعة)" + (n ? `  🔴 ${n}` : ""), "a:pend")], [btn("🗂 الطلبات المطبوعة", "a:printed")],
