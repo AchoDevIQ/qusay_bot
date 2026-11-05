@@ -91,6 +91,7 @@ export const PERMS: Record<string, string> = {
   exams: "📄 إدارة الامتحانات",
 };
 
+export const BTN_HOME = "🏠 فتح القائمة";
 export const BTN_SHOP = "🛒 المتجر";
 export const BTN_CANCEL = "❌ إلغاء";
 export const BTN_ADMIN = "⚙️ لوحة التحكم";

@@ -30,6 +30,9 @@ export function TelegramInit() {
 export function haptic() {
   try { tg()?.HapticFeedback?.selectionChanged(); } catch { /* مو مدعوم */ }
 }
+export function closeApp() {
+  try { (tg() as unknown as { close?: () => void } | undefined)?.close?.(); } catch { /* مو مدعوم */ }
+}
 export function sendToBot(o: unknown) {
   const s = JSON.stringify(o);
   const w = tg();

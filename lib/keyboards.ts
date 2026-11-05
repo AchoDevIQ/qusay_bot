@@ -1,6 +1,7 @@
 // لوحات الأزرار وروابط صفحات المتجر (البيانات تنضغط داخل الرابط)
 import { find, kvGet, type Row } from "./db.ts";
-import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL } from "./config.ts";
+import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_HOME, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL, WORD_CHECK } from "./config.ts";
+import { homeToken } from "./webAuth.ts";
 import { areasWithCenters, can, cats, centerName, feeOf, hasExamMenu, isRealStaff, isStaff, myOffice, newOrdersCount, products, student, viewingAsStudent } from "./data.ts";
 import { chapterLabel } from "./orderRules.ts";
 import { b64urlEncode, btn, chunk } from "./util.ts";
@@ -24,6 +25,11 @@ export function siteBase() {
 // v= رقم يتغير حتى التليجرام ما يفتح نسخة قديمة محفوظة من الصفحة
 const pageUrl = (page: string, d: unknown) => `${siteBase()}${page}?v=${Math.floor(Date.now() / 1000)}&d=${b64urlEncode(d)}`;
 
+// القائمة صفحة بمربعات، لأن تليجرام ما يسمح بإطارات وألوان على أزرار المحادثة.
+// فحوصات البوت القديم تشتغل على الأزرار نفسها، فتطفيها
+const HOME_PAGE = WORD_CHECK && !!STORE_URL;
+export const homeLink = (uid: number) => `${siteBase()}/store/home?v=${Math.floor(Date.now() / 1000)}&t=${homeToken(uid)}`;
+
 export async function storeLink(uid?: number) {
   const s = uid ? await student(uid) : null;
   const c: unknown[][] = [];
@@ -40,6 +46,7 @@ export async function storeLink(uid?: number) {
     if (labels.length) d.w = labels;
   }
   if (s) d.p = { n: s.name, cu: s.curr, g: s.gov, s: s.side || "", a: s.area, p1: s.phone1, p2: s.phone2 };
+  if (uid && HOME_PAGE) d.tk = homeToken(uid);
   return pageUrl("/store", d);
 }
 export const storeKb = async (uid?: number) => ({
@@ -81,8 +88,12 @@ export const scanKb = (oid: number) => ({
 });
 
 export async function mainKb(uid: number) {
-  const rows: { text: string }[][] = [[{ text: BTN_SHOP }, { text: BTN_ASK }], [{ text: BTN_MYQ }, { text: BTN_ME }]];
-  if (await hasExamMenu(uid)) rows.push([{ text: BTN_EXAMS }]);
+  const rows: { text: string; web_app?: { url: string } }[][] = [];
+  if (HOME_PAGE) rows.push([{ text: BTN_HOME, web_app: { url: homeLink(uid) } }]);
+  else {
+    rows.push([{ text: BTN_SHOP }, { text: BTN_ASK }], [{ text: BTN_MYQ }, { text: BTN_ME }]);
+    if (await hasExamMenu(uid)) rows.push([{ text: BTN_EXAMS }]);
+  }
   if (await isStaff(uid)) {
     const n = await can(uid, "orders") ? await newOrdersCount() : 0;
     rows.push([{ text: BTN_ADMIN + (n ? `  🔴 ${n}` : "") }]);

@@ -24,6 +24,23 @@ export function verifyInitData(raw: unknown, now = Date.now() / 1000): number | 
   } catch { return null; }
 }
 
+// زر أسفل المحادثة ما يعطي الصفحة توقيع تليجرام، فرابطه يحمل رمز موقع منا.
+// الرمز يتجدد كل ما وصلت الأزرار، ولو انتهى الطالب يكتب /start
+const HOME_TTL_S = 60 * 24 * 3600;
+const homeSig = (uid: number, exp: number) => hmac(hmac("QMathHome", TOKEN), `${uid}.${exp}`).toString("hex");
+export function homeToken(uid: number, now = Date.now() / 1000) {
+  const exp = Math.floor(now) + HOME_TTL_S;
+  return `${uid}.${exp}.${homeSig(uid, exp)}`;
+}
+export function verifyHomeToken(t: unknown, now = Date.now() / 1000): number | null {
+  if (typeof t !== "string" || !TOKEN) return null;
+  const [u, e, sig] = t.split(".");
+  const uid = Number(u), exp = Number(e);
+  if (!Number.isSafeInteger(uid) || !Number.isFinite(exp) || exp < now || !sig) return null;
+  const want = Buffer.from(homeSig(uid, exp), "hex"), got = Buffer.from(sig, "hex");
+  return got.length === want.length && timingSafeEqual(got, want) ? uid : null;
+}
+
 // الصور ما تكدر ترسل التوقيع، فتاخذ رمز قصير العمر مربوط بالمستخدم
 const FILE_TTL_S = 3600;
 const tokenSig = (uid: number, exp: number) => hmac(hmac("QMathFiles", TOKEN), `${uid}.${exp}`).toString("hex");

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import {
-  AR_NAME_ERR, CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanName, cleanPhone, fmt, haptic, nameOk, phoneErr, scrollToFirst, sendToBot, useBotData,
+  AR_NAME_ERR, CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanName, cleanPhone, closeApp, fmt, haptic, nameOk, phoneErr, scrollToFirst, sendToBot, useBotData,
 } from "./shared";
 import { AgreeNotice, WordOrder } from "./agreeSteps";
 import { REFUND_SENTENCE, TERM_SENTENCE, chaptersInOrder, firstRoundOnly } from "../../lib/orderRules.ts";
@@ -12,6 +12,7 @@ type Item = [number, string, number];
 type Data = {
   c: [string, Item[]][]; g: string[]; f: number[]; w?: string[];
   p?: { n?: string; cu?: string; g?: string; s?: string; a?: string; p1?: string; p2?: string };
+  tk?: string;
 };
 
 export default function StoreClient() {
@@ -28,6 +29,8 @@ function Store({ D }: { D: Data }) {
   const [gate, setGate] = useState<Gate>("a1");
   const [termOk, setTermOk] = useState(false);
   const [manyFor, setManyFor] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendErr, setSendErr] = useState("");
   const [name, setName] = useState(P?.n ?? "");
   const [curr, setCurr] = useState(P?.cu ?? "");
   const [gov, setGov] = useState(P?.g ?? "");
@@ -82,7 +85,21 @@ function Store({ D }: { D: Data }) {
     if (b) e.ph2 = b; else if (p1 === p2) e.ph2 = "الرقم الثاني لازم يختلف عن الأول";
     setErrs(e);
     if (scrollToFirst(e)) return;
-    sendToBot({ n, cu: curr, g: gov, s: side, a: area.trim(), p1, p2, i: entries.map(([id, q]) => [id, q]), t: sub + fee, ag: 1, tm: termOk ? 1 : 0, mn: manyFor === chaptersKey ? 1 : 0 });
+    const order = { n, cu: curr, g: gov, s: side, a: area.trim(), p1, p2, i: entries.map(([id, q]) => [id, q]), t: sub + fee, ag: 1, tm: termOk ? 1 : 0, mn: manyFor === chaptersKey ? 1 : 0 };
+    if (D.tk) void sendOrder(order); else sendToBot(order);
+  }
+  // الطلب يروح للسيرفر مباشرة، لأن الصفحة ممكن تنفتح من القائمة وهناك sendData ما مضمون
+  async function sendOrder(order: unknown) {
+    if (sending) return;
+    setSending(true);
+    setSendErr("");
+    try {
+      const res = await fetch("/api/home", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: D.tk, action: "order", order }) });
+      const j = await res.json();
+      if (res.ok) { closeApp(); return; }
+      setSendErr(j.error ?? "ما انرسل الطلب، حاول مرة ثانية");
+    } catch { setSendErr("ماكو اتصال، ما انرسل الطلب. حاول مرة ثانية"); }
+    setSending(false);
   }
 
   return (
@@ -194,11 +211,12 @@ function Store({ D }: { D: Data }) {
 
       {!gate && <div className="bar"><div className="in">
         <div className="sum">
+          {sendErr && <small className="exbad">⚠️ {sendErr}</small>}
           <small>{page === 1 ? "مجموع المنتجات" : "المبلغ الكلي" + (fee ? " مع التوصيل" : "")}</small>
           <strong>{fmt(page === 1 ? sub : sub + fee)}</strong>
         </div>
         {page === 2 && <button type="button" className="btn ghost" onClick={() => go(1)}>رجوع</button>}
-        <button type="button" className="btn" disabled={page === 1 && sub === 0} onClick={submit}>{page === 1 ? "التالي" : "تأكيد وإرسال الطلب"}</button>
+        <button type="button" className="btn" disabled={sending || (page === 1 && sub === 0)} onClick={submit}>{page === 1 ? "التالي" : sending ? "جاري الإرسال..." : "تأكيد وإرسال الطلب"}</button>
       </div></div>}
     </>
   );
