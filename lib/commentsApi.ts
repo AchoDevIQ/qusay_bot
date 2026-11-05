@@ -92,7 +92,7 @@ export async function stickerFile(id: unknown) {
 }
 
 /** مقولة لدرجة هذا الطالب: عشوائية، وما تتكرر عليه لحد ما يشوف كل مقولات مداه */
-export async function pickComment(uid: number, total: number) {
+export async function pickComment(uid: number, total: number, record = true) {
   await seed();
   const fit = (await find("grade_comments", {})).filter((c) => c.lo <= total && total <= c.hi);
   if (!fit.length) return null;
@@ -100,9 +100,9 @@ export async function pickComment(uid: number, total: number) {
   let fresh = fit.filter((c) => !seen.has(c.id));
   if (!fresh.length) { for (const c of fit) await remove("comment_sent", { user_id: uid, comment_id: c.id }); fresh = fit; }
   const c = fresh[Math.floor(Math.random() * fresh.length)];
-  await put("comment_sent", { user_id: uid, comment_id: c.id, at: stamp() });
+  if (record) await put("comment_sent", { user_id: uid, comment_id: c.id, at: stamp() });
   // إذا المقولة بدون ملصق، ياخذ ملصق عشوائي من مدى الدرجة إذا موجود
   const stickers = (await find("stickers", {})).filter((s) => s.lo <= total && total <= s.hi);
   const sticker = c.sticker_id ? await one("stickers", { id: c.sticker_id }) : stickers[Math.floor(Math.random() * stickers.length)] ?? null;
-  return { text: c.text as string, sticker: sticker as Row | null };
+  return { id: c.id as number, text: c.text as string, sticker: sticker as Row | null };
 }

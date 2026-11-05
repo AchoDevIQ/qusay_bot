@@ -2,7 +2,7 @@
 // التصحيح: قائمة الأوراق، وشاشة الورقة بكل الشاشة مثل النظام القديم (Grader)
 import { useEffect, useRef, useState } from "react";
 import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../adminPage";
-import Grader, { type Paper, type Sticker } from "./Grader";
+import Grader, { type Paper, type Prepared, type Sticker } from "./Grader";
 
 type Row = { id: number; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
 type Data = { waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
@@ -29,22 +29,38 @@ export default function GradeClient() {
   const saving = useRef(new Set<number>());
   const [savedNow, setSavedNow] = useState(0);
   const [bgErr, setBgErr] = useState("");
+  const [savingLeft, setSavingLeft] = useState(0);
   useWide(!!paper || allDone);
   const act: Call = async (b) => { const r = await call(b); if (r?.paper) setPaper(r.paper); return r; };
   const url = (ref: string) => `/api/grade/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
   /** الحفظ بالخلفية: المصحح ما ينتظر، تنفتح الورقة الجاية والدرجة توصل للطالب وراها */
-  function saveInBackground(p: Paper, inkSaved: Promise<void>) {
+  function saveInBackground(p: Paper, inkSaved: Promise<void>, compose: (x: Prepared) => Promise<Blob[]>) {
     saving.current.add(p.id);
+    setSavingLeft(saving.current.size);
     setSavedNow((n) => n + 1);
     void (async () => {
       try {
         await inkSaved;
-        const res = await fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "finish", id: p.id }) });
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "");
+        const post = async (body: BodyInit, json: boolean) => {
+          const res = await fetch("/api/grade", { method: "POST", ...(json ? { headers: { "Content-Type": "application/json" } } : {}), body });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(j.error ?? "");
+          return j;
+        };
+        const prep: Prepared = await post(JSON.stringify({ initData: pageAuth(), action: "prepare", id: p.id }), true);
+        // الصفحة تركب صور الورقة المصححة، وإذا ما گدرت توصل الدرجة كرسالة بس
+        let photos: Blob[] = [];
+        try { photos = await compose(prep); } catch { photos = []; }
+        if (photos.length) {
+          const fd = new FormData();
+          fd.set("initData", pageAuth()); fd.set("action", "finish"); fd.set("id", String(p.id)); fd.set("comment", String(prep.sent));
+          photos.forEach((b, i) => fd.append("photo", b, `p${i}.jpg`));
+          await post(fd, false);
+        } else await post(JSON.stringify({ initData: pageAuth(), action: "finish", id: p.id, comment: prep.sent }), true);
       } catch (e) {
         setSavedNow((n) => n - 1);
         setBgErr(`⚠️ ورقة ${p.name} ما انحفظت${(e as Error).message ? `: ${(e as Error).message}` : ""}. افتحها من القائمة واحفظها مرة ثانية.`);
-      } finally { saving.current.delete(p.id); }
+      } finally { saving.current.delete(p.id); setSavingLeft(saving.current.size); }
     })();
     const nextPaper = data?.waiting.find((x) => x.id !== p.id && !skipped.current.has(x.id) && !saving.current.has(x.id));
     setPaper(null);
@@ -69,13 +85,14 @@ export default function GradeClient() {
           <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} errors={data.errors ?? []} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && !saving.current.has(x.id)).length}
             onClose={() => { setPaper(null); setSavedNow(0); void call({ action: "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
-            onSave={(inkSaved) => saveInBackground(paper, inkSaved)} />
+            onSave={(inkSaved, compose) => saveInBackground(paper, inkSaved, compose)} />
         )}
         {data && !paper && allDone && (
           <div className="gk gk-done">
             <div className="gk-check">✓</div>
             <b>انتهت الأوراق المتاحة</b>
             <span>ماكو أوراق ثانية تنتظر التصحيح هسه.</span>
+            {savingLeft > 0 && <span className="gk-err">⏳ جاري حفظ {savingLeft} ورقة وإرسالها للطلاب. لا تسد الصفحة لحد ما تخلص.</span>}
             {bgErr && <span className="gk-err">{bgErr}</span>}
             <button type="button" className="gk-finish" onClick={() => { setAllDone(false); skipped.current.clear(); setSavedNow(0); void call({ action: "list" }); }}>رجوع للقائمة</button>
           </div>

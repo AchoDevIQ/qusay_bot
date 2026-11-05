@@ -4,9 +4,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pageAuth } from "../adminPage";
 import PdfPages, { pdfByQuestion, pdfToImages } from "../PdfPages";
+import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
-export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string> };
+export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en" };
+export type Prepared = { total: number; comment: string; sticker: number; sent: number };
 type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
 export type Sticker = { id: number; name: string; lo: number; hi: number };
 type Ink = { rot: number; items: Item[] };
@@ -53,8 +55,8 @@ async function buildPages(paper: Paper, url: (r: string) => string): Promise<Pag
 }
 
 const stickerUrl = (id: number) => `/api/sticker?id=${id}`;
-function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: number, live?: Item | null, imgs?: Map<number, HTMLImageElement>) {
-  ctx.clearRect(0, 0, w, h);
+function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: number, live?: Item | null, imgs?: Map<number, HTMLImageElement>, clear = true) {
+  if (clear) ctx.clearRect(0, 0, w, h);
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   for (const it of live ? [...items, live] : items) {
     if (it.t === "s") {
@@ -208,7 +210,7 @@ const PEN_KEY = "gradePen";
 export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, today, left: papersLeft, errors, stickers }: {
   paper: Paper; url: (r: string) => string; busy: boolean; errors: string[]; stickers: Sticker[];
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null } | null>;
-  onClose: () => void; onSkip: () => void; onSave: (inkSaved: Promise<void>) => void; today: number; left: number;
+  onClose: () => void; onSkip: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
 }) {
   const [pages, setPages] = useState<Page[] | null>(null);
   const [at, setAt] = useState(0);
@@ -341,6 +343,24 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     if (v && keepErr && !errors.includes(v)) void act({ action: "saveError", text: v });
     setTextAt(null); setText(""); setKeepErr(false);
   }
+  /** صور الورقة المصححة اللي توصل للطالب: غلاف، وبعده كل صفحة بتصحيحها */
+  async function composeAll(prep: Prepared): Promise<Blob[]> {
+    try { await Promise.all(["600", "700", "800", "900"].map((w) => document.fonts.load(`${w} 40px Cairo`, "اب Ab"))); await document.fonts.ready; } catch { /* بدون خطوط */ }
+    const info: HeaderInfo = { slug: paper.slug, chapter: paper.chapter, title: paper.title, info: paper.info, model: paper.model, name: paper.name, total: prep.total, lang: paper.lang };
+    const logo = await loadImage("/logo.png");
+    const out = [await coverImage(info, prep.comment, prep.sticker ? await loadImage(stickerUrl(prep.sticker)) : null, logo)];
+    const all = inksRef.current;
+    const imgs = new Map<number, HTMLImageElement>();
+    for (const ink of Object.values(all)) for (const it of ink.items) if (it.t === "i" && !imgs.has(it.id)) { const im = await loadImage(stickerUrl(it.id)); if (im) imgs.set(it.id, im); }
+    for (const [i, pg] of (pages ?? []).entries()) {
+      if (!pg.src) continue;
+      const im = await loadImage(pg.src);
+      if (!im) continue;
+      const ink = all[i] ?? { rot: 0, items: [] };
+      out.push(await pageImage(info, im, ink.rot, (ctx, w, h) => drawItems(ctx, ink.items, w, h, null, imgs, false), logo));
+    }
+    return out;
+  }
   /** حفظ الورقة: لازم كل الأسئلة عدها درجة. بعدها تنفتح الورقة الجاية مباشرة، والحفظ يكمل بالخلفية */
   function save() {
     const miss = paper.questions.find((x) => marks[x.n] === null || marks[x.n] === undefined);
@@ -350,7 +370,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       if (i >= 0) go(i); else setQSel(miss.n);
       return;
     }
-    onSave(Promise.all([flush(), ...pendingMarks.current]).then(() => undefined));
+    onSave(Promise.all([flush(), ...pendingMarks.current]).then(() => undefined), composeAll);
   }
   return (
     <div className="gk">

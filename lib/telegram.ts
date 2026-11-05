@@ -72,3 +72,31 @@ export async function sendImage(chat: number | string, filePath: string, key: st
   else if (!r) await send(chat, fallback, { replyKb });
   return r;
 }
+
+/** ألبوم صور: كل 10 برسالة، والكلام على أول صورة. يرجع عدد الرسائل اللي وصلت */
+export async function sendAlbum(chat: number | string, photos: Buffer[], caption: string, protect = true) {
+  let sent = 0;
+  for (let i = 0; i < photos.length; i += 10) {
+    const part = photos.slice(i, i + 10);
+    const withCaption = i === 0;
+    const fd = new FormData();
+    fd.append("chat_id", String(chat));
+    if (protect) fd.append("protect_content", "true");
+    const jpg = (b: Buffer) => new Blob([new Uint8Array(b)], { type: "image/jpeg" });
+    let method = "sendMediaGroup";
+    if (part.length === 1) {
+      method = "sendPhoto";
+      fd.append("photo", jpg(part[0]), "p.jpg");
+      if (withCaption) { fd.append("caption", caption); fd.append("parse_mode", "HTML"); }
+    } else {
+      fd.append("media", JSON.stringify(part.map((_, k) => ({ type: "photo", media: `attach://p${k}`, ...(withCaption && k === 0 ? { caption, parse_mode: "HTML" } : {}) }))));
+      part.forEach((b, k) => fd.append(`p${k}`, jpg(b), `p${k}.jpg`));
+    }
+    try {
+      const r = await fetch(base() + method, { method: "POST", body: fd, signal: AbortSignal.timeout(120_000) });
+      const j: any = await r.json();
+      if (j.ok) sent++; else console.error("Telegram error:", method, j.description);
+    } catch (e) { console.error("Connection problem: album", e); }
+  }
+  return sent;
+}

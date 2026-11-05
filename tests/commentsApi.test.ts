@@ -97,3 +97,31 @@ test("لمن تخلص الورقة، الطالب وولي أمره توصلهم
   assert.match(photos[0].p.caption, /60<\/b> من 100[\s\S]*💬 «/);
   assert.equal(photos[0].p.protect_content, "true");
 });
+
+test("الحفظ ويا صور الورقة: الطالب وولي أمره يوصلهم ألبوم، وأوراق التجربة توصل للمصحح", async () => {
+  const { gradeUpload } = await import("../lib/gradeApi.ts");
+  await put("students", { user_id: 52, name: "علي حسن محمد كاظم", curr: "إنجليزي", exam: "إلكتروني", created: "2026-01-01 10:00" });
+  const e = await insert("bank_exams", { slug: "ch3", chapter: "الفصل الثالث", ord: 2, title: "امتحان", info: "Exam", minutes: 60, pos: 1 });
+  const v = await insert("bank_versions", { exam_id: e, model: "B", kind: "mandatory", ok: 1 });
+  await insert("bank_questions", { version_id: v, n: 1, max_mark: 100, q_file: "t/q1.png" });
+  const send = async (uid: number, n: number) => {
+    const id = await insert("sched_items", { user_id: uid, exam_id: e, at: "x", status: "done", version_id: v, submitted_at: "x" });
+    const g = (action: string, x: object = {}) => gradeAction({ initData: sign(30), action, id, ...x }) as Promise<any>;
+    const opened = await g("open");
+    assert.deepEqual([opened.paper.slug, opened.paper.lang], ["ch3", uid > 0 ? "en" : "ar"]);
+    await g("mark", { q: 1, mark: 40 });
+    const prep = await g("prepare");
+    assert.equal(prep.total, 40);
+    const f = new FormData();
+    f.set("initData", sign(30)); f.set("action", "finish"); f.set("id", String(id)); f.set("comment", String(prep.sent));
+    for (let i = 0; i < n; i++) f.append("photo", new File([new Uint8Array([255, 216, 255])], `p${i}.jpg`));
+    calls.length = 0;
+    await gradeUpload(f);
+    return calls;
+  };
+  const real = await send(52, 3);
+  assert.deepEqual(real.filter((x) => x.method === "sendMediaGroup").map((x) => x.p.chat_id), ["52"]);
+  assert.equal(real[0].p.protect_content, "true");
+  const test = await send(-9, 1);
+  assert.deepEqual(test.map((x) => [x.method, x.p.chat_id]), [["sendPhoto", "30"]]);   // التجربة توصل للمصحح بس
+});

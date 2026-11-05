@@ -3,7 +3,7 @@ import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
 import { isAdmin, staffName, student } from "./data.ts";
-import { send, upload } from "./telegram.ts";
+import { send, sendAlbum, upload } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { files } from "./files.ts";
 import { stamp } from "./util.ts";
@@ -37,6 +37,12 @@ async function listData(uid: number) {
     today: papers.filter((p) => p.grader_id === uid && String(p.graded_at ?? "").startsWith(stamp().slice(0, 10))).length,
   };
 }
+/** معلومات هدر الورقة المصححة: الفصل والمنهج */
+async function headerInfo(it: Row) {
+  const e = await one("bank_exams", { id: it.exam_id });
+  const st = isTest(it) ? null : await student(it.user_id);
+  return { slug: e?.slug ?? "", info: e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar" };
+}
 async function paperView(it: Row) {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
@@ -46,7 +52,7 @@ async function paperView(it: Row) {
   for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
   return {
     ink,
-    ...await paperRow(it), answerPdf: v?.answer_pdf ?? null,
+    ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null })),
   };
@@ -135,32 +141,18 @@ export async function gradeAction(body: Row) {
     await remove("paper_ink", { item_id: it.id });
     await update("sched_items", { id: it.id }, { grader_id: null });
     notice = "↩️ رجعت الورقة للقائمة";
-  } else if (a === "finish") {
+  } else if (a === "prepare") {
+    // قبل الحفظ: المقولة والملصق حتى الصفحة تركب صورة الغلاف
     const it = await myPaper(uid, body.id);
     need(!it.graded_at, "الورقة مخلصة");
     const view = await paperView(it);
     const left = view.questions.filter((q) => q.mark === null).map((q) => q.n);
     need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
     const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
-    await update("sched_items", { id: it.id }, { total, graded_at: stamp() });
-    if (!isTest(it)) {
-      const head = `📝 <b>انصحح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
-      const c = await pickComment(it.user_id, total);
-      const text = c ? `${head}\n┈┈┈┈┈┈┈┈┈┈┈┈\n💬 «${esc(c.text)}»\n┈┈┈┈┈┈┈┈┈┈┈┈` : head;
-      const pic = c?.sticker ? await files().read(c.sticker.file) : null;
-      const deliver = async (chat: number, caption: string) => {
-        if (pic) {
-          const gif = /\.gif$/i.test(c!.sticker!.file);
-          if (await upload(gif ? "sendAnimation" : "sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", protect_content: "true" }, gif ? "animation" : "photo", pic, path.basename(c!.sticker!.file))) return;
-        }
-        await send(chat, caption);
-      };
-      await deliver(it.user_id, text);
-      const g = await guardianOf(it.user_id);
-      if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
-      await logActivity(it.user_id, `📝 انصحح امتحان ${view.title}: ${total} من 100`);
-    }
-    notice = `✅ انحفظت الدرجة ${total} من 100`;
+    const c = await pickComment(isTest(it) ? uid : it.user_id, total, !isTest(it));
+    return { total, comment: c?.text ?? "", sticker: c?.sticker?.id ?? 0, sent: c?.id ?? 0 };
+  } else if (a === "finish") {
+    notice = await finishPaper(uid, body.id, [], Number(body.comment) || 0);
   } else if (a === "makeTests" || a === "deleteTests") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     if (a === "makeTests") {
@@ -174,4 +166,53 @@ export async function gradeAction(body: Row) {
   } else need(a === "list", "أمر غير معروف");
   return { ...await listData(uid), paper, notice };
 }
+/** حفظ الورقة: المجموع، وتوصل للطالب وولي أمره صور ورقته المصححة ويا المقولة. أوراق التجربة توصل للمصحح نفسه */
+async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentId: number) {
+  const it = await myPaper(uid, raw);
+  need(!it.graded_at, "الورقة مخلصة");
+  const view = await paperView(it);
+  const left = view.questions.filter((q) => q.mark === null).map((q) => q.n);
+  need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
+  const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
+  await update("sched_items", { id: it.id }, { total, graded_at: stamp() });
+  const head = `📝 <b>انصحح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
+  const chosen = commentId ? await one("grade_comments", { id: commentId }) : null;
+  const c = chosen ? { text: chosen.text as string, sticker: chosen.sticker_id ? await one("stickers", { id: chosen.sticker_id }) : null }
+    : photos.length ? null : await pickComment(isTest(it) ? uid : it.user_id, total, !isTest(it));
+  const text = c ? `${head}\n┈┈┈┈┈┈┈┈┈┈┈┈\n💬 «${esc(c.text)}»\n┈┈┈┈┈┈┈┈┈┈┈┈` : head;
+  const pic = !photos.length && c?.sticker ? await files().read(c.sticker.file) : null;
+  const deliver = async (chat: number, caption: string) => {
+    if (photos.length && await sendAlbum(chat, photos, caption)) return;
+    if (pic) {
+      const gif = /\.gif$/i.test(c!.sticker!.file);
+      if (await upload(gif ? "sendAnimation" : "sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", protect_content: "true" }, gif ? "animation" : "photo", pic, path.basename(c!.sticker!.file))) return;
+    }
+    await send(chat, caption);
+  };
+  if (isTest(it)) {
+    // أوراق التجربة: الصور توصل للمصحح نفسه حتى يشوف شنو يوصل للطالب
+    if (photos.length) await deliver(uid, `🧪 <b>هيچ توصل للطالب</b>\n${text}`);
+  } else {
+    await deliver(it.user_id, text);
+    const g = await guardianOf(it.user_id);
+    if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
+    await logActivity(it.user_id, `📝 انصحح امتحان ${view.title}: ${total} من 100`);
+  }
+  return `✅ انحفظت الدرجة ${total} من 100`;
+}
+
+/** الحفظ ويا صور الورقة المصححة اللي ركبتها صفحة التصحيح */
+export async function gradeUpload(form: FormData) {
+  const uid = await authed(form.get("initData"), GRADE_PERM);
+  need(form.get("action") === "finish", "أمر غير معروف");
+  const photos: Buffer[] = [];
+  for (const f of form.getAll("photo")) {
+    need(f instanceof Blob && f.size <= 9_000_000, "صورة كبيرة");
+    photos.push(Buffer.from(await (f as Blob).arrayBuffer()));
+  }
+  need(photos.length <= 40, "صور هواية");
+  const notice = await finishPaper(uid, form.get("id"), photos, Number(form.get("comment")) || 0);
+  return { ok: true, notice };
+}
+
 export const waitingPapers = async (uid: number) => (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid)).length;
