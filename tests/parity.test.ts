@@ -58,6 +58,7 @@ function normalDb(db: Record<string, any[]>) {
     if (NEW_TABLES.includes(t)) continue;
     out[t] = rows.map((r) => {
       const x = { ...r };
+      if (t === "products") delete x.hidden;   // الإخفاء من المتجر ميزة جديدة
       if (t === "orders" && x.items) x.items = JSON.parse(x.items);
       if (t === "sessions" && x.data) x.data = JSON.parse(x.data);
       return normal(x);

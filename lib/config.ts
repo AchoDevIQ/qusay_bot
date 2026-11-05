@@ -52,6 +52,7 @@ export const DEFAULT_FEE = 5000;
 export const CURRENCY = "د.ع";
 export const AGREE_TIMES = 3;
 export const NO_REFUND = "⚠️ <b>تنبيه مهم</b>\n\nجميع المشتريات <b>غير قابلة للإرجاع إطلاقاً ولأي سبب كان</b>.";
+export const ONE_CHAPTER = "⚠️ <b>تذكر</b>\n\nجميع المشتريات <b>غير قابلة للإرجاع إطلاقاً</b>، لذلك من الأفضل لك أن تسجل الآن في <b>فصل واحد</b>.";
 export const REFUND_SENTENCE = "جميع المشتريات غير قابلة للإرجاع إطلاقاً ولأي سبب كان";
 export const TERM_SENTENCE = "صلاحية المحاضرات والامتحانات للدور الأول فقط";
 export const TERM_NOTICE = `⚠️ <b>تنبيه مهم</b>\n\n<b>${TERM_SENTENCE}</b>.`;

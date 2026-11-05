@@ -1,12 +1,12 @@
 // واجهة الطالب: التسجيل، المتجر، الطلبات
 import { find, getSession, insert, kvSet, one, put, setSession, update, type Row } from "./db.ts";
 import {
-  AGREE_TIMES, AR_WORD, BANNER, BTN_ME, BTN_OPEN, BTN_REG, BTN_SHOP, CURRS, EXAMS, GOVS, GRADES, NO_REFUND, REFUND_SENTENCE, SIDES, STORE_URL, SUCCESS, TERM_NOTICE, TERM_SENTENCE, WORD_CHECK, successText,
+  AGREE_TIMES, AR_WORD, BANNER, BTN_ME, BTN_OPEN, BTN_REG, BTN_SHOP, CURRS, EXAMS, GOVS, GRADES, NO_REFUND, ONE_CHAPTER, REFUND_SENTENCE, SIDES, STORE_URL, SUCCESS, TERM_NOTICE, TERM_SENTENCE, WORD_CHECK, successText,
 } from "./config.ts";
 import {
   can, cat, cats, centerAreas, centerName, checkPhone, feeOf, govMode, newOrdersCount, orderItems, placeOf, product, products, profileText, staffIds, student,
 } from "./data.ts";
-import { flowKb, govKb, mainKb, regKb, storeKb } from "./keyboards.ts";
+import { chapterLabel, flowKb, govKb, mainKb, regKb, storeKb } from "./keyboards.ts";
 import { sendProfileCard } from "./documents.ts";
 import { edit, send, sendImage, type Kb } from "./telegram.ts";
 import { btn, esc, money, num, stamp, toInt, cut, words } from "./util.ts";
@@ -20,7 +20,7 @@ const CONFIRM_KB = (edit = "✏️ تعديل المنتجات"): Kb => [[btn("�
 
 // ---------- السلة (إذا ماكو STORE_URL تشتغل بأزرار البوت)
 async function cleanCart(cart: Row = {}) {
-  const ids = new Set((await products()).map((p) => String(p.id)));
+  const ids = new Set((await products()).filter((p) => !p.hidden).map((p) => String(p.id)));
   return Object.fromEntries(Object.entries(cart).filter(([k, v]) => ids.has(k) && Number(v) > 0)) as Record<string, number>;
 }
 async function cartLines(cart: Record<string, number>) {
@@ -35,14 +35,15 @@ async function cartLines(cart: Record<string, number>) {
 const cartButtons = (cart: Record<string, number>): Kb =>
   Object.keys(cart).length ? [[btn("✅ إكمال الطلب", "checkout"), btn("🗑 تفريغ السلة", "clear")]] : [];
 async function homeView(cart: Record<string, number>): Promise<[string, Kb]> {
-  const cs = await cats();
+  const shown = (await products()).filter((p) => !p.hidden);
+  const cs = (await cats()).map((c) => ({ ...c, n: shown.filter((p) => p.cat_id === c.id).length })).filter((c) => c.n);
   if (!cs.length) return ["لا توجد منتجات حاليا.", [[btn("🔄 تحديث", "home")]]];
   const text = ["<b>🛍 أقسام المتجر</b>", "", "اختر القسم:", ...await cartLines(cart)].join("\n");
   return [text, [...cs.map((c) => [btn(`📂 ${c.name}  (${c.n})`, `cat:${c.id}`)]), ...cartButtons(cart)]];
 }
 async function catView(cid: number, cart: Record<string, number>): Promise<[string, Kb]> {
   const c = await cat(cid);
-  const ps = c ? await products(cid) : [];
+  const ps = c ? (await products(cid)).filter((p) => !p.hidden) : [];
   if (!ps.length) return await homeView(cart);
   const lines = [`<b>📂 ${esc(c!.name)}</b>`, "", ...ps.map((p, i) => `${i + 1}) ${esc(p.name)} — <b>${money(p.price)}</b>`), "", "اضغط على المنتج حتى تضيفه للسلة ➕"];
   const kb: Kb = ps.map((p) => {
@@ -91,7 +92,21 @@ export function firstRoundOnly(name: string | null | undefined) {
   const n = name ?? "";
   return /محاضر|امتحان/.test(n) && !n.includes("دفتر");
 }
-/** يرجع true إذا طلع للطالب التنبيه، وبعده يكمل الطلب من continueOrder */
+/** فصول المحاضرات والامتحانات بالطلب. «الفصل الرابع والخامس» يبقى فصل واحد لأنه ينباع سوية */
+export function chaptersInOrder(items: Row[]) {
+  const labels = items.filter((i) => firstRoundOnly(i.name)).map((i) => chapterLabel(i.name)?.replace("الاول", "الأول"));
+  return [...new Set(labels.filter((l): l is string => !!l))];
+}
+async function askOneChapter(chat: number, uid: number, data: Row, items: Row[]) {
+  if (!WORD_CHECK || data.manyOk || chaptersInOrder(items).length < 2) return false;
+  await setSession(uid, "many", data);
+  await send(chat, ONE_CHAPTER, { kb: [[btn("✅ أكمل الطلب", "manyok")], [btn("✏️ أعدل طلبي", "manyedit")]] });
+  return true;
+}
+/** الرسائل قبل تثبيت الطلب: يرجع true إذا طلعت رسالة، وبعدها يكمل الطلب من continueOrder */
+const orderGates = async (chat: number, uid: number, data: Row, items: Row[]) =>
+  await askOneChapter(chat, uid, data, items) || await askTerm(chat, uid, data, items);
+
 async function askTerm(chat: number, uid: number, data: Row, items: Row[]) {
   if (!WORD_CHECK || data.termOk || !items.some((i) => firstRoundOnly(i.name))) return false;
   await setSession(uid, "term", data);
@@ -211,7 +226,7 @@ export async function onStudentText(chat: number, uid: number, text: string, st:
     await send(chat, "📘 اختر منهجك:", { kb: [CURRS.map((c, i) => btn("📗 " + c, `curr:${i}`))] });
   } else if (st === "store") {
     await send(chat, `اضغط زر «${BTN_OPEN}» اللي جوه الشاشة 👇`, { replyKb: await storeKb(uid) });
-  } else if (["gov", "side", "agree", "curr", "words", "term"].includes(st)) {
+  } else if (["gov", "side", "agree", "curr", "words", "term", "many"].includes(st)) {
     await send(chat, "⚠️ اضغط على الأزرار فوق 👆");
   } else if (st === "area") {
     if (text.length < 2) { await send(chat, "⚠️ اكتب اسم المنطقة."); return; }
@@ -294,7 +309,28 @@ export async function onStudentCb(chat: number, uid: number, mid: number, d: str
     return null;
   }
   if (d === "wok" || d === "wu" || d.startsWith("wp:")) return st === "words" ? await wordsCb(chat, uid, mid, d, data, user) : "انتهت صلاحية هذا الزر";
-  if ((st === "words" || st === "term") && d !== "cancel") return "كمل التنبيه أولا";
+  if (d === "manyok" || d === "manyedit") {
+    if (st !== "many") return "انتهت صلاحية هذا الزر";
+    if (d === "manyok") {
+      await edit(chat, mid, ONE_CHAPTER + "\n\n✅ <b>اخترت تكمل الطلب</b>");
+      data.manyOk = 1;
+      if (!await askTerm(chat, uid, data, (await summary(data)).items)) await continueOrder(chat, uid, data, user);
+      return null;
+    }
+    await edit(chat, mid, ONE_CHAPTER);
+    delete data.orderT;
+    data.cart = await cleanCart(cart);
+    if (STORE_URL) {
+      await setSession(uid, "store", data);
+      await send(chat, `اضغط «${BTN_OPEN}» حتى تعدل طلبك 👇`, { replyKb: await storeKb(uid) });
+    } else {
+      await setSession(uid, "cart", data);
+      const [t, kb] = await homeView(data.cart);
+      await send(chat, t, { kb });
+    }
+    return null;
+  }
+  if (["words", "term", "many"].includes(st) && d !== "cancel") return "كمل التنبيه أولا";
   if (d === "home" || d.startsWith("cat:") || d.startsWith("add:") || d.startsWith("sub:") || d === "clear") {
     if ((data.agreed ?? 0) < AGREE_TIMES) return "اضغط «المتجر» من جديد";
     let viewCat: number | null = null;
@@ -302,7 +338,7 @@ export async function onStudentCb(chat: number, uid: number, mid: number, d: str
     else if (d.startsWith("add:") || d.startsWith("sub:")) {
       const pid = d.slice(4);
       const p = await product(Number(pid));
-      if (p) {
+      if (p && !p.hidden) {
         viewCat = p.cat_id;
         cart[pid] = (cart[pid] ?? 0) + (d.startsWith("add:") ? 1 : -1);
       }
@@ -323,7 +359,7 @@ export async function onStudentCb(chat: number, uid: number, mid: number, d: str
     Object.assign(data, { name: sp.name ?? "", curr: sp.curr ?? "", gov: sp.gov ?? "بغداد", side: sp.side ?? "", area: sp.area ?? "", phone1: sp.phone1 ?? "", phone2: sp.phone2 ?? "" });
     await setSession(uid, "confirm", data);
     await edit(chat, mid, ["<b>🛒 طلبك</b>", ...(await cartLines(cart)).slice(2)].join("\n"));
-    if (await askTerm(chat, uid, data, (await summary(data)).items)) return null;
+    if (await orderGates(chat, uid, data, (await summary(data)).items)) return null;
     await send(chat, (await summary(data)).text, { kb: CONFIRM_KB() });
   } else if (d.startsWith("curr:") && st === "curr") {
     data.curr = CURRS[Number(d.slice(5))];
@@ -350,10 +386,11 @@ export async function onStudentCb(chat: number, uid: number, mid: number, d: str
   } else if (d === "confirm" && st === "confirm") {
     const s = await summary(data);
     if (!s.items.length) return "سلتك فارغة";
-    if (await askTerm(chat, uid, data, s.items)) return null;
+    if (await orderGates(chat, uid, data, s.items)) return null;
     await edit(chat, mid, s.text.slice(0, s.text.lastIndexOf("\n\n")) + "\n\n✅ <b>تم التأكيد</b>");
     await finalize(chat, uid, data, s.items, s.sub, s.fee, user);
   } else if (d === "editcart" && st === "confirm") {
+    delete data.manyOk;
     data.cart = await cleanCart(cart);
     if (STORE_URL) {
       await setSession(uid, "store", data);
@@ -415,7 +452,8 @@ export async function onStoreOrder(chat: number, uid: number, raw: string, user:
   for (const it of Array.isArray(o.i) ? o.i : []) {
     const pid = toInt(it?.[0]), q = toInt(it?.[1]);
     if (pid === null || q === null || q <= 0) continue;
-    if (await product(pid)) cart[String(pid)] = Math.min(q, 50);
+    const p = await product(pid);
+    if (p && !p.hidden) cart[String(pid)] = Math.min(q, 50);
     else missing = true;
   }
   if (!Object.keys(cart).length) errs.push("اختر منتج واحد على الأقل");
@@ -428,7 +466,8 @@ export async function onStoreOrder(chat: number, uid: number, raw: string, user:
   Object.assign(data, { cart, name, curr: cu, gov: g, area, phone1: p1, phone2: p2 });
   if (sd) data.side = sd; else delete data.side;
   data.orderT = o.t ?? -1;
-  if (await askTerm(chat, uid, data, (await summary(data)).items)) return;
+  delete data.manyOk;   // طلب جديد من الصفحة: ينفحص من جديد
+  if (await orderGates(chat, uid, data, (await summary(data)).items)) return;
   await continueOrder(chat, uid, data, user);
 }
 

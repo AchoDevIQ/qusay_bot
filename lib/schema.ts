@@ -5,7 +5,7 @@ type Table = { key: string | string[]; auto?: boolean; cols: Row };
 const nulls = (...names: string[]) => Object.fromEntries(names.map((n) => [n, null]));
 
 export const SCHEMA: Record<string, Table> = {
-  products: { key: "id", auto: true, cols: { ...nulls("name", "price", "cat_id", "mode"), active: 1 } },
+  products: { key: "id", auto: true, cols: { ...nulls("name", "price", "cat_id", "mode"), active: 1, hidden: 0 } },
   cats: { key: "id", auto: true, cols: { name: null, active: 1 } },
   fees: { key: "gov", cols: { fee: null } },
   sessions: { key: "user_id", cols: nulls("state", "data") },

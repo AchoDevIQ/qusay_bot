@@ -73,6 +73,7 @@ async function init() {
   await addColumn("orders", "settle_id", "INTEGER");
   await addColumn("products", "cat_id", "INTEGER");
   await addColumn("products", "mode", "TEXT");
+  await addColumn("products", "hidden", "INTEGER DEFAULT 0");
   await addColumn("bank_exams", "manual", "INTEGER DEFAULT 0");
   await addColumn("bank_versions", "manual", "INTEGER DEFAULT 0");
   await addColumn("bank_versions", "pdf_ar", "TEXT");

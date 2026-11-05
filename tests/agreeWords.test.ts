@@ -24,7 +24,7 @@ globalThis.fetch = (async (url: string, init: any) => {
 }) as typeof fetch;
 
 const { handleUpdate } = await import("../lib/bot.ts");
-const { firstRoundOnly } = await import("../lib/student.ts");
+const { chaptersInOrder, firstRoundOnly } = await import("../lib/student.ts");
 const { REFUND_SENTENCE, TERM_SENTENCE } = await import("../lib/config.ts");
 const { getSession } = await import("../lib/db.ts");
 const { get, run } = await import("../lib/sqliteDriver.ts");
@@ -161,15 +161,86 @@ test("المحاضرات: موافق، بعدها ترتيب، وبعدها ين
   flush();
 });
 
+const orderMany = async (uid: number, pids: number[]) => await webapp(uid, { p1: "07701234567", p2: "07801234567", i: pids.map((p) => [p, 1]), t: 1000 * pids.length + await fee() });
+
+test("منو يحسب فصلين", () => {
+  const n = (...names: string[]) => chaptersInOrder(names.map((name) => ({ name }))).length;
+  assert.equal(n("الفصل الأول - محاضرات فقط", "الفصل الثاني - امتحانات إلكترونية"), 2);
+  assert.equal(n("الفصل الأول - محاضرات فقط", "فقط امتحانات الفصل الاول"), 1);      // نفس الفصل
+  assert.equal(n("الفصل الرابع والخامس - امتحانات حضورية"), 1);                     // ينباعن سوية
+  assert.equal(n("الفصل الأول - محاضرات فقط", "ملزمة الفصل الثاني", "دفتر امتحانات الفصل الثالث"), 1);
+});
+
+test("فصلين برسالة الفصل الواحد: أعدل يرجع للصفحة، وأكمل يكمل للتنبيه", async () => {
+  const a = await addProduct("الفصل الثاني - محاضرات فقط");
+  const b = await addProduct("الفصل الثالث - محاضرات فقط");
+  await openStore(2);
+  const before = await orders(2);
+  flush();
+  await orderMany(2, [a, b]);
+  assert.match(lastSent().p.text, /فصل واحد/);
+  assert.deepEqual(buttons(lastSent()), ["manyok", "manyedit"]);
+  assert.equal(await orders(2), before);
+  flush();
+  await cb(2, "manyedit");
+  assert.equal((await getSession(2)).state, "store");
+  assert.match(lastSent().p.reply_markup.keyboard[0][0].web_app.url, /\/store\?v=/);
+  flush();
+  await orderMany(2, [a, b]);
+  assert.match(lastSent().p.text, /فصل واحد/);
+  flush();
+  await cb(2, "manyok");
+  assert.deepEqual(buttons(lastSent()), ["termok"]);
+  await cb(2, "termok");
+  await solve(2, TERM_SENTENCE);
+  await cb(2, "wok");
+  assert.equal(await orders(2), before + 1);
+  flush();
+});
+
+test("المنتج المخفي ما يطلع بالمتجر ولا ينطلب، والطلب القديم يبقى", async () => {
+  const pid = await addProduct("الفصل الخامس - محاضرات فقط");
+  await openStore(2);
+  const seen = () => {
+    const url = lastSent().p.reply_markup.keyboard[0][0].web_app.url as string;
+    const d = JSON.parse(Buffer.from(new URL(url).searchParams.get("d")!, "base64url").toString("utf8"));
+    return d.c.flatMap((c: any) => c[1].map((p: any) => p[0])) as number[];
+  };
+  assert.ok(seen().includes(pid));
+  flush();
+  await order(2, pid);
+  await cb(2, "termok");
+  await solve(2, TERM_SENTENCE);
+  await cb(2, "wok");
+  const count = await orders(2);
+
+  await run("UPDATE products SET hidden=1 WHERE id=?", pid);
+  await openStore(2);
+  assert.ok(!seen().includes(pid));
+  flush();
+  await order(2, pid);                                  // صفحة قديمة بعدها مفتوحة
+  assert.match(sent().at(-1)!.p.text, /تغيرت أو انحذفت/);
+  assert.equal(await orders(2), count);
+  assert.equal((await get("SELECT COUNT(*) n FROM orders WHERE user_id=2 AND items LIKE '%الفصل الخامس%'"))!.n, 1);
+
+  await run("UPDATE products SET hidden=0 WHERE id=?", pid);
+  flush();
+  await openStore(2);
+  assert.ok(seen().includes(pid));
+  await run("UPDATE products SET hidden=1 WHERE id=?", pid);
+  flush();
+});
+
 test("الامتحانات يطلع لها التنبيه، وبإلغاء التنبيه ما ينحفظ طلب", async () => {
   const pid = await addProduct("الفصل الأول - امتحانات إلكترونية");
   await openStore(2);
+  const before = await orders(2);
   flush();
   await order(2, pid);
   assert.deepEqual(buttons(lastSent()), ["termok"]);
   await cb(2, "termok");
   await cb(2, "cancel");
-  assert.equal(await orders(2), 2);
+  assert.equal(await orders(2), before);
   assert.equal((await getSession(2)).state, "");
   flush();
 });

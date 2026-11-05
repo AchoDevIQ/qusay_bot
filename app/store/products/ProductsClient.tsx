@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
-type Product = { id: number; name: string; price: number; mode: string };
+type Product = { id: number; name: string; price: number; mode: string; hidden: boolean };
 type Cat = { id: number; name: string; products: Product[] };
 type Data = { cats: Cat[]; catId?: number; added?: string[]; bad?: string[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -58,13 +58,20 @@ function CatCard({ cat, cats, busy, call }: { cat: Cat; cats: Cat[]; busy: boole
       <h2>📂 {cat.name}</h2>
       {cat.products.length ? (
         <table className="extable"><tbody>
-          <tr><th>المنتج</th><th className="p">السعر</th></tr>
+          <tr><th>المنتج</th><th className="p">السعر</th><th className="p">بالمتجر</th></tr>
           {cat.products.map((p) => (
             <ProductRows key={p.id} p={p} cats={cats} catId={cat.id} open={open === p.id} toggle={() => setOpen(open === p.id ? null : p.id)} close={() => setOpen(null)} busy={busy} call={call} />
           ))}
         </tbody></table>
       ) : <div className="empty">هذا القسم فارغ، والطالب ما يشوفه لحد ما تضيف بي منتج.</div>}
       <div className="expad">
+        {!!cat.products.length && (
+          <div className="exline pdhideall">
+            <button type="button" className="exbtn" disabled={busy || cat.products.every((p) => !p.hidden)} onClick={() => void call({ action: "hideCat", id: cat.id, hidden: false })}>👁 إظهار الكل</button>
+            <button type="button" className="exbtn" disabled={busy || cat.products.every((p) => p.hidden)} onClick={() => void call({ action: "hideCat", id: cat.id, hidden: true })}>🙈 إخفاء الكل</button>
+          </div>
+        )}
+        <div className="exhint">المنتج المخفي ما يطلع بالمتجر. مو حذف، واللي اشتراه قبل تبقى مشترياته عنده.</div>
         <AddProduct catId={cat.id} busy={busy} call={call} />
         <div className="exfoot">
           <div className="exadd">
@@ -81,11 +88,12 @@ function CatCard({ cat, cats, busy, call }: { cat: Cat; cats: Cat[]; busy: boole
 function ProductRows({ p, cats, catId, open, toggle, close, busy, call }: { p: Product; cats: Cat[]; catId: number; open: boolean; toggle: () => void; close: () => void; busy: boolean; call: Call }) {
   return (
     <>
-      <tr className={"exrow" + (open ? " sel" : "")} onClick={toggle}>
+      <tr className={"exrow" + (open ? " sel" : "") + (p.hidden ? " pdhidden" : "")} onClick={toggle}>
         <td><b>{p.name}</b><small className="pdmode">{modeLabel(p.mode)}</small></td>
         <td className="p">{fmt(p.price)}</td>
+        <td className="p"><button type="button" className="exbtn pdeye" disabled={busy} onClick={(e) => { e.stopPropagation(); void call({ action: "hide", id: p.id, hidden: !p.hidden }); }}>{p.hidden ? "🙈 مخفي" : "👁 ظاهر"}</button></td>
       </tr>
-      {open && <tr><td colSpan={2} className="expanel"><EditProduct key={`${p.name}|${p.price}|${p.mode}|${catId}`} p={p} cats={cats} catId={catId} close={close} busy={busy} call={call} /></td></tr>}
+      {open && <tr><td colSpan={3} className="expanel"><EditProduct key={`${p.name}|${p.price}|${p.mode}|${catId}`} p={p} cats={cats} catId={catId} close={close} busy={busy} call={call} /></td></tr>}
     </>
   );
 }

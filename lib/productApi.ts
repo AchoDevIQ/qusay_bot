@@ -62,7 +62,7 @@ async function productList() {
   const products = await find("products", { active: 1 }, { order: ["id"] });
   return (await allCats()).map((c) => ({
     id: c.id, name: c.name,
-    products: products.filter((p) => p.cat_id === c.id).map((p) => ({ id: p.id, name: p.name, price: p.price, mode: p.mode || "both" })),
+    products: products.filter((p) => p.cat_id === c.id).map((p) => ({ id: p.id, name: p.name, price: p.price, mode: p.mode || "both", hidden: !!p.hidden })),
   }));
 }
 
@@ -100,6 +100,13 @@ export async function productAction(body: Row) {
   } else if (a === "del") {
     need(await one("products", { id, active: 1 }), "المنتج غير موجود");
     await update("products", { id }, { active: 0 });
+  } else if (a === "hide") {
+    // الإخفاء من المتجر فقط: اللي اشترى قبل تبقى مشترياته وطلباته مثل ما هي
+    need(await one("products", { id, active: 1 }), "المنتج غير موجود");
+    await update("products", { id }, { hidden: body.hidden ? 1 : 0 });
+  } else if (a === "hideCat") {
+    await liveCat(id);
+    await update("products", { cat_id: id }, { hidden: body.hidden ? 1 : 0 });
   } else if (a === "bulk") {
     need(String(body.text ?? "").trim(), "اكتب المنتجات");
     extra = await bulkAdd(String(body.text));
