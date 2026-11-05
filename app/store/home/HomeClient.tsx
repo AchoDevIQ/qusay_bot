@@ -52,7 +52,7 @@ export default function HomeClient() {
     { key: "myq", title: "أسئلتي" },
     { key: "me", title: "معلوماتي" },
     ...(data?.exams ? [{ key: "exams", title: "امتحاناتي" }] : []),
-    { key: "pass", title: "طلب كلمة مرور جديدة" },
+    // مربع «طلب كلمة مرور جديدة» (key: "pass") مخفي لحد ما نربط التطبيق، بطلب المستخدم
   ] as { key: string; title: string; note?: string; main?: boolean }[];
 
   return (

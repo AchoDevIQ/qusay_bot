@@ -24,9 +24,10 @@ async function homeData(uid: number) {
   }
   if (await can(uid, EXAM_PERM)) people.push({ page: "exams", icon: "📝", title: "الامتحانات" });
   if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` }, { page: "centers", icon: "🏫", title: "المراكز الامتحانية" });
+  // الطلاب ما يگدرون يطلبون هسه، فالمربع يطلع بس إذا بقى طلب قديم. يرجع مع ربط التطبيق
   if (await can(uid, "students")) {
     const n = await passRequestsCount();
-    people.push({ page: "passwords", icon: "🔑", title: "طلبات كلمة المرور", note: n ? `${n} طلب` : "ماكو طلبات", hot: n > 0 });
+    if (n) people.push({ page: "passwords", icon: "🔑", title: "طلبات كلمة المرور", note: `${n} طلب`, hot: true });
   }
   if (await can(uid, "q")) {
     const n = await count("questions", { status: "open" });
