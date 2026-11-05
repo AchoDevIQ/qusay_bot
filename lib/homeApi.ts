@@ -6,7 +6,7 @@ import { BTN_ME } from "./config.ts";
 import { hasExamMenu, student } from "./data.ts";
 import { sendProfileCard } from "./documents.ts";
 import { examsMenu } from "./exams.ts";
-import { homeLink, mainKb, regLink, storeLink } from "./keyboards.ts";
+import { adminPageLink, homeLink, mainKb, regLink, storeLink } from "./keyboards.ts";
 import { issuePassword } from "./password.ts";
 import { askStart, myQuestions } from "./questions.ts";
 import { onStoreOrder, saveStudent, showMe, studentFromForm } from "./student.ts";
@@ -97,6 +97,10 @@ export async function homeAction(body: Row) {
   if (!await student(id)) {
     await setSession(id, "r:form", { next: a === "ask" ? "ask" : null, edit: false });
     return { url: await regLink(id) };
+  }
+  if (a === "exams" && await one("exam_access", { user_id: id })) {
+    await logActivity(id, "📝 فتح امتحاناتي");
+    return { url: adminPageLink("myexams", id) };
   }
   if (a === "ask") {
     await setSession(id, "", {});

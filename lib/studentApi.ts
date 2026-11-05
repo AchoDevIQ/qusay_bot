@@ -8,7 +8,8 @@ import { deliverPassword } from "./password.ts";
 import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
-import { authed, need } from "./webApi.ts";
+import { resetSchedule, setPerDay, studentSchedule } from "./schedApi.ts";
+import { authed, intOf, need } from "./webApi.ts";
 
 export const STUDENTS_PERM = "students";
 const RECENT = 100;
@@ -79,6 +80,8 @@ export async function studentAction(body: Row) {
     await remove("pass_requests", { user_id: id });
     await remove("exam_access", { user_id: id });   // إذا رجع يسجل، يبدي مثل طالب جديد
     await remove("guardians", { student_id: id });
+    await remove("schedules", { user_id: id });
+    await remove("sched_items", { user_id: id });
     await logActivity(id, "🗑 انحذف تسجيله من الإدارة");
     await setSession(id, "", {});
     notice = "🗑 انحذف تسجيله. لمن يفتح البوت يسجل من جديد، وطلباته القديمة باقية";
@@ -100,6 +103,15 @@ export async function studentAction(body: Row) {
   } else if (a === "log") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, log: { id, rows: await activityOf(id) } };
+  } else if (a === "sched") {
+    need(await one("students", { user_id: id }), "الطالب غير موجود");
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, sched: { id, ...await studentSchedule(id) } };
+  } else if (a === "schedReset") {
+    await resetSchedule(id);
+    notice = "✅ انفتح جدوله، والطالب يرتبه من جديد";
+  } else if (a === "perDay") {
+    await setPerDay(id, intOf(body.value, 0, 10, "اكتب رقم من 0 إلى 10"));
+    notice = "✅ انحفظ حد الامتحانات باليوم لهذا الطالب";
   } else if (a === "unlink") {
     await remove("guardians", { student_id: id });
     await logActivity(id, "👨‍👧 الإدارة فكت ربط ولي الأمر");

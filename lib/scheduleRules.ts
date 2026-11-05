@@ -1,0 +1,79 @@
+// حساب جدول الامتحانات: بدون قاعدة بيانات حتى ينفحص لوحده. الأيام: 0 = الاثنين، مثل DAYS بالإعدادات
+export type SchedSettings = { window: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[] };
+export const DEFAULT_SETTINGS: SchedSettings = { window: 15, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, blockedHours: [], excluded: [] };
+export type PlanExam = { id: number; minutes: number };
+export type PlanItem = { examId: number; at: string };
+export type Plan = { ok: true; items: PlanItem[]; days: number; maxPerDay: number; perWeek: number } | { ok: false; error: string; minWeekdays?: number };
+
+const DAY_MS = 86400000;
+const parse = (d: string) => new Date(d + "T00:00:00Z");
+const fmt = (d: Date) => d.toISOString().slice(0, 10);
+export const addDays = (d: string, n: number) => fmt(new Date(parse(d).getTime() + n * DAY_MS));
+export const validDay = (d: unknown): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && fmt(parse(d)) === d;
+export const weekdayOf = (d: string) => (parse(d).getUTCDay() + 6) % 7;
+const p2 = (n: number) => String(n).padStart(2, "0");
+
+export function inHoliday(day: string, s: SchedSettings) {
+  if (!s.holidayStart || s.holidayDays <= 0) return false;
+  return day >= s.holidayStart && day < addDays(s.holidayStart, s.holidayDays);
+}
+/** الأيام اللي يصير بيها امتحان ضمن المدة */
+export function availableDays(start: string, end: string, weekdays: number[], s: SchedSettings) {
+  const out: string[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) if (weekdays.includes(weekdayOf(d)) && !inHoliday(d, s) && !s.excluded.includes(d)) out.push(d);
+  return out;
+}
+/** أقل عدد أيام بالأسبوع يكفي لهالعدد من الامتحانات */
+function neededWeekdays(n: number, start: string, end: string, s: SchedSettings, perDay: number) {
+  for (let k = 1; k <= 7; k++) {
+    // أكثر الأيام توفراً هو أحسن اختيار ممكن لـ k يوم بالأسبوع
+    const counts = [0, 1, 2, 3, 4, 5, 6].map((w) => availableDays(start, end, [w], s).length).sort((a, b) => b - a);
+    if (counts.slice(0, k).reduce((t, c) => t + c, 0) * perDay >= n) return k;
+  }
+  return null;
+}
+/** يوزع الامتحانات بالتساوي على الأيام المتاحة. الامتحان الثاني بنفس اليوم يبدي بعد نهاية اللي قبله */
+export function buildPlan(exams: PlanExam[], o: { start: string; end: string; weekdays: number[]; hour: number; perDay: number; settings: SchedSettings }): Plan {
+  const { start, end, weekdays, hour, perDay, settings: s } = o;
+  if (!exams.length) return { ok: false, error: "ماكو امتحانات تنحسب بالجدول." };
+  if (end < start) return { ok: false, error: "تاريخ النهاية لازم يكون بعد البداية." };
+  if (!weekdays.length) return { ok: false, error: "اختار أيام الامتحان." };
+  if (s.blockedHours.includes(hour)) return { ok: false, error: "هذي الساعة موقوفة من الإدارة، اختار غيرها." };
+  const days = availableDays(start, end, weekdays, s);
+  const n = exams.length;
+  if (days.length * perDay < n) {
+    const k = neededWeekdays(n, start, end, s, perDay);
+    if (k === null) return { ok: false, error: `عندك ${n} امتحان، والمدة ما تكفي حتى لو اخترت كل الأيام. مدد تاريخ النهاية.` };
+    return { ok: false, minWeekdays: k, error: `عندك ${n} امتحان، وهالأيام تكفي لـ ${days.length * perDay} بس. اختار ${k} أيام بالأسبوع على الأقل، أو مدد تاريخ النهاية.` };
+  }
+  const perDayIdx = new Map<number, PlanExam[]>();
+  exams.forEach((e, i) => {
+    const di = Math.floor((i * days.length) / n);
+    perDayIdx.set(di, [...(perDayIdx.get(di) ?? []), e]);
+  });
+  const items: PlanItem[] = [];
+  let maxPerDay = 0;
+  for (const [di, list] of [...perDayIdx].sort((a, b) => a[0] - b[0])) {
+    maxPerDay = Math.max(maxPerDay, list.length);
+    let minute = hour * 60;
+    for (const e of list) {
+      while (s.blockedHours.includes(Math.floor(minute / 60))) minute = (Math.floor(minute / 60) + 1) * 60;
+      if (minute >= 24 * 60) return { ok: false, error: "الامتحانات ما تلحك بنفس اليوم. اختار ساعة أبكر." };
+      items.push({ examId: e.id, at: `${days[di]} ${p2(Math.floor(minute / 60))}:${p2(minute % 60)}` });
+      minute += e.minutes + s.gap;
+    }
+  }
+  const weeks = Math.max(1, Math.ceil((parse(end).getTime() - parse(start).getTime() + DAY_MS) / (7 * DAY_MS)));
+  return { ok: true, items, days: days.length, maxPerDay, perWeek: Math.ceil(n / weeks) };
+}
+/** وقت بعد الدقايق، بنفس صيغة at */
+export function addMinutes(at: string, m: number) {
+  const d = new Date(at.replace(" ", "T") + ":00Z");
+  return new Date(d.getTime() + m * 60000).toISOString().slice(0, 16).replace("T", " ");
+}
+export type ItemState = "locked" | "open" | "missed" | "done";
+export function itemState(status: string, at: string, window: number, now: string): ItemState {
+  if (status === "done") return "done";
+  if (now < at) return "locked";
+  return now < addMinutes(at, window) ? "open" : "missed";
+}

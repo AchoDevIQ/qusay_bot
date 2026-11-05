@@ -67,6 +67,8 @@ async function init() {
     CREATE TABLE IF NOT EXISTS bank_edits(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS exam_access(user_id INTEGER, chapter TEXT, order_id INTEGER, created TEXT, PRIMARY KEY(user_id, chapter));
     CREATE TABLE IF NOT EXISTS order_codes(code TEXT PRIMARY KEY, order_id INTEGER UNIQUE, chapters TEXT, used_at TEXT);
+    CREATE TABLE IF NOT EXISTS schedules(user_id INTEGER PRIMARY KEY, start_day TEXT, end_day TEXT, weekdays TEXT, hour INTEGER, created TEXT);
+    CREATE TABLE IF NOT EXISTS sched_items(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, exam_id INTEGER, at TEXT, status TEXT);
     CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS guardians(guardian_id INTEGER, student_id INTEGER, created TEXT, PRIMARY KEY(guardian_id, student_id));
     CREATE TABLE IF NOT EXISTS company_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, from_id INTEGER, to_id INTEGER, n INTEGER, gross INTEGER, fees INTEGER, net INTEGER, created TEXT);

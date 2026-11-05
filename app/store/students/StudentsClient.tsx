@@ -6,7 +6,7 @@ import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; guardian: boolean; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
-type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] } };
+type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; items: { id: number; title: string; at: string; state: string }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -121,8 +121,10 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
       <div className="exhint">مسجل من: {s.created}{s.username ? ` · @${s.username}` : ""}</div>
       <div className="exline">
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "log", id: s.id })}>📜 عمليات الطالب</button>
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "sched", id: s.id })}>🗓 جدوله</button>
         {s.guardian ? <Confirm label="👨‍👧 مربوط بولي أمر: فك الربط" disabled={busy} onYes={() => void call({ action: "unlink", id: s.id })} /> : <span className="exhint">ولي الأمر غير مربوط</span>}
       </div>
+      {data.sched?.id === s.id && <SchedPanel key={data.sched.perDay} sched={data.sched} id={s.id} busy={busy} call={call} />}
       {data.log?.id === s.id && (
         <div className="adlog">
           {data.log.rows.length ? data.log.rows.map((r, i) => <div key={i} className="adsale">{r.what}<small>{r.created}</small></div>) : <div className="exhint">ما أكو عمليات مسجلة بعد.</div>}
@@ -167,6 +169,21 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
         <Confirm label="🔑 دز له كلمة مرور جديدة" disabled={busy} onYes={() => void call({ action: "pass", id: s.id })} />
         <Confirm label="🗑 حذف تسجيله" disabled={busy} onYes={() => void call({ action: "del", id: s.id })} />
       </div>
+    </div>
+  );
+}
+
+const SCHED_STATE: Record<string, string> = { locked: "🔒 ينتظر", open: "🟢 بدا", missed: "⛔ فات", done: "✅ مخلص" };
+function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"]>; id: number; busy: boolean; call: Call }) {
+  const [n, setN] = useState(String(sched.perDay));
+  return (
+    <div className="adlog">
+      {sched.items.length ? sched.items.map((i) => <div key={i.id} className="adsale">{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small></div>) : <div className="exhint">ما رتب جدوله بعد.</div>}
+      <div className="exadd">
+        <input className="exnum" inputMode="numeric" aria-label="حد الامتحانات باليوم لهذا الطالب" value={n} onChange={(e) => setN(e.target.value)} />
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "perDay", id, value: n })}>حفظ حده باليوم (0 = العام: {sched.general})</button>
+      </div>
+      {!!sched.items.length && <Confirm label="🗓 خليه يرتب جدوله من جديد" disabled={busy} onYes={() => void call({ action: "schedReset", id })} />}
     </div>
   );
 }
