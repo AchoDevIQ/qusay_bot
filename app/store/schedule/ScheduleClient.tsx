@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 
-type Data = { window: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; schedules: number; notice: string };
+type Data = { window: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; groups: { id: number; name: string; hour: number }[]; schedules: number; notice: string };
 
 export default function ScheduleClient() {
   const { data, error, busy, call } = useAdminApi<Data>("/api/schedule", "🗓 جدول الامتحانات");
@@ -13,7 +13,8 @@ export default function ScheduleClient() {
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
-        {data && <Form key={JSON.stringify(data)} d={data} busy={busy} save={(b) => void call({ action: "save", ...b })} />}
+        {data && <Groups d={data} busy={busy} call={(b) => void call(b)} />}
+        {data && <Form key={JSON.stringify({ ...data, groups: 0, notice: 0 })} d={data} busy={busy} save={(b) => void call({ action: "save", ...b })} />}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
@@ -52,6 +53,29 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         </div>
         <div className="exhint">⚠️ إذا غيرت العطلة أو الأيام المستثناة، جداول الطلاب تنعاد من باجر، وكل طالب يوصله الخبر.</div>
         <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, perDay, gap, holidayStart, holidayDays, excluded, blockedHours: blocked })}>حفظ</button>
+      </div>
+    </div>
+  );
+}
+
+function Groups({ d, busy, call }: { d: Data; busy: boolean; call: (b: Record<string, unknown>) => void }) {
+  const [hour, setHour] = useState("20");
+  const [name, setName] = useState("");
+  return (
+    <div className="card">
+      <h2>👥 مجاميع الامتحان الإلكتروني: {d.groups.length}</h2>
+      <div className="form">
+        <div className="exhint">كل مجموعة إلها ساعة، والطالب يختار وحدة منها. وبكل امتحان تحدد نسخة كل مجموعة من صفحة الامتحانات.</div>
+        {d.groups.map((g) => (
+          <div className="adsplit adsale" key={g.id}><span>{g.name} · {String(g.hour).padStart(2, "0")}:00</span><button type="button" className="exbtn" disabled={busy} onClick={() => call({ action: "delGroup", id: g.id })}>🗑 حذف</button></div>
+        ))}
+        <div className="exadd adtop">
+          <select className="exnum" aria-label="ساعة المجموعة" value={hour} onChange={(e) => setHour(e.target.value)}>
+            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+          </select>
+          <input placeholder="اسمها (اختياري)" value={name} onChange={(e) => setName(e.target.value)} />
+          <button type="button" className="exbtn" disabled={busy} onClick={() => { call({ action: "addGroup", hour, name }); setName(""); }}>➕ إضافة</button>
+        </div>
       </div>
     </div>
   );

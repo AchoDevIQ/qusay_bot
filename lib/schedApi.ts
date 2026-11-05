@@ -4,7 +4,7 @@ import { logActivity } from "./access.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
 import { student } from "./data.ts";
 import { send } from "./telegram.ts";
-import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, validDay, type PlanExam, type SchedSettings } from "./scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, labelChapters, validDay, type ExamGroup, type PlanExam, type SchedSettings } from "./scheduleRules.ts";
 import { stamp, todayStr } from "./util.ts";
 import { authed, ensure, intOf, need } from "./webApi.ts";
 import { verifyHomeToken } from "./webAuth.ts";
@@ -13,16 +13,27 @@ export const SCHED_PERM = "schedule";
 export async function schedSettings(): Promise<SchedSettings> {
   try { return { ...DEFAULT_SETTINGS, ...JSON.parse(await kvGet("sched_settings") || "{}") }; } catch { return DEFAULT_SETTINGS; }
 }
+export async function examGroups(): Promise<ExamGroup[]> {
+  try { return JSON.parse(await kvGet("exam_groups") || "[]"); } catch { return []; }
+}
+/** إذا أكو مجاميع، الطالب يختار ساعة مجموعة منها، وهي تحدد نسخته */
+const allowedHours = async (s: SchedSettings) => {
+  const groups = await examGroups();
+  const base = groups.length ? groups.map((g) => g.hour) : Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= 6);
+  return [...new Set(base)].filter((h) => !s.blockedHours.includes(h)).sort((a, b) => a - b);
+};
 /** حد الامتحانات باليوم: الخاص بالطالب إذا موجود، وإلا العام */
 export async function perDayFor(uid: number, s: SchedSettings) { return Number(await kvGet(`sched_perday_${uid}`)) || s.perDay; }
 
 /** الامتحانات الإجبارية الجاهزة من الفصول اللي اشتراها، بترتيبها */
 async function boughtExams(uid: number) {
   const chapters = (await find("exam_access", { user_id: uid }, { order: ["created", "chapter"] })).map((r) => r.chapter as string);
-  const ready = new Set((await find("bank_versions", { kind: "mandatory", ok: 1 })).map((v) => v.exam_id));
+  // الامتحان اللي كل نسخه اختيارية ما يدخل الجدول. اللي نسخه لسه ما انضافت يدخل بمكانه
+  const versions = await find("bank_versions");
+  const skip = (examId: number) => { const vs = versions.filter((v) => v.exam_id === examId); return vs.length > 0 && vs.every((v) => v.kind !== "mandatory"); };
   const out: Row[] = [];
-  for (const ch of chapters) {
-    const list = (await find("bank_exams", { chapter: ch })).filter((e) => ready.has(e.id)).sort((a, b) => (a.pos ?? a.ord) - (b.pos ?? b.ord) || a.id - b.id);
+  for (const ch of chapters.flatMap(labelChapters)) {
+    const list = (await find("bank_exams", { chapter: ch })).filter((e) => !skip(e.id)).sort((a, b) => (a.pos ?? a.ord) - (b.pos ?? b.ord) || a.id - b.id);
     out.push(...list);
   }
   return out;
@@ -62,7 +73,7 @@ async function studentInfo(uid: number) {
     inPerson: st?.exam === "حضوري", name: st?.name ?? "", remaining: left.length, needsBuild: left.some((e) => !planned.has(e.id)),
     schedule: sched ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour } : null,
     items: await itemsView(uid, s), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
-    week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= 6 && !s.blockedHours.includes(h)),
+    week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: await allowedHours(s),
     holiday: s.holidayStart && s.holidayDays ? { start: s.holidayStart, days: s.holidayDays } : null,
   };
 }
@@ -77,6 +88,7 @@ async function planFor(uid: number, body: Row) {
   const s = await schedSettings();
   await closeMissed(uid, s);
   const f = formOf(body, addDays(todayStr(), 1));
+  need((await allowedHours(s)).includes(f.hour), "هذي الساعة مو من أوقات الامتحانات، اختار غيرها");
   const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
   return { f, left, plan: buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: s }) };
 }
@@ -162,8 +174,16 @@ export async function schedAdminAction(body: Row) {
       const r = await rebuildAll(next);
       notice += `. انعاد جدول ${r.moved} طالب${r.stuck ? `، و${r.stuck} لازم يرتبون جدولهم` : ""}`;
     }
+  } else if (a === "addGroup") {
+    const hour = intOf(body.hour, 0, 23, "اختار ساعة المجموعة");
+    const groups = await examGroups();
+    need(!groups.some((g) => g.hour === hour), "أكو مجموعة بهذي الساعة");
+    const name = String(body.name ?? "").trim().slice(0, 40) || `مجموعة ${String(hour).padStart(2, "0")}:00`;
+    await kvSet("exam_groups", JSON.stringify([...groups, { id: Math.max(0, ...groups.map((g) => g.id)) + 1, name, hour }].sort((x, y) => x.hour - y.hour)));
+  } else if (a === "delGroup") {
+    await kvSet("exam_groups", JSON.stringify((await examGroups()).filter((g) => g.id !== Number(body.id))));
   } else need(a === "list", "أمر غير معروف");
-  return { ...await schedSettings(), schedules: (await find("schedules")).length, notice };
+  return { ...await schedSettings(), groups: await examGroups(), schedules: (await find("schedules")).length, notice };
 }
 /** جدول طالب واحد بصفحة الطلاب */
 export async function studentSchedule(uid: number) {

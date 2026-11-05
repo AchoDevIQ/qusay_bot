@@ -77,3 +77,23 @@ export function itemState(status: string, at: string, window: number, now: strin
   if (now < at) return "locked";
   return now < addMinutes(at, window) ? "open" : "missed";
 }
+
+// ---------- أي نسخة ياخذ الطالب
+export type ExamGroup = { id: number; name: string; hour: number };
+type V = { id: number; kind: string; ok: unknown };
+/** الإجباري: صاحب البوت يحدد نسخة لكل مجموعة بكل امتحان. إذا ما حدد، أول نسخة جاهزة */
+export function pickMandatory(versions: V[], assigned: Record<string, number>, groupId: number | null) {
+  const ready = versions.filter((v) => v.kind === "mandatory" && v.ok);
+  const wanted = groupId === null ? undefined : assigned[String(groupId)];
+  return ready.find((v) => v.id === wanted)?.id ?? ready[0]?.id ?? null;
+}
+/** الاختياري: نسخة وحدة تنفتح هي، وأكثر من وحدة عشوائي لكل طالب */
+export function pickOptional(versions: V[], random = Math.random) {
+  const ready = versions.filter((v) => v.kind === "optional" && v.ok);
+  return ready.length ? ready[Math.floor(random() * ready.length)].id : null;
+}
+/** الفصول اللي يفتحها المنتج: «الفصل الرابع والخامس» ينباعون سوية */
+export function labelChapters(label: string) {
+  const m = /^الفصل (\S+) و(\S+)$/.exec(label);
+  return m ? [`الفصل ${m[1]}`, `الفصل ${m[2]}`] : [label];
+}

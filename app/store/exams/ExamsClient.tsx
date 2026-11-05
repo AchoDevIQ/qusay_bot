@@ -5,9 +5,10 @@ import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
-type Exam = { id: number; ord: number; title: string; info: string; minutes: number; versions: Version[] };
+type Exam = { id: number; ord: number; title: string; info: string; minutes: number; groupVersions: Record<string, number>; versions: Version[] };
+type Group = { id: number; name: string; hour: number };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
-type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string };
+type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; groups: Group[]; bookMissing: boolean };
 
 const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info)?.[0] ?? "";
 const fmtTime = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -29,6 +30,13 @@ export default function ExamsClient() {
       <div className="wrap">
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
+        {data?.bookMissing && (
+          <div className="card expad adform">
+            <div className="exlabel">📥 جدول الكتاب</div>
+            <div className="exhint">يدخل عناوين امتحانات الفصل الثاني والثالث والرابع والخامس بترتيبها. الملفات والنسخ تنضاف بعدين. اللي تحذفه بعدها ما يرجع.</div>
+            <button type="button" className="btn agbtn" disabled={busy} onClick={() => void call({ action: "loadBook" })}>📥 أدخل جدول الكتاب</button>
+          </div>
+        )}
         {data && data.chapters.length > 1 && (
           <div className="chips">{data.chapters.map((c, i) => <button type="button" key={c.slug} className={i === openChapter ? "on" : ""} onClick={() => { setOpenChapter(i); setOpenExam(null); }}>{c.chapter}</button>)}</div>
         )}
@@ -52,17 +60,65 @@ export default function ExamsClient() {
                       <td className="p">{e.versions.length}</td><td className="p">{fmtTime(e.minutes)}{e.minutes !== data!.generalMinutes ? <small className="exown"> خاص</small> : null}</td>
                     </tr>
                   }>
-                    <ExamPanel key={e.id + ":" + e.versions.map((v) => v.questions.map((q) => q.max).join()).join("|")} exam={e} busy={busy} call={call} fileUrl={fileUrl} openVersion={openVersion} setOpenVersion={(v) => { setOpenVersion(v); setOpenQ(null); }} openQ={openQ} setOpenQ={setOpenQ} />
+                    <ExamPanel key={e.id + ":" + e.versions.map((v) => v.questions.map((q) => q.max).join()).join("|")} exam={e} groups={data!.groups} busy={busy} call={call} fileUrl={fileUrl} openVersion={openVersion} setOpenVersion={(v) => { setOpenVersion(v); setOpenQ(null); }} openQ={openQ} setOpenQ={setOpenQ} />
                   </ExamRows>
                 );
               })}
             </tbody></table>
             <AddExam slug={ch.slug} generalMinutes={data!.generalMinutes} busy={busy} call={call} />
+            <ChapterTools key={ch.slug + ch.chapter} ch={ch} busy={busy} call={call} onGone={() => setOpenChapter(0)} />
           </div>
         )}
+        {data && <AddChapter busy={busy} call={call} />}
       </div>
       {busy && <div className="bar"><div className="in"><div className="sum"><small>جاري الحفظ...</small></div></div></div>}
     </>
+  );
+}
+
+function ChapterTools({ ch, busy, call, onGone }: { ch: Chapter; busy: boolean; call: Call; onGone: () => void }) {
+  const [name, setName] = useState(ch.chapter);
+  return (
+    <div className="expad exfoot">
+      <div className="exadd">
+        <input aria-label="اسم الفصل" value={name} onChange={(e) => setName(e.target.value)} />
+        <button type="button" className="exbtn" disabled={busy || !name.trim() || name.trim() === ch.chapter} onClick={() => call({ action: "renameChapter", slug: ch.slug, chapter: name })}>حفظ اسم الفصل</button>
+      </div>
+      <div className="exhint">خلي الاسم مثل «الفصل السادس»، لأن البوت يربط الفصل بالمنتج من هذا الاسم.</div>
+      <Confirm label={`🗑 حذف الفصل كله (${ch.exams.length} امتحان)`} disabled={busy} onYes={() => { void call({ action: "delChapter", slug: ch.slug }); onGone(); }} />
+    </div>
+  );
+}
+
+function AddChapter({ busy, call }: { busy: boolean; call: Call }) {
+  const [chapter, setChapter] = useState("");
+  const [title, setTitle] = useState("");
+  return (
+    <div className="card expad adform">
+      <div className="exlabel">➕ فصل جديد</div>
+      <input placeholder="اسم الفصل، مثل: الفصل السادس" value={chapter} onChange={(e) => setChapter(e.target.value)} />
+      <input placeholder="عنوان أول امتحان بالفصل" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <button type="button" className="exbtn" disabled={busy || !chapter.trim() || !title.trim()} onClick={async () => { if (await call({ action: "addChapter", chapter, title })) { setChapter(""); setTitle(""); } }}>➕ إضافة الفصل</button>
+    </div>
+  );
+}
+
+function GroupVersions({ exam, groups, busy, call }: { exam: Exam; groups: Group[]; busy: boolean; call: Call }) {
+  const list = exam.versions.filter((v) => v.kind === "mandatory" && v.ok);
+  if (!groups.length) return <div className="exhint">حتى تحدد نسخة لكل مجموعة، ضيف المجاميع من مربع 🗓 جدول الامتحانات.</div>;
+  return (
+    <div className="exfoot">
+      <div className="exlabel">👥 نسخة كل مجموعة بهذا الامتحان</div>
+      {groups.map((g) => (
+        <div className="exline" key={g.id}>
+          <span>{g.name}</span>
+          <select className="exnum" aria-label={g.name} disabled={busy} value={exam.groupVersions[String(g.id)] ?? 0} onChange={(e) => call({ action: "groupVersion", id: exam.id, group: g.id, version: Number(e.target.value) })}>
+            <option value={0}>أول نسخة جاهزة</option>
+            {list.map((v) => <option key={v.id} value={v.id}>نسخة {v.model}</option>)}
+          </select>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -111,12 +167,14 @@ function FileButton({ label, accept, multiple, onFiles, disabled }: { label: str
 }
 
 type Call = (b: Record<string, unknown> | FormData) => Promise<unknown>;
-function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, openQ, setOpenQ }: {
-  exam: Exam; busy: boolean; call: Call; fileUrl: (r: string) => string;
+function ExamPanel({ exam, groups, busy, call, fileUrl, openVersion, setOpenVersion, openQ, setOpenQ }: {
+  exam: Exam; groups: Group[]; busy: boolean; call: Call; fileUrl: (r: string) => string;
   openVersion: number | null; setOpenVersion: (v: number | null) => void; openQ: number | null; setOpenQ: (q: number | null) => void;
 }) {
   const [minutes, setMinutes] = useState(String(exam.minutes));
   useEffect(() => setMinutes(String(exam.minutes)), [exam.minutes]);
+  const [title, setTitle] = useState(exam.title);
+  useEffect(() => setTitle(exam.title), [exam.title]);
   const version = exam.versions.find((v) => v.id === openVersion);
   return (
     <div>
@@ -126,7 +184,12 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
         <input className="exnum" inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
         <button type="button" className="exbtn" disabled={busy || minutes === String(exam.minutes)} onClick={() => call({ action: "minutes", id: exam.id, value: minutes })}>حفظ</button>
       </div>
+      <div className="exadd">
+        <input aria-label="عنوان الامتحان" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <button type="button" className="exbtn" disabled={busy || !title.trim() || title.trim() === exam.title} onClick={() => call({ action: "renameExam", id: exam.id, title })}>حفظ العنوان</button>
+      </div>
       <MarksEditor exam={exam} busy={busy} call={call} />
+      <GroupVersions exam={exam} groups={groups} busy={busy} call={call} />
       <div className="excols">
         {(["mandatory", "optional"] as const).map((kind) => {
           const list = exam.versions.filter((v) => v.kind === kind);

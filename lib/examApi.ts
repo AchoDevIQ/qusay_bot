@@ -5,7 +5,9 @@ import { CONTENT_DIR, TOKEN } from "./config.ts";
 import { find, insert, kvGet, kvSet, maxOf, one, remove, sumOf, tx, update, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
+import { BOOK } from "./bookOutline.ts";
 import { files } from "./files.ts";
+import { examGroups } from "./schedApi.ts";
 import { api } from "./telegram.ts";
 import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { fileToken, verifyFileToken } from "./webAuth.ts";
@@ -33,7 +35,7 @@ export async function examList(uid: number) {
     if (!c) { c = { slug: e.slug, chapter: e.chapter, exams: [] }; chapters.push(c); }
     const dir = `${e.slug}/e${e.ord}`;
     c.exams.push({
-      id: e.id, ord: e.ord, title: e.title, info: e.info, minutes: e.minutes,
+      id: e.id, ord: e.ord, title: e.title, info: e.info, minutes: e.minutes, groupVersions: JSON.parse(e.group_versions || "{}"),
       versions: (vBy.get(e.id) ?? []).map((v) => {
         const pdf = (lang: "ar" | "en") => v["pdf_" + lang] || (lang === "ar" || v.has_en ? `${dir}/${v.model}/student_${lang}.pdf` : null);
         // صور الصفحات تنعرض داخل الصفحة. إذا انرفع PDF بديل، ينفتح الملف نفسه
@@ -53,7 +55,8 @@ export async function examList(uid: number) {
       }),
     });
   }
-  return { chapters, generalMinutes: await generalMinutes(), fileToken: fileToken(uid) };
+  const slugs = new Set(exams.map((e) => e.slug));
+  return { chapters, generalMinutes: await generalMinutes(), fileToken: fileToken(uid), groups: await examGroups(), bookMissing: !await kvGet("book_loaded") && BOOK.some((c) => !slugs.has(c.slug)) };
 }
 
 /** الأوامر اللي ما بيها ملفات. يرجع القائمة المحدثة */
@@ -128,6 +131,74 @@ export async function examAction(body: Row) {
     const list = await chapterExams(String(body.slug));
     await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: "", minutes: n, manual: 1, pos: maxPos(list) + 1 });
     await logEdit(uid, `امتحان جديد: ${title}`);
+  } else if (a === "loadBook") {
+    // مرة وحدة: اللي ينحذف بعدها ما يرجع
+    let added = 0;
+    const minutes = await generalMinutes();
+    await tx(async () => {
+      added = 0;
+      for (const c of BOOK) {
+        const old = await find("bank_exams", { slug: c.slug });
+        let ord = maxOf(old, "ord"), pos = maxPos(old);
+        for (const [title, info] of c.exams) {
+          if (old.some((e) => e.title === title)) continue;
+          await insert("bank_exams", { slug: c.slug, chapter: c.chapter, ord: ++ord, title, info, minutes, manual: 1, pos: ++pos });
+          added++;
+        }
+      }
+      await kvSet("book_loaded", "1");
+    });
+    await logEdit(uid, `جدول الكتاب: ${added} امتحان`);
+  } else if (a === "addChapter") {
+    const chapter = String(body.chapter ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+    const title = String(body.title ?? "").trim().slice(0, 80);
+    need(chapter, "اكتب اسم الفصل");
+    need(title, "اكتب عنوان أول امتحان بالفصل");
+    const all = await find("bank_exams");
+    need(!all.some((e) => e.chapter === chapter), "هذا الفصل موجود");
+    let n = 1;
+    while (all.some((e) => e.slug === `ch${n}`) || BOOK.some((c) => c.slug === `ch${n}`)) n++;
+    await insert("bank_exams", { slug: `ch${n}`, chapter, ord: 1, title, info: "", minutes: await generalMinutes(), manual: 1, pos: 1 });
+    await logEdit(uid, `فصل جديد: ${chapter}`);
+  } else if (a === "renameChapter") {
+    const chapter = String(body.chapter ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+    need(chapter, "اكتب اسم الفصل");
+    const slug = String(body.slug ?? "");
+    need(await one("bank_exams", { slug }), "الفصل غير موجود");
+    need(!(await find("bank_exams")).some((e) => e.chapter === chapter && e.slug !== slug), "هذا الاسم موجود");
+    await update("bank_exams", { slug }, { chapter });
+    await logEdit(uid, `اسم فصل ${slug}: ${chapter}`);
+  } else if (a === "delChapter") {
+    const list = await find("bank_exams", { slug: String(body.slug ?? "") });
+    need(list.length, "الفصل غير موجود");
+    await tx(async () => {
+      for (const e of list) {
+        for (const v of await find("bank_versions", { exam_id: e.id })) await deleteVersion(v.id);
+        await remove("sched_items", { exam_id: e.id, status: "waiting" });
+        await remove("bank_exams", { id: e.id });
+      }
+    });
+    await logEdit(uid, `حذف فصل ${list[0].chapter}`);
+  } else if (a === "renameExam") {
+    const title = String(body.title ?? "").trim().slice(0, 80);
+    need(title, "اكتب عنوان الامتحان");
+    need(await one("bank_exams", { id }), "الامتحان غير موجود");
+    await update("bank_exams", { id }, { title });
+    await logEdit(uid, `امتحان ${id}: العنوان ${title}`);
+  } else if (a === "groupVersion") {
+    // هذا الامتحان: أي نسخة تاخذ كل مجموعة
+    const e = await one("bank_exams", { id });
+    need(e, "الامتحان غير موجود");
+    const group = Number(body.group), version = Number(body.version);
+    need((await examGroups()).some((g) => g.id === group), "المجموعة غير موجودة");
+    const map: Record<string, number> = JSON.parse(e!.group_versions || "{}");
+    if (version) {
+      const v = await one("bank_versions", { id: version, exam_id: id });
+      need(v && v.kind === "mandatory", "اختار نسخة إجبارية من هذا الامتحان");
+      map[String(group)] = version;
+    } else delete map[String(group)];
+    await update("bank_exams", { id }, { group_versions: JSON.stringify(map) });
+    await logEdit(uid, `امتحان ${id}: مجموعة ${group} نسخة ${version}`);
   } else if (a === "addVersion") {
     need(await one("bank_exams", { id }), "الامتحان غير موجود");
     const versions = await find("bank_versions", { exam_id: id }, { order: ["model"] });
@@ -156,6 +227,7 @@ export async function examAction(body: Row) {
     need(e, "الامتحان غير موجود");
     await tx(async () => {
       for (const v of await find("bank_versions", { exam_id: id })) await deleteVersion(v.id);
+      await remove("sched_items", { exam_id: id, status: "waiting" });
       await remove("bank_exams", { id });
     });
     await logEdit(uid, `حذف امتحان ${e!.title}`);

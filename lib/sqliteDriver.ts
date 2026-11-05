@@ -89,6 +89,7 @@ async function init() {
   await addColumn("bank_versions", "pdf_ar", "TEXT");
   await addColumn("bank_versions", "pdf_en", "TEXT");
   await addColumn("bank_exams", "pos", "INTEGER");
+  await addColumn("bank_exams", "group_versions", "TEXT");
   await addColumn("bank_versions", "pages_ar", "TEXT");
   await addColumn("bank_versions", "pages_en", "TEXT");
   await addColumn("bank_versions", "answer_pdf", "TEXT");

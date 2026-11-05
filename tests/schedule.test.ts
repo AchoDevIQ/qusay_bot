@@ -5,7 +5,7 @@ import { createHmac } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_SETTINGS, addDays, availableDays, buildPlan, itemState, weekdayOf } from "../lib/scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, availableDays, buildPlan, itemState, labelChapters, pickMandatory, pickOptional, weekdayOf } from "../lib/scheduleRules.ts";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-sched-"));
 Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CHROME_PATH: path.join(tmp, "none"), ASSETS_DIR: path.join(tmp, "none"), SETTINGS_FILE: path.join(tmp, "none") });
@@ -18,6 +18,7 @@ globalThis.fetch = (async (url: string, init: any) => {
 
 const { myExamAction, schedAdminAction } = await import("../lib/schedApi.ts");
 const { homeAction } = await import("../lib/homeApi.ts");
+const { examAction } = await import("../lib/examApi.ts");
 const { studentAction } = await import("../lib/studentApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 const { initDb, find, insert, kvSet, put } = await import("../lib/db.ts");
@@ -163,4 +164,62 @@ test("الإدارة من صفحة الطالب: حده باليوم، إعاد�
   await kvSet("sched_perday_70", "0");
   await studentAction({ action: "del", id: 70, initData: sign(1) });
   assert.equal((await find("sched_items", { user_id: 70 })).length, 0);
+});
+
+test("النسخة: الإجباري حسب المجموعة، والاختياري عشوائي إلا إذا وحدة", () => {
+  const vs = [{ id: 1, kind: "mandatory", ok: 1 }, { id: 2, kind: "mandatory", ok: 1 }, { id: 3, kind: "mandatory", ok: 0 }, { id: 4, kind: "optional", ok: 1 }, { id: 5, kind: "optional", ok: 1 }];
+  assert.equal(pickMandatory(vs, { "7": 2 }, 7), 2);
+  assert.equal(pickMandatory(vs, { "7": 2 }, 8), 1);    // ما محددة: أول نسخة جاهزة
+  assert.equal(pickMandatory(vs, { "7": 3 }, 7), 1);    // المحددة موقوفة
+  assert.equal(pickOptional(vs, () => 0), 4);
+  assert.equal(pickOptional(vs, () => 0.99), 5);
+  assert.equal(pickOptional(vs.slice(0, 4), () => 0.99), 4);
+  assert.equal(pickOptional(vs.slice(0, 3)), null);
+  assert.deepEqual(labelChapters("الفصل الرابع والخامس"), ["الفصل الرابع", "الفصل الخامس"]);
+  assert.deepEqual(labelChapters("الفصل الأول"), ["الفصل الأول"]);
+});
+
+test("جدول الكتاب ينضاف مرة وحدة، والفصل يتعدل وينحذف، والاختياري ما يدخل الجدول", async () => {
+  const admin = sign(1);
+  const r: any = await examAction({ action: "loadBook", initData: admin });
+  const count = (d: any, ch: string) => d.chapters.find((c: any) => c.chapter === ch).exams.length;
+  assert.equal(count(r, "الفصل الرابع"), 14);
+  assert.equal(count(r, "الفصل الخامس"), 3);
+  assert.equal(r.bookMissing, false);
+  assert.equal(r.chapters.find((c: any) => c.chapter === "الفصل الخامس").exams[0].title, "هل والإثبات");
+  await assert.rejects(examAction({ action: "addChapter", chapter: "الفصل الخامس", title: "س", initData: admin }), /موجود/);
+  const six: any = await examAction({ action: "addChapter", chapter: "الفصل السادس", title: "اول امتحان", initData: admin });
+  const c6 = six.chapters.find((c: any) => c.chapter === "الفصل السادس");
+  await examAction({ action: "renameExam", id: c6.exams[0].id, title: "معدل", initData: admin });
+
+  await student(80);
+  await put("exam_access", { user_id: 80, chapter: "الفصل الرابع والخامس", order_id: 9, created: "1" });
+  assert.equal((await act(80, "info")).remaining, 17);    // يفتح الفصلين سوية
+  const onlyOpt = r.chapters.find((c: any) => c.chapter === "الفصل الخامس").exams[0].id;
+  await insert("bank_versions", { exam_id: onlyOpt, model: "A", kind: "optional", ok: 1 });
+  assert.equal((await act(80, "info")).remaining, 16);
+
+  await student(81);
+  await put("exam_access", { user_id: 81, chapter: "الفصل السادس", order_id: 9, created: "1" });
+  await act(81, "confirm", form());
+  assert.equal((await find("sched_items", { user_id: 81 })).length, 1);
+  await examAction({ action: "delChapter", slug: c6.slug, initData: admin });
+  assert.equal((await find("sched_items", { user_id: 81 })).length, 0);
+});
+
+test("المجاميع: الطالب يختار ساعتها بس، وكل امتحان ينحدد إله نسخة", async () => {
+  const admin = sign(1);
+  const g: any = await schedAdminAction({ action: "addGroup", hour: 20, initData: admin });
+  await assert.rejects(schedAdminAction({ action: "addGroup", hour: 20, initData: admin }), /أكو مجموعة/);
+  const gid = g.groups[0].id;
+  assert.deepEqual((await act(80, "info")).hours, [20]);
+  await assert.rejects(act(80, "preview", form({ hour: 16 })), /أوقات الامتحانات/);
+  assert.ok((await act(80, "preview", form({ hour: 20 }))).preview);
+  const e = (await find("bank_exams", { slug: "ch1" }))[0];
+  const list = await find("bank_versions", { exam_id: e.id, kind: "mandatory" });
+  const r: any = await examAction({ action: "groupVersion", id: e.id, group: gid, version: list[0].id, initData: admin });
+  assert.equal(r.chapters.flatMap((c: any) => c.exams).find((x: any) => x.id === e.id).groupVersions[gid], list[0].id);
+  const opt = (await find("bank_versions", { exam_id: e.id, kind: "optional" }))[0];
+  await assert.rejects(examAction({ action: "groupVersion", id: e.id, group: gid, version: opt.id, initData: admin }), /إجبارية/);
+  await schedAdminAction({ action: "delGroup", id: gid, initData: admin });
 });
