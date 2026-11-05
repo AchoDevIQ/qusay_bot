@@ -5,7 +5,7 @@ import { CONTENT_DIR, TOKEN } from "./config.ts";
 import { find, insert, kvGet, kvSet, maxOf, one, remove, sumOf, tx, update, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
-import { BOOK } from "./bookOutline.ts";
+import { BOOK, OLD_ONLY_PROBLEMS } from "./bookOutline.ts";
 import { files } from "./files.ts";
 import { api } from "./telegram.ts";
 import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
@@ -55,7 +55,7 @@ export async function examList(uid: number) {
     });
   }
   const slugs = new Set(exams.map((e) => e.slug));
-  return { chapters, generalMinutes: await generalMinutes(), fileToken: fileToken(uid), bookMissing: !await kvGet("book_loaded") && BOOK.some((c) => !slugs.has(c.slug)) };
+  return { chapters, generalMinutes: await generalMinutes(), fileToken: fileToken(uid), bookMissing: !await kvGet("book_loaded_v2") && (!!await kvGet("book_loaded") || BOOK.some((c) => !slugs.has(c.slug))) };
 }
 
 /** الأوامر اللي ما بيها ملفات. يرجع القائمة المحدثة */
@@ -136,6 +136,24 @@ export async function examAction(body: Row) {
     const minutes = await generalMinutes();
     await tx(async () => {
       added = 0;
+      if (await kvGet("book_loaded")) {
+        // انضاف قبل: بس تصحيح الفصل الثالث، حتى اللي انحذف ما يرجع
+        const ch3 = BOOK.find((c) => c.slug === "ch3")!;
+        const list = await chapterExams("ch3");
+        const wrong = list.find((e) => e.title === OLD_ONLY_PROBLEMS);
+        const right = ch3.exams.find(([t]) => t.startsWith("فقط مسائل"))!;
+        if (wrong) await update("bank_exams", { id: wrong.id }, { title: right[0], info: right[1] });
+        const i = ch3.exams.findIndex(([t]) => t.endsWith("7&8") && t.startsWith("تطبيقات"));
+        const before = list.find((e) => e.title === ch3.exams[i - 1][0]);
+        if (before && !list.some((e) => e.title === ch3.exams[i][0])) {
+          const at = examPos(before);
+          for (const e of list) if (examPos(e) > at) await update("bank_exams", { id: e.id }, { pos: examPos(e) + 1 });
+          await insert("bank_exams", { slug: "ch3", chapter: ch3.chapter, ord: maxOf(list, "ord") + 1, title: ch3.exams[i][0], info: ch3.exams[i][1], minutes, manual: 1, pos: at + 1 });
+          added++;
+        }
+        await kvSet("book_loaded_v2", "1");
+        return;
+      }
       for (const c of BOOK) {
         const old = await find("bank_exams", { slug: c.slug });
         let ord = maxOf(old, "ord"), pos = maxPos(old);
@@ -146,6 +164,7 @@ export async function examAction(body: Row) {
         }
       }
       await kvSet("book_loaded", "1");
+      await kvSet("book_loaded_v2", "1");
     });
     await logEdit(uid, `جدول الكتاب: ${added} امتحان`);
   } else if (a === "addChapter") {

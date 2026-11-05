@@ -15,8 +15,8 @@ export const BOOK: { slug: string; chapter: string; exams: [string, string][] }[
     ["التقريب 1&2&3", "Approximation 1&2&3"], ["التقريب 4&5", "Approximation 4&5"], ["نصف فاينل (من البداية للتقريب داخل)", "Mid Final (from the start to Approximation)"],
     ["رسم الدوال 1&2", "Graph of Function 1&2"], ["رسم الدوال 3&4", "Graph of Function 3&4"], ["رسم الدوال شامل", "All Graph of Function"],
     ["الثوابت 1&2", "Constant 1&2"], ["الثوابت 3&4", "Constant 3&4"],
-    ["تطبيقات النهايات العظمى والصغرى المحلية 1&2", "Optimization problems 1&2"], ["تطبيقات النهايات العظمى والصغرى المحلية 3&4", "Optimization problems 3&4"], ["تطبيقات النهايات العظمى والصغرى المحلية 5&6", "Optimization problems 5&6"],
-    ["فقط مسائل (التقريب والمعدلات الزمنية والتطبيقات على النهايات)", ""],
+    ["تطبيقات النهايات العظمى والصغرى المحلية 1&2", "Optimization problems 1&2"], ["تطبيقات النهايات العظمى والصغرى المحلية 3&4", "Optimization problems 3&4"], ["تطبيقات النهايات العظمى والصغرى المحلية 5&6", "Optimization problems 5&6"], ["تطبيقات النهايات العظمى والصغرى المحلية 7&8", "Optimization problems 7&8"],
+    ["فقط مسائل (التقريب والمعدلات الزمنية والتطبيقات على النهايات العظمى والصغرى)", "Approximation & Related Rates & Optimization problems only"],
     ["رول والمتوسطة والتقريب والثوابت ورسم الدوال", "Rolle & Mean Value & Approximation & Constant & Graph of Function"], ["فاينل", "Final"], ["إعادة فاينل", "Re-Final"],
   ] },
   { slug: "ch4", chapter: "الفصل الرابع", exams: [
@@ -26,6 +26,9 @@ export const BOOK: { slug: string; chapter: string; exams: [string, string][] }[
   ] },
   { slug: "ch5", chapter: "الفصل الخامس", exams: [["هل والإثبات", ""], ["فصل المتغيرات", "Separation of Variables"], ["فاينل", "Final"]] },
 ];
+
+// تصحيح الفصل الثالث لمن انضاف الجدول قبل ما تجي صورة العناوين الكاملة
+export const OLD_ONLY_PROBLEMS = "فقط مسائل (التقريب والمعدلات الزمنية والتطبيقات على النهايات)";
 
 // أوقات كل مكان مثل ما كتبها قصي: كل يوم إله أوقاته، والطالب يختار وقت لكل يوم بكيفه. الأيام: 0 = الاثنين
 const SAT = 5, SUN = 6, MON = 0, TUE = 1, WED = 2, FRI = 4;

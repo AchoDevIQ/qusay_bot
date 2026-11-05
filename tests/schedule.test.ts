@@ -21,7 +21,7 @@ const { homeAction } = await import("../lib/homeApi.ts");
 const { examAction } = await import("../lib/examApi.ts");
 const { studentAction } = await import("../lib/studentApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
-const { initDb, find, insert, kvSet, put } = await import("../lib/db.ts");
+const { initDb, find, insert, kvSet, put, update } = await import("../lib/db.ts");
 const { todayStr } = await import("../lib/util.ts");
 await initDb();
 
@@ -364,4 +364,33 @@ test("أوقات الأماكن تدخل بضغطة، بالعطلة، والت�
   assert.ok(dated.every((x: any) => [5, 1].includes(weekdayOf(x.date))));
   const items = (await act(86, "info")).items;
   assert.ok(items.some((i: any) => i.at.endsWith(" 11:00")) && items.some((i: any) => i.at.endsWith(" 18:30")));
+});
+
+test("تصحيح الفصل الثالث: يعدل العنوان ويضيف 7&8 بمكانه، بدون ما يرجع المحذوف", async () => {
+  const admin = sign(1);
+  const ch3 = await find("bank_exams", { slug: "ch3" });
+  assert.ok(ch3.some((e) => e.title.endsWith("7&8") && e.title.startsWith("تطبيقات")));
+  const order = (d: any) => d.chapters.find((c: any) => c.slug === "ch3").exams.map((e: any) => e.title);
+  const fresh: any = await examAction({ action: "list", initData: admin });
+  const titles = order(fresh);
+  const i = titles.findIndex((t: string) => t.endsWith("7&8") && t.startsWith("تطبيقات"));
+  assert.ok(titles[i - 1].endsWith("5&6"));
+  assert.ok(titles[i + 1].startsWith("فقط مسائل") && titles[i + 1].endsWith("العظمى والصغرى)"));
+
+  // جدول انضاف بالنسخة القديمة
+  const eight = ch3.find((e) => e.title === titles[i])!;
+  await examAction({ action: "delExam", id: eight.id, initData: admin });
+  const only = ch3.find((e) => e.title === titles[i])! && ch3.find((e) => e.title.startsWith("فقط مسائل"))!;
+  await update("bank_exams", { id: only.id }, { title: "فقط مسائل (التقريب والمعدلات الزمنية والتطبيقات على النهايات)" });
+  const gone = ch3.find((e) => e.title === "الثوابت 1&2")!;
+  await examAction({ action: "delExam", id: gone.id, initData: admin });
+  await kvSet("book_loaded_v2", "");
+  assert.equal(((await examAction({ action: "list", initData: admin })) as any).bookMissing, true);
+  const r: any = await examAction({ action: "loadBook", initData: admin });
+  const after = order(r);
+  assert.equal(after.length, ch3.length - 1);     // 7&8 رجع، والمحذوف ما رجع
+  assert.ok(!after.includes("الثوابت 1&2"));
+  const j = after.findIndex((t: string) => t.endsWith("7&8") && t.startsWith("تطبيقات"));
+  assert.ok(after[j - 1].endsWith("5&6") && after[j + 1].endsWith("العظمى والصغرى)"));
+  assert.equal(r.bookMissing, false);
 });
