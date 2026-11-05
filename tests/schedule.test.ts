@@ -21,6 +21,10 @@ const { homeAction } = await import("../lib/homeApi.ts");
 const { examAction } = await import("../lib/examApi.ts");
 const { studentAction } = await import("../lib/studentApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
+const { closeFinished, notifyStarted, roomFile, uploadAnswer } = await import("../lib/examRoom.ts");
+const { schedSettings } = await import("../lib/schedApi.ts");
+const { run: sqlRun } = await import("../lib/sqliteDriver.ts");
+const { stamp } = await import("../lib/util.ts");
 const { initDb, find, insert, kvSet, put, update } = await import("../lib/db.ts");
 const { todayStr } = await import("../lib/util.ts");
 await initDb();
@@ -339,6 +343,7 @@ test("أوقات الأماكن تدخل بضغطة، بالعطلة، والت�
   const athar = centers.find((c) => c.name === "معهد أثر")!.id;
   const girls = centers.find((c) => c.name === "قمة النجاح للبنات")!.id;
   await put("place_slots", { center_id: 0, slots: "[]" });
+  await kvSet("sched_settings", "{}");
   await kvSet("sched_settings", "{}");   // العطلة تنكتب بس إذا لسه ما مكتوبة
   const r: any = await schedAdminAction({ action: "loadPlaces", initData: admin });
   assert.match(r.notice, /انضافت أوقات 5 مكان/);   // الإلكتروني صار عنده صف من قبل
@@ -397,6 +402,7 @@ test("تصحيح الفصل الثالث: يعدل العنوان ويضيف 7&8
 
 test("تواريخ الأسابيع 1 إلى 40 تدخل لكل مكان حسب جدول النظام القديم", async () => {
   const admin = sign(1);
+  await sqlRun("DELETE FROM place_dates");
   const r: any = await schedAdminAction({ action: "loadOldDates", initData: admin });
   assert.match(r.notice, /انضاف \d+ موعد/);
   assert.equal(r.canLoadDates, false);
@@ -426,6 +432,15 @@ test("تواريخ الأسابيع 1 إلى 40 تدخل لكل مكان حسب 
   assert.equal(await dayOf(m, "ch4", "ساين وكوساين 1&2"), "2027-03-05");
   assert.equal(await dayOf(m, "ch3", "الاشتقاق 1&2"), "");
   assert.equal(await dayOf(m, "ch2", "قطع مكافئ 1&2"), "");
+  // الباقي بنفس النمط بعد الأسبوع 40، والتعديل اليدوي ما ينمسح
+  assert.equal(await dayOf(0, "ch4", "ساين وكوساين 5&6"), "2027-03-10");
+  assert.equal(await dayOf(0, "ch5", "فاينل"), "2027-04-04");
+  assert.equal(await dayOf(m, "ch5", "هل والإثبات"), "2027-03-29");
+  await kvSet("old_dates_loaded_v2", "");
+  const e2 = (await find("bank_exams", { slug: "ch5" })).find((x) => x.title === "فاينل")!;
+  await put("place_dates", { center_id: 0, exam_id: e2.id, day: "2027-04-11", versions: "{}" });
+  await schedAdminAction({ action: "loadOldDates", initData: admin });
+  assert.equal(await dayOf(0, "ch5", "فاينل"), "2027-04-11");
 });
 
 test("ملفات الفصل تدخل على جدول الكتاب حسب العنوان، حتى لو الأرقام مختلفة", async () => {
@@ -441,4 +456,79 @@ test("ملفات الفصل تدخل على جدول الكتاب حسب الع�
   assert.equal(rows.length, 3);
   assert.equal((await find("bank_versions", { exam_id: c })).length, 1);
   assert.equal((await find("bank_versions", { exam_id: b })).length, 0);
+});
+
+const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]);
+const upload = async (uid: number, item: number, q: number, body: Buffer = JPG) => {
+  const f = new FormData();
+  f.set("token", homeToken(uid)); f.set("item", String(item)); f.set("q", String(q));
+  f.set("file", new Blob([new Uint8Array(body)]), "a.jpg");
+  return await uploadAnswer(f, await schedSettings()) as any;
+};
+test("الامتحان: مقفول قبل وقته، يدخل بوقته، نسخته حسب وقته، يرفع ويسلم بدون كود، وبعد الوقت يتسد", async () => {
+  const admin = sign(1);
+  const e = await insert("bank_exams", { slug: "room", chapter: "فصل الغرفة", ord: 1, title: "امتحان الغرفة", info: "", minutes: 60, pos: 1 });
+  const va = await insert("bank_versions", { exam_id: e, model: "A", kind: "mandatory", ok: 1 });
+  const vb = await insert("bank_versions", { exam_id: e, model: "B", kind: "mandatory", ok: 1 });
+  for (const v of [va, vb]) for (const n of [1, 2]) await insert("bank_questions", { version_id: v, n, max_mark: 50, q_file: "x.png" });
+  await schedAdminAction({ action: "saveSlots", center: 0, slots: SLOTS, initData: admin });
+  const sun = nextWeekday(6);
+  await schedAdminAction({ action: "saveDates", center: 0, rows: [{ exam: e, date: sun, versions: { "20:30": vb } }], initData: admin });
+  await student(90);
+  await put("exam_access", { user_id: 90, chapter: "فصل الغرفة", order_id: 1, created: "1" });
+  const joined = await act(90, "joinPlace", { picks: { "6": "20:30", "2": "16:00" } });
+  const item = joined.items.find((i: any) => i.title === "امتحان الغرفة").id;
+  await assert.rejects(act(90, "openExam", { item }), /ما بدا/);
+  await assert.rejects(upload(90, item, 1), /انتهى|ما بدا|وقت/);
+  await assert.rejects(studentAction({ action: "examNow", id: 90, item, initData: sign(5) }), (x: any) => x.status === 403);
+  await sqlRun("UPDATE sched_items SET at=? WHERE id=?", stamp(), item);
+  const opened = await act(90, "openExam", { item });
+  assert.equal(opened.room.questions.length, 2);
+  assert.equal(opened.room.extra, 15);
+  await assert.rejects(upload(91, item, 1), /غير موجود/);      // طالب ثاني
+  await assert.rejects(upload(90, item, 9), /السؤال/);
+  await assert.rejects(upload(90, item, 1, Buffer.from("not image")), /صورة/);
+  await assert.rejects(act(90, "submitExam", { item }), /ولا جواب/);
+  const r = await upload(90, item, 1);
+
+  const ans = r.questions[0].answers[0];
+  assert.match(ans.file, /student_answers\/90\//);
+  assert.ok((await roomFile(homeToken(90), item, ans.file)).body.length);
+  await assert.rejects(roomFile(homeToken(91), item, ans.file), (x: any) => x.status === 403);
+  await assert.rejects(roomFile(homeToken(90), item, "ch1/secret.png"), (x: any) => x.status === 403);
+  const del = await act(90, "delAnswer", { item, answer: ans.id });
+  assert.equal(del.room.questions[0].answers.length, 0);
+  await upload(90, item, 2);
+  const done = await act(90, "submitExam", { item });
+  assert.equal(done.items.find((i: any) => i.id === item).state, "done");
+  await assert.rejects(upload(90, item, 1), /سلمت/);
+
+  // طالب ثاني: دخل وما دز لحد ما خلص الوقت، وبعدها استثناء
+  await student(92);
+  await put("exam_access", { user_id: 92, chapter: "فصل الغرفة", order_id: 1, created: "1" });
+  const j2 = await act(92, "joinPlace", { picks: { "6": "20:30", "2": "16:00" } });
+  const it2 = j2.items.find((i: any) => i.title === "امتحان الغرفة").id;
+  await sqlRun("UPDATE sched_items SET at=? WHERE id=?", stamp(), it2);
+  await act(92, "openExam", { item: it2 });
+  assert.equal((await find("sched_items", { id: it2 }))[0].version_id, va);   // وقته تغير، فما اله نسخة محددة
+  await sqlRun("UPDATE sched_items SET at='2020-01-01 10:00', started_at='2020-01-01 10:00' WHERE id=?", it2);
+  await assert.rejects(upload(92, it2, 1), /لم ترسل الإجابة/);
+  await closeFinished(92, await schedSettings());
+  assert.equal((await act(92, "info")).items.find((i: any) => i.id === it2).state, "missed");
+  await assert.rejects(studentAction({ action: "examException", id: 92, item: it2, initData: sign(5) }), /صلاحية/);
+  calls.length = 0;
+  await studentAction({ action: "examException", id: 92, item: it2, initData: admin });
+  assert.ok(calls.some((c) => c.p.chat_id === 92));
+  assert.equal((await act(92, "info")).items.find((i: any) => i.id === it2).state, "open");
+  const back = await act(92, "openExam", { item: it2 });
+  assert.ok(back.room.closeAt > stamp());                     // وقته يبدي من دخوله
+  assert.ok(await upload(92, it2, 1));
+});
+test("الحضوري ما يدخل غرفة الامتحان، ورسالة البدء مرة وحدة وبالمفتاح بس", async () => {
+  const s = await schedSettings();
+  await assert.rejects(notifyStarted("bad", s), (x: any) => x.status === 401);
+  const e = (await find("bank_exams", { slug: "room" }))[0];
+  await student(93, "حضوري");
+  const it = await insert("sched_items", { user_id: 93, exam_id: e.id, at: stamp(), status: "waiting" });
+  await assert.rejects(act(93, "openExam", { item: it }), /حضوري/);
 });

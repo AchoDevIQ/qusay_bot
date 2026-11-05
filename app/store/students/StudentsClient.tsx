@@ -183,7 +183,12 @@ function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"
   return (
     <div className="adlog">
       {sched.way && <div className="exlabel">{sched.way}</div>}
-      {sched.items.length ? sched.items.map((i) => <div key={i.id} className="adsale">{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small></div>) : <div className="exhint">ما رتب جدوله بعد.</div>}
+      {sched.items.length ? sched.items.map((i) => (
+        <div key={i.id} className="adsale">{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small>
+          {i.state === "missed" && <Confirm label="🔓 افتحه باستثناء" disabled={busy} onYes={() => void call({ action: "examException", id, item: i.id })} />}
+          {i.state === "locked" && <button type="button" className="exbtn adsmall" disabled={busy} onClick={() => void call({ action: "examNow", id, item: i.id })}>▶️ جربه هسه</button>}
+        </div>
+      )) : <div className="exhint">ما رتب جدوله بعد.</div>}
       <div className="exadd">
         <input className="exnum" inputMode="numeric" aria-label="حد الامتحانات باليوم لهذا الطالب" value={n} onChange={(e) => setN(e.target.value)} />
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "perDay", id, value: n })}>حفظ حده باليوم (0 = العام: {sched.general})</button>

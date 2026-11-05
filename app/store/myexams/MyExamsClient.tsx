@@ -11,8 +11,9 @@ type Info = {
   inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
-  preview?: Preview; notice?: string; error?: string;
+  preview?: Preview; notice?: string; error?: string; lateText: string; closedText: string; room?: Room;
 };
+type Room = { id: number; title: string; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
 const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
@@ -33,6 +34,9 @@ export default function MyExamsClient() {
     } catch { setError("ماكو اتصال، حاول مرة ثانية"); return null; } finally { setBusy(false); }
   }
   useEffect(() => { void call({ action: "info" }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [room, setRoom] = useState<Room | null>(null);
+  async function enter(item: number) { const r = await call({ action: "openExam", item }); if (r?.room) setRoom(r.room); }
+  if (room) return <ExamRoom room={room} setRoom={setRoom} call={call} leave={() => { setRoom(null); void call({ action: "info" }); }} />;
 
   return (
     <>
@@ -49,7 +53,8 @@ export default function MyExamsClient() {
         {info?.needsChoice && <Choice info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
-        {info && !!info.items.length && <List info={info} />}
+        {info?.notice && <div className="card warn exerr">{info.notice}</div>}
+        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} />}
       </div>
     </>
   );
@@ -173,7 +178,7 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
   );
 }
 
-function List({ info }: { info: Info }) {
+function List({ info, busy, enter }: { info: Info; busy: boolean; enter: (id: number) => void }) {
   return (
     <div className="card">
       <h2>🗓 جدول امتحاناتك</h2>
@@ -181,12 +186,109 @@ function List({ info }: { info: Info }) {
       <table className="extable"><tbody>
         {info.items.map((i) => (
           <tr key={i.id} className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>
-            <td><b>{i.title}</b><small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small></td>
+            <td><b>{i.title}</b><small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
+              {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
+              {i.state === "missed" && <small className="pdmode exbad">{info.lateText}</small>}
+            </td>
             <td className="adphone">{prettyAt(i.at)}</td>
           </tr>
         ))}
       </tbody></table>
       {!info.inPerson && <div className="expad exhint adtop">تگدر تدخل الامتحان خلال {info.window} دقيقة من موعده. الامتحان اللي يفوت وقته ما يرجع.</div>}
+    </div>
+  );
+}
+
+const fileUrl = (item: number, ref: string) => `/api/myexams/file?t=${encodeURIComponent(new URLSearchParams(location.search).get("t") ?? "")}&item=${item}&ref=${encodeURIComponent(ref)}`;
+const minutesLeft = (closeAt: string, nowAt: string, since: number) => {
+  const end = new Date(closeAt.replace(" ", "T") + ":00Z").getTime(), start = new Date(nowAt.replace(" ", "T") + ":00Z").getTime();
+  return Math.ceil((end - start - (Date.now() - since)) / 60000);
+};
+/** يدور الصورة ويصغرها قبل الرفع */
+async function prepare(file: File, turns: number) {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const c = document.createElement("canvas");
+  [c.width, c.height] = turns % 2 ? [h, w] : [w, h];
+  const g = c.getContext("2d")!;
+  g.translate(c.width / 2, c.height / 2);
+  g.rotate((turns * Math.PI) / 2);
+  g.drawImage(bmp, -w / 2, -h / 2, w, h);
+  return await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("صورة"))), "image/jpeg", 0.85));
+}
+
+function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Room) => void; call: (b: Record<string, unknown>) => Promise<Info | null>; leave: () => void }) {
+  const [since] = useState(() => Date.now());
+  const [tick, setTick] = useState(0);
+  const [open, setOpen] = useState(room.questions[0]?.n ?? 0);
+  const [draft, setDraft] = useState<{ q: number; file: File; url: string; turns: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [closed, setClosed] = useState(false);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 20000); return () => clearInterval(t); }, []);
+  const left = minutesLeft(room.closeAt, room.now, since);
+  useEffect(() => { if (left <= 0) setClosed(true); }, [left, tick]);
+  async function send() {
+    if (!draft) return;
+    setBusy(true); setError("");
+    try {
+      const f = new FormData();
+      f.set("token", new URLSearchParams(location.search).get("t") ?? "");
+      f.set("item", String(room.id)); f.set("q", String(draft.q));
+      f.set("file", await prepare(draft.file, draft.turns), "answer.jpg");
+      const res = await fetch("/api/myexams", { method: "POST", body: f });
+      const j = await res.json();
+      if (!res.ok) { setError(j.error ?? "ما وصلت الصورة، حاول مرة ثانية"); if (res.status === 403) setClosed(true); return; }
+      setRoom(j.room); setDraft(null);
+    } catch { setError("ماكو اتصال، حاول مرة ثانية"); } finally { setBusy(false); }
+  }
+  const total = room.questions.reduce((n, q) => n + q.answers.length, 0);
+  if (closed) {
+    return (
+      <div className="wrap"><div className="card warn exerr">{total ? "انتهى الوقت، وأجوبتك اللي دزيتها انحفظت." : "⛔ انتهى وقت الامتحان المحدد، وأعطيناك وقت إضافي، ولم ترسل الإجابة."}</div>
+        <button type="button" className="btn agbtn" onClick={leave}>رجوع لامتحاناتي</button></div>
+    );
+  }
+  return (
+    <div className="wrap">
+      <div className="card"><h2>📝 {room.title}</h2>
+        <div className="who">⏳ باقي <b>{left}</b> دقيقة<br /><small className="hint">الوقت {room.minutes} دقيقة، وفوقه {room.extra} دقيقة حتى تصور وتدز.</small></div>
+      </div>
+      {room.pages.map((p) => <img key={p} className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" />)}
+      <div className="card"><h2>📷 صور جواب كل سؤال</h2>
+        <div className="form">
+          {room.questions.map((q) => (
+            <div key={q.n}>
+              <button type="button" className={"exqhead" + (open === q.n ? " on" : "")} onClick={() => setOpen(q.n)}><span>السؤال {q.n}</span><span>{q.answers.length ? `✅ ${q.answers.length} صورة` : "ما مدزوز"}</span></button>
+              {open === q.n && (
+                <div className="exqbody">
+                  {q.answers.map((a) => (
+                    <div key={a.id}><img className="eximg" src={fileUrl(room.id, a.file)} alt={`جواب ${q.n}`} /><button type="button" className="exbtn" disabled={busy} onClick={async () => { setBusy(true); const r = await call({ action: "delAnswer", item: room.id, answer: a.id }); if (r?.room) setRoom(r.room); setBusy(false); }}>🗑 احذف هاي الصورة</button></div>
+                  ))}
+                  {draft?.q === q.n ? (
+                    <div>
+                      <img className="eximg mxdraft" src={draft.url} alt="معاينة" style={{ transform: `rotate(${draft.turns * 90}deg)` }} />
+                      <div className="exline">
+                        <button type="button" className="exbtn" onClick={() => setDraft({ ...draft, turns: (draft.turns + 1) % 4 })}>🔄 دور الصورة</button>
+                        <button type="button" className="exbtn" onClick={() => setDraft(null)}>إلغاء</button>
+                        <button type="button" className="btn" disabled={busy} onClick={() => void send()}>{busy ? "جاري الإرسال..." : "✅ تم"}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="exline">
+                      <label className="exbtn">📷 صور بالكاميرا<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setDraft({ q: q.n, file: f, url: URL.createObjectURL(f), turns: 0 }); }} /></label>
+                      <label className="exbtn">🖼 من الجهاز<input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setDraft({ q: q.n, file: f, url: URL.createObjectURL(f), turns: 0 }); }} /></label>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          {error && <div className="err">⚠️ {error}</div>}
+          <button type="button" className="btn agbtn adtop" disabled={busy || !total} onClick={async () => { setBusy(true); const r = await call({ action: "submitExam", item: room.id }); setBusy(false); if (r) leave(); }}>✅ سلم الامتحان</button>
+        </div>
+      </div>
     </div>
   );
 }

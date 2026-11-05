@@ -2,12 +2,13 @@
 import { find, one, remove, setSession, type Row } from "./db.ts";
 import { activityOf, guardianOf, logActivity } from "./access.ts";
 import { GOVS, GRADES, toLatinDigits } from "./config.ts";
-import { areasWithCenters, centerName, placeOf, student } from "./data.ts";
+import { areasWithCenters, centerName, isAdmin, placeOf, student } from "./data.ts";
 import { listPdf } from "./documents.ts";
 import { deliverPassword } from "./password.ts";
 import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
+import { openException, startNowForTest } from "./examRoom.ts";
 import { resetSchedule, setPerDay, studentSchedule } from "./schedApi.ts";
 import { authed, intOf, need } from "./webApi.ts";
 
@@ -106,6 +107,13 @@ export async function studentAction(body: Row) {
   } else if (a === "sched") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, sched: { id, ...await studentSchedule(id) } };
+  } else if (a === "examException") {
+    await openException(uid, body.item);
+    notice = "🔓 انفتح الامتحان للطالب، ووصله الخبر";
+  } else if (a === "examNow") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    await startNowForTest(body.item);
+    notice = "▶️ الامتحان بدا هسه للتجربة";
   } else if (a === "schedReset") {
     await resetSchedule(id);
     notice = "✅ انفتح جدوله، والطالب يرتبه من جديد";

@@ -48,10 +48,10 @@ function normal(v: any): any {
   return v;
 }
 // ميزات جديدة ما موجودة بالبوت القديم: جداول الامتحانات وزر لوحة التحكم
-const NEW_TABLES = ["schedules", "place_slots", "place_dates", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
+const NEW_TABLES = ["schedules", "place_slots", "place_dates", "exam_answers", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
-  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(exams|schedule|sales|company|fees|online|centers)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
+  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(exams|schedule|exception|sales|company|fees|online|centers)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
   return e;
 }
 // قائمة لوحة التحكم صارت صفحة وحدة، فأزرارها ما تنقارن بالبوت القديم

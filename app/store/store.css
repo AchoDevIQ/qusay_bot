@@ -169,3 +169,4 @@ html:has(.rg),html:has(.rg) body{background:#f4f6fb;padding-bottom:0}
 .adexamrow{padding:10px 0;border-top:1px solid var(--line);font-size:14px}.adexamcells{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;margin-top:6px}.adexamcells input,.adexamcells select{padding:8px;font-size:14px}.adwide{width:150px}
 .mxlocked td{opacity:.45}
 .adtimev{margin:0;font-size:12px}.adtimev small{display:block;color:var(--mut);direction:ltr;text-align:right}
+.mxdraft{transition:transform .2s;max-height:70vh;object-fit:contain}

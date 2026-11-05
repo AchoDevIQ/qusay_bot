@@ -70,6 +70,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS schedules(user_id INTEGER PRIMARY KEY, start_day TEXT, end_day TEXT, weekdays TEXT, hour INTEGER, created TEXT);
     CREATE TABLE IF NOT EXISTS place_slots(center_id INTEGER PRIMARY KEY, slots TEXT);
     CREATE TABLE IF NOT EXISTS place_dates(center_id INTEGER, exam_id INTEGER, day TEXT, versions TEXT, PRIMARY KEY(center_id, exam_id));
+    CREATE TABLE IF NOT EXISTS exam_answers(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER, q INTEGER, file TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS sched_items(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, exam_id INTEGER, at TEXT, status TEXT);
     CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS guardians(guardian_id INTEGER, student_id INTEGER, created TEXT, PRIMARY KEY(guardian_id, student_id));
@@ -94,6 +95,8 @@ async function init() {
   await addColumn("bank_exams", "group_versions", "TEXT");
   await addColumn("students", "gender", "TEXT");
   await addColumn("centers", "gender", "TEXT");
+  await addColumn("sched_items", "version_id", "INTEGER");
+  for (const c of ["started_at", "submitted_at", "opened_at", "notified"]) await addColumn("sched_items", c, "TEXT");
   await addColumn("schedules", "mode", "TEXT");
   await addColumn("schedules", "center_id", "INTEGER");
   await addColumn("schedules", "picks", "TEXT");
