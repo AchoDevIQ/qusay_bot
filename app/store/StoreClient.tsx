@@ -3,7 +3,11 @@ import { useState } from "react";
 import {
   AR_NAME_ERR, CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanName, cleanPhone, fmt, haptic, nameOk, phoneErr, scrollToFirst, sendToBot, useBotData,
 } from "./shared";
+import { AgreeNotice, WordOrder } from "./agreeSteps";
+import { REFUND_SENTENCE, TERM_SENTENCE, chaptersInOrder, firstRoundOnly } from "../../lib/orderRules.ts";
 
+// شاشات التنبيه بالترتيب: موافقتين وترتيب قبل المتجر، وبعد اختيار المنتجات حسب اللي بالسلة
+type Gate = "" | "a1" | "a2" | "aw" | "many" | "t1" | "tw";
 type Item = [number, string, number];
 type Data = {
   c: [string, Item[]][]; g: string[]; f: number[]; w?: string[];
@@ -21,6 +25,9 @@ function Store({ D }: { D: Data }) {
   const prod = new Map(D.c.flatMap(([, items]) => items.map(([id, n, p]) => [id, { n, p }] as const)));
   const [cart, setCart] = useState<Record<number, number>>({});
   const [page, setPage] = useState(1);
+  const [gate, setGate] = useState<Gate>("a1");
+  const [termOk, setTermOk] = useState(false);
+  const [manyFor, setManyFor] = useState("");
   const [name, setName] = useState(P?.n ?? "");
   const [curr, setCurr] = useState(P?.cu ?? "");
   const [gov, setGov] = useState(P?.g ?? "");
@@ -45,12 +52,23 @@ function Store({ D }: { D: Data }) {
     haptic();
   }
   function go(p: number) { setPage(p); window.scrollTo(0, 0); }
+  function show(g: Gate) { setGate(g); window.scrollTo(0, 0); }
+  const names = entries.map(([id]) => prod.get(id)!.n);
+  const chapters = chaptersInOrder(names);
+  const chaptersKey = chapters.join("|");
+  /** بعد اختيار المنتجات: يطلع التنبيه اللي يخص السلة، وبعدها صفحة المعلومات */
+  function afterShop(many = manyFor) {
+    if (chapters.length > 1 && many !== chaptersKey) return show("many");
+    if (names.some(firstRoundOnly) && !termOk) return show("t1");
+    setGate("");
+    go(2);
+  }
   function onGov(g: string) {
     setGov(g);
     if (g !== "بغداد") setSide("");
   }
   function submit() {
-    if (page === 1) return go(2);
+    if (page === 1) return afterShop();
     const e: Errs = {};
     const n = cleanName(name);
     if (!nameOk(n)) e.name = AR_NAME_ERR;
@@ -64,7 +82,7 @@ function Store({ D }: { D: Data }) {
     if (b) e.ph2 = b; else if (p1 === p2) e.ph2 = "الرقم الثاني لازم يختلف عن الأول";
     setErrs(e);
     if (scrollToFirst(e)) return;
-    sendToBot({ n, cu: curr, g: gov, s: side, a: area.trim(), p1, p2, i: entries.map(([id, q]) => [id, q]), t: sub + fee });
+    sendToBot({ n, cu: curr, g: gov, s: side, a: area.trim(), p1, p2, i: entries.map(([id, q]) => [id, q]), t: sub + fee, ag: 1, tm: termOk ? 1 : 0, mn: manyFor === chaptersKey ? 1 : 0 });
   }
 
   return (
@@ -73,14 +91,28 @@ function Store({ D }: { D: Data }) {
         <img src="/logo.png" alt="" />
         <h1>متجر قصي العميري</h1>
         <p>الرياضيات · السادس الإعدادي</p>
-        <div className="steps">
-          <span className={page === 1 ? "on" : ""}>1  اختر المنتجات</span>
-          <span className={page === 2 ? "on" : ""}>2  معلوماتك</span>
-        </div>
+        {!gate && (
+          <div className="steps">
+            <span className={page === 1 ? "on" : ""}>1  اختر المنتجات</span>
+            <span className={page === 2 ? "on" : ""}>2  معلوماتك</span>
+          </div>
+        )}
       </header>
 
       <div className="wrap">
-        <section className={page === 1 ? "" : "hide"}>
+        {gate === "a1" && <AgreeNotice step="1 من 3" onOk={() => show("a2")}>{REFUND_SENTENCE}.</AgreeNotice>}
+        {gate === "a2" && <AgreeNotice step="2 من 3" onOk={() => show("aw")}>{REFUND_SENTENCE}.</AgreeNotice>}
+        {gate === "aw" && <WordOrder step="3 من 3" sentence={REFUND_SENTENCE} onDone={() => show("")} />}
+        {gate === "many" && (
+          <AgreeNotice title="⚠️ تذكر" okLabel="✅ أكمل الطلب" onOk={() => { setManyFor(chaptersKey); afterShop(chaptersKey); }}
+            other={<button type="button" className="btn ghost agbtn" onClick={() => show("")}>✏️ أعدل طلبي</button>}>
+            جميع المشتريات غير قابلة للإرجاع إطلاقاً، لذلك من الأفضل لك أن تسجل الآن في فصل واحد.
+          </AgreeNotice>
+        )}
+        {gate === "t1" && <AgreeNotice onOk={() => show("tw")}>{TERM_SENTENCE}.</AgreeNotice>}
+        {gate === "tw" && <WordOrder sentence={TERM_SENTENCE} onDone={() => { setTermOk(true); setGate(""); go(2); }} />}
+
+        <section className={!gate && page === 1 ? "" : "hide"}>
           {!D.c.length && <div className="empty">لا توجد منتجات حاليا.</div>}
           {!!D.w?.length && <div className="card warn">⚠️ <b>تنبيه:</b> امتحانات <b>{D.w.join("، ")}</b> <b>إلكترونية فقط</b>.</div>}
           {D.c.map(([cname, items]) => (
@@ -103,7 +135,7 @@ function Store({ D }: { D: Data }) {
           ))}
         </section>
 
-        <section className={page === 2 ? "" : "hide"}>
+        <section className={!gate && page === 2 ? "" : "hide"}>
           <div className="card">
             <h2>📝 معلومات الطلب</h2>
             <div className="form">
@@ -160,14 +192,14 @@ function Store({ D }: { D: Data }) {
         </section>
       </div>
 
-      <div className="bar"><div className="in">
+      {!gate && <div className="bar"><div className="in">
         <div className="sum">
           <small>{page === 1 ? "مجموع المنتجات" : "المبلغ الكلي" + (fee ? " مع التوصيل" : "")}</small>
           <strong>{fmt(page === 1 ? sub : sub + fee)}</strong>
         </div>
         {page === 2 && <button type="button" className="btn ghost" onClick={() => go(1)}>رجوع</button>}
         <button type="button" className="btn" disabled={page === 1 && sub === 0} onClick={submit}>{page === 1 ? "التالي" : "تأكيد وإرسال الطلب"}</button>
-      </div></div>
+      </div></div>}
     </>
   );
 }

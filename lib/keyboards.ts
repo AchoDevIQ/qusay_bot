@@ -2,12 +2,10 @@
 import { find, kvGet, type Row } from "./db.ts";
 import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL } from "./config.ts";
 import { areasWithCenters, can, cats, centerName, feeOf, hasExamMenu, isRealStaff, isStaff, myOffice, newOrdersCount, products, student, viewingAsStudent } from "./data.ts";
+import { chapterLabel } from "./orderRules.ts";
 import { b64urlEncode, btn, chunk } from "./util.ts";
 
-export function chapterLabel(name: string | null | undefined) {
-  const m = (name ?? "").match(/الفصل\s+(ال\S+(?:\s+و\S+)?)/);
-  return m ? "الفصل " + m[1] : null;
-}
+export { chapterLabel };
 export async function onlineOnly(): Promise<string[]> {
   try { return JSON.parse(await kvGet("online_only") || "[]"); } catch { return []; }
 }
