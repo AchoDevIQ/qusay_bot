@@ -1,10 +1,11 @@
 // الأسئلة العلمية: الطالب يسأل، وكل سؤال ينفتحله موضوع بمجموعة الأساتذة
-import { find, insert, kvSet, one, remove, setSession, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, one, remove, setSession, type Row } from "./db.ts";
+import { canAsk, logActivity } from "./access.ts";
 import { ADMIN_IDS, BTN_ASK, BTN_MYQ } from "./config.ts";
 import {
   can, centerName, chLabel, chapters, groupId, hoursText, qHours, qOpenNow, qWhere, question, setQ, student, topic, topics,
 } from "./data.ts";
-import { flowKb, mainKb } from "./keyboards.ts";
+import { HOME_PAGE, flowKb, mainKb } from "./keyboards.ts";
 import { api, edit, send, type Kb } from "./telegram.ts";
 import { btn, chunk, cut, esc, stamp, words } from "./util.ts";
 import { startReg } from "./student.ts";
@@ -19,6 +20,7 @@ export async function askStart(chat: number, uid: number) {
     await startReg(chat, uid, "ask");
     return;
   }
+  if (HOME_PAGE && !await canAsk(uid)) { await send(chat, "ℹ️ الأسئلة العلمية تنفتح لمن تشتري محاضرات أو امتحانات من 🛒 المتجر."); return; }
   if (!await groupId()) { await send(chat, "⚠️ قسم الأسئلة العلمية غير مفعّل حالياً."); return; }
   if (!await qOpenNow()) { await send(chat, "⏰ <b>استقبال الأسئلة مغلق هسه.</b>\n\n" + hoursText(await qHours())); return; }
   await setSession(uid, "q:pick", {});
@@ -94,6 +96,34 @@ export async function hideTopic(q: Row) {
   }
   await setQ(q.id, { thread_id: null });
 }
+/** زر «تم»: يخلص السؤال، وإذا أكو سؤال ينتظر يطلع زر ينقله إله. أسئلة نفس الطالب أول */
+export async function finishQuestion(q: Row) {
+  if (!HOME_PAGE) { await hideTopic(q); return "✅ اختفى السؤال"; }
+  const g = await groupId();
+  const later: number[] = JSON.parse(await kvGet("q_hide_later") || "[]");
+  // المواضيع المخلصة قبلها تنحذف هسه. اللي الطالب استفسر عليها ترجعت مفتوحة فتبقى
+  for (const id of later) {
+    const old = await question(id);
+    if (old && old.id !== q.id && old.status !== "open") await hideTopic(old);
+  }
+  const open = (await find("questions", { status: "open" }, { order: ["id"] })).filter((x) => x.id !== q.id && x.thread_id);
+  const next = open.find((x) => x.user_id === q.user_id) ?? open[0];
+  if (!next || !g || !String(g).startsWith("-100")) {
+    await kvSet("q_hide_later", "[]");
+    await hideTopic(q);
+    return "✅ تم. ماكو أسئلة ثانية تنتظر";
+  }
+  // حذف الموضوع هسه يطلعه من الشاشة ويضيع الزر، فينغلق ويتأجل حذفه
+  await kvSet("q_hide_later", JSON.stringify([q.id]));
+  await api("editForumTopic", { chat_id: g, message_thread_id: q.thread_id, name: await topicTitle(q, true) });
+  const who = next.user_id === q.user_id ? "باقي سؤال لنفس الطالب" : `الطالب اللي وراه: ${words((await student(next.user_id))?.name ?? "").slice(0, 3).join(" ")}`;
+  await api("sendMessage", {
+    chat_id: g, message_thread_id: q.thread_id, parse_mode: "HTML", text: `✅ <b>تم</b>\n${esc(who)}`,
+    reply_markup: { inline_keyboard: [[{ text: "➡️ روح للي وراه", url: `https://t.me/c/${String(g).slice(4)}/${next.thread_id}` }]] },
+  });
+  await api("closeForumTopic", { chat_id: g, message_thread_id: q.thread_id });
+  return "✅ تم";
+}
 async function studentHead(q: Row, s: Row, title: string) {
   const center = s.center_id ? " — " + esc(await centerName(s.center_id)) : "";
   return `${title}\n\n<b>${esc(s.name)}</b>\nالمنهج: ${esc(s.curr)} — ${esc(s.grade)}\nالامتحان: ${esc(s.exam ?? "")}${center}\n📞 <code>${s.phone1}</code>\n\n📍 ${esc(await qWhere(q))}`;
@@ -132,6 +162,7 @@ export async function qNewMessage(chat: number, uid: number, m: Row, data: Row) 
   await api("sendMessage", { chat_id: g, message_thread_id: tid, text: head, parse_mode: "HTML" });
   await api("copyMessage", { chat_id: g, from_chat_id: chat, message_id: m.message_id, message_thread_id: tid });
   await logMsg(qid, "q", chat, m.message_id);
+  await logActivity(uid, `❓ سأل سؤال علمي #${qid}`);
   await setSession(uid, "q:sent", mg ? { qid, mg } : {});
   await send(chat, `✅ <b>وصل سؤالك</b> (رقم <b>#${qid}</b>)\n📍 ${esc(await qWhere(q, s.curr === "إنجليزي"))}\n\nراح يوصلك الجواب هنا بالبوت. وتگدر تشوف أسئلتك من «${BTN_MYQ}».`, { replyKb: await mainKb(uid) });
 }
@@ -167,6 +198,7 @@ export async function qFollowMessage(chat: number, uid: number, m: Row, data: Ro
   await api("sendMessage", { chat_id: g, message_thread_id: tid, parse_mode: "HTML", text: "━━━━━━━━━━━━\n🔁 <b>الاستفسار الجديد (ما فهم):</b>" });
   await api("copyMessage", { chat_id: g, from_chat_id: chat, message_id: m.message_id, message_thread_id: tid });
   await logMsg(q.id, "q", chat, m.message_id);
+  await logActivity(uid, `🔁 استفسر على السؤال #${q.id}`);
   await send(chat, `✅ وصل استفسارك على السؤال <b>#${q.id}</b>. راح يوصلك الجواب هنا.`, { replyKb: await mainKb(uid) });
 }
 
@@ -202,7 +234,7 @@ export async function onGroupMessage(m: Row) {
       await api("sendMessage", {
         chat_id: m.chat.id, message_thread_id: m.message_thread_id, parse_mode: "HTML",
         text: "✅ وصل جوابك للطالب.\nإذا خلصت جوابك اضغط الزر حتى يختفي السؤال من عندك.\n(إذا الطالب استفسر بعدين، يرجعلك السؤال نفسه ويا جوابك)",
-        reply_markup: { inline_keyboard: [[btn("✅ خلصت — أخفِ السؤال", `qh:${q.id}`)]] },
+        reply_markup: { inline_keyboard: [[btn("✅ تم — خلصت هذا السؤال", `qh:${q.id}`)]] },
       });
     }
   } else {

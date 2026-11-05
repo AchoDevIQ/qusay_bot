@@ -25,6 +25,13 @@ function scrub(s: string) {
     .replace(/↩️ إذا غيرت رأيك،[\s\S]*ما يمكن إلغاؤه\.|↩️ <b>طلبك رقم #\d+<\/b>[\s\S]*تم تجهيز الطلب\./, "<CANCEL_NOTE>")
     .replace(/a:done:\d+/g, "a:done:<BATCH>")
     // رمز الدعوة صار 8 أرقام عمداً (كان 6 بالبوت القديم)، حتى ما ينخمن
+    // تغييرات مقصودة عن البوت القديم: شكل ملف الطلبات، اسم البائع، وتفصيل الصلاحيات
+    .replace(/html\{-webkit-print-color-adjust[\s\S]*?(<\/style>)/, "$1")
+    .replace('<section class="page ar">\n<div class=currbar>منهج عربي</div>', "<section class=page>")
+    .replace(/🏪 (البائع: )?<b>(استلام من )?[^<]*<\/b>/g, "🏪 <SELLER>")
+    .replace(/وصل شرائك من [^<]*/, "وصل شرائك من مكتب QMath")
+    .replace("🖨 طلبات التوصيل والطباعة", "🖨 الطلبات والطباعة").replace(/🛒 المنتجات والأسعار$/, "🛒 المنتجات والأسعار والتوصيل").replace(/🎓 الطلاب$/, "🎓 الطلاب والمراكز")
+    .replace("✅ تم — خلصت هذا السؤال", "✅ خلصت — أخفِ السؤال")
     .replace(/lib_\d{6,8}/g, "lib_<CODE>")
     .replace(/<code>\d{6,8}<\/code>/g, "<code><CODE></code>");
 }
@@ -41,10 +48,10 @@ function normal(v: any): any {
   return v;
 }
 // ميزات جديدة ما موجودة بالبوت القديم: جداول الامتحانات وزر لوحة التحكم
-const NEW_TABLES = ["student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
+const NEW_TABLES = ["activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
-  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:exams$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
+  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(exams|sales|company|fees|online|centers)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
   return e;
 }
 // قائمة لوحة التحكم صارت صفحة وحدة، فأزرارها ما تنقارن بالبوت القديم
@@ -58,7 +65,8 @@ function normalDb(db: Record<string, any[]>) {
     if (NEW_TABLES.includes(t)) continue;
     out[t] = rows.map((r) => {
       const x = { ...r };
-      if (t === "products") delete x.hidden;   // الإخفاء من المتجر ميزة جديدة
+      if (t === "products") { delete x.hidden; delete x.ask; }   // الإخفاء من المتجر وحق السؤال ميزات جديدة
+      if (t === "orders") { delete x.printed_by; delete x.printed_at; }
       if (t === "orders" && x.items) x.items = JSON.parse(x.items);
       if (t === "sessions" && x.data) x.data = JSON.parse(x.data);
       return normal(x);

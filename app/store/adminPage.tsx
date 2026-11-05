@@ -3,13 +3,21 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
-type TgEvent = (e?: { error?: string }) => void;
 type Tg = { Telegram?: { WebApp?: {
-  initData?: string; expand?: () => void; platform?: string; isFullscreen?: boolean;
-  isVersionAtLeast?: (v: string) => boolean; requestFullscreen?: () => void; exitFullscreen?: () => void;
-  onEvent?: (name: string, fn: TgEvent) => void; offEvent?: (name: string, fn: TgEvent) => void; showAlert?: (text: string) => void;
+  initData?: string; expand?: () => void;
 } } };
 const webApp = () => (window as unknown as Tg).Telegram?.WebApp;
+
+// زر أسفل المحادثة ما يعطي توقيع تليجرام، فرابطه يحمل رمز موقع. يبقى محفوظ لما ينتقل بين الصفحات
+const TOKEN_KEY = "qmathPageToken";
+function pageToken() {
+  const t = new URLSearchParams(location.search).get("t");
+  try {
+    if (t) sessionStorage.setItem(TOKEN_KEY, t);
+    return t ?? sessionStorage.getItem(TOKEN_KEY) ?? "";
+  } catch { return t ?? ""; }
+}
+const pageAuth = () => { const t = pageToken(); return t ? `tk:${t}` : webApp()?.initData ?? ""; };
 
 /** يتصل بواجهة الصفحة بتوقيع تليجرام. يرجع الجواب، أو null إذا صار خطأ */
 export function useAdminApi<T>(url: string, button: string) {
@@ -21,7 +29,7 @@ export function useAdminApi<T>(url: string, button: string) {
     setBusy(true);
     setError("");
     try {
-      const initData = webApp()?.initData ?? "";
+      const initData = pageAuth();
       let res: Response;
       if (body instanceof FormData) {
         body.set("initData", initData);
@@ -39,7 +47,7 @@ export function useAdminApi<T>(url: string, button: string) {
   useEffect(() => {
     let tries = 0;
     const t = setInterval(() => {
-      if (webApp()?.initData) { clearInterval(t); webApp()?.expand?.(); void call({ action: "list" }); }
+      if (pageAuth()) { clearInterval(t); webApp()?.expand?.(); void call({ action: "list" }); }
       else if (++tries > 25) { clearInterval(t); setError(`افتح هاي الصفحة من زر «${button}» داخل البوت.`); }
     }, 200);
     return () => clearInterval(t);
@@ -48,41 +56,11 @@ export function useAdminApi<T>(url: string, button: string) {
   return { data, error, busy, call };
 }
 
-// تليجرام هو اللي يحدد حجم النافذة، ويسمح للصفحة بس بملء الشاشة أو الرجوع منه.
-// الموبايل تنفتح بيه الصفحة كبيرة أصلاً، فالزر للكمبيوتر فقط
-const DESKTOP = ["tdesktop", "macos"];
-function FullscreenButton() {
-  const [show, setShow] = useState(false);
-  const [full, setFull] = useState(false);
-  useEffect(() => {
-    let off = () => {};
-    let tries = 0;
-    const t = setInterval(() => {
-      const w = webApp();
-      if (w?.initData) {
-        clearInterval(t);
-        if (!DESKTOP.includes(w.platform ?? "") || !w.isVersionAtLeast?.("8.0") || !w.requestFullscreen) return;
-        const changed: TgEvent = () => setFull(!!webApp()?.isFullscreen);
-        const failed: TgEvent = (e) => { if (e?.error !== "ALREADY_FULLSCREEN") webApp()?.showAlert?.("ما گدر تليجرام يكبر الصفحة. حدث تليجرام وجرب مرة ثانية."); };
-        w.onEvent?.("fullscreenChanged", changed);
-        w.onEvent?.("fullscreenFailed", failed);
-        off = () => { w.offEvent?.("fullscreenChanged", changed); w.offEvent?.("fullscreenFailed", failed); };
-        setFull(!!w.isFullscreen);
-        setShow(true);
-      } else if (++tries > 25) clearInterval(t);
-    }, 200);
-    return () => { clearInterval(t); off(); };
-  }, []);
-  if (!show) return null;
-  return <button type="button" className="adscreen" onClick={() => (full ? webApp()?.exitFullscreen?.() : webApp()?.requestFullscreen?.())}>{full ? "↙️ تصغير الشاشة" : "↗️ ملء الشاشة"}</button>;
-}
-
 /** رأس صفحة الإدارة، وزر الرجوع للوحة التحكم */
 export function AdminHeader({ title, home }: { title: string; home?: boolean }) {
   return (
     <header className="adhead">
       {!home && <Link className="adback" href="/store/admin">⬅️ لوحة التحكم</Link>}
-      <FullscreenButton />
       <img src="/logo.png" alt="" />
       <h1 className="plain">QMath</h1>
       <p>{title}</p>

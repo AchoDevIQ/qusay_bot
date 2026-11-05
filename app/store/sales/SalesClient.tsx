@@ -1,35 +1,66 @@
 "use client";
-// بيع بالمكتب وسجل مبيعاته
+// بيع بالمكتب أو المكتبة، وسجل المبيعات. صاحب المكتبة يشوف بيعها بس، وهاي صفحته الرئيسية
 import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 
 type Sale = { id: number; time: string; name: string; total: number; seller: string; items: string };
 type St = { id: number; name: string; phone: string; gov: string };
+type Shop = { name: string; open: number; openN: number; left: number | null; archive: { id: number; amount: number; n: number; created: string }[] };
+type Team = { id: number; name: string; sold: number; total: number; printed: number; pdfs: number };
 type Data = {
-  today: string; day: string; prev: string; next: string | null; total: number; sales: Sale[]; sellers: { name: string; total: number }[];
+  today: string; day: string; prev: string; next: string | null; total: number; sales: Sale[]; sellers: { name: string; total: number }[]; shop: Shop | null; team: Team[];
   days: { day: string; n: number; total: number }[]; results: St[]; catalog: { name: string; items: { id: number; name: string; price: number }[] }[]; notice: string; soldId?: number;
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
 
+function Receipts({ id, busy, call, big }: { id: number; busy: boolean; call: Call; big?: boolean }) {
+  const btn = big ? "btn agbtn" : "exbtn";
+  return (
+    <div className={big ? "adform" : "adreceipts"}>
+      <button type="button" aria-label="وصل طابعة POS عرض 58" className={btn} disabled={busy} onClick={() => void call({ action: "receipt", id, kind: "paper" })}>🧾{big ? " وصل طابعة POS (عرض 58)" : ""}</button>
+      <button type="button" aria-label="وصل PDF بإطار" className={btn} disabled={busy} onClick={() => void call({ action: "receipt", id, kind: "framed" })}>📄{big ? " PDF بإطار للطابعة الكبيرة" : ""}</button>
+      {!big && <button type="button" aria-label="وصل ملون" className={btn} disabled={busy} onClick={() => void call({ action: "receipt", id, kind: "color" })}>🖼</button>}
+    </div>
+  );
+}
+
 export default function SalesClient() {
-  const { data, error, busy, call } = useAdminApi<Data>("/api/sales", "🏪 بيع ومبيعات المكتب");
-  const [tab, setTab] = useState<"sell" | "log">("sell");
+  const { data, error, busy, call } = useAdminApi<Data>("/api/sales", "🏪 البيع");
+  const [tab, setTab] = useState<"sell" | "log" | "archive">("sell");
   const day = data?.day;
   const act: Call = (b) => call({ day, ...b });
+  const shop = data?.shop;
   return (
     <>
-      <AdminHeader title="🏪 بيع ومبيعات المكتب" />
+      <AdminHeader title={shop ? `🏪 ${shop.name}` : "🏪 بيع ومبيعات المكتب"} home={!!shop} />
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && (
           <>
+            {shop && (
+              <div className="adstats adstats2 adshop">
+                <div><b>{fmt(data.total)}</b>مبيعات اليوم ({data.sales.length})</div>
+                <div><b>{fmt(shop.open)}</b>غير محاسب ({shop.openN})</div>
+                {shop.left !== null && <div><b>{fmt(shop.left)}</b>الباقي من الرصيد</div>}
+              </div>
+            )}
             <div className="chips adtabs">
               <button type="button" className={tab === "sell" ? "on" : ""} onClick={() => setTab("sell")}>🏪 بيع جديد</button>
               <button type="button" className={tab === "log" ? "on" : ""} onClick={() => setTab("log")}>📊 المبيعات</button>
+              {shop && <button type="button" className={tab === "archive" ? "on" : ""} onClick={() => setTab("archive")}>🗂 المحاسبات</button>}
             </div>
-            {tab === "sell" ? <Sell data={data} busy={busy} call={act} /> : <Log data={data} busy={busy} call={act} />}
+            {tab === "sell" && <Sell data={data} busy={busy} call={act} />}
+            {tab === "log" && <Log data={data} busy={busy} call={act} />}
+            {tab === "archive" && shop && (
+              <div className="card">
+                <h2>🗂 المحاسبات السابقة</h2>
+                {shop.archive.length ? shop.archive.map((s) => (
+                  <button type="button" key={s.id} className="adfield" disabled={busy} onClick={() => void act({ action: "settlePdf", id: s.id })}><small>{s.n} بيعة</small><span>{s.created}</span><i>{fmt(s.amount)} 📄</i></button>
+                )) : <div className="empty">ما أكو محاسبات بعد.</div>}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -42,6 +73,7 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
   const [q, setQ] = useState("");
   const [st, setSt] = useState<St | null>(null);
   const [cart, setCart] = useState<Record<number, number>>({});
+  const [sold, setSold] = useState<{ id: number; name: string } | null>(null);
   const all = data.catalog.flatMap((c) => c.items);
   const lines = Object.entries(cart).map(([id, n]) => ({ id: Number(id), n, p: all.find((x) => x.id === Number(id)) })).filter((x) => x.p);
   const total = lines.reduce((s, x) => s + x.p!.price * x.n, 0);
@@ -51,6 +83,16 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
     if (n) next[id] = n; else delete next[id];
     return next;
   });
+  if (sold) {
+    return (
+      <div className="card">
+        <h2>✅ تم البيع #{sold.id}</h2>
+        <div className="who">👤 {sold.name}<br />اختار شلون تطبع الوصل. الملف يوصلك بمحادثة البوت، تفتحه وتطبعه.</div>
+        <div className="expad"><Receipts id={sold.id} busy={busy} call={call} big /></div>
+        <div className="expad"><button type="button" className="btn ghost agbtn" onClick={() => setSold(null)}>🏪 بيع جديد</button></div>
+      </div>
+    );
+  }
   if (!st) {
     return (
       <>
@@ -69,7 +111,7 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
     <>
       <div className="card">
         <h2>👤 {st.name}</h2>
-        <div className="who">📞 {st.phone} · {st.gov} <button type="button" className="exbtn" onClick={() => setSt(null)}>تغيير الطالب</button></div>
+        <div className="who">📞 {st.phone}{st.gov ? ` · ${st.gov}` : ""} <button type="button" className="exbtn" onClick={() => setSt(null)}>تغيير الطالب</button></div>
       </div>
       {data.catalog.map((c) => (
         <div className="card" key={c.name}>
@@ -91,7 +133,8 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
       <div className="card expad adform">
         <div>💰 المجموع بدون توصيل: <b className="adcode">{fmt(total)}</b></div>
         <button type="button" className="btn" disabled={busy || !lines.length} onClick={async () => {
-          if (await call({ action: "sale", sid: st.id, items: lines.map((x) => [x.id, x.n]) })) { setSt(null); setCart({}); setQ(""); }
+          const r = await call({ action: "sale", sid: st.id, items: lines.map((x) => [x.id, x.n]) });
+          if (r?.soldId) { setSold({ id: r.soldId, name: st.name }); setSt(null); setCart({}); setQ(""); }
         }}>✅ تم البيع</button>
       </div>
     </>
@@ -100,6 +143,8 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
 
 function Log({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
   const [showDays, setShowDays] = useState(false);
+  const [seller, setSeller] = useState("");
+  const shown = seller ? data.sales.filter((s) => s.seller === seller) : data.sales;
   return (
     <>
       <div className="card">
@@ -121,23 +166,32 @@ function Log({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
         <div className="adstats adstats2 adnopadtop">
           <div><b>{data.sales.length}</b>عدد المبيعات</div><div><b>{fmt(data.total)}</b>المجموع</div>
         </div>
-        {!!data.sellers.length && <div className="expad exhint adtop">حسب البائع: {data.sellers.map((s) => `${s.name}: ${fmt(s.total)}`).join(" · ")}</div>}
-        {data.sales.length ? (
+        {data.sellers.length > 1 && (
+          <div className="chips">
+            <button type="button" className={!seller ? "on" : ""} onClick={() => setSeller("")}>الكل</button>
+            {data.sellers.map((s) => <button type="button" key={s.name} className={seller === s.name ? "on" : ""} onClick={() => setSeller(s.name)}>{s.name}: {fmt(s.total)}</button>)}
+          </div>
+        )}
+        {shown.length ? (
           <table className="extable"><tbody>
-            {data.sales.map((s) => (
+            {shown.map((s) => (
               <tr key={s.id}>
                 <td><b>#{s.id} {s.name}</b><small className="pdmode">{s.time} · {s.seller}<br />{s.items}</small></td>
-                <td className="p">{fmt(s.total)}
-                  <div className="adreceipts">
-                    <button type="button" aria-label="وصل ملون" className="exbtn" disabled={busy} onClick={() => void call({ action: "receipt", id: s.id, kind: "color" })}>🖼</button>
-                    <button type="button" aria-label="وصل للطباعة" className="exbtn" disabled={busy} onClick={() => void call({ action: "receipt", id: s.id, kind: "paper" })}>🖨</button>
-                  </div>
-                </td>
+                <td className="p">{fmt(s.total)}<Receipts id={s.id} busy={busy} call={call} /></td>
               </tr>
             ))}
           </tbody></table>
         ) : <div className="empty">ما أكو مبيعات بهذا اليوم.</div>}
       </div>
+      {!!data.team.length && (
+        <div className="card">
+          <h2>👥 شغل المساعدين بهذا اليوم</h2>
+          <table className="extable"><tbody>
+            <tr><th>المساعد</th><th className="p">باع</th><th className="p">طلبات طبعها</th><th className="p">ملفات PDF</th></tr>
+            {data.team.map((t) => <tr key={t.id}><td><b>{t.name}</b></td><td className="p">{t.sold} ({fmt(t.total)})</td><td className="p">{t.printed}</td><td className="p">{t.pdfs}</td></tr>)}
+          </tbody></table>
+        </div>
+      )}
     </>
   );
 }

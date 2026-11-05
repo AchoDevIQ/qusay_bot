@@ -61,7 +61,7 @@ test("الصفحة الرئيسية تطلع حسب الصلاحية", async () 
     assert.ok(fs.existsSync(file), file);                                              // كل زر إله صفحة
     assert.ok(fs.existsSync(path.join("app", "api", p, "route.ts")), p);
   }
-  assert.deepEqual(await pages(5), ["orders", "sales"]);
+  assert.deepEqual(await pages(5), ["orders"]);
   await assert.rejects(adminHomeAction({ action: "list" }), status(401));
   await assert.rejects(adminHomeAction({ action: "list", initData: sign(2) }), status(403));
 });
@@ -130,7 +130,7 @@ test("المساعدين: إضافة، صلاحيات، دفعة، رصيد، و
   assert.ok(sent.some((x) => x.p?.chat_id === 555123));
   await assert.rejects(staff({ action: "add", id: "555123", name: "ثاني" }), /موجود/);
   await assert.rejects(staff({ action: "perms", id: 555123, perms: ["hack"] }), /صلاحية/);
-  await staff({ action: "perms", id: 555123, perms: ["orders", "q"] });
+  await staff({ action: "perms", id: 555123, perms: ["orders", "q", "sales"] });
   assert.equal(await can(555123, "orders"), true);
   assert.equal(await can(555123, "students"), false);
   await order(3, { seller: 555123, total: 10_000_000 });

@@ -3,8 +3,9 @@ import { randomInt } from "node:crypto";
 import { find, insert, kvGet, kvSet, one, put, remove, setSession, sumOf, tx, update, type Row } from "./db.ts";
 import { ADMIN_IDS, BTN_OFFICE, toLatinDigits } from "./config.ts";
 import {
-  can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, product, staffAccount, staffName, student, tooManyFails, viewingAsStudent,
+  can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, product, sellerLabel, staffAccount, staffName, student, tooManyFails, viewingAsStudent,
 } from "./data.ts";
+import { logActivity } from "./access.ts";
 import { flowKb, mainKb, posKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendPaperReceipt, sendReceiptImage } from "./documents.ts";
 import { unlockFromSale } from "./exams.ts";
@@ -22,7 +23,7 @@ export async function onPosSale(chat: number, uid: number, o: any) {
 /** ينفذ البيعة ويرسل الوصل للطالب. يرجع الرسالة للبائع، أو سبب الرفض */
 export async function posSale(uid: number, o: any): Promise<{ error?: string; againSid?: number; msg?: string; off?: Row | null; oid?: number; total?: number; sent?: boolean }> {
   const off = await myOffice(uid);
-  if (!off && !await can(uid, "orders")) return { error: "⚠️ ما عندك صلاحية." };
+  if (!off && !await can(uid, "orders") && !await can(uid, "sales")) return { error: "⚠️ ما عندك صلاحية." };
   const sid = toInt(o.sid || 0) ?? 0;
   const s = await student(sid);
   if (!s) return { error: "⚠️ الطالب غير موجود." };
@@ -55,13 +56,14 @@ export async function posSale(uid: number, o: any): Promise<{ error?: string; ag
   // الوصل الإلكتروني الملون للطالب
   let sent = false;
   try {
-    sent = await sendReceiptImage(sid, od, items, `🧾 <b>وصل شرائك من مكتب QMath</b> (#${oid})\nشكراً لك 🌷`);
+    sent = await sendReceiptImage(sid, od, items, `🧾 <b>وصل شرائك من ${esc(await sellerLabel(od))}</b> (#${oid})\nشكراً لك 🌷`);
   } catch (e) { console.error(e); }
   if (!sent) {
-    const lines = [`🧾 <b>وصل شرائك من مكتب QMath</b> (#${oid})`, "", ...items.map((i) => `• ${esc(i.name)} × ${i.qty} — ${money(i.qty * i.price)}`),
+    const lines = [`🧾 <b>وصل شرائك من ${esc(await sellerLabel(od))}</b> (#${oid})`, "", ...items.map((i) => `• ${esc(i.name)} × ${i.qty} — ${money(i.qty * i.price)}`),
       "", `💰 المجموع: <b>${money(total)}</b>`, "شكراً لك 🌷"];
     sent = !!await send(sid, lines.join("\n"));
   }
+  await logActivity(sid, `🏪 اشترى من ${await sellerLabel(od)} (#${oid}): ${items.map((i) => `${i.name} ×${i.qty}`).join("، ")}`);
   const unlocked = await unlockFromSale(sid, items, oid);
   let msg = `✅ <b>تم البيع #${oid}</b> — ${esc(s.name)}\n💰 ${money(total)}\n\n` +
     (sent ? "📱 وصل الوصل الإلكتروني للطالب." : "⚠️ ما گدرت أرسل الوصل للطالب (ممكن مسوي حظر للبوت).") + "\n📊 وانسجلت بمبيعات اليوم." +

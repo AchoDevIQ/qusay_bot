@@ -98,6 +98,6 @@ test("الطلب يوصل السيرفر مباشرة وينحفظ باسم صا
   const o = (await get("SELECT * FROM orders WHERE user_id=2 ORDER BY id DESC LIMIT 1"))!;
   assert.equal((await get("SELECT COUNT(*) n FROM orders WHERE user_id=2"))!.n, n + 1);
   assert.equal(o.username, "u2");
-  assert.ok(calls.some((c) => /طلب جديد/.test(c.p.text ?? "")));
+  assert.ok(!calls.some((c) => /طلب جديد/.test(c.p.text ?? "")));   // الطلب يطلع بالصفحة، بدون رسالة
   flush();
 });

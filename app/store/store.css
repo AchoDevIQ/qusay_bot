@@ -105,7 +105,7 @@ input.ltr{direction:ltr;text-align:left;letter-spacing:1px}
 html:has(.rg),html:has(.rg) body{background:#f4f6fb;padding-bottom:0}
 .rg{min-height:100vh;background:#f4f6fb;color:#16233b;padding-bottom:170px}
 .rgtop{background:#16233b;color:#d7dde8;padding:14px 18px 16px}
-.rgtopline{display:flex;justify-content:space-between;align-items:center;font-size:15px;margin-bottom:10px}
+.rgtopline{display:flex;justify-content:flex-start;gap:10px;align-items:center;font-size:15px;margin-bottom:10px}
 .rgtopline b{font-weight:600}
 .rgtopline span{color:#8d99ad;font-size:13px}
 .rgtrack{height:5px;border-radius:9px;background:#3a475d;overflow:hidden}
@@ -150,3 +150,18 @@ html:has(.rg),html:has(.rg) body{background:#f4f6fb;padding-bottom:0}
 .rgpass b{display:block;margin:8px 0 12px;font-size:30px;letter-spacing:3px;user-select:all}
 .rgcopy{border:0;background:none;color:#16233b;font-family:inherit;font-size:15px;cursor:pointer}
 .rgalert{text-align:right;padding:13px 15px;border-radius:14px;background:#fff4cf;border:1px solid #f4d36f;color:#8a4b08;font-size:14px;line-height:1.7}
+/* أدوات حجم الصفحة: تطلع بكل الصفحات */
+.ptools{position:absolute;z-index:6;top:calc(10px + var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));left:8px;display:flex;gap:4px}
+.ptools button{min-width:34px;height:30px;padding:0 6px;border:1px solid var(--gold2);border-radius:9px;background:var(--ink2);color:var(--gold);font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
+.ptools button:disabled{opacity:.4}
+/* التسجيل */
+.rglogo{height:96px}.rgintro{margin:6px 0 0;font-size:17px;font-weight:600;line-height:1.9}
+/* جملة الفصل الواحد: لازم الطالب يشوفها */
+.agflash{display:inline-block;padding:4px 10px;border-radius:10px;color:#101929;font-weight:800;background:linear-gradient(100deg,#F9C445 30%,#fff6d6 50%,#F9C445 70%);background-size:220% 100%;animation:agflash 1.6s linear infinite alternate}
+@keyframes agflash{from{background-position:100% 0}to{background-position:0 0}}
+/* الطالب: ربط ولي الأمر */
+.hmlink{display:flex;flex-direction:column;gap:12px;padding:16px;font-size:15px;line-height:1.9}.hmlink a,.hmlink button{width:100%;text-align:center;text-decoration:none}.hmsteps{margin:0;padding-inline-start:22px}
+/* الطلبات */
+.adenrow td{background:rgba(46,180,110,.14)}.adenrow td:first-child{border-right:4px solid #2eb46e}.adentag{display:inline-block;margin-inline-start:6px;padding:1px 7px;border-radius:6px;background:#0b5d3b;color:#fff;font-size:11px;font-weight:800}
+.adcompany{padding:10px 0}.adcompany .adnet{border-color:var(--gold)}.adshop{padding:12px 0 0}.pdask{display:block;margin:4px auto 0}
+.adfilters{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:10px 0}.adfilters select{padding:9px;font-size:14px}.adlog{max-height:320px;overflow:auto;margin:8px 0;padding:0 10px;border:1px solid var(--line);border-radius:10px}.adlinkin{color:var(--gold)}

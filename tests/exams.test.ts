@@ -124,7 +124,7 @@ let code = "", oid = 0;
 test("التوصيل: الرمز ما ينعطى للطالب، والامتحانات تبقى مقفولة لحد المسح", async () => {
   oid = await order(3, 1);
   code = (await get("SELECT code FROM order_codes WHERE order_id=?", oid))!.code;
-  assert.match(code, /^QM-[A-HJ-NP-Z2-9]{8}$/);
+  assert.match(code, /^\d{6}$/);
   assert.ok(!JSON.stringify(calls).includes(code), "الرمز ما لازم يوصل برسائل تليجرام");
   assert.deepEqual(await access(3), []);
   flush();

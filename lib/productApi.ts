@@ -1,6 +1,7 @@
 // واجهة صفحة المنتجات والأقسام. المنتج المحذوف يبقى مخفي، لأن الطلبات القديمة تحفظ اسمه وسعره لوحدها
 import { catIdFor, find, insert, modeFromName, one, tx, update, type Row } from "./db.ts";
 import { toLatinDigits } from "./config.ts";
+import { askDefault } from "./access.ts";
 import { allCats } from "./data.ts";
 import { authed, need } from "./webApi.ts";
 
@@ -62,7 +63,7 @@ async function productList() {
   const products = await find("products", { active: 1 }, { order: ["id"] });
   return (await allCats()).map((c) => ({
     id: c.id, name: c.name,
-    products: products.filter((p) => p.cat_id === c.id).map((p) => ({ id: p.id, name: p.name, price: p.price, mode: p.mode || "both", hidden: !!p.hidden })),
+    products: products.filter((p) => p.cat_id === c.id).map((p) => ({ id: p.id, name: p.name, price: p.price, mode: p.mode || "both", hidden: !!p.hidden, ask: askDefault(p) })),
   }));
 }
 
@@ -104,6 +105,10 @@ export async function productAction(body: Row) {
     // الإخفاء من المتجر فقط: اللي اشترى قبل تبقى مشترياته وطلباته مثل ما هي
     need(await one("products", { id, active: 1 }), "المنتج غير موجود");
     await update("products", { id }, { hidden: body.hidden ? 1 : 0 });
+  } else if (a === "ask") {
+    // هل اللي يشتري هذا المنتج من حقه يسأل أسئلة علمية
+    need(await one("products", { id, active: 1 }), "المنتج غير موجود");
+    await update("products", { id }, { ask: body.ask ? 1 : 0 });
   } else if (a === "hideCat") {
     await liveCat(id);
     await update("products", { cat_id: id }, { hidden: body.hidden ? 1 : 0 });

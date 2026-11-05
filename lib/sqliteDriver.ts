@@ -67,12 +67,18 @@ async function init() {
     CREATE TABLE IF NOT EXISTS bank_edits(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS exam_access(user_id INTEGER, chapter TEXT, order_id INTEGER, created TEXT, PRIMARY KEY(user_id, chapter));
     CREATE TABLE IF NOT EXISTS order_codes(code TEXT PRIMARY KEY, order_id INTEGER UNIQUE, chapters TEXT, used_at TEXT);
+    CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
+    CREATE TABLE IF NOT EXISTS guardians(guardian_id INTEGER, student_id INTEGER, created TEXT, PRIMARY KEY(guardian_id, student_id));
+    CREATE TABLE IF NOT EXISTS company_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, from_id INTEGER, to_id INTEGER, n INTEGER, gross INTEGER, fees INTEGER, net INTEGER, created TEXT);
   `);
   await addColumn("orders", "curr", "TEXT");
   await addColumn("orders", "printed", "INTEGER DEFAULT 0");
   await addColumn("orders", "seller", "INTEGER");
   await addColumn("orders", "office_id", "INTEGER");
   await addColumn("orders", "settle_id", "INTEGER");
+  await addColumn("orders", "printed_by", "INTEGER");
+  await addColumn("orders", "printed_at", "TEXT");
+  await addColumn("products", "ask", "INTEGER");
   await addColumn("products", "cat_id", "INTEGER");
   await addColumn("products", "mode", "TEXT");
   await addColumn("products", "hidden", "INTEGER DEFAULT 0");

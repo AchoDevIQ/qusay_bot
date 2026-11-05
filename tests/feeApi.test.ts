@@ -59,7 +59,7 @@ for (const [name, d] of Object.entries(drivers)) {
 test("الصلاحية", async () => {
   dbm.setDriver(sqliteDriver);
   await dbm.put("staff", { user_id: 5, name: "م", perms: "orders" });
-  await dbm.put("staff", { user_id: 6, name: "م", perms: "products" });
+  await dbm.put("staff", { user_id: 6, name: "م", perms: "fees" });
   await assert.rejects(feeAction({ action: "list" }), (e: any) => e.status === 401);
   await assert.rejects(feeAction({ action: "all", value: 1, initData: sign(2) }), (e: any) => e.status === 403);
   await assert.rejects(feeAction({ action: "all", value: 1, initData: sign(5) }), (e: any) => e.status === 403);

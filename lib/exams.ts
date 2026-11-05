@@ -1,13 +1,13 @@
 // الامتحانات: تنفتح بعد الشراء، مباشرة من المكتبة، أو برمز QR بوصل التوصيل لمن يوصل الطلب
 import { randomInt } from "node:crypto";
 import { count, find, insert, insertIgnore, one, setSession, tx, update, type Row } from "./db.ts";
-import { BTN_EXAMS, STORE_URL } from "./config.ts";
+import { logActivity } from "./access.ts";
+import { BTN_EXAMS, STORE_URL, toLatinDigits } from "./config.ts";
 import { noteFail, pendingCodes, tooManyFails } from "./data.ts";
 import { chapterLabel, flowKb, mainKb, scanKb } from "./keyboards.ts";
 import { send, type Kb } from "./telegram.ts";
 import { btn, esc, stamp } from "./util.ts";
 
-const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // بدون 0 وO و1 وI حتى ما تتشابه بالقراءة
 const FAILS = "xfail";
 
 /** الفصل اللي يفتحه المنتج، أو null. الدفاتر ورق، والامتحان الحضوري ينقدم بالمركز، فما يفتحون شي بالبوت */
@@ -40,7 +40,8 @@ export async function unlockFromSale(sid: number, items: Row[], oid: number) {
 export async function createOrderCode(oid: number, items: Row[]) {
   const chapters = chaptersOf(items);
   if (!chapters.length) return null;
-  const make = () => "QM-" + Array.from({ length: 8 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
+  // أرقام بس حتى ما يخربط بالكابيتال والسمول. الرمز يشتغل لصاحب الطلب فقط، والمحاولات محدودة
+  const make = () => String(randomInt(100000, 1000000));
   let code = make();
   while (await one("order_codes", { code })) code = make();
   await insert("order_codes", { code, order_id: oid, chapters: JSON.stringify(chapters) });
@@ -55,8 +56,8 @@ export async function readyExtras(oid: number): Promise<{ text: string; kb?: Kb 
   };
 }
 function normalCode(raw: string) {
-  const c = raw.trim().toUpperCase().replace(/[\s-]/g, "").replace(/^QM/, "");
-  return "QM-" + c;
+  const c = toLatinDigits(raw).trim().toUpperCase().replace(/[\s-]/g, "").replace(/^QM/, "");
+  return /^\d+$/.test(c) ? c : "QM-" + c;   // الوصولات القديمة بيها حروف
 }
 /** الرمز يشتغل بس لصاحب الطلب، وبعد ما يتجهز الطلب */
 export async function redeemCode(chat: number, uid: number, raw: string) {
@@ -78,6 +79,7 @@ export async function redeemCode(chat: number, uid: number, raw: string) {
     await grantExams(uid, chapters, r.order_id);
     await update("order_codes", { code: r.code }, { used_at: stamp() });
   });
+  await logActivity(uid, `🔓 فتح امتحانات ${chapters.join("، ")} برمز الوصل`);
   await send(chat, `🔓 <b>انفتحت امتحاناتك</b>\n${chaptersText(chapters)}`, { replyKb: await mainKb(uid) });
   await examsMenu(chat, uid);
 }
@@ -100,7 +102,7 @@ export async function examCb(chat: number, uid: number, d: string): Promise<stri
     if (o.used_at) { await examsMenu(chat, uid); return null; }
     if (o.printed !== 1) return "طلبك لسه ما تجهز";
     await setSession(uid, "x:code", { oid });
-    await send(chat, (STORE_URL ? "📷 اضغط الزر جوة ووجه الكاميرا على الكود المطبوع بالوصل.\nأو " : "") + "اكتب هنا الرمز المطبوع تحت الكود، مثل <code>QM-ABCD2345</code>:",
+    await send(chat, (STORE_URL ? "📷 اضغط الزر جوة ووجه الكاميرا على الكود المطبوع بالوصل.\nأو " : "") + "اكتب هنا الرمز المطبوع تحت الكود، مثل <code>482917</code>:",
       { replyKb: STORE_URL ? scanKb(oid) : flowKb() });
   } else if (d.startsWith("xc:")) {
     const chapters = await myChapters(uid);

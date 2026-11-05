@@ -5,12 +5,12 @@ type Table = { key: string | string[]; auto?: boolean; cols: Row };
 const nulls = (...names: string[]) => Object.fromEntries(names.map((n) => [n, null]));
 
 export const SCHEMA: Record<string, Table> = {
-  products: { key: "id", auto: true, cols: { ...nulls("name", "price", "cat_id", "mode"), active: 1, hidden: 0 } },
+  products: { key: "id", auto: true, cols: { ...nulls("name", "price", "cat_id", "mode", "ask"), active: 1, hidden: 0 } },
   cats: { key: "id", auto: true, cols: { name: null, active: 1 } },
   fees: { key: "gov", cols: { fee: null } },
   sessions: { key: "user_id", cols: nulls("state", "data") },
   kv: { key: "k", cols: { v: null } },
-  orders: { key: "id", auto: true, cols: { ...nulls("user_id", "username", "name", "gov", "side", "area", "phone1", "phone2", "items", "subtotal", "fee", "total", "created", "curr", "seller", "office_id", "settle_id"), printed: 0 } },
+  orders: { key: "id", auto: true, cols: { ...nulls("user_id", "username", "name", "gov", "side", "area", "phone1", "phone2", "items", "subtotal", "fee", "total", "created", "curr", "seller", "office_id", "settle_id", "printed_by", "printed_at"), printed: 0 } },
   students: { key: "user_id", cols: nulls("username", "name", "curr", "grade", "gov", "side", "area", "phone1", "phone2", "exam", "center_id", "created", "updated") },
   student_pass: { key: "user_id", cols: nulls("hash", "created") },
   pass_requests: { key: "user_id", cols: { created: null } },
@@ -32,6 +32,9 @@ export const SCHEMA: Record<string, Table> = {
   bank_edits: { key: "id", auto: true, cols: nulls("user_id", "what", "created") },
   exam_access: { key: ["user_id", "chapter"], cols: nulls("order_id", "created") },
   order_codes: { key: "code", cols: nulls("order_id", "chapters", "used_at") },
+  activity: { key: "id", auto: true, cols: nulls("user_id", "what", "created") },
+  guardians: { key: ["guardian_id", "student_id"], cols: { created: null } },
+  company_settlements: { key: "id", auto: true, cols: nulls("from_id", "to_id", "n", "gross", "fees", "net", "created") },
 };
 
 export const keyCols = (table: string) => [SCHEMA[table].key].flat();

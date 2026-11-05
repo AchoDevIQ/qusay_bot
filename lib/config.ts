@@ -86,8 +86,9 @@ export const DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "
 export const DAY_ORDER = [5, 6, 0, 1, 2, 3, 4];                                                // نعرضها من السبت
 export const ORD_AR = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر"];
 export const PERMS: Record<string, string> = {
-  q: "❓ الأسئلة العلمية", orders: "🖨 الطلبات والطباعة",
-  products: "🛒 المنتجات والأسعار والتوصيل", students: "🎓 الطلاب والمراكز",
+  q: "❓ الأسئلة العلمية", orders: "🖨 طلبات التوصيل والطباعة", sales: "🏪 البيع بالمكتب ومبيعاته", company: "💰 حساب شركة التوصيل",
+  products: "🛒 المنتجات والأسعار", fees: "🚚 أسعار التوصيل", online: "💻 الفصول الإلكترونية فقط",
+  students: "🎓 الطلاب", centers: "🏫 المراكز الامتحانية",
   exams: "📄 إدارة الامتحانات",
 };
 
@@ -103,7 +104,7 @@ export const BTN_ME = "👤 معلوماتي";
 export const BTN_OFFICE = "🏪 مكتبتي";
 export const BTN_EXAMS = "📝 امتحاناتي";
 export const BTN_SCAN = "📷 افتح الكاميرا";
-export const BTN_EXIT_VIEW = "⚙️ رجوع للوحة التحكم";
+export const BTN_EXIT_VIEW = "↩️ إنهاء التجربة كطالب";
 export const AR_WORD = /^[ء-ْٰ-ۓ]+$/;
 
 export const SEED_CURRIC = `# الأعداد المركبة | Complex Numbers

@@ -3,7 +3,8 @@ import { find, insert, kvSet, one, put, remove, update, type Row } from "./db.ts
 import { ADMIN_IDS, PERMS, toLatinDigits } from "./config.ts";
 import { staffAccount } from "./data.ts";
 import { parseAmount } from "./office.ts";
-import { api, send } from "./telegram.ts";
+import { mainKb } from "./keyboards.ts";
+import { send } from "./telegram.ts";
 import { money, stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 
@@ -42,7 +43,8 @@ export async function staffAction(body: Row) {
     need(!ADMIN_IDS.includes(nid), "هذا حساب المدير");
     need(!await one("staff", { user_id: nid }), "هذا المساعد موجود");
     await put("staff", { user_id: nid, name: nameOf(body.name), perms: "q" });
-    await api("sendMessage", { chat_id: nid, text: "✅ تمت إضافتك مساعد بالبوت. اكتب /start" });
+    await kvSet(`staff_since_${nid}`, stamp());
+    await send(nid, "✅ تمت إضافتك مساعد بالبوت. اضغط الزر جوة 👇", { replyKb: await mainKb(nid) });
     notice = "✅ انضاف المساعد بصلاحية الأسئلة بس. لازم تضيفه هم لمجموعة الأسئلة";
   } else if (a === "rename") {
     await liveStaff(id);
@@ -56,6 +58,8 @@ export async function staffAction(body: Row) {
   } else if (a === "del") {
     await liveStaff(id);
     await remove("staff", { user_id: id });
+    // يختفي زر اللوحة من عنده هسه، مو لحد ما يكتب /start
+    await send(id, "ℹ️ انشال حسابك من المساعدين.", { replyKb: await mainKb(id) });
   } else if (a === "pay") {
     await liveStaff(id);
     const amt = amountOf(body.amount);

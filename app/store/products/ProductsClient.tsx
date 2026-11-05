@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
-type Product = { id: number; name: string; price: number; mode: string; hidden: boolean };
+type Product = { id: number; name: string; price: number; mode: string; hidden: boolean; ask: boolean };
 type Cat = { id: number; name: string; products: Product[] };
 type Data = { cats: Cat[]; catId?: number; added?: string[]; bad?: string[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -71,6 +71,7 @@ function CatCard({ cat, cats, busy, call }: { cat: Cat; cats: Cat[]; busy: boole
             <button type="button" className="exbtn" disabled={busy || cat.products.every((p) => p.hidden)} onClick={() => void call({ action: "hideCat", id: cat.id, hidden: true })}>🙈 إخفاء الكل</button>
           </div>
         )}
+        <div className="exhint">❓ يسأل: اللي يشتري هذا المنتج ينفتح عنده السؤال العلمي. 🚫 ما يسأل: هذا المنتج ما يفتحه.</div>
         <div className="exhint">المنتج المخفي ما يطلع بالمتجر. مو حذف، واللي اشتراه قبل تبقى مشترياته عنده.</div>
         <AddProduct catId={cat.id} busy={busy} call={call} />
         <div className="exfoot">
@@ -91,7 +92,8 @@ function ProductRows({ p, cats, catId, open, toggle, close, busy, call }: { p: P
       <tr className={"exrow" + (open ? " sel" : "") + (p.hidden ? " pdhidden" : "")} onClick={toggle}>
         <td><b>{p.name}</b><small className="pdmode">{modeLabel(p.mode)}</small></td>
         <td className="p">{fmt(p.price)}</td>
-        <td className="p"><button type="button" className="exbtn pdeye" disabled={busy} onClick={(e) => { e.stopPropagation(); void call({ action: "hide", id: p.id, hidden: !p.hidden }); }}>{p.hidden ? "🙈 مخفي" : "👁 ظاهر"}</button></td>
+        <td className="p"><button type="button" className="exbtn pdeye" disabled={busy} onClick={(e) => { e.stopPropagation(); void call({ action: "hide", id: p.id, hidden: !p.hidden }); }}>{p.hidden ? "🙈 مخفي" : "👁 ظاهر"}</button>
+          <button type="button" className="exbtn pdeye pdask" disabled={busy} onClick={(e) => { e.stopPropagation(); void call({ action: "ask", id: p.id, ask: !p.ask }); }}>{p.ask ? "❓ يسأل" : "🚫 ما يسأل"}</button></td>
       </tr>
       {open && <tr><td colSpan={3} className="expanel"><EditProduct key={`${p.name}|${p.price}|${p.mode}|${catId}`} p={p} cats={cats} catId={catId} close={close} busy={busy} call={call} /></td></tr>}
     </>

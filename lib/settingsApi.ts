@@ -16,7 +16,7 @@ async function onlineData() {
   return { chapters: labels.map((label) => ({ label, on: on.includes(label) })) };
 }
 export async function onlineAction(body: Row) {
-  await authed(body?.initData, "products");
+  await authed(body?.initData, "online");
   if (body.action === "toggle") {
     const data = await onlineData();
     const label = String(body.label);

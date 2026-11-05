@@ -6,7 +6,8 @@ import {
 import {
   can, cat, cats, centerAreas, centerName, checkPhone, feeOf, govMode, newOrdersCount, orderItems, placeOf, product, products, profileText, staffIds, student,
 } from "./data.ts";
-import { flowKb, govKb, mainKb, regKb, storeKb } from "./keyboards.ts";
+import { logActivity } from "./access.ts";
+import { HOME_PAGE, flowKb, govKb, mainKb, regKb, storeKb } from "./keyboards.ts";
 import { chaptersInOrder, firstRoundOnly } from "./orderRules.ts";
 import { sendProfileCard } from "./documents.ts";
 import { edit, send, sendImage, type Kb } from "./telegram.ts";
@@ -76,7 +77,7 @@ async function afterAgree(chat: number, uid: number, data: Row) {
 }
 export async function openShop(chat: number, uid: number) {
   if (!await student(uid)) {
-    await send(chat, "حتى تطلب من المتجر، سجّل معلوماتك أول مرة 👇");
+    if (!HOME_PAGE) await send(chat, "حتى تطلب من المتجر، سجّل معلوماتك أول مرة 👇");
     await startReg(chat, uid, "shop");
     return;
   }
@@ -172,6 +173,7 @@ export async function orderCancelCb(chat: number, uid: number, mid: number, d: s
     await edit(chat, mid, `تمام، طلبك #${oid} باقي ✅\n↩️ تگدر تلغيه <b>لحد ما توصلك رسالة «تم تجهيز طلبك»</b>.`, [[btn(`❌ إلغاء الطلب #${oid}`, `oc:${oid}`)]]);
   } else if (d.startsWith("ocy:")) {
     await update("orders", { id: oid }, { printed: 2 }, { where: (r) => !r.printed });
+    await logActivity(uid, `❌ ألغى الطلب #${oid}`);
     await edit(chat, mid, `❌ تم إلغاء طلبك <b>#${oid}</b>.\nتگدر تطلب من جديد بأي وقت من 🛒 المتجر.`);
     const n = await newOrdersCount();
     for (const a of await staffIds("orders")) {
@@ -274,6 +276,7 @@ async function finalize(chat: number, uid: number, data: Row, items: Row[], sub:
     phone1: data.phone1, phone2: data.phone2, items: JSON.stringify(items), subtotal: sub, fee, total: sub + fee, created: stamp(),
   });
   await createOrderCode(oid, items);
+  await logActivity(uid, `🛒 طلب توصيل #${oid}: ${items.map((i) => `${i.name} ×${i.qty}`).join("، ")}`);
   await setSession(uid, "", {});
   // الكلام مكتوب داخل صورة النجاح، والنص يطلع بس إذا الصورة ما وصلت
   await sendImage(chat, SUCCESS, "success", "", await mainKb(uid), successText(oid));
@@ -356,6 +359,7 @@ export function orderKb(o: Row): Kb {
     [cbtn("الهاتف 1", o.phone1), cbtn("الهاتف 2", o.phone2)], [cbtn("المنتجات", items), cbtn("المبلغ الكلي", num(o.total))]];
 }
 async function notifyAdmins(oid: number) {
+  if (HOME_PAGE) return;   // الطلب يطلع بصفحة الطلبات وبعدّاد مربعها، بدون رسائل
   const o = (await one("orders", { id: oid }))!;
   const n = await newOrdersCount();
   for (const a of await staffIds("orders")) {
@@ -373,6 +377,7 @@ export async function startReg(chat: number, uid: number, nxt: string | null, ed
   const old = editMode ? await student(uid) : null;
   if (!STORE_URL) return await startRegChat(chat, uid, nxt, editMode);
   await setSession(uid, "r:form", { next: nxt, edit: !!old });
+  if (HOME_PAGE) { await send(chat, "📝 اضغط الزر جوة 👇", { replyKb: await regKb(uid) }); return; }
   await send(chat, "📝 <b>التسجيل</b> (مرة وحدة بس، وبعدها معلوماتك تطلع تلقائياً بالمتجر والأسئلة)" +
     "\n⚠️ بعد الحفظ ما تگدر تغير معلوماتك إلا عن طريق الإدارة، فاكتبها صح." +
     `\n\n👇 اضغط زر «${BTN_REG}» اللي جوة، واملأ الفورمة، وبعدين اضغط «حفظ معلوماتي».`, { replyKb: await regKb(uid) });

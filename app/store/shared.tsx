@@ -27,8 +27,62 @@ export function TelegramInit() {
   );
 }
 
+// الصفحة تكبر وتصغر كلها وياها الأيقونات، والحجم يبقى محفوظ على نفس الجهاز
+const ZOOMS = [0.85, 1, 1.15, 1.3, 1.5, 1.75];
+const ZOOM_KEY = "pageZoom";
+type FullApp = { isFullscreen?: boolean; isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; onEvent?(n: string, f: () => void): void; offEvent?(n: string, f: () => void): void };
+export function PageTools() {
+  const [zoom, setZoom] = useState(1);
+  const [canFull, setCanFull] = useState(false);
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(ZOOM_KEY));
+      if (ZOOMS.includes(saved)) setZoom(saved);
+    } catch { /* المتصفح مانع الحفظ */ }
+    let off = () => {};
+    let tries = 0;
+    const t = setInterval(() => {
+      const w = tg() as unknown as FullApp | undefined;
+      if (w?.isVersionAtLeast) {
+        clearInterval(t);
+        if (!w.isVersionAtLeast("8.0") || !w.requestFullscreen) return;
+        const changed = () => setFull(!!w.isFullscreen);
+        w.onEvent?.("fullscreenChanged", changed);
+        off = () => w.offEvent?.("fullscreenChanged", changed);
+        setFull(!!w.isFullscreen);
+        setCanFull(true);
+      } else if (++tries > 25) clearInterval(t);
+    }, 200);
+    return () => { clearInterval(t); off(); };
+  }, []);
+  useEffect(() => { (document.documentElement.style as unknown as { zoom: string }).zoom = String(zoom); }, [zoom]);
+  function step(d: number) {
+    const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, ZOOMS.indexOf(zoom) + d))];
+    setZoom(next);
+    try { localStorage.setItem(ZOOM_KEY, String(next)); } catch { /* المتصفح مانع الحفظ */ }
+  }
+  const w = () => tg() as unknown as FullApp | undefined;
+  return (
+    <div className="ptools" role="group" aria-label="حجم الصفحة">
+      <button type="button" aria-label="تكبير" disabled={zoom === ZOOMS.at(-1)} onClick={() => step(1)}>A+</button>
+      <button type="button" aria-label="تصغير" disabled={zoom === ZOOMS[0]} onClick={() => step(-1)}>A−</button>
+      {canFull && <button type="button" aria-label={full ? "تصغير الشاشة" : "ملء الشاشة"} onClick={() => (full ? w()?.exitFullscreen?.() : w()?.requestFullscreen?.())}>{full ? "↙️" : "⛶"}</button>}
+    </div>
+  );
+}
+
 export function haptic() {
   try { tg()?.HapticFeedback?.selectionChanged(); } catch { /* مو مدعوم */ }
+}
+/** يفتح رابط واتساب أو تليجرام خارج الصفحة */
+export function openOutside(url: string) {
+  const w = tg() as unknown as { openLink?(u: string): void; openTelegramLink?(u: string): void } | undefined;
+  try {
+    if (url.startsWith("https://t.me/") && w?.openTelegramLink) return w.openTelegramLink(url);
+    if (w?.openLink) return w.openLink(url);
+  } catch { /* نسخة قديمة */ }
+  window.open(url, "_blank");
 }
 export function closeApp() {
   try { (tg() as unknown as { close?: () => void } | undefined)?.close?.(); } catch { /* مو مدعوم */ }

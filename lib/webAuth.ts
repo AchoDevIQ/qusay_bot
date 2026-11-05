@@ -8,6 +8,8 @@ const hmac = (key: string | Buffer, data: string) => createHmac("sha256", key).u
 /** يرجع رقم حساب المستخدم، أو null إذا التوقيع غلط أو قديم */
 export function verifyInitData(raw: unknown, now = Date.now() / 1000): number | null {
   if (typeof raw !== "string" || !raw || !TOKEN) return null;
+  // الصفحة المفتوحة من زر أسفل المحادثة ترسل رمزها الموقع بدل توقيع تليجرام
+  if (raw.startsWith("tk:")) return verifyHomeToken(raw.slice(3), now);
   const params = new URLSearchParams(raw);
   const hash = params.get("hash");
   if (!hash) return null;
@@ -39,6 +41,16 @@ export function verifyHomeToken(t: unknown, now = Date.now() / 1000): number | n
   if (!Number.isSafeInteger(uid) || !Number.isFinite(exp) || exp < now || !sig) return null;
   const want = Buffer.from(homeSig(uid, exp), "hex"), got = Buffer.from(sig, "hex");
   return got.length === want.length && timingSafeEqual(got, want) ? uid : null;
+}
+
+// رابط ولي الأمر: رقم الطالب وتوقيعه، حتى ما ينربط أحد بطالب غيره بتخمين الرقم
+const parentSig = (sid: number) => hmac(hmac("QMathParent", TOKEN), String(sid)).toString("hex").slice(0, 20);
+export const guardianCode = (sid: number) => `${sid}_${parentSig(sid)}`;
+export function verifyGuardianCode(c: unknown): number | null {
+  if (typeof c !== "string" || !TOKEN) return null;
+  const [s, sig] = c.split("_");
+  const sid = Number(s);
+  return Number.isSafeInteger(sid) && sig === parentSig(sid) ? sid : null;
 }
 
 // الصور ما تكدر ترسل التوقيع، فتاخذ رمز قصير العمر مربوط بالمستخدم

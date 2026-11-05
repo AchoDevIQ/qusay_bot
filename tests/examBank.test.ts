@@ -237,7 +237,7 @@ test("شوف كطالب: نفس أزرار الطالب بدون صلاحيات�
   flush();
   await cb(1, "a:asstudent");
   const k = keys(calls[0]);
-  assert.ok(k.includes("🛒 المتجر") && k.includes("⚙️ رجوع للوحة التحكم"));
+  assert.ok(k.includes("🛒 المتجر") && k.includes("↩️ إنهاء التجربة كطالب"));
   assert.ok(!k.some((x: string) => x === "⚙️ لوحة التحكم"));
   flush();
   await cb(1, "a:ex");
@@ -246,13 +246,13 @@ test("شوف كطالب: نفس أزرار الطالب بدون صلاحيات�
   await msg(1, "/admin");                                    // مثل الطالب: ما تنفتح اللوحة
   assert.ok(!JSON.stringify(calls).includes("a:bulk"));
   flush();
-  await msg(1, "⚙️ رجوع للوحة التحكم");
+  await msg(1, "↩️ إنهاء التجربة كطالب");
   assert.ok(JSON.stringify(calls).includes("a:bulk"));
   flush();
   await cb(1, "a:ex");
   assert.notEqual(calls.at(-1)!.p.text, "ما عندك صلاحية");
   flush();
-  await msg(2, "⚙️ رجوع للوحة التحكم");                       // طالب عادي يكتبها: ما تنطيه شي
+  await msg(2, "↩️ إنهاء التجربة كطالب");                       // طالب عادي يكتبها: ما تنطيه شي
   assert.ok(!JSON.stringify(calls).includes("a:bulk"));
   flush();
 });
@@ -273,7 +273,7 @@ test("بوضع الطالب ما يوصل شي إداري أبداً، ويرج�
   await msg(1, "احمد");                                      // البحث السريع إداري
   assert.ok(!JSON.stringify(calls).includes("نتيجة"));
   flush();
-  await msg(1, "⚙️ رجوع للوحة التحكم");
+  await msg(1, "↩️ إنهاء التجربة كطالب");
   flush();
   assert.ok((await staffIds("orders")).includes(1));
   assert.ok(await myOffice(1));
@@ -287,7 +287,7 @@ test("المساعد يجرب كطالب، والطالب ما يطلعله زر
   assert.ok(lastBtns().includes("a:asstudent"));
   flush();
   await cb(55555, "a:asstudent");
-  assert.ok(keys(calls[0]).includes("⚙️ رجوع للوحة التحكم"));
+  assert.ok(keys(calls[0]).includes("↩️ إنهاء التجربة كطالب"));
   flush();
   await cb(2, "a:asstudent");
   assert.equal(calls.at(-1)!.p.text, "ما عندك صلاحية");

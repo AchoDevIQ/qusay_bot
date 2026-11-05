@@ -1,5 +1,6 @@
 // الصفحة الرئيسية للطالب، وإرسال طلب المتجر للسيرفر مباشرة
-import { getSession, put, setSession, type Row } from "./db.ts";
+import { getSession, one, put, setSession, type Row } from "./db.ts";
+import { boughtCourse, canAsk, childrenOf, guardianLink, guardianOf, logActivity } from "./access.ts";
 import { allowUpdate } from "./bot.ts";
 import { BTN_ME } from "./config.ts";
 import { hasExamMenu, student } from "./data.ts";
@@ -27,6 +28,7 @@ async function registerFromPage(id: number, body: Row) {
   const next = state.startsWith("r:") ? data.next : null;
   await saveStudent(id, username, r, null);
   const password = await issuePassword(id);
+  await logActivity(id, "📝 سجل بالبوت");
   await setSession(id, "", {});
   // التسجيل انحفظ، فخطأ برسائل المحادثة ما يضيع كلمة المرور على الطالب
   try {
@@ -45,9 +47,21 @@ export async function homeAction(body: Row) {
   const id = uid!;
   need(allowUpdate(id), "ضغطت هوايا، انتظر شوية", 429);
   const a = String(body.action ?? "");
+  if (a === "ask" || a === "exams") need(!await boughtCourse(id) || await guardianOf(id), "اربط ولي أمرك أول، من القائمة الرئيسية");
   if (a === "list") {
     const s = await student(id);
-    return { name: s ? String(s.name).split(" ")[0] : "", exams: await hasExamMenu(id) };
+    if (!s) {
+      const kids = await childrenOf(id);
+      if (kids.length) return { name: "", exams: false, ask: false, myq: false, children: await Promise.all(kids.map(async (k) => (await student(k.student_id))?.name ?? "—")) };
+      return { name: "", exams: false, ask: true, myq: false, fresh: true };
+    }
+    // اشترى محاضرات أو امتحانات: لازم يربط ولي أمره قبل كل شي
+    const needLink = await boughtCourse(id) && !await guardianOf(id);
+    return {
+      // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
+      name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id), ask: await canAsk(id), myq: !!await one("questions", { user_id: id }),
+      link: needLink ? await guardianLink(id) : null,
+    };
   }
   if (a === "regInfo") {
     const terms = await loadTerms();
@@ -60,6 +74,7 @@ export async function homeAction(body: Row) {
       return { url: await regLink(id) };
     }
     await setSession(id, "store", {});
+    await logActivity(id, "🛒 فتح المتجر");
     return { url: await storeLink(id) };
   }
   if (a === "order") {
@@ -78,6 +93,11 @@ export async function homeAction(body: Row) {
     await send(id, "✅ وصل طلبك. راح توصلك كلمة المرور الجديدة هنا بالمحادثة لمن توافق الإدارة.");
     return { close: true };
   }
+  // غير المسجل: كل المربعات تفتح التسجيل، بدون رسائل
+  if (!await student(id)) {
+    await setSession(id, "r:form", { next: a === "ask" ? "ask" : null, edit: false });
+    return { url: await regLink(id) };
+  }
   if (a === "ask") {
     await setSession(id, "", {});
     await askStart(id, id);
@@ -85,5 +105,6 @@ export async function homeAction(body: Row) {
   else if (a === "me") await showMe(id, id);
   else if (a === "exams") await examsMenu(id, id);
   else need(false, "أمر غير معروف");
+  await logActivity(id, { ask: "❓ فتح سؤال علمي", myq: "📂 فتح أسئلتي", me: "👤 فتح معلوماتي", exams: "📝 فتح امتحاناتي" }[a] ?? a);
   return { close: true };
 }

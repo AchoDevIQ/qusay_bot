@@ -4,9 +4,9 @@ import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
-type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; centerId: number; center: string; created: string; updated: string };
+type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; guardian: boolean; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
-type Data = { stats: Record<string, number>; results: S[]; limit: number; govs: string[]; areas: Area[]; notice: string };
+type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -17,7 +17,16 @@ export default function StudentsClient() {
   const [q, setQ] = useState("");       // المكتوب بالمربع
   const [shown, setShown] = useState(""); // البحث اللي نتيجته طالعة
   const [open, setOpen] = useState<number | null>(null);
-  const act = (b: Record<string, unknown>) => call({ q: shown, ...b });
+  const [filters, setFilters] = useState({ curr: "", grade: "", exam: "", gov: "" });
+  const [picked, setPicked] = useState<number[]>([]);
+  const [printing, setPrinting] = useState(false);
+  const act = (b: Record<string, unknown>) => call({ q: shown, filters, ...b });
+  function filter(k: keyof typeof filters, v: string) {
+    const next = { ...filters, [k]: v };
+    setFilters(next);
+    setOpen(null);
+    void call({ action: "list", q: shown, filters: next });
+  }
   const s = data?.stats;
 
   return (
@@ -36,24 +45,36 @@ export default function StudentsClient() {
                 <div><b>{s.ar}</b>عربي</div><div><b>{s.en}</b>إنجليزي</div>
               </div>
               <div className="expad exline">
-                <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "pdf", kind: "all" })}>📄 قائمة كل الطلاب</button>
-                <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "pdf", kind: "fifth" })}>📄 طلاب الخامس</button>
+                <button type="button" className="exbtn" onClick={() => setPrinting(!printing)}>🖨 طباعة قائمة</button>
               </div>
+              {printing && (
+                <div className="expad exline">
+                  <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "pdf", kind: "all" })}>📄 كل الطلاب ({s.all})</button>
+                  <button type="button" className="exbtn" disabled={busy || !data.found} onClick={() => void act({ action: "pdf", kind: "found" })}>📄 نتيجة البحث والفلاتر ({data.found})</button>
+                  <button type="button" className="exbtn" disabled={busy || !picked.length} onClick={() => void act({ action: "pdf", kind: "picked", ids: picked })}>📄 المحددين ({picked.length})</button>
+                </div>
+              )}
             </div>
-            <form className="exadd adsearch" onSubmit={(e) => { e.preventDefault(); setShown(q); setOpen(null); void call({ action: "list", q }); }}>
+            <form className="exadd adsearch" onSubmit={(e) => { e.preventDefault(); setShown(q); setOpen(null); void call({ action: "list", q, filters }); }}>
               <input placeholder="🔍 اسم الطالب أو رقم هاتفه" value={q} onChange={(e) => setQ(e.target.value)} />
               <button type="submit" className="exbtn" disabled={busy}>بحث</button>
             </form>
+            <div className="adfilters">
+              <select aria-label="المنهج" value={filters.curr} onChange={(e) => filter("curr", e.target.value)}><option value="">كل المناهج</option>{CURR_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select>
+              <select aria-label="الصف" value={filters.grade} onChange={(e) => filter("grade", e.target.value)}><option value="">كل الصفوف</option>{GRADE_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select>
+              <select aria-label="الامتحان" value={filters.exam} onChange={(e) => filter("exam", e.target.value)}><option value="">كل الامتحانات</option>{EXAM_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select>
+              <select aria-label="المحافظة" value={filters.gov} onChange={(e) => filter("gov", e.target.value)}><option value="">كل المحافظات</option>{data.govs.map((g) => <option key={g} value={g}>{g}</option>)}</select>
+            </div>
             <div className="card">
-              <h2>{shown.trim() ? `نتائج البحث (${data.results.length})` : "آخر المسجلين"}</h2>
+              <h2>{shown.trim() || Object.values(filters).some(Boolean) ? `النتائج: ${data.found}` : "آخر المسجلين"}</h2>
               {data.results.length ? (
                 <table className="extable"><tbody>
                   {data.results.map((x) => (
-                    <Rows key={x.id} s={x} data={data} open={open === x.id} toggle={() => setOpen(open === x.id ? null : x.id)} close={() => setOpen(null)} busy={busy} call={act} />
+                    <Rows key={x.id} s={x} data={data} picked={picked.includes(x.id)} pick={() => setPicked(picked.includes(x.id) ? picked.filter((i) => i !== x.id) : [...picked, x.id])} open={open === x.id} toggle={() => setOpen(open === x.id ? null : x.id)} close={() => setOpen(null)} busy={busy} call={act} />
                   ))}
                 </tbody></table>
               ) : <div className="empty">ما لگيت طالب.</div>}
-              {data.results.length >= data.limit && <div className="expad exhint">تطلع أول {data.limit} بس. ابحث بالاسم أو الرقم حتى توصل للطالب.</div>}
+              {data.found > data.results.length && <div className="expad exhint">تطلع أول {data.results.length} من {data.found}. استخدم البحث أو الفلاتر حتى توصل للطالب.</div>}
             </div>
           </>
         )}
@@ -63,14 +84,15 @@ export default function StudentsClient() {
   );
 }
 
-function Rows({ s, data, open, toggle, close, busy, call }: { s: S; data: Data; open: boolean; toggle: () => void; close: () => void; busy: boolean; call: Call }) {
+function Rows({ s, data, picked, pick, open, toggle, close, busy, call }: { s: S; data: Data; picked: boolean; pick: () => void; open: boolean; toggle: () => void; close: () => void; busy: boolean; call: Call }) {
   return (
     <>
-      <tr className={"exrow" + (open ? " sel" : "")} onClick={toggle}>
+      <tr className={"exrow" + (open || picked ? " sel" : "")} onClick={toggle}>
+        <td className="adpick" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`تحديد ${s.name}`} checked={picked} onChange={pick} /></td>
         <td><b>{s.name}</b><small className="pdmode">{s.grade} · {s.exam || "بدون امتحان"}{s.center ? ` · ${s.center}` : ""}</small></td>
         <td className="adphone">{s.phone1}</td>
       </tr>
-      {open && <tr><td colSpan={2} className="expanel"><Form key={s.updated + s.id} s={s} data={data} close={close} busy={busy} call={call} /></td></tr>}
+      {open && <tr><td colSpan={3} className="expanel"><Form key={s.updated + s.id} s={s} data={data} close={close} busy={busy} call={call} /></td></tr>}
     </>
   );
 }
@@ -97,6 +119,15 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
   return (
     <div>
       <div className="exhint">مسجل من: {s.created}{s.username ? ` · @${s.username}` : ""}</div>
+      <div className="exline">
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "log", id: s.id })}>📜 عمليات الطالب</button>
+        {s.guardian ? <Confirm label="👨‍👧 مربوط بولي أمر: فك الربط" disabled={busy} onYes={() => void call({ action: "unlink", id: s.id })} /> : <span className="exhint">ولي الأمر غير مربوط</span>}
+      </div>
+      {data.log?.id === s.id && (
+        <div className="adlog">
+          {data.log.rows.length ? data.log.rows.map((r, i) => <div key={i} className="adsale">{r.what}<small>{r.created}</small></div>) : <div className="exhint">ما أكو عمليات مسجلة بعد.</div>}
+        </div>
+      )}
       <label>الاسم الرباعي</label>
       <input value={name} onChange={(e) => setName(e.target.value)} />
       <label>المنهج</label>

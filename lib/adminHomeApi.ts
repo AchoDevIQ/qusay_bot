@@ -13,17 +13,21 @@ type Tile = { page: string; icon: string; title: string; note?: string; hot?: bo
 async function homeData(uid: number) {
   const groups: { title: string; tiles: Tile[] }[] = [];
   const shop: Tile[] = [], people: Tile[] = [], setup: Tile[] = [];
-  if (await can(uid, "orders")) {
-    const n = await newOrdersCount();
-    shop.push({ page: "orders", icon: "🖨", title: "الطلبات", note: n ? `${n} جديد` : "ماكو جديد", hot: n > 0 });
+  const orders = await can(uid, "orders"), company = await can(uid, "company");
+  if (orders || company) {
+    const n = orders ? await newOrdersCount() : 0;
+    shop.push({ page: "orders", icon: "🖨", title: "طلبات التوصيل", note: !orders ? "حساب الشركة" : n ? `عندك ${n} طلب جديد` : "ماكو جديد", hot: n > 0 });
+  }
+  if (await can(uid, "sales")) {
     const sold = await find("orders", { printed: 3 }, { where: (o) => o.office_id === null && String(o.created).startsWith(todayStr()) });
     shop.push({ page: "sales", icon: "🏪", title: "بيع ومبيعات المكتب", note: `اليوم: ${sold.length} بيعة` });
   }
-  if (await can(uid, "products")) {
-    shop.push({ page: "products", icon: "🛒", title: "المنتجات والأقسام" }, { page: "fees", icon: "🚚", title: "أسعار التوصيل" }, { page: "online", icon: "💻", title: "فصول إلكترونية فقط" });
-  }
+  if (await can(uid, "products")) shop.push({ page: "products", icon: "🛒", title: "المنتجات والأقسام" });
+  if (await can(uid, "fees")) shop.push({ page: "fees", icon: "🚚", title: "أسعار التوصيل" });
+  if (await can(uid, "online")) shop.push({ page: "online", icon: "💻", title: "فصول إلكترونية فقط" });
   if (await can(uid, EXAM_PERM)) people.push({ page: "exams", icon: "📝", title: "الامتحانات" });
-  if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` }, { page: "centers", icon: "🏫", title: "المراكز الامتحانية" });
+  if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` });
+  if (await can(uid, "centers")) people.push({ page: "centers", icon: "🏫", title: "المراكز الامتحانية" });
   // الطلاب ما يگدرون يطلبون هسه، فالمربع يطلع بس إذا بقى طلب قديم. يرجع مع ربط التطبيق
   if (await can(uid, "students")) {
     const n = await passRequestsCount();

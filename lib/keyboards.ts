@@ -27,7 +27,7 @@ const pageUrl = (page: string, d: unknown) => `${siteBase()}${page}?v=${Math.flo
 
 // القائمة صفحة بمربعات، لأن تليجرام ما يسمح بإطارات وألوان على أزرار المحادثة.
 // فحوصات البوت القديم تشتغل على الأزرار نفسها، فتطفيها
-const HOME_PAGE = WORD_CHECK && !!STORE_URL;
+export const HOME_PAGE = WORD_CHECK && !!STORE_URL;
 export const homeLink = (uid: number) => `${siteBase()}/store/home?v=${Math.floor(Date.now() / 1000)}&t=${homeToken(uid)}`;
 
 export async function storeLink(uid?: number) {
@@ -84,13 +84,16 @@ export const posKb = async (sid: number) => ({
   keyboard: [[{ text: "🏪 افتح صفحة البيع", web_app: { url: await posLink(sid) } }], [{ text: BTN_CANCEL }]], resize_keyboard: true,
 });
 
-export const adminPageLink = (page: string) => `${siteBase()}/store/${page}?v=${Math.floor(Date.now() / 1000)}`;
+export const adminPageLink = (page: string, uid?: number) => `${siteBase()}/store/${page}?v=${Math.floor(Date.now() / 1000)}${uid ? `&t=${homeToken(uid)}` : ""}`;
 export const scanKb = (oid: number) => ({
   keyboard: [[{ text: BTN_SCAN, web_app: { url: pageUrl("/store/scan", { o: oid }) } }], [{ text: BTN_CANCEL }]], resize_keyboard: true,
 });
 
 export async function mainKb(uid: number) {
   const rows: { text: string; web_app?: { url: string } }[][] = [];
+  // المدير والمساعد وصاحب المكتبة: زر واحد يفتح صفحتهم مباشرة، بدون شي يخص الطالب
+  if (HOME_PAGE && await isStaff(uid)) return { keyboard: [[{ text: BTN_ADMIN, web_app: { url: adminPageLink("admin", uid) } }]], resize_keyboard: true };
+  if (HOME_PAGE && await myOffice(uid)) return { keyboard: [[{ text: BTN_OFFICE, web_app: { url: adminPageLink("sales", uid) } }]], resize_keyboard: true };
   if (HOME_PAGE) rows.push([{ text: BTN_HOME, web_app: { url: homeLink(uid) } }]);
   else {
     rows.push([{ text: BTN_SHOP }, { text: BTN_ASK }], [{ text: BTN_MYQ }, { text: BTN_ME }]);

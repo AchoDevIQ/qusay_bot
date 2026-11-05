@@ -1,7 +1,8 @@
 // واجهة صفحة الطلاب: الأرقام، البحث، تعديل المعلومات، الحذف، وقوائم PDF
 import { find, one, remove, setSession, type Row } from "./db.ts";
-import { GOVS, GRADES } from "./config.ts";
-import { areasWithCenters, centerName, placeOf, searchStudents, student } from "./data.ts";
+import { activityOf, guardianOf, logActivity } from "./access.ts";
+import { GOVS, GRADES, toLatinDigits } from "./config.ts";
+import { areasWithCenters, centerName, placeOf, student } from "./data.ts";
 import { listPdf } from "./documents.ts";
 import { deliverPassword } from "./password.ts";
 import { saveStudent, studentFromForm } from "./student.ts";
@@ -10,7 +11,7 @@ import { esc } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 
 export const STUDENTS_PERM = "students";
-const RECENT = 15;
+const RECENT = 100;
 
 export async function studentsStats() {
   const rows = await find("students");
@@ -26,15 +27,30 @@ export async function sendStudentsPdf(chat: number, fifth: boolean) {
 }
 const view = async (s: Row) => ({
   id: s.user_id, username: s.username ?? "", name: s.name, curr: s.curr, grade: s.grade, gov: s.gov, side: s.side ?? "", area: s.area,
-  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
+  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", guardian: !!await guardianOf(s.user_id), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
 });
 
-async function pageData(q: string) {
-  const s = q.trim();
-  const rows = s ? await searchStudents(s) : await find("students", {}, { order: ["-created"], limit: RECENT });
+type Filters = { curr?: string; grade?: string; exam?: string; gov?: string };
+/** البحث والفلاتر سوية. يرجع كل المطابقين، والصفحة تعرض أولهم */
+async function matching(q: string, f: Filters) {
+  const s = toLatinDigits(q.trim()).toLowerCase();
+  const has = (v: unknown) => v !== null && String(v).toLowerCase().includes(s);
+  return await find("students", {}, {
+    where: (r) => (!s || has(r.name) || has(r.phone1) || has(r.phone2)) && (!f.curr || r.curr === f.curr) && (!f.grade || r.grade === f.grade) && (!f.exam || r.exam === f.exam) && (!f.gov || r.gov === f.gov),
+    order: s || f.curr || f.grade || f.exam || f.gov ? ["name"] : ["-created"],
+  });
+}
+const filtersOf = (raw: unknown): Filters => { const f = (raw ?? {}) as Row; return { curr: f.curr || "", grade: f.grade || "", exam: f.exam || "", gov: f.gov || "" }; };
+async function sendPicked(chat: number, title: string, rows: Row[]) {
+  return await listPdf(chat, title, ["الاسم", "الصف", "المنهج", "المحافظة", "الهاتف 1", "الهاتف 2", "الامتحان"],
+    await Promise.all(rows.map(async (r) => [r.name, r.grade, r.curr, placeOf(r), r.phone1, r.phone2, (r.exam ?? "") + (r.center_id ? " - " + await centerName(r.center_id) : "")])), "students");
+}
+async function pageData(q: string, f: Filters) {
+  const found = await matching(q, f);
+  const rows = found.slice(0, RECENT);
   const centers = await find("centers", { active: 1 }, { order: ["id"] });
   return {
-    stats: await studentsStats(), results: await Promise.all(rows.map(view)), limit: RECENT, govs: GOVS,
+    stats: await studentsStats(), results: await Promise.all(rows.map(view)), found: found.length, limit: RECENT, govs: GOVS,
     areas: (await areasWithCenters()).map((a) => ({ id: a.id, gov: a.gov, name: a.name, centers: centers.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, name: c.name })) })),
   };
 }
@@ -50,6 +66,7 @@ export async function studentAction(body: Row) {
     const { errs, r } = await studentFromForm(body.form ?? {}, true);
     need(!errs.length, errs.join("، "));
     await saveStudent(id, old!.username, r, old);
+    await logActivity(id, "✏️ الإدارة عدلت معلوماته");
     notice = "✅ انحفظت معلومات الطالب";
     if (r.center_id && r.center_id !== old!.center_id) {
       // الطالب يعرف بمركزه الجديد. إذا حاظر البوت، التعديل يبقى محفوظ
@@ -60,6 +77,9 @@ export async function studentAction(body: Row) {
     await remove("students", { user_id: id });
     await remove("student_pass", { user_id: id });
     await remove("pass_requests", { user_id: id });
+    await remove("exam_access", { user_id: id });   // إذا رجع يسجل، يبدي مثل طالب جديد
+    await remove("guardians", { student_id: id });
+    await logActivity(id, "🗑 انحذف تسجيله من الإدارة");
     await setSession(id, "", {});
     notice = "🗑 انحذف تسجيله. لمن يفتح البوت يسجل من جديد، وطلباته القديمة باقية";
   } else if (a === "pass") {
@@ -67,8 +87,23 @@ export async function studentAction(body: Row) {
     need(await deliverPassword(id), "ما وصلت الرسالة، يمكن الطالب حاظر البوت. كلمته القديمة باقية");
     notice = "✅ وصلت الكلمة الجديدة للطالب بالبوت";
   } else if (a === "pdf") {
-    need(await sendStudentsPdf(uid, body.kind === "fifth"), "ما گدرت أرسل الملف، حاول مرة ثانية");
+    // الملف ما يوصل إلا بطلب: الكل، أو نتيجة البحث والفلاتر، أو المحددين
+    let rows: Row[];
+    if (body.kind === "picked") {
+      const ids = new Set(Array.isArray(body.ids) ? (body.ids as unknown[]).map(Number) : []);
+      need(ids.size, "حدد طالب واحد على الأقل");
+      rows = await find("students", {}, { where: (r) => ids.has(r.user_id), order: ["name"] });
+    } else rows = body.kind === "found" ? await matching(String(body.q ?? ""), filtersOf(body.filters)) : await find("students", {}, { order: ["grade", "name"] });
+    need(rows.length, "ماكو طلاب بهذا الاختيار");
+    need(await sendPicked(uid, `قائمة الطلاب (${rows.length})`, rows), "ما گدرت أرسل الملف، حاول مرة ثانية");
     notice = "✅ الملف وصلك بمحادثة البوت";
+  } else if (a === "log") {
+    need(await one("students", { user_id: id }), "الطالب غير موجود");
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, log: { id, rows: await activityOf(id) } };
+  } else if (a === "unlink") {
+    await remove("guardians", { student_id: id });
+    await logActivity(id, "👨‍👧 الإدارة فكت ربط ولي الأمر");
+    notice = "✅ انفك الربط. الطالب يگدر يدز الرابط لولي أمر ثاني";
   } else need(a === "list", "أمر غير معروف");
-  return { ...await pageData(String(body.q ?? "")), notice };
+  return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice };
 }

@@ -5,12 +5,13 @@ import { examBankMessage } from "./examBank.ts";
 import { examCb, examsMenu, redeemCode } from "./exams.ts";
 import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setStudentView, student, tooManyFails, viewingAsStudent } from "./data.ts";
 import { ADMIN_IDS } from "./config.ts";
-import { mainKb, regKb } from "./keyboards.ts";
+import { isGuardian, linkGuardian } from "./access.ts";
+import { HOME_PAGE, mainKb, regKb } from "./keyboards.ts";
 import { api, answerCb, send } from "./telegram.ts";
-import { btn } from "./util.ts";
+import { btn, esc } from "./util.ts";
 import { adminMenuFor, onAdminCb, onAdminText } from "./admin.ts";
 import { joinOfficeByCode, officeCb, officeMenu, onPosSale, quickSearch } from "./office.ts";
-import { askStart, hideTopic, myQuestions, onGroupMessage, qCb, qFollowMessage, qNewMessage } from "./questions.ts";
+import { askStart, finishQuestion, myQuestions, onGroupMessage, qCb, qFollowMessage, qNewMessage } from "./questions.ts";
 import {
   onRegForm, onStoreOrder, onStudentCb, onStudentText, openShop, orderCancelCb, regCb, regText, sendBanner, showMe, startReg,
 } from "./student.ts";
@@ -34,8 +35,23 @@ async function onMessage(m: Row) {
   const { state: st, data } = await getSession(uid);
   if (text === "/start") {
     await setSession(uid, "", { cart: data.cart ?? {} });
+    if (HOME_PAGE) {
+      // كل الشرح داخل الصفحات. الرسالة هنا بس تحمل الزر
+      const fresh = !await student(uid) && !await isStaff(uid) && !await myOffice(uid) && !await isGuardian(uid);
+      if (fresh) await setSession(uid, "r:form", { next: null, edit: false });
+      await sendBanner(chat, "أهلا بك في <b>QMath</b> 🌷", fresh ? await regKb(uid) : await mainKb(uid));
+      return;
+    }
     await sendBanner(chat, WELCOME, await mainKb(uid));
     if (!await student(uid)) await startReg(chat, uid, null);
+    return;
+  }
+  if (text.startsWith("/start par_")) {
+    const r = await linkGuardian(uid, text.slice(text.indexOf("par_") + 4).trim());
+    if (r.error) { await send(chat, r.error); return; }
+    await setSession(uid, "", {});
+    await send(chat, `✅ <b>تم الربط بنجاح</b>\nصرت ولي أمر الطالب: <b>${esc(r.name)}</b>\nدرجاته راح توصلك هنا. ما تحتاج تسوي شي ثاني 🌷`, { replyKb: await mainKb(uid) });
+    await send(r.sid!, "✅ انربط ولي أمرك. افتح القائمة وكمل 🌷");
     return;
   }
   if (text === BTN_EXIT_VIEW && await viewingAsStudent(uid)) {
@@ -121,8 +137,7 @@ async function onCallback(q: Row) {
   } else if (d.startsWith("qh:")) {
     if (await can(uid, "q")) {
       const qq = await question(Number(d.slice(3)));
-      if (qq) await hideTopic(qq);
-      note = "✅ اختفى السؤال";
+      note = qq ? await finishQuestion(qq) : "✅ اختفى السؤال";
     } else note = "ما عندك صلاحية";
   } else if (["qc:", "qb:", "qt:", "ql:", "qf:", "qok:"].some((p) => d.startsWith(p))) {
     note = await qCb(chat, uid, mid, d);

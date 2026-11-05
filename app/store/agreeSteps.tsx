@@ -50,7 +50,7 @@ export function WordOrder({ step, sentence, onDone }: { step?: string; sentence:
       <h2>✍️ رتب الجملة</h2>
       <div className="agbody">
         {step && <small className="agstep">{step}</small>}
-        <p className="agtext agsmall">حتى نتأكد إنك قريت الشرط، اضغط الكلمات بالترتيب حتى تطلع الجملة صحيحة:</p>
+        <p className="agtext agsmall">حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، اضغط الكلمات بالترتيب:</p>
         <p className="agtext">{sentence}</p>
         <div className={"agbuilt" + (done ? " ok" : "")} aria-live="polite">{built || "اضغط أول كلمة..."}</div>
         {wrong && <div className="agwrong">⚠️ الترتيب غلط، رتبها مرة ثانية.</div>}

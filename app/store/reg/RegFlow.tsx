@@ -13,8 +13,8 @@ type Done = { password: string; url?: string; close?: boolean };
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس العلمي" }, { v: "الخامس العلمي", label: "الخامس العلمي" }];
 const EXAM_OPTS = [{ v: "حضوري", label: "🏫 حضوري" }, { v: "إلكتروني", label: "💻 إلكتروني" }];
 const NAME_PARTS = [
-  { key: "n1", label: "الاسم الأول", hint: "يوسف" }, { key: "n2", label: "اسم الأب", hint: "رياض" },
-  { key: "n3", label: "اسم الجد", hint: "هاشم" }, { key: "n4", label: "الاسم الرابع", hint: "حسن" },
+  { key: "n1", label: "الاسم الأول", hint: "عبد الله" }, { key: "n2", label: "اسم الأب", hint: "مصطفى" },
+  { key: "n3", label: "اسم الجد", hint: "علي" }, { key: "n4", label: "الاسم الرابع", hint: "احمد" },
 ];
 
 async function homeCall<T>(token: string, body: Record<string, unknown>): Promise<T> {
@@ -43,7 +43,7 @@ export default function RegFlow({ D }: { D: RegData }) {
   const token = D.tk!;
   const [info, setInfo] = useState<Info | null>(null);
   const [loadErr, setLoadErr] = useState("");
-  const [step, setStep] = useState(0);   // الشروط أول شي، وبعدها المعلومات والدراسة
+  const [step, setStep] = useState(-1);   // التعريف، بعدها الشروط، وبعدها المعلومات والدراسة
   const [agreed, setAgreed] = useState<number[]>([]);
   const [making, setMaking] = useState(false);
   const [sendErr, setSendErr] = useState("");
@@ -80,11 +80,27 @@ export default function RegFlow({ D }: { D: RegData }) {
       </div>
     );
   }
+  if (step < 0) {
+    return (
+      <div className="rg">
+        <Top title="التسجيل" step={1} total={1} />
+        <div className="rgbody">
+          <div className="rgcard rgcenter">
+            <img className="rglogo" src="/logo.png" alt="" />
+            <h2 className="rgh">📝 التسجيل</h2>
+            <p className="rgintro">التسجيل مرة وحدة بس، وبعدها معلوماتك تطلع تلقائياً بالمتجر والأسئلة.</p>
+          </div>
+          <div className="rgalert">⚠️ بعد الحفظ ما تگدر تغير معلوماتك إلا عن طريق الإدارة، فاكتبها صح.</div>
+        </div>
+        <Foot><button type="button" className="rgbtn" onClick={() => page(0)}>ابدأ التسجيل</button></Foot>
+      </div>
+    );
+  }
   if (step < T) {
     const term = info.terms[step];
     return (
       <TermStep key={term.id} term={term} n={step + 1} total={T} last={step === T - 1} agreed={agreed.includes(term.id)}
-        onBack={step ? () => page(step - 1) : undefined}
+        onBack={() => page(step - 1)}
         onOk={() => { setAgreed((a) => (a.includes(term.id) ? a : [...a, term.id])); page(step + 1); }} />
     );
   }
@@ -130,7 +146,7 @@ export default function RegFlow({ D }: { D: RegData }) {
         <Top title="البيانات الأساسية" step={1} total={3} />
         <div className="rgbody rgform">
           <h2 className="rgh">معلوماتك الشخصية</h2>
-          <p className="rgsub">مثال: يوسف رياض هاشم حسن — ضع كل جزء في خانته دون تكرار</p>
+          <p className="rgsub">مثال: عبد الله مصطفى علي احمد — ضع كل جزء في خانته دون تكرار</p>
           <div className="rgcard">
             {NAME_PARTS.map((p) => (
               <div key={p.key} className="rgrow">
@@ -262,7 +278,7 @@ function TermStep({ term, n, total, last, agreed, onBack, onOk }: { term: Term; 
         <div className="rgcard rgterm">{term.text}</div>
         {canOrder && (
           <div className="rgcard">
-            <div className="rgask">حتى نتأكد إنك قريت الشرط، اضغط كلماته بالترتيب:</div>
+            <div className="rgask">حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، اضغط كلماته بالترتيب:</div>
             <div className={"rgbuilt" + (left === 0 ? " full" : "")} aria-live="polite">
               {!picked.length && <span className="rgempty">اضغط أول كلمة من تحت...</span>}
               {picked.map((p, i) => (

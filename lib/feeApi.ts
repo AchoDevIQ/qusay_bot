@@ -1,7 +1,7 @@
 // واجهة صفحة أسعار التوصيل
 import { find, put, tx, type Row } from "./db.ts";
 import { DEFAULT_FEE, GOVS } from "./config.ts";
-import { PRODUCTS_PERM, parsePrice } from "./productApi.ts";
+import { parsePrice } from "./productApi.ts";
 import { authed, need } from "./webApi.ts";
 
 const MAX_FEE = 10_000_000;
@@ -19,7 +19,7 @@ async function saveFees(list: [string, number][]) {
 }
 
 export async function feeAction(body: Row) {
-  await authed(body?.initData, PRODUCTS_PERM);
+  await authed(body?.initData, "fees");
   const a = String(body.action ?? "");
   if (a === "save") {
     const entries = Object.entries((body.fees ?? {}) as Row);

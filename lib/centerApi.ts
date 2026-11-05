@@ -3,7 +3,6 @@ import { find, insert, one, put, tx, update, type Row } from "./db.ts";
 import { GOVS } from "./config.ts";
 import { centerName } from "./data.ts";
 import { listPdf } from "./documents.ts";
-import { STUDENTS_PERM } from "./studentApi.ts";
 import { authed, need } from "./webApi.ts";
 
 const MODES = ["both", "in", "online"];
@@ -38,7 +37,7 @@ const areaFree = async (gov: string, name: string, self = 0) => need(!(await fin
 const centerFree = async (area_id: number, name: string, self = 0) => need(!(await find("centers", { area_id, name, active: 1 })).some((c) => c.id !== self), "اكو مركز بهذا الاسم بنفس المنطقة");
 
 export async function centerAction(body: Row) {
-  const uid = await authed(body?.initData, STUDENTS_PERM);
+  const uid = await authed(body?.initData, "centers");
   const a = String(body.action ?? "");
   const id = Number(body.id);
   let notice = "";

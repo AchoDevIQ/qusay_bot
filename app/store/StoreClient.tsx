@@ -4,7 +4,7 @@ import {
   AR_NAME_ERR, CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanName, cleanPhone, closeApp, fmt, haptic, nameOk, phoneErr, scrollToFirst, sendToBot, useBotData,
 } from "./shared";
 import { AgreeNotice, WordOrder } from "./agreeSteps";
-import { REFUND_SENTENCE, TERM_SENTENCE, chaptersInOrder, firstRoundOnly } from "../../lib/orderRules.ts";
+import { REFUND_SENTENCE, chaptersInOrder, firstRoundOnly, termSentenceFor } from "../../lib/orderRules.ts";
 
 // شاشات التنبيه بالترتيب: موافقتين وترتيب قبل المتجر، وبعد اختيار المنتجات حسب اللي بالسلة
 type Gate = "" | "a1" | "a2" | "aw" | "many" | "t1" | "tw";
@@ -123,11 +123,11 @@ function Store({ D }: { D: Data }) {
         {gate === "many" && (
           <AgreeNotice title="⚠️ تذكر" okLabel="✅ أكمل الطلب" onOk={() => { setManyFor(chaptersKey); afterShop(chaptersKey); }}
             other={<button type="button" className="btn ghost agbtn" onClick={() => show("")}>✏️ أعدل طلبي</button>}>
-            جميع المشتريات غير قابلة للإرجاع إطلاقاً، لذلك من الأفضل لك أن تسجل الآن في فصل واحد.
+            جميع المشتريات غير قابلة للإرجاع إطلاقاً، <span className="agflash">لذلك من الأفضل لك أن تسجل الآن في فصل واحد.</span>
           </AgreeNotice>
         )}
-        {gate === "t1" && <AgreeNotice onOk={() => show("tw")}>{TERM_SENTENCE}.</AgreeNotice>}
-        {gate === "tw" && <WordOrder sentence={TERM_SENTENCE} onDone={() => { setTermOk(true); setGate(""); go(2); }} />}
+        {gate === "t1" && <AgreeNotice onOk={() => show("tw")}>{termSentenceFor(names)}.</AgreeNotice>}
+        {gate === "tw" && <WordOrder sentence={termSentenceFor(names)} onDone={() => { setTermOk(true); setGate(""); go(2); }} />}
 
         <section className={!gate && page === 1 ? "" : "hide"}>
           {!D.c.length && <div className="empty">لا توجد منتجات حاليا.</div>}
@@ -163,7 +163,7 @@ function Store({ D }: { D: Data }) {
                 </div>
               )}
               <label>الاسم الرباعي</label>
-              <input placeholder="بالعربي، مثال: علي حسن محمد كاظم" autoComplete="off" value={name} disabled={locked} onChange={(e) => setName(e.target.value)} />
+              <input placeholder="بالعربي، مثال: عبد الله مصطفى علي احمد" autoComplete="off" value={name} disabled={locked} onChange={(e) => setName(e.target.value)} />
               <Err id="name" errs={errs} />
 
               <label>المنهج</label>

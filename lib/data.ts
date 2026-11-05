@@ -84,7 +84,8 @@ export const hasExamMenu = async (uid: number) => !!await one("exam_access", { u
 /** الطلبات الجاهزة اللي رمزها لسه ما انستخدم */
 export async function pendingCodes(uid: number) {
   const out: Row[] = [];
-  for (const o of await find("orders", { user_id: uid, printed: 1 }, { order: ["id"] })) if (await one("order_codes", { order_id: o.id, used_at: null })) out.push(o);
+  const s = await student(uid);   // طلب قبل حذف تسجيله ما يفتح شي
+  for (const o of await find("orders", { user_id: uid, printed: 1 }, { where: (r) => !s || String(r.created) >= String(s.created), order: ["id"] })) if (await one("order_codes", { order_id: o.id, used_at: null })) out.push(o);
   return out;
 }
 export async function centerName(cid: number | null | undefined) {
@@ -198,8 +199,10 @@ export async function sellerLabel(o: Row) {
 }
 /** ذمة المساعد = مبيعاته بالمكتب − اللي سلمه إلك */
 export async function staffAccount(sid: number) {
-  const sold = sumOf(await find("orders", { printed: 3, seller: sid }), "total");
-  const paid = sumOf(await find("staff_pay", { staff_id: sid }), "amount");
+  // بيع المكتبة حسابه ويا المكتبة، واللي قبل ما ينضاف مساعد ما ينحسب عليه
+  const since = await kvGet(`staff_since_${sid}`) ?? "";
+  const sold = sumOf(await find("orders", { printed: 3, seller: sid }, { where: (o) => o.office_id === null && String(o.created) >= since }), "total");
+  const paid = sumOf(await find("staff_pay", { staff_id: sid }, { where: (p) => String(p.created) >= since }), "amount");
   const limit = Number(await kvGet(`limit_${sid}`) || 0);
   const owed = sold - paid;
   return { sold, paid, owed, limit, left: limit ? limit - owed : 0 };

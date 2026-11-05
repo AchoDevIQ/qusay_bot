@@ -38,7 +38,7 @@ const form = (o: Record<string, unknown> = {}) => ({ n: base.name, cu: "عربي
 
 test("الصلاحية: الطلاب والمراكز بس لصاحب صلاحية الطلاب", async () => {
   await put("staff", { user_id: 5, name: "م", perms: "orders" });
-  await put("staff", { user_id: 6, name: "م", perms: "students" });
+  await put("staff", { user_id: 6, name: "م", perms: "students,centers" });
   for (const fn of [studentAction, centerAction]) {
     await assert.rejects(fn({ action: "list" }), (e: any) => e.status === 401);
     await assert.rejects(fn({ action: "list", initData: sign(2) }), (e: any) => e.status === 403);

@@ -1,5 +1,6 @@
 "use client";
 // المساعدين: الصلاحيات، والحساب والدفعات
+import Link from "next/link";
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
@@ -70,7 +71,8 @@ function Panel({ s, perms, busy, call }: { s: Staff; perms: Data["perms"]; busy:
       <button type="button" className="btn adsmallbtn" disabled={busy || same} onClick={() => void call({ action: "perms", id: s.id, perms: picked })}>حفظ الصلاحيات</button>
 
       <div className="exfoot">
-        <div className="exlabel">💰 حساب المبيعات</div>
+        <div className="exlabel">💰 حساب مبيعاته بنفسه</div>
+        <div className="exhint">بس اللي باعه من صفحة البيع بعد ما انضاف مساعد. مبيعات اليوم وشغله بالتفصيل: <Link href="/store/sales" className="adlinkin">🏪 بيع ومبيعات المكتب ← المبيعات</Link></div>
         <div className="adstats adstats2">
           <div><b>{fmt(a.sold)}</b>كل مبيعاته</div><div><b>{fmt(a.paid)}</b>سلمك</div>
           <div><b>{fmt(a.owed)}</b>بذمته</div><div><b>{a.limit ? fmt(a.limit) : "بدون حد"}</b>الرصيد المسموح</div>
@@ -105,6 +107,7 @@ function Add({ busy, call }: { busy: boolean; call: Call }) {
     <div className="card expad adform">
       <div className="exlabel">➕ إضافة مساعد</div>
       <div className="exhint">خلي المساعد يفتح البوت ويكتب <code>/myid</code>، وينطيك الرقم.</div>
+      <div className="exhint">🏬 صاحب المكتبة مو مساعد: تضيفه من مربع <Link href="/store/libs" className="adlinkin">المكتبات</Link>، وهو يبيع ويطبع من صفحته.</div>
       <input inputMode="numeric" className="ltr" placeholder="رقم حسابه" value={id} onChange={(e) => setId(e.target.value)} />
       <input placeholder="اسمه" value={name} onChange={(e) => setName(e.target.value)} />
       <button type="button" className="btn" disabled={busy || !id.trim() || !name.trim()} onClick={async () => { if (await call({ action: "add", id, name })) { setId(""); setName(""); } }}>إضافة</button>

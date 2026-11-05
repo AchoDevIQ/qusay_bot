@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import QRCode from "qrcode";
 import { kvSet, one, type Row } from "./db.ts";
 import type { RenderJob } from "./browserRender.ts";
-import { FONT, LOGO, PDF_DIR } from "./config.ts";
+import { FONT, LOGO, PDF_DIR, WORD_CHECK } from "./config.ts";
 import { btn, esc, fileStamp, money, num, stamp } from "./util.ts";
 import { upload, send, type Kb } from "./telegram.ts";
 import { centerName, examLabel, orderItems, ordersByIds, placeOf, profileText, sellerLabel } from "./data.ts";
@@ -86,7 +86,7 @@ async function examQr(oid: number) {
   const svg = await QRCode.toString(code, { type: "svg", margin: 1, errorCorrectionLevel: "M" });
   return `<div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding:8px 10px;border:1.5px solid #101929;border-radius:10px;break-inside:avoid">
 <div style="width:92px;height:92px;flex:none">${svg}</div>
-<div style="font-size:11.5px;line-height:1.7"><b style="font-size:13px">🔓 افتح امتحاناتك</b><br>اضغط زر «وصلني الطلب» بالبوت، ووجه الكاميرا على هذا الكود.<br>أو اكتب الرمز: <b dir="ltr" style="font-size:14px;letter-spacing:.5px">${code}</b></div>
+<div style="font-size:11.5px;line-height:1.7"><b style="font-size:13px">🔓 افتح امتحاناتك</b><br>اضغط زر «وصلني الطلب» بالبوت، ووجه الكاميرا على هذا الكود.<br>أو اكتب الرقم: <b dir="ltr" style="font-size:20px;letter-spacing:2px">${code}</b></div>
 </div>`;
 }
 
@@ -94,7 +94,9 @@ async function ordersHtml(orders: Row[]) {
   const logo = logoTag();
   const pages = await Promise.all(await Promise.all(orders.map(async (o) => {
     const rows = orderItems(o).map((it) => `<tr><td>${esc(it.name)}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
-    return `<section class=page>
+    const en = o.curr === "إنجليزي";
+    return `<section class="page ${en ? "en" : "ar"}">
+<div class=currbar>${en ? "ENGLISH — منهج إنجليزي" : "منهج عربي"}</div>
 <div class=head>${logo}<div class=ht><h1>متجر قصي العميري</h1><p>الرياضيات · السادس الإعدادي</p></div>
 <div class=no><b>#${o.id}</b><span>${esc(o.created)}</span></div></div>
 <table class=info>
@@ -128,10 +130,22 @@ td,th{padding:6px 8px;border:1px solid #d9dde5;text-align:right}
 .n{text-align:center;white-space:nowrap}
 .s td{background:#f5f6f8}.t td{background:#F9C445;font-weight:800;font-size:15px;border-color:#CEA239}
 .foot{margin-top:10px;font-size:10.5px;text-align:center;color:#8a2a20;border:1px dashed #d98b80;border-radius:8px;padding:5px}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{box-sizing:border-box}
+.currbar{text-align:center;font-weight:800;font-size:13px;border-radius:8px;padding:3px;margin-bottom:6px;background:#FFF3CF;color:#101929;border:1px solid #CEA239}
+/* المنهج الإنجليزي شكله كله غير، حتى المجهز ما يغلط، وحتى إذا انطبع أبيض وأسود */
+.page.en{min-height:188mm;padding:4mm;border:5px double #0b5d3b;border-radius:6px;background:#e4f5ea}
+.en .currbar{background:repeating-linear-gradient(45deg,#0b5d3b,#0b5d3b 10px,#127a4f 10px,#127a4f 20px);color:#fff;font-size:18px;padding:7px;letter-spacing:1px;border:0}
+.en .head{background:#0b5d3b;border-bottom-color:#7fd1a4}
+.en .ht h1,.en .no b{color:#fff}
+.en td,.en th{border-color:#9ecdb1;background-color:#f3fbf6}
+.en .info th{background:#c9ecd6}
+.en .items th{background:#0b5d3b;border-color:#0b5d3b;color:#fff}
+.en .s td{background:#dcf1e4}.en .t td{background:#0b5d3b;color:#fff;border-color:#0b5d3b}
 </style></head><body>${pages.join("")}</body></html>`;
 }
 
-export async function sendOrdersPdf(chat: number, ids: number[]) {
+export async function sendOrdersPdf(chat: number, ids: number[], reprint = false) {
   const orders = await ordersByIds(ids);
   ensureDir();
   const name = "orders_" + fileStamp();
@@ -139,9 +153,9 @@ export async function sendOrdersPdf(chat: number, ids: number[]) {
   fs.writeFileSync(hp, await ordersHtml(orders), "utf8");
   const bid = String(Math.floor(Date.now() / 1000));
   await kvSet("batch_" + bid, orders.map((o) => o.id).join(","));
-  const kb: Kb = [[btn("✅ تم الطباعة (إخفاؤها)", "a:done:" + bid)], [btn("↩️ لا، خليها", "a:keep")]];
+  const kb: Kb = reprint ? [] : [[btn("✅ تم الطباعة (إخفاؤها)", "a:done:" + bid)], [btn("↩️ لا، خليها", "a:keep")]];
   const markup = JSON.stringify({ inline_keyboard: kb });
-  const cap = `🖨 ملف ${orders.length} طلب: ${orders.map((o) => "#" + o.id).join("، ")}\n\nاطبعه، وبعد الطباعة اضغط «تم الطباعة» حتى تختفي من الطلبات الجديدة.`;
+  const cap = `🖨 ${reprint ? "إعادة طباعة" : "ملف"} ${orders.length} طلب: ${orders.map((o) => "#" + o.id).join("، ")}` + (reprint ? "" : "\n\nاطبعه، وبعد الطباعة اضغط «تم الطباعة» حتى تختفي من الطلبات الجديدة.");
   const r = await htmlToPdf(hp, pp)
     ? await upload("sendDocument", { chat_id: String(chat), caption: cap, reply_markup: markup }, "document", pp, name + ".pdf", "application/pdf")
     : await upload("sendDocument", { chat_id: String(chat), caption: cap + "\n\n(افتح الملف بالمتصفح واضغط Ctrl + P حتى تطبعه أو تحفظه PDF)", reply_markup: markup },
@@ -270,7 +284,7 @@ tr:nth-child(even) td{background:rgba(255,255,255,.025)}
 </style></head><body>
 <div class="top">${logoTag()}<h1>QMath</h1><p>قصي العميري</p></div>
 <div class="card"><h2><span>🧾 وصل الشراء</span><span dir="ltr">#${o.id}</span></h2>
-<div class="info"><span>👤 <b>${esc(o.name)}</b></span><span>📅 <b dir="ltr">${esc(o.created)}</b></span><span>🏪 <b>استلام من ${esc(o.gov || "المكتب")}</b></span><span>📝 الامتحان: <b>${esc(await examLabel(o.user_id))}</b></span></div>
+<div class="info"><span>👤 <b>${esc(o.name)}</b></span><span>📅 <b dir="ltr">${esc(o.created)}</b></span><span>🏪 البائع: <b>${esc(await sellerLabel(o))}</b></span><span>📝 الامتحان: <b>${esc(await examLabel(o.user_id))}</b></span></div>
 <table>${rows}</table>
 <div class="tot"><span>💰 المجموع</span><span dir="ltr">${money(o.total)}</span></div>
 <div class="ok">✅ تم الدفع والاستلام · شكراً لك 🌷<br>جميع المشتريات غير قابلة للإرجاع</div></div>
@@ -295,15 +309,39 @@ export async function sendColorReceipt(chat: number, oid: number) {
   return false;
 }
 
-/** وصل للطباعة (بس إذا طلبه البائع) */
-export async function sendPaperReceipt(chat: number, oid: number) {
+/** وصل A5 بإطار، للطابعة الكبيرة */
+async function receiptFramedHtml(o: Row, items: Row[]) {
+  const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
+  return `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>
+@page{size:A5;margin:8mm}html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#101929}
+.fr{box-sizing:border-box;min-height:190mm;padding:5mm;border:4px double #CEA239;border-radius:10px}
+.head{display:flex;align-items:center;gap:10px;background:#101929;border-radius:10px;padding:8px 12px;border-bottom:4px solid #CEA239}
+.head img{height:48px}.head h1{flex:1;margin:0;font-size:20px;color:#F9C445}.head b{color:#F9C445;font-size:20px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}td,th{padding:7px 9px;border:1px solid #d9dde5;text-align:right}
+.info th{background:#FFF3CF;width:80px}.items th{background:#101929;color:#fff;border-color:#101929}.n{text-align:center;white-space:nowrap}
+.t td{background:#F9C445;font-weight:800;font-size:16px;border-color:#CEA239}
+.foot{margin-top:12px;text-align:center;font-size:11px;color:#8a2a20;border:1px dashed #d98b80;border-radius:8px;padding:6px}
+</style></head><body><div class=fr>
+<div class=head>${logoTag()}<h1>وصل بيع QMath</h1><b>#${o.id}</b></div>
+<table class=info><tr><th>الطالب</th><td>${esc(o.name)}</td></tr><tr><th>الهاتف</th><td dir=ltr style="text-align:right">${esc(o.phone1)}</td></tr>
+<tr><th>التاريخ</th><td dir=ltr style="text-align:right">${esc(o.created)}</td></tr><tr><th>الامتحان</th><td>${esc(await examLabel(o.user_id))}</td></tr><tr><th>البائع</th><td><b>${esc(await sellerLabel(o))}</b></td></tr></table>
+<table class=items><tr><th>المنتج</th><th class=n>العدد</th><th class=n>المبلغ</th></tr>${rows}<tr class=t><td colspan=2>المجموع</td><td class=n>${num(o.total)} د.ع</td></tr></table>
+<div class=foot>جميع المشتريات غير قابلة للإرجاع — شكراً لك 🌷</div>
+</div></body></html>`;
+}
+
+/** وصل للطباعة (بس إذا طلبه البائع): 58 ملم لطابعة الوصولات، أو A5 بإطار */
+export async function sendPaperReceipt(chat: number, oid: number, framed = false) {
   const o = await one("orders", { id: oid, printed: 3 });
   if (!o) { await send(chat, "⚠️ البيعة غير موجودة."); return false; }
   ensureDir();
-  const hp = path.join(PDF_DIR, `receipt_${oid}.html`), pp = path.join(PDF_DIR, `وصل_${oid}.pdf`);
-  fs.writeFileSync(hp, await receiptPaperHtml(o, orderItems(o)), "utf8");
-  if (await htmlToPdf(hp, pp)) {
-    return !!await upload("sendDocument", { chat_id: String(chat), caption: `🧾 وصل بيع #${oid}\n🖨 افتح الملف ← ⋮ ← Print ← طابعة SUNMI` }, "document", pp, `وصل_${oid}.pdf`, "application/pdf");
-  }
-  return false;
+  const base = framed ? `receipt_framed_${oid}` : `receipt_${oid}`;
+  const hp = path.join(PDF_DIR, base + ".html"), pp = path.join(PDF_DIR, base + ".pdf");
+  fs.writeFileSync(hp, framed ? await receiptFramedHtml(o, orderItems(o)) : await receiptPaperHtml(o, orderItems(o)), "utf8");
+  const caption = framed ? `📄 وصل بيع #${oid} بإطار` : `🧾 وصل بيع #${oid} (عرض 58)\n🖨 افتح الملف ← ⋮ ← Print ← طابعة SUNMI`;
+  if (await htmlToPdf(hp, pp)) return !!await upload("sendDocument", { chat_id: String(chat), caption }, "document", pp, `receipt_${oid}.pdf`, "application/pdf");
+  if (!WORD_CHECK) return false;   // فحوصات البوت القديم
+  // إذا الرسم ما صار، يبقى الملف يوصل ويفتح بالمتصفح
+  return !!await upload("sendDocument", { chat_id: String(chat), caption: caption + "\n\n(افتح الملف بالمتصفح واطبعه من هناك)" }, "document", hp, `receipt_${oid}.html`, "text/html");
 }

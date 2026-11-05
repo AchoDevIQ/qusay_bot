@@ -6,11 +6,12 @@ const HINT = "وجه الكاميرا على الكود المطبوع بوصل 
 
 export default function ScanClient() {
   const [failed, setFailed] = useState(false);
+  const [code, setCode] = useState("");
   const opened = useRef(false);
 
   function open() {
     const ok = scanQr(HINT, (text) => {
-      if (!text.trim().toUpperCase().startsWith("QM-")) return false; // كود ثاني: تبقى الكاميرا مفتوحة
+      if (!/^(QM-|\d{6}$)/i.test(text.trim())) return false; // كود ثاني: تبقى الكاميرا مفتوحة
       sendToBot({ k: "scan", code: text.trim() });
       return true;
     });
@@ -39,11 +40,10 @@ export default function ScanClient() {
           <h2>📷 امسح الكود</h2>
           <div className="form">
             <div className="lock">{HINT}.</div>
-            {failed && (
-              <div className="note" style={{ margin: "14px 0 0" }}>
-                ⚠️ الكاميرا ما تشتغل بهذا الجهاز، أو نسخة تليجرام قديمة. سكر هاي الصفحة واكتب الرمز المطبوع تحت الكود بمحادثة البوت.
-              </div>
-            )}
+            {failed && <div className="note" style={{ margin: "14px 0 0" }}>⚠️ الكاميرا ما تشتغل بهذا الجهاز. اكتب الرقم المطبوع تحت الكود.</div>}
+            <label>أو اكتب الرقم المطبوع تحت الكود (6 أرقام)</label>
+            <input className="ltr" inputMode="numeric" maxLength={12} placeholder="482917" value={code} onChange={(e) => setCode(e.target.value)} />
+            <button type="button" className="btn agbtn adtop" disabled={code.trim().length < 6} onClick={() => sendToBot({ k: "scan", code: code.trim() })}>🔓 افتح الامتحانات</button>
           </div>
         </div>
       </div>
