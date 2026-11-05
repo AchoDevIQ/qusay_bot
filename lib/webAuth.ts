@@ -53,6 +53,9 @@ export function verifyGuardianCode(c: unknown): number | null {
   return Number.isSafeInteger(sid) && sig === parentSig(sid) ? sid : null;
 }
 
+/** مفتاح رابط المؤقت: مشتق من توكن البوت، فما يحتاج سر جديد بالسيرفر */
+export const cronKey = () => hmac(hmac("QMathCron", TOKEN), "cron").toString("hex").slice(0, 32);
+
 // الصور ما تكدر ترسل التوقيع، فتاخذ رمز قصير العمر مربوط بالمستخدم
 const FILE_TTL_S = 3600;
 const tokenSig = (uid: number, exp: number) => hmac(hmac("QMathFiles", TOKEN), `${uid}.${exp}`).toString("hex");

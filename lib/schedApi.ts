@@ -3,14 +3,15 @@ import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } fr
 import { logActivity } from "./access.ts";
 import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
-import { centerName, student } from "./data.ts";
+import { centerName, isAdmin, student } from "./data.ts";
+import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, openRoom, roomState, submitRoom } from "./examRoom.ts";
 import { send } from "./telegram.ts";
-import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, labelChapters, pickedAt, slotDays, ampm, validDay, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, labelChapters, pickOptional, pickedAt, slotDays, ampm, validDay, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { stamp, todayStr } from "./util.ts";
 import { authed, ensure, intOf, need } from "./webApi.ts";
-import { verifyHomeToken } from "./webAuth.ts";
+import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
 export const SCHED_PERM = "schedule";
 export async function schedSettings(): Promise<SchedSettings> {
@@ -62,7 +63,7 @@ async function closeMissed(uid: number, s: SchedSettings) {
 }
 const remaining = (bought: Row[], items: Row[]) => {
   // الفايت والمخلص ما يرجعون. اللي بالانتظار ينعاد توزيعه
-  const gone = new Set(items.filter((i) => i.status !== "waiting").map((i) => i.exam_id));
+  const gone = new Set(items.filter((i) => i.status !== "waiting" && i.kind !== "optional").map((i) => i.exam_id));
   return bought.filter((e) => !gone.has(e.id));
 };
 const toPlanExams = (rows: Row[]): PlanExam[] => rows.map((e) => ({ id: e.id, minutes: e.minutes ?? 75 }));
@@ -80,7 +81,7 @@ const picksFit = (slots: Slot[], picks: Record<string, string>) => [...new Set(s
 async function lateExams(uid: number, sc: Row, s: SchedSettings): Promise<Row[]> {
   const days = await placeDays(sc.center_id);
   const picks = picksOf(sc);
-  const has = new Set((await find("sched_items", { user_id: uid })).map((i) => i.exam_id));
+  const has = new Set((await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional").map((i) => i.exam_id));
   const now = stamp();
   const out: Row[] = [];
   for (const e of await boughtExams(uid)) {
@@ -120,8 +121,14 @@ async function itemsView(uid: number, s: SchedSettings) {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
-    return { id: i.id, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, at: i.at, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
+    return { id: i.id, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, at: i.at, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
   });
+}
+/** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
+async function optionalList(uid: number, bought: Row[]) {
+  const versions = await find("bank_versions", { kind: "optional", ok: 1 });
+  const taken = new Set((await find("sched_items", { user_id: uid, kind: "optional" })).map((i) => i.exam_id));
+  return bought.filter((e) => versions.some((v) => v.exam_id === e.id) && !taken.has(e.id)).map((e) => ({ exam: e.id, title: e.title, chapter: e.chapter, minutes: e.minutes ?? 75 }));
 }
 async function studentInfo(uid: number) {
   const s = await schedSettings();
@@ -157,6 +164,7 @@ async function studentInfo(uid: number) {
     picks: general ? picksOf(sched!) : null,
     schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour } : null,
     days: daysView(slots),
+    optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
     items: [...await itemsView(uid, s), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
     week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s),
@@ -224,6 +232,20 @@ export async function myExamAction(body: Row) {
     const dated = (await find("bank_exams")).filter((e) => days.has(e.id));
     return { ...await studentInfo(id), placePreview: { items: dated.map((e) => ({ title: e.title, at: pickedAt(days.get(e.id)!, picks), locked: !mine.has(e.id) })).filter((x) => x.at).sort((x, y) => String(x.at).localeCompare(String(y.at))), waiting: bought.filter((e) => !days.has(e.id)).length } };
   }
+  if (a === "openOptional") {
+    const s = await schedSettings();
+    need(s.optionalOpen, "الامتحانات الاختيارية مسدودة هسه");
+    const bought = await boughtExams(id);
+    const e = (await optionalList(id, bought)).find((x) => x.exam === Number(body.exam));
+    need(e && (await student(id))!.exam !== "حضوري", "هذا الامتحان مو متاح");
+    const version = pickOptional(await find("bank_versions", { exam_id: e!.exam }) as { id: number; kind: string; ok: unknown }[]);
+    need(version, "هذا الامتحان مو متاح");
+    const now = stamp();
+    const item = await insert("sched_items", { user_id: id, exam_id: e!.exam, at: now, status: "started", kind: "optional", version_id: version, started_at: now, opened_at: now });
+    await logActivity(id, `🎯 دخل امتحان اختياري: ${e!.title}`);
+    const room = await openRoom(id, item, s);
+    return { ...await studentInfo(id), room };
+  }
   if (a === "openExam" || a === "delAnswer" || a === "submitExam") {
     const s = await schedSettings();
     // الغرفة أول: تحديث المواعيد يعيد كتابة الامتحانات اللي لسه ما بدت
@@ -282,7 +304,7 @@ async function rebuildAll(s: SchedSettings) {
   return { moved, stuck };
 }
 export async function schedAdminAction(body: Row) {
-  await authed(body?.initData, SCHED_PERM);
+  const uid = await authed(body?.initData, SCHED_PERM);
   const a = String(body.action ?? "");
   let notice = "";
   if (a === "save") {
@@ -291,7 +313,7 @@ export async function schedAdminAction(body: Row) {
     need(!holidayStart || validDay(holidayStart), "تاريخ بداية العطلة غير صحيح");
     const hours = [...new Set((Array.isArray(body.blockedHours) ? body.blockedHours : []).map(Number))].filter((h) => Number.isInteger(h) && h >= 0 && h < 24).sort((x, y) => x - y) as number[];
     const next: SchedSettings = {
-      window: intOf(body.window, 1, 600, "وقت الدخول بالدقائق، من 1 إلى 600"), extra: intOf(body.extra, 0, 600, "الوقت الإضافي بالدقائق، من 0 إلى 600"), excWindow: body.excWindow === undefined ? old.excWindow : intOf(body.excWindow, 1, 10000, "وقت الاستثناء بالدقائق"), perDay: intOf(body.perDay, 1, 10, "امتحانات اليوم من 1 إلى 10"), gap: intOf(body.gap, 0, 600, "الفاصل بالدقائق، من 0 إلى 600"),
+      window: intOf(body.window, 1, 600, "وقت الدخول بالدقائق، من 1 إلى 600"), extra: intOf(body.extra, 0, 600, "الوقت الإضافي بالدقائق، من 0 إلى 600"), excWindow: body.excWindow === undefined ? old.excWindow : intOf(body.excWindow, 1, 10000, "وقت الاستثناء بالدقائق"), optionalOpen: body.optionalOpen === undefined ? old.optionalOpen : !!body.optionalOpen, perDay: intOf(body.perDay, 1, 10, "امتحانات اليوم من 1 إلى 10"), gap: intOf(body.gap, 0, 600, "الفاصل بالدقائق، من 0 إلى 600"),
       holidayStart, holidayDays: intOf(body.holidayDays, 0, 120, "أيام العطلة من 0 إلى 120"), blockedHours: hours, excluded: dayList(body.excluded),
     };
     await kvSet("sched_settings", JSON.stringify(next));
@@ -385,8 +407,9 @@ export async function schedAdminAction(body: Row) {
     await kvSet("old_dates_loaded_v2", "1");
     notice = `✅ انضاف ${added} موعد${missing.length ? `. ما لگيت هاي المراكز: ${missing.join("، ")}` : ""}`;
   } else need(a === "list", "أمر غير معروف");
-  return { ...await schedSettings(), ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice };
+  return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice };
 }
+const cronUrl = () => `${siteBase()}/api/cron?key=${cronKey()}`;
 /** كل طالب بهذا المكان يوصله خبر واحد إذا تغيرت مواعيده */
 async function tellPlace(center: number) {
   const s = await schedSettings();

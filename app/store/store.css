@@ -170,3 +170,4 @@ html:has(.rg),html:has(.rg) body{background:#f4f6fb;padding-bottom:0}
 .mxlocked td{opacity:.45}
 .adtimev{margin:0;font-size:12px}.adtimev small{display:block;color:var(--mut);direction:ltr;text-align:right}
 .mxdraft{transition:transform .2s;max-height:70vh;object-fit:contain}
+.grmarks{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px;margin:12px 0}.grmarks button{height:44px;border:1px solid var(--gold2);border-radius:10px;background:var(--ink);color:var(--gold);font-family:inherit;font-size:16px;font-weight:800;cursor:pointer}.grmarks button.on{background:var(--gold);color:var(--ink)}

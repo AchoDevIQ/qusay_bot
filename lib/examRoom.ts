@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { find, insert, one, put, remove, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
-import { STORE_URL, WEBHOOK_SECRET } from "./config.ts";
+import { STORE_URL } from "./config.ts";
 import { can, student } from "./data.ts";
 import { files } from "./files.ts";
 import { adminPageLink } from "./keyboards.ts";
@@ -11,7 +11,7 @@ import { addMinutes, answersClose, itemState, pickMandatory, type SchedSettings 
 import { send } from "./telegram.ts";
 import { stamp } from "./util.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
-import { verifyHomeToken } from "./webAuth.ts";
+import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
 export const LATE_TEXT = "فات وقت الدخول لهذا الامتحان. إذا عندك عذر تواصل ويا قصي العميري.";
 export const CLOSED_TEXT = "انتهى وقت الامتحان المحدد، وأعطيناك وقت إضافي، ولم ترسل الإجابة.";
@@ -175,7 +175,7 @@ export async function startNowForTest(itemId: unknown) {
 /** رسالة «بدأ الامتحان». يشغلها مؤقت من برا لأن السيرفر ينام: /api/cron?key=... */
 export async function notifyStarted(key: unknown, s: SchedSettings) {
   await ensure();
-  if (!WEBHOOK_SECRET || key !== WEBHOOK_SECRET) throw new ApiError(401, "no");
+  if (key !== cronKey()) throw new ApiError(401, "no");
   const now = stamp();
   let sent = 0;
   for (const it of await find("sched_items", { status: "waiting", notified: null })) {

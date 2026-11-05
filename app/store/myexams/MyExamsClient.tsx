@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { haptic } from "../shared";
 
-type Item = { id: number; title: string; chapter: string; minutes: number; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
+type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
   preview?: Preview; notice?: string; error?: string; lateText: string; closedText: string; room?: Room;
@@ -35,6 +35,7 @@ export default function MyExamsClient() {
   }
   useEffect(() => { void call({ action: "info" }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [room, setRoom] = useState<Room | null>(null);
+  async function enterOptional(exam: number) { const r = await call({ action: "openOptional", exam }); if (r?.room) setRoom(r.room); }
   async function enter(item: number) { const r = await call({ action: "openExam", item }); if (r?.room) setRoom(r.room); }
   if (room) return <ExamRoom room={room} setRoom={setRoom} call={call} leave={() => { setRoom(null); void call({ action: "info" }); }} />;
 
@@ -55,6 +56,7 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info && !!info.items.length && <List info={info} busy={busy} enter={enter} />}
+        {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
     </>
   );
@@ -186,7 +188,7 @@ function List({ info, busy, enter }: { info: Info; busy: boolean; enter: (id: nu
       <table className="extable"><tbody>
         {info.items.map((i) => (
           <tr key={i.id} className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>
-            <td><b>{i.title}</b><small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
+            <td><b>{i.optional ? "🎯 " : ""}{i.title}</b>{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.state === "missed" && <small className="pdmode exbad">{info.lateText}</small>}
             </td>
@@ -195,6 +197,26 @@ function List({ info, busy, enter }: { info: Info; busy: boolean; enter: (id: nu
         ))}
       </tbody></table>
       {!info.inPerson && <div className="expad exhint adtop">تگدر تدخل الامتحان خلال {info.window} دقيقة من موعده. الامتحان اللي يفوت وقته ما يرجع.</div>}
+    </div>
+  );
+}
+
+function Optional({ info, busy, enter }: { info: Info; busy: boolean; enter: (exam: number) => void }) {
+  const [ask, setAsk] = useState(0);
+  return (
+    <div className="card">
+      <h2>🎯 امتحانات اختيارية</h2>
+      <div className="expad exhint adtop">كل امتحان ينفتح مرة وحدة بس. لمن تدخل يبدي وقته، وما يتوقف إذا طلعت.</div>
+      <table className="extable"><tbody>
+        {info.optional.map((o) => (
+          <tr key={o.exam}>
+            <td><b>{o.title}</b><small className="pdmode">{o.chapter} · {o.minutes} دقيقة</small></td>
+            <td className="p">{ask === o.exam
+              ? <button type="button" className="btn" disabled={busy} onClick={() => enter(o.exam)}>متأكد؟ ادخل</button>
+              : <button type="button" className="exbtn" disabled={busy} onClick={() => setAsk(o.exam)}>ادخل</button>}</td>
+          </tr>
+        ))}
+      </tbody></table>
     </div>
   );
 }

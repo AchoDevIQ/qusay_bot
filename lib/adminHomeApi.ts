@@ -2,6 +2,7 @@
 import { count, find, setSession, sumOf, type Row } from "./db.ts";
 import { can, isAdmin, isStaff, newOrdersCount, setStudentView } from "./data.ts";
 import { EXAM_PERM } from "./examBank.ts";
+import { waitingPapers } from "./gradeApi.ts";
 import { mainKb } from "./keyboards.ts";
 import { passRequestsCount } from "./passApi.ts";
 import { send } from "./telegram.ts";
@@ -26,6 +27,10 @@ async function homeData(uid: number) {
   if (await can(uid, "fees")) shop.push({ page: "fees", icon: "🚚", title: "أسعار التوصيل" });
   if (await can(uid, "online")) shop.push({ page: "online", icon: "💻", title: "فصول إلكترونية فقط" });
   if (await can(uid, EXAM_PERM)) people.push({ page: "exams", icon: "📝", title: "الامتحانات" });
+  if (await can(uid, "grade")) {
+    const n = await waitingPapers(uid);
+    people.push({ page: "grade", icon: "✍️", title: "التصحيح", note: n ? `${n} ورقة تنتظر` : "ماكو أوراق", hot: n > 0 });
+  }
   if (await can(uid, "schedule")) people.push({ page: "schedule", icon: "🗓", title: "جدول الامتحانات" });
   if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` });
   if (await can(uid, "centers")) people.push({ page: "centers", icon: "🏫", title: "المراكز الامتحانية" });
@@ -41,7 +46,7 @@ async function homeData(uid: number) {
   if (await isAdmin(uid)) {
     const sold = await find("orders", { printed: 3 }, { where: (o) => o.office_id !== null && String(o.created).startsWith(todayStr()) });
     setup.push({ page: "libs", icon: "🏬", title: "المكتبات", note: `اليوم: ${sold.length} بيعة · ${sumOf(sold, "total").toLocaleString("en-US")}` },
-      { page: "staff", icon: "👥", title: "المساعدين والصلاحيات" }, { page: "hours", icon: "⏰", title: "أوقات الأسئلة ومجموعتها" }, { page: "curriculum", icon: "📚", title: "الفصول والمواضيع" }, { page: "terms", icon: "📜", title: "شروط التسجيل" });
+      { page: "staff", icon: "👥", title: "المساعدين والصلاحيات" }, { page: "hours", icon: "⏰", title: "أوقات الأسئلة ومجموعتها" }, { page: "curriculum", icon: "📚", title: "الفصول والمواضيع" }, { page: "terms", icon: "📜", title: "شروط التسجيل" }, { page: "upload", icon: "📤", title: "رفع الفصول" });
   }
   if (shop.length) groups.push({ title: "المتجر", tiles: shop });
   if (people.length) groups.push({ title: "الطلاب والامتحانات", tiles: people });

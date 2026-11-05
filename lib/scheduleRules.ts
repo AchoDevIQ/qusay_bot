@@ -1,6 +1,6 @@
 // حساب جدول الامتحانات: بدون قاعدة بيانات حتى ينفحص لوحده. الأيام: 0 = الاثنين، مثل DAYS بالإعدادات
-export type SchedSettings = { window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[] };
-export const DEFAULT_SETTINGS: SchedSettings = { window: 15, extra: 15, excWindow: 60, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, blockedHours: [], excluded: [] };
+export type SchedSettings = { window: number; extra: number; excWindow: number; optionalOpen: boolean; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[] };
+export const DEFAULT_SETTINGS: SchedSettings = { window: 15, extra: 15, excWindow: 60, optionalOpen: true, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, blockedHours: [], excluded: [] };
 export type PlanExam = { id: number; minutes: number };
 export type PlanItem = { examId: number; at: string };
 export type Plan = { ok: true; items: PlanItem[]; days: number; maxPerDay: number; perWeek: number } | { ok: false; error: string; minWeekdays?: number };

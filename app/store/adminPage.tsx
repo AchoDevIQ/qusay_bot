@@ -17,7 +17,7 @@ function pageToken() {
     return t ?? sessionStorage.getItem(TOKEN_KEY) ?? "";
   } catch { return t ?? ""; }
 }
-const pageAuth = () => { const t = pageToken(); return t ? `tk:${t}` : webApp()?.initData ?? ""; };
+export const pageAuth = () => { const t = pageToken(); return t ? `tk:${t}` : webApp()?.initData ?? ""; };
 
 /** يتصل بواجهة الصفحة بتوقيع تليجرام. يرجع الجواب، أو null إذا صار خطأ */
 export function useAdminApi<T>(url: string, button: string) {

@@ -8,7 +8,7 @@ export type FileStore = {
   read(ref: string): Promise<Buffer | null>;
   write(ref: string, body: Buffer, type: string): Promise<void>;
   /** كل الملفات تحت مجلد، بأسمائها الكاملة */
-  list(prefix: string): Promise<string[]>;
+  list(prefix: string, fresh?: boolean): Promise<string[]>;
 };
 
 export function localStore(root: string): FileStore {
@@ -54,8 +54,8 @@ export function cloudStore(getBucket: () => Bucket, now = Date.now): FileStore {
       await getBucket().file(CLOUD_ROOT + ref).save(body, { contentType: type, resumable: false });
       lists.clear();
     },
-    async list(prefix) {
-      const hit = lists.get(prefix);
+    async list(prefix, fresh) {
+      const hit = fresh ? undefined : lists.get(prefix);
       if (hit && now() - hit.at < LIST_TTL) return hit.names;
       const [files] = await getBucket().getFiles({ prefix: CLOUD_ROOT + prefix });
       const names = files.map((f) => f.name.slice(CLOUD_ROOT.length));

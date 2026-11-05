@@ -326,11 +326,11 @@ export async function examUpload(form: FormData) {
 
 // ---------- قراءة الملفات
 /** يرجع محتوى ملف من المحتوى السري، بس لصاحب الصلاحية، وبس من داخل مجلد المحتوى */
-export async function examFile(token: unknown, ref: unknown) {
+export async function examFile(token: unknown, ref: unknown, perm = EXAM_PERM) {
   await ensure();
   const uid = verifyFileToken(token);
   need(uid !== null, "الرابط انتهى", 401);
-  need(await can(uid!, EXAM_PERM), "ما عندك صلاحية", 403);
+  need(await can(uid!, perm), "ما عندك صلاحية", 403);
   need(typeof ref === "string" && ref, "ملف غير معروف");
   const r = ref as string;
   if (r.startsWith("tg:") || /^[\w-]{20,}$/.test(r)) {
