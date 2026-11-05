@@ -29,7 +29,8 @@ async function buildPages(paper: Paper, url: (r: string) => string): Promise<Pag
       // ورقة كاملة (مثل أوراق التجربة): تنقسم صفحة لكل سؤال، حتى الدرجة تقلب للسؤال اللي بعده
       const parts = await pdfByQuestion(url(f)).catch(() => []);
       const known = new Set(paper.questions.map((x) => x.n));
-      if (parts.some((x) => known.has(x.q))) {
+      // إذا لگينا كل الأسئلة بالملف ينقسم، وإذا لا يبقى صفحات كاملة واختيار السؤال من فوك
+      if (paper.questions.every((x) => parts.some((y) => y.q === x.n)) && parts.every((y) => known.has(y.q))) {
         for (const x of paper.questions) {
           const mine = parts.filter((y) => y.q === x.n);
           if (mine.length) mine.forEach((y) => out.push({ src: y.src, q: x.n }));
@@ -170,10 +171,10 @@ const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽
 const TIP: Record<Tool, string> = { hand: "تحريك", pen: "القلم", eraser: "الممحاة", text: "كتابة", stamp: "ختم صح", sticker: "ملصق" };
 
 const SHOWQ_KEY = "gradeShowQuestion";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinish, today, left: papersLeft, errors, stickers }: {
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, today, left: papersLeft, errors, stickers }: {
   paper: Paper; url: (r: string) => string; busy: boolean; errors: string[]; stickers: Sticker[];
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null } | null>;
-  onClose: () => void; onSkip: () => void; onFinish: () => void; today: number; left: number;
+  onClose: () => void; onSkip: () => void; onSave: (inkSaved: Promise<void>) => void; today: number; left: number;
 }) {
   const [pages, setPages] = useState<Page[] | null>(null);
   const [at, setAt] = useState(0);
@@ -188,10 +189,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
   const [overlay, setOverlay] = useState<"" | "model" | "question">("");
   const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
   const [text, setText] = useState("");
-  const [askFinish, setAskFinish] = useState(false);
   const [saveErr, setSaveErr] = useState("");
   const [keepErr, setKeepErr] = useState(false);
-  const [saved, setSaved] = useState("");
   const [showQ, setShowQ] = useState(true);
   const [sticker, setSticker] = useState(0);
   const [stickerBox, setStickerBox] = useState(false);
@@ -284,21 +283,30 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
     if (v && keepErr && !errors.includes(v)) void act({ action: "saveError", text: v });
     setTextAt(null); setText(""); setKeepErr(false);
   }
-  async function saveNow() { await flush(); setSaved("✅ انحفظ"); setTimeout(() => setSaved(""), 2000); }
+  /** حفظ الورقة: لازم كل الأسئلة عدها درجة. بعدها تنفتح الورقة الجاية مباشرة، والحفظ يكمل بالخلفية */
+  function save() {
+    const miss = paper.questions.find((x) => marks[x.n] === null || marks[x.n] === undefined);
+    if (miss) {
+      setSaveErr(`باقي درجة السؤال ${miss.n}`);
+      const i = pages?.findIndex((p) => p.q === miss.n) ?? -1;
+      if (i >= 0) go(i); else setQSel(miss.n);
+      return;
+    }
+    onSave(flush());
+  }
   return (
     <div className="gk">
       <div className="gk-row gk-head">
-        <button type="button" className="gk-ic" aria-label="سد" onClick={async () => { await flush(); onClose(); }}>✕</button>
         <b className="gk-name">{paper.name}{paper.test ? " (تجربة)" : ""}</b>
         <div className="gk-tools">
           <button type="button" className={"gk-btn" + (showQ ? " on" : "")} onClick={toggleQ}>📋 {showQ ? "إخفاء السؤال" : "إظهار السؤال"}</button>
           <button type="button" className="gk-btn" onClick={() => setOverlay("model")}>📄 الجواب النموذجي</button>
           {!locked && <button type="button" className="gk-ic" title="تراجع" onClick={back}>↶</button>}
           {!locked && <button type="button" className="gk-ic" title="إعادة" onClick={forward}>↷</button>}
-          {!locked && <button type="button" className="gk-save" onClick={() => void saveNow()}>{saved || "💾 حفظ"}</button>}
         </div>
       </div>
       <div className="gk-row gk-info">
+        <button type="button" className="gk-skip" onClick={async () => { await flush(); onClose(); }}>⬅️ القائمة</button>
         <span>الامتحان: {paper.title} · النسخة: {paper.model}</span>
         <span>صححت: <b>{today}</b> | متبقي: <b>{papersLeft}</b>{saveErr && <span className="gk-err"> · ⚠️ {saveErr}</span>}</span>
         {!locked && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(); onSkip(); }}>⏭ تخطي الورقة</button>}
@@ -343,7 +351,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
             ))}
           </div>
           <span className="gk-total">{total} / 100</span>
-          {!locked && <button type="button" className="gk-finish" disabled={busy || missing > 0} onClick={() => setAskFinish(true)}>{missing ? `باقي ${missing}` : "✅ خلصت"}</button>}
+          {!locked && <button type="button" className="gk-save" disabled={busy} onClick={save}>💾 حفظ{missing ? ` (باقي ${missing})` : ""}</button>}
         </div>
       )}
       <div className="gk-stage" ref={stage}>
@@ -386,15 +394,6 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
               ))}
             </div>
             <button type="button" className="gk-btn" onClick={() => setStickerBox(false)}>إلغاء</button>
-          </div>
-        </div>
-      )}
-      {askFinish && (
-        <div className="gk-modal" onClick={() => setAskFinish(false)}>
-          <div className="gk-dialog" onClick={(e) => e.stopPropagation()}>
-            <b>تخلص الورقة؟</b>
-            <div>المجموع <b>{total}</b> من 100{paper.test ? "" : "، وتوصل للطالب وولي أمره"}.</div>
-            <div className="gk-tools"><button type="button" className="gk-finish" disabled={busy} onClick={async () => { await flush(); setAskFinish(false); onFinish(); }}>إي، خلصت</button><button type="button" className="gk-btn" onClick={() => setAskFinish(false)}>لا</button></div>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 "use client";
 // التصحيح: قائمة الأوراق، وشاشة الورقة بكل الشاشة مثل النظام القديم (Grader)
 import { useEffect, useRef, useState } from "react";
-import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
+import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import Grader, { type Paper, type Sticker } from "./Grader";
 
 type Row = { id: number; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
@@ -26,10 +26,32 @@ export default function GradeClient() {
   const [paper, setPaper] = useState<Paper | null>(null);
   const [allDone, setAllDone] = useState(false);
   const skipped = useRef(new Set<number>());
+  const saving = useRef(new Set<number>());
+  const [savedNow, setSavedNow] = useState(0);
+  const [bgErr, setBgErr] = useState("");
   useWide(!!paper || allDone);
   const act: Call = async (b) => { const r = await call(b); if (r?.paper) setPaper(r.paper); return r; };
   const url = (ref: string) => `/api/grade/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
-  /** بعد ما تخلص أو تتخطى، تنفتح الورقة اللي بعدها وحدها */
+  /** الحفظ بالخلفية: المصحح ما ينتظر، تنفتح الورقة الجاية والدرجة توصل للطالب وراها */
+  function saveInBackground(p: Paper, inkSaved: Promise<void>) {
+    saving.current.add(p.id);
+    setSavedNow((n) => n + 1);
+    void (async () => {
+      try {
+        await inkSaved;
+        const res = await fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "finish", id: p.id }) });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "");
+      } catch (e) {
+        setSavedNow((n) => n - 1);
+        setBgErr(`⚠️ ورقة ${p.name} ما انحفظت${(e as Error).message ? `: ${(e as Error).message}` : ""}. افتحها من القائمة واحفظها مرة ثانية.`);
+      } finally { saving.current.delete(p.id); }
+    })();
+    const nextPaper = data?.waiting.find((x) => x.id !== p.id && !skipped.current.has(x.id) && !saving.current.has(x.id));
+    setPaper(null);
+    if (nextPaper) void act({ action: "open", id: nextPaper.id });
+    else setAllDone(true);
+  }
+  /** بعد ما تتخطى، تنفتح الورقة اللي بعدها وحدها */
   async function next(r: Data | null) {
     const p = r?.waiting.find((x) => !skipped.current.has(x.id));
     setPaper(null);
@@ -42,18 +64,20 @@ export default function GradeClient() {
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
+        {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
         {data && paper && (
-          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today} errors={data.errors ?? []} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id).length}
-            onClose={() => { setPaper(null); void call({ action: "list" }); }}
+          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} errors={data.errors ?? []} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && !saving.current.has(x.id)).length}
+            onClose={() => { setPaper(null); setSavedNow(0); void call({ action: "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
-            onFinish={async () => { const r = await call({ action: "finish", id: paper.id }); if (r) await next(r); }} />
+            onSave={(inkSaved) => saveInBackground(paper, inkSaved)} />
         )}
         {data && !paper && allDone && (
           <div className="gk gk-done">
             <div className="gk-check">✓</div>
             <b>انتهت الأوراق المتاحة</b>
             <span>ماكو أوراق ثانية تنتظر التصحيح هسه.</span>
-            <button type="button" className="gk-finish" onClick={() => { setAllDone(false); skipped.current.clear(); void call({ action: "list" }); }}>إغلاق</button>
+            {bgErr && <span className="gk-err">{bgErr}</span>}
+            <button type="button" className="gk-finish" onClick={() => { setAllDone(false); skipped.current.clear(); setSavedNow(0); void call({ action: "list" }); }}>رجوع للقائمة</button>
           </div>
         )}
         {data && !paper && !allDone && <List data={data} busy={busy} act={act} />}
