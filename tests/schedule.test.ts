@@ -394,3 +394,36 @@ test("تصحيح الفصل الثالث: يعدل العنوان ويضيف 7&8
   assert.ok(after[j - 1].endsWith("5&6") && after[j + 1].endsWith("العظمى والصغرى)"));
   assert.equal(r.bookMissing, false);
 });
+
+test("تواريخ الأسابيع 1 إلى 40 تدخل لكل مكان حسب جدول النظام القديم", async () => {
+  const admin = sign(1);
+  const r: any = await schedAdminAction({ action: "loadOldDates", initData: admin });
+  assert.match(r.notice, /انضاف \d+ موعد/);
+  assert.equal(r.canLoadDates, false);
+  const centers = await find("centers");
+  const id = (n: string) => centers.find((c) => String(c.name).includes(n))!.id;
+  const dayOf = async (center: number, slug: string, title: string) => {
+    const rows = (await schedAdminAction({ action: "list", center, initData: admin }) as any).rows;
+    const exams = await find("bank_exams", { slug });
+    const e = exams.find((x) => x.title === title)!;
+    return rows.find((x: any) => x.exam === e.id).date;
+  };
+  // كل تاريخ منقول من جدول قصي
+  assert.equal(await dayOf(0, "ch2", "قطع مكافئ 1&2"), "2026-08-12");
+  assert.equal(await dayOf(0, "ch2", "فاينل"), "2026-09-27");
+  assert.equal(await dayOf(0, "ch3", "فاينل"), "2026-12-20");
+  assert.equal(await dayOf(0, "ch4", "ممنوع لو مسموح 1&2"), "2027-02-07");
+  assert.equal(await dayOf(id("أثر"), "ch4", "ممنوع لو مسموح 1&2"), "2027-02-06");
+  assert.equal(await dayOf(id("قصي العميري"), "ch4", "ممنوع لو مسموح 1&2"), "2027-02-05");
+  assert.equal(await dayOf(id("قصي العميري"), "ch4", "ساين وكوساين 1&2"), "2027-03-01");
+  assert.equal(await dayOf(id("أثر"), "ch3", "إعادة فاينل"), "2026-12-22");
+  // المنصور جلسة وحدة وره الباقين، وقبل الساين ما عندهم مواعيد
+  const m = id("قمة المنصور للبنين");
+  assert.equal(await dayOf(m, "ch3", "اشتقاق الساين والكوساين"), "2026-10-05");
+  assert.equal(await dayOf(m, "ch3", "المعدلات الزمنية 1&2"), "2026-10-09");
+  assert.equal(await dayOf(m, "ch3", "إعادة فاينل"), "2026-12-25");
+  assert.equal(await dayOf(m, "ch4", "ممنوع لو مسموح 1&2"), "2027-02-08");
+  assert.equal(await dayOf(m, "ch4", "ساين وكوساين 1&2"), "2027-03-05");
+  assert.equal(await dayOf(m, "ch3", "الاشتقاق 1&2"), "");
+  assert.equal(await dayOf(m, "ch2", "قطع مكافئ 1&2"), "");
+});

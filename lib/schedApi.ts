@@ -1,7 +1,7 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
 import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
-import { PLACE_SLOTS } from "./bookOutline.ts";
+import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
 import { centerName, student } from "./data.ts";
 import { chapterLabel } from "./orderRules.ts";
@@ -343,6 +343,34 @@ export async function schedAdminAction(body: Row) {
     const cur = await schedSettings();
     if (!cur.holidayStart) await kvSet("sched_settings", JSON.stringify({ ...cur, holidayStart: "2027-01-15", holidayDays: 18 }));
     notice = `✅ انضافت أوقات ${added} مكان${missing.length ? `. ما لگيت هاي المراكز: ${missing.join("، ")}` : ""}`;
+  } else if (a === "loadOldDates") {
+    // تواريخ النظام القديم. النسخ المحددة تبقى، وأي تاريخ يتعدل بعدها من الصفحة
+    const centers = await find("centers", { active: 1 });
+    const missing: string[] = [];
+    let added = 0;
+    for (const pl of PLACE_DAYS) {
+      const row = pl.match === null ? { id: 0 } : centers.find((x) => String(x.name).includes(pl.match!));
+      if (!row) { missing.push(pl.match!); continue; }
+      for (const [slug, list] of Object.entries(SESSIONS)) {
+        const exams = (await find("bank_exams", { slug })).sort((x, y) => (x.pos ?? x.ord) - (y.pos ?? y.ord) || x.id - y.id);
+        const started = pl.from ? pl.from[0] < slug || (pl.from[0] === slug) : true;
+        if (!started) continue;
+        const startAt = pl.from && pl.from[0] === slug ? list.findIndex(([x]) => x === pl.from![1]) : 0;
+        for (const [exam, week, part] of list.slice(startAt)) {
+          const e = typeof exam === "number" ? exams[exam] : exams.find((x) => x.title === exam);
+          if (!e) continue;
+          let w = week, sp = part as number;
+          if (pl.shift) { if (sp === 1) sp = 2; else { sp = 1; w++; } }
+          const day = addDays(YEAR_START, (w - 1) * 7 + (sp === 1 ? pl.first : pl.second));
+          const old = await one("place_dates", { center_id: row.id, exam_id: e.id });
+          await put("place_dates", { center_id: row.id, exam_id: e.id, day, versions: old?.versions ?? "{}" });
+          added++;
+        }
+      }
+      await tellPlace(row.id);
+    }
+    await kvSet("old_dates_loaded", "1");
+    notice = `✅ انضاف ${added} موعد${missing.length ? `. ما لگيت هاي المراكز: ${missing.join("، ")}` : ""}`;
   } else need(a === "list", "أمر غير معروف");
   return { ...await schedSettings(), ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice };
 }
@@ -369,7 +397,7 @@ async function placesPage(center: number) {
   const versions = await find("bank_versions", { kind: "mandatory" }, { order: ["model"] });
   const exams = (await find("bank_exams")).sort((a, b) => String(a.slug).localeCompare(String(b.slug)) || (a.pos ?? a.ord) - (b.pos ?? b.ord));
   return {
-    canLoad: !await kvGet("places_loaded"), week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), places, center,
+    canLoad: !await kvGet("places_loaded"), canLoadDates: !await kvGet("old_dates_loaded"), week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), places, center,
     slots: await placeSlots(center), students: (await find("schedules", { mode: "general", center_id: center })).length,
     rows: exams.map((e) => {
       const d = dates.get(e.id);

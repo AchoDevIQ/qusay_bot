@@ -5,7 +5,7 @@ import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; versions: Record<string, number>; models: { id: number; model: string }[] };
-type Data = { window: number; extra: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; week: { i: number; name: string }[]; schedules: number; notice: string };
+type Data = { window: number; extra: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
 export default function ScheduleClient() {
@@ -71,6 +71,7 @@ function Place({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
       <h2>👥 الجدول العام (ويا الطلاب)</h2>
       <div className="form">
         {d.canLoad && <button type="button" className="btn agbtn" disabled={busy} onClick={() => void act({ action: "loadPlaces" })}>📥 أدخل أوقات الأماكن والعطلة</button>}
+        {d.canLoadDates && <Confirm label="📥 أدخل تواريخ الأسابيع 1 إلى 40" disabled={busy || d.canLoad} onYes={() => void act({ action: "loadOldDates" })} />}
         <label>المكان</label>
         <select value={d.center} disabled={busy} onChange={(e) => void act({ action: "list", center: Number(e.target.value) })}>
           {d.places.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
