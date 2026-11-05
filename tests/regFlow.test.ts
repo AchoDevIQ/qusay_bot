@@ -42,7 +42,7 @@ const initData = (uid: number) => {
   return params.toString();
 };
 const act = (uid: number, action: string, extra: object = {}) => homeAction({ token: homeToken(uid), action, ...extra });
-const FORM = { n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "إلكتروني", c: 0 };
+const FORM = { n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "إلكتروني", c: 0, sx: "بنين" };
 
 test("كلمات الترتيب بدون العلامات الوحدها", () => {
   assert.deepEqual(termWords("- سيتم *** عرض\nالتعليمات / 25"), ["سيتم", "عرض", "التعليمات", "25"]);

@@ -8,6 +8,7 @@ import { sendProfileCard } from "./documents.ts";
 import { examsMenu } from "./exams.ts";
 import { adminPageLink, homeLink, mainKb, regLink, storeLink } from "./keyboards.ts";
 import { issuePassword } from "./password.ts";
+import { scheduleChapters } from "./schedApi.ts";
 import { askStart, myQuestions } from "./questions.ts";
 import { onStoreOrder, saveStudent, showMe, studentFromForm } from "./student.ts";
 import { api, send } from "./telegram.ts";
@@ -22,6 +23,7 @@ async function registerFromPage(id: number, body: Row) {
   need(body.rev === termsRev(await loadTerms()), "الشروط تغيرت. سكر الصفحة وافتح التسجيل من جديد.", 409);
   const { errs, r } = await studentFromForm(body.form ?? {}, false);
   need(!errs.length, errs.join("، "));
+  need(r.gender, "اختار بنين لو بنات");
   // الصفحة ما تعرف معرف تليجرام، وإذا ما وصلنا التسجيل يكمل بدونه
   const username = await api("getChat", { chat_id: id }).then((c: any) => c?.username ?? "").catch(() => "");
   const { state, data } = await getSession(id);
@@ -59,7 +61,7 @@ export async function homeAction(body: Row) {
     const needLink = await boughtCourse(id) && !await guardianOf(id);
     return {
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
-      name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id), ask: await canAsk(id), myq: !!await one("questions", { user_id: id }),
+      name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }),
       link: needLink ? await guardianLink(id) : null,
     };
   }
@@ -98,7 +100,7 @@ export async function homeAction(body: Row) {
     await setSession(id, "r:form", { next: a === "ask" ? "ask" : null, edit: false });
     return { url: await regLink(id) };
   }
-  if (a === "exams" && await one("exam_access", { user_id: id })) {
+  if (a === "exams" && (await scheduleChapters(id)).length) {
     await logActivity(id, "📝 فتح امتحاناتي");
     return { url: adminPageLink("myexams", id) };
   }

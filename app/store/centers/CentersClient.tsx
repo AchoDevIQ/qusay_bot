@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
-type Center = { id: number; name: string; n: number };
+type Center = { id: number; name: string; gender: string; n: number };
 type Area = { id: number; gov: string; name: string; centers: Center[] };
 type Data = { govs: string[]; modes: { gov: string; mode: string }[]; areas: Area[]; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -96,13 +96,19 @@ function CenterRow({ c, busy, call }: { c: Center; busy: boolean; call: Call }) 
   return (
     <>
       <tr className={"exrow" + (open ? " sel" : "")} onClick={() => setOpen(!open)}>
-        <td><b>🏫 {c.name}</b></td><td className="p">{c.n} طالب</td>
+        <td><b>🏫 {c.name}</b>{c.gender && <small className="pdmode">{c.gender} فقط</small>}</td><td className="p">{c.n} طالب</td>
       </tr>
       {open && (
         <tr><td colSpan={2} className="expanel">
           <div className="exadd">
             <input aria-label="اسم المركز" value={name} onChange={(e) => setName(e.target.value)} />
             <button type="button" className="exbtn" disabled={busy || !name.trim() || name.trim() === c.name} onClick={() => void call({ action: "renameCenter", id: c.id, name })}>حفظ الاسم</button>
+          </div>
+          <div className="exline">
+            <span>يطلع لـ:</span>
+            <select className="exnum adwide" aria-label="بنين أو بنات" disabled={busy} value={c.gender} onChange={(e) => void call({ action: "centerGender", id: c.id, gender: e.target.value })}>
+              <option value="">الكل</option><option value="بنين">بنين فقط</option><option value="بنات">بنات فقط</option>
+            </select>
           </div>
           <div className="exline">
             <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "pdf", id: c.id })}>📄 قائمة طلابه</button>

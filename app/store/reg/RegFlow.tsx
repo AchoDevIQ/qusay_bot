@@ -4,13 +4,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { termWords } from "../../../lib/orderRules.ts";
 import { CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanPhone, closeApp, haptic, nameOk, phoneErr, scrollToFirst } from "../shared";
 
-type Area = [number, string, string, [number, string][]];
+type Area = [number, string, string, [number, string, string?][]];
 export type RegData = { g: string[]; m: string[]; a: Area[]; tk?: string };
 type Term = { id: number; text: string };
 type Info = { terms: Term[]; rev: string; registered: boolean };
 type Done = { password: string; url?: string; close?: boolean };
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس العلمي" }, { v: "الخامس العلمي", label: "الخامس العلمي" }];
+const GENDER_OPTS = [{ v: "بنين", label: "👦 بنين" }, { v: "بنات", label: "👧 بنات" }];
 const EXAM_OPTS = [{ v: "حضوري", label: "🏫 حضوري" }, { v: "إلكتروني", label: "💻 إلكتروني" }];
 const NAME_PARTS = [
   { key: "n1", label: "الاسم الأول", hint: "عبد الله" }, { key: "n2", label: "اسم الأب", hint: "مصطفى" },
@@ -62,9 +63,12 @@ export default function RegFlow({ D }: { D: RegData }) {
   const gov = f.gov ?? "";
   const mode = D.m[D.g.indexOf(gov)] || "online";
   const exam = mode === "online" ? "إلكتروني" : mode === "in" ? "حضوري" : f.exam ?? "";
-  const inGov = D.a.filter((x) => x[1] === gov);
-  const areas = inGov.length ? inGov : D.a;
-  const centers = D.a.find((x) => x[0] === carea)?.[3] ?? [];
+  // المعاهد اللي بس بنين أو بس بنات ما تطلع للثاني
+  const fits = (c: [number, string, string?]) => !c[2] || c[2] === f.sx;
+  const allAreas = D.a.filter((x) => x[3].some(fits));
+  const inGov = allAreas.filter((x) => x[1] === gov);
+  const areas = inGov.length ? inGov : allAreas;
+  const centers = (D.a.find((x) => x[0] === carea)?.[3] ?? []).filter(fits);
 
   if (loadErr) return <div className="rg"><Top title="التسجيل" step={1} total={1} /><div className="rgbody"><div className="rgcard rgbad">⚠️ {loadErr}</div></div></div>;
   if (!info) return <div className="rg"><Top title="التسجيل" step={1} total={1} /><div className="rgbody rgcenter"><div className="rgspin" /></div></div>;
@@ -109,6 +113,7 @@ export default function RegFlow({ D }: { D: RegData }) {
     const e: Errs = {};
     for (const p of NAME_PARTS) if (!nameOk([f[p.key] ?? "x", "ا", "ا", "ا"].join(" ").trim())) e[p.key] = "اكتب هذا الاسم بالحروف العربية فقط";
     for (const p of NAME_PARTS) if (!(f[p.key] ?? "").trim()) e[p.key] = `اكتب ${p.label}`;
+    if (!f.sx) e.sx = "اختار بنين لو بنات";
     const p1 = cleanPhone(f.p1 ?? ""), p2 = cleanPhone(f.p2 ?? "");
     const a = phoneErr(p1), b = phoneErr(p2);
     if (a) e.p1 = a;
@@ -124,7 +129,7 @@ export default function RegFlow({ D }: { D: RegData }) {
     if (!f.curr) e.curr = "اختر المنهج";
     if (!f.grade) e.grade = "اختر صفك بالمدرسة";
     if (!exam) e.exam = "اختر نوع الامتحان";
-    else if (exam === "حضوري" && D.a.length) {
+    else if (exam === "حضوري" && allAreas.length) {
       if (!carea) e.carea = "اختر منطقة المركز";
       else if (!center) e.center = "اختر المركز الامتحاني";
     }
@@ -134,7 +139,7 @@ export default function RegFlow({ D }: { D: RegData }) {
     setMaking(true);
     window.scrollTo(0, 0);
     const n = NAME_PARTS.map((p) => (f[p.key] ?? "").trim().replace(/\s+/g, " ")).join(" ");
-    const form = { n, cu: f.curr, gr: f.grade, g: gov, s: gov === "بغداد" ? f.side : "", a: (f.area ?? "").trim(), p1: cleanPhone(f.p1 ?? ""), p2: cleanPhone(f.p2 ?? ""), e: exam, c: exam === "حضوري" ? center : 0 };
+    const form = { n, cu: f.curr, gr: f.grade, g: gov, s: gov === "بغداد" ? f.side : "", a: (f.area ?? "").trim(), p1: cleanPhone(f.p1 ?? ""), p2: cleanPhone(f.p2 ?? ""), e: exam, c: exam === "حضوري" ? center : 0, sx: f.sx };
     try { setDone(await homeCall<Done>(token, { action: "register", rev: info!.rev, form })); }
     catch (err) { setSendErr((err as Error).message); }
     setMaking(false);
@@ -155,6 +160,11 @@ export default function RegFlow({ D }: { D: RegData }) {
                 <Err id={p.key} errs={errs} />
               </div>
             ))}
+          </div>
+          <div className="rgcard">
+            <label>بنين لو بنات؟ <i>*</i></label>
+            <Seg options={GENDER_OPTS} value={f.sx ?? ""} onPick={(v) => { set("sx", v); setCarea(0); setCenter(0); }} />
+            <Err id="sx" errs={errs} />
           </div>
           <div className="rgcard">
             <label>رقم هاتفك <i>*</i></label>
@@ -212,7 +222,7 @@ export default function RegFlow({ D }: { D: RegData }) {
               <Err id="exam" errs={errs} />
             </>
           ) : <div className="rgnote">{mode === "online" ? "💻 امتحاناتك: إلكترونية" : "🏫 امتحاناتك: حضورية"}</div>}
-          {exam === "حضوري" && D.a.length > 0 && (
+          {exam === "حضوري" && allAreas.length > 0 && (
             <>
               <label>منطقة المركز الامتحاني <i>*</i></label>
               <Seg wrap value={String(carea)} options={areas.map((a) => ({ v: String(a[0]), label: `📍 ${a[2]}${a[1] !== gov ? ` (${a[1]})` : ""}` }))}

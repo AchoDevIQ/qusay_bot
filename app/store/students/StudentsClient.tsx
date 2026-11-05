@@ -4,12 +4,13 @@ import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
-type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; guardian: boolean; centerId: number; center: string; created: string; updated: string };
+type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
-type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; items: { id: number; title: string; at: string; state: string }[]; perDay: number; general: number } };
+type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
+const GENDER_OPTS = [{ v: "بنين", label: "بنين" }, { v: "بنات", label: "بنات" }];
 const EXAM_OPTS = [{ v: "حضوري", label: "🏫 حضوري" }, { v: "إلكتروني", label: "💻 إلكتروني" }];
 
 export default function StudentsClient() {
@@ -108,12 +109,13 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
   const [p1, setP1] = useState(s.phone1);
   const [p2, setP2] = useState(s.phone2);
   const [exam, setExam] = useState(s.exam);
+  const [gender, setGender] = useState(s.gender);
   const [carea, setCarea] = useState(startArea?.id ?? 0);
   const [center, setCenter] = useState(startArea ? s.centerId : 0);
   const centers = data.areas.find((a) => a.id === carea)?.centers ?? [];
 
   async function save() {
-    const form = { n: name, cu: curr, gr: grade, g: gov, s: side, a: area, p1: cleanPhone(p1), p2: cleanPhone(p2), e: exam, c: exam === "حضوري" ? center : 0 };
+    const form = { n: name, cu: curr, gr: grade, g: gov, s: side, a: area, p1: cleanPhone(p1), p2: cleanPhone(p2), e: exam, c: exam === "حضوري" ? center : 0, sx: gender };
     if (await call({ action: "save", id: s.id, form })) close();
   }
   return (
@@ -132,6 +134,8 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
       )}
       <label>الاسم الرباعي</label>
       <input value={name} onChange={(e) => setName(e.target.value)} />
+      <label>بنين لو بنات</label>
+      <Seg options={GENDER_OPTS} value={gender} onPick={setGender} />
       <label>المنهج</label>
       <Seg options={CURR_OPTS} value={curr} onPick={setCurr} />
       <label>صفه بالمدرسة</label>
@@ -173,17 +177,18 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
   );
 }
 
-const SCHED_STATE: Record<string, string> = { locked: "🔒 ينتظر", open: "🟢 بدا", missed: "⛔ فات", done: "✅ مخلص" };
+const SCHED_STATE: Record<string, string> = { locked: "🔒 ينتظر", open: "🟢 بدا", missed: "⛔ فات", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده" };
 function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"]>; id: number; busy: boolean; call: Call }) {
   const [n, setN] = useState(String(sched.perDay));
   return (
     <div className="adlog">
+      {sched.way && <div className="exlabel">{sched.way}</div>}
       {sched.items.length ? sched.items.map((i) => <div key={i.id} className="adsale">{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small></div>) : <div className="exhint">ما رتب جدوله بعد.</div>}
       <div className="exadd">
         <input className="exnum" inputMode="numeric" aria-label="حد الامتحانات باليوم لهذا الطالب" value={n} onChange={(e) => setN(e.target.value)} />
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "perDay", id, value: n })}>حفظ حده باليوم (0 = العام: {sched.general})</button>
       </div>
-      {!!sched.items.length && <Confirm label="🗓 خليه يرتب جدوله من جديد" disabled={busy} onYes={() => void call({ action: "schedReset", id })} />}
+      {!!sched.way && <Confirm label="🗓 خليه يرتب جدوله من جديد" disabled={busy} onYes={() => void call({ action: "schedReset", id })} />}
     </div>
   );
 }

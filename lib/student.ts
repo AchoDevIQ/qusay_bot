@@ -1,7 +1,7 @@
 // واجهة الطالب: التسجيل، المتجر، الطلبات
 import { find, getSession, insert, kvSet, one, put, setSession, update, type Row } from "./db.ts";
 import {
-  AGREE_TIMES, AR_WORD, BANNER, BTN_ME, BTN_OPEN, BTN_REG, BTN_SHOP, CURRS, EXAMS, GOVS, GRADES, NO_REFUND, SIDES, STORE_URL, SUCCESS, WORD_CHECK, successText,
+  AGREE_TIMES, AR_WORD, BANNER, BTN_ME, BTN_OPEN, BTN_REG, BTN_SHOP, CURRS, EXAMS, GENDERS, GOVS, GRADES, NO_REFUND, SIDES, STORE_URL, SUCCESS, WORD_CHECK, successText,
 } from "./config.ts";
 import {
   can, cat, cats, centerAreas, centerName, checkPhone, feeOf, govMode, newOrdersCount, orderItems, placeOf, product, products, profileText, staffIds, student,
@@ -445,12 +445,12 @@ export async function studentFromForm(o: any, byAdmin: boolean): Promise<{ errs:
     cid = toInt(o.c || 0) ?? 0;
     if (!cid || !await centerName(cid)) { errs.push("اختر المركز الامتحاني"); cid = null; }
   }
-  return { errs, r: { name, curr: cu, grade: gr, gov: g, side: sd, area, phone1: p1, phone2: p2, exam, center_id: cid } };
+  return { errs, r: { name, curr: cu, grade: gr, gov: g, side: sd, area, phone1: p1, phone2: p2, exam, center_id: cid, gender: GENDERS.includes(o.sx) ? o.sx : null } };
 }
 export async function saveStudent(uid: number, username: string, r: Row, old: Row | null) {
   await put("students", {
     user_id: uid, username, name: r.name, curr: r.curr, grade: r.grade, gov: r.gov, side: r.side ?? "", area: r.area,
-    phone1: r.phone1, phone2: r.phone2, exam: r.exam, center_id: r.center_id ?? null, created: old ? old.created : stamp(), updated: stamp(),
+    phone1: r.phone1, phone2: r.phone2, exam: r.exam, center_id: r.center_id ?? null, gender: r.gender ?? old?.gender ?? null, created: old ? old.created : stamp(), updated: stamp(),
   });
 }
 

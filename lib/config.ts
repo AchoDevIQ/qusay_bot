@@ -80,6 +80,7 @@ export const SIDES = ["الرصافة", "الكرخ"];
 export const CURRS = ["عربي", "إنجليزي"];
 export const GRADES = ["السادس العلمي", "الخامس العلمي"];
 export const EXAMS = ["حضوري", "إلكتروني"];
+export const GENDERS = ["بنين", "بنات"];
 export const MODE_ICON: Record<string, string> = { both: "🔄 كليهما", in: "🏫 حضوري", online: "💻 إلكتروني" };
 export const MODE_NEXT: Record<string, string> = { both: "in", in: "online", online: "both" };
 export const DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]; // 0 = الاثنين

@@ -5,7 +5,7 @@ import { createHmac } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_SETTINGS, addDays, availableDays, buildPlan, itemState, labelChapters, pickMandatory, pickOptional, weekdayOf } from "../lib/scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, availableDays, buildPlan, itemState, ampm, labelChapters, pickMandatory, prettyAt, slotDates, pickOptional, weekdayOf } from "../lib/scheduleRules.ts";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-sched-"));
 Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CHROME_PATH: path.join(tmp, "none"), ASSETS_DIR: path.join(tmp, "none"), SETTINGS_FILE: path.join(tmp, "none") });
@@ -121,11 +121,7 @@ test("شراء فصل جديد يرجع يطلب ترتيب الجدول، وا�
   assert.equal((await find("sched_items", { user_id: 70, status: "missed" })).length, 1);
 });
 
-test("الطالب الحضوري ما يبني جدول، وغير المسجل مرفوض", async () => {
-  await student(71, "حضوري");
-  await put("exam_access", { user_id: 71, chapter: "الفصل الأول", order_id: 3, created: "1" });
-  assert.equal((await act(71, "info")).inPerson, true);
-  await assert.rejects(act(71, "preview", form()), /حضوري/);
+test("غير المسجل مرفوض", async () => {
   await assert.rejects(act(72, "info"), /سجل/);
   await assert.rejects(myExamAction({ token: "x", action: "info" }), (e: any) => e.status === 401);
 });
@@ -168,9 +164,9 @@ test("الإدارة من صفحة الطالب: حده باليوم، إعاد�
 
 test("النسخة: الإجباري حسب المجموعة، والاختياري عشوائي إلا إذا وحدة", () => {
   const vs = [{ id: 1, kind: "mandatory", ok: 1 }, { id: 2, kind: "mandatory", ok: 1 }, { id: 3, kind: "mandatory", ok: 0 }, { id: 4, kind: "optional", ok: 1 }, { id: 5, kind: "optional", ok: 1 }];
-  assert.equal(pickMandatory(vs, { "7": 2 }, 7), 2);
-  assert.equal(pickMandatory(vs, { "7": 2 }, 8), 1);    // ما محددة: أول نسخة جاهزة
-  assert.equal(pickMandatory(vs, { "7": 3 }, 7), 1);    // المحددة موقوفة
+  assert.equal(pickMandatory(vs, 2), 2);
+  assert.equal(pickMandatory(vs, null), 1);    // ما محددة: أول نسخة جاهزة
+  assert.equal(pickMandatory(vs, 3), 1);       // المحددة موقوفة
   assert.equal(pickOptional(vs, () => 0), 4);
   assert.equal(pickOptional(vs, () => 0.99), 5);
   assert.equal(pickOptional(vs.slice(0, 4), () => 0.99), 4);
@@ -207,19 +203,174 @@ test("جدول الكتاب ينضاف مرة وحدة، والفصل يتعدل
   assert.equal((await find("sched_items", { user_id: 81 })).length, 0);
 });
 
-test("المجاميع: الطالب يختار ساعتها بس، وكل امتحان ينحدد إله نسخة", async () => {
+test("الإلكتروني: يختار ويا الطلاب، ومواعيد المجموعة توصله وتتحدث، وما يصير يبدل", async () => {
   const admin = sign(1);
-  const g: any = await schedAdminAction({ action: "addGroup", hour: 20, initData: admin });
-  await assert.rejects(schedAdminAction({ action: "addGroup", hour: 20, initData: admin }), /أكو مجموعة/);
-  const gid = g.groups[0].id;
-  assert.deepEqual((await act(80, "info")).hours, [20]);
-  await assert.rejects(act(80, "preview", form({ hour: 16 })), /أوقات الامتحانات/);
-  assert.ok((await act(80, "preview", form({ hour: 20 }))).preview);
-  const e = (await find("bank_exams", { slug: "ch1" }))[0];
-  const list = await find("bank_versions", { exam_id: e.id, kind: "mandatory" });
-  const r: any = await examAction({ action: "groupVersion", id: e.id, group: gid, version: list[0].id, initData: admin });
-  assert.equal(r.chapters.flatMap((c: any) => c.exams).find((x: any) => x.id === e.id).groupVersions[gid], list[0].id);
-  const opt = (await find("bank_versions", { exam_id: e.id, kind: "optional" }))[0];
-  await assert.rejects(examAction({ action: "groupVersion", id: e.id, group: gid, version: opt.id, initData: admin }), /إجبارية/);
+  const later = addDays(todayStr(), 10);
+  const add: any = await schedAdminAction({ action: "addGroup", center: 0, name: "المجموعة الأولى", hour: 20, initData: admin });
+  await assert.rejects(schedAdminAction({ action: "addGroup", center: 999, name: "x", hour: 20, initData: admin }), /المركز/);
+  const gid = add.groups.at(-1).id;
+  const opened: any = await schedAdminAction({ action: "list", open: gid, initData: admin });
+  const ch1 = opened.detail.rows.filter((r: any) => r.chapter === "الفصل الأول");
+  assert.equal(ch1.length, 3);
+  const v = ch1[0].versions[0].id;
+  await assert.rejects(schedAdminAction({ action: "saveGroup", id: gid, rows: [{ exam: ch1[0].exam, date: "bad", time: "20:00" }], initData: admin }), /غير صحيحة/);
+  await schedAdminAction({ action: "saveGroup", id: gid, rows: [{ exam: ch1[0].exam, date: later, time: "20:00", version: v }, { exam: ch1[1].exam, date: "2020-01-01", time: "20:00" }], initData: admin });
+
+  await student(82);
+  await put("exam_access", { user_id: 82, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  const info = await act(82, "info");
+  assert.equal(info.needsChoice, true);
+  assert.equal(info.groups.length, 1);
+  const pre = await act(82, "groupPreview", { group: gid });
+  assert.equal(pre.groupPreview.items.length, 2);
+  assert.equal(pre.groupPreview.waiting, 1);
+  assert.equal((await find("schedules", { user_id: 82 })).length, 0);
+  const j = await act(82, "joinGroup", { group: gid });
+  assert.equal(j.mode, "general");
+  assert.equal(j.needsBuild, false);
+  assert.equal(j.items.find((i: any) => i.at === `${later} 20:00`).state, "locked");
+  assert.equal(j.late.length, 1);                                  // اللي فات موعده: يختار هو
+  assert.equal(j.items.length, 1);
+  const kept = await act(82, "lateKeep");
+  assert.equal(kept.late.length, 0);
+  assert.equal(kept.items.find((i: any) => i.at === "2020-01-01 20:00").state, "missed");
+  await assert.rejects(act(82, "joinGroup", { group: gid }), /مثبت/);
+  await assert.rejects(act(82, "preview", form()), /مثبت/);
+
+  calls.length = 0;
+  await schedAdminAction({ action: "saveGroup", id: gid, rows: [{ exam: ch1[0].exam, date: addDays(later, 1), time: "21:00", version: v }, { exam: ch1[2].exam, date: later, time: "20:00" }], initData: admin });
+  assert.equal(calls.filter((c) => c.p.chat_id === 82).length, 1);    // خبر واحد
+  const after = await act(82, "info");
+  assert.ok(after.items.some((i: any) => i.at === `${addDays(later, 1)} 21:00`));
+  assert.ok(after.items.some((i: any) => i.at === `${later} 20:00`));
+  assert.equal((await find("sched_items", { user_id: 82, status: "missed" })).length, 1);
+
+  // نسخ الأيام بساعة المجموعة الثانية، والنسخ ما تنتقل
+  const b: any = await schedAdminAction({ action: "addGroup", center: 0, name: "الثانية", hour: 22, initData: admin });
+  const bid = b.groups.find((g: any) => g.name === "الثانية").id;
+  const copied: any = await schedAdminAction({ action: "copyGroup", id: bid, from: gid, open: bid, initData: admin });
+  const row = copied.detail.rows.find((r: any) => r.exam === ch1[0].exam);
+  assert.equal(row.time, "22:00");
+  assert.equal(row.version, 0);
+
+  // حذف المجموعة يرجع طلابها يختارون
+  calls.length = 0;
   await schedAdminAction({ action: "delGroup", id: gid, initData: admin });
+  assert.ok(calls.some((c) => c.p.chat_id === 82));
+  assert.equal((await act(82, "info")).needsChoice, true);
+});
+
+test("الحضوري: مجاميع مركزه بس، وفصوله من الطلب، وبالموعد ما يصير فايت", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "المنصور" });
+  const c1 = await insert("centers", { area_id: area, name: "قمة" });
+  const c2 = await insert("centers", { area_id: area, name: "ثاني" });
+  const g1: any = await schedAdminAction({ action: "addGroup", center: c1, name: "منصور 1", hour: 16, initData: admin });
+  const mine = g1.groups.find((g: any) => g.name === "منصور 1").id;
+  const g2: any = await schedAdminAction({ action: "addGroup", center: c2, name: "غير", hour: 16, initData: admin });
+  const other = g2.groups.find((g: any) => g.name === "غير").id;
+  await student(83, "حضوري");
+  await put("students", { ...(await find("students", { user_id: 83 }))[0], center_id: c1 });
+  assert.equal((await act(83, "info")).remaining, 0);
+  await insert("orders", { user_id: 83, name: "ط", gov: "بغداد", side: "", area: "م", phone1: "1", phone2: "2", items: JSON.stringify([{ name: "الفصل الأول - امتحانات حضورية", qty: 1, price: 1 }]), subtotal: 1, fee: 0, total: 1, created: "2026-02-01 10:00", printed: 3 });
+  const info = await act(83, "info");
+  assert.equal(info.remaining, 3);
+  assert.deepEqual(info.groups.map((g: any) => g.name), ["منصور 1"]);
+  await assert.rejects(act(83, "joinGroup", { group: other }), /مو من مكانك/);
+  await put("guardians", { guardian_id: 9001, student_id: 83, created: "x" });
+  const r: any = await homeAction({ token: homeToken(83), action: "exams" });
+  assert.match(r.url, /myexams/);
+  const rows = (await schedAdminAction({ action: "list", open: mine, initData: admin }) as any).detail.rows.filter((x: any) => x.chapter === "الفصل الأول");
+  await schedAdminAction({ action: "saveGroup", id: mine, rows: [{ exam: rows[0].exam, date: "2020-01-01", time: "16:00" }, { exam: rows[1].exam, date: addDays(todayStr(), 5), time: "16:00" }], initData: admin });
+  const j = await act(83, "joinGroup", { group: mine });
+  assert.equal(j.late.length, 1);
+  const k = await act(83, "lateKeep");
+  assert.deepEqual(k.items.map((i: any) => i.state), ["past", "center"]);
+  // الجدول الخاص يبقى متاح للحضوري
+  await student(84, "حضوري");
+  await put("exam_access", { user_id: 84, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  assert.ok((await act(84, "preview", form())).preview);
+});
+
+test("بنين وبنات: المجموعة تطلع لجنسها، والفصل غير المشترى مقفول، واللي اشترى متأخر يگدر يتحول خاص", async () => {
+  const admin = sign(1);
+  const later = addDays(todayStr(), 20);
+  const made: any = await schedAdminAction({ action: "addGroup", center: 0, name: "بنات فقط", hour: 18, gender: "بنات", initData: admin });
+  const girls = made.groups.find((g: any) => g.name === "بنات فقط").id;
+  const b2: any = await schedAdminAction({ action: "addGroup", center: 0, name: "للكل", hour: 19, initData: admin });
+  const open = b2.groups.find((g: any) => g.name === "للكل").id;
+  await student(85);
+  await put("students", { ...(await find("students", { user_id: 85 }))[0], gender: "بنين" });
+  await put("exam_access", { user_id: 85, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  const names = (await act(85, "info")).groups.map((g: any) => g.name);
+  assert.ok(!names.includes("بنات فقط") && names.includes("للكل"));
+  await assert.rejects(act(85, "joinGroup", { group: girls }), /مو من مكانك/);
+
+  const rows = (await schedAdminAction({ action: "list", open, initData: admin }) as any).detail.rows;
+  const first = rows.find((r: any) => r.chapter === "الفصل الأول"), other = rows.find((r: any) => r.chapter === "الفصل الثاني");
+  await schedAdminAction({ action: "saveGroup", id: open, rows: [{ exam: first.exam, date: later, time: "19:00" }, { exam: other.exam, date: addDays(later, 1), time: "19:00" }], initData: admin });
+  const pre = await act(85, "groupPreview", { group: open });
+  assert.deepEqual(pre.groupPreview.items.map((i: any) => i.locked), [false, true]);
+  const j = await act(85, "joinGroup", { group: open });
+  assert.deepEqual(j.items.map((i: any) => i.state), ["locked", "notbought"]);
+
+  // اشترى الفصل الثاني بعد ما فات موعده
+  await schedAdminAction({ action: "saveGroup", id: open, rows: [{ exam: first.exam, date: later, time: "19:00" }, { exam: other.exam, date: "2020-02-02", time: "19:00" }], initData: admin });
+  await put("exam_access", { user_id: 85, chapter: "الفصل الثاني", order_id: 2, created: "2" });
+  const info = await act(85, "info");
+  assert.ok(info.late.length >= 1);
+  const out = await act(85, "latePrivate");
+  assert.equal(out.mode, null);
+  assert.equal(out.needsChoice, true);
+  await assert.rejects(act(85, "lateKeep"), /ويا الطلاب/);
+
+  // كل شي يتغير: اسم المجموعة وساعتها، ونسخة الخاص لفصل كامل
+  await schedAdminAction({ action: "editGroup", id: open, name: "اسم جديد", hour: 21, gender: "", initData: admin });
+  const after: any = await schedAdminAction({ action: "list", initData: admin });
+  assert.equal(after.groups.find((g: any) => g.id === open).name, "اسم جديد");
+  const pc: any = await examAction({ action: "privateChapter", slug: "ch1", model: "A", initData: admin });
+  const exams = pc.chapters.find((c: any) => c.slug === "ch1").exams;
+  assert.ok(exams.every((x: any) => x.privateVersion === x.versions.find((v: any) => v.model === "A").id));
+  await examAction({ action: "privateChapter", slug: "ch1", model: "", initData: admin });
+});
+
+test("الأوقات بالأسبوع: توزيع متتالي يتخطى العطلة، وصباحاً ومساءً", () => {
+  const slots = [{ d: 5, t: "11:00" }, { d: 1, t: "14:00" }];   // السبت والثلاثاء
+  assert.deepEqual(slotDates(slots, "2027-02-01", 3, S), ["2027-02-02 14:00", "2027-02-06 11:00", "2027-02-09 14:00"]);
+  assert.deepEqual(slotDates(slots, "2027-02-01", 2, { ...S, excluded: ["2027-02-02"], holidayStart: "2027-02-06", holidayDays: 1 }), ["2027-02-09 14:00", "2027-02-13 11:00"]);
+  assert.deepEqual(slotDates([], "2027-02-01", 2, S), []);
+  assert.equal(ampm("09:30"), "9:30 صباحاً");
+  assert.equal(ampm("12:30"), "12:30 مساءً");
+  assert.equal(ampm("14:00"), "2:00 مساءً");
+  assert.equal(prettyAt("2027-02-02 14:00"), "2027-02-02 · 2:00 مساءً");
+});
+
+test("مجاميع المراكز تدخل مرة وحدة، والتوزيع يوصل للطالب", async () => {
+  const admin = sign(1);
+  const centers = await find("centers");
+  const athar = centers.find((c) => c.name === "معهد أثر")!.id;
+  const girls = centers.find((c) => c.name === "قمة النجاح للبنات")!.id;
+  const r: any = await schedAdminAction({ action: "loadCenterGroups", initData: admin });
+  assert.match(r.notice, /17 مجموعة/);
+  assert.equal(r.canLoadCenters, false);
+  const mine = r.groups.filter((g: any) => g.center === athar);
+  assert.equal(mine.length, 4);
+  assert.match(mine[0].label, /السبت 11:00 صباحاً \+ الثلاثاء 2:00 مساءً/);
+  assert.match(r.groups.filter((g: any) => g.center === athar)[3].label, /السبت 3:30 مساءً \+ الثلاثاء 6:30 مساءً/);
+  assert.equal(r.groups.find((g: any) => g.center === girls).gender, "بنات");
+  assert.equal((await find("centers", { id: girls }))[0].gender, "بنات");
+
+  await student(86, "حضوري");
+  await put("students", { ...(await find("students", { user_id: 86 }))[0], center_id: athar });
+  await put("exam_access", { user_id: 86, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  await act(86, "joinGroup", { group: mine[0].id });
+  await assert.rejects(schedAdminAction({ action: "fillGroup", id: mine[0].id, start: "bad", initData: admin }), /تاريخ/);
+  calls.length = 0;
+  const f: any = await schedAdminAction({ action: "fillGroup", id: mine[0].id, start: addDays(todayStr(), 1), open: mine[0].id, initData: admin });
+  assert.match(f.notice, /توزع/);
+  assert.equal(calls.filter((c) => c.p.chat_id === 86).length, 1);
+  const dated = f.detail.rows.filter((x: any) => x.date);
+  assert.ok(dated.length > 3);
+  assert.ok(dated.every((x: any) => ["11:00", "14:00"].includes(x.time)));
+  assert.ok((await act(86, "info")).items.filter((i: any) => i.state === "center").length >= 3);
 });

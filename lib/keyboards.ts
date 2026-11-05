@@ -56,7 +56,7 @@ export const storeKb = async (uid?: number) => ({
 export async function regLink(uid: number, adminFor?: number | null) {
   const modes = Object.fromEntries((await find("govmode")).map((r) => [r.gov, r.mode]));
   const areas = await Promise.all((await areasWithCenters()).map(async (a) => [a.id, a.gov, a.name,
-    (await find("centers", { area_id: a.id, active: 1 }, { order: ["id"] })).map((x) => [x.id, x.name])]));
+    (await find("centers", { area_id: a.id, active: 1 }, { order: ["id"] })).map((x) => (HOME_PAGE ? [x.id, x.name, x.gender ?? ""] : [x.id, x.name]))]));
   const d: Row = { g: GOVS, m: GOVS.map((g) => modes[g] ?? "online"), a: areas };
   const s = await student(adminFor || uid);
   if (s) d.p = { n: s.name, cu: s.curr, gr: s.grade, g: s.gov, s: s.side || "", a: s.area, p1: s.phone1, p2: s.phone2, e: s.exam || "", c: s.center_id || 0 };

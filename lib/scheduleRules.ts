@@ -79,12 +79,10 @@ export function itemState(status: string, at: string, window: number, now: strin
 }
 
 // ---------- أي نسخة ياخذ الطالب
-export type ExamGroup = { id: number; name: string; hour: number };
 type V = { id: number; kind: string; ok: unknown };
-/** الإجباري: صاحب البوت يحدد نسخة لكل مجموعة بكل امتحان. إذا ما حدد، أول نسخة جاهزة */
-export function pickMandatory(versions: V[], assigned: Record<string, number>, groupId: number | null) {
+/** الإجباري: النسخة المحددة للمجموعة بهذا الامتحان، أو للجدول الخاص. إذا ما انحددت، أول نسخة جاهزة */
+export function pickMandatory(versions: V[], wanted: number | null | undefined) {
   const ready = versions.filter((v) => v.kind === "mandatory" && v.ok);
-  const wanted = groupId === null ? undefined : assigned[String(groupId)];
   return ready.find((v) => v.id === wanted)?.id ?? ready[0]?.id ?? null;
 }
 /** الاختياري: نسخة وحدة تنفتح هي، وأكثر من وحدة عشوائي لكل طالب */
@@ -97,3 +95,23 @@ export function labelChapters(label: string) {
   const m = /^الفصل (\S+) و(\S+)$/.exec(label);
   return m ? [`الفصل ${m[1]}`, `الفصل ${m[2]}`] : [label];
 }
+
+// ---------- أوقات المجموعة بالأسبوع
+export type Slot = { d: number; t: string };
+/** مواعيد متتالية من تاريخ البداية على أوقات المجموعة، بدون العطلة والأيام المستثناة */
+export function slotDates(slots: Slot[], start: string, count: number, s: SchedSettings) {
+  const out: string[] = [];
+  if (!slots.length) return out;
+  const sorted = [...slots].sort((a, b) => a.t.localeCompare(b.t));
+  for (let d = start, guard = 0; out.length < count && guard < 3000; d = addDays(d, 1), guard++) {
+    if (inHoliday(d, s) || s.excluded.includes(d)) continue;
+    for (const sl of sorted) if (sl.d === weekdayOf(d) && out.length < count) out.push(`${d} ${sl.t}`);
+  }
+  return out;
+}
+/** 14:30 تصير 2:30 مساءً */
+export function ampm(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "صباحاً" : "مساءً"}`;
+}
+export const prettyAt = (at: string) => `${at.slice(0, 10)} · ${ampm(at.slice(11))}`;

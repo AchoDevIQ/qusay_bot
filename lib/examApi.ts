@@ -7,7 +7,6 @@ import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
 import { BOOK } from "./bookOutline.ts";
 import { files } from "./files.ts";
-import { examGroups } from "./schedApi.ts";
 import { api } from "./telegram.ts";
 import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { fileToken, verifyFileToken } from "./webAuth.ts";
@@ -35,7 +34,7 @@ export async function examList(uid: number) {
     if (!c) { c = { slug: e.slug, chapter: e.chapter, exams: [] }; chapters.push(c); }
     const dir = `${e.slug}/e${e.ord}`;
     c.exams.push({
-      id: e.id, ord: e.ord, title: e.title, info: e.info, minutes: e.minutes, groupVersions: JSON.parse(e.group_versions || "{}"),
+      id: e.id, ord: e.ord, title: e.title, info: e.info, minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0,
       versions: (vBy.get(e.id) ?? []).map((v) => {
         const pdf = (lang: "ar" | "en") => v["pdf_" + lang] || (lang === "ar" || v.has_en ? `${dir}/${v.model}/student_${lang}.pdf` : null);
         // صور الصفحات تنعرض داخل الصفحة. إذا انرفع PDF بديل، ينفتح الملف نفسه
@@ -56,7 +55,7 @@ export async function examList(uid: number) {
     });
   }
   const slugs = new Set(exams.map((e) => e.slug));
-  return { chapters, generalMinutes: await generalMinutes(), fileToken: fileToken(uid), groups: await examGroups(), bookMissing: !await kvGet("book_loaded") && BOOK.some((c) => !slugs.has(c.slug)) };
+  return { chapters, generalMinutes: await generalMinutes(), fileToken: fileToken(uid), bookMissing: !await kvGet("book_loaded") && BOOK.some((c) => !slugs.has(c.slug)) };
 }
 
 /** الأوامر اللي ما بيها ملفات. يرجع القائمة المحدثة */
@@ -185,20 +184,29 @@ export async function examAction(body: Row) {
     need(await one("bank_exams", { id }), "الامتحان غير موجود");
     await update("bank_exams", { id }, { title });
     await logEdit(uid, `امتحان ${id}: العنوان ${title}`);
-  } else if (a === "groupVersion") {
-    // هذا الامتحان: أي نسخة تاخذ كل مجموعة
+  } else if (a === "privateVersion") {
+    // نسخة الطالب اللي جدوله خاص. نسخ المجاميع من صفحة جدول الامتحانات
     const e = await one("bank_exams", { id });
     need(e, "الامتحان غير موجود");
-    const group = Number(body.group), version = Number(body.version);
-    need((await examGroups()).some((g) => g.id === group), "المجموعة غير موجودة");
-    const map: Record<string, number> = JSON.parse(e!.group_versions || "{}");
+    const version = Number(body.version);
     if (version) {
       const v = await one("bank_versions", { id: version, exam_id: id });
       need(v && v.kind === "mandatory", "اختار نسخة إجبارية من هذا الامتحان");
-      map[String(group)] = version;
-    } else delete map[String(group)];
-    await update("bank_exams", { id }, { group_versions: JSON.stringify(map) });
-    await logEdit(uid, `امتحان ${id}: مجموعة ${group} نسخة ${version}`);
+    }
+    await update("bank_exams", { id }, { group_versions: JSON.stringify(version ? { private: version } : {}) });
+    await logEdit(uid, `امتحان ${id}: نسخة الخاص ${version}`);
+  } else if (a === "privateChapter") {
+    // نسخة الجدول الخاص لكل الفصل دفعة وحدة، وتتبدل بأي وقت
+    const list = await find("bank_exams", { slug: String(body.slug ?? "") });
+    need(list.length, "الفصل غير موجود");
+    const model = String(body.model ?? "");
+    await tx(async () => {
+      for (const e of list) {
+        const v = model ? await one("bank_versions", { exam_id: e.id, model, kind: "mandatory" }) : null;
+        await update("bank_exams", { id: e.id }, { group_versions: JSON.stringify(v ? { private: v.id } : {}) });
+      }
+    });
+    await logEdit(uid, `فصل ${body.slug}: نسخة الخاص ${model || "أول جاهزة"}`);
   } else if (a === "addVersion") {
     need(await one("bank_exams", { id }), "الامتحان غير موجود");
     const versions = await find("bank_versions", { exam_id: id }, { order: ["model"] });

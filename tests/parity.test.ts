@@ -48,7 +48,7 @@ function normal(v: any): any {
   return v;
 }
 // ميزات جديدة ما موجودة بالبوت القديم: جداول الامتحانات وزر لوحة التحكم
-const NEW_TABLES = ["schedules", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
+const NEW_TABLES = ["schedules", "exam_groups", "group_dates", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
   if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(exams|schedule|sales|company|fees|online|centers)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
@@ -66,6 +66,7 @@ function normalDb(db: Record<string, any[]>) {
     out[t] = rows.map((r) => {
       const x = { ...r };
       if (t === "products") { delete x.hidden; delete x.ask; }   // الإخفاء من المتجر وحق السؤال ميزات جديدة
+      if (t === "students" || t === "centers") delete x.gender;   // بنين وبنات ميزة جديدة
       if (t === "orders") { delete x.printed_by; delete x.printed_at; }
       if (t === "orders" && x.items) x.items = JSON.parse(x.items);
       if (t === "sessions" && x.data) x.data = JSON.parse(x.data);

@@ -1,6 +1,6 @@
 // واجهة صفحة المراكز الامتحانية: المناطق، المراكز، ونوع الامتحان لكل محافظة
 import { find, insert, one, put, tx, update, type Row } from "./db.ts";
-import { GOVS } from "./config.ts";
+import { GENDERS, GOVS } from "./config.ts";
 import { centerName } from "./data.ts";
 import { listPdf } from "./documents.ts";
 import { authed, need } from "./webApi.ts";
@@ -27,7 +27,7 @@ async function pageData() {
     modes: GOVS.map((gov) => ({ gov, mode: modes.get(gov) ?? "online" })),
     areas: (await find("areas", { active: 1 }, { order: ["gov", "id"] })).map((a) => ({
       id: a.id, gov: a.gov, name: a.name,
-      centers: centers.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, name: c.name, n: counts.get(c.id) ?? 0 })),
+      centers: centers.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, name: c.name, gender: c.gender ?? "", n: counts.get(c.id) ?? 0 })),
     })),
   };
 }
@@ -71,6 +71,10 @@ export async function centerAction(body: Row) {
     const name = nameOf(body.name, "اكتب اسم المركز");
     await centerFree(c.area_id, name, id);
     await update("centers", { id }, { name });
+  } else if (a === "centerGender") {
+    await liveCenter(id);
+    need(["", ...GENDERS].includes(String(body.gender ?? "")), "اختار بنين أو بنات أو الكل");
+    await update("centers", { id }, { gender: String(body.gender ?? "") || null });
   } else if (a === "delCenter") {
     await liveCenter(id);
     await update("centers", { id }, { active: 0 });
