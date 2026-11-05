@@ -100,15 +100,16 @@ export async function examAction(body: Row) {
     need(Array.isArray(body.marks) && body.marks.length, "اكتب الدرجات");
     const marks = (body.marks as unknown[]).map((m) => intOf(m, 1, 100, "كل درجة لازم رقم كامل من 1 إلى 100"));
     need(marks.reduce((s, m) => s + m, 0) === 100, "مجموع الدرجات لازم يكون 100");
+    need(!body.kind || ["mandatory", "optional"].includes(String(body.kind)), "نوع غير معروف");
     await tx(async () => {
-      // الدرجات للامتحان كله، فتتطبق على كل نسخة بيها نفس عدد الأسئلة
-      for (const v of await find("bank_versions", { exam_id: id })) {
+      // الإجباري والاختياري كل واحد إله درجاته، حتى لو عدد الأسئلة نفسه. تتطبق على نسخ نفس النوع ونفس عدد الأسئلة
+      for (const v of await find("bank_versions", body.kind ? { exam_id: id, kind: String(body.kind) } : { exam_id: id })) {
         const qs = await find("bank_questions", { version_id: v.id }, { order: ["n"] });
         if (qs.length !== marks.length) continue;
         for (const [i, q] of qs.entries()) await update("bank_questions", { id: q.id }, { max_mark: marks[i], edited: 1 });
       }
     });
-    await logEdit(uid, `امتحان ${id}: الدرجات ${marks.join(",")}`);
+    await logEdit(uid, `امتحان ${id}${body.kind ? ` (${body.kind})` : ""}: الدرجات ${marks.join(",")}`);
   } else if (a === "moveExam") {
     const e = await one("bank_exams", { id });
     need(e, "الامتحان غير موجود");

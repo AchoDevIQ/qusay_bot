@@ -222,16 +222,37 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
 }
 
 /** درجات الامتحان كله: تتغير كلها سوية، وما تنحفظ إلا إذا مجموعها 100 */
+/** مربعات الإجباري والاختياري: كل واحد درجاته مستقلة، وكل عدد أسئلة بمربعه */
 function MarksEditor({ exam, busy, call }: { exam: Exam; busy: boolean; call: Call }) {
-  const shapes = new Map(exam.versions.filter((v) => v.questions.length).map((v) => [v.questions.length, v.questions.map((q) => q.max)]));
-  const [count] = [...shapes.keys()];
-  const start = shapes.get(count) ?? [];
+  const boxes = (["mandatory", "optional"] as const).map((kind) => {
+    const shapes = new Map<number, { marks: number[]; models: string[] }>();
+    for (const v of exam.versions.filter((x) => x.kind === kind && x.questions.length)) {
+      const cur = shapes.get(v.questions.length) ?? { marks: v.questions.map((q) => q.max), models: [] };
+      cur.models.push(v.model);
+      shapes.set(v.questions.length, cur);
+    }
+    return { kind, shapes: [...shapes.entries()].sort((x, y) => x[0] - y[0]) };
+  });
+  if (!boxes.some((x) => x.shapes.length)) return null;
+  return (
+    <div className="excols">
+      {boxes.map(({ kind, shapes }) => (
+        <div className="excol" key={kind}>
+          <div className="excolhead">🔢 درجات {KIND[kind]}</div>
+          {!shapes.length && <div className="exempty">ماكو نسخ بعد</div>}
+          {shapes.map(([count, shape]) => <MarksBox key={count + shape.marks.join()} exam={exam} kind={kind} count={count} start={shape.marks} models={shape.models} busy={busy} call={call} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MarksBox({ exam, kind, count, start, models, busy, call }: { exam: Exam; kind: string; count: number; start: number[]; models: string[]; busy: boolean; call: Call }) {
   const [marks, setMarks] = useState(start.map(String));
-  if (!start.length) return null;
   const total = marks.reduce((s, m) => s + (Number(m) || 0), 0);
   return (
     <div className="exversion">
-      <div className="excolhead">🔢 درجات الأسئلة لكل نسخ هذا الامتحان</div>
+      <div className="exhint">{count} أسئلة · النسخ {models.join(" ")}</div>
       <div className="exmarks">
         {marks.map((m, i) => (
           <label key={i}>س {i + 1}<input className="exnum" inputMode="numeric" value={m} onChange={(e) => setMarks(marks.map((x, j) => (j === i ? e.target.value : x)))} /></label>
@@ -239,9 +260,8 @@ function MarksEditor({ exam, busy, call }: { exam: Exam; busy: boolean; call: Ca
       </div>
       <div className="exline">
         <b className={total === 100 ? "" : "exbad"}>المجموع {total} من 100</b>
-        <button type="button" className="exbtn" disabled={busy || total !== 100 || marks.join() === start.join()} onClick={() => call({ action: "marks", id: exam.id, marks })}>حفظ كل الدرجات</button>
+        <button type="button" className="exbtn" disabled={busy || total !== 100 || marks.join() === start.join()} onClick={() => call({ action: "marks", id: exam.id, kind, marks })}>حفظ</button>
       </div>
-      {shapes.size > 1 && <div className="exhint exbad">هذا الامتحان بيه نسخ بعدد أسئلة مختلف. هاي الدرجات تتطبق بس على النسخ اللي بيها {count} أسئلة.</div>}
     </div>
   );
 }

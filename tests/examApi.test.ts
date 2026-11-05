@@ -122,6 +122,15 @@ test("الدرجات: مرة وحدة لكل نسخ الامتحان، وما ت
   assert.deepEqual(await marks("A"), [30, 70]);
   assert.deepEqual(await marks("B"), [30, 70]);
   assert.deepEqual(await marks("C"), [50, 50, 50]);      // عدد أسئلة مختلف
+  // الاختياري درجاته مستقلة عن الإجباري، حتى بنفس عدد الأسئلة
+  await run("UPDATE bank_versions SET kind='optional' WHERE exam_id=? AND model='B'", e.id);
+  await examAction({ action: "marks", id: e.id, kind: "optional", marks: [80, 20], initData: init });
+  assert.deepEqual(await marks("B"), [80, 20]);
+  assert.deepEqual(await marks("A"), [30, 70]);
+  await examAction({ action: "marks", id: e.id, kind: "mandatory", marks: [45, 55], initData: init });
+  assert.deepEqual(await marks("A"), [45, 55]);
+  assert.deepEqual(await marks("B"), [80, 20]);
+  await denied(async () => await examAction({ action: "marks", id: e.id, kind: "bad", marks: [50, 50], initData: init }), 400);
 });
 
 test("ترتيب الامتحانات بالسهم: مكان الملفات ما يتغير", async () => {
