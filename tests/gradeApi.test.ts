@@ -84,7 +84,13 @@ test("التصحيح: الصلاحية، أول مصحح ياخذ الورقة،
 
 test("أوراق التجربة: لصاحب البوت بس، وما توصل رسالة، وتنمسح", async () => {
   await assert.rejects(g(20, "makeTests"), (x: any) => x.status === 403);
+  const withPdf = await exam();
+  await update("bank_versions", { id: withPdf.v }, { answer_pdf: "answers/t/e1/A.pdf" });
   const made = await g(1, "makeTests");
+  const pdfPaper = made.waiting.find((p: any) => p.test && p.title === "امتحان mandatory" && p.model === "A" && p.id);
+  const views = await Promise.all(made.waiting.filter((p: any) => p.test).map((p: any) => g(1, "open", { id: p.id })));
+  assert.ok(pdfPaper && views.some((v: any) => v.paper.whole[0] === "answers/t/e1/A.pdf"));   // ورقة الطالب = ملف الحلول
+  for (const v of views) await g(1, "release", { id: v.paper.id });
   assert.ok(made.hasTests);
   const t = made.waiting.find((p: any) => p.test);
   await g(1, "open", { id: t.id });

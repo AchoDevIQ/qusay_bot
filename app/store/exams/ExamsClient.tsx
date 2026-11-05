@@ -1,6 +1,7 @@
 "use client";
 // صفحة وحدة لإدارة الامتحانات: جدول الامتحانات، وكل شي ينفتح داخل نفس الصفحة بدون رسائل بالبوت
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import PdfPages from "../PdfPages";
 import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
@@ -334,45 +335,6 @@ function VersionPanel({ version: v, busy, call, fileUrl, openQ, setOpenQ, onDele
   );
 }
 
-/** صفحات PDF كبيرة داخل الصفحة، لأن تليجرام ما يعرض PDF بالموبايل */
-function PdfPages({ url }: { url: string }) {
-  const box = useRef<HTMLDivElement>(null);
-  const [state, setState] = useState<"loading" | "done" | "failed">("loading");
-  useEffect(() => {
-    let stop = false;
-    setState("loading");
-    void (async () => {
-      try {
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-        const doc = await pdfjs.getDocument({ url, disableFontFace: true }).promise;
-        box.current?.replaceChildren();
-        for (let i = 1; i <= doc.numPages && !stop; i++) {
-          const page = await doc.getPage(i);
-          const width = box.current?.clientWidth || 800;
-          const scale = (width * Math.max(window.devicePixelRatio || 1, 2)) / page.getViewport({ scale: 1 }).width;
-          const viewport = page.getViewport({ scale });
-          const canvas = document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          canvas.className = "eximg";
-          box.current?.append(canvas);
-          await page.render({ canvas, viewport }).promise;
-        }
-        if (!stop) setState("done");
-      } catch (e) { console.error(e); if (!stop) setState("failed"); }
-    })();
-    return () => { stop = true; };
-  }, [url]);
-  return (
-    <div>
-      {state === "loading" && <div className="exempty">جاري فتح الملف...</div>}
-      {state === "failed" && <div className="exbad">ما انفتح الملف هنا.</div>}
-      <div ref={box} />
-      <div className="exline"><a className="exbtn" href={url} target="_blank" rel="noreferrer">📄 فتح الملف خارج الصفحة</a></div>
-    </div>
-  );
-}
 
 function QuestionRow({ q, open, toggle, busy, call, fileUrl }: { q: Question; open: boolean; toggle: () => void; busy: boolean; call: Call; fileUrl: (r: string) => string }) {
   const send = (action: string, files: File[]) => { const fd = new FormData(); fd.set("action", action); fd.set("id", String(q.id)); files.forEach((f) => fd.append("file", f)); return call(fd); };

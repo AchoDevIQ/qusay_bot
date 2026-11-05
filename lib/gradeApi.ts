@@ -33,6 +33,7 @@ async function paperView(it: Row) {
   const v = await one("bank_versions", { id: it.version_id });
   return {
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null,
+    whole: answers.filter((a) => !a.q).map((a) => a.file),
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null })),
   };
 }
@@ -46,7 +47,8 @@ async function myPaper(uid: number, raw: unknown) {
 /** أوراق تجربة بدون طلاب حقيقيين: الجواب صورة السؤال نفسه، حتى تنجرب الشاشة وما توصل رسالة لأحد */
 async function makeTests() {
   // عشوائية: كل مرة امتحانات مختلفة، ونسخة وحدة من كل امتحان
-  const versions = (await find("bank_versions", { kind: "mandatory", ok: 1 })).map((v) => ({ v, r: Math.random() })).sort((a, b) => a.r - b.r).map((x) => x.v);
+  // الأفضل نسخ عدها ملف حلول، حتى تبين الورقة مثل ورقة طالب حل
+  const versions = (await find("bank_versions", { kind: "mandatory", ok: 1 })).map((v) => ({ v, r: Math.random() - (v.answer_pdf ? 1 : 0) })).sort((a, b) => a.r - b.r).map((x) => x.v);
   const seen = new Set<number>();
   const last = Math.min(0, ...(await find("sched_items", { status: "done" })).filter(isTest).map((i) => i.user_id));
   let made = 0;
@@ -57,7 +59,8 @@ async function makeTests() {
     const qs = await find("bank_questions", { version_id: v.id }, { order: ["n"] });
     if (!qs.length || !qs.every((q) => q.q_file)) continue;
     const id = await insert("sched_items", { user_id: last - made - 1, exam_id: v.exam_id, at: stamp(), status: "done", version_id: v.id, started_at: stamp(), submitted_at: stamp() });
-    for (const q of qs) await insert("exam_answers", { item_id: id, q: q.n, file: q.q_file, created: stamp() });
+    if (v.answer_pdf) await insert("exam_answers", { item_id: id, q: 0, file: v.answer_pdf, created: stamp() });
+    else for (const q of qs) await insert("exam_answers", { item_id: id, q: q.n, file: q.q_file, created: stamp() });
     made++;
   }
   return made;

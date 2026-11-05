@@ -171,3 +171,8 @@ html:has(.rg),html:has(.rg) body{background:#f4f6fb;padding-bottom:0}
 .adtimev{margin:0;font-size:12px}.adtimev small{display:block;color:var(--mut);direction:ltr;text-align:right}
 .mxdraft{transition:transform .2s;max-height:70vh;object-fit:contain}
 .grmarks{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px;margin:12px 0}.grmarks button{height:44px;border:1px solid var(--gold2);border-radius:10px;background:var(--ink);color:var(--gold);font-family:inherit;font-size:16px;font-weight:800;cursor:pointer}.grmarks button.on{background:var(--gold);color:var(--ink)}
+body.grwide .wrap{max-width:none;padding:0 10px}.grtop{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between;margin:10px 0}.grtop b{font-size:17px}.grsum{color:var(--gold);font-weight:800}
+.grpaper{padding-bottom:46vh}.grpaper .eximg{margin:0 0 10px;border-radius:4px}.grqtag{display:inline-block;margin:14px 0 6px;padding:4px 12px;border-radius:999px;background:var(--gold);color:var(--ink);font-weight:800}
+.grbar{position:fixed;inset:auto 0 0 0;z-index:40;max-height:44vh;overflow:auto;background:var(--ink2);border-top:2px solid var(--gold);padding:8px 10px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.4)}
+.grbar .chips{margin:0 0 6px;flex-wrap:nowrap;overflow-x:auto}.grbar .grmarks{margin:6px 0;grid-template-columns:repeat(auto-fill,minmax(52px,1fr))}.grbar .grmarks button{height:50px;font-size:18px}.grq{max-height:22vh;overflow:auto;margin:4px 0}.grq .eximg{margin:0}
+body.grwide .grtop{padding-left:104px}
