@@ -15,7 +15,8 @@ Object.assign(process.env, {
 });
 
 const { linkAnswerFiles } = await import("../lib/answerFiles.ts");
-const dir = path.join(process.cwd(), "data", "exams", "الاجوبه النموذجيه");
+// الفصل الأول بمجلده القديم. الباقي: npm run upload-answers -- key.json ch2 "الفصل الثاني"
+const dir = process.argv[4] ? path.join(process.cwd(), "data", "exams", process.argv[4], "الاجوبه النموذجيه") : path.join(process.cwd(), "data", "exams", "الاجوبه النموذجيه");
 const r = await linkAnswerFiles(dir, process.argv[3] ?? "ch1", (line) => console.log("✅", line));
 console.log(`انرفع ${r.sent} ملف، وكان موجود ${r.kept}، وما لگيت ${r.missing.length}${r.missing.length ? ": " + r.missing.join("، ") : ""}`);
 process.exit(0);

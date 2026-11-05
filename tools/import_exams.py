@@ -19,9 +19,10 @@ M = "{http://schemas.openxmlformats.org/officeDocument/2006/math}"
 # كل أشكال رأس السؤال بالملفات: «س 1 /» و«س /3» و«س1 /» و«س 3 اثبت» و«Q2/»
 QRE = re.compile(r"^\s*(?:س|Q)\s*/?\s*(\d+)(?!\d)", re.I)
 BARE = re.compile(r"^\s*س\s*/")   # «س / جد...» بدون رقم
-AR_MODEL = re.compile(r"^(.*?)\s*·\s*نموذج\s*([A-Za-z]+)\s*$")
-EN_MODEL = re.compile(r"^(.*?)\s*·\s*Model\s*([A-Za-z]+)\s*$", re.I)
-SKIP = re.compile(r"اختيارية")
+# العنوان ممكن قبل «نموذج A» أو بعده
+AR_MODEL = re.compile(r"^(?:(.*?)\s*·\s*)?نموذج\s*([A-Za-z]+)\s*(?:·\s*(.*?))?\s*$")
+EN_MODEL = re.compile(r"^(?:(.*?)\s*·\s*)?Model\s*([A-Za-z]+)\s*(?:·\s*(.*?))?\s*$", re.I)
+SKIP = re.compile(r"اختيارية|مراجع")
 MARKS = {5: [20] * 5, 6: [15, 15, 15, 15, 20, 20], 7: [15] * 6 + [10]}
 SCALE = 2.5
 CONTENT_TOP, CONTENT_BOTTOM = 95, 800     # بين رأس الصفحة وذيلها، بالنقاط
@@ -48,7 +49,7 @@ def parse_versions(path, model_re):
     for b in blocks(path):
         m = model_re.match(b)
         if m:
-            cur = {"title": m.group(1).strip(), "model": m.group(2).upper(), "info": "", "qs": [], "pre": [], "between": []}
+            cur = {"title": (m.group(1) or m.group(3) or "").strip(), "model": m.group(2).upper(), "info": "", "qs": [], "pre": [], "between": []}
             vs.append(cur)
             continue
         if cur is None:

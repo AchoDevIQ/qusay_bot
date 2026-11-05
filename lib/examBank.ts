@@ -23,6 +23,19 @@ export async function loadCatalog(catalog: Row) {
   return await tx(async () => {
     let versions = 0, questions = 0, needReview = 0;
     // الامتحانات والنسخ اللي انشالت من الملفات تنشال من البوت هم
+    // جدول الكتاب انضاف بعناوينه قبل الملفات: إذا العناوين مميزة، كل امتحان ياخذ رقمه من الملفات حتى ما تتبدل ملفاته
+    const titles = catalog.exams.map((e: Row) => e.title as string);
+    if (new Set(titles).size === titles.length) {
+      const rows = await find("bank_exams", { slug: catalog.slug });
+      const moved = rows.filter((r) => { const ex = catalog.exams.find((e: Row) => e.title === r.title); return ex && ex.ord !== r.ord; });
+      if (moved.length) {
+        let spare = rows.reduce((m, r) => Math.max(m, r.ord), catalog.exams.length) + 1;
+        // الزايد عن الملفات يتحرك من طريقها، مثل إعادة فاينل
+        for (const r of rows) if (r.manual && !titles.includes(r.title) && r.ord <= catalog.exams.length) await update("bank_exams", { id: r.id }, { ord: spare++ });
+        for (const r of moved) await update("bank_exams", { id: r.id }, { ord: spare++ });
+        for (const r of moved) await update("bank_exams", { id: r.id }, { ord: catalog.exams.find((e: Row) => e.title === r.title).ord });
+      }
+    }
     const keepOrds = catalog.exams.map((e: Row) => e.ord as number);
     // (اللي انضاف من لوحة التحكم يبقى)
     for (const old of await find("bank_exams", { slug: catalog.slug })) {

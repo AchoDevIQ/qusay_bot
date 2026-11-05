@@ -427,3 +427,18 @@ test("تواريخ الأسابيع 1 إلى 40 تدخل لكل مكان حسب 
   assert.equal(await dayOf(m, "ch3", "الاشتقاق 1&2"), "");
   assert.equal(await dayOf(m, "ch2", "قطع مكافئ 1&2"), "");
 });
+
+test("ملفات الفصل تدخل على جدول الكتاب حسب العنوان، حتى لو الأرقام مختلفة", async () => {
+  const { loadCatalog } = await import("../lib/examBank.ts");
+  const mk = async (ord: number, title: string) => await insert("bank_exams", { slug: "chx", chapter: "الفصل التجريبي", ord, title, info: "", minutes: 75, manual: 1, pos: ord });
+  const a = await mk(1, "اول"), b = await mk(2, "اعادة"), c = await mk(3, "ثاني");
+  const version = { model: "A", ok: true, issues: [], has_en: true, questions: [{ n: 1, max: 100, q: "q1.png", a: [] }] };
+  await loadCatalog({ slug: "chx", chapter: "الفصل التجريبي", exams: [{ ord: 1, title: "اول", info: "", minutes: 75, versions: [version] }, { ord: 2, title: "ثاني", info: "", minutes: 75, versions: [version] }] });
+  const rows = await find("bank_exams", { slug: "chx" });
+  assert.equal(rows.find((r) => r.id === a)!.ord, 1);
+  assert.equal(rows.find((r) => r.id === c)!.ord, 2);
+  assert.ok(rows.find((r) => r.id === b)!.ord > 2);     // بقى بدون ملفات، وما انحذف
+  assert.equal(rows.length, 3);
+  assert.equal((await find("bank_versions", { exam_id: c })).length, 1);
+  assert.equal((await find("bank_versions", { exam_id: b })).length, 0);
+});
