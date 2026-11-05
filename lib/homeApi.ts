@@ -1,5 +1,5 @@
 // الصفحة الرئيسية للطالب، وإرسال طلب المتجر للسيرفر مباشرة
-import { getSession, setSession, type Row } from "./db.ts";
+import { getSession, put, setSession, type Row } from "./db.ts";
 import { allowUpdate } from "./bot.ts";
 import { BTN_ME } from "./config.ts";
 import { hasExamMenu, student } from "./data.ts";
@@ -9,8 +9,9 @@ import { homeLink, mainKb, regLink, storeLink } from "./keyboards.ts";
 import { issuePassword } from "./password.ts";
 import { askStart, myQuestions } from "./questions.ts";
 import { onStoreOrder, saveStudent, showMe, studentFromForm } from "./student.ts";
-import { api } from "./telegram.ts";
+import { api, send } from "./telegram.ts";
 import { loadTerms, termsRev } from "./terms.ts";
+import { stamp } from "./util.ts";
 import { ensure, need } from "./webApi.ts";
 import { verifyHomeToken } from "./webAuth.ts";
 
@@ -65,6 +66,16 @@ export async function homeAction(body: Row) {
     need(body.order && typeof body.order === "object", "الطلب ناقص");
     // الردود توصل بالمحادثة مثل كل طلب، والصفحة تتسكر
     await onStoreOrder(id, id, JSON.stringify(body.order), { username: (await student(id))?.username ?? "" });
+    return { close: true };
+  }
+  if (a === "pass") {
+    // الطلب ينتظر الإدارة، وتكراره ما يسوي طلب ثاني
+    if (!await student(id)) {
+      await setSession(id, "r:form", { next: null, edit: false });
+      return { url: await regLink(id) };
+    }
+    await put("pass_requests", { user_id: id, created: stamp() });
+    await send(id, "✅ وصل طلبك. راح توصلك كلمة المرور الجديدة هنا بالمحادثة لمن توافق الإدارة.");
     return { close: true };
   }
   if (a === "ask") {

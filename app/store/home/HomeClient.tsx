@@ -12,6 +12,7 @@ const ICONS: Record<string, ReactNode> = {
   ask: svg(<><circle cx="12" cy="12" r="9" /><path d="M9.4 9.3a2.7 2.7 0 1 1 3.9 2.4c-.9.5-1.3 1.1-1.3 2" /><path d="M12 17h.01" /></>),
   myq: svg(<path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.2l2 2.3H19a1.5 1.5 0 0 1 1.5 1.5v8.2A1.5 1.5 0 0 1 19 19.500H5A1.500 1.500 0 0 1 3.500 18z" />),
   me: svg(<><circle cx="12" cy="8.500" r="3.700" /><path d="M4.500 20c1-3.700 4-5.200 7.500-5.200s6.500 1.500 7.500 5.200" /></>),
+  pass: svg(<><circle cx="8" cy="15.500" r="4.200" /><path d="M11 12.500l8.500-8.500M16 7.500l2.500 2.500M13.500 10l1.800 1.800" /></>),
   exams: svg(<><path d="M7 3.500h7.500L19 8v12.500H7a1.500 1.500 0 0 1-1.500-1.500V5A1.500 1.500 0 0 1 7 3.500z" /><path d="M14.500 3.500V8H19" /><path d="M9 12.500h6M9 16h6" /></>),
 };
 
@@ -51,6 +52,7 @@ export default function HomeClient() {
     { key: "myq", title: "أسئلتي" },
     { key: "me", title: "معلوماتي" },
     ...(data?.exams ? [{ key: "exams", title: "امتحاناتي" }] : []),
+    { key: "pass", title: "طلب كلمة مرور جديدة" },
   ] as { key: string; title: string; note?: string; main?: boolean }[];
 
   return (

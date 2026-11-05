@@ -13,6 +13,7 @@ export const SCHEMA: Record<string, Table> = {
   orders: { key: "id", auto: true, cols: { ...nulls("user_id", "username", "name", "gov", "side", "area", "phone1", "phone2", "items", "subtotal", "fee", "total", "created", "curr", "seller", "office_id", "settle_id"), printed: 0 } },
   students: { key: "user_id", cols: nulls("username", "name", "curr", "grade", "gov", "side", "area", "phone1", "phone2", "exam", "center_id", "created", "updated") },
   student_pass: { key: "user_id", cols: nulls("hash", "created") },
+  pass_requests: { key: "user_id", cols: { created: null } },
   areas: { key: "id", auto: true, cols: { gov: null, name: null, active: 1 } },
   centers: { key: "id", auto: true, cols: { area_id: null, name: null, active: 1 } },
   govmode: { key: "gov", cols: { mode: null } },

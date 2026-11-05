@@ -3,7 +3,7 @@ import { find, one, remove, setSession, type Row } from "./db.ts";
 import { GOVS, GRADES } from "./config.ts";
 import { areasWithCenters, centerName, placeOf, searchStudents, student } from "./data.ts";
 import { listPdf } from "./documents.ts";
-import { issuePassword } from "./password.ts";
+import { deliverPassword } from "./password.ts";
 import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
@@ -59,12 +59,13 @@ export async function studentAction(body: Row) {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
     await remove("students", { user_id: id });
     await remove("student_pass", { user_id: id });
+    await remove("pass_requests", { user_id: id });
     await setSession(id, "", {});
     notice = "🗑 انحذف تسجيله. لمن يفتح البوت يسجل من جديد، وطلباته القديمة باقية";
   } else if (a === "pass") {
-    // الكلمة تنعرض مرة وحدة، فإذا ضاعت على الطالب المدير يسوي له غيرها
     need(await one("students", { user_id: id }), "الطالب غير موجود");
-    notice = `🔑 كلمة المرور الجديدة: ${await issuePassword(id)}`;
+    need(await deliverPassword(id), "ما وصلت الرسالة، يمكن الطالب حاظر البوت. كلمته القديمة باقية");
+    notice = "✅ وصلت الكلمة الجديدة للطالب بالبوت";
   } else if (a === "pdf") {
     need(await sendStudentsPdf(uid, body.kind === "fifth"), "ما گدرت أرسل الملف، حاول مرة ثانية");
     notice = "✅ الملف وصلك بمحادثة البوت";

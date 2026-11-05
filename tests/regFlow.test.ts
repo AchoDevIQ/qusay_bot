@@ -14,11 +14,12 @@ Object.assign(process.env, {
 delete process.env.NO_WORD_CHECK;
 
 const calls: { method: string; p: any }[] = [];
-let nextId = 100;
+let nextId = 100, failFor = 0;
 globalThis.fetch = (async (url: string, init: any) => {
   const method = String(url).split("/").pop()!;
   const p = init.body instanceof FormData ? Object.fromEntries(init.body.entries()) : JSON.parse(init.body);
   calls.push({ method, p });
+  if (method === "sendMessage" && p.chat_id === failFor) return new Response(JSON.stringify({ ok: false, description: "blocked" }));
   const result = method === "getChat" ? { username: "ali_tg" } : method === "getMe" ? { username: "test_bot" } : { message_id: ++nextId };
   return new Response(JSON.stringify({ ok: true, result }));
 }) as typeof fetch;
@@ -26,6 +27,7 @@ globalThis.fetch = (async (url: string, init: any) => {
 const { homeAction } = await import("../lib/homeApi.ts");
 const { termsAction } = await import("../lib/terms.ts");
 const { studentAction } = await import("../lib/studentApi.ts");
+const { passAction } = await import("../lib/passApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 const { regLink } = await import("../lib/keyboards.ts");
 const { termWords } = await import("../lib/orderRules.ts");
@@ -94,14 +96,51 @@ test("اللي جا من المتجر يرجع للمتجر بعد التسجي�
   assert.equal(new URL(r.url).pathname, "/store");
 });
 
-test("المدير يسوي كلمة جديدة، والحذف يشيلها", async () => {
+const sentPassword = (uid: number) => {
+  const m = calls.filter((c) => c.method === "sendMessage" && c.p.chat_id === uid).at(-1)!;
+  return /<code>([a-z2-9]{8})<\/code>/.exec(m.p.text)![1];
+};
+const passHash = async (uid: number) => (await get("SELECT hash FROM student_pass WHERE user_id=?", uid))!.hash as string;
+
+test("الطالب يطلب كلمة، وطلبه ينتظر الإدارة بدون ما تتغير كلمته", async () => {
+  const old = await passHash(2);
+  assert.deepEqual(await act(2, "pass"), { close: true });
+  assert.deepEqual(await act(2, "pass"), { close: true });
+  assert.equal(await passHash(2), old);
+  const { requests } = await passAction({ initData: initData(1), action: "list" }) as any;
+  assert.deepEqual(requests.map((r: any) => r.id), [2]);
+  await assert.rejects(passAction({ initData: initData(5), action: "list" }), (e: any) => e.status === 403);
+});
+
+test("زر الطالب الواحد يدز الكلمة له بالبوت ويشيل طلبه", async () => {
+  const r: any = await passAction({ initData: initData(1), action: "one", id: 2 });
+  assert.deepEqual(r.requests, []);
+  assert.ok(!JSON.stringify(r).includes(sentPassword(2)));   // الكلمة توصل للطالب بس
+  assert.ok(verifyPassword(sentPassword(2), await passHash(2)));
+  await assert.rejects(passAction({ initData: initData(1), action: "one", id: 2 }), (e: any) => e.status === 400);
+});
+
+test("زر الكل يدز للي طلبوا بس، واللي ما وصلته تبقى كلمته وطلبه", async () => {
+  await act(2, "pass");
+  await act(3, "pass");
+  const old3 = await passHash(3), old2 = await passHash(2);
+  failFor = 3;
+  const r: any = await passAction({ initData: initData(1), action: "all" });
+  failFor = 0;
+  assert.notEqual(await passHash(2), old2);
+  assert.equal(await passHash(3), old3);
+  assert.deepEqual(r.requests.map((x: any) => x.id), [3]);
+  assert.match(r.notice, /لـ 1 طالب.*لـ 1/);
+});
+
+test("المدير يدز كلمة لأي طالب من صفحة الطلاب، والحذف يشيلها", async () => {
   const admin = initData(1);
-  const old = (await get("SELECT hash FROM student_pass WHERE user_id=2"))!.hash;
-  const { notice } = await studentAction({ initData: admin, action: "pass", id: 2 }) as any;
-  const fresh = /: ([a-z2-9]{8})$/.exec(notice)![1];
-  const stored = (await get("SELECT hash FROM student_pass WHERE user_id=2"))!.hash as string;
+  const old = await passHash(2);
+  await studentAction({ initData: admin, action: "pass", id: 2 });
+  const stored = await passHash(2);
   assert.notEqual(stored, old);
-  assert.ok(verifyPassword(fresh, stored));
-  await studentAction({ initData: admin, action: "del", id: 2 });
-  assert.equal(await get("SELECT user_id FROM student_pass WHERE user_id=2"), null);
+  assert.ok(verifyPassword(sentPassword(2), stored));
+  await studentAction({ initData: admin, action: "del", id: 3 });
+  assert.equal(await get("SELECT user_id FROM student_pass WHERE user_id=3"), null);
+  assert.equal(await get("SELECT user_id FROM pass_requests WHERE user_id=3"), null);
 });

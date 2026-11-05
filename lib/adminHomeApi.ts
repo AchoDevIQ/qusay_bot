@@ -3,6 +3,7 @@ import { count, find, setSession, sumOf, type Row } from "./db.ts";
 import { can, isAdmin, isStaff, newOrdersCount, setStudentView } from "./data.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { mainKb } from "./keyboards.ts";
+import { passRequestsCount } from "./passApi.ts";
 import { send } from "./telegram.ts";
 import { todayStr } from "./util.ts";
 import { ensure, need } from "./webApi.ts";
@@ -23,6 +24,10 @@ async function homeData(uid: number) {
   }
   if (await can(uid, EXAM_PERM)) people.push({ page: "exams", icon: "📝", title: "الامتحانات" });
   if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` }, { page: "centers", icon: "🏫", title: "المراكز الامتحانية" });
+  if (await can(uid, "students")) {
+    const n = await passRequestsCount();
+    people.push({ page: "passwords", icon: "🔑", title: "طلبات كلمة المرور", note: n ? `${n} طلب` : "ماكو طلبات", hot: n > 0 });
+  }
   if (await can(uid, "q")) {
     const n = await count("questions", { status: "open" });
     people.push({ page: "questions", icon: "❓", title: "الأسئلة", note: n ? `${n} تنتظر جواب` : "ماكو أسئلة", hot: n > 0 });
