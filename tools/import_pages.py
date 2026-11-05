@@ -14,6 +14,7 @@ from import_exams import CONTENT_BOTTOM, MARKS, SCALE, Sheet, find_labels, page_
 # بهاي الملفات أول سؤال يبدي أعلى من ملفات الفصل الأول
 CONTENT_TOP = import_exams.CONTENT_TOP = 45
 
+TAIL_NUM = re.compile(r"(?:(?:س|Q)\s*(\d{1,2})\s*/|/\s*(?:س|Q)\s*(\d{1,2}))\s*$")
 BARE_NUM = re.compile(r"^\s*(\d{1,2})\s*/")   # «1/ ∫...» بدون حرف س، وينقبل بس إذا هو الرقم اللي بعده
 
 
@@ -41,6 +42,10 @@ def labels_of(lines):
             m = BARE_NUM.match(t)
             if m:
                 found.setdefault(round(box[1]), int(m.group(1)))
+            # سطر عربي يبدي بالمعادلة: «س 4 /» تجي بآخره
+            m = TAIL_NUM.search(t)
+            if m:
+                found.setdefault(round(box[1]), int(m.group(1) or m.group(2)))
     out, last = [], 0
     for y in sorted(found):
         n = found[y]
