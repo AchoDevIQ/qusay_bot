@@ -532,3 +532,12 @@ test("الحضوري ما يدخل غرفة الامتحان، ورسالة ال
   const it = await insert("sched_items", { user_id: 93, exam_id: e.id, at: stamp(), status: "waiting" });
   await assert.rejects(act(93, "openExam", { item: it }), /حضوري/);
 });
+
+test("النسخة تدخل اختياري إذا الملف محددها هيچ", async () => {
+  const { loadCatalog } = await import("../lib/examBank.ts");
+  const q = [{ n: 1, max: 100, q: "q1.png", a: [] }];
+  await loadCatalog({ slug: "chk", chapter: "فصل النوع", exams: [{ ord: 1, title: "ع", info: "", minutes: 75, versions: [{ model: "A", ok: true, issues: [], has_en: true, questions: q }, { model: "D", kind: "optional", ok: true, issues: [], has_en: true, questions: q }] }] });
+  const e = (await find("bank_exams", { slug: "chk" }))[0];
+  const vs = await find("bank_versions", { exam_id: e.id }, { order: ["model"] });
+  assert.deepEqual(vs.map((v) => v.kind), ["mandatory", "optional"]);
+});

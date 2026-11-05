@@ -53,7 +53,7 @@ export async function loadCatalog(catalog: Row) {
       if (oldExam) await update("bank_exams", { id: oldExam.id }, examFields);
       const examId: number = oldExam ? oldExam.id : await insert("bank_exams", { slug: catalog.slug, ord: ex.ord, minutes: ex.minutes, ...examFields });
       for (const v of ex.versions) {
-        const versionFields = { ok: v.ok ? 1 : 0, issues: JSON.stringify(v.issues ?? []), has_en: v.has_en ? 1 : 0 };
+        const versionFields = { ok: v.ok ? 1 : 0, issues: JSON.stringify(v.issues ?? []), has_en: v.has_en ? 1 : 0, ...(v.kind ? { kind: v.kind } : {}) };
         const oldVersion = await one("bank_versions", { exam_id: examId, model: v.model });
         if (oldVersion) await update("bank_versions", { id: oldVersion.id }, versionFields);
         const vid: number = oldVersion ? oldVersion.id : await insert("bank_versions", { exam_id: examId, model: v.model, ...versionFields });
