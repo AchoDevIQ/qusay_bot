@@ -62,6 +62,8 @@ export async function regLink(uid: number, adminFor?: number | null) {
   if (s) d.p = { n: s.name, cu: s.curr, gr: s.grade, g: s.gov, s: s.side || "", a: s.area, p1: s.phone1, p2: s.phone2, e: s.exam || "", c: s.center_id || 0 };
   if (adminFor) d.adm = adminFor;
   else if (s?.exam) d.x = { gr: s.grade || "", e: s.exam, c: s.exam === "حضوري" ? await centerName(s.center_id) : "" };
+  // الطالب الجديد يسجل بخطوات الشروط وكلمة المرور، وهاي تحتاج جواب من السيرفر
+  if (!s && !adminFor && HOME_PAGE) d.tk = homeToken(uid);
   return pageUrl("/store/reg", d);
 }
 export const regKb = async (uid: number, adminFor?: number | null) => ({

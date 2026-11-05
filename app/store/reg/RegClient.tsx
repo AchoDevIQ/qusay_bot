@@ -3,19 +3,23 @@ import { useState } from "react";
 import {
   AR_NAME_ERR, CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanName, cleanPhone, nameOk, phoneErr, scrollToFirst, sendToBot, useBotData,
 } from "../shared";
+import RegFlow, { type RegData } from "./RegFlow";
 
 type Area = [number, string, string, [number, string][]];
 type Data = {
   g: string[]; m: string[]; a: Area[]; adm?: number;
   p?: { n?: string; cu?: string; gr?: string; g?: string; s?: string; a?: string; p1?: string; p2?: string; e?: string; c?: number };
   x?: { gr?: string; e?: string; c?: string };
+  tk?: string;
 };
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس العلمي" }, { v: "الخامس العلمي", label: "الخامس العلمي" }];
 const EXAM_OPTS = [{ v: "حضوري", label: "🏫 حضوري" }, { v: "إلكتروني", label: "💻 إلكتروني" }];
 
 export default function RegClient() {
   const D = useBotData<Data>({ g: [], m: [], a: [] });
-  return D ? <Reg D={D} /> : null;
+  if (!D) return null;
+  // الرمز يوصل بس للطالب الجديد. تعديل المعلومات وفورمة الإدارة تبقى مثل ما هي
+  return D.tk ? <RegFlow D={D as RegData} /> : <Reg D={D} />;
 }
 
 function Reg({ D }: { D: Data }) {

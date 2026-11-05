@@ -133,6 +133,7 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
       )}
       <div className="exline pdactions">
         <button type="button" className="btn" disabled={busy} onClick={() => void save()}>حفظ</button>
+        <Confirm label="🔑 كلمة مرور جديدة" disabled={busy} onYes={() => void call({ action: "pass", id: s.id })} />
         <Confirm label="🗑 حذف تسجيله" disabled={busy} onYes={() => void call({ action: "del", id: s.id })} />
       </div>
     </div>

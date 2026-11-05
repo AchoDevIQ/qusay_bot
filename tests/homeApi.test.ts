@@ -76,8 +76,8 @@ test("كل مربع يوصل الطالب لمكانه بالمحادثة", asyn
 });
 
 test("المتجر: غير المسجل يروح للتسجيل، والمسجل ياخذ رابط برمزه", async () => {
-  assert.deepEqual(await act("shop", {}, 9), { close: true });
-  assert.ok(calls.some((c) => /سجّل|التسجيل/.test(c.p.text ?? "")));
+  const reg: any = await act("shop", {}, 9);
+  assert.equal(new URL(reg.url).pathname, "/store/reg");
   flush();
   const r: any = await act("shop");
   assert.ok(r.url.startsWith("https://x.test/store?v="));
