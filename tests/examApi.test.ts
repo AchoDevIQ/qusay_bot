@@ -259,3 +259,18 @@ test("آخر نسختين من كل امتحان تصير اختياري، وت�
   await examAction({ action: "lastTwoOptional", initData: init });   // التكرار ما يحرك نسخ زيادة
   assert.equal(await kinds(four), "mmoo");
 });
+
+test("التشغيل يطبقها مرة وحدة على امتحانات موجودة، وما يرجع يغير اللي عدلته بعدها", async () => {
+  const { initDb, kvSet } = await import("../lib/db.ts");
+  const id = Number(await run("INSERT INTO bank_exams(slug, chapter, ord, title, minutes) VALUES('boot', 'ف', 1, 'ع', 75)"));
+  for (const m of ["A", "B", "C"]) await run("INSERT INTO bank_versions(exam_id, model, kind, ok) VALUES(?, ?, 'mandatory', 1)", id, m);
+  const kinds = async () => (await all("SELECT kind FROM bank_versions WHERE exam_id=? ORDER BY model", id)).map((r) => r.kind === "optional" ? "o" : "m").join("");
+  await initDb();                       // مطبقة قبل: ما تغير شي
+  assert.equal(await kinds(), "mmm");
+  await kvSet("last_two_done", "");
+  await initDb();
+  assert.equal(await kinds(), "moo");
+  await run("UPDATE bank_versions SET kind='mandatory' WHERE exam_id=? AND model='C'", id);
+  await initDb();                       // تعديل صاحب البوت يبقى
+  assert.equal(await kinds(), "mom");
+});

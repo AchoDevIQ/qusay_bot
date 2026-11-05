@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { CONTENT_DIR, TOKEN } from "./config.ts";
-import { find, insert, kvGet, kvSet, maxOf, one, remove, sumOf, tx, update, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, lastTwoOptional, maxOf, one, remove, sumOf, tx, update, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
 import { BOOK, OLD_ONLY_PROBLEMS } from "./bookOutline.ts";
@@ -216,18 +216,7 @@ export async function examAction(body: Row) {
     await update("bank_exams", { id }, { group_versions: JSON.stringify(version ? { private: version } : {}) });
     await logEdit(uid, `امتحان ${id}: نسخة الخاص ${version}`);
   } else if (a === "lastTwoOptional") {
-    // آخر نسختين من كل امتحان تصير اختياري. يتكرر بأمان، وتبقى نسخة إجبارية وحدة على الأقل
-    let moved = 0;
-    await tx(async () => {
-      moved = 0;
-      for (const e of await find("bank_exams")) {
-        const vs = (await find("bank_versions", { exam_id: e.id })).sort((x, y) => String(x.model).localeCompare(String(y.model)));
-        for (const v of vs.length <= 2 ? vs.slice(1) : vs.slice(-2)) {
-          if (v.kind !== "optional") { await update("bank_versions", { id: v.id }, { kind: "optional" }); moved++; }
-        }
-      }
-    });
-    await kvSet("last_two_done", "1");
+    const moved = await lastTwoOptional();
     await logEdit(uid, `آخر نسختين اختياري: ${moved} نسخة`);
   } else if (a === "privateChapter") {
     // نسخة الجدول الخاص لكل الفصل دفعة وحدة، وتتبدل بأي وقت

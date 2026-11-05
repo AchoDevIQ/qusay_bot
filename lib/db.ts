@@ -98,9 +98,29 @@ export async function catIdFor(name: string) {
   return insert("cats", { name });
 }
 
+/** آخر نسختين من كل امتحان تصير اختياري. يتكرر بأمان، وتبقى نسخة إجبارية وحدة على الأقل */
+export async function lastTwoOptional() {
+  let moved = 0;
+  await tx(async () => {
+    moved = 0;
+    for (const e of await find("bank_exams")) {
+      const vs = (await find("bank_versions", { exam_id: e.id })).sort((x, y) => String(x.model).localeCompare(String(y.model)));
+      for (const v of vs.length <= 2 ? vs.slice(1) : vs.slice(-2)) {
+        if (v.kind !== "optional") { await update("bank_versions", { id: v.id }, { kind: "optional" }); moved++; }
+      }
+    }
+    await kvSet("last_two_done", "1");
+  });
+  return moved;
+}
+
 export async function initDb() {
   const d = await driver();
   await d.init();
+  // بطلب صاحب البوت: تنطبق مرة وحدة على الامتحانات الموجودة. خطأ بيها ما يوقف البوت، وتنعاد بالتشغيل الجاي
+  if (!await kvGet("last_two_done")) {
+    try { await lastTwoOptional(); } catch (e) { console.error(e); }
+  }
   if (d.seedOnce && await kvGet("seeded")) return;
   const orphan = await find("products", { cat_id: null });
   if (orphan.some((p) => p.active === 1)) await update("products", { cat_id: null }, { cat_id: await catIdFor("منتجات أخرى") });
