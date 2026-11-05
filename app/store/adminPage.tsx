@@ -1,6 +1,7 @@
 "use client";
 // المشترك بين صفحات لوحة التحكم
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState, type ReactNode } from "react";
 
 type Tg = { Telegram?: { WebApp?: { initData?: string; expand?: () => void } } };
 const webApp = () => (window as unknown as Tg).Telegram?.WebApp;
@@ -40,6 +41,30 @@ export function useAdminApi<T>(url: string, button: string) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { data, error, busy, call };
+}
+
+/** رأس صفحة الإدارة، وزر الرجوع للوحة التحكم */
+export function AdminHeader({ title, home }: { title: string; home?: boolean }) {
+  return (
+    <header className="adhead">
+      {!home && <Link className="adback" href="/store/admin">⬅️ لوحة التحكم</Link>}
+      <img src="/logo.png" alt="" />
+      <h1 className="plain">QMath</h1>
+      <p>{title}</p>
+    </header>
+  );
+}
+/** شريط أسفل الشاشة: جاري الحفظ، الخطأ، أو تم */
+export function StatusBar({ busy, error, notice, children }: { busy: boolean; error?: string; notice?: string; children?: ReactNode }) {
+  if (!busy && !error && !notice && !children) return null;
+  return (
+    <div className="bar"><div className="in">
+      <div className="sum">
+        {busy ? <small>جاري التنفيذ...</small> : error ? <small className="exbad">⚠️ {error}</small> : notice ? <small className="fdok">{notice}</small> : null}
+      </div>
+      {children}
+    </div></div>
+  );
 }
 
 /** زر فيه خطوة تأكيد داخل الصفحة */

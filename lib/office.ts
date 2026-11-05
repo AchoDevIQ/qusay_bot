@@ -12,11 +12,20 @@ import { edit, send, type Kb } from "./telegram.ts";
 import { btn, cut, esc, money, num, shiftDay, stamp, toInt, todayStr, words } from "./util.ts";
 
 export async function onPosSale(chat: number, uid: number, o: any) {
+  const r = await posSale(uid, o);
+  if (r.error) { await send(chat, r.error, { replyKb: r.againSid ? await posKb(r.againSid) : await mainKb(uid) }); return; }
+  const { msg, off, oid } = r;
+  await send(chat, msg!, { replyKb: await mainKb(uid) });
+  if (off) await send(chat, "👇", { kb: [[btn("🏪 بيع جديد", "of:pos")], [btn("📊 مبيعات اليوم", "of:d:0")], [btn("🖼 وصل ملون (صورة)", `of:rc:${oid}`), btn("🖨 وصل للطباعة", `of:r:${oid}`)]] });
+  else await send(chat, "👇", { kb: [[btn("🏪 بيع جديد", "a:pos")], [btn("📊 مبيعات اليوم", "a:of")], [btn("🖼 وصل ملون (صورة)", `a:ofrc:${oid}`), btn("🖨 وصل للطباعة", `a:ofr:${oid}`)]] });
+}
+/** ينفذ البيعة ويرسل الوصل للطالب. يرجع الرسالة للبائع، أو سبب الرفض */
+export async function posSale(uid: number, o: any): Promise<{ error?: string; againSid?: number; msg?: string; off?: Row | null; oid?: number; total?: number; sent?: boolean }> {
   const off = await myOffice(uid);
-  if (!off && !await can(uid, "orders")) { await send(chat, "⚠️ ما عندك صلاحية.", { replyKb: await mainKb(uid) }); return; }
+  if (!off && !await can(uid, "orders")) return { error: "⚠️ ما عندك صلاحية." };
   const sid = toInt(o.sid || 0) ?? 0;
   const s = await student(sid);
-  if (!s) { await send(chat, "⚠️ الطالب غير موجود.", { replyKb: await mainKb(uid) }); return; }
+  if (!s) return { error: "⚠️ الطالب غير موجود." };
   const items: Row[] = [];
   for (const it of Array.isArray(o.i) ? o.i : []) {
     const pid = toInt(it?.[0]), q = toInt(it?.[1]);
@@ -24,19 +33,17 @@ export async function onPosSale(chat: number, uid: number, o: any) {
     const p = await product(pid);
     if (p && q > 0) items.push({ id: pid, name: p.name, price: p.price, qty: Math.min(q, 50) });
   }
-  if (!items.length) { await send(chat, "⚠️ ما اخترت ولا منتج.", { replyKb: await posKb(sid) }); return; }
+  if (!items.length) return { error: "⚠️ ما اخترت ولا منتج.", againSid: sid };
   const total = items.reduce((t, i) => t + i.qty * i.price, 0);
   if (off) {
     const un = await officeUnsettled(off.id);
     if (off.lim && un.total + total > off.lim) {
-      await send(chat, `⛔ ما يصير تبيع هالبيعة: مبلغها أكثر من الرصيد الباقي للمكتبة.\n🔴 غير محاسب عليه: ${money(un.total)}\n🟢 الباقي: ${money(Math.max(off.lim - un.total, 0))}\n\nتحاسب ويا قصي العميري حتى ينفتح الرصيد.`, { replyKb: await mainKb(uid) });
-      return;
+      return { error: `⛔ ما يصير تبيع هالبيعة: مبلغها أكثر من الرصيد الباقي للمكتبة.\n🔴 غير محاسب عليه: ${money(un.total)}\n🟢 الباقي: ${money(Math.max(off.lim - un.total, 0))}\n\nتحاسب ويا قصي العميري حتى ينفتح الرصيد.` };
     }
   } else if (!await isAdmin(uid)) {
     const a = await staffAccount(uid);
     if (a.limit && a.owed + total > a.limit) {
-      await send(chat, `⛔ ما يصير تبيع هالبيعة: مبلغها أكثر من الرصيد الباقي إلك.\n🔴 بذمتك: ${money(a.owed)}\n🟢 باقي تگدر تبيع بـ: ${money(Math.max(a.left, 0))}\n\nسلّم المبلغ لقصي العميري حتى ينفتح رصيدك.`, { replyKb: await mainKb(uid) });
-      return;
+      return { error: `⛔ ما يصير تبيع هالبيعة: مبلغها أكثر من الرصيد الباقي إلك.\n🔴 بذمتك: ${money(a.owed)}\n🟢 باقي تگدر تبيع بـ: ${money(Math.max(a.left, 0))}\n\nسلّم المبلغ لقصي العميري حتى ينفتح رصيدك.` };
     }
   }
   const oid = await insert("orders", {
@@ -63,17 +70,14 @@ export async function onPosSale(chat: number, uid: number, o: any) {
     const un = await officeUnsettled(off.id);
     msg += `\n\n🔴 غير محاسب عليه: <b>${money(un.total)}</b>`;
     if (off.lim) msg += `\n🟢 الباقي من الرصيد: <b>${money(Math.max(off.lim - un.total, 0))}</b>`;
-    await send(chat, msg, { replyKb: await mainKb(uid) });
-    await send(chat, "👇", { kb: [[btn("🏪 بيع جديد", "of:pos")], [btn("📊 مبيعات اليوم", "of:d:0")], [btn("🖼 وصل ملون (صورة)", `of:rc:${oid}`), btn("🖨 وصل للطباعة", `of:r:${oid}`)]] });
-    return;
+    return { msg, off, oid, total, sent };
   }
   if (!await isAdmin(uid)) {
     const a = await staffAccount(uid);
     msg += `\n\n🔴 بذمتك هسه: <b>${money(a.owed)}</b>`;
     if (a.limit) msg += `\n🟢 باقي تگدر تبيع بـ: <b>${money(Math.max(a.left, 0))}</b>`;
   }
-  await send(chat, msg, { replyKb: await mainKb(uid) });
-  await send(chat, "👇", { kb: [[btn("🏪 بيع جديد", "a:pos")], [btn("📊 مبيعات اليوم", "a:of")], [btn("🖼 وصل ملون (صورة)", `a:ofrc:${oid}`), btn("🖨 وصل للطباعة", `a:ofr:${oid}`)]] });
+  return { msg, off: null, oid, total, sent };
 }
 
 // ---------- مبيعات المكتب (الإدارة)
@@ -120,9 +124,9 @@ function salesText(title: string, rows: Row[], limit = 30) {
   const t = lines.join("\n");
   return t.length < 3900 ? t : cut(t, 3850) + "\n…";
 }
-const officeDayRows = async (oid: number, day: string) => await find("orders", { printed: 3, office_id: oid }, { where: (o) => String(o.created).startsWith(day), order: ["id"] });
-const officeOpenRows = async (oid: number) => await find("orders", { printed: 3, office_id: oid, settle_id: null }, { order: ["id"] });
-function officePdf(chat: number, title: string, rows: Row[], fname: string) {
+export const officeDayRows = async (oid: number, day: string) => await find("orders", { printed: 3, office_id: oid }, { where: (o) => String(o.created).startsWith(day), order: ["id"] });
+export const officeOpenRows = async (oid: number) => await find("orders", { printed: 3, office_id: oid, settle_id: null }, { order: ["id"] });
+export function officePdf(chat: number, title: string, rows: Row[], fname: string) {
   const data = rows.map((r) => [`#${r.id}`, r.created, r.name, itemsLine(r), num(r.total)]);
   return listPdf(chat, `${title} — المجموع ${money(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ"], data, fname);
 }
@@ -187,7 +191,7 @@ async function settlementsView(oid: number, pre: "of" | "a"): Promise<[string, K
   kb.push([btn("⬅️ رجوع", back)]);
   return [lines.join("\n"), kb];
 }
-async function settleDetail(chat: number, oid: number, stid: number) {
+export async function settleDetail(chat: number, oid: number, stid: number) {
   const st = await one("settlements", { id: stid, office_id: oid });
   if (!st) return;
   const rows = await find("orders", { printed: 3, office_id: oid, settle_id: stid }, { order: ["id"] });
@@ -225,6 +229,24 @@ async function libView(oid: number): Promise<[string, Kb]> {
   return [t.join("\n"), kb];
 }
 const sendView = (chat: number, [t, kb]: [string, Kb]) => send(chat, t, { kb });
+type Unsettled = { n: number; total: number };
+/** المبيعات غير المحاسب عليها تنتقل للأرشيف */
+export async function settleOffice(oid: number, un: Unsettled) {
+  await tx(async () => {
+    const id = await insert("settlements", { office_id: oid, amount: un.total, n: un.n, created: stamp() });
+    await update("orders", { printed: 3, office_id: oid, settle_id: null }, { settle_id: id });
+  });
+}
+export async function notifySettled(oid: number, un: Unsettled) {
+  for (const u of await find("office_users", { office_id: oid })) await send(u.user_id, `✅ <b>تمت المحاسبة</b> ويا قصي العميري\n💰 ${money(un.total)} (${un.n} بيعة)\nالمبيعات انتقلت للأرشيف «🗂 المحاسبات السابقة».`);
+}
+/** رمز ورابط انضمام للمكتبة، يشتغلون مرة وحدة */
+export async function createInvite(oid: number) {
+  let code = String(randomInt(10000000, 100000000));
+  while (await kvGet("libinv_" + code)) code = String(randomInt(10000000, 100000000));
+  await kvSet("libinv_" + code, `${oid}:${Math.floor(Date.now() / 1000)}`);
+  return { code, link: `https://t.me/${await kvGet("bot_username") || "Qusay_Alomairi_Bot"}?start=lib_${code}` };
+}
 
 /** أزرار a:lib. يرجع الملاحظة اللي تطلع للضاغط */
 export async function libCb(chat: number, uid: number, mid: number, d: string): Promise<string | null> {
@@ -252,13 +274,9 @@ export async function libCb(chat: number, uid: number, mid: number, d: string): 
     const [oid, amt] = d.slice(8).split(":").map(Number);
     const un = await officeUnsettled(oid);
     if (un.total !== amt) return "صارت مبيعات جديدة، اضغط «تمت المحاسبة» مرة ثانية";
-    await tx(async () => {
-      const id = await insert("settlements", { office_id: oid, amount: amt, n: un.n, created: stamp() });
-      await update("orders", { printed: 3, office_id: oid, settle_id: null }, { settle_id: id });
-    });
-    const us = await find("office_users", { office_id: oid });
+    await settleOffice(oid, un);
     await edit(chat, mid, `✅ تمت المحاسبة ويا <b>${esc((await office(oid))!.name)}</b>: <b>${money(amt)}</b> (${un.n} بيعة)، وانتقلت للأرشيف.`);
-    for (const u of us) await send(u.user_id, `✅ <b>تمت المحاسبة</b> ويا قصي العميري\n💰 ${money(amt)} (${un.n} بيعة)\nالمبيعات انتقلت للأرشيف «🗂 المحاسبات السابقة».`);
+    await notifySettled(oid, un);
     await sendView(chat, await libView(oid));
   } else if (d.startsWith("a:libs:")) {
     const oid = Number(d.slice(7));
@@ -282,10 +300,7 @@ export async function libCb(chat: number, uid: number, mid: number, d: string): 
     if (r) await sendView(chat, await libView(r.office_id));
   } else if (d.startsWith("a:libm:")) {
     const oid = Number(d.slice(7));
-    let code = String(randomInt(10000000, 100000000));
-    while (await kvGet("libinv_" + code)) code = String(randomInt(10000000, 100000000));
-    await kvSet("libinv_" + code, `${oid}:${Math.floor(Date.now() / 1000)}`);
-    const link = `https://t.me/${await kvGet("bot_username") || "Qusay_Alomairi_Bot"}?start=lib_${code}`;
+    const { code, link } = await createInvite(oid);
     await send(chat, `👤 <b>إضافة حساب لـ ${esc((await office(oid))!.name)}</b>\n\n` +
       "1️⃣ اضغط مطولاً على الرابط الأزرق جوة وانسخه (أو اضغط زر «📤 مشاركة الرابط»).\n" +
       "2️⃣ دزه لصاحب المكتبة بالواتساب أو التلكرام.\n" +

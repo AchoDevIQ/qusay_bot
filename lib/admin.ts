@@ -10,7 +10,9 @@ import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./do
 import { EXAM_PERM, examBankCb } from "./examBank.ts";
 import { readyExtras } from "./exams.ts";
 import { officeDays, officeKb, officeView, libCb, libText, parseAmount } from "./office.ts";
+import { sendCenterPdf } from "./centerApi.ts";
 import { bulkAdd, parsePrice } from "./productApi.ts";
+import { sendStudentsPdf, studentsStats } from "./studentApi.ts";
 import { orderKb, orderText } from "./student.ts";
 import { api, edit, send, type Kb } from "./telegram.ts";
 import { btn, chunk, esc, money, num, stamp, todayStr, words } from "./util.ts";
@@ -18,7 +20,29 @@ import { btn, chunk, esc, money, num, stamp, todayStr, words } from "./util.ts";
 type View = [string, Kb];
 
 // ---------- القوائم
+/** الطلبات المحددة تصير مطبوعة، والطالب يوصله إن طلبه تجهز. اللي الطالب ألغاها ترجع بـ gone */
+export async function markPrinted(ids: number[]) {
+  const rows = new Map((await ordersByIds(ids)).map((r) => [r.id as number, r] as const));
+  const gone = ids.filter((i) => rows.get(i)?.printed === 2);
+  const ready = ids.filter((i) => { const p = rows.get(i)?.printed; return rows.has(i) && (p === 0 || p === null); });
+  await tx(async () => { for (const i of ready) await update("orders", { id: i }, { printed: 1 }); });
+  for (const i of ready) {
+    const student_id = rows.get(i)!.user_id;
+    const cm = await kvGet(`ocmsg_${i}`);
+    if (cm) {                       // نشيل رسالة زر الإلغاء من عند الطالب
+      if (!await api("deleteMessage", { chat_id: student_id, message_id: Number(cm) })) {
+        await api("editMessageReplyMarkup", { chat_id: student_id, message_id: Number(cm), reply_markup: { inline_keyboard: [] } });
+      }
+    }
+    const extra = await readyExtras(i);
+    await send(student_id, orderReady(i) + extra.text, extra.kb ? { kb: extra.kb } : {});
+  }
+  return { ready, gone };
+}
+
 export async function adminMenuFor(uid: number): Promise<View> {
+  // اللوحة كلها صفحة وحدة. بدون رابط https ترجع شاشات الأزرار
+  if (STORE_URL) return ["<b>⚙️ لوحة التحكم</b>", [[{ text: "⚙️ فتح لوحة التحكم", web_app: { url: adminPageLink("admin") } }]]];
   const kb: Kb = [];
   // صفحات كاملة داخل تليجرام. بدون رابط https ترجع شاشات الأزرار
   if (await can(uid, "products")) {
@@ -75,12 +99,6 @@ function pendView(pend: Row[], sel: Set<number>): View {
   if (sel.size) kb.push([btn(`🖨 إنشاء PDF للمحدد (${sel.size})`, "a:pdf")]);
   kb.push([btn("⬅️ رجوع", "a:menu")]);
   return [`<b>🖨 الطلبات الجديدة (غير مطبوعة): ${pend.length}</b>\nاضغط على الطلبات حتى تحددها ☑️، بعدين اضغط «إنشاء PDF».`, kb];
-}
-async function studentsStats() {
-  const rows = await find("students");
-  const f = (col: string, v: string) => rows.filter((r) => r[col] === v).length;
-  return { all: rows.length, g6: f("grade", GRADES[0]), g5: f("grade", GRADES[1]), in: f("exam", "حضوري"),
-    on: f("exam", "إلكتروني"), ar: f("curr", "عربي"), en: f("curr", "إنجليزي") };
 }
 const studentCardKb = (sid: number): Kb => [[btn("🏫 تغيير المركز الامتحاني", `a:sc:${sid}`)], [btn("🔄 تغيير نوع الامتحان", `a:se:${sid}`)],
   [btn("🎓 تغيير صفه بالمدرسة", `a:sg:${sid}`)], [btn("✏️ تعديل كل معلوماته (فورمة)", `a:sw:${sid}`)], [btn("🗑 حذف تسجيله (يسجل من جديد)", `a:sx:${sid}`)]];
@@ -326,11 +344,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     await setSession(uid, "a:sts", {});
     await send(chat, "🔍 اكتب اسم الطالب (أو جزء منه) أو رقم هاتفه:");
   } else if (d === "a:5th" || d === "a:stall") {
-    const fifth = d === "a:5th";
-    const rows = fifth ? await find("students", { grade: GRADES[1] }, { order: ["name"] }) : await find("students", {}, { order: ["grade", "name"] });
-    await listPdf(chat, fifth ? "طلاب الخامس العلمي" : "كل الطلاب المسجلين", ["الاسم", "الصف", "المنهج", "المحافظة", "الهاتف 1", "الهاتف 2", "الامتحان"],
-      await Promise.all(rows.map(async (r) => [r.name, r.grade, r.curr, placeOf(r), r.phone1, r.phone2, (r.exam ?? "") + (r.center_id ? " - " + await centerName(r.center_id) : "")])),
-      fifth ? "students_5th" : "students_all");
+    await sendStudentsPdf(chat, d === "a:5th");
   } else if (d.startsWith("a:sv:")) {
     const s = await student(Number(d.slice(5)));
     if (s) await send(chat, "<b>🎓 بطاقة الطالب</b>\n\n" + await profileText(s) + `\nمسجل من: ${s.created}`, { kb: studentCardKb(s.user_id) });
@@ -426,10 +440,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     await update("centers", { id: cid }, { active: 0 });
     await editV(await areaView(aid), "🗑 انحذف المركز (طلابه يبقون مسجلين عليه، غيّرهم من 🎓 الطلاب).\n\n");
   } else if (d.startsWith("a:cc:")) {
-    const cid = Number(d.slice(5));
-    const rows = await find("students", { center_id: cid }, { order: ["name"] });
-    await listPdf(chat, "طلاب مركز " + await centerName(cid), ["الاسم", "الصف", "المنهج", "الهاتف 1", "الهاتف 2"],
-      rows.map((r) => [r.name, r.grade, r.curr, r.phone1, r.phone2]), `center_${cid}`);
+    await sendCenterPdf(chat, Number(d.slice(5)));
   } else if (d === "a:na") {
     await edit(chat, mid, "اختر محافظة المنطقة الجديدة:", chunk(GOVS.map((g, i) => btn(g, `a:nag:${i}`)), 3));
   } else if (d.startsWith("a:nag:")) {
@@ -573,22 +584,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     await sendOrdersPdf(chat, sel);
   } else if (d.startsWith("a:done:")) {
     const batch = await kvGet("batch_" + d.slice(7));
-    const ids = batch ? batch.split(",").map(Number) : [];
-    const rows = new Map((await ordersByIds(ids)).map((r) => [r.id as number, r] as const));
-    const gone = ids.filter((i) => rows.get(i)?.printed === 2);
-    const ready = ids.filter((i) => { const p = rows.get(i)?.printed; return rows.has(i) && (p === 0 || p === null); });
-    await tx(async () => { for (const i of ready) await update("orders", { id: i }, { printed: 1 }); });
-    for (const i of ready) {
-      const student_id = rows.get(i)!.user_id;
-      const cm = await kvGet(`ocmsg_${i}`);
-      if (cm) {                       // نشيل رسالة زر الإلغاء من عند الطالب
-        if (!await api("deleteMessage", { chat_id: student_id, message_id: Number(cm) })) {
-          await api("editMessageReplyMarkup", { chat_id: student_id, message_id: Number(cm), reply_markup: { inline_keyboard: [] } });
-        }
-      }
-      const extra = await readyExtras(i);
-      await send(student_id, orderReady(i) + extra.text, extra.kb ? { kb: extra.kb } : {});
-    }
+    const { ready, gone } = await markPrinted(batch ? batch.split(",").map(Number) : []);
     if (gone.length) await send(chat, `⚠️ <b>انتبه:</b> الطالب ألغى هالطلبات قبل التجهيز، <b>لا ترسلها</b>: ${gone.map((i) => "#" + i).join("، ")}`);
     const { data } = await getSession(uid);
     await setSession(uid, "", { ...data, sel: [] });

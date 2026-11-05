@@ -278,9 +278,7 @@ test("الصلاحيات: المساعد يشوف بس اللي عنده", async
   await msg(1, "أحمد");
   flush();
   await msg(555123, "/admin");
-  const b = buttons(calls.at(-1)!);
-  assert.ok(b.includes("a:oq"));
-  assert.ok(!b.includes("a:bulk") && !b.includes("a:lib"));
+  assert.match(JSON.stringify(calls.at(-1)!.p.reply_markup), /store\/admin/);
   flush();
   await cb(555123, "a:sf");
   assert.equal(calls.at(-1)!.p.text, "ما عندك صلاحية");

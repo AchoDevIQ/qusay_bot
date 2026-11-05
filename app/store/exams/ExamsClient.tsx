@@ -1,7 +1,7 @@
 "use client";
 // صفحة وحدة لإدارة الامتحانات: جدول الامتحانات، وكل شي ينفتح داخل نفس الصفحة بدون رسائل بالبوت
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Confirm, useAdminApi } from "../adminPage";
+import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
@@ -25,11 +25,7 @@ export default function ExamsClient() {
 
   return (
     <>
-      <header>
-        <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
-        <p>📝 إدارة الامتحانات</p>
-      </header>
+      <AdminHeader title="📝 إدارة الامتحانات" />
       <div className="wrap" style={{ maxWidth: 1100 }}>
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}

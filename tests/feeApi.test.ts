@@ -10,7 +10,6 @@ Object.assign(process.env, { DB_PATH: ":memory:", TOKEN, ADMIN: "1", STORE_URL: 
 
 const { feeAction } = await import("../lib/feeApi.ts");
 const { ApiError } = await import("../lib/webApi.ts");
-const { adminMenuFor } = await import("../lib/admin.ts");
 const dbm = await import("../lib/db.ts");
 const { feeOf } = await import("../lib/data.ts");
 const { sqliteDriver } = await import("../lib/sqliteDriver.ts");
@@ -57,7 +56,7 @@ for (const [name, d] of Object.entries(drivers)) {
   });
 }
 
-test("الصلاحية، وزر القائمة", async () => {
+test("الصلاحية", async () => {
   dbm.setDriver(sqliteDriver);
   await dbm.put("staff", { user_id: 5, name: "م", perms: "orders" });
   await dbm.put("staff", { user_id: 6, name: "م", perms: "products" });
@@ -67,7 +66,4 @@ test("الصلاحية، وزر القائمة", async () => {
   assert.ok((await feeAction({ action: "list", initData: sign(6) })).fees);
   assert.equal((await POST(new Request("http://x/api/fees", { method: "POST", body: "{}" }))).status, 401);
 
-  const kb = (await adminMenuFor(1))[1].flat();
-  assert.ok(kb.find((b) => b.text === "🚚 أسعار التوصيل")?.web_app?.url.includes("/store/fees"));
-  assert.equal(kb.some((b) => b.callback_data === "a:fees"), false);
 });

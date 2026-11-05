@@ -1,7 +1,7 @@
 "use client";
 // صفحة المنتجات والأقسام: كل شي يتعدل داخل نفس الصفحة بدون رسائل بالبوت
 import { useState } from "react";
-import { Confirm, useAdminApi } from "../adminPage";
+import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Product = { id: number; name: string; price: number; mode: string };
 type Cat = { id: number; name: string; products: Product[] };
@@ -25,11 +25,7 @@ export default function ProductsClient() {
   }
   return (
     <>
-      <header>
-        <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
-        <p>🛒 المنتجات والأقسام</p>
-      </header>
+      <AdminHeader title="🛒 المنتجات والأقسام" />
       <div className="wrap" style={{ maxWidth: 800 }}>
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}

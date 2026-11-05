@@ -10,7 +10,6 @@ Object.assign(process.env, { DB_PATH: ":memory:", TOKEN, ADMIN: "1", STORE_URL: 
 
 const { productAction } = await import("../lib/productApi.ts");
 const { ApiError } = await import("../lib/webApi.ts");
-const { adminMenuFor } = await import("../lib/admin.ts");
 const { initDb, insert, one, put } = await import("../lib/db.ts");
 const { cats, product } = await import("../lib/data.ts");
 const { POST } = await import("../app/api/products/route.ts");
@@ -85,9 +84,3 @@ test("دفعة وحدة: يحسب الصحيح بس، ويرجع السطور ا
   await fails({ action: "زر" }, 400);
 });
 
-test("قائمة المدير تفتح الصفحة بدل شاشات الأزرار", async () => {
-  const kb = (await adminMenuFor(1))[1].flat();
-  assert.ok(kb.find((b) => b.text === "🛒 المنتجات والأقسام")?.web_app?.url.includes("/store/products"));
-  assert.equal(kb.some((b) => ["a:bulk", "a:add", "a:list"].includes(b.callback_data ?? "")), false);
-  assert.ok(kb.some((b) => b.callback_data === "a:oo"));                        // باقي الأقسام مثل ما هي
-});

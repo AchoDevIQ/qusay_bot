@@ -382,6 +382,25 @@ export async function onRegForm(chat: number, uid: number, o: any, user: Row) {
     await send(chat, "🔒 معلوماتك محفوظة ومقفولة. لتغيير أي معلومة تواصل ويا قصي العميري.", { replyKb: await mainKb(uid) });
     return;
   }
+  const { errs, r } = await studentFromForm(o, byAdmin);
+  if (errs.length) {
+    await send(chat, "⚠️ ما انحفظت المعلومات:\n" + errs.map((e) => "• " + e).join("\n") + "\n\nافتح الفورمة مرة ثانية وصحح 👇",
+      { replyKb: await regKb(uid, byAdmin ? target : null) });
+    return;
+  }
+  await saveStudent(target, byAdmin ? old!.username : user.username ?? "", r, old);
+  if (byAdmin) {
+    await setSession(uid, "", {});
+    await send(chat, "✅ <b>تم تعديل معلومات الطالب</b>\n\n" + await profileText(r), { replyKb: await mainKb(uid) });
+    return;
+  }
+  const nxt = st.startsWith("r:") ? data.next : null;
+  await setSession(uid, "", {});
+  await sendProfileCard(chat, r, "✅ تم حفظ معلوماتك", `✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «${BTN_ME}».`, await mainKb(uid));
+  await afterReg(chat, uid, nxt);
+}
+/** يتفحص معلومات الطالب من الفورمة. الإدارة تختار نوع الامتحان بحرية */
+export async function studentFromForm(o: any, byAdmin: boolean): Promise<{ errs: string[]; r: Row }> {
   const errs: string[] = [];
   const name = words(o.n).join(" ");
   if (!validName(name)) errs.push("الاسم لازم يكون رباعي وبالحروف العربية فقط");
@@ -408,24 +427,9 @@ export async function onRegForm(chat: number, uid: number, o: any, user: Row) {
     cid = toInt(o.c || 0) ?? 0;
     if (!cid || !await centerName(cid)) { errs.push("اختر المركز الامتحاني"); cid = null; }
   }
-  if (errs.length) {
-    await send(chat, "⚠️ ما انحفظت المعلومات:\n" + errs.map((e) => "• " + e).join("\n") + "\n\nافتح الفورمة مرة ثانية وصحح 👇",
-      { replyKb: await regKb(uid, byAdmin ? target : null) });
-    return;
-  }
-  const r: Row = { name, curr: cu, grade: gr, gov: g, side: sd, area, phone1: p1, phone2: p2, exam, center_id: cid };
-  await saveStudent(target, byAdmin ? old!.username : user.username ?? "", r, old);
-  if (byAdmin) {
-    await setSession(uid, "", {});
-    await send(chat, "✅ <b>تم تعديل معلومات الطالب</b>\n\n" + await profileText(r), { replyKb: await mainKb(uid) });
-    return;
-  }
-  const nxt = st.startsWith("r:") ? data.next : null;
-  await setSession(uid, "", {});
-  await sendProfileCard(chat, r, "✅ تم حفظ معلوماتك", `✅ <b>تم الحفظ بنجاح</b>\nتگدر تشوف معلوماتك بأي وقت من زر «${BTN_ME}».`, await mainKb(uid));
-  await afterReg(chat, uid, nxt);
+  return { errs, r: { name, curr: cu, grade: gr, gov: g, side: sd, area, phone1: p1, phone2: p2, exam, center_id: cid } };
 }
-async function saveStudent(uid: number, username: string, r: Row, old: Row | null) {
+export async function saveStudent(uid: number, username: string, r: Row, old: Row | null) {
   await put("students", {
     user_id: uid, username, name: r.name, curr: r.curr, grade: r.grade, gov: r.gov, side: r.side ?? "", area: r.area,
     phone1: r.phone1, phone2: r.phone2, exam: r.exam, center_id: r.center_id ?? null, created: old ? old.created : stamp(), updated: stamp(),

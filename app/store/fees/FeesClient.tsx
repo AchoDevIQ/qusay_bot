@@ -1,7 +1,7 @@
 "use client";
 // صفحة أسعار التوصيل: تعدل أي عدد من المحافظات، وتحفظهن مرة وحدة
 import { useState } from "react";
-import { Confirm, useAdminApi } from "../adminPage";
+import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Data = { fees: { gov: string; fee: number }[] };
 
@@ -21,11 +21,7 @@ export default function FeesClient() {
   }
   return (
     <>
-      <header>
-        <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
-        <p>🚚 أسعار التوصيل</p>
-      </header>
+      <AdminHeader title="🚚 أسعار التوصيل" />
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
