@@ -125,3 +125,26 @@ test("الحفظ ويا صور الورقة: الطالب وولي أمره يو
   const test = await send(-9, 1);
   assert.deepEqual(test.map((x) => [x.method, x.p.chat_id]), [["sendPhoto", "30"]]);   // التجربة توصل للمصحح بس
 });
+
+test("رسالة المصحح: كتابة أو صوت، والزر يحتاج اسم صحيح، وورقة التجربة توصل للمصحح", async () => {
+  const { gradeUpload } = await import("../lib/gradeApi.ts");
+  const e = await insert("bank_exams", { slug: "ch2", chapter: "الفصل الثاني", ord: 3, title: "امتحان الرسالة", info: "", minutes: 60, pos: 1 });
+  const v = await insert("bank_versions", { exam_id: e, model: "A", kind: "mandatory", ok: 1 });
+  await insert("bank_questions", { version_id: v, n: 1, max_mark: 100, q_file: "t/q1.png" });
+  const id = await insert("sched_items", { user_id: 52, exam_id: e, at: "x", status: "done", version_id: v, submitted_at: "x" });
+  await gradeAction({ initData: sign(30), action: "open", id });
+  const msg = (x: Record<string, string | Blob>) => { const f = new FormData(); f.set("initData", sign(30)); f.set("action", "message"); f.set("id", String(id)); for (const [k, val] of Object.entries(x)) f.set(k, val); return gradeUpload(f); };
+  await assert.rejects(msg({}), /اكتب رسالة/);
+  await assert.rejects(msg({ text: "هلا", btnText: "تواصل", btnUser: "a b" }), /اسم مستخدم/);
+  calls.length = 0;
+  await msg({ text: "ركز على السؤال <2>", btnText: "تواصل وياي", btnUser: "@Qusay_Teacher" });
+  assert.equal(calls[0].method, "sendMessage");
+  assert.equal(calls[0].p.chat_id, 52);
+  assert.match(calls[0].p.text, /&lt;2&gt;/);
+  assert.equal(calls[0].p.reply_markup.inline_keyboard[0][0].url, "https://t.me/Qusay_Teacher");
+  calls.length = 0;
+  await msg({ voice: new File([new Uint8Array([1, 2, 3])], "v.m4a", { type: "audio/mp4" }) });
+  assert.equal(calls[0].method, "sendVoice");
+  await put("staff", { user_id: 31, name: "ثاني", perms: "grade" });
+  await assert.rejects(gradeUpload((() => { const f = new FormData(); f.set("initData", sign(31)); f.set("action", "message"); f.set("id", String(id)); f.set("text", "x"); return f; })()), /مصحح ثاني/);
+});

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pageAuth } from "../adminPage";
 import PdfPages, { pdfByQuestion, pdfToImages } from "../PdfPages";
 import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
+import MessageBox from "./MessageBox";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
 export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en" };
@@ -237,6 +238,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const [showQ, setShowQ] = useState(true);
   const [sticker, setSticker] = useState(0);
   const [stickerBox, setStickerBox] = useState(false);
+  const [msgBox, setMsgBox] = useState(false);
+  const [msgDone, setMsgDone] = useState("");
   useEffect(() => { try { if (localStorage.getItem(SHOWQ_KEY) === "0") setShowQ(false); } catch { /* بدون حفظ */ } }, []);
   function toggleQ() { const v = !showQ; setShowQ(v); try { localStorage.setItem(SHOWQ_KEY, v ? "1" : "0"); } catch { /* بدون حفظ */ } }
   const undo = useRef<Record<number, Item[][]>>({});
@@ -379,6 +382,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         <div className="gk-tools">
           <button type="button" className={"gk-btn" + (showQ ? " on" : "")} onClick={toggleQ}>📋 {showQ ? "إخفاء السؤال" : "إظهار السؤال"}</button>
           <button type="button" className="gk-btn" onClick={() => setOverlay("model")}>📄 الجواب النموذجي</button>
+          <button type="button" className="gk-btn" onClick={() => setMsgBox(true)}>📩 رسالة للطالب</button>
           {!locked && <button type="button" className="gk-ic" title="تراجع" onClick={back}>↶</button>}
           {!locked && <button type="button" className="gk-ic" title="إعادة" onClick={forward}>↷</button>}
         </div>
@@ -459,6 +463,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           </div>
         </div>
       )}
+      {msgBox && <MessageBox paperId={paper.id} name={paper.name} onClose={(n) => { setMsgBox(false); if (n) { setMsgDone(n); setTimeout(() => setMsgDone(""), 4000); } }} />}
+      {msgDone && <div className="gk-toast">{msgDone}</div>}
       {stickerBox && (
         <div className="gk-modal" onClick={() => setStickerBox(false)}>
           <div className="gk-dialog" onClick={(e) => e.stopPropagation()}>

@@ -204,6 +204,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
 /** الحفظ ويا صور الورقة المصححة اللي ركبتها صفحة التصحيح */
 export async function gradeUpload(form: FormData) {
   const uid = await authed(form.get("initData"), GRADE_PERM);
+  if (form.get("action") === "message") return await messageStudent(uid, form);
   need(form.get("action") === "finish", "أمر غير معروف");
   const photos: Buffer[] = [];
   for (const f of form.getAll("photo")) {
@@ -213,6 +214,38 @@ export async function gradeUpload(form: FormData) {
   need(photos.length <= 40, "صور هواية");
   const notice = await finishPaper(uid, form.get("id"), photos, Number(form.get("comment")) || 0);
   return { ok: true, notice };
+}
+
+const VOICE_MAX = 20 * 1024 * 1024;
+/** رسالة من المصحح للطالب: كتابة، وتسجيل صوت، وزر يفتح محادثة تلگرام. ورقة التجربة توصل للمصحح نفسه */
+async function messageStudent(uid: number, form: FormData) {
+  const it = await myPaper(uid, form.get("id"));
+  const text = String(form.get("text") ?? "").trim().slice(0, 3000);
+  const voice = form.get("voice");
+  const hasVoice = voice instanceof Blob && voice.size > 0;
+  need(text || hasVoice, "اكتب رسالة أو سجل صوت");
+  if (hasVoice) need((voice as Blob).size <= VOICE_MAX, "التسجيل طويل هواية");
+  const btnText = String(form.get("btnText") ?? "").trim().slice(0, 40);
+  const user = String(form.get("btnUser") ?? "").trim().replace(/^@/, "").replace(/^https?:\/\/t\.me\//, "");
+  if (btnText || user) need(btnText && /^[A-Za-z0-9_]{4,32}$/.test(user), "الزر يحتاج نص واسم مستخدم تلگرام صحيح");
+  const view = await paperRow(it);
+  const to = isTest(it) ? uid : it.user_id;
+  const kb = btnText ? { inline_keyboard: [[{ text: btnText, url: `https://t.me/${user}` }]] } : undefined;
+  const caption = `📩 <b>رسالة من المصحح</b>\nبخصوص امتحان: ${esc(view.title)}${text ? `\n\n${esc(text)}` : ""}`;
+  if (hasVoice) {
+    const type = (voice as Blob).type || "";
+    // تلگرام يشغلها كرسالة صوتية إذا m4a أو ogg أو mp3، وإلا تنرسل كملف صوت
+    const ext = /mp4|m4a|aac/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : /mpeg|mp3/.test(type) ? "mp3" : "webm";
+    const method = ext === "webm" ? "sendDocument" : "sendVoice";
+    const fields: Record<string, string> = { chat_id: String(to), caption, parse_mode: "HTML", protect_content: "true" };
+    if (kb) fields.reply_markup = JSON.stringify(kb);
+    const ok = await upload(method, fields, method === "sendVoice" ? "voice" : "document", Buffer.from(await (voice as Blob).arrayBuffer()), `voice.${ext}`, type || "audio/ogg");
+    need(ok, "ما وصلت الرسالة الصوتية، جرب مرة ثانية");
+  } else {
+    await send(to, caption, { extra: { protect_content: true, ...(kb ? { reply_markup: kb } : {}) } });
+  }
+  if (!isTest(it)) await logActivity(it.user_id, `📩 وصلته رسالة من المصحح بخصوص ${view.title}`);
+  return { ok: true, notice: isTest(it) ? "🧪 وصلتك الرسالة إنت لأنها ورقة تجربة" : "✅ وصلت الرسالة للطالب" };
 }
 
 export const waitingPapers = async (uid: number) => (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid)).length;
