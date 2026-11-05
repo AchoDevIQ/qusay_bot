@@ -26,7 +26,7 @@ export default function ProductsClient() {
   return (
     <>
       <AdminHeader title="🛒 المنتجات والأقسام" />
-      <div className="wrap" style={{ maxWidth: 800 }}>
+      <div className="wrap">
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && (

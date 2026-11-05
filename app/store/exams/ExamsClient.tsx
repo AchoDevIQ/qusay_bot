@@ -26,7 +26,7 @@ export default function ExamsClient() {
   return (
     <>
       <AdminHeader title="📝 إدارة الامتحانات" />
-      <div className="wrap" style={{ maxWidth: 1100 }}>
+      <div className="wrap">
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && data.chapters.length > 1 && (
