@@ -13,7 +13,7 @@ const sc = read(file).find((x: any) => x.name === name);
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-parity-"));
 Object.assign(process.env, {
-  DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: sc.noStore ? "" : "https://x.test", PDF_DIR: tmp,
+  DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: sc.noStore ? "" : "https://x.test", PDF_DIR: tmp, NO_WORD_CHECK: "1",
   CHROME_PATH: path.join(tmp, "no-browser"), SETTINGS_FILE: path.join(tmp, "no-settings"),
 });
 

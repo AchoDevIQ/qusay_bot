@@ -52,6 +52,11 @@ export const DEFAULT_FEE = 5000;
 export const CURRENCY = "د.ع";
 export const AGREE_TIMES = 3;
 export const NO_REFUND = "⚠️ <b>تنبيه مهم</b>\n\nجميع المشتريات <b>غير قابلة للإرجاع إطلاقاً ولأي سبب كان</b>.";
+export const REFUND_SENTENCE = "جميع المشتريات غير قابلة للإرجاع إطلاقاً ولأي سبب كان";
+export const TERM_SENTENCE = "صلاحية المحاضرات والامتحانات للدور الأول فقط";
+export const TERM_NOTICE = `⚠️ <b>تنبيه مهم</b>\n\n<b>${TERM_SENTENCE}</b>.`;
+// فحوصات البوت القديم تضغط «موافق» 3 مرات، فتطفي ترتيب الكلمات. على السيرفر يبقى شغال دائماً
+export const WORD_CHECK = process.env.NO_WORD_CHECK !== "1";
 export const successText = (id: number) => `✅ <b>تم استلام طلبك بنجاح</b>  (رقم الطلب <b>#${id}</b>)\n\n` +
   "🚚 سيصلك الطلب خلال مدة من <b>12 ساعة إلى 48 ساعة</b>.\n\n" +
   "⚠️ وللتذكير: جميع المشتريات <b>غير قابلة للإرجاع إطلاقاً ولأي سبب كان</b>.";
