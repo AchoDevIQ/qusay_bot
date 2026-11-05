@@ -5,11 +5,12 @@ import {
   allCats, can, cat, centerName, chapters, govMode, groupId, hoursText, isAdmin, newOrdersCount, orderItems, ordersByIds, placeOf, product, products, profileText, qHours, qWhere,
   searchStudents, setStudentView, staffAccount, staffName, staffRow, student, topics,
 } from "./data.ts";
-import { chapterLabel, examsPageLink, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
+import { chapterLabel, examsPageLink, flowKb, mainKb, onlineOnly, posKb, productsPageLink, regKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
 import { EXAM_PERM, examBankCb } from "./examBank.ts";
 import { readyExtras } from "./exams.ts";
 import { officeDays, officeKb, officeView, libCb, libText, parseAmount } from "./office.ts";
+import { bulkAdd, parsePrice } from "./productApi.ts";
 import { orderKb, orderText } from "./student.ts";
 import { api, edit, send, type Kb } from "./telegram.ts";
 import { btn, chunk, esc, money, num, stamp, todayStr, words } from "./util.ts";
@@ -19,11 +20,12 @@ type View = [string, Kb];
 // ---------- القوائم
 export async function adminMenuFor(uid: number): Promise<View> {
   const kb: Kb = [];
+  // صفحات كاملة داخل تليجرام. بدون رابط https ترجع شاشات الأزرار
   if (await can(uid, "products")) {
-    kb.push([btn("📥 إضافة منتجات دفعة وحدة", "a:bulk")], [btn("➕ إضافة منتج واحد", "a:add")], [btn("📋 المنتجات والأقسام", "a:list")],
-      [btn("🚚 أسعار التوصيل", "a:fees")], [btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")]);
+    if (STORE_URL) kb.push([{ text: "🛒 المنتجات والأقسام", web_app: { url: productsPageLink() } }]);
+    else kb.push([btn("📥 إضافة منتجات دفعة وحدة", "a:bulk")], [btn("➕ إضافة منتج واحد", "a:add")], [btn("📋 المنتجات والأقسام", "a:list")]);
+    kb.push([btn("🚚 أسعار التوصيل", "a:fees")], [btn("💻 فصول امتحانها إلكتروني فقط", "a:oo")]);
   }
-  // صفحة كاملة داخل تليجرام. بدون رابط https ترجع شاشات الأزرار
   if (await can(uid, EXAM_PERM)) kb.push([STORE_URL ? { text: "📝 الامتحانات", web_app: { url: examsPageLink() } } : btn("📝 الامتحانات", "a:ex")]);
   if (await can(uid, "orders")) {
     const n = await newOrdersCount();
@@ -157,37 +159,6 @@ async function onlineOnlyView(): Promise<[string, Kb, string[]]> {
 }
 
 // ---------- إدخال المنتجات
-function parsePrice(raw: string) {
-  const t = toLatinDigits(raw).replace(/[,،٬. ]/g, "").replace(/(دينار|د\.ع|IQD)$/, "");
-  return /^\d+$/.test(t) ? Number(t) : null;
-}
-async function bulkAdd(text: string) {
-  const added: string[] = [], bad: string[] = [];
-  let cur: number | null = null;
-  await tx(async () => {
-    // Firestore ممكن يعيد العملية، فتبدي من الصفر كل مرة
-    added.length = 0;
-    bad.length = 0;
-    cur = null;
-    for (const raw of text.split(/\r?\n/)) {
-      const line = raw.trim();
-      if (!line) continue;
-      if (line.startsWith("#")) {
-        const name = line.replace(/^#+/, "").trim();
-        cur = name ? await catIdFor(name) : null;
-        continue;
-      }
-      const m = line.match(/^(.+?)\s*[=:]\s*([\d٠-٩۰-۹,،٬.\s]+)\s*(دينار|د\.ع)?\s*$/);
-      const pr = m ? parsePrice(m[2]) : null;
-      if (!m || pr === null) { bad.push(line); continue; }
-      cur ??= await catIdFor("منتجات أخرى");
-      await insert("products", { name: m[1].trim(), price: pr, cat_id: cur, mode: modeFromName(m[1]) });
-      added.push(m[1].trim());
-    }
-  });
-  return { added, bad };
-}
-
 // ---------- الكتابة أثناء حالات a:*
 export async function onAdminText(chat: number, uid: number, text: string, st: string, data: Row): Promise<boolean> {
   const view = ([t, kb]: View, prefix = "") => send(chat, prefix + t, { kb });

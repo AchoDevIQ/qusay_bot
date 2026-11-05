@@ -2,32 +2,15 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { CONTENT_DIR, TOKEN } from "./config.ts";
-import { find, initDb, insert, kvGet, kvSet, maxOf, one, remove, sumOf, tx, update, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, maxOf, one, remove, sumOf, tx, update, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { EXAM_PERM, deleteVersion, logEdit } from "./examBank.ts";
 import { files } from "./files.ts";
 import { api } from "./telegram.ts";
-import { fileToken, verifyFileToken, verifyInitData } from "./webAuth.ts";
+import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
+import { fileToken, verifyFileToken } from "./webAuth.ts";
 
-let ready = false;
-const ensure = async () => { if (!ready) { await initDb(); ready = true; } };
-export class ApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
-}
-const need = (cond: unknown, message: string, status = 400) => { if (!cond) throw new ApiError(status, message); };
-const intOf = (v: unknown, min: number, max: number, label: string) => {
-  const n = Number(v);
-  need(Number.isInteger(n) && n >= min && n <= max, label);
-  return n;
-};
-async function authed(initData: unknown) {
-  await ensure();
-  const uid = verifyInitData(initData);
-  need(uid !== null, "افتح الصفحة من داخل البوت", 401);
-  need(await can(uid!, EXAM_PERM), "ما عندك صلاحية", 403);
-  return uid!;
-}
+export { ApiError };
 
 const generalMinutes = async () => Number(await kvGet("exam_minutes")) || 75;
 // ord يحدد مكان ملفات الامتحان فما يتغير، والترتيب بالجدول من pos
@@ -75,7 +58,7 @@ export async function examList(uid: number) {
 
 /** الأوامر اللي ما بيها ملفات. يرجع القائمة المحدثة */
 export async function examAction(body: Row) {
-  const uid = await authed(body?.initData);
+  const uid = await authed(body?.initData, EXAM_PERM);
   const a = String(body.action ?? "");
   const id = Number(body.id);
   if (a === "list") return await examList(uid);
@@ -204,7 +187,7 @@ async function saveUpload(f: unknown, kinds: string[]) {
 }
 const IMAGES = ["png", "jpg"];
 export async function examUpload(form: FormData) {
-  const uid = await authed(form.get("initData"));
+  const uid = await authed(form.get("initData"), EXAM_PERM);
   const a = String(form.get("action") ?? "");
   const id = Number(form.get("id"));
   if (a === "addQuestion") {

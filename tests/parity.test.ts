@@ -44,7 +44,13 @@ function normal(v: any): any {
 const NEW_TABLES = ["bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
-  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:exams$)/.test(b.callback_data ?? "") || /\/store\/exams/.test(b.web_app?.url ?? "")));
+  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:exams$)/.test(b.callback_data ?? "") || /\/store\/(exams|products)/.test(b.web_app?.url ?? "")));
+  return e;
+}
+// أزرار المنتجات صارت صفحة وحدة بالقائمة الرئيسية
+function dropOldProductButtons(e: any) {
+  const kb = e.p?.reply_markup?.inline_keyboard;
+  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^a:(bulk|add)$/.test(b.callback_data ?? "") || (b.callback_data === "a:list" && b.text === "📋 المنتجات والأقسام")));
   return e;
 }
 function normalDb(db: Record<string, any[]>) {
@@ -83,7 +89,7 @@ for (const driver of ["sqlite", "firestore"]) for (const file of fs.readdirSync(
       // طلب من صاحب البوت: صورة نجاح الطلب تطلع لوحدها، لأن نفس الكلام مكتوب داخلها
       const photoOnly = (e: any) => { if (e.m === "sendPhoto" && /تم استلام طلبك/.test(e.p.caption ?? "")) { delete e.p.caption; delete e.p.parse_mode; } return e; };
       const dropPhotoMode = (e: any) => { if (e.m === "sendPhoto" && !e.p.caption) delete e.p.parse_mode; return e; };
-      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode)), b = normal(py.trace.map(photoOnly));
+      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode)), b = normal(py.trace.map(photoOnly).map(dropOldProductButtons));
       for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
       if (driver === "firestore") assert.deepEqual(sorted(normalDb(ts.db)), sorted(normalDb(py.db)));
       else assert.deepEqual(normalDb(ts.db), normalDb(py.db));

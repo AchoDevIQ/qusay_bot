@@ -78,6 +78,7 @@ export const posKb = async (sid: number) => ({
 });
 
 export const examsPageLink = () => `${siteBase()}/store/exams?v=${Math.floor(Date.now() / 1000)}`;
+export const productsPageLink = () => `${siteBase()}/store/products?v=${Math.floor(Date.now() / 1000)}`;
 export const scanKb = (oid: number) => ({
   keyboard: [[{ text: BTN_SCAN, web_app: { url: pageUrl("/store/scan", { o: oid }) } }], [{ text: BTN_CANCEL }]], resize_keyboard: true,
 });

@@ -1,6 +1,7 @@
 "use client";
 // صفحة وحدة لإدارة الامتحانات: جدول الامتحانات، وكل شي ينفتح داخل نفس الصفحة بدون رسائل بالبوت
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Confirm, useAdminApi } from "../adminPage";
 
 type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
@@ -8,47 +9,16 @@ type Exam = { id: number; ord: number; title: string; info: string; minutes: num
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string };
 
-const webApp = () => (window as unknown as { Telegram?: { WebApp?: { initData?: string; expand?: () => void } } }).Telegram?.WebApp;
-const initData = () => (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData ?? "";
 const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info)?.[0] ?? "";
 const fmtTime = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
 const KIND: Record<string, string> = { mandatory: "📌 إجباري", optional: "🎯 اختياري" };
 
 export default function ExamsClient() {
-  const [data, setData] = useState<Data | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { data, error, busy, call } = useAdminApi<Data>("/api/exams", "📝 الامتحانات");
   const [openChapter, setOpenChapter] = useState(0);
   const [openExam, setOpenExam] = useState<number | null>(null);
   const [openVersion, setOpenVersion] = useState<number | null>(null);
   const [openQ, setOpenQ] = useState<number | null>(null);
-
-  async function call(body: Record<string, unknown> | FormData) {
-    setBusy(true);
-    setError("");
-    try {
-      let res: Response;
-      if (body instanceof FormData) {
-        body.set("initData", initData());
-        res = await fetch("/api/exams", { method: "POST", body });
-      } else {
-        res = await fetch("/api/exams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, initData: initData() }) });
-      }
-      const j = await res.json();
-      if (!res.ok) { setError(j.error ?? "صار خطأ"); return false; }
-      setData(j);
-      return true;
-    } catch { setError("ماكو اتصال، حاول مرة ثانية"); return false; } finally { setBusy(false); }
-  }
-  // سكربت تليجرام يتحمل بعد الصفحة، فننتظره شوية
-  useEffect(() => {
-    let tries = 0;
-    const t = setInterval(() => {
-      if (initData()) { clearInterval(t); webApp()?.expand?.(); void call({ action: "list" }); }
-      else if (++tries > 25) { clearInterval(t); setError("افتح هاي الصفحة من زر «📝 الامتحانات» داخل البوت."); }
-    }, 200);
-    return () => clearInterval(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fileUrl = (ref: string) => `/api/exams/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
   const ch = data?.chapters[openChapter];
@@ -135,13 +105,6 @@ function ExamRows({ head, open, children }: { head: ReactNode; open: boolean; ch
   return <>{head}{open && <tr><td colSpan={4} className="expanel">{children}</td></tr>}</>;
 }
 
-/** زر فيه خطوة تأكيد داخل الصفحة */
-function Confirm({ label, onYes, disabled }: { label: string; onYes: () => void; disabled?: boolean }) {
-  const [ask, setAsk] = useState(false);
-  return ask
-    ? <button type="button" className="exbtn danger" disabled={disabled} onClick={() => { setAsk(false); onYes(); }}>⚠️ متأكد؟ اضغط مرة ثانية</button>
-    : <button type="button" className="exbtn" disabled={disabled} onClick={() => setAsk(true)}>{label}</button>;
-}
 function FileButton({ label, accept, multiple, onFiles, disabled }: { label: string; accept: string; multiple?: boolean; onFiles: (f: File[]) => void; disabled?: boolean }) {
   return (
     <label className={"exbtn" + (disabled ? " off" : "")}>
@@ -151,7 +114,7 @@ function FileButton({ label, accept, multiple, onFiles, disabled }: { label: str
   );
 }
 
-type Call = (b: Record<string, unknown> | FormData) => Promise<boolean>;
+type Call = (b: Record<string, unknown> | FormData) => Promise<unknown>;
 function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, openQ, setOpenQ }: {
   exam: Exam; busy: boolean; call: Call; fileUrl: (r: string) => string;
   openVersion: number | null; setOpenVersion: (v: number | null) => void; openQ: number | null; setOpenQ: (q: number | null) => void;
