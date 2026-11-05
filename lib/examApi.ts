@@ -55,7 +55,7 @@ export async function examList(uid: number) {
     });
   }
   const slugs = new Set(exams.map((e) => e.slug));
-  return { chapters, generalMinutes: await generalMinutes(), fileToken: fileToken(uid), bookMissing: !await kvGet("book_loaded_v2") && (!!await kvGet("book_loaded") || BOOK.some((c) => !slugs.has(c.slug))) };
+  return { chapters, generalMinutes: await generalMinutes(), fileToken: fileToken(uid), lastTwoDone: !!await kvGet("last_two_done"), bookMissing: !await kvGet("book_loaded_v2") && (!!await kvGet("book_loaded") || BOOK.some((c) => !slugs.has(c.slug))) };
 }
 
 /** الأوامر اللي ما بيها ملفات. يرجع القائمة المحدثة */
@@ -215,6 +215,20 @@ export async function examAction(body: Row) {
     }
     await update("bank_exams", { id }, { group_versions: JSON.stringify(version ? { private: version } : {}) });
     await logEdit(uid, `امتحان ${id}: نسخة الخاص ${version}`);
+  } else if (a === "lastTwoOptional") {
+    // آخر نسختين من كل امتحان تصير اختياري. يتكرر بأمان، وتبقى نسخة إجبارية وحدة على الأقل
+    let moved = 0;
+    await tx(async () => {
+      moved = 0;
+      for (const e of await find("bank_exams")) {
+        const vs = (await find("bank_versions", { exam_id: e.id })).sort((x, y) => String(x.model).localeCompare(String(y.model)));
+        for (const v of vs.length <= 2 ? vs.slice(1) : vs.slice(-2)) {
+          if (v.kind !== "optional") { await update("bank_versions", { id: v.id }, { kind: "optional" }); moved++; }
+        }
+      }
+    });
+    await kvSet("last_two_done", "1");
+    await logEdit(uid, `آخر نسختين اختياري: ${moved} نسخة`);
   } else if (a === "privateChapter") {
     // نسخة الجدول الخاص لكل الفصل دفعة وحدة، وتتبدل بأي وقت
     const list = await find("bank_exams", { slug: String(body.slug ?? "") });

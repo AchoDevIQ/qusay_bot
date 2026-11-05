@@ -241,3 +241,21 @@ test("ملفات الجواب الكاملة: تنربط بنسختها، وال
   await run("DELETE FROM bank_versions WHERE exam_id=1 AND model IN ('K','L')");
   assert.deepEqual((await linkAnswerFiles(dir, "ch1")).sent, 0);                // الإعادة ما ترفع مرة ثانية
 });
+
+test("آخر نسختين من كل امتحان تصير اختياري، وتبقى إجبارية وحدة على الأقل", async () => {
+  const init = sign(1);
+  const exam = async (models: string[]) => {
+    const id = Number(await run("INSERT INTO bank_exams(slug, chapter, ord, title, minutes) VALUES('last2', 'ف', ?, 'ع', 75)", Math.floor(Math.random() * 1e6)));
+    for (const m of models) await run("INSERT INTO bank_versions(exam_id, model, kind, ok) VALUES(?, ?, 'mandatory', 1)", id, m);
+    return id;
+  };
+  const kinds = async (id: number) => (await all("SELECT kind FROM bank_versions WHERE exam_id=? ORDER BY model", id)).map((r) => r.kind === "optional" ? "o" : "m").join("");
+  const four = await exam(["A", "B", "C", "D"]), two = await exam(["A", "B"]), one = await exam(["A"]);
+  const r: any = await examAction({ action: "lastTwoOptional", initData: init });
+  assert.equal(r.lastTwoDone, true);
+  assert.equal(await kinds(four), "mmoo");
+  assert.equal(await kinds(two), "mo");
+  assert.equal(await kinds(one), "m");
+  await examAction({ action: "lastTwoOptional", initData: init });   // التكرار ما يحرك نسخ زيادة
+  assert.equal(await kinds(four), "mmoo");
+});

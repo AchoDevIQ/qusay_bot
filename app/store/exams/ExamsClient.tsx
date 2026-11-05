@@ -7,7 +7,7 @@ type Question = { id: number; n: number; max: number; q: string | null; edited: 
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
 type Exam = { id: number; ord: number; title: string; info: string; minutes: number; privateVersion: number; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
-type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean };
+type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean; lastTwoDone: boolean };
 
 const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info)?.[0] ?? "";
 const fmtTime = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -34,6 +34,12 @@ export default function ExamsClient() {
             <div className="exlabel">📥 جدول الكتاب</div>
             <div className="exhint">يدخل عناوين امتحانات الفصل الثاني والثالث والرابع والخامس بترتيبها. الملفات والنسخ تنضاف بعدين. اللي تحذفه بعدها ما يرجع.</div>
             <button type="button" className="btn agbtn" disabled={busy} onClick={() => void call({ action: "loadBook" })}>📥 أدخل جدول الكتاب</button>
+          </div>
+        )}
+        {data && !data.lastTwoDone && (
+          <div className="card expad adform">
+            <div className="exhint">آخر نسختين من كل امتحان بكل الفصول تصير اختياري. إذا الامتحان بيه نسختين بس، الأخيرة تصير اختياري والأولى تبقى إجباري. وتگدر تغير أي نسخة بعدها.</div>
+            <Confirm label="🎯 خلي آخر نسختين اختياري" disabled={busy} onYes={() => void call({ action: "lastTwoOptional" })} />
           </div>
         )}
         {data && data.chapters.length > 1 && (
