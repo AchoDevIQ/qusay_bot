@@ -3,7 +3,7 @@
 // والدرجات بصف فوك. الرسم ينحفظ وحده لكل صفحة
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pageAuth } from "../adminPage";
-import PdfPages, { pdfToImages } from "../PdfPages";
+import PdfPages, { pdfByQuestion, pdfToImages } from "../PdfPages";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
 export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string> };
@@ -12,7 +12,8 @@ type Ink = { rot: number; items: Item[] };
 type Page = { src: string | null; q: number | null };
 type Tool = "hand" | "pen" | "eraser" | "text" | "stamp";
 
-const COLORS = ["#111111", "#1f9d55", "#1e5bd8", "#e53935"];
+const COLORS = ["#111111", "#555555", "#9e9e9e", "#ffffff", "#e53935", "#c62828", "#ff5252", "#ff7043", "#fb8c00", "#ffb300", "#fdd835", "#c0ca33",
+  "#7cb342", "#1f9d55", "#00897b", "#00acc1", "#039be5", "#1e5bd8", "#3949ab", "#5e35b1", "#8e24aa", "#d81b60", "#ec407a", "#6d4c41"];
 const WIDTHS = [2, 5];
 const ZOOMS = [0.75, 1, 1.25, 1.5, 2, 2.5];
 const GREEN = "#1f9d55";
@@ -23,6 +24,19 @@ const parseInk = (s: string | undefined): Ink => { try { const j = JSON.parse(s 
 async function buildPages(paper: Paper, url: (r: string) => string): Promise<Page[]> {
   const out: Page[] = [];
   const add = async (f: string, q: number | null) => {
+    if (isPdf(f) && q === null) {
+      // ورقة كاملة (مثل أوراق التجربة): تنقسم صفحة لكل سؤال، حتى الدرجة تقلب للسؤال اللي بعده
+      const parts = await pdfByQuestion(url(f)).catch(() => []);
+      const known = new Set(paper.questions.map((x) => x.n));
+      if (parts.some((x) => known.has(x.q))) {
+        for (const x of paper.questions) {
+          const mine = parts.filter((y) => y.q === x.n);
+          if (mine.length) mine.forEach((y) => out.push({ src: y.src, q: x.n }));
+          else out.push({ src: null, q: x.n });
+        }
+        return;
+      }
+    }
     if (isPdf(f)) for (const src of await pdfToImages(url(f))) out.push({ src, q });
     else out.push({ src: url(f), q });
   };
@@ -142,8 +156,9 @@ function Sheet({ page, ink, zoom, tool, color, width, onAdd, onErase, onTap }: {
 const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "T", stamp: "✅" };
 const TIP: Record<Tool, string> = { hand: "تحريك", pen: "القلم", eraser: "الممحاة", text: "كتابة", stamp: "ختم صح" };
 
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinish, today, left: papersLeft }: {
-  paper: Paper; url: (r: string) => string; busy: boolean;
+const SHOWQ_KEY = "gradeShowQuestion";
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinish, today, left: papersLeft, errors }: {
+  paper: Paper; url: (r: string) => string; busy: boolean; errors: string[];
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null } | null>;
   onClose: () => void; onSkip: () => void; onFinish: () => void; today: number; left: number;
 }) {
@@ -162,6 +177,11 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
   const [text, setText] = useState("");
   const [askFinish, setAskFinish] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+  const [keepErr, setKeepErr] = useState(false);
+  const [saved, setSaved] = useState("");
+  const [showQ, setShowQ] = useState(true);
+  useEffect(() => { try { if (localStorage.getItem(SHOWQ_KEY) === "0") setShowQ(false); } catch { /* بدون حفظ */ } }, []);
+  function toggleQ() { const v = !showQ; setShowQ(v); try { localStorage.setItem(SHOWQ_KEY, v ? "1" : "0"); } catch { /* بدون حفظ */ } }
   const undo = useRef<Record<number, Item[][]>>({});
   const redo = useRef<Record<number, Item[][]>>({});
   const dirty = useRef(new Set<number>());
@@ -240,28 +260,30 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
     else setQSel(nextQ.n);
   }
   function pickTool(t: Tool) { if (t === "pen" && tool === "pen") setPenBox(!penBox); else { setTool(t); setPenBox(false); } }
-  function addText() {
-    if (textAt && text.trim()) addItem({ t: "x", c: color, x: textAt.x, y: textAt.y, s: text.trim(), z: 0.032 });
-    setTextAt(null); setText("");
+  function addText(value = text) {
+    const v = value.trim();
+    if (textAt && v) addItem({ t: "x", c: color, x: textAt.x, y: textAt.y, s: v, z: 0.032 });
+    if (v && keepErr && !errors.includes(v)) void act({ action: "saveError", text: v });
+    setTextAt(null); setText(""); setKeepErr(false);
   }
+  async function saveNow() { await flush(); setSaved("✅ انحفظ"); setTimeout(() => setSaved(""), 2000); }
   return (
     <div className="gk">
       <div className="gk-row gk-head">
         <button type="button" className="gk-ic" aria-label="سد" onClick={async () => { await flush(); onClose(); }}>✕</button>
         <b className="gk-name">{paper.name}{paper.test ? " (تجربة)" : ""}</b>
         <div className="gk-tools">
-          <button type="button" className="gk-ic" title="السؤال" onClick={() => setOverlay("question")}>📋</button>
-          <button type="button" className="gk-ic" title="الجواب النموذجي" onClick={() => setOverlay("model")}>📄</button>
-          {!locked && <button type="button" className="gk-btn" disabled={busy} onClick={async () => { await flush(); onSkip(); }}>⏭ تخطي</button>}
-          {!locked && <button type="button" className="gk-btn" onClick={() => ink.items.length && change({ ...ink, items: [] })}>🗑 إعادة مسح</button>}
+          <button type="button" className={"gk-btn" + (showQ ? " on" : "")} onClick={toggleQ}>📋 {showQ ? "إخفاء السؤال" : "إظهار السؤال"}</button>
+          <button type="button" className="gk-btn" onClick={() => setOverlay("model")}>📄 الجواب النموذجي</button>
           {!locked && <button type="button" className="gk-ic" title="تراجع" onClick={back}>↶</button>}
           {!locked && <button type="button" className="gk-ic" title="إعادة" onClick={forward}>↷</button>}
-          {!locked && <button type="button" className="gk-btn" onClick={() => void flush()}>💾 حفظ</button>}
+          {!locked && <button type="button" className="gk-save" onClick={() => void saveNow()}>{saved || "💾 حفظ"}</button>}
         </div>
       </div>
       <div className="gk-row gk-info">
         <span>الامتحان: {paper.title} · النسخة: {paper.model}</span>
         <span>صححت: <b>{today}</b> | متبقي: <b>{papersLeft}</b>{saveErr && <span className="gk-err"> · ⚠️ {saveErr}</span>}</span>
+        {!locked && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(); onSkip(); }}>⏭ تخطي الورقة</button>}
       </div>
       <div className="gk-row gk-bar">
         <div className="gk-tools">
@@ -275,6 +297,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
           <span className="gk-pg">{at + 1}{pages ? ` / ${pages.length}` : ""}</span>
           <button type="button" className="gk-ic" disabled={!pages || at >= pages.length - 1} onClick={() => go(at + 1)}>‹</button>
         </div>
+        {!locked && <button type="button" className="gk-clear" onClick={() => ink.items.length && change({ ...ink, items: [] })}>🗑 مسح الصفحة</button>}
         {!locked && <div className="gk-tools gk-pens">
           {(["stamp", "text", "eraser", "pen", "hand"] as Tool[]).map((t) => (
             <button type="button" key={t} title={TIP[t]} className={"gk-ic" + (tool === t ? " on" : "")} onClick={() => pickTool(t)}>
@@ -284,7 +307,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
           {penBox && (
             <div className="gk-penbox">
               <div className="gk-lbl">خيارات القلم</div>
-              <div className="gk-tools">{COLORS.map((c) => <button type="button" key={c} aria-label="لون" className={"gk-dot" + (color === c ? " on" : "")} style={{ background: c }} onClick={() => setColor(c)} />)}</div>
+              <div className="gk-colors">{COLORS.map((c) => <button type="button" key={c} aria-label="لون" className={"gk-dot" + (color === c ? " on" : "")} style={{ background: c }} onClick={() => setColor(c)} />)}</div>
+              <label className="gk-custom">🎨 لون ثاني <input type="color" value={color} onChange={(e) => setColor(e.target.value)} /></label>
               <div className="gk-tools">{WIDTHS.map((w) => <button type="button" key={w} className={"gk-w" + (width === w ? " on" : "")} onClick={() => setWidth(w)}><span style={{ height: w }} /></button>)}</div>
               <button type="button" className="gk-btn" onClick={() => setPenBox(false)}>تم</button>
             </div>
@@ -307,6 +331,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
       <div className="gk-stage" ref={stage}>
         {!pages && <div className="gk-empty">جاري تجهيز الورقة...</div>}
         {pages && !pages.length && <div className="gk-empty">⚠️ ماكو صفحات بهذي الورقة.</div>}
+        {page && showQ && q && <div className="gk-qtop"><span>السؤال {q.n}</span><img src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
         {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} onAdd={addItem} onErase={erase} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
       </div>
       {textAt && (
@@ -314,7 +339,19 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onFinis
           <div className="gk-dialog" onClick={(e) => e.stopPropagation()}>
             <b>إضافة تعليق نصي</b>
             <textarea autoFocus rows={3} value={text} placeholder="اكتب التعليق..." onChange={(e) => setText(e.target.value)} />
-            <div className="gk-tools"><button type="button" className="gk-finish" onClick={addText}>إضافة</button><button type="button" className="gk-btn" onClick={() => setTextAt(null)}>إلغاء</button></div>
+            <label className="gk-keep"><input type="checkbox" checked={keepErr} onChange={(e) => setKeepErr(e.target.checked)} /> حفظ في الأخطاء الشائعة</label>
+            {!!errors.length && (
+              <div className="gk-errs">
+                <div className="gk-lbl">الأخطاء الشائعة: اضغط واحد حتى ينكتب</div>
+                {errors.map((e) => (
+                  <span key={e} className="gk-errchip">
+                    <button type="button" onClick={() => addText(e)}>{e}</button>
+                    <button type="button" aria-label="حذف" className="gk-x" onClick={() => void act({ action: "delError", text: e })}>✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="gk-tools"><button type="button" className="gk-finish" onClick={() => addText()}>إضافة</button><button type="button" className="gk-btn" onClick={() => setTextAt(null)}>إلغاء</button></div>
           </div>
         </div>
       )}

@@ -71,6 +71,11 @@ test("التصحيح: الصلاحية، أول مصحح ياخذ الورقة،
   await assert.rejects(g(20, "ink", { id, page: -1, ink }), /صفحة/);
   await assert.rejects(g(20, "ink", { id, page: 0, ink: "{bad" }), /غير مفهوم/);
   assert.deepEqual(await g(20, "ink", { id, page: 0, ink }), { ok: true });
+  await g(20, "saveError", { text: "خطأ بالإشارة" });
+  assert.deepEqual((await g(20, "saveError", { text: "نسيت الثابت" })).errors, ["نسيت الثابت", "خطأ بالإشارة"]);
+  assert.deepEqual((await g(20, "list")).errors, ["نسيت الثابت", "خطأ بالإشارة"]);
+  assert.deepEqual((await g(21, "list")).errors, []);              // كل مصحح إله أخطاءه
+  assert.deepEqual((await g(20, "delError", { text: "نسيت الثابت" })).errors, ["خطأ بالإشارة"]);
   assert.equal((await g(20, "open", { id })).paper.ink[0], ink);
   calls.length = 0;
   const done = await g(20, "finish", { id });

@@ -1,5 +1,5 @@
 // صفحة التصحيح: أول مصحح يفتح الورقة تصير إله، يضغط درجة كل سؤال، والبوت يجمع ويبلغ الطالب وولي أمره
-import { find, insert, one, put, remove, update, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
 import { isAdmin, staffName, student } from "./data.ts";
 import { send } from "./telegram.ts";
@@ -11,6 +11,9 @@ export const GRADE_PERM = "grade";
 const TEST_PAPERS = 5;
 const isTest = (it: Row) => it.user_id < 0;
 const MAX_INK = 400_000;
+/** الأخطاء الشائعة: تعليقات كل مصحح يحفظها حتى يعيدها بضغطة */
+const errKey = (uid: number) => `grade_errors_${uid}`;
+async function errorsOf(uid: number): Promise<string[]> { try { const j = JSON.parse(await kvGet(errKey(uid)) ?? "[]"); return Array.isArray(j) ? j.map(String) : []; } catch { return []; } }
 const nameOf = async (it: Row) => (isTest(it) ? `طالب تجربة ${-it.user_id}` : (await student(it.user_id))?.name ?? "طالب");
 
 async function paperRow(it: Row) {
@@ -25,6 +28,7 @@ async function listData(uid: number) {
   return {
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
     owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid),
+    errors: await errorsOf(uid),
     today: papers.filter((p) => p.grader_id === uid && String(p.graded_at ?? "").startsWith(stamp().slice(0, 10))).length,
   };
 }
@@ -95,6 +99,14 @@ export async function gradeAction(body: Row) {
     try { need(Array.isArray(JSON.parse(ink || "[]").items ?? []), "رسم غير مفهوم"); } catch { need(false, "رسم غير مفهوم"); }
     await put("paper_ink", { item_id: it.id, page, ink });
     return { ok: true };
+  }
+  if (a === "saveError" || a === "delError") {
+    const text = String(body.text ?? "").trim().slice(0, 300);
+    need(text, "اكتب التعليق");
+    const list = (await errorsOf(uid)).filter((x) => x !== text);
+    if (a === "saveError") list.unshift(text);
+    await kvSet(errKey(uid), JSON.stringify(list.slice(0, 100)));
+    return { ...await listData(uid), paper: null, notice: a === "saveError" ? "✅ انحفظ بالأخطاء الشائعة" : "" };
   }
   if (a === "open") {
     const it = await one("sched_items", { id: Number(body.id) });
