@@ -187,9 +187,9 @@ body.grwide .grtop{padding-left:104px}
 .gk-penbox .gk-btn{background:#111;color:#fff}.gk-lbl{font-weight:800;text-align:center}.gk-dot{width:34px;height:34px;border-radius:50%;border:3px solid #fff;cursor:pointer;box-shadow:0 0 0 1px #ccc}.gk-dot.on{box-shadow:0 0 0 3px #111}
 .gk-w{flex:1;height:34px;border-radius:8px;border:1px solid #ccc;background:#f3f3f3;display:flex;align-items:center;justify-content:center;cursor:pointer}.gk-w span{display:block;width:60%;background:#111;border-radius:4px}.gk-w.on{border:2px solid #111}
 .gk-marks{flex-wrap:wrap}.gk-nums{display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0}.gk-nums button,.gk-qs button{min-width:40px;height:40px;border:0;border-radius:10px;background:#2a2c31;color:#fff;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;flex:none}
-.gk-nums button.on,.gk-qs button.on{background:#1f9d55}.gk-qs{display:flex;gap:6px;width:100%;overflow-x:auto}.gk-q{font-weight:800;white-space:nowrap}.gk-q small{color:#b9bcc4;font-weight:400}.gk-total{font-weight:800;color:var(--gold);white-space:nowrap}
+.gk-nums button.on,.gk-qs button.on{background:#1f9d55;box-shadow:0 0 0 3px #7ee2a8;transform:scale(1.08)}.gk-qs{display:flex;gap:6px;width:100%;overflow-x:auto}.gk-q{font-weight:800;white-space:nowrap}.gk-q small{color:#b9bcc4;font-weight:400}.gk-total{font-weight:800;color:var(--gold);white-space:nowrap}
 .gk-finish{height:42px;border:0;border-radius:10px;background:#1f9d55;color:#fff;font-family:inherit;font-size:15px;font-weight:800;padding:0 14px;cursor:pointer;white-space:nowrap}.gk-finish:disabled{background:#3a3d44;color:#aaa}
-.gk-stage{flex:1;overflow:auto;padding:12px 8px calc(12px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}.gk-page{width:100%;display:flex;justify-content:center}
+.gk-stage{flex:1;overflow:auto;padding:6px 8px calc(12px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}.gk-page{width:100%;display:flex;justify-content:center}
 .gk-sheet{position:relative;flex:none;box-shadow:0 4px 18px rgba(0,0,0,.5)}.gk-sheet canvas{position:absolute;inset:0;display:block}
 .gk-empty{color:#c9ccd3;text-align:center;padding:60px 16px;font-size:17px;line-height:1.8}
 .gk-modal{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -202,7 +202,7 @@ body.grwide .grtop{padding-left:104px}
 .gk-clear{height:40px;border:1px solid #ff8a80;border-radius:10px;background:transparent;color:#ff8a80;font-family:inherit;font-size:14px;font-weight:700;padding:0 12px;cursor:pointer}
 .gk-btn.on{outline:2px solid var(--gold)}.gk-colors{display:grid;grid-template-columns:repeat(6,34px);gap:8px}.gk-penbox{min-width:260px}
 .gk-custom{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700}.gk-custom input{width:54px;height:34px;border:0;background:none}
-.gk-qtop{max-width:1100px;margin:0 auto 10px;background:#fff;border-radius:8px;padding:6px;border:2px solid var(--gold)}.gk-qtop span{display:block;color:#111;font-weight:800;font-size:13px;margin-bottom:4px}.gk-qtop img{display:block;width:100%;max-height:26vh;object-fit:contain}
+.gk-qtop{max-width:1100px;margin:0 auto 6px;background:#fff;border-radius:6px;padding:3px 6px;border:1px solid var(--gold);display:flex;align-items:center;gap:8px}.gk-qtop b{color:#111;font-size:13px;flex:none}.gk-qtop img{display:block;max-width:100%;max-height:9vh;width:auto;height:auto;object-fit:contain;margin-inline-start:auto}.gk-qwait{color:#999}
 .gk-keep{display:flex;align-items:center;gap:8px;font-weight:700;color:#111}.gk-keep input{width:20px;height:20px}
 .gk-errs{display:flex;flex-wrap:wrap;gap:6px;max-height:30vh;overflow:auto}.gk-errs .gk-lbl{width:100%;text-align:right;font-size:13px}
 .gk-errchip{display:inline-flex;align-items:center;border:1px solid #d6d6d6;border-radius:999px;overflow:hidden}.gk-errchip button{border:0;background:#f4f4f4;font-family:inherit;font-size:14px;padding:6px 10px;cursor:pointer;color:#111}.gk-errchip .gk-x{background:#fde8e6;color:#c62828;padding:6px 8px}

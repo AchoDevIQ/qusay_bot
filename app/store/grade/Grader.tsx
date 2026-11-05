@@ -79,8 +79,8 @@ function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: n
 }
 
 /** صفحة وحدة: الصورة جوة والرسم فوكها */
-function Sheet({ page, ink, zoom, tool, color, width, sticker, onAdd, onErase, onTap }: {
-  page: Page; ink: Ink; zoom: number; tool: Tool; color: string; width: number; sticker: number;
+function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, onAdd, onErase, onTap }: {
+  page: Page; ink: Ink; zoom: number; tool: Tool; color: string; width: number; sticker: number; fitH: number;
   onAdd: (it: Item) => void; onErase: (x: number, y: number) => void; onTap: (x: number, y: number) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -113,7 +113,9 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, onAdd, onErase, o
   }, []);
   const side = ink.rot % 180 !== 0;
   const iw = img ? (side ? img.height : img.width) : 1, ih = img ? (side ? img.width : img.height) : 1;
-  const w = Math.round(Math.min(boxW, 1100) * zoom), h = Math.round((w * ih) / iw);
+  // 100% يعني الورقة كلها تبين بالشاشة بدون نزول، والتكبير فوكها
+  const fit = Math.min(boxW, fitH > 120 ? (fitH * iw) / ih : boxW);
+  const w = Math.round(fit * zoom), h = Math.round((w * ih) / iw);
   const dpr = typeof window === "undefined" ? 1 : Math.min(window.devicePixelRatio || 1, 2);
   useEffect(() => {
     const c = bg.current; if (!c || !img) return;
@@ -167,10 +169,42 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, onAdd, onErase, o
   );
 }
 
+/** صورة السؤال بدون البياض اللي حواليها، حتى تاخذ أقل مساحة */
+function TrimmedImage({ src, alt }: { src: string; alt: string }) {
+  const [out, setOut] = useState("");
+  useEffect(() => {
+    setOut("");
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = im.naturalWidth; c.height = im.naturalHeight;
+        const ctx = c.getContext("2d")!; ctx.drawImage(im, 0, 0);
+        const d = ctx.getImageData(0, 0, c.width, c.height).data;
+        let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+        for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) {
+          const i = (y * c.width + x) * 4;
+          if (d[i + 3] > 20 && (d[i] < 225 || d[i + 1] < 225 || d[i + 2] < 225)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+        if (x1 < 0) { setOut(src); return; }
+        const pad = 6; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(c.width - 1, x1 + pad); y1 = Math.min(c.height - 1, y1 + pad);
+        const t = document.createElement("canvas");
+        t.width = x1 - x0 + 1; t.height = y1 - y0 + 1;
+        t.getContext("2d")!.drawImage(c, x0, y0, t.width, t.height, 0, 0, t.width, t.height);
+        setOut(t.toDataURL("image/png"));
+      } catch { setOut(src); }
+    };
+    im.onerror = () => setOut(src);
+    im.src = src;
+  }, [src]);
+  return out ? <img src={out} alt={alt} /> : <span className="gk-qwait">...</span>;
+}
+
 const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "T", stamp: "✅", sticker: "🖼" };
 const TIP: Record<Tool, string> = { hand: "تحريك", pen: "القلم", eraser: "الممحاة", text: "كتابة", stamp: "ختم صح", sticker: "ملصق" };
 
 const SHOWQ_KEY = "gradeShowQuestion";
+const PEN_KEY = "gradePen";
 export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, today, left: papersLeft, errors, stickers }: {
   paper: Paper; url: (r: string) => string; busy: boolean; errors: string[]; stickers: Sticker[];
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null } | null>;
@@ -182,8 +216,15 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const [marks, setMarks] = useState<Record<number, number | null>>(() => Object.fromEntries(paper.questions.map((q) => [q.n, q.mark])));
   const [qSel, setQSel] = useState(paper.questions.find((q) => q.mark === null)?.n ?? paper.questions[0]?.n ?? 0);
   const [tool, setTool] = useState<Tool>("pen");
-  const [color, setColor] = useState(COLORS[3]);
-  const [width, setWidth] = useState(WIDTHS[0]);
+  // لون القلم وسمكه يبقون نفسهم بكل الصفحات والأوراق، لحد ما المصحح يبدلهم
+  const [color, setColorState] = useState("#e53935");
+  const [width, setWidthState] = useState(WIDTHS[0]);
+  useEffect(() => {
+    try { const j = JSON.parse(localStorage.getItem(PEN_KEY) ?? "{}"); if (/^#[0-9a-f]{6}$/i.test(j.c) && j.c.toLowerCase() !== "#ffffff") setColorState(j.c); if (WIDTHS.includes(j.w)) setWidthState(j.w); } catch { /* بدون حفظ */ }
+  }, []);
+  const keepPen = (c: string, w: number) => { try { localStorage.setItem(PEN_KEY, JSON.stringify({ c, w })); } catch { /* بدون حفظ */ } };
+  const setColor = (c: string) => { setColorState(c); keepPen(c, width); };
+  const setWidth = (w: number) => { setWidthState(w); keepPen(color, w); };
   const [penBox, setPenBox] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [overlay, setOverlay] = useState<"" | "model" | "question">("");
@@ -199,10 +240,21 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const undo = useRef<Record<number, Item[][]>>({});
   const redo = useRef<Record<number, Item[][]>>({});
   const dirty = useRef(new Set<number>());
+  const pendingMarks = useRef(new Set<Promise<void>>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inksRef = useRef(inks); inksRef.current = inks;
   const locked = !!paper.graded;
   const stage = useRef<HTMLDivElement>(null);
+  const qtop = useRef<HTMLDivElement>(null);
+  const [fitH, setFitH] = useState(0);
+  useEffect(() => {
+    const measure = () => { const st = stage.current; if (st) setFitH(st.clientHeight - (qtop.current?.offsetHeight ?? 0) - 34); };
+    const ro = new ResizeObserver(measure);
+    if (stage.current) ro.observe(stage.current);
+    if (qtop.current) ro.observe(qtop.current);
+    measure();
+    return () => ro.disconnect();
+  });
 
   useEffect(() => {
     let stop = false;
@@ -264,12 +316,18 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const missing = paper.questions.filter((x) => marks[x.n] === null || marks[x.n] === undefined).length;
   async function press(m: number) {
     if (!q || locked) return;
-    const r = await act({ action: "mark", id: paper.id, q: q.n, mark: m });
-    if (!r) return;
-    setMarks((x) => ({ ...x, [q.n]: m }));
-    // ينتقل وحده للسؤال اللي بعده
-    const nextQ = paper.questions[paper.questions.findIndex((x) => x.n === q.n) + 1];
-    if (!nextQ) return;
+    const n = q.n, old = marks[n] ?? null;
+    // الدرجة تصير خضرة فوراً، وتبقى شوية حتى المصحح يشوفها، وبعدها ينتقل للسؤال اللي بعده
+    setMarks((x) => ({ ...x, [n]: m }));
+    setSaveErr("");
+    const sent = fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "mark", id: paper.id, q: n, mark: m }) })
+      .then(async (res) => { if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? ""); })
+      .catch((e) => { setMarks((x) => ({ ...x, [n]: old })); setSaveErr(`ما انحفظت درجة السؤال ${n}${(e as Error).message ? `: ${(e as Error).message}` : ""}`); });
+    pendingMarks.current.add(sent);
+    void sent.finally(() => pendingMarks.current.delete(sent));
+    await new Promise((r) => setTimeout(r, 450));
+    const nextQ = paper.questions[paper.questions.findIndex((x) => x.n === n) + 1];
+    if (!nextQ || (q && q.n !== n)) return;
     if (page?.q !== null && pages) { const i = pages.findIndex((p) => p.q === nextQ.n); if (i >= 0) go(i); }
     else setQSel(nextQ.n);
   }
@@ -292,7 +350,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       if (i >= 0) go(i); else setQSel(miss.n);
       return;
     }
-    onSave(flush());
+    onSave(Promise.all([flush(), ...pendingMarks.current]).then(() => undefined));
   }
   return (
     <div className="gk">
@@ -357,8 +415,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       <div className="gk-stage" ref={stage}>
         {!pages && <div className="gk-empty">جاري تجهيز الورقة...</div>}
         {pages && !pages.length && <div className="gk-empty">⚠️ ماكو صفحات بهذي الورقة.</div>}
-        {page && showQ && q && <div className="gk-qtop"><span>السؤال {q.n}</span><img src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
-        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} onAdd={addItem} onErase={erase} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
+        {page && showQ && q && <div className="gk-qtop" ref={qtop}><b>س{q.n}</b><TrimmedImage src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
+        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={fitH} onAdd={addItem} onErase={erase} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
       </div>
       {textAt && (
         <div className="gk-modal" onClick={() => setTextAt(null)}>
