@@ -33,7 +33,7 @@ export async function loadCfg(): Promise<Cfg> {
 const saveCfg = (c: Cfg) => kvSet(KEY, JSON.stringify(c));
 
 /** امتحانات كل فصل بترتيب الكتاب، بدون اللي كل نسخها اختيارية لأنها ما تدخل الجدول */
-async function bookExams() {
+export async function bookExams() {
   const versions = await find("bank_versions");
   const exams = (await find("bank_exams"))
     .filter((e) => { const vs = versions.filter((v) => v.exam_id === e.id); return !vs.length || vs.some((v) => v.kind === "mandatory"); })

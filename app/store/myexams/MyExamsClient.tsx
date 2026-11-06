@@ -1,15 +1,15 @@
 "use client";
 // امتحاناتي: الطالب يرتب جدوله مرة وحدة، وبعدها يشوف مواعيده
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
-import { deviceId, haptic } from "../shared";
+import { deviceId, haptic, openOutside } from "../shared";
 import VoiceRec from "../VoiceRec";
 
-type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
+type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  appLink: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
   preview?: Preview; notice?: string; error?: string; lateText: string; closedText: string; room?: Room; obj?: Obj;
@@ -197,7 +197,14 @@ function List({ info, busy, enter, object }: { info: Info; busy: boolean; enter:
       <div className="who adnopad expad adtop">{info.place} · {info.mode === "general" ? "ويا الطلاب" : "جدول خاص"}</div>
       <table className="extable"><tbody>
         {info.items.map((i) => (
-          <tr key={i.id} className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>
+          <Fragment key={i.id}>
+          {(i.lectures ?? []).map((l) => (
+            <tr key={l} className="lcrow">
+              <td>📺 {l}<small className="pdmode">{info.appLink ? "شوفها بالتطبيق قبل الامتحان" : "ادرسها قبل الامتحان"}</small></td>
+              <td className="p">{info.appLink && <button type="button" className="exbtn" onClick={() => openOutside(info.appLink)}>▶️ افتح</button>}</td>
+            </tr>
+          ))}
+          <tr className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>
             <td><b>{i.optional ? "🎯 " : ""}{i.title}</b>{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.state === "missed" && <small className="pdmode exbad">{info.lateText}</small>}
@@ -205,6 +212,7 @@ function List({ info, busy, enter, object }: { info: Info; busy: boolean; enter:
             </td>
             <td className="adphone">{prettyAt(i.at)}</td>
           </tr>
+          </Fragment>
         ))}
       </tbody></table>
       {!info.inPerson && <div className="expad exhint adtop">تگدر تدخل الامتحان خلال {info.window} دقيقة من موعده. الامتحان اللي يفوت وقته ما يرجع.</div>}

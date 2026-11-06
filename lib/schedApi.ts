@@ -1,9 +1,10 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
+import { appLink, lectureMap } from "./lectures.ts";
 import { checkStopped } from "./checkpoints.ts";
 import { checkDevice } from "./deviceLock.ts";
 import { objectionInfo } from "./objections.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
-import { logActivity } from "./access.ts";
+import { boughtLectures, logActivity } from "./access.ts";
 import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
 import { centerName, isAdmin, student } from "./data.ts";
@@ -120,11 +121,12 @@ async function itemsView(uid: number, s: SchedSettings) {
   const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
   const now = stamp();
   const { inPerson } = await placeFor(uid);
+  const lec = await lectureMap();
   return (await find("sched_items", { user_id: uid }, { order: ["at"] })).map((i) => {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
-    return { id: i.id, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, at: i.at, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
+    return { id: i.id, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
   });
 }
 /** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
@@ -149,6 +151,7 @@ async function studentInfo(uid: number) {
   const late = general ? await lateExams(uid, sched!, s) : [];
   // جدول المكان كله يطلع حتى يعرف شوكت يخلص، والفصول اللي ما اشتراها مقفولة
   const lockedRows: Row[] = [];
+  const lec = await lectureMap();
   if (general) {
     const mine = new Set(bought.map((e) => e.id));
     const allExams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
@@ -156,10 +159,12 @@ async function studentInfo(uid: number) {
     for (const [examId, day] of await placeDays(sched!.center_id)) {
       const e = allExams.get(examId);
       const at = pickedAt(day, picks);
-      if (e && at && !mine.has(examId)) lockedRows.push({ id: -e.id, title: e.title, chapter: e.chapter, minutes: e.minutes ?? 75, at, state: "notbought" });
+      if (e && at && !mine.has(examId)) lockedRows.push({ id: -e.id, title: e.title, chapter: e.chapter, minutes: e.minutes ?? 75, lectures: lec.get(e.id) ?? [], at, state: "notbought" });
     }
   }
   return {
+    // اللي مشتري محاضرات يدوس على المحاضرة فيفتح التطبيق
+    appLink: await boughtLectures(uid) ? await appLink() : "",
     inPerson: place.inPerson, place: place.label, name: st?.name ?? "", remaining: left.length, mode: sched?.mode ?? (sched ? "private" : null),
     needsChoice: !sched && left.length > 0, needsBuild: !general && left.some((e) => !planned.has(e.id)),
     // الإدارة غيرت الأوقات واللي اختاره راح: يختار من جديد
