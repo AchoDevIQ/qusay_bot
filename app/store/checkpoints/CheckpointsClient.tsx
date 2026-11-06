@@ -1,9 +1,12 @@
 "use client";
-// صفحة السيطرة: لكل فصل ورا كل كم امتحان، أقل مجموع، وكم غياب يوقف. ورسائل الإيقاف، والموقوفين وفك إيقافهم
+// صفحة السيطرة: امتحانات كل فصل بالترتيب، وتحت كل امتحان تگدر تنشئ سيطرة. السيطرة تشمل الامتحانات من بعد اللي قبلها لحدها،
+// وإلها أقل مجموع وعدد غيابات يوقف. ورسائل الإيقاف، والموقوفين وفك إيقافهم
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
-type Chapter = { chapter: string; exams: number; on: boolean; every: number; min: number; absent: number };
+type Cp = { min: number; absent: number };
+type Exam = { id: number; title: string; since: number; from: string; cp: Cp | null };
+type Chapter = { chapter: string; exams: Exam[] };
 type Stop = { id: number; name: string; at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number };
 type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; stopped: Stop[]; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -19,8 +22,9 @@ export default function CheckpointsClient() {
         {data && (
           <>
             <div className="exhint tmhint">
-              كل ما يكمل الطالب العدد اللي تحدده من امتحانات الفصل (انصححت أو غاب عنها) تنحسب سيطرة. إذا مجموعه أقل من المطلوب، أو غيابه وصل للعدد اللي تحدده،
-              تنوقف عليه الامتحانات (والمحاضرات إذا مشتريها)، وتوصله رسالة هو وولي أمره. الغياب ينحسب صفر. ويرجع بس إذا إنت فكيته.
+              افتح الفصل، وتحت أي امتحان اضغط «➕ إنشاء سيطرة». السيطرة تحسب الامتحانات من بعد السيطرة اللي قبلها لحد هذا الامتحان.
+              إذا مجموعه أقل من المطلوب، أو غيابه وصل للعدد، تنوقف عليه الامتحانات (والمحاضرات إذا مشتريها) وتوصله رسالة هو وولي أمره.
+              الامتحان اللي ما بيه أجوبة ينحسب غياب وصفر. ويرجع بس إذا إنت فكيته.
             </div>
             <div className="card">
               <h2>⛔ الموقوفين ({data.stopped.length})</h2>
@@ -37,7 +41,17 @@ export default function CheckpointsClient() {
               </div>
             </div>
             {!data.chapters.length && <div className="empty">ماكو فصول بيها امتحانات بعد.</div>}
-            {data.chapters.map((c) => <RuleCard key={c.chapter + c.on + c.every + c.min + c.absent} c={c} busy={busy} call={call} />)}
+            {data.chapters.map((c) => {
+              const n = c.exams.filter((e) => e.cp).length;
+              return (
+                <details key={c.chapter} className="card cpch">
+                  <summary><b>{c.chapter}</b> <span className="cpcount">{c.exams.length} امتحان · {n ? `🚦 ${n} سيطرة` : "بدون سيطرة"}</span></summary>
+                  <div className="expad">
+                    {c.exams.map((e, i) => <ExamRow key={`${e.id}|${e.since}|${e.cp?.min}|${e.cp?.absent}`} e={e} n={i + 1} busy={busy} call={call} />)}
+                  </div>
+                </details>
+              );
+            })}
             <Texts key={data.student + data.guardian} data={data} busy={busy} call={call} />
           </>
         )}
@@ -47,31 +61,34 @@ export default function CheckpointsClient() {
   );
 }
 
-function RuleCard({ c, busy, call }: { c: Chapter; busy: boolean; call: Call }) {
-  const [on, setOn] = useState(c.on);
-  const [every, setEvery] = useState(String(c.every));
-  const [min, setMin] = useState(String(c.min));
-  const [absent, setAbsent] = useState(String(c.absent));
-  const n = Number(every) || 0;
-  const changed = on !== c.on || every !== String(c.every) || min !== String(c.min) || absent !== String(c.absent);
+function ExamRow({ e, n, busy, call }: { e: Exam; n: number; busy: boolean; call: Call }) {
+  const [open, setOpen] = useState(false);
+  const max = e.since * 100;
+  const [min, setMin] = useState(String(e.cp?.min ?? max / 2));
+  const [absent, setAbsent] = useState(String(e.cp?.absent ?? Math.min(3, e.since)));
+  const show = !!e.cp || open;
+  const changed = !e.cp || min !== String(e.cp.min) || absent !== String(e.cp.absent);
   return (
-    <div className="card">
-      <h2>{c.chapter} <small className="cpcount">({c.exams} امتحان)</small></h2>
-      <div className="expad">
-        <label className="cpon"><input type="checkbox" checked={on} onChange={() => setOn(!on)} /> {on ? "🟢 السيطرة شغالة" : "⚪ السيطرة طافية"}</label>
-        <div className="cprule">
-          <label>ورا كل كم امتحان<input className="exnum" inputMode="numeric" value={every} onChange={(e) => setEvery(e.target.value.replace(/\D/g, ""))} /></label>
-          <label>أقل مجموع (من {n * 100})<input className="exnum" inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, ""))} /></label>
-          <label>يوقف إذا غاب<input className="exnum" inputMode="numeric" value={absent} onChange={(e) => setAbsent(e.target.value.replace(/\D/g, ""))} /></label>
-        </div>
-        <div className="exhint">
-          {n ? `كل ${n} امتحانات: لازم يجيب ${min || 0} من ${n * 100} أقل شي${Number(absent) ? `، وإذا غاب ${absent} مرات أو أكثر ينوقف` : "، والغياب وحده ما يوقف"}.` : "اكتب عدد الامتحانات."}
-          {" "}0 يعني الشرط طافي.
-        </div>
-        <div className="exline pdactions">
-          <button type="button" className="btn" disabled={busy || !changed || !n} onClick={() => void call({ action: "saveRule", chapter: c.chapter, on, every, min: min || 0, absent: absent || 0 })}>💾 حفظ</button>
-        </div>
+    <div className={`cpexam${e.cp ? " cpon2" : ""}`}>
+      <div className="cpname"><span>{n}. {e.title}</span>
+        {!show && <button type="button" className="exbtn cpadd" disabled={busy} onClick={() => setOpen(true)}>➕ إنشاء سيطرة</button>}
       </div>
+      {show && (
+        <div className="cpbox">
+          <b>🚦 {e.cp ? "سيطرة" : "سيطرة جديدة"} بعد هذا الامتحان</b>
+          <div className="exhint">تشمل {e.since} امتحان{e.since > 1 ? `، من «${e.from}» لحد هذا` : ""}. المجموع الكلي {max}.</div>
+          <div className="cprule">
+            <label>أقل مجموع (من {max})<input className="exnum" inputMode="numeric" value={min} onChange={(x) => setMin(x.target.value.replace(/\D/g, ""))} /></label>
+            <label>يوقف إذا غاب<input className="exnum" inputMode="numeric" value={absent} onChange={(x) => setAbsent(x.target.value.replace(/\D/g, ""))} /></label>
+          </div>
+          <div className="exhint">لازم يجيب {min || 0} من {max} أقل شي{Number(absent) ? `، وإذا غاب ${absent} مرات أو أكثر ينوقف` : "، والغياب وحده ما يوقف"}. 0 يعني الشرط طافي.</div>
+          <div className="exline pdactions">
+            <button type="button" className="btn" disabled={busy || !changed} onClick={() => void call({ action: "saveCp", exam: e.id, min: min || 0, absent: absent || 0 })}>💾 حفظ السيطرة</button>
+            {e.cp ? <Confirm label="🗑 حذف السيطرة" disabled={busy} onYes={() => void call({ action: "delCp", exam: e.id })} />
+              : <button type="button" className="exbtn" disabled={busy} onClick={() => setOpen(false)}>إلغاء</button>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

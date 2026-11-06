@@ -1,5 +1,5 @@
-// السيطرة: لكل فصل صاحب البوت يحدد «ورا كل كم امتحان» وأقل مجموع وأكثر غيابات. كل ما يكمل الطالب هذا العدد
-// من امتحانات الفصل الإجبارية (انصححت أو غاب عنها) تنحسب سيطرة. إذا ما عبرها تنوقف عليه الامتحانات،
+// السيطرة: صاحب البوت يحط سيطرة ورا أي امتحان يختاره. السيطرة تشمل امتحانات الفصل من بعد السيطرة اللي قبلها
+// لحد هذا الامتحان، وإلها أقل مجموع وعدد غيابات يوقف. إذا ما عبرها الطالب تنوقف عليه الامتحانات،
 // والمحاضرات هم إذا مشتريها، ويوصله هو وولي أمره رسالة صاحب البوت يكتبها. يرجع بس إذا فكه صاحب البوت
 import { ADMIN_IDS } from "./config.ts";
 import { find, insert, kvGet, kvSet, put, update, type Row } from "./db.ts";
@@ -12,9 +12,10 @@ import { send } from "./telegram.ts";
 import { esc, stamp } from "./util.ts";
 import { authed, intOf, need } from "./webApi.ts";
 
-export type Rule = { on: boolean; every: number; min: number; absent: number };
+export type Rule = { min: number; absent: number };
 type Cfg = { rules: Record<string, Rule>; student: string; guardian: string };
-const KEY = "checkpoints";
+type Seg = Rule & { exam: number; chapter: string; title: string; from: string; ids: number[] };
+const KEY = "checkpoints_v2";
 const PER_EXAM = 100;
 const MAX_TEXT = 2000;
 export const TAGS = ["{الاسم}", "{الموقوف}", "{السبب}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{المطلوب}", "{الغياب}"];
@@ -31,6 +32,32 @@ export async function loadCfg(): Promise<Cfg> {
 }
 const saveCfg = (c: Cfg) => kvSet(KEY, JSON.stringify(c));
 
+/** امتحانات كل فصل بترتيب الكتاب، بدون اللي كل نسخها اختيارية لأنها ما تدخل الجدول */
+async function bookExams() {
+  const versions = await find("bank_versions");
+  const exams = (await find("bank_exams"))
+    .filter((e) => { const vs = versions.filter((v) => v.exam_id === e.id); return !vs.length || vs.some((v) => v.kind === "mandatory"); })
+    .sort((x, y) => (Number(x.pos ?? 0) * 1000 + Number(x.ord ?? 0)) - (Number(y.pos ?? 0) * 1000 + Number(y.ord ?? 0)));
+  const chapters = new Map<string, Row[]>();
+  for (const e of exams) { const ch = String(e.chapter ?? ""); if (ch) chapters.set(ch, [...chapters.get(ch) ?? [], e]); }
+  return chapters;
+}
+/** كل سيطرة تشمل امتحانات فصلها من بعد السيطرة اللي قبلها لحدها */
+function segmentsOf(chapters: Map<string, Row[]>, rules: Record<string, Rule>): Seg[] {
+  const out: Seg[] = [];
+  for (const [chapter, list] of chapters) {
+    let from = 0;
+    list.forEach((e, i) => {
+      const r = rules[String(e.id)];
+      if (!r) return;
+      const n = i + 1 - from;
+      out.push({ exam: e.id, chapter, title: String(e.title ?? ""), from: String(list[from].title ?? ""), ids: list.slice(from, i + 1).map((x) => x.id as number), min: Math.min(r.min, n * PER_EXAM), absent: Math.min(r.absent, n) });
+      from = i + 1;
+    });
+  }
+  return out;
+}
+
 /** الإيقاف الحالي إذا موجود */
 export const activeStop = async (uid: number) => (await find("student_stops", { user_id: uid }, { order: ["-id"] })).find((s) => !s.lifted) ?? null;
 /** للتطبيق بعدين: المحاضرات موقوفة على هذا الطالب؟ */
@@ -43,37 +70,39 @@ const fill = (text: string, v: Record<string, string | number>) => esc(text).rep
 export async function runCheckpoints(uid: number) {
   if (uid <= 0) return;
   const cfg = await loadCfg();
-  const rules = Object.entries(cfg.rules).filter(([, r]) => r.on && r.every > 0 && (r.min > 0 || r.absent > 0));
-  if (!rules.length || await activeStop(uid)) return;
+  if (!Object.keys(cfg.rules).length || await activeStop(uid)) return;
   const st = await student(uid);
   if (!st) return;
+  const segs = segmentsOf(await bookExams(), cfg.rules);
   const s = await schedSettings();
   await closeFinished(uid, s);
-  const inPerson = st.exam === "حضوري";
-  const chapterOf = new Map((await find("bank_exams")).map((e) => [e.id, String(e.chapter ?? "")]));
-  // الامتحانات اللي فاتت وهو موقوف ما تنحسب عليه
   const stops = (await find("student_stops", { user_id: uid })).map((x) => [String(x.created), String(x.lifted ?? "9")]);
-  const items = (await find("sched_items", { user_id: uid }, { order: ["at"] }))
-    .filter((i) => i.kind !== "optional" && !stops.some(([a, b]) => String(i.at) >= a && String(i.at) <= b));
+  const byExam = new Map((await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional").map((i) => [i.exam_id as number, i]));
   const done = new Set((await find("checkpoint_done", { user_id: uid })).map((d) => `${d.chapter}|${d.block}`));
   const now = stamp();
-  for (const [chapter, r] of rules) {
-    const list = items.filter((i) => chapterOf.get(i.exam_id) === chapter);
-    for (let b = 1; b * r.every <= list.length; b++) {
-      if (done.has(`${chapter}|${b}`)) continue;
-      const res = list.slice((b - 1) * r.every, b * r.every).map((i) => {
-        if (i.graded_at) return { mark: Number(i.total) || 0, absent: 0 };
-        const missed = i.status === "missed" || (!inPerson && i.status === "waiting" && itemState("waiting", i.at, s.window, now) === "missed");
-        return missed ? { mark: 0, absent: 1 } : null;
-      });
-      if (res.some((x) => x === null)) break;   // باقي امتحان ما انصحح أو ما صار وقته
-      const score = res.reduce((n, x) => n + x!.mark, 0), absent = res.reduce((n, x) => n + x!.absent, 0);
-      const low = r.min > 0 && score < r.min, many = r.absent > 0 && absent >= r.absent;
-      await put("checkpoint_done", { user_id: uid, chapter, block: b, passed: low || many ? 0 : 1, score, absent, created: now });
-      if (!low && !many) { await logActivity(uid, `🚦 عبر سيطرة ${chapter} رقم ${b}: ${score} من ${r.every * PER_EXAM}، غياب ${absent}`); continue; }
-      await stopStudent(uid, st, cfg, { chapter, block: b, every: r.every, score, need: r.min, absent, reason: [low && LOW, many && ABSENT].filter(Boolean).join(" و") });
-      return;
+  for (const g of segs) {
+    if (done.has(`${g.chapter}|${g.exam}`)) continue;
+    const its = g.ids.map((id) => byExam.get(id));
+    if (its.some((i) => !i)) continue;   // فصل ما مشتريه، أو امتحان لسه ما انحط بجدوله
+    const res = its.map((i) => {
+      if (i!.graded_at) return { mark: Number(i!.total) || 0, absent: 0 };
+      // ما بيه أجوبة = غياب، إلكتروني أو حضوري
+      const missed = i!.status === "missed" || (i!.status === "waiting" && itemState("waiting", i!.at, s.window, now) === "missed");
+      return missed ? { mark: 0, absent: 1 } : null;
+    });
+    if (res.some((x) => x === null)) continue;   // باقي امتحان ما انصحح أو ما صار وقته
+    // امتحانات فاتته وهو موقوف: هذي السيطرة ما تنحسب عليه
+    if (its.some((i) => stops.some(([a, b]) => String(i!.at) >= a && String(i!.at) <= b))) {
+      await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: 2, score: null, absent: null, created: now });
+      continue;
     }
+    const score = res.reduce((n, x) => n + x!.mark, 0), absent = res.reduce((n, x) => n + x!.absent, 0);
+    const n = g.ids.length;
+    const low = g.min > 0 && score < g.min, many = g.absent > 0 && absent >= g.absent;
+    await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: low || many ? 0 : 1, score, absent, created: now });
+    if (!low && !many) { await logActivity(uid, `🚦 عبر سيطرة ${g.chapter} بعد ${g.title}: ${score} من ${n * PER_EXAM}، غياب ${absent}`); continue; }
+    await stopStudent(uid, st, cfg, { chapter: g.chapter, block: g.exam, every: n, score, need: g.min, absent, reason: [low && LOW, many && ABSENT].filter(Boolean).join(" و") });
+    return;
   }
 }
 
@@ -109,7 +138,7 @@ export async function liftStop(uid: number, by: number) {
 
 /** للمؤقت: يحسب السيطرات لكل طالب عنده امتحانات */
 export async function sweepCheckpoints(force = false) {
-  if (!Object.values((await loadCfg()).rules).some((r) => r.on)) return 0;
+  if (!Object.keys((await loadCfg()).rules).length) return 0;
   const last = Number(await kvGet("checkpoints_sweep")) || 0;
   if (!force && Date.now() - last < 30 * 60 * 1000) return 0;
   await kvSet("checkpoints_sweep", String(Date.now()));
@@ -122,12 +151,18 @@ export const stopView = (s: Row | null) => (s ? { at: String(s.created), reason:
 
 async function pageData() {
   const cfg = await loadCfg();
-  const exams = await find("bank_exams");
-  const order = new Map<string, number>();
-  for (const e of exams) { const ch = String(e.chapter ?? ""); if (ch) order.set(ch, Math.min(order.get(ch) ?? 1e9, Number(e.pos ?? 0) * 1000 + Number(e.ord ?? 0))); }
-  const chapters = [...order.keys()].sort((a, b) => order.get(a)! - order.get(b)!).map((ch) => ({
-    chapter: ch, exams: exams.filter((e) => e.chapter === ch).length, ...(cfg.rules[ch] ?? { on: false, every: 8, min: 400, absent: 3 }),
-  }));
+  const chapters = [];
+  for (const [chapter, list] of await bookExams()) {
+    let from = 0;
+    chapters.push({
+      chapter, exams: list.map((e, i) => {
+        const r = cfg.rules[String(e.id)];
+        const row = { id: e.id as number, title: String(e.title ?? ""), since: i + 1 - from, from: String(list[from].title ?? ""), cp: r ?? null };
+        if (r) from = i + 1;
+        return row;
+      }),
+    });
+  }
   const stopped = [];
   for (const s of (await find("student_stops", {}, { order: ["-id"] })).filter((x) => !x.lifted)) {
     stopped.push({ id: s.user_id, name: (await student(s.user_id))?.name ?? String(s.user_id), ...stopView(s)! });
@@ -146,16 +181,24 @@ export async function checkpointsAction(body: Row) {
   const uid = await authed(body?.initData, "owner");
   const a = String(body.action ?? "");
   let notice = "";
-  if (a === "saveRule") {
-    const chapter = String(body.chapter ?? "");
-    need((await find("bank_exams", { chapter })).length, "الفصل غير موجود");
-    const every = intOf(body.every, 1, 60, "اكتب عدد الامتحانات من 1 إلى 60");
-    const rule: Rule = { on: !!body.on, every, min: intOf(body.min, 0, every * PER_EXAM, `اكتب أقل مجموع من 0 إلى ${every * PER_EXAM}`), absent: intOf(body.absent, 0, every, `اكتب عدد الغيابات من 0 إلى ${every}`) };
-    need(!rule.on || rule.min > 0 || rule.absent > 0, "حط أقل مجموع أو عدد غيابات، حتى السيطرة يكون إلها شرط");
+  if (a === "saveCp" || a === "delCp") {
+    const id = Number(body.exam);
+    const ch = (await pageData()).chapters.find((c) => c.exams.some((e) => e.id === id));
+    need(ch, "الامتحان غير موجود");
+    const e = ch!.exams.find((x) => x.id === id)!;
     const cfg = await loadCfg();
-    cfg.rules[chapter] = rule;
+    if (a === "delCp") {
+      need(cfg.rules[String(id)], "ماكو سيطرة هنا");
+      delete cfg.rules[String(id)];
+      notice = `🗑 انحذفت السيطرة بعد ${e.title}`;
+    } else {
+      const n = e.since;
+      const rule: Rule = { min: intOf(body.min, 0, n * PER_EXAM, `اكتب أقل مجموع من 0 إلى ${n * PER_EXAM}`), absent: intOf(body.absent, 0, n, `اكتب عدد الغيابات من 0 إلى ${n}`) };
+      need(rule.min > 0 || rule.absent > 0, "حط أقل مجموع أو عدد غيابات، حتى السيطرة يكون إلها شرط");
+      cfg.rules[String(id)] = rule;
+      notice = `✅ انحفظت السيطرة بعد ${e.title}`;
+    }
     await saveCfg(cfg);
-    notice = rule.on ? `✅ انحفظت سيطرة ${chapter}` : `⏸ انطفت سيطرة ${chapter}`;
   } else if (a === "saveTexts") {
     const cfg = await loadCfg();
     cfg.student = textOf(body.student);

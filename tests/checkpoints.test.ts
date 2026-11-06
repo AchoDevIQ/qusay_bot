@@ -35,15 +35,22 @@ const reg = async (uid: number, name: string) => put("students", { user_id: uid,
 const graded = (uid: number, n: number, total: number) => insert("sched_items", { user_id: uid, exam_id: exams[n], at: `2026-02-0${n + 1} 10:00:00`, status: "done", total, graded_at: "x", submitted_at: "x" });
 const missed = (uid: number, n: number) => insert("sched_items", { user_id: uid, exam_id: exams[n], at: `2026-02-0${n + 1} 10:00:00`, status: "missed" });
 
-test("صفحة السيطرة لصاحب البوت بس، والشروط تنحفظ لكل فصل", async () => {
+test("صفحة السيطرة لصاحب البوت بس، والسيطرة تنحط ورا أي امتحان وتشمل اللي من بعد السيطرة اللي قبلها", async () => {
   await put("staff", { user_id: 30, name: "مساعد", perms: "grade" });
   await assert.rejects(cp("list", {}, 30), (e: any) => e.status === 403);
   const r = await cp("list");
-  assert.deepEqual(r.chapters.map((c: any) => [c.chapter, c.exams, c.on]), [["الفصل الأول", 6, false]]);
-  await assert.rejects(cp("saveRule", { chapter: "الفصل الأول", on: true, every: 3, min: 400, absent: 0 }), /من 0 إلى 300/);
-  await assert.rejects(cp("saveRule", { chapter: "الفصل الأول", on: true, every: 3, min: 0, absent: 0 }), /حط أقل مجموع/);
-  const s = await cp("saveRule", { chapter: "الفصل الأول", on: true, every: 3, min: 150, absent: 2 });
-  assert.deepEqual(s.chapters[0], { chapter: "الفصل الأول", exams: 6, on: true, every: 3, min: 150, absent: 2 });
+  assert.deepEqual(r.chapters.map((c: any) => [c.chapter, c.exams.length]), [["الفصل الأول", 6]]);
+  assert.deepEqual(r.chapters[0].exams.map((e: any) => e.since), [1, 2, 3, 4, 5, 6]);
+  await assert.rejects(cp("saveCp", { exam: exams[2], min: 400, absent: 0 }), /من 0 إلى 300/);
+  await assert.rejects(cp("saveCp", { exam: exams[2], min: 0, absent: 0 }), /حط أقل مجموع/);
+  await cp("saveCp", { exam: exams[2], min: 150, absent: 2 });
+  // السيطرة الثانية تبدي من بعد الأولى: امتحانين بس
+  const s = await cp("saveCp", { exam: exams[4], min: 100, absent: 0 });
+  assert.deepEqual(s.chapters[0].exams.map((e: any) => e.since), [1, 2, 3, 1, 2, 1]);
+  assert.deepEqual(s.chapters[0].exams[4].cp, { min: 100, absent: 0 });
+  await assert.rejects(cp("saveCp", { exam: exams[4], min: 300, absent: 0 }), /من 0 إلى 200/);
+  const d = await cp("delCp", { exam: exams[4] });
+  assert.equal(d.chapters[0].exams[4].cp, null);
 });
 
 test("اللي يعبر ما ينوقف، والسيطرة تنتظر لحد ما تنصحح كل الامتحانات", async () => {
@@ -102,4 +109,21 @@ test("فك الإيقاف يرجعه، والرسائل تتعدل", async () =>
   const t = await cp("saveTexts", { student: "وقف {الاسم} {الدرجة}", guardian: "ولي {الاسم}" });
   assert.equal(t.student, "وقف {الاسم} {الدرجة}");
   assert.equal((await cp("resetTexts")).student.startsWith("⛔"), true);
+});
+
+test("السيطرة الثانية تحسب بس الامتحانات اللي بعد الأولى، والحضوري اللي ما بيه أجوبة غياب", async () => {
+  await cp("saveCp", { exam: exams[4], min: 120, absent: 0 });
+  await reg(54, "ثاني");
+  await graded(54, 0, 90); await graded(54, 1, 90); await graded(54, 2, 90);   // الأولى: 270 يعبر
+  await graded(54, 3, 50); await graded(54, 4, 60);                         // الثانية: 110 من 200 والمطلوب 120
+  await runCheckpoints(54);
+  const s = (await activeStop(54))!;
+  assert.equal(s.score, 110);
+  assert.equal(s.max, 200);
+  await put("students", { user_id: 55, name: "حضوري", exam: "حضوري", created: "2026-01-01 00:00:00" });
+  await graded(55, 0, 100);
+  await insert("sched_items", { user_id: 55, exam_id: exams[1], at: "2026-02-02 10:00", status: "waiting" });
+  await insert("sched_items", { user_id: 55, exam_id: exams[2], at: "2026-02-03 10:00", status: "waiting" });
+  await runCheckpoints(55);
+  assert.equal((await activeStop(55))!.absent, 2);
 });
