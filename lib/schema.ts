@@ -40,7 +40,7 @@ export const SCHEMA: Record<string, Table> = {
   paper_ink: { key: ["item_id", "page"], cols: { ink: null } },
   center_rent: { key: "id", auto: true, cols: nulls("center_id", "month", "students", "price", "amount", "created", "by_id") },
   student_stops: { key: "id", auto: true, cols: nulls("user_id", "chapter", "block", "score", "max", "need", "absent", "reason", "lectures", "created", "lifted", "lifted_by") },
-  checkpoint_done: { key: ["user_id", "chapter", "block"], cols: nulls("passed", "score", "absent", "created") },
+  checkpoint_done: { key: ["user_id", "chapter", "block"], cols: nulls("passed", "score", "absent", "created", "band", "seen") },
   student_devices: { key: "user_id", cols: nulls("device", "at", "tried") },
   grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters", "exams_off", "places") },
   grader_settlements: { key: "id", auto: true, cols: nulls("user_id", "n_mand", "n_opt", "n_obj", "amount", "forgiven", "created", "by_id") },

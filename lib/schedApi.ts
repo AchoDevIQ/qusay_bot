@@ -1,7 +1,7 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
 import { photosAllowed, studentCode } from "./inPerson.ts";
 import { appLink, lectureMap } from "./lectures.ts";
-import { checkStopped } from "./checkpoints.ts";
+import { checkStopped, checkpointCard, seeCheckpoint } from "./checkpoints.ts";
 import { checkDevice } from "./deviceLock.ts";
 import { objectionInfo } from "./objections.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
@@ -179,6 +179,8 @@ async function studentInfo(uid: number) {
     schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour } : null,
     days: daysView(slots),
     optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
+    // آخر سيطرة عبرها: تومض ويا شخصيتها لحد ما يشوفها
+    cp: await checkpointCard(uid),
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
     items: [...await itemsView(uid, s), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
     week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s),
@@ -284,6 +286,7 @@ export async function myExamAction(body: Row) {
     }
     return await studentInfo(id);
   }
+  if (a === "cpSeen") { await seeCheckpoint(id, body.key); return await studentInfo(id); }
   if (a === "askException") {
     await askException(id, body.item, body.reason, await schedSettings());
     return { ...await studentInfo(id), notice: "📨 وصل طلبك. من يوافقون ينفتحلك الامتحان وتوصلك رسالة" };

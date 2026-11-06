@@ -14,7 +14,7 @@ type Info = {
   appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
-  preview?: Preview; notice?: string; error?: string; lateText: string; closedText: string; room?: Room; obj?: Obj;
+  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; lateText: string; closedText: string; room?: Room; obj?: Obj;
 };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
@@ -25,6 +25,7 @@ const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
 export default function MyExamsClient() {
   const [info, setInfo] = useState<Info | null>(null);
   const [error, setError] = useState("");
+  const [stopPic, setStopPic] = useState("");
   const [busy, setBusy] = useState(false);
   async function call(body: Record<string, unknown>) {
     setBusy(true);
@@ -33,7 +34,7 @@ export default function MyExamsClient() {
       const token = new URLSearchParams(location.search).get("t") ?? "";
       const res = await fetch("/api/myexams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, ...body, device: await deviceId() }) });
       const j: Info = await res.json();
-      if (!res.ok) { setError(j.error ?? "صار خطأ، حاول مرة ثانية"); return null; }
+      if (!res.ok) { setError(j.error ?? "صار خطأ، حاول مرة ثانية"); if (res.status === 423) setStopPic(j.stop?.image || "none"); return null; }
       setInfo(j);
       return j;
     } catch { setError("ماكو اتصال، حاول مرة ثانية"); return null; } finally { setBusy(false); }
@@ -59,7 +60,19 @@ export default function MyExamsClient() {
         <p>📝 امتحاناتي</p>
       </header>
       <div className="wrap">
-        {error && <div className="card warn exerr">⚠️ {error}</div>}
+        {error && stopPic ? (
+          <div className="card cpflash stop">
+            {stopPic !== "none" && <img src={stopPic} alt="سيطرة" />}
+            <div className="cpflashtext">🚦 {error}</div>
+          </div>
+        ) : error && <div className="card warn exerr">⚠️ {error}</div>}
+        {info?.cp && (
+          <div className="card cpflash">
+            {info.cp.image && <img src={info.cp.image} alt="سيطرة" />}
+            <div className="cpflashtext">🚦 {info.cp.text}</div>
+            <button type="button" className="btn agbtn" disabled={busy} onClick={() => void call({ action: "cpSeen", key: info.cp!.key })}>👍 تمام</button>
+          </div>
+        )}
         {!info && !error && <div className="empty">جاري التحميل...</div>}
         {info?.repick && <Picker info={info} busy={busy} call={call} />}
         {info && info.late.length > 0 && <LateAsk info={info} busy={busy} call={call} />}

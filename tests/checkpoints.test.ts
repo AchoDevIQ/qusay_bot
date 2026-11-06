@@ -150,3 +150,36 @@ test("الإعادة: الغياب ينمسح إذا اجت درجة بعده، 
   await runCheckpoints(81);
   assert.equal((await find("checkpoint_done", { user_id: 81 }))[0].score, 120);
 });
+
+test("نتيجة اللي عبر: النسبة تختار رسالتها وشخصيتها، توصل إله ولولي أمره، وتومض بصفحته لحد ما يشوفها", async () => {
+  const { find } = await import("../lib/db.ts");
+  const png = () => new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])], { type: "image/png" });
+  const form = (x: Record<string, string | Blob>) => { const f = new FormData(); f.set("initData", sign(1)); for (const [k, v] of Object.entries(x)) f.set(k, v); return f; };
+  await assert.rejects(cp("saveBand", { from: 90, to: 80, text: "x" }), /أصغر/);
+  await checkpointsAction(form({ action: "saveBand", from: "80", to: "100", text: "🌹 عاشت إيدك يا {الاسم}، نسبتك {النسبة}", file: png() }));
+  await assert.rejects(cp("saveBand", { from: 70, to: 85, text: "y" }), /تتداخل/);
+  const r = await cp("saveBand", { from: 50, to: 79, text: "👍 زين يا {الاسم}" });
+  assert.deepEqual(r.bands.map((b: any) => [b.from, b.to, !!b.url]), [[80, 100, true], [50, 79, false]]);
+  await assert.rejects(checkpointsAction(form({ action: "stopImage", file: new Blob([Buffer.from("hello")]) })), /PNG أو JPG/);
+  const st = await checkpointsAction(form({ action: "stopImage", file: png() })) as any;
+  assert.match(st.stopUrl, /^\/api\/cpimg\?ref=checkpoints%2F/);
+  // طالب عبر بنسبة 90%: شخصية ورسالة، إله ولولي أمره
+  await reg(90, "شاطر");
+  await put("guardians", { guardian_id: 91, student_id: 90, created: "x" });
+  await graded(90, 0, 90); await graded(90, 1, 90); await graded(90, 2, 90);
+  calls.length = 0;
+  await runCheckpoints(90);
+  assert.equal(await activeStop(90), null);
+  assert.deepEqual(calls.filter((c) => c.method === "sendPhoto").length, 2);
+  const msgs = calls.filter((c) => c.method === "sendMessage");
+  assert.deepEqual(msgs.map((m) => m.p.chat_id), [90, 91]);
+  assert.match(msgs[0].p.text, /عاشت إيدك يا شاطر، نسبتك 90%/);
+  assert.equal((await find("checkpoint_done", { user_id: 90 }))[0].seen, null);
+  // صفحته: الكارت يطلع، ومن يدوس تمام يختفي
+  const { checkpointCard, seeCheckpoint } = await import("../lib/checkpoints.ts");
+  const card = (await checkpointCard(90))!;
+  assert.match(card.text, /نسبتك 90%/);
+  assert.match(card.image, /cpimg/);
+  await seeCheckpoint(90, card.key);
+  assert.equal(await checkpointCard(90), null);
+});

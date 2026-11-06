@@ -8,8 +8,9 @@ type Cp = { min: number; absent: number };
 type Exam = { id: number; title: string; since: number; from: string; cp: Cp | null };
 type Chapter = { chapter: string; exams: Exam[] };
 type Stop = { id: number; name: string; at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number };
-type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; stopped: Stop[]; notice: string };
-type Call = (b: Record<string, unknown>) => Promise<Data | null>;
+type Band = { id: string; from: number; to: number; text: string; url: string };
+type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; bandTags: string[]; bands: Band[]; stopUrl: string; stopped: Stop[]; notice: string };
+type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 
 export default function CheckpointsClient() {
   const { data, error, busy, call } = useAdminApi<Data>("/api/checkpoints", "🚦 السيطرة");
@@ -53,6 +54,8 @@ export default function CheckpointsClient() {
               );
             })}
             <Texts key={data.student + data.guardian} data={data} busy={busy} call={call} />
+            <StopPicture url={data.stopUrl} busy={busy} call={call} />
+            <Bands data={data} busy={busy} call={call} />
           </>
         )}
       </div>
@@ -110,6 +113,90 @@ function Texts({ data, busy, call }: { data: Data; busy: boolean; call: Call }) 
           <button type="button" className="btn" disabled={busy || !student.trim() || !guardian.trim() || (student === data.student && guardian === data.guardian)} onClick={() => void call({ action: "saveTexts", student, guardian })}>💾 حفظ الرسائل</button>
           <Confirm label="↩️ رجعها للأصلية" disabled={busy} onYes={() => void call({ action: "resetTexts" })} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** صورة تختار ملف وتعرضه قبل الحفظ */
+function PicturePick({ url, file, setFile, drop, setDrop }: { url: string; file: File | null; setFile: (f: File | null) => void; drop: boolean; setDrop: (d: boolean) => void }) {
+  const [preview, setPreview] = useState("");
+  const shown = file ? preview : drop ? "" : url;
+  return (
+    <div className="cppic">
+      {shown ? <img src={shown} alt="الشخصية" /> : <div className="exhint">ماكو شخصية</div>}
+      <div className="exline">
+        <label className="exbtn">🖼 {shown ? "بدل الشخصية" : "اختار شخصية"}<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0] ?? null; e.target.value = ""; if (f) { setFile(f); setDrop(false); setPreview(URL.createObjectURL(f)); } }} /></label>
+        {shown && <button type="button" className="exbtn" onClick={() => { setFile(null); setDrop(true); }}>🗑 شيلها</button>}
+      </div>
+    </div>
+  );
+}
+
+/** شخصية الإيقاف: مثل شرطي مرور يكول «أوگف» */
+function StopPicture({ url, busy, call }: { url: string; busy: boolean; call: Call }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [drop, setDrop] = useState(false);
+  function save() {
+    const f = new FormData();
+    f.set("action", "stopImage");
+    if (file) f.set("file", file); else f.set("dropImage", "1");
+    void call(f).then((r) => { if (r) { setFile(null); setDrop(false); } });
+  }
+  return (
+    <div className="card">
+      <h2>⛔ شخصية الإيقاف</h2>
+      <div className="expad">
+        <div className="exhint">تطلع ويا رسالة الإيقاف بالبوت، وتومض بصفحة امتحاناته. مثلاً إنت لابس مرور وتكول «أوگف أوگف».</div>
+        <PicturePick url={url} file={file} setFile={setFile} drop={drop} setDrop={setDrop} />
+        <button type="button" className="btn adsmallbtn" disabled={busy || (!file && !drop)} onClick={save}>💾 حفظ</button>
+      </div>
+    </div>
+  );
+}
+
+/** نتائج اللي عبر: من نسبة لنسبة، رسالة وشخصية */
+function Bands({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
+  const [adding, setAdding] = useState(false);
+  return (
+    <div className="card">
+      <h2>🏅 نتيجة اللي عبر السيطرة</h2>
+      <div className="expad">
+        <div className="exhint">حط نسب من المجموع الكلي للسيطرة. كل طالب عبر توصله رسالة النسبة اللي وقع بيها وشخصيتها، هو وولي أمره، وتومض بصفحة امتحاناته. اللي ما عبر توصله رسالة الإيقاف.</div>
+        <div className="cptags">{data.bandTags.map((t) => <code key={t}>{t}</code>)}</div>
+        {data.bands.map((b) => <BandRow key={`${b.id}|${b.from}|${b.to}|${b.text}|${b.url}`} b={b} busy={busy} call={call} />)}
+        {adding ? <BandRow b={null} busy={busy} call={call} done={() => setAdding(false)} />
+          : <button type="button" className="btn adsmallbtn adtop" disabled={busy} onClick={() => setAdding(true)}>➕ إضافة نتيجة</button>}
+      </div>
+    </div>
+  );
+}
+
+function BandRow({ b, busy, call, done }: { b: Band | null; busy: boolean; call: Call; done?: () => void }) {
+  const [from, setFrom] = useState(String(b?.from ?? 90));
+  const [to, setTo] = useState(String(b?.to ?? 100));
+  const [text, setText] = useState(b?.text ?? "🌹 عاشت إيدك يا {الاسم}! عبرت سيطرة {الفصل} بنسبة {النسبة}");
+  const [file, setFile] = useState<File | null>(null);
+  const [drop, setDrop] = useState(false);
+  function save() {
+    const f = new FormData();
+    f.set("action", "saveBand"); f.set("id", b?.id ?? ""); f.set("from", from); f.set("to", to); f.set("text", text);
+    if (file) f.set("file", file);
+    if (drop) f.set("dropImage", "1");
+    void call(f).then((r) => { if (r) done?.(); });
+  }
+  return (
+    <div className="cpbox adtop">
+      <div className="cprule">
+        <label>من %<input className="exnum" inputMode="numeric" value={from} onChange={(x) => setFrom(x.target.value.replace(/\D/g, ""))} /></label>
+        <label>إلى %<input className="exnum" inputMode="numeric" value={to} onChange={(x) => setTo(x.target.value.replace(/\D/g, ""))} /></label>
+      </div>
+      <textarea className="tmtext" aria-label="رسالة هاي النتيجة" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+      <PicturePick url={b?.url ?? ""} file={file} setFile={setFile} drop={drop} setDrop={setDrop} />
+      <div className="exline pdactions">
+        <button type="button" className="btn" disabled={busy || !from || !to || !text.trim()} onClick={save}>💾 حفظ</button>
+        {b ? <Confirm label="🗑 حذف" disabled={busy} onYes={() => void call({ action: "delBand", id: b.id })} />
+          : <button type="button" className="exbtn" disabled={busy} onClick={() => done?.()}>إلغاء</button>}
       </div>
     </div>
   );

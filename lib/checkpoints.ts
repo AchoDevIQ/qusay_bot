@@ -8,17 +8,24 @@ import { isStaff, student } from "./data.ts";
 import { closeFinished } from "./examRoom.ts";
 import { schedSettings } from "./schedApi.ts";
 import { itemState } from "./scheduleRules.ts";
-import { send } from "./telegram.ts";
+import { randomUUID } from "node:crypto";
+import { files } from "./files.ts";
+import { send, upload } from "./telegram.ts";
 import { esc, stamp } from "./util.ts";
-import { authed, intOf, need } from "./webApi.ts";
+import { ApiError, authed, intOf, need } from "./webApi.ts";
 
 export type Rule = { min: number; absent: number };
-type Cfg = { rules: Record<string, Rule>; student: string; guardian: string };
+/** نتيجة اللي عبر: من نسبة لنسبة (من المجموع الكلي للسيطرة) إلها رسالة وشخصية */
+export type Band = { id: string; from: number; to: number; text: string; image: string | null };
+type Cfg = { rules: Record<string, Rule>; student: string; guardian: string; bands: Band[]; stopImage: string | null };
 type Seg = Rule & { exam: number; chapter: string; title: string; from: string; ids: number[] };
 const KEY = "checkpoints_v2";
 const PER_EXAM = 100;
 const MAX_TEXT = 2000;
 export const TAGS = ["{الاسم}", "{الموقوف}", "{السبب}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{المطلوب}", "{الغياب}"];
+export const BAND_TAGS = ["{الاسم}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{النسبة}"];
+const IMG = /^checkpoints\/[\w-]+\.(png|jpg|webp)$/;
+export const cpImageUrl = (ref: string | null) => (ref && IMG.test(ref) ? `/api/cpimg?ref=${encodeURIComponent(ref)}` : "");
 const LOW = "عدم تحقيق الدرجة المطلوبة للعبور";
 const ABSENT = "كثرة الغيابات";
 
@@ -28,7 +35,7 @@ export const DEFAULT_GUARDIAN = "⛔ توقفت {الموقوف} على الطا
 export async function loadCfg(): Promise<Cfg> {
   let saved: Partial<Cfg> = {};
   try { saved = JSON.parse(await kvGet(KEY) ?? "{}"); } catch { /* إعدادات خربانة */ }
-  return { rules: saved.rules ?? {}, student: saved.student || DEFAULT_STUDENT, guardian: saved.guardian || DEFAULT_GUARDIAN };
+  return { rules: saved.rules ?? {}, student: saved.student || DEFAULT_STUDENT, guardian: saved.guardian || DEFAULT_GUARDIAN, bands: Array.isArray(saved.bands) ? saved.bands : [], stopImage: saved.stopImage ?? null };
 }
 const saveCfg = (c: Cfg) => kvSet(KEY, JSON.stringify(c));
 
@@ -65,6 +72,25 @@ export const lecturesStopped = async (uid: number) => !!(await activeStop(uid))?
 const whatOf = (s: Row) => (s.lectures ? "الامتحانات والمحاضرات" : "الامتحانات");
 
 const fill = (text: string, v: Record<string, string | number>) => esc(text).replace(/\{([^{}]+)\}/g, (m, k) => (k in v ? esc(String(v[k])) : m));
+const plain = (text: string, v: Record<string, string | number>) => text.replace(/\{([^{}]+)\}/g, (m, k) => (k in v ? String(v[k]) : m));
+export const bandOf = (bands: Band[], pct: number) => bands.find((b) => pct >= b.from && pct <= b.to) ?? null;
+/** صورة الشخصية بالبوت (إذا موجودة) */
+async function sendPicture(chat: number, ref: string | null) {
+  if (!ref || !IMG.test(ref)) return;
+  const buf = await files().read(ref);
+  if (!buf) return;
+  const ext = ref.split(".").pop()!;
+  try { await upload("sendPhoto", { chat_id: String(chat) }, "photo", buf, `c.${ext}`, ext === "jpg" ? "image/jpeg" : `image/${ext}`); } catch (e) { console.error(e); }
+}
+/** اللي عبر: رسالة الفئة اللي وقع بيها وشخصيتها، إله ولولي أمره */
+async function rewardStudent(uid: number, st: Row, band: Band | null, v: Record<string, string | number>) {
+  if (!band) return;
+  const to = [uid, (await guardianOf(uid))?.guardian_id].filter(Boolean) as number[];
+  for (const chat of to) {
+    await sendPicture(chat, band.image);
+    try { await send(chat, fill(band.text, { "الاسم": st.name ?? "", ...v })); } catch (e) { console.error(e); }
+  }
+}
 
 /** يحسب السيطرات اللي كملت للطالب، ويوقفه إذا ما عبر وحدة منها */
 export async function runCheckpoints(uid: number) {
@@ -102,8 +128,14 @@ export async function runCheckpoints(uid: number) {
     const score = res.reduce((n, x) => n + x!.mark, 0), absent = res.reduce((n, x) => n + x!.absent, 0);
     const n = g.ids.length;
     const low = g.min > 0 && score < g.min, many = g.absent > 0 && absent >= g.absent;
-    await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: low || many ? 0 : 1, score, absent, created: now });
-    if (!low && !many) { await logActivity(uid, `🚦 عبر سيطرة ${g.chapter} بعد ${g.title}: ${score} من ${n * PER_EXAM}، غياب ${absent}`); continue; }
+    const pct = Math.round((score * 100) / (n * PER_EXAM));
+    const band = low || many ? null : bandOf(cfg.bands, pct);
+    await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: low || many ? 0 : 1, score, absent, created: now, band: band?.id ?? null, seen: null });
+    if (!low && !many) {
+      await logActivity(uid, `🚦 عبر سيطرة ${g.chapter} بعد ${g.title}: ${score} من ${n * PER_EXAM}، غياب ${absent}`);
+      await rewardStudent(uid, st, band, { "الفصل": g.chapter, "العدد": n, "الدرجة": score, "الكلي": n * PER_EXAM, "النسبة": `${pct}%` });
+      continue;
+    }
     await stopStudent(uid, st, cfg, { chapter: g.chapter, block: g.exam, every: n, score, need: g.min, absent, reason: [low && LOW, many && ABSENT].filter(Boolean).join(" و") });
     return;
   }
@@ -117,10 +149,28 @@ async function stopStudent(uid: number, st: Row, cfg: Cfg, x: { chapter: string;
   await logActivity(uid, `⛔ توقفت عليه ${what}: ${x.reason} (سيطرة ${x.chapter}، ${x.score} من ${row.max}، غياب ${x.absent})`);
   const v = { "الاسم": st.name ?? "", "الموقوف": what, "السبب": x.reason, "الفصل": x.chapter, "العدد": x.every, "الدرجة": x.score, "الكلي": row.max, "المطلوب": x.need, "الغياب": x.absent };
   const safe = async (chat: number, text: string) => { try { await send(chat, text); } catch (e) { console.error(e); } };
+  await sendPicture(uid, cfg.stopImage);
   await safe(uid, fill(cfg.student, v));
   const g = await guardianOf(uid);
-  if (g) await safe(g.guardian_id, fill(cfg.guardian, v));
+  if (g) { await sendPicture(g.guardian_id, cfg.stopImage); await safe(g.guardian_id, fill(cfg.guardian, v)); }
   for (const a of ADMIN_IDS) await safe(a, `⛔ <b>توقف طالب بالسيطرة</b>\nالطالب: ${esc(st.name ?? "")}\nتوقفت عليه: ${what}\nالسبب: ${esc(x.reason)}\n${esc(x.chapter)}: ${x.score} من ${row.max}، غياب ${x.absent}\nتفكه من صفحة السيطرة أو صفحة الطالب.`);
+}
+
+/** آخر سيطرة عبرها وبعده ما شافها: تطلع بصفحة امتحاناته تومض ويا شخصيتها */
+export async function checkpointCard(uid: number) {
+  const r = (await find("checkpoint_done", { user_id: uid })).filter((x) => x.passed === 1 && x.band && !x.seen).sort((a, b) => String(b.created).localeCompare(String(a.created)))[0];
+  if (!r) return null;
+  const cfg = await loadCfg();
+  const band = cfg.bands.find((b) => b.id === r.band);
+  if (!band) return null;
+  const n = Math.max(1, segmentsOf(await bookExams(), cfg.rules).find((g) => g.chapter === r.chapter && g.exam === r.block)?.ids.length ?? 1);
+  const pct = Math.round((Number(r.score) * 100) / (n * PER_EXAM));
+  const st = await student(uid);
+  return { key: `${r.chapter}|${r.block}`, image: cpImageUrl(band.image), text: plain(band.text, { "الاسم": st?.name ?? "", "الفصل": r.chapter, "العدد": n, "الدرجة": r.score, "الكلي": n * PER_EXAM, "النسبة": `${pct}%` }) };
+}
+export async function seeCheckpoint(uid: number, key: unknown) {
+  const [chapter, block] = String(key ?? "").split("|");
+  await update("checkpoint_done", { user_id: uid, chapter, block: Number(block) }, { seen: stamp() });
 }
 
 /** صفحات امتحانات الطالب: إذا موقوف ما يدخل */
@@ -128,7 +178,7 @@ export async function checkStopped(uid: number) {
   if (await isStaff(uid) || !await student(uid)) return;
   await runCheckpoints(uid);
   const s = await activeStop(uid);
-  need(!s, s ? `⛔ توقفت عليك ${whatOf(s)} بسبب ${s.reason}. حتى ترجع تواصل ويا قصي العميري.` : "", 423);
+  if (s) throw new ApiError(423, `⛔ توقفت عليك ${whatOf(s)} بسبب ${s.reason}. حتى ترجع تواصل ويا قصي العميري.`, { stop: { image: cpImageUrl((await loadCfg()).stopImage) } });
 }
 
 export async function liftStop(uid: number, by: number) {
@@ -170,7 +220,10 @@ async function pageData() {
   for (const s of (await find("student_stops", {}, { order: ["-id"] })).filter((x) => !x.lifted)) {
     stopped.push({ id: s.user_id, name: (await student(s.user_id))?.name ?? String(s.user_id), ...stopView(s)! });
   }
-  return { chapters, student: cfg.student, guardian: cfg.guardian, tags: TAGS, stopped, notice: "" };
+  return {
+    chapters, student: cfg.student, guardian: cfg.guardian, tags: TAGS, bandTags: BAND_TAGS, stopped, notice: "",
+    bands: [...cfg.bands].sort((a, b) => b.from - a.from).map((b) => ({ ...b, url: cpImageUrl(b.image) })), stopUrl: cpImageUrl(cfg.stopImage),
+  };
 }
 
 const textOf = (raw: unknown) => {
@@ -180,11 +233,51 @@ const textOf = (raw: unknown) => {
   return t;
 };
 
-export async function checkpointsAction(body: Row) {
+const IMG_MAX = 5 * 1024 * 1024;
+/** صورة شخصية مرفوعة: PNG أو JPG أو WEBP */
+async function savePicture(f: unknown) {
+  need(f instanceof Blob && f.size > 0, "اختار صورة");
+  need((f as Blob).size <= IMG_MAX, "الصورة لازم أصغر من 5 ميگا");
+  const buf = Buffer.from(await (f as Blob).arrayBuffer());
+  const ext = buf[0] === 0x89 && buf[1] === 0x50 ? "png" : buf[0] === 0xff && buf[1] === 0xd8 ? "jpg" : buf.subarray(8, 12).toString() === "WEBP" ? "webp" : "";
+  need(ext, "الصورة لازم PNG أو JPG أو WEBP");
+  const ref = `checkpoints/${randomUUID()}.${ext}`;
+  await files().write(ref, buf, ext === "jpg" ? "image/jpeg" : `image/${ext}`);
+  return ref;
+}
+
+export async function checkpointsAction(raw: Row | FormData) {
+  const body: Row = raw instanceof FormData ? Object.fromEntries([...raw.entries()]) : raw;
   const uid = await authed(body?.initData, "owner");
   const a = String(body.action ?? "");
   let notice = "";
-  if (a === "saveCp" || a === "delCp") {
+  if (a === "saveBand") {
+    const cfg = await loadCfg();
+    const from = intOf(body.from, 0, 100, "من نسبة 0 إلى 100"), to = intOf(body.to, 0, 100, "إلى نسبة 0 إلى 100");
+    need(from <= to, "«من» لازم أصغر من «إلى»");
+    const text = textOf(body.text);
+    const id = String(body.id ?? "") || randomUUID().slice(0, 8);
+    const clash = cfg.bands.find((b) => b.id !== id && from <= b.to && to >= b.from);
+    need(!clash, clash ? `تتداخل ويا ${clash.from}% إلى ${clash.to}%` : "");
+    const old = cfg.bands.find((b) => b.id === id);
+    let image = old?.image ?? null;
+    if (body.file instanceof Blob && body.file.size > 0) image = await savePicture(body.file);
+    if (body.dropImage === "1") image = null;
+    cfg.bands = [...cfg.bands.filter((b) => b.id !== id), { id, from, to, text, image }];
+    await saveCfg(cfg);
+    notice = `✅ انحفظت ${from}% إلى ${to}%`;
+  } else if (a === "delBand") {
+    const cfg = await loadCfg();
+    need(cfg.bands.some((b) => b.id === String(body.id)), "غير موجودة");
+    cfg.bands = cfg.bands.filter((b) => b.id !== String(body.id));
+    await saveCfg(cfg);
+    notice = "🗑 انحذفت";
+  } else if (a === "stopImage") {
+    const cfg = await loadCfg();
+    cfg.stopImage = body.dropImage === "1" ? null : await savePicture(body.file);
+    await saveCfg(cfg);
+    notice = cfg.stopImage ? "✅ انحفظت شخصية الإيقاف" : "🗑 انشالت شخصية الإيقاف";
+  } else if (a === "saveCp" || a === "delCp") {
     const id = Number(body.exam);
     const ch = (await pageData()).chapters.find((c) => c.exams.some((e) => e.id === id));
     need(ch, "الامتحان غير موجود");
