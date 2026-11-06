@@ -12,7 +12,7 @@ import { can, student } from "./data.ts";
 import { files } from "./files.ts";
 import { adminPageLink } from "./keyboards.ts";
 import { addMinutes, answersClose, itemState, pickMandatory, type SchedSettings } from "./scheduleRules.ts";
-import { send } from "./telegram.ts";
+import { send, sendMany } from "./telegram.ts";
 import { stamp } from "./util.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
@@ -181,19 +181,23 @@ export async function startNowForTest(itemId: unknown) {
 }
 
 /** رسالة «بدأ الامتحان». يشغلها مؤقت من برا لأن السيرفر ينام: /api/cron?key=... */
-export async function notifyStarted(key: unknown, s: SchedSettings) {
+export async function notifyStarted(key: unknown, s: SchedSettings, limit = 1200) {
   await ensure();
   if (key !== cronKey()) throw new ApiError(401, "no");
   const now = stamp();
-  let sent = 0;
-  for (const it of await find("sched_items", { status: "waiting", notified: null })) {
-    if (itemState("waiting", it.at, s.window, now) !== "open") continue;
-    const st = await student(it.user_id);
+  // ناخذ اللي بدأ وقتهم ونعلّمهم أول، وبعدين ندز بدفعات. إذا هواية (أكثر من limit) الباقي بالدقيقة الجاية
+  const due = (await find("sched_items", { status: "waiting", notified: null }))
+    .filter((it) => itemState("waiting", it.at, s.window, now) === "open").slice(0, limit);
+  const exams = new Map<unknown, Row | null>();
+  const jobs: { uid: number; title: string }[] = [];
+  for (const it of due) {
     await update("sched_items", { id: it.id }, { notified: now });
+    const st = await student(it.user_id);
     if (st?.exam === "حضوري" || await activeStop(it.user_id)) continue;
-    const e = await one("bank_exams", { id: it.exam_id });
-    await send(it.user_id, `🟢 <b>بدأ امتحانك: ${e?.title ?? ""}</b>\nادخل عليه خلال ${s.window} دقيقة.`, { kb: roomButton(it.user_id) });
-    sent++;
+    if (!exams.has(it.exam_id)) exams.set(it.exam_id, await one("bank_exams", { id: it.exam_id }));
+    jobs.push({ uid: it.user_id, title: String(exams.get(it.exam_id)?.title ?? "") });
   }
-  return { sent };
+  const sent = await sendMany(jobs, (j) => send(j.uid, `🟢 <b>بدأ امتحانك: ${j.title}</b>
+ادخل عليه خلال ${s.window} دقيقة.`, { kb: roomButton(j.uid) }));
+  return { sent, due: jobs.length };
 }

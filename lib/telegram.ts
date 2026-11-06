@@ -17,7 +17,7 @@ export async function shouldProtect(method: string, chat: unknown, given: unknow
   try { return !await isStaff(id); } catch { return true; }
 }
 
-export async function api<T = any>(method: string, params: Record<string, unknown> = {}): Promise<T | null> {
+export async function api<T = any>(method: string, params: Record<string, unknown> = {}, tries = 2): Promise<T | null> {
   if (await shouldProtect(method, params.chat_id, params.protect_content)) params = { ...params, protect_content: true };
   try {
     const r = await fetch(base() + method, {
@@ -25,6 +25,12 @@ export async function api<T = any>(method: string, params: Record<string, unknow
       signal: AbortSignal.timeout(70_000),
     });
     const j: any = await r.json().catch(() => ({ ok: false, description: "bad json" }));
+    // تليجرام يكول «هواية رسائل، انتظر»: ننتظر المدة اللي يكولها ونعيد مرة
+    const wait = Number(j?.parameters?.retry_after);
+    if (j?.error_code === 429 && wait > 0 && wait <= 30 && tries > 1) {
+      await new Promise((ok) => setTimeout(ok, wait * 1000));
+      return api<T>(method, params, tries - 1);
+    }
     if (!j.ok && !String(j.description ?? "").includes("message is not modified")) {
       console.error("Telegram error:", method, j.description);
     }
@@ -33,6 +39,20 @@ export async function api<T = any>(method: string, params: Record<string, unknow
     console.error("Connection problem:", method, e);
     return null;
   }
+}
+
+/** رسائل هواية مرة وحدة (مثل «بدأ الامتحان» لآلاف الطلاب): دفعات بسرعة تليجرام المسموحة (بحدود 30 بالثانية)،
+ *  وكل رسالة تفشل (طالب حاظر البوت) ما توگف الباقي */
+export async function sendMany<T>(list: T[], one: (x: T) => Promise<unknown>, perSecond = 25) {
+  let ok = 0;
+  for (let i = 0; i < list.length; i += perSecond) {
+    const started = Date.now();
+    const r = await Promise.allSettled(list.slice(i, i + perSecond).map(one));
+    ok += r.filter((x) => x.status === "fulfilled" && x.value != null).length;
+    const left = 1000 - (Date.now() - started);
+    if (i + perSecond < list.length && left > 0) await new Promise((done) => setTimeout(done, left));
+  }
+  return ok;
 }
 
 /** رفع ملف (صورة/PDF) */
