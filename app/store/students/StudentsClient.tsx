@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
-type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; device: { at: string; tried: string } | null; centerId: number; center: string; created: string; updated: string };
+type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -124,6 +124,12 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
       <div className="exline">
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "log", id: s.id })}>📜 عمليات الطالب</button>
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "sched", id: s.id })}>🗓 جدوله</button>
+        {s.stop && (
+          <>
+            <span className="exhint exbad">⛔ موقوفة عليه {s.stop.what} من {s.stop.at.slice(0, 10)}: {s.stop.reason} ({s.stop.chapter}: {s.stop.score} من {s.stop.max}، غياب {s.stop.absent})</span>
+            <Confirm label="✅ فك الإيقاف" disabled={busy} onYes={() => void call({ action: "liftStop", id: s.id })} />
+          </>
+        )}
         {s.device ? (
           <>
             {s.device.tried && <span className="exhint exbad">🔒 حاول يفتح من جهاز ثاني: {s.device.tried}</span>}

@@ -1,4 +1,5 @@
 // غرفة الامتحان للطالب الإلكتروني: الدخول بوقته، النسخة، صور الأسئلة، ورفع الأجوبة بدون أي كود
+import { activeStop, checkStopped } from "./checkpoints.ts";
 import { checkDevice } from "./deviceLock.ts";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -124,6 +125,7 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   const uid = verifyHomeToken(form.get("token"));
   need(uid !== null, "هذا الرابط قديم. اكتب /start بالبوت وافتح القائمة من جديد", 401);
   await checkDevice(uid!, form.get("device"));
+  await checkStopped(uid!);
   const it = await liveRoom(uid!, form.get("item"), s);
   const q = Number(form.get("q"));
   need(await one("bank_questions", { version_id: it.version_id, n: q }), "السؤال غير موجود");
@@ -184,7 +186,7 @@ export async function notifyStarted(key: unknown, s: SchedSettings) {
     if (itemState("waiting", it.at, s.window, now) !== "open") continue;
     const st = await student(it.user_id);
     await update("sched_items", { id: it.id }, { notified: now });
-    if (st?.exam === "حضوري") continue;
+    if (st?.exam === "حضوري" || await activeStop(it.user_id)) continue;
     const e = await one("bank_exams", { id: it.exam_id });
     await send(it.user_id, `🟢 <b>بدأ امتحانك: ${e?.title ?? ""}</b>\nادخل عليه خلال ${s.window} دقيقة.`, { kb: roomButton(it.user_id) });
     sent++;

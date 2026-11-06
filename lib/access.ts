@@ -25,6 +25,7 @@ export async function canAsk(uid: number) {
   const byName = new Map((await find("products")).map((p) => [String(p.name), p]));
   return names.some((n) => { const p = byName.get(n); return p ? askDefault(p) : firstRoundOnly(n); });
 }
+export const boughtLectures = async (uid: number) => (await liveItems(uid)).some((n) => n.includes("محاضر") && !n.includes("دفتر"));
 export const boughtCourse = async (uid: number) => (await liveItems(uid)).some(firstRoundOnly);
 
 // ---------- ولي الأمر

@@ -1,4 +1,5 @@
 // صفحة التصحيح: أول مصحح يفتح الورقة تصير إله، يضغط درجة كل سؤال، والبوت يجمع ويبلغ الطالب وولي أمره
+import { runCheckpoints } from "./checkpoints.ts";
 import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
@@ -272,6 +273,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
     const g = await guardianOf(it.user_id);
     if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
     await logActivity(it.user_id, `📝 انصحح امتحان ${view.title}: ${total} من 100`);
+    try { await runCheckpoints(it.user_id); } catch (e) { console.error(e); }
   }
   return `✅ انحفظت الدرجة ${total} من 100`;
 }

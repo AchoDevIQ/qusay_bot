@@ -1,4 +1,5 @@
 // واجهة صفحة الطلاب: الأرقام، البحث، تعديل المعلومات، الحذف، وقوائم PDF
+import { activeStop, liftStop, stopView } from "./checkpoints.ts";
 import { deviceOf, unlockDevice } from "./deviceLock.ts";
 import { find, one, remove, setSession, type Row } from "./db.ts";
 import { activityOf, guardianOf, logActivity } from "./access.ts";
@@ -30,7 +31,7 @@ export async function sendStudentsPdf(chat: number, fifth: boolean) {
 }
 const view = async (s: Row) => ({
   id: s.user_id, username: s.username ?? "", name: s.name, curr: s.curr, grade: s.grade, gov: s.gov, side: s.side ?? "", area: s.area,
-  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), device: await deviceOf(s.user_id), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
+  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
 });
 
 type Filters = { curr?: string; grade?: string; exam?: string; gov?: string };
@@ -121,6 +122,9 @@ export async function studentAction(body: Row) {
   } else if (a === "perDay") {
     await setPerDay(id, intOf(body.value, 0, 10, "اكتب رقم من 0 إلى 10"));
     notice = "✅ انحفظ حد الامتحانات باليوم لهذا الطالب";
+  } else if (a === "liftStop") {
+    await liftStop(id, uid);
+    notice = "✅ انفك الإيقاف، ووصل الطالب خبر";
   } else if (a === "unlockDevice") {
     await unlockDevice(id);
     notice = "🔓 انفك قفل الجهاز. أول جهاز يفتح صفحاته ينقفل عليه";

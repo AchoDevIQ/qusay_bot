@@ -248,3 +248,5 @@ body.grwide .grtop{padding-left:104px}
 .stwallet .exbtn,.stwallet button{padding:6px 10px;font-size:13px}
 .stfield{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:14px;margin-top:8px}
 .sttopics{border:1px solid var(--gold2);border-radius:10px;padding:6px 10px;margin-top:6px}.sttopics summary{cursor:pointer;font-weight:800;padding:4px 0}.sttopics summary small{opacity:.75;font-weight:600}
+.cprule{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:6px 0}.cprule label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut);font-weight:700}.cprule .exnum{width:84px}.cpon{display:flex;align-items:center;gap:8px;font-weight:700;margin:4px 0}.cpon input{width:20px;height:20px}.cptags{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.cptags code{background:var(--card2,rgba(127,127,127,.15));border-radius:6px;padding:2px 6px;font-size:13px}.cpstop{border-top:1px solid var(--line);padding:10px 0}.cpstop b{display:block}
+.cpcount{font-size:13px;opacity:.75;font-weight:600}

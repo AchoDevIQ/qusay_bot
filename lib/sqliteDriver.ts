@@ -74,6 +74,8 @@ async function init() {
     CREATE TABLE IF NOT EXISTS stickers(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, file TEXT, lo INTEGER, hi INTEGER, created TEXT);
     CREATE TABLE IF NOT EXISTS comment_sent(user_id INTEGER, comment_id INTEGER, at TEXT, PRIMARY KEY(user_id, comment_id));
     CREATE TABLE IF NOT EXISTS objections(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER, user_id INTEGER, q INTEGER, text TEXT, voice TEXT, status TEXT, old_mark INTEGER, new_mark INTEGER, reason TEXT, created TEXT, decided_at TEXT, decided_by INTEGER, paid_id INTEGER);
+    CREATE TABLE IF NOT EXISTS student_stops(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, chapter TEXT, block INTEGER, score INTEGER, max INTEGER, need INTEGER, absent INTEGER, reason TEXT, lectures INTEGER, created TEXT, lifted TEXT, lifted_by INTEGER);
+    CREATE TABLE IF NOT EXISTS checkpoint_done(user_id INTEGER, chapter TEXT, block INTEGER, passed INTEGER, score INTEGER, absent INTEGER, created TEXT, PRIMARY KEY(user_id, chapter, block));
     CREATE TABLE IF NOT EXISTS student_devices(user_id INTEGER PRIMARY KEY, device TEXT, at TEXT, tried TEXT);
     CREATE TABLE IF NOT EXISTS grader_pay(user_id INTEGER PRIMARY KEY, mandatory INTEGER, optional INTEGER, deduct INTEGER, chapters TEXT, exams_off TEXT);
     CREATE TABLE IF NOT EXISTS grader_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, n_mand INTEGER, n_opt INTEGER, n_obj INTEGER, amount INTEGER, created TEXT, by_id INTEGER);

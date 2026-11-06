@@ -1,4 +1,5 @@
 // الصفحة الرئيسية للوحة التحكم: الأقسام حسب صلاحية كل واحد
+import { stoppedCount } from "./checkpoints.ts";
 import { count, find, setSession, sumOf, type Row } from "./db.ts";
 import { can, isAdmin, isStaff, newOrdersCount, setStudentView } from "./data.ts";
 import { EXAM_PERM } from "./examBank.ts";
@@ -48,6 +49,8 @@ async function homeData(uid: number) {
     const sold = await find("orders", { printed: 3 }, { where: (o) => o.office_id !== null && String(o.created).startsWith(todayStr()) });
     setup.push({ page: "libs", icon: "🏬", title: "المكتبات", note: `اليوم: ${sold.length} بيعة · ${sumOf(sold, "total").toLocaleString("en-US")}` },
       { page: "staff", icon: "👥", title: "المساعدين والصلاحيات" }, { page: "hours", icon: "⏰", title: "أوقات الأسئلة ومجموعتها" }, { page: "curriculum", icon: "📚", title: "الفصول والمواضيع" }, { page: "terms", icon: "📜", title: "شروط التسجيل" }, { page: "upload", icon: "📤", title: "رفع الفصول" }, { page: "comments", icon: "💬", title: "تعليقات الدرجات" }, { page: "stickers", icon: "🖼", title: "مكتبة الملصقات" });
+    const stopped = await stoppedCount();
+    people.push({ page: "checkpoints", icon: "🚦", title: "السيطرة", note: stopped ? `${stopped} طالب موقوف` : "ماكو موقوفين", hot: stopped > 0 });
   }
   if (shop.length) groups.push({ title: "المتجر", tiles: shop });
   if (people.length) groups.push({ title: "الطلاب والامتحانات", tiles: people });
