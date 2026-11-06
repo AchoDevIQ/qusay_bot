@@ -3,6 +3,7 @@
 // وكل خطوة لحالها: إذا وحدة خربت الباقي يكمل
 import { sweepSessions } from "./centerRent.ts";
 import { sweepCheckpoints } from "./checkpoints.ts";
+import { sweepSignups } from "./signups.ts";
 import { kvGet, kvSet } from "./db.ts";
 import { notifyStarted } from "./examRoom.ts";
 import { notifyGraders } from "./graderPay.ts";
@@ -28,6 +29,7 @@ export async function cronTick(key: unknown) {
     await step("checked", () => sweepCheckpoints());
     await step("graders", () => notifyGraders());
     await step("sessions", () => sweepSessions());
+    await step("signups", () => sweepSignups());
   } finally {
     await kvSet(LOCK, "0");
   }

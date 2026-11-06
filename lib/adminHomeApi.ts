@@ -35,6 +35,10 @@ async function homeData(uid: number) {
     const note = [n ? `${n} ورقة تنتظر` : "", o ? `${o} اعتراض` : ""].filter(Boolean).join(" · ") || "ماكو أوراق";
     people.push({ page: "grade", icon: "✍️", title: "التصحيح", note, hot: n + o > 0 });
   }
+  if (await can(uid, "signups")) {
+    const n = (await find("exam_access")).filter((r) => String(r.created ?? "").startsWith(todayStr())).length;
+    people.push({ page: "signups", icon: "📊", title: "تسجيلات الفصول", note: `اليوم: ${n}` });
+  }
   if (await can(uid, "schedule")) people.push({ page: "schedule", icon: "🗓", title: "جدول الامتحانات" });
   if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` });
   if (!await can(uid, "attend") && await can(uid, "camup")) people.push({ page: "attend", icon: "📷", title: "تصوير أوراق الحضوري", note: "صور ورقة الطالب سؤال سؤال" });
