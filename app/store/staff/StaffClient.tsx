@@ -5,8 +5,10 @@ import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Account = { sold: number; paid: number; owed: number; limit: number; left: number };
-type Staff = { id: number; name: string; perms: string[]; account: Account; pays: { id: number; amount: number; created: string }[] };
-type Data = { perms: { key: string; label: string }[]; staff: Staff[]; notice: string };
+type Rate = { mandatory: number; optional: number; deduct: number };
+type Grade = { chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; amount: number; created: string }[] };
+type Staff = { id: number; name: string; perms: string[]; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
+type Data = { chapters: string[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -26,7 +28,7 @@ export default function StaffClient() {
               {data.staff.length ? (
                 <table className="extable"><tbody>
                   {data.staff.map((s) => (
-                    <Rows key={s.id} s={s} perms={data.perms} open={open === s.id} toggle={() => setOpen(open === s.id ? null : s.id)} busy={busy} call={call} />
+                    <Rows key={s.id} s={s} perms={data.perms} chapters={data.chapters} open={open === s.id} toggle={() => setOpen(open === s.id ? null : s.id)} busy={busy} call={call} />
                   ))}
                 </tbody></table>
               ) : <div className="empty">لا يوجد مساعدين بعد.</div>}
@@ -40,19 +42,31 @@ export default function StaffClient() {
   );
 }
 
-function Rows({ s, perms, open, toggle, busy, call }: { s: Staff; perms: Data["perms"]; open: boolean; toggle: () => void; busy: boolean; call: Call }) {
+function Rows({ s, perms, chapters, open, toggle, busy, call }: { s: Staff; perms: Data["perms"]; chapters: string[]; open: boolean; toggle: () => void; busy: boolean; call: Call }) {
+  const g = s.grade;
   return (
     <>
       <tr className={"exrow" + (open ? " sel" : "")} onClick={toggle}>
-        <td><b>👤 {s.name}</b><small className="pdmode">{s.perms.length} صلاحية</small></td>
-        <td className="p">{s.account.owed ? `بذمته ${fmt(s.account.owed)}` : ""}</td>
+        <td><b>👤 {s.name}</b><small className="pdmode">{s.perms.length} صلاحية</small>
+          {s.account.owed ? <small className="pdmode">بذمته {fmt(s.account.owed)}</small> : null}
+        </td>
+        <td className="p">
+          {/* اللي إله على التصحيح: يطلع برا، والدفع يصفره */}
+          {g && (
+            <div className="stwallet" onClick={(e) => e.stopPropagation()}>
+              <b>💰 {fmt(g.amount)} د</b>
+              <small>{g.mand + g.opt} ورقة{g.obj ? ` · ${g.obj} اعتراض` : ""}</small>
+              {(g.mand || g.opt || g.obj) ? <Confirm label="💵 دفع" disabled={busy} onYes={() => void call({ action: "gradePay", id: s.id })} /> : null}
+            </div>
+          )}
+        </td>
       </tr>
-      {open && <tr><td colSpan={2} className="expanel"><Panel key={s.perms.join() + s.name} s={s} perms={perms} busy={busy} call={call} /></td></tr>}
+      {open && <tr><td colSpan={2} className="expanel"><Panel key={s.perms.join() + s.name + JSON.stringify(g?.rate) + g?.chapters.join()} s={s} perms={perms} chapters={chapters} busy={busy} call={call} /></td></tr>}
     </>
   );
 }
 
-function Panel({ s, perms, busy, call }: { s: Staff; perms: Data["perms"]; busy: boolean; call: Call }) {
+function Panel({ s, perms, chapters, busy, call }: { s: Staff; perms: Data["perms"]; chapters: string[]; busy: boolean; call: Call }) {
   const [name, setName] = useState(s.name);
   const [picked, setPicked] = useState(s.perms);
   const [pay, setPay] = useState("");
@@ -69,6 +83,7 @@ function Panel({ s, perms, busy, call }: { s: Staff; perms: Data["perms"]; busy:
         </label>
       ))}
       <button type="button" className="btn adsmallbtn" disabled={busy || same} onClick={() => void call({ action: "perms", id: s.id, perms: picked })}>حفظ الصلاحيات</button>
+      {s.grade && <GradeWallet s={s} g={s.grade} chapters={chapters} busy={busy} call={call} />}
 
       <div className="exfoot">
         <div className="exlabel">💰 حساب مبيعاته بنفسه</div>
@@ -96,6 +111,40 @@ function Panel({ s, perms, busy, call }: { s: Staff; perms: Data["perms"]; busy:
         </div>
         <Confirm label="🗑 حذف المساعد" disabled={busy} onYes={() => void call({ action: "del", id: s.id })} />
       </div>
+    </div>
+  );
+}
+
+/** محفظة التصحيح: تفاصيل اللي إله، وفصوله، وأجره، والدفعات السابقة */
+function GradeWallet({ s, g, chapters, busy, call }: { s: Staff; g: Grade; chapters: string[]; busy: boolean; call: Call }) {
+  const [rate, setRate] = useState(g.rate);
+  const [chs, setChs] = useState<string[]>(g.chapters.length ? g.chapters : chapters);
+  const num = (k: keyof Rate, label: string) => (
+    <label className="stfield">{label}
+      <input type="number" inputMode="numeric" className="ltr" min={0} value={rate[k]} onChange={(e) => setRate({ ...rate, [k]: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+    </label>
+  );
+  return (
+    <div className="exfoot">
+      <div className="exlabel">✍️ محفظة التصحيح</div>
+      <div className="adstats adstats2">
+        <div><b>{g.mand}</b>ورقة إجبارية × {fmt(g.rate.mandatory)}</div>
+        <div><b>{g.opt}</b>ورقة اختيارية × {fmt(g.rate.optional)}</div>
+        <div><b>{g.obj}</b>اعتراض انقبل − {fmt(g.rate.deduct)}</div>
+        <div><b>{fmt(g.amount)}</b>إله هسه (دينار)</div>
+      </div>
+      {(g.mand || g.opt || g.obj) ? <Confirm label={`💵 دفع ${fmt(g.amount)} دينار وتصفير`} disabled={busy} onYes={() => void call({ action: "gradePay", id: s.id })} /> : null}
+      <div className="exlabel adtop">الفصول اللي يصححها</div>
+      <div className="seg wrap2">
+        {chapters.map((c) => <button type="button" key={c} className={chs.includes(c) ? "on" : ""} onClick={() => setChs(chs.includes(c) ? chs.filter((x) => x !== c) : [...chs, c])}>{c}</button>)}
+      </div>
+      {!chs.length && <div className="exhint">إذا ما تختار ولا فصل، يصحح كل الفصول.</div>}
+      {num("mandatory", "أجر الورقة الإجبارية (دينار)")}
+      {num("optional", "أجر الورقة الاختيارية (دينار)")}
+      {num("deduct", "خصم كل اعتراض ينقبل على ورقته (دينار)")}
+      <div className="exhint">الأجر الجديد ينحسب على الأوراق اللي بعدها ما اندفعت.</div>
+      <button type="button" className="btn adsmallbtn" disabled={busy} onClick={() => void call({ action: "gradeRate", id: s.id, ...rate, chapters: chs })}>💾 حفظ الفصول والأجور</button>
+      {!!g.archive.length && <div className="exhint">الدفعات السابقة: {g.archive.map((a) => `${a.created.slice(0, 10)}: ${fmt(a.amount)} (${a.mand + a.opt} ورقة)`).join(" · ")}</div>}
     </div>
   );
 }

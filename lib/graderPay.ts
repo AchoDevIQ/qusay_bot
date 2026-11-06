@@ -2,6 +2,7 @@
 // الرصيد هو اللي ما انحاسب بعد، والتسوية تصفره وتنحفظ بالأرشيف. أوراق التجربة ما تنحسب
 import { find, insert, one, put, update, type Row } from "./db.ts";
 import { isAdmin, staffName } from "./data.ts";
+import { send } from "./telegram.ts";
 import { stamp } from "./util.ts";
 import { need } from "./webApi.ts";
 
@@ -40,10 +41,10 @@ const archiveOf = async (uid: number) => (await find("grader_settlements", { use
   .map((s) => ({ id: s.id, mand: s.n_mand, opt: s.n_opt, obj: s.n_obj, amount: s.amount, created: s.created }));
 
 /** المصححين: كل اللي عدهم صلاحية التصحيح، ويا أجورهم ورصيدهم */
-async function graders() {
+export async function graders() {
   return (await find("staff")).filter((s) => String(s.perms ?? "").split(",").includes("grade")).map((s) => s.user_id as number);
 }
-async function card(uid: number) {
+export async function card(uid: number) {
   const b = await balanceOf(uid);
   return { id: uid, name: await staffName(uid), chapters: await chaptersOf(uid), rate: b.rate, mand: b.mand, opt: b.opt, obj: b.obj, amount: b.amount, archive: await archiveOf(uid) };
 }
@@ -70,5 +71,7 @@ export async function payAction(uid: number, body: Row) {
   const sid = await insert("grader_settlements", { user_id: id, n_mand: b.mand, n_opt: b.opt, n_obj: b.obj, amount: b.amount, created: stamp(), by_id: uid });
   for (const p of b.paperIds) await update("sched_items", { id: p }, { paid_id: sid });
   for (const o of b.objIds) await update("objections", { id: o }, { paid_id: sid });
+  const parts = [b.mand ? `${b.mand} ورقة إجبارية` : "", b.opt ? `${b.opt} ورقة اختيارية` : "", b.obj ? `خصم ${b.obj} اعتراض انقبل` : ""].filter(Boolean).join("، ");
+  await send(id, `💵 <b>قصي العميري دفعلك ${b.amount.toLocaleString("en")} دينار</b>\nعن تصحيح: ${parts}.\nرصيدك هسه صفر.`);
   return `✅ انحاسب ${await staffName(id)}: ${b.amount.toLocaleString("en")} دينار`;
 }

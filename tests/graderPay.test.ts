@@ -80,3 +80,20 @@ test("سجل التصحيح: المصحح أوراقه، وصاحب البوت �
   assert.equal((await g(31, "history")).history.count, 0);
   assert.equal((await g(1, "history")).history.count, 3);
 });
+
+test("صفحة المساعدين: اللي إله على التصحيح يطلع جنب اسمه، والدفع يصفره ويوصله خبر", async () => {
+  const { staffAction } = await import("../lib/staffApi.ts");
+  const c = await insert("sched_items", { user_id: 73, exam_id: e2, at: "x", status: "done", version_id: v2, submitted_at: "x" });
+  await g(30, "open", { id: c }); await g(30, "mark", { id: c, q: 1, mark: 80 }); await g(30, "finish", { id: c });
+  const page = await staffAction({ initData: sign(1), action: "list" }) as any;
+  const me = page.staff.find((x: any) => x.id === 30);
+  assert.equal(me.grade.amount, 200);
+  assert.ok(page.staff.find((x: any) => x.id === 31).grade, "اللي عنده التصحيح عنده محفظة");
+  await staffAction({ initData: sign(1), action: "gradeRate", id: 30, mandatory: 300, optional: 150, deduct: 50, chapters: ["الفصل الثاني"] });
+  calls.length = 0;
+  const r = await staffAction({ initData: sign(1), action: "gradePay", id: 30 }) as any;
+  assert.match(r.notice, /300 دينار/);
+  assert.equal(r.staff.find((x: any) => x.id === 30).grade.amount, 0);
+  assert.ok(calls.some((x) => x.p.chat_id === 30 && /دفعلك 300 دينار/.test(x.p.text)));
+  await assert.rejects(staffAction({ initData: sign(30), action: "gradePay", id: 30 }), (x: any) => x.status === 403);
+});

@@ -134,7 +134,7 @@ export default function GradeClient() {
             <div className="seg gktabs">
               <button type="button" className={tab === "papers" ? "on" : ""} onClick={() => { setTab("papers"); void call({ action: "list" }); }}>📥 الأوراق</button>
               <button type="button" className={tab === "history" ? "on" : ""} onClick={() => { setTab("history"); void call({ action: "history" }); }}>📜 السجل</button>
-              <button type="button" className={tab === "pay" ? "on" : ""} onClick={() => { setTab("pay"); void call({ action: "pay" }); }}>💰 التعويض</button>
+              {!data.owner && <button type="button" className={tab === "pay" ? "on" : ""} onClick={() => { setTab("pay"); void call({ action: "pay" }); }}>💰 حسابي</button>}
             </div>
             {tab === "papers" && <List data={data} busy={busy} act={act} openGroup={(exam) => {
               group.current = exam; skipped.current.clear();
@@ -229,7 +229,7 @@ function HistoryTab({ h, busy, owner, act }: { h: History; busy: boolean; owner:
 const iqd = (n: number) => `${n.toLocaleString("en")} دينار`;
 /** التعويض: صاحب البوت يحدد لكل مصحح فصوله وأجوره ويحاسبه، والمصحح يشوف حسابه */
 function PayTab({ pay, busy, act }: { pay: Pay; busy: boolean; act: Call }) {
-  if (!pay.graders.length) return <div className="card"><div className="empty">ماكو مصححين بعد. انطي أحد صلاحية «✍️ التصحيح» من صفحة المساعدين.</div></div>;
+  if (!pay.graders.length) return <div className="card"><div className="empty">ماكو حساب.</div></div>;
   return <>{pay.graders.map((g) => <PayCardView key={g.id} g={g} all={pay.all} chapters={pay.chapters} busy={busy} act={act} />)}</>;
 }
 function PayCardView({ g, all, chapters, busy, act }: { g: PayCard; all: boolean; chapters: string[]; busy: boolean; act: Call }) {

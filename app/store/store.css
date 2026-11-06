@@ -243,3 +243,7 @@ body.grwide .grtop{padding-left:104px}
 /* رقم الطالب فوك صفحات الامتحان، بدون علامة مائية */
 .exidwrap{position:relative}.exidwrap .eximg{display:block}
 .exid{position:absolute;top:6px;inset-inline-start:6px;z-index:2;background:rgba(17,24,39,.82);color:#fff;font-weight:800;font-size:13px;border-radius:8px;padding:3px 8px;direction:ltr;pointer-events:none}
+/* محفظة التصحيح بصفحة المساعدين */
+.stwallet{display:flex;flex-direction:column;align-items:flex-end;gap:4px;white-space:nowrap}.stwallet b{color:var(--gold)}.stwallet small{opacity:.75}
+.stwallet .exbtn,.stwallet button{padding:6px 10px;font-size:13px}
+.stfield{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:14px;margin-top:8px}

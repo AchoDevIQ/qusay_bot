@@ -7,6 +7,7 @@ import { mainKb } from "./keyboards.ts";
 import { send } from "./telegram.ts";
 import { money, stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
+import { allChapters, card, graders, payAction } from "./graderPay.ts";
 
 const NAME_MAX = 60;
 const nameOf = (raw: unknown) => {
@@ -22,10 +23,14 @@ const amountOf = (raw: unknown) => {
 };
 async function pageData() {
   const rows = await find("staff", {}, { order: ["name"] });
+  const graderIds = new Set(await graders());
   return {
+    chapters: await allChapters(),
     perms: Object.entries(PERMS).map(([key, label]) => ({ key, label })),
     staff: await Promise.all(rows.map(async (s) => ({
       id: s.user_id, name: s.name, perms: String(s.perms ?? "").split(",").filter(Boolean), account: await staffAccount(s.user_id),
+      // محفظة التصحيح: اللي إله على التصحيح، تطلع برا جنب اسمه ويندفع بضغطة
+      grade: graderIds.has(s.user_id) ? await card(s.user_id) : null,
       pays: (await find("staff_pay", { staff_id: s.user_id }, { order: ["-id"], limit: 8 })).map((p) => ({ id: p.id, amount: p.amount, created: p.created })),
     }))),
   };
@@ -33,7 +38,7 @@ async function pageData() {
 const liveStaff = async (id: number) => need(await one("staff", { user_id: id }), "المساعد غير موجود");
 
 export async function staffAction(body: Row) {
-  await authed(body?.initData, "owner");
+  const me = await authed(body?.initData, "owner");
   const a = String(body.action ?? "");
   const id = Number(body.id);
   let notice = "";
@@ -71,6 +76,9 @@ export async function staffAction(body: Row) {
     await liveStaff(id);
     await kvSet(`limit_${id}`, String(amountOf(body.amount)));
     notice = "✅ انحفظ الرصيد المسموح";
+  } else if (a === "gradePay" || a === "gradeRate") {
+    await liveStaff(id);
+    notice = await payAction(me, { ...body, grader: id, action: a === "gradePay" ? "settle" : "setRate" });
   } else need(a === "list", "أمر غير معروف");
   return { ...await pageData(), notice };
 }
