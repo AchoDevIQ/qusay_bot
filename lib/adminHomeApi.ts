@@ -52,6 +52,7 @@ async function homeData(uid: number) {
       { page: "staff", icon: "👥", title: "المساعدين والصلاحيات" }, { page: "hours", icon: "⏰", title: "أوقات الأسئلة ومجموعتها" }, { page: "curriculum", icon: "📚", title: "الفصول والمواضيع" }, { page: "terms", icon: "📜", title: "شروط التسجيل" }, { page: "upload", icon: "📤", title: "رفع الفصول" }, { page: "comments", icon: "💬", title: "تعليقات الدرجات" }, { page: "stickers", icon: "🖼", title: "مكتبة الملصقات" });
     const stopped = await stoppedCount();
     people.push({ page: "lectures", icon: "📺", title: "محاضرات الامتحانات", note: "السكة: المحاضرات قبل كل امتحان" });
+    people.push({ page: "rent", icon: "🏢", title: "المراكز: الحضور والإيجار", note: "المدراء والتقرير الشهري والدفع" });
     people.push({ page: "checkpoints", icon: "🚦", title: "السيطرة", note: stopped ? `${stopped} طالب موقوف` : "ماكو موقوفين", hot: stopped > 0 });
   }
   if (shop.length) groups.push({ title: "المتجر", tiles: shop });
