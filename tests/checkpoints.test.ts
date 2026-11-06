@@ -199,3 +199,28 @@ test("نتيجة اللي عبر: لكل سيطرة درجاتها ورسالت�
   assert.equal(rows.length, 2);
   assert.notEqual(rows.find((x) => x.block === exams[4])!.image, first);
 });
+
+test("بالنسبة لكل السيطرات: نسبة وحدة توقف، ونتائجها بالنسبة، وترجع للدرجات بزر", async () => {
+  const { find } = await import("../lib/db.ts");
+  await assert.rejects(cp("savePct", { min: 0, absent: 0 }), /حط نسبة/);
+  await cp("savePct", { min: 60, absent: 0 });
+  await cp("saveMode", { mode: "percent" });
+  // السيطرة تنحط بمكانها بدون شرط
+  const r = await cp("saveCp", { exam: exams[0] });
+  assert.equal(r.mode, "percent");
+  await assert.rejects(cp("saveBand", { exam: "pct", from: 80, to: 120, text: "x" }), /من 0 إلى 100%/);
+  await cp("saveBand", { exam: "pct", from: 90, to: 100, text: "🌹 {الاسم} جبت {النسبة}" });
+  // سيطرة الأول (امتحان واحد من 100): 60% يعني 60
+  await reg(95, "واطي بالنسبة"); await graded(95, 0, 55);
+  await runCheckpoints(95);
+  assert.equal((await activeStop(95))!.need, 60);
+  await reg(96, "عالي بالنسبة"); await graded(96, 0, 95);
+  calls.length = 0;
+  await runCheckpoints(96);
+  assert.equal(await activeStop(96), null);
+  assert.match(calls.find((c) => c.method === "sendMessage")!.p.text, /عالي بالنسبة جبت 95%/);
+  assert.ok((await find("checkpoint_done", { user_id: 96 }))[0].band);
+  const back = await cp("saveMode", { mode: "marks" });
+  assert.equal(back.mode, "marks");
+  await cp("delCp", { exam: exams[0] });
+});

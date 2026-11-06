@@ -9,7 +9,8 @@ type Cp = { min: number; absent: number; bands: Band[] };
 type Exam = { id: number; title: string; since: number; from: string; cp: Cp | null };
 type Chapter = { chapter: string; exams: Exam[] };
 type Stop = { id: number; name: string; at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number };
-type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; bandTags: string[]; stopUrl: string; stopped: Stop[]; notice: string };
+type Mode = "marks" | "percent";
+type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; bandTags: string[]; stopUrl: string; mode: Mode; pct: { min: number; absent: number; bands: Band[] }; stopped: Stop[]; notice: string };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 
 export default function CheckpointsClient() {
@@ -41,6 +42,7 @@ export default function CheckpointsClient() {
                 ))}
               </div>
             </div>
+            <ModeCard data={data} busy={busy} call={call} />
             {!data.chapters.length && <div className="empty">ماكو فصول بيها امتحانات بعد.</div>}
             {data.chapters.map((c) => {
               const n = c.exams.filter((e) => e.cp).length;
@@ -48,7 +50,7 @@ export default function CheckpointsClient() {
                 <details key={c.chapter} className="card cpch">
                   <summary><b>{c.chapter}</b> <span className="cpcount">{c.exams.length} امتحان · {n ? `🚦 ${n} سيطرة` : "بدون سيطرة"}</span></summary>
                   <div className="expad">
-                    {c.exams.map((e, i) => <ExamRow key={`${e.id}|${e.since}|${e.cp?.min}|${e.cp?.absent}`} e={e} n={i + 1} tags={data.bandTags} busy={busy} call={call} />)}
+                    {c.exams.map((e, i) => <ExamRow key={`${e.id}|${e.since}|${e.cp?.min}|${e.cp?.absent}|${data.mode}`} e={e} n={i + 1} mode={data.mode} pct={data.pct.min} tags={data.bandTags} busy={busy} call={call} />)}
                   </div>
                 </details>
               );
@@ -63,7 +65,7 @@ export default function CheckpointsClient() {
   );
 }
 
-function ExamRow({ e, n, tags, busy, call }: { e: Exam; n: number; tags: string[]; busy: boolean; call: Call }) {
+function ExamRow({ e, n, mode, pct, tags, busy, call }: { e: Exam; n: number; mode: Mode; pct: number; tags: string[]; busy: boolean; call: Call }) {
   const [open, setOpen] = useState(false);
   const max = e.since * 100;
   const [min, setMin] = useState(String(e.cp?.min ?? max / 2));
@@ -79,17 +81,23 @@ function ExamRow({ e, n, tags, busy, call }: { e: Exam; n: number; tags: string[
         <div className="cpbox">
           <b>🚦 {e.cp ? "سيطرة" : "سيطرة جديدة"} بعد هذا الامتحان</b>
           <div className="exhint">تشمل {e.since} امتحان{e.since > 1 ? `، من «${e.from}» لحد هذا` : ""}. المجموع الكلي {max}.</div>
+          {mode === "percent" ? (
+            <div className="exhint">الشرط والنتائج من «📏 بالنسبة لكل السيطرات» فوق: لازم يجيب {Math.ceil((pct * max) / 100)} من {max} ({pct}%).</div>
+          ) : (<>
           <div className="cprule">
             <label>أقل مجموع (من {max})<input className="exnum" inputMode="numeric" value={min} onChange={(x) => setMin(x.target.value.replace(/\D/g, ""))} /></label>
             <label>يوقف إذا غاب<input className="exnum" inputMode="numeric" value={absent} onChange={(x) => setAbsent(x.target.value.replace(/\D/g, ""))} /></label>
           </div>
           <div className="exhint">لازم يجيب {min || 0} من {max} أقل شي{Number(absent) ? `، وإذا غاب ${absent} مرات أو أكثر ينوقف` : "، والغياب وحده ما يوقف"}. 0 يعني الشرط طافي.</div>
+          </>)}
           <div className="exline pdactions">
-            <button type="button" className="btn" disabled={busy || !changed} onClick={() => void call({ action: "saveCp", exam: e.id, min: min || 0, absent: absent || 0 })}>💾 حفظ السيطرة</button>
+            {mode === "percent"
+              ? !e.cp && <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "saveCp", exam: e.id })}>💾 حفظ السيطرة</button>
+              : <button type="button" className="btn" disabled={busy || !changed} onClick={() => void call({ action: "saveCp", exam: e.id, min: min || 0, absent: absent || 0 })}>💾 حفظ السيطرة</button>}
             {e.cp ? <Confirm label="🗑 حذف السيطرة" disabled={busy} onYes={() => void call({ action: "delCp", exam: e.id })} />
               : <button type="button" className="exbtn" disabled={busy} onClick={() => setOpen(false)}>إلغاء</button>}
           </div>
-          {e.cp && <Bands exam={e.id} max={max} bands={e.cp.bands} tags={tags} busy={busy} call={call} />}
+          {e.cp && mode === "marks" && <Bands exam={e.id} max={max} bands={e.cp.bands} tags={tags} busy={busy} call={call} />}
         </div>
       )}
     </div>
@@ -156,12 +164,12 @@ function StopPicture({ url, busy, call }: { url: string; busy: boolean; call: Ca
 }
 
 /** نتائج اللي عبر هاي السيطرة: من درجة لدرجة، رسالة وشخصية */
-function Bands({ exam, max, bands, tags, busy, call }: { exam: number; max: number; bands: Band[]; tags: string[]; busy: boolean; call: Call }) {
+function Bands({ exam, max, bands, tags, busy, call }: { exam: number | "pct"; max: number; bands: Band[]; tags: string[]; busy: boolean; call: Call }) {
   const [adding, setAdding] = useState(false);
   return (
     <div className="cpbands">
-      <b>🏅 نتيجة اللي يعبر (من {max})</b>
-      <div className="exhint">حط درجات «من» و«إلى». اللي يعبر توصله رسالة الدرجة اللي جابها وشخصيتها، وتومض بصفحة امتحاناته. ولي أمره توصله الرسالة بدون صورة.</div>
+      <b>🏅 نتيجة اللي يعبر {exam === "pct" ? "(بالنسبة)" : `(من ${max})`}</b>
+      <div className="exhint">{exam === "pct" ? "حط نسب «من» و«إلى»، تنطبق على كل السيطرات." : "حط درجات «من» و«إلى»."} اللي يعبر توصله رسالة الدرجة اللي جابها وشخصيتها، وتومض بصفحة امتحاناته. ولي أمره توصله الرسالة بدون صورة.</div>
       <div className="cptags">{tags.map((t) => <code key={t}>{t}</code>)}</div>
       {bands.map((b) => <BandRow key={`${b.id}|${b.from}|${b.to}|${b.text}|${b.pics.map((p) => p.ref).join()}`} exam={exam} max={max} b={b} busy={busy} call={call} />)}
       {adding ? <BandRow exam={exam} max={max} b={null} busy={busy} call={call} done={() => setAdding(false)} />
@@ -170,10 +178,11 @@ function Bands({ exam, max, bands, tags, busy, call }: { exam: number; max: numb
   );
 }
 
-function BandRow({ exam, max, b, busy, call, done }: { exam: number; max: number; b: Band | null; busy: boolean; call: Call; done?: () => void }) {
+function BandRow({ exam, max, b, busy, call, done }: { exam: number | "pct"; max: number; b: Band | null; busy: boolean; call: Call; done?: () => void }) {
   const [from, setFrom] = useState(String(b?.from ?? Math.round(max * 0.9)));
   const [to, setTo] = useState(String(b?.to ?? max));
-  const [text, setText] = useState(b?.text ?? "🌹 عاشت إيدك يا {الاسم}! عبرت سيطرة {الفصل} بدرجة {الدرجة} من {الكلي}");
+  const [text, setText] = useState(b?.text ?? (exam === "pct" ? "🌹 عاشت إيدك يا {الاسم}! عبرت سيطرة {الفصل} بنسبة {النسبة}" : "🌹 عاشت إيدك يا {الاسم}! عبرت سيطرة {الفصل} بدرجة {الدرجة} من {الكلي}"));
+  const unit = exam === "pct" ? "%" : "درجة";
   const [added, setAdded] = useState<{ file: File; url: string }[]>([]);
   const [drop, setDrop] = useState<string[]>([]);
   const kept = (b?.pics ?? []).filter((p) => !drop.includes(p.ref));
@@ -186,8 +195,8 @@ function BandRow({ exam, max, b, busy, call, done }: { exam: number; max: number
   return (
     <div className="cpbox adtop">
       <div className="cprule">
-        <label>من درجة<input className="exnum" inputMode="numeric" value={from} onChange={(x) => setFrom(x.target.value.replace(/\D/g, ""))} /></label>
-        <label>إلى درجة<input className="exnum" inputMode="numeric" value={to} onChange={(x) => setTo(x.target.value.replace(/\D/g, ""))} /></label>
+        <label>من {unit}<input className="exnum" inputMode="numeric" value={from} onChange={(x) => setFrom(x.target.value.replace(/\D/g, ""))} /></label>
+        <label>إلى {unit}<input className="exnum" inputMode="numeric" value={to} onChange={(x) => setTo(x.target.value.replace(/\D/g, ""))} /></label>
       </div>
       <textarea className="tmtext" aria-label="رسالة هاي النتيجة" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
       <div className="exhint">الصور: كل مرة يوصل للطالب صورة ما شافها قبل. ولي الأمر توصله الكتابة بس.</div>
@@ -200,6 +209,38 @@ function BandRow({ exam, max, b, busy, call, done }: { exam: number; max: number
         <button type="button" className="btn" disabled={busy || !from || !to || !text.trim()} onClick={save}>💾 حفظ</button>
         {b ? <Confirm label="🗑 حذف" disabled={busy} onYes={() => void call({ action: "delBand", exam, id: b.id })} />
           : <button type="button" className="exbtn" disabled={busy} onClick={() => done?.()}>إلغاء</button>}
+      </div>
+    </div>
+  );
+}
+
+/** الطريقة: نسبة وحدة لكل السيطرات، لو كل سيطرة بدرجاتها */
+function ModeCard({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
+  const [min, setMin] = useState(String(data.pct.min));
+  const [absent, setAbsent] = useState(String(data.pct.absent));
+  const changed = min !== String(data.pct.min) || absent !== String(data.pct.absent);
+  return (
+    <div className="card">
+      <h2>⚙️ طريقة السيطرة</h2>
+      <div className="expad">
+        <div className="seg">
+          <button type="button" className={data.mode === "percent" ? "on" : ""} disabled={busy} onClick={() => void call({ action: "saveMode", mode: "percent" })}>📏 بالنسبة لكل السيطرات</button>
+          <button type="button" className={data.mode === "marks" ? "on" : ""} disabled={busy} onClick={() => void call({ action: "saveMode", mode: "marks" })}>🔢 بالدرجات لكل سيطرة</button>
+        </div>
+        {data.mode === "marks" ? (
+          <div className="exhint adtop">كل سيطرة إلها أقل مجموع وغياب ونتائج بالدرجات، تحطهن تحت السيطرة بالفصل.</div>
+        ) : (
+          <>
+            <div className="exhint adtop">نسبة وحدة لكل السيطرات. إنت بس تحط مكان السيطرة بالفصل، والشرط والنتائج من هنا.</div>
+            <div className="cprule">
+              <label>أقل نسبة يعبر بيها %<input className="exnum" inputMode="numeric" value={min} onChange={(x) => setMin(x.target.value.replace(/\D/g, ""))} /></label>
+              <label>يوقف إذا غاب<input className="exnum" inputMode="numeric" value={absent} onChange={(x) => setAbsent(x.target.value.replace(/\D/g, ""))} /></label>
+            </div>
+            <div className="exhint">مثلاً 50%: سيطرة من 300 لازم يجيب 150، ومن 700 لازم 350. الغياب: 0 يعني طافي.</div>
+            <button type="button" className="btn adsmallbtn" disabled={busy || !changed} onClick={() => void call({ action: "savePct", min: min || 0, absent: absent || 0 })}>💾 حفظ</button>
+            <Bands exam="pct" max={100} bands={data.pct.bands} tags={data.bandTags} busy={busy} call={call} />
+          </>
+        )}
       </div>
     </div>
   );
