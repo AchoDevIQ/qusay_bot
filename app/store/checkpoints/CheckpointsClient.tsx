@@ -4,12 +4,12 @@
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
-type Cp = { min: number; absent: number };
+type Band = { id: string; from: number; to: number; text: string; pics: { ref: string; url: string }[] };
+type Cp = { min: number; absent: number; bands: Band[] };
 type Exam = { id: number; title: string; since: number; from: string; cp: Cp | null };
 type Chapter = { chapter: string; exams: Exam[] };
 type Stop = { id: number; name: string; at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number };
-type Band = { id: string; from: number; to: number; text: string; url: string };
-type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; bandTags: string[]; bands: Band[]; stopUrl: string; stopped: Stop[]; notice: string };
+type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; bandTags: string[]; stopUrl: string; stopped: Stop[]; notice: string };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 
 export default function CheckpointsClient() {
@@ -48,14 +48,13 @@ export default function CheckpointsClient() {
                 <details key={c.chapter} className="card cpch">
                   <summary><b>{c.chapter}</b> <span className="cpcount">{c.exams.length} امتحان · {n ? `🚦 ${n} سيطرة` : "بدون سيطرة"}</span></summary>
                   <div className="expad">
-                    {c.exams.map((e, i) => <ExamRow key={`${e.id}|${e.since}|${e.cp?.min}|${e.cp?.absent}`} e={e} n={i + 1} busy={busy} call={call} />)}
+                    {c.exams.map((e, i) => <ExamRow key={`${e.id}|${e.since}|${e.cp?.min}|${e.cp?.absent}`} e={e} n={i + 1} tags={data.bandTags} busy={busy} call={call} />)}
                   </div>
                 </details>
               );
             })}
             <Texts key={data.student + data.guardian} data={data} busy={busy} call={call} />
             <StopPicture url={data.stopUrl} busy={busy} call={call} />
-            <Bands data={data} busy={busy} call={call} />
           </>
         )}
       </div>
@@ -64,7 +63,7 @@ export default function CheckpointsClient() {
   );
 }
 
-function ExamRow({ e, n, busy, call }: { e: Exam; n: number; busy: boolean; call: Call }) {
+function ExamRow({ e, n, tags, busy, call }: { e: Exam; n: number; tags: string[]; busy: boolean; call: Call }) {
   const [open, setOpen] = useState(false);
   const max = e.since * 100;
   const [min, setMin] = useState(String(e.cp?.min ?? max / 2));
@@ -90,6 +89,7 @@ function ExamRow({ e, n, busy, call }: { e: Exam; n: number; busy: boolean; call
             {e.cp ? <Confirm label="🗑 حذف السيطرة" disabled={busy} onYes={() => void call({ action: "delCp", exam: e.id })} />
               : <button type="button" className="exbtn" disabled={busy} onClick={() => setOpen(false)}>إلغاء</button>}
           </div>
+          {e.cp && <Bands exam={e.id} max={max} bands={e.cp.bands} tags={tags} busy={busy} call={call} />}
         </div>
       )}
     </div>
@@ -147,7 +147,7 @@ function StopPicture({ url, busy, call }: { url: string; busy: boolean; call: Ca
     <div className="card">
       <h2>⛔ شخصية الإيقاف</h2>
       <div className="expad">
-        <div className="exhint">تطلع ويا رسالة الإيقاف بالبوت، وتومض بصفحة امتحاناته. مثلاً إنت لابس مرور وتكول «أوگف أوگف».</div>
+        <div className="exhint">توصل للطالب ويا رسالة الإيقاف بالبوت، وتومض بصفحة امتحاناته. ولي أمره توصله الرسالة بدون صورة. مثلاً إنت لابس مرور وتكول «أوگف أوگف».</div>
         <PicturePick url={url} file={file} setFile={setFile} drop={drop} setDrop={setDrop} />
         <button type="button" className="btn adsmallbtn" disabled={busy || (!file && !drop)} onClick={save}>💾 حفظ</button>
       </div>
@@ -155,47 +155,50 @@ function StopPicture({ url, busy, call }: { url: string; busy: boolean; call: Ca
   );
 }
 
-/** نتائج اللي عبر: من نسبة لنسبة، رسالة وشخصية */
-function Bands({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
+/** نتائج اللي عبر هاي السيطرة: من درجة لدرجة، رسالة وشخصية */
+function Bands({ exam, max, bands, tags, busy, call }: { exam: number; max: number; bands: Band[]; tags: string[]; busy: boolean; call: Call }) {
   const [adding, setAdding] = useState(false);
   return (
-    <div className="card">
-      <h2>🏅 نتيجة اللي عبر السيطرة</h2>
-      <div className="expad">
-        <div className="exhint">حط نسب من المجموع الكلي للسيطرة. كل طالب عبر توصله رسالة النسبة اللي وقع بيها وشخصيتها، هو وولي أمره، وتومض بصفحة امتحاناته. اللي ما عبر توصله رسالة الإيقاف.</div>
-        <div className="cptags">{data.bandTags.map((t) => <code key={t}>{t}</code>)}</div>
-        {data.bands.map((b) => <BandRow key={`${b.id}|${b.from}|${b.to}|${b.text}|${b.url}`} b={b} busy={busy} call={call} />)}
-        {adding ? <BandRow b={null} busy={busy} call={call} done={() => setAdding(false)} />
-          : <button type="button" className="btn adsmallbtn adtop" disabled={busy} onClick={() => setAdding(true)}>➕ إضافة نتيجة</button>}
-      </div>
+    <div className="cpbands">
+      <b>🏅 نتيجة اللي يعبر (من {max})</b>
+      <div className="exhint">حط درجات «من» و«إلى». اللي يعبر توصله رسالة الدرجة اللي جابها وشخصيتها، وتومض بصفحة امتحاناته. ولي أمره توصله الرسالة بدون صورة.</div>
+      <div className="cptags">{tags.map((t) => <code key={t}>{t}</code>)}</div>
+      {bands.map((b) => <BandRow key={`${b.id}|${b.from}|${b.to}|${b.text}|${b.pics.map((p) => p.ref).join()}`} exam={exam} max={max} b={b} busy={busy} call={call} />)}
+      {adding ? <BandRow exam={exam} max={max} b={null} busy={busy} call={call} done={() => setAdding(false)} />
+        : <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setAdding(true)}>➕ إضافة نتيجة</button>}
     </div>
   );
 }
 
-function BandRow({ b, busy, call, done }: { b: Band | null; busy: boolean; call: Call; done?: () => void }) {
-  const [from, setFrom] = useState(String(b?.from ?? 90));
-  const [to, setTo] = useState(String(b?.to ?? 100));
-  const [text, setText] = useState(b?.text ?? "🌹 عاشت إيدك يا {الاسم}! عبرت سيطرة {الفصل} بنسبة {النسبة}");
-  const [file, setFile] = useState<File | null>(null);
-  const [drop, setDrop] = useState(false);
+function BandRow({ exam, max, b, busy, call, done }: { exam: number; max: number; b: Band | null; busy: boolean; call: Call; done?: () => void }) {
+  const [from, setFrom] = useState(String(b?.from ?? Math.round(max * 0.9)));
+  const [to, setTo] = useState(String(b?.to ?? max));
+  const [text, setText] = useState(b?.text ?? "🌹 عاشت إيدك يا {الاسم}! عبرت سيطرة {الفصل} بدرجة {الدرجة} من {الكلي}");
+  const [added, setAdded] = useState<{ file: File; url: string }[]>([]);
+  const [drop, setDrop] = useState<string[]>([]);
+  const kept = (b?.pics ?? []).filter((p) => !drop.includes(p.ref));
   function save() {
     const f = new FormData();
-    f.set("action", "saveBand"); f.set("id", b?.id ?? ""); f.set("from", from); f.set("to", to); f.set("text", text);
-    if (file) f.set("file", file);
-    if (drop) f.set("dropImage", "1");
-    void call(f).then((r) => { if (r) done?.(); });
+    f.set("action", "saveBand"); f.set("exam", String(exam)); f.set("id", b?.id ?? ""); f.set("from", from); f.set("to", to); f.set("text", text); f.set("drop", drop.join(","));
+    for (const a of added) f.append("file", a.file);
+    void call(f).then((r) => { if (r) { setAdded([]); setDrop([]); done?.(); } });
   }
   return (
     <div className="cpbox adtop">
       <div className="cprule">
-        <label>من %<input className="exnum" inputMode="numeric" value={from} onChange={(x) => setFrom(x.target.value.replace(/\D/g, ""))} /></label>
-        <label>إلى %<input className="exnum" inputMode="numeric" value={to} onChange={(x) => setTo(x.target.value.replace(/\D/g, ""))} /></label>
+        <label>من درجة<input className="exnum" inputMode="numeric" value={from} onChange={(x) => setFrom(x.target.value.replace(/\D/g, ""))} /></label>
+        <label>إلى درجة<input className="exnum" inputMode="numeric" value={to} onChange={(x) => setTo(x.target.value.replace(/\D/g, ""))} /></label>
       </div>
       <textarea className="tmtext" aria-label="رسالة هاي النتيجة" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
-      <PicturePick url={b?.url ?? ""} file={file} setFile={setFile} drop={drop} setDrop={setDrop} />
+      <div className="exhint">الصور: كل مرة يوصل للطالب صورة ما شافها قبل. ولي الأمر توصله الكتابة بس.</div>
+      <div className="cppics">
+        {kept.map((p) => <div key={p.ref}><img src={p.url} alt="شخصية" /><button type="button" className="exbtn" onClick={() => setDrop([...drop, p.ref])}>🗑</button></div>)}
+        {added.map((a, i) => <div key={a.url}><img src={a.url} alt="شخصية جديدة" /><button type="button" className="exbtn" onClick={() => setAdded(added.filter((_, j) => j !== i))}>🗑</button></div>)}
+      </div>
+      <label className="exbtn">🖼 أضف صور<input type="file" multiple accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const l = [...(e.target.files ?? [])]; e.target.value = ""; setAdded([...added, ...l.map((file) => ({ file, url: URL.createObjectURL(file) }))]); }} /></label>
       <div className="exline pdactions">
         <button type="button" className="btn" disabled={busy || !from || !to || !text.trim()} onClick={save}>💾 حفظ</button>
-        {b ? <Confirm label="🗑 حذف" disabled={busy} onYes={() => void call({ action: "delBand", id: b.id })} />
+        {b ? <Confirm label="🗑 حذف" disabled={busy} onYes={() => void call({ action: "delBand", exam, id: b.id })} />
           : <button type="button" className="exbtn" disabled={busy} onClick={() => done?.()}>إلغاء</button>}
       </div>
     </div>

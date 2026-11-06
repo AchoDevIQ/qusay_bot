@@ -8,22 +8,24 @@ import { isStaff, student } from "./data.ts";
 import { closeFinished } from "./examRoom.ts";
 import { schedSettings } from "./schedApi.ts";
 import { itemState } from "./scheduleRules.ts";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { files } from "./files.ts";
 import { send, upload } from "./telegram.ts";
 import { esc, stamp } from "./util.ts";
 import { ApiError, authed, intOf, need } from "./webApi.ts";
 
-export type Rule = { min: number; absent: number };
-/** نتيجة اللي عبر: من نسبة لنسبة (من المجموع الكلي للسيطرة) إلها رسالة وشخصية */
-export type Band = { id: string; from: number; to: number; text: string; image: string | null };
-type Cfg = { rules: Record<string, Rule>; student: string; guardian: string; bands: Band[]; stopImage: string | null };
+/** نتيجة اللي عبر: من درجة لدرجة (من مجموع هاي السيطرة) إلها رسالة وشخصية */
+export type Band = { id: string; from: number; to: number; text: string; images?: string[]; image?: string | null };
+/** صور النتيجة (الحفظ القديم كان صورة وحدة) */
+const picsOf = (b: Band) => [...new Set([...(b.images ?? []), ...(b.image ? [b.image] : [])])];
+export type Rule = { min: number; absent: number; bands?: Band[] };
+type Cfg = { rules: Record<string, Rule>; student: string; guardian: string; stopImage: string | null };
 type Seg = Rule & { exam: number; chapter: string; title: string; from: string; ids: number[] };
 const KEY = "checkpoints_v2";
 const PER_EXAM = 100;
 const MAX_TEXT = 2000;
 export const TAGS = ["{الاسم}", "{الموقوف}", "{السبب}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{المطلوب}", "{الغياب}"];
-export const BAND_TAGS = ["{الاسم}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{النسبة}"];
+export const BAND_TAGS = ["{الاسم}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}"];
 const IMG = /^checkpoints\/[\w-]+\.(png|jpg|webp)$/;
 export const cpImageUrl = (ref: string | null) => (ref && IMG.test(ref) ? `/api/cpimg?ref=${encodeURIComponent(ref)}` : "");
 const LOW = "عدم تحقيق الدرجة المطلوبة للعبور";
@@ -35,7 +37,7 @@ export const DEFAULT_GUARDIAN = "⛔ توقفت {الموقوف} على الطا
 export async function loadCfg(): Promise<Cfg> {
   let saved: Partial<Cfg> = {};
   try { saved = JSON.parse(await kvGet(KEY) ?? "{}"); } catch { /* إعدادات خربانة */ }
-  return { rules: saved.rules ?? {}, student: saved.student || DEFAULT_STUDENT, guardian: saved.guardian || DEFAULT_GUARDIAN, bands: Array.isArray(saved.bands) ? saved.bands : [], stopImage: saved.stopImage ?? null };
+  return { rules: saved.rules ?? {}, student: saved.student || DEFAULT_STUDENT, guardian: saved.guardian || DEFAULT_GUARDIAN, stopImage: saved.stopImage ?? null };
 }
 const saveCfg = (c: Cfg) => kvSet(KEY, JSON.stringify(c));
 
@@ -73,7 +75,7 @@ const whatOf = (s: Row) => (s.lectures ? "الامتحانات والمحاضر�
 
 const fill = (text: string, v: Record<string, string | number>) => esc(text).replace(/\{([^{}]+)\}/g, (m, k) => (k in v ? esc(String(v[k])) : m));
 const plain = (text: string, v: Record<string, string | number>) => text.replace(/\{([^{}]+)\}/g, (m, k) => (k in v ? String(v[k]) : m));
-export const bandOf = (bands: Band[], pct: number) => bands.find((b) => pct >= b.from && pct <= b.to) ?? null;
+export const bandOf = (bands: Band[] | undefined, score: number) => (bands ?? []).find((b) => score >= b.from && score <= b.to) ?? null;
 /** صورة الشخصية بالبوت (إذا موجودة) */
 async function sendPicture(chat: number, ref: string | null) {
   if (!ref || !IMG.test(ref)) return;
@@ -82,14 +84,23 @@ async function sendPicture(chat: number, ref: string | null) {
   const ext = ref.split(".").pop()!;
   try { await upload("sendPhoto", { chat_id: String(chat) }, "photo", buf, `c.${ext}`, ext === "jpg" ? "image/jpeg" : `image/${ext}`); } catch (e) { console.error(e); }
 }
-/** اللي عبر: رسالة الفئة اللي وقع بيها وشخصيتها، إله ولولي أمره */
-async function rewardStudent(uid: number, st: Row, band: Band | null, v: Record<string, string | number>) {
+/** صورة ما وصلت للطالب قبل، وإذا كلهن وصلن: وحدة غير آخر وحدة إذا أكو */
+async function freshPicture(uid: number, band: Band) {
+  const pics = picsOf(band);
+  if (!pics.length) return null;
+  const past = (await find("checkpoint_done", { user_id: uid })).filter((r) => r.image).sort((a, b) => String(a.created).localeCompare(String(b.created))).map((r) => r.image as string);
+  const fresh = pics.filter((p) => !past.includes(p));
+  const pool = fresh.length ? fresh : pics.length > 1 ? pics.filter((p) => p !== past[past.length - 1]) : pics;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+/** اللي عبر: رسالة الدرجة اللي جابها وشخصيتها للطالب، وولي أمره الكتابة بس */
+async function rewardStudent(uid: number, st: Row, band: Band | null, pic: string | null, v: Record<string, string | number>) {
   if (!band) return;
-  const to = [uid, (await guardianOf(uid))?.guardian_id].filter(Boolean) as number[];
-  for (const chat of to) {
-    await sendPicture(chat, band.image);
-    try { await send(chat, fill(band.text, { "الاسم": st.name ?? "", ...v })); } catch (e) { console.error(e); }
-  }
+  const text = fill(band.text, { "الاسم": st.name ?? "", ...v });
+  await sendPicture(uid, pic);
+  try { await send(uid, text); } catch (e) { console.error(e); }
+  const g = (await guardianOf(uid))?.guardian_id;
+  if (g) try { await send(g, text); } catch (e) { console.error(e); }
 }
 
 /** يحسب السيطرات اللي كملت للطالب، ويوقفه إذا ما عبر وحدة منها */
@@ -128,12 +139,12 @@ export async function runCheckpoints(uid: number) {
     const score = res.reduce((n, x) => n + x!.mark, 0), absent = res.reduce((n, x) => n + x!.absent, 0);
     const n = g.ids.length;
     const low = g.min > 0 && score < g.min, many = g.absent > 0 && absent >= g.absent;
-    const pct = Math.round((score * 100) / (n * PER_EXAM));
-    const band = low || many ? null : bandOf(cfg.bands, pct);
-    await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: low || many ? 0 : 1, score, absent, created: now, band: band?.id ?? null, seen: null });
+    const band = low || many ? null : bandOf(cfg.rules[String(g.exam)]?.bands, score);
+    const pic = band ? await freshPicture(uid, band) : null;
+    await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: low || many ? 0 : 1, score, absent, created: now, band: band?.id ?? null, image: pic, seen: null });
     if (!low && !many) {
       await logActivity(uid, `🚦 عبر سيطرة ${g.chapter} بعد ${g.title}: ${score} من ${n * PER_EXAM}، غياب ${absent}`);
-      await rewardStudent(uid, st, band, { "الفصل": g.chapter, "العدد": n, "الدرجة": score, "الكلي": n * PER_EXAM, "النسبة": `${pct}%` });
+      await rewardStudent(uid, st, band, pic, { "الفصل": g.chapter, "العدد": n, "الدرجة": score, "الكلي": n * PER_EXAM });
       continue;
     }
     await stopStudent(uid, st, cfg, { chapter: g.chapter, block: g.exam, every: n, score, need: g.min, absent, reason: [low && LOW, many && ABSENT].filter(Boolean).join(" و") });
@@ -152,7 +163,7 @@ async function stopStudent(uid: number, st: Row, cfg: Cfg, x: { chapter: string;
   await sendPicture(uid, cfg.stopImage);
   await safe(uid, fill(cfg.student, v));
   const g = await guardianOf(uid);
-  if (g) { await sendPicture(g.guardian_id, cfg.stopImage); await safe(g.guardian_id, fill(cfg.guardian, v)); }
+  if (g) await safe(g.guardian_id, fill(cfg.guardian, v));   // ولي الأمر: الكتابة بس، بدون صورة
   for (const a of ADMIN_IDS) await safe(a, `⛔ <b>توقف طالب بالسيطرة</b>\nالطالب: ${esc(st.name ?? "")}\nتوقفت عليه: ${what}\nالسبب: ${esc(x.reason)}\n${esc(x.chapter)}: ${x.score} من ${row.max}، غياب ${x.absent}\nتفكه من صفحة السيطرة أو صفحة الطالب.`);
 }
 
@@ -161,12 +172,11 @@ export async function checkpointCard(uid: number) {
   const r = (await find("checkpoint_done", { user_id: uid })).filter((x) => x.passed === 1 && x.band && !x.seen).sort((a, b) => String(b.created).localeCompare(String(a.created)))[0];
   if (!r) return null;
   const cfg = await loadCfg();
-  const band = cfg.bands.find((b) => b.id === r.band);
+  const band = (cfg.rules[String(r.block)]?.bands ?? []).find((b) => b.id === r.band);
   if (!band) return null;
   const n = Math.max(1, segmentsOf(await bookExams(), cfg.rules).find((g) => g.chapter === r.chapter && g.exam === r.block)?.ids.length ?? 1);
-  const pct = Math.round((Number(r.score) * 100) / (n * PER_EXAM));
   const st = await student(uid);
-  return { key: `${r.chapter}|${r.block}`, image: cpImageUrl(band.image), text: plain(band.text, { "الاسم": st?.name ?? "", "الفصل": r.chapter, "العدد": n, "الدرجة": r.score, "الكلي": n * PER_EXAM, "النسبة": `${pct}%` }) };
+  return { key: `${r.chapter}|${r.block}`, image: cpImageUrl(r.image ?? null), text: plain(band.text, { "الاسم": st?.name ?? "", "الفصل": r.chapter, "العدد": n, "الدرجة": r.score, "الكلي": n * PER_EXAM }) };
 }
 export async function seeCheckpoint(uid: number, key: unknown) {
   const [chapter, block] = String(key ?? "").split("|");
@@ -210,7 +220,8 @@ async function pageData() {
     chapters.push({
       chapter, exams: list.map((e, i) => {
         const r = cfg.rules[String(e.id)];
-        const row = { id: e.id as number, title: String(e.title ?? ""), since: i + 1 - from, from: String(list[from].title ?? ""), cp: r ?? null };
+        const row = { id: e.id as number, title: String(e.title ?? ""), since: i + 1 - from, from: String(list[from].title ?? ""),
+          cp: r ? { min: r.min, absent: r.absent, bands: [...r.bands ?? []].sort((a, b) => b.from - a.from).map((b) => ({ id: b.id, from: b.from, to: b.to, text: b.text, pics: picsOf(b).map((ref) => ({ ref, url: cpImageUrl(ref) })) })) } : null };
         if (r) from = i + 1;
         return row;
       }),
@@ -222,7 +233,7 @@ async function pageData() {
   }
   return {
     chapters, student: cfg.student, guardian: cfg.guardian, tags: TAGS, bandTags: BAND_TAGS, stopped, notice: "",
-    bands: [...cfg.bands].sort((a, b) => b.from - a.from).map((b) => ({ ...b, url: cpImageUrl(b.image) })), stopUrl: cpImageUrl(cfg.stopImage),
+    stopUrl: cpImageUrl(cfg.stopImage),
   };
 }
 
@@ -241,37 +252,46 @@ async function savePicture(f: unknown) {
   const buf = Buffer.from(await (f as Blob).arrayBuffer());
   const ext = buf[0] === 0x89 && buf[1] === 0x50 ? "png" : buf[0] === 0xff && buf[1] === 0xd8 ? "jpg" : buf.subarray(8, 12).toString() === "WEBP" ? "webp" : "";
   need(ext, "الصورة لازم PNG أو JPG أو WEBP");
-  const ref = `checkpoints/${randomUUID()}.${ext}`;
+  // اسمها من محتواها: نفس الصورة بأكثر من سيطرة تبقى نفسها، حتى ما توصل للطالب مرتين
+  const ref = `checkpoints/${createHash("sha256").update(buf).digest("hex").slice(0, 32)}.${ext}`;
   await files().write(ref, buf, ext === "jpg" ? "image/jpeg" : `image/${ext}`);
   return ref;
 }
 
 export async function checkpointsAction(raw: Row | FormData) {
   const body: Row = raw instanceof FormData ? Object.fromEntries([...raw.entries()]) : raw;
+  const files = raw instanceof FormData ? raw.getAll("file") : [];
   const uid = await authed(body?.initData, "owner");
   const a = String(body.action ?? "");
   let notice = "";
-  if (a === "saveBand") {
+  if (a === "saveBand" || a === "delBand") {
+    // النتيجة تخص سيطرة وحدة: درجاتها من مجموع هاي السيطرة
     const cfg = await loadCfg();
-    const from = intOf(body.from, 0, 100, "من نسبة 0 إلى 100"), to = intOf(body.to, 0, 100, "إلى نسبة 0 إلى 100");
-    need(from <= to, "«من» لازم أصغر من «إلى»");
-    const text = textOf(body.text);
-    const id = String(body.id ?? "") || randomUUID().slice(0, 8);
-    const clash = cfg.bands.find((b) => b.id !== id && from <= b.to && to >= b.from);
-    need(!clash, clash ? `تتداخل ويا ${clash.from}% إلى ${clash.to}%` : "");
-    const old = cfg.bands.find((b) => b.id === id);
-    let image = old?.image ?? null;
-    if (body.file instanceof Blob && body.file.size > 0) image = await savePicture(body.file);
-    if (body.dropImage === "1") image = null;
-    cfg.bands = [...cfg.bands.filter((b) => b.id !== id), { id, from, to, text, image }];
+    const rule = cfg.rules[String(body.exam)];
+    need(rule, "أنشئ السيطرة أول");
+    const e = (await pageData()).chapters.flatMap((c) => c.exams).find((x) => x.id === Number(body.exam))!;
+    const max = e.since * PER_EXAM, bands = rule.bands ?? [];
+    if (a === "delBand") {
+      need(bands.some((b) => b.id === String(body.id)), "غير موجودة");
+      rule.bands = bands.filter((b) => b.id !== String(body.id));
+      notice = "🗑 انحذفت";
+    } else {
+      const from = intOf(body.from, 0, max, `«من» درجة من 0 إلى ${max}`), to = intOf(body.to, 0, max, `«إلى» درجة من 0 إلى ${max}`);
+      need(from <= to, "«من» لازم أصغر من «إلى»");
+      const text = textOf(body.text);
+      const id = String(body.id ?? "") || randomUUID().slice(0, 8);
+      const clash = bands.find((b) => b.id !== id && from <= b.to && to >= b.from);
+      need(!clash, clash ? `تتداخل ويا ${clash.from} إلى ${clash.to}` : "");
+      // الصور: الموجودة ناقص اللي انشالت، وفوكها الجديدة
+      const old = bands.find((b) => b.id === id);
+      const drop = new Set(String(body.drop ?? "").split(",").filter(Boolean));
+      const images = (old ? picsOf(old) : []).filter((p) => !drop.has(p));
+      for (const f of files) if (f instanceof Blob && f.size > 0) images.push(await savePicture(f));
+      need(images.length <= 20, "أكثر شي 20 صورة لكل نتيجة");
+      rule.bands = [...bands.filter((b) => b.id !== id), { id, from, to, text, images }];
+      notice = `✅ انحفظت ${from} إلى ${to} من ${max}`;
+    }
     await saveCfg(cfg);
-    notice = `✅ انحفظت ${from}% إلى ${to}%`;
-  } else if (a === "delBand") {
-    const cfg = await loadCfg();
-    need(cfg.bands.some((b) => b.id === String(body.id)), "غير موجودة");
-    cfg.bands = cfg.bands.filter((b) => b.id !== String(body.id));
-    await saveCfg(cfg);
-    notice = "🗑 انحذفت";
   } else if (a === "stopImage") {
     const cfg = await loadCfg();
     cfg.stopImage = body.dropImage === "1" ? null : await savePicture(body.file);
@@ -291,7 +311,7 @@ export async function checkpointsAction(raw: Row | FormData) {
       const n = e.since;
       const rule: Rule = { min: intOf(body.min, 0, n * PER_EXAM, `اكتب أقل مجموع من 0 إلى ${n * PER_EXAM}`), absent: intOf(body.absent, 0, n, `اكتب عدد الغيابات من 0 إلى ${n}`) };
       need(rule.min > 0 || rule.absent > 0, "حط أقل مجموع أو عدد غيابات، حتى السيطرة يكون إلها شرط");
-      cfg.rules[String(id)] = rule;
+      cfg.rules[String(id)] = { ...rule, bands: cfg.rules[String(id)]?.bands ?? [] };
       notice = `✅ انحفظت السيطرة بعد ${e.title}`;
     }
     await saveCfg(cfg);

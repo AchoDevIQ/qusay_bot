@@ -47,7 +47,7 @@ test("صفحة السيطرة لصاحب البوت بس، والسيطرة تن
   // السيطرة الثانية تبدي من بعد الأولى: امتحانين بس
   const s = await cp("saveCp", { exam: exams[4], min: 100, absent: 0 });
   assert.deepEqual(s.chapters[0].exams.map((e: any) => e.since), [1, 2, 3, 1, 2, 1]);
-  assert.deepEqual(s.chapters[0].exams[4].cp, { min: 100, absent: 0 });
+  assert.deepEqual(s.chapters[0].exams[4].cp, { min: 100, absent: 0, bands: [] });
   await assert.rejects(cp("saveCp", { exam: exams[4], min: 300, absent: 0 }), /من 0 إلى 200/);
   const d = await cp("delCp", { exam: exams[4] });
   assert.equal(d.chapters[0].exams[4].cp, null);
@@ -151,35 +151,51 @@ test("الإعادة: الغياب ينمسح إذا اجت درجة بعده، 
   assert.equal((await find("checkpoint_done", { user_id: 81 }))[0].score, 120);
 });
 
-test("نتيجة اللي عبر: النسبة تختار رسالتها وشخصيتها، توصل إله ولولي أمره، وتومض بصفحته لحد ما يشوفها", async () => {
+test("نتيجة اللي عبر: لكل سيطرة درجاتها ورسالتها وصورها، الطالب ما توصله نفس الصورة مرتين، وولي أمره الكتابة بس", async () => {
   const { find } = await import("../lib/db.ts");
-  const png = () => new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])], { type: "image/png" });
-  const form = (x: Record<string, string | Blob>) => { const f = new FormData(); f.set("initData", sign(1)); for (const [k, v] of Object.entries(x)) f.set(k, v); return f; };
-  await assert.rejects(cp("saveBand", { from: 90, to: 80, text: "x" }), /أصغر/);
-  await checkpointsAction(form({ action: "saveBand", from: "80", to: "100", text: "🌹 عاشت إيدك يا {الاسم}، نسبتك {النسبة}", file: png() }));
-  await assert.rejects(cp("saveBand", { from: 70, to: 85, text: "y" }), /تتداخل/);
-  const r = await cp("saveBand", { from: 50, to: 79, text: "👍 زين يا {الاسم}" });
-  assert.deepEqual(r.bands.map((b: any) => [b.from, b.to, !!b.url]), [[80, 100, true], [50, 79, false]]);
-  await assert.rejects(checkpointsAction(form({ action: "stopImage", file: new Blob([Buffer.from("hello")]) })), /PNG أو JPG/);
-  const st = await checkpointsAction(form({ action: "stopImage", file: png() })) as any;
-  assert.match(st.stopUrl, /^\/api\/cpimg\?ref=checkpoints%2F/);
-  // طالب عبر بنسبة 90%: شخصية ورسالة، إله ولولي أمره
+  const pic = (n: number) => new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, n])], { type: "image/png" });
+  const form = (x: Record<string, string>, pics: Blob[] = []) => { const f = new FormData(); f.set("initData", sign(1)); for (const [k, v] of Object.entries(x)) f.set(k, v); for (const p of pics) f.append("file", p); return f; };
+  await assert.rejects(cp("saveBand", { exam: exams[1], from: 1, to: 2, text: "x" }), /أنشئ السيطرة أول/);
+  await assert.rejects(cp("saveBand", { exam: exams[2], from: 200, to: 400, text: "x" }), /من 0 إلى 300/);
+  await assert.rejects(cp("saveBand", { exam: exams[2], from: 290, to: 250, text: "x" }), /أصغر/);
+  // السيطرة الثانية (بعد الامتحان الخامس) تشمل الرابع والخامس: من 200
+  await checkpointsAction(form({ action: "saveBand", exam: String(exams[2]), from: "250", to: "300", text: "🌹 عاشت إيدك يا {الاسم}، جبت {الدرجة} من {الكلي}" }, [pic(1), pic(2)]));
+  await checkpointsAction(form({ action: "saveBand", exam: String(exams[4]), from: "160", to: "200", text: "🌹 مرة ثانية يا {الاسم}" }, [pic(1), pic(2)]));
+  await assert.rejects(cp("saveBand", { exam: exams[2], from: 200, to: 260, text: "y" }), /تتداخل ويا 250 إلى 300/);
+  const r = await cp("saveBand", { exam: exams[2], from: 150, to: 249, text: "👍 زين يا {الاسم}" });
+  const c2 = r.chapters[0].exams[2].cp;
+  assert.deepEqual(c2.bands.map((b: any) => [b.from, b.to, b.pics.length]), [[250, 300, 2], [150, 249, 0]]);
+  // نفس الصورة بسيطرتين: نفس الاسم
+  assert.deepEqual(r.chapters[0].exams[4].cp.bands[0].pics.map((p: any) => p.ref).sort(), c2.bands[0].pics.map((p: any) => p.ref).sort());
+  // حفظ شرط السيطرة ما يمسح نتائجها
+  const kept = await cp("saveCp", { exam: exams[2], min: 150, absent: 2 });
+  assert.equal(kept.chapters[0].exams[2].cp.bands.length, 2);
+  const st = await checkpointsAction(form({ action: "stopImage" }, [])).catch((e) => e);
+  assert.match(String(st.message), /اختار صورة/);
+  // طالب جاب 270: صورة ورسالة إله، وولي أمره الرسالة بس
   await reg(90, "شاطر");
   await put("guardians", { guardian_id: 91, student_id: 90, created: "x" });
-  await graded(90, 0, 90); await graded(90, 1, 90); await graded(90, 2, 90);
+  for (const n of [0, 1, 2]) await graded(90, n, 90);
   calls.length = 0;
   await runCheckpoints(90);
   assert.equal(await activeStop(90), null);
-  assert.deepEqual(calls.filter((c) => c.method === "sendPhoto").length, 2);
+  assert.equal(calls.filter((c) => c.method === "sendPhoto").length, 1);
   const msgs = calls.filter((c) => c.method === "sendMessage");
   assert.deepEqual(msgs.map((m) => m.p.chat_id), [90, 91]);
-  assert.match(msgs[0].p.text, /عاشت إيدك يا شاطر، نسبتك 90%/);
-  assert.equal((await find("checkpoint_done", { user_id: 90 }))[0].seen, null);
-  // صفحته: الكارت يطلع، ومن يدوس تمام يختفي
+  assert.match(msgs[0].p.text, /عاشت إيدك يا شاطر، جبت 270 من 300/);
+  const first = (await find("checkpoint_done", { user_id: 90 }))[0].image;
+  assert.ok(first);
+  // الكارت بصفحته بنفس الصورة، ومن يدوس تمام يختفي
   const { checkpointCard, seeCheckpoint } = await import("../lib/checkpoints.ts");
   const card = (await checkpointCard(90))!;
-  assert.match(card.text, /نسبتك 90%/);
-  assert.match(card.image, /cpimg/);
+  assert.match(card.text, /جبت 270 من 300/);
+  assert.ok(card.image.includes(encodeURIComponent(first)));
   await seeCheckpoint(90, card.key);
   assert.equal(await checkpointCard(90), null);
+  // السيطرة الثانية بنفس الدرجات: صورة غير اللي شافها
+  for (const n of [3, 4]) await graded(90, n, 90);
+  await runCheckpoints(90);
+  const rows = await find("checkpoint_done", { user_id: 90 });
+  assert.equal(rows.length, 2);
+  assert.notEqual(rows.find((x) => x.block === exams[4])!.image, first);
 });
