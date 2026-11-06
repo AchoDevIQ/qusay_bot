@@ -1,4 +1,5 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
+import { photosAllowed, studentCode } from "./inPerson.ts";
 import { appLink, lectureMap } from "./lectures.ts";
 import { checkStopped } from "./checkpoints.ts";
 import { checkDevice } from "./deviceLock.ts";
@@ -120,7 +121,8 @@ async function itemsView(uid: number, s: SchedSettings) {
   await closeFinished(uid, s);
   const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
   const now = stamp();
-  const { inPerson } = await placeFor(uid);
+  // الحضوري ينقدم بالمركز، إلا إذا صاحب البوت فتحله يصور أجوبته بنفسه
+  const inPerson = (await placeFor(uid)).inPerson && !await photosAllowed(uid);
   const lec = await lectureMap();
   return (await find("sched_items", { user_id: uid }, { order: ["at"] })).map((i) => {
     const e = exams.get(i.exam_id);
@@ -165,6 +167,8 @@ async function studentInfo(uid: number) {
   return {
     // اللي مشتري محاضرات يدوس على المحاضرة فيفتح التطبيق
     appLink: await boughtLectures(uid) ? await appLink() : "",
+    // كود الحضور: المساعد يقراه بالمركز
+    attendCode: place.inPerson ? studentCode(uid) : "",
     inPerson: place.inPerson, place: place.label, name: st?.name ?? "", remaining: left.length, mode: sched?.mode ?? (sched ? "private" : null),
     needsChoice: !sched && left.length > 0, needsBuild: !general && left.some((e) => !planned.has(e.id)),
     // الإدارة غيرت الأوقات واللي اختاره راح: يختار من جديد

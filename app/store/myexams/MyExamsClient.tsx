@@ -3,13 +3,14 @@
 import { Fragment, useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { deviceId, haptic, openOutside } from "../shared";
+import QRCode from "qrcode";
 import VoiceRec from "../VoiceRec";
 
 type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  appLink: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
   preview?: Preview; notice?: string; error?: string; lateText: string; closedText: string; room?: Room; obj?: Obj;
@@ -65,6 +66,7 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
+        {info?.attendCode && <AttendCode code={info.attendCode} />}
         {info && !!info.items.length && <List info={info} busy={busy} enter={enter} object={(id) => void openObj(id)} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
@@ -185,6 +187,21 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
             <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void call({ action: "confirm", ...form })}>✅ ثبت جدولي</button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** كود الحضور للطالب الحضوري: يطلعه للمساعد بالمركز، فينسجل حضوره وتنطبع ورقته */
+function AttendCode({ code }: { code: string }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => { void QRCode.toDataURL(code, { margin: 1, width: 360, errorCorrectionLevel: "M" }).then(setSrc); }, [code]);
+  return (
+    <div className="card">
+      <h2>🎫 كود الحضور</h2>
+      <div className="expad atcode">
+        {src && <img src={src} alt="كود الحضور" />}
+        <div className="exhint">طلّع هذا الكود للمساعد بالمركز قبل الامتحان. ينسجل حضورك وتنطبع ورقتك باسمك. سوّيله سكرين شوت حتى يكون عندك حتى بدون انترنت.</div>
       </div>
     </div>
   );

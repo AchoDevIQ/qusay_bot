@@ -91,6 +91,7 @@ export const PERMS: Record<string, string> = {
   products: "🛒 المنتجات والأسعار", fees: "🚚 أسعار التوصيل", online: "💻 الفصول الإلكترونية فقط",
   students: "🎓 الطلاب", centers: "🏫 المراكز الامتحانية",
   exams: "📄 إدارة الامتحانات", schedule: "🗓 إعدادات جدول الامتحانات", exception: "🔓 فتح امتحان فايت باستثناء", grade: "✍️ التصحيح", objections: "✋ الرد على اعتراضات أوراقه",
+  attend: "🎫 الحضوري: الحضور والطباعة والسكانر",
 };
 
 export const BTN_HOME = "🏠 فتح القائمة";

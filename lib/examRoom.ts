@@ -1,4 +1,5 @@
 // غرفة الامتحان للطالب الإلكتروني: الدخول بوقته، النسخة، صور الأسئلة، ورفع الأجوبة بدون أي كود
+import { photosAllowed } from "./inPerson.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { activeStop, checkStopped } from "./checkpoints.ts";
 import { checkDevice } from "./deviceLock.ts";
@@ -44,7 +45,7 @@ export function roomState(it: Row, s: SchedSettings, now = stamp()) {
   if (it.status === "missed") return "missed";
   return itemState(it.status, it.at, s.window, now);
 }
-async function versionOf(it: Row, e: Row) {
+export async function versionOf(it: Row, e: Row) {
   const sc = await one("schedules", { user_id: it.user_id });
   let wanted: number | null = null;
   if (sc?.mode === "general") {
@@ -85,7 +86,7 @@ async function ownItem(uid: number, id: unknown) {
 }
 /** يدخل الطالب: أول مرة تنحدد نسخته ويبدي وقته */
 export async function openRoom(uid: number, id: unknown, s: SchedSettings) {
-  need((await student(uid))?.exam !== "حضوري", "امتحانك حضوري، ينقدم بالمركز");
+  need((await student(uid))?.exam !== "حضوري" || await photosAllowed(uid), "امتحانك حضوري، ينقدم بالمركز");
   await closeFinished(uid, s);
   let it = await ownItem(uid, id);
   const state = roomState(it, s);

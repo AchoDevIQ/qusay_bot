@@ -35,6 +35,7 @@ async function homeData(uid: number) {
   }
   if (await can(uid, "schedule")) people.push({ page: "schedule", icon: "🗓", title: "جدول الامتحانات" });
   if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` });
+  if (await can(uid, "attend")) people.push({ page: "attend", icon: "🎫", title: "الحضوري", note: "الحضور والطباعة والسكانر" });
   if (await can(uid, "centers")) people.push({ page: "centers", icon: "🏫", title: "المراكز الامتحانية" });
   // الطلاب ما يگدرون يطلبون هسه، فالمربع يطلع بس إذا بقى طلب قديم. يرجع مع ربط التطبيق
   if (await can(uid, "students")) {

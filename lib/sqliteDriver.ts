@@ -111,6 +111,8 @@ async function init() {
   for (const c of ["grader_id", "total"]) await addColumn("sched_items", c, "INTEGER");
   for (const c of ["graded_at", "kind"]) await addColumn("sched_items", c, "TEXT");
   await addColumn("sched_items", "paid_id", "INTEGER");
+  await addColumn("sched_items", "attended_at", "TEXT");
+  await addColumn("sched_items", "attended_by", "INTEGER");
   await addColumn("grader_pay", "exams_off", "TEXT");
   for (const c of ["started_at", "submitted_at", "opened_at", "notified"]) await addColumn("sched_items", c, "TEXT");
   await addColumn("schedules", "mode", "TEXT");
