@@ -3,10 +3,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { TOKEN } from "./config.ts";
 import { kvGet, kvSet } from "./db.ts";
+import { isStaff } from "./data.ts";
 
 const base = () => `https://api.telegram.org/bot${TOKEN}/`;
 
+/** الحماية: كل شي يوصل للطلاب وأولياء الأمور ما ينحفظ وما ينعاد توجيهه. الكادر بدون حماية حتى يگدرون يحولون الطلبات.
+ *  الرسالة اللي لازم تنسخ (مثل كلمة المرور) تنرسل بـ protect_content: false */
+const SENDS = new Set(["sendMessage", "sendPhoto", "sendDocument", "sendVideo", "sendAnimation", "sendVoice", "sendAudio", "sendVideoNote", "sendMediaGroup", "sendSticker", "copyMessage", "forwardMessage", "sendLocation", "sendContact"]);
+export async function shouldProtect(method: string, chat: unknown, given: unknown) {
+  if (given !== undefined || !SENDS.has(method)) return false;
+  const id = Number(chat);
+  if (!Number.isInteger(id) || id <= 0) return false;   // المجموعات والقنوات مال الكادر
+  try { return !await isStaff(id); } catch { return true; }
+}
+
 export async function api<T = any>(method: string, params: Record<string, unknown> = {}): Promise<T | null> {
+  if (await shouldProtect(method, params.chat_id, params.protect_content)) params = { ...params, protect_content: true };
   try {
     const r = await fetch(base() + method, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(params),
@@ -27,6 +39,7 @@ export async function api<T = any>(method: string, params: Record<string, unknow
 export async function upload(method: string, fields: Record<string, string>, fileField: string,
   file: string | Buffer, fname = typeof file === "string" ? path.basename(file) : "file", ctype = "application/octet-stream") {
   const fd = new FormData();
+  if (await shouldProtect(method, fields.chat_id, fields.protect_content)) fields = { ...fields, protect_content: "true" };
   for (const [k, v] of Object.entries(fields)) fd.append(k, v);
   fd.append(fileField, new Blob([typeof file === "string" ? fs.readFileSync(file) : new Uint8Array(file)], { type: ctype }), fname);
   try {

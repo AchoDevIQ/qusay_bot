@@ -1,7 +1,7 @@
 // تركيب الورقة المصححة كصور: غلاف بهدر الفصل والدرجة والملصق والمقولة، وبعده صفحات ورقة الطالب بتصحيح المصحح.
 // كل فصل إله هدر بلون ورموز غير، والعربي غير الإنكليزي
 export type Theme = { from: string; to: string; accent: string; symbols: string[] };
-export type HeaderInfo = { slug: string; chapter: string; title: string; info: string; model: string; name: string; total: number; lang: "ar" | "en" };
+export type HeaderInfo = { slug: string; chapter: string; title: string; info: string; model: string; name: string; total: number; lang: "ar" | "en"; sid: number };
 
 const THEMES: Theme[] = [
   { from: "#0d2547", to: "#1d4f8f", accent: "#f9c445", symbols: ["i", "z", "√-1", "a+bi", "|z|", "θ"] },        // الأول: الأعداد المركبة
@@ -69,7 +69,8 @@ export function drawHeader(ctx: CanvasRenderingContext2D, h: number, x: HeaderIn
   ctx.direction = en ? "ltr" : "rtl"; ctx.textAlign = en ? "left" : "right";
   const tx = en ? textL : textR, ink = en ? "#14213d" : "#ffffff", sub = en ? t.to : t.accent;
   const line1 = en ? `Chapter ${EN_NUM[chapterNo] ?? chapterNo} · ${x.info || x.title}` : `${x.chapter} · ${x.title}`;
-  const line2 = en ? `Model ${x.model}` : `النسخة ${x.model}`;
+  // رقم الطالب بالهدر: كل صورة من ورقته تبين لمن
+  const line2 = (en ? `Model ${x.model}` : `النسخة ${x.model}`) + (x.sid ? `  ·  ID ${x.sid}` : "");
   ctx.fillStyle = ink; fitText(ctx, line1, tw, big ? 46 : 38); ctx.fillText(line1, tx, cy - h * (big ? 0.2 : 0.17));
   ctx.fillStyle = sub; fitText(ctx, x.name, tw, big ? 40 : 32, 700); ctx.fillText(x.name, tx, cy + h * 0.05);
   ctx.fillStyle = en ? "#55607a" : "rgba(255,255,255,.8)"; fitText(ctx, line2, tw, big ? 28 : 24, 600); ctx.fillText(line2, tx, cy + h * (big ? 0.26 : 0.27));

@@ -8,7 +8,7 @@ import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
 import MessageBox from "./MessageBox";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
-export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; objections?: Objection[] };
+export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
 /** اعتراض الطالب على سؤال: نصه، وتسجيله إذا موجود، ودرجته قبل الاعتراض */
 export type Objection = { q: number; text: string; voice: string | null; old: number };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
@@ -364,7 +364,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   /** صور الورقة المصححة اللي توصل للطالب: غلاف، وبعده كل صفحة بتصحيحها */
   async function composeAll(prep: Prepared): Promise<Blob[]> {
     try { await Promise.all(["600", "700", "800", "900"].map((w) => document.fonts.load(`${w} 40px Cairo`, "اب Ab"))); await document.fonts.ready; } catch { /* بدون خطوط */ }
-    const info: HeaderInfo = { slug: paper.slug, chapter: paper.chapter, title: paper.title, info: paper.info, model: paper.model, name: paper.name, total: prep.total, lang: paper.lang };
+    const info: HeaderInfo = { slug: paper.slug, chapter: paper.chapter, title: paper.title, info: paper.info, model: paper.model, name: paper.name, total: prep.total, lang: paper.lang, sid: paper.sid };
     const logo = await loadImage("/logo.png");
     const out = [await coverImage(info, prep.comment, prep.sticker ? await loadImage(stickerUrl(prep.sticker)) : null, logo)];
     const all = inksRef.current;

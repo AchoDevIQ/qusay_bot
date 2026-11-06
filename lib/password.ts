@@ -25,7 +25,7 @@ export function verifyPassword(password: string, stored: string) {
  */
 export async function deliverPassword(uid: number) {
   const password = newPassword();
-  const sent = await send(uid, `🔑 <b>كلمة المرور الجديدة</b>\n\n<code>${password}</code>\n\nاضغط عليها حتى تنسخها، واستخدمها حتى تدخل للتطبيق. الكلمة القديمة ما تشتغل بعد.`);
+  const sent = await send(uid, `🔑 <b>كلمة المرور الجديدة</b>\n\n<code>${password}</code>\n\nاضغط عليها حتى تنسخها، واستخدمها حتى تدخل للتطبيق. الكلمة القديمة ما تشتغل بعد.`, { extra: { protect_content: false } });
   if (!sent) return false;
   await put("student_pass", { user_id: uid, hash: hashPassword(password), created: stamp() });
   await remove("pass_requests", { user_id: uid });

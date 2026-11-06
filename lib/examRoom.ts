@@ -69,7 +69,7 @@ async function roomView(it: Row, s: SchedSettings) {
   const qs = await find("bank_questions", { version_id: v.id }, { order: ["n"] });
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   return {
-    id: it.id, title: e.title, model: v.model, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra,
+    id: it.id, sid: it.user_id, title: e.title, model: v.model, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra,
     pages: await pagesOf(e, v, st?.curr ?? ""),
     questions: qs.map((q) => ({ n: q.n, answers: answers.filter((a) => a.q === q.n).map((a) => ({ id: a.id, file: a.file })) })),
   };

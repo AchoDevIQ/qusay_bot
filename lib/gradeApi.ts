@@ -75,7 +75,7 @@ export const objectionsWaiting = async (uid: number) => (await objectionPapers(u
 async function headerInfo(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });
   const st = isTest(it) ? null : await student(it.user_id);
-  return { slug: e?.slug ?? "", info: e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar" };
+  return { slug: e?.slug ?? "", info: e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar", sid: isTest(it) ? 0 : it.user_id };
 }
 async function paperView(it: Row, withObj = false) {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
