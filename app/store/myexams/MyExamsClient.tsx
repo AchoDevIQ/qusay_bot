@@ -6,7 +6,7 @@ import { deviceId, haptic, openOutside } from "../shared";
 import QRCode from "qrcode";
 import VoiceRec from "../VoiceRec";
 
-type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
+type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
@@ -67,7 +67,7 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} />}
-        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} object={(id) => void openObj(id)} />}
+        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} object={(id) => void openObj(id)} ask={(item, reason) => call({ action: "askException", item, reason })} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
     </>
@@ -207,7 +207,7 @@ function AttendCode({ code }: { code: string }) {
   );
 }
 
-function List({ info, busy, enter, object }: { info: Info; busy: boolean; enter: (id: number) => void; object: (id: number) => void }) {
+function List({ info, busy, enter, object, ask }: { info: Info; busy: boolean; enter: (id: number) => void; object: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown> }) {
   return (
     <div className="card">
       <h2>🗓 جدول امتحاناتك</h2>
@@ -224,7 +224,7 @@ function List({ info, busy, enter, object }: { info: Info; busy: boolean; enter:
           <tr className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>
             <td><b>{i.optional ? "🎯 " : ""}{i.title}</b>{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
-              {i.state === "missed" && <small className="pdmode exbad">{info.lateText}</small>}
+              {i.state === "missed" && <Excuse item={i} busy={busy} ask={ask} />}
               {i.total !== null && i.total !== undefined && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => object(i.id)}>✋ اعتراض على الدرجة</button>}
             </td>
             <td className="adphone">{prettyAt(i.at)}</td>
@@ -232,7 +232,23 @@ function List({ info, busy, enter, object }: { info: Info; busy: boolean; enter:
           </Fragment>
         ))}
       </tbody></table>
-      {!info.inPerson && <div className="expad exhint adtop">تگدر تدخل الامتحان خلال {info.window} دقيقة من موعده. الامتحان اللي يفوت وقته ما يرجع.</div>}
+      {!info.inPerson && <div className="expad exhint adtop">تگدر تدخل الامتحان خلال {info.window} دقيقة من موعده. الامتحان اللي يفوت وقته ما يرجع، إلا إذا عندك عذر ووافقت عليه الإدارة.</div>}
+    </div>
+  );
+}
+
+/** الامتحان الفايت: الطالب يكتب عذره ويطلب فتحه، ويشوف وين وصل طلبه */
+function Excuse({ item, busy, ask }: { item: Item; busy: boolean; ask: (item: number, reason: string) => Promise<unknown> }) {
+  const [open, setOpen] = useState(false);
+  const [why, setWhy] = useState("");
+  if (item.exc === "asked") return <small className="pdmode">⏳ طلبك وصل، ننتظر الموافقة</small>;
+  if (item.exc === "rejected") return <small className="pdmode exbad">❌ انرفض طلبك</small>;
+  if (item.exc) return null;
+  if (!open) return <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setOpen(true)}>📨 عندي عذر</button>;
+  return (
+    <div className="adtop">
+      <textarea className="stfield" rows={3} maxLength={500} placeholder="اكتب عذرك هنا" value={why} onChange={(e) => setWhy(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }} />
+      <button type="button" className="btn agbtn adtop" disabled={busy || why.trim().length < 3} onClick={() => void ask(item.id, why)}>📨 دز الطلب</button>
     </div>
   );
 }

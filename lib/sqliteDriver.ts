@@ -114,6 +114,8 @@ async function init() {
   await addColumn("sched_items", "paid_id", "INTEGER");
   await addColumn("sched_items", "attended_at", "TEXT");
   await addColumn("sched_items", "attended_by", "INTEGER");
+  for (const c of ["exc_state", "exc_reason", "exc_at"]) await addColumn("sched_items", c, "TEXT");
+  await addColumn("sched_items", "exc_by", "INTEGER");
   await addColumn("grader_pay", "exams_off", "TEXT");
   await addColumn("grader_pay", "places", "TEXT");
   for (const c of ["started_at", "submitted_at", "opened_at", "notified"]) await addColumn("sched_items", c, "TEXT");

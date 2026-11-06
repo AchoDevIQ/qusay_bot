@@ -11,6 +11,7 @@ import { DAYS, DAY_ORDER } from "./config.ts";
 import { centerName, isAdmin, student } from "./data.ts";
 import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
+import { askException } from "./lateRequest.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, openRoom, roomState, submitRoom } from "./examRoom.ts";
 import { send } from "./telegram.ts";
 import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, labelChapters, pickOptional, pickedAt, slotDays, ampm, validDay, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
@@ -128,7 +129,7 @@ async function itemsView(uid: number, s: SchedSettings) {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
-    return { id: i.id, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
+    return { id: i.id, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
   });
 }
 /** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
@@ -282,6 +283,10 @@ export async function myExamAction(body: Row) {
     }
     return await studentInfo(id);
   }
+  if (a === "askException") {
+    await askException(id, body.item, body.reason, await schedSettings());
+    return { ...await studentInfo(id), notice: "📨 وصل طلبك. من يوافقون ينفتحلك الامتحان وتوصلك رسالة" };
+  }
   if (a === "objInfo") return { ...await studentInfo(id), obj: await objectionInfo(id, body.item) };
   need(a === "info", "أمر غير معروف");
   return await studentInfo(id);
@@ -388,7 +393,7 @@ export async function schedAdminAction(body: Row) {
       added++;
     }
     await kvSet("places_loaded", "1");
-    // عطلة نصف السنة مثل ما حددها قصي، إذا لسه ما مكتوبة
+    // عطلة نصف السنة مثل ما حددها قصي العميري، إذا لسه ما مكتوبة
     const cur = await schedSettings();
     if (!cur.holidayStart) await kvSet("sched_settings", JSON.stringify({ ...cur, holidayStart: "2027-01-15", holidayDays: 18 }));
     notice = `✅ انضافت أوقات ${added} مكان${missing.length ? `. ما لگيت هاي المراكز: ${missing.join("، ")}` : ""}`;

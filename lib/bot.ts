@@ -3,6 +3,7 @@ import { getSession, initDb, kvGet, kvSet, setSession, type Row } from "./db.ts"
 import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
 import { examBankMessage } from "./examBank.ts";
 import { examCb, examsMenu, redeemCode } from "./exams.ts";
+import { exceptionCb } from "./lateRequest.ts";
 import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setStudentView, student, tooManyFails, viewingAsStudent } from "./data.ts";
 import { ADMIN_IDS } from "./config.ts";
 import { isGuardian, linkGuardian } from "./access.ts";
@@ -145,6 +146,8 @@ async function onCallback(q: Row) {
     note = await orderCancelCb(chat, uid, mid, d);
   } else if (d === "xm" || ["xs:", "xc:"].some((p) => d.startsWith(p))) {
     note = await examCb(chat, uid, d);
+  } else if (d.startsWith("ek:")) {
+    note = await exceptionCb(chat, uid, mid, d);
   } else if (d === "me:edit") {
     note = "لتغيير معلوماتك تواصل ويا قصي العميري";
     if (!await student(uid)) await startReg(chat, uid, null);

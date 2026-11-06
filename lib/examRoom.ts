@@ -17,7 +17,7 @@ import { stamp } from "./util.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
-export const LATE_TEXT = "فات وقت الدخول لهذا الامتحان. إذا عندك عذر تواصل ويا قصي العميري.";
+export const LATE_TEXT = "فات وقت الدخول لهذا الامتحان. إذا عندك عذر اطلب فتحه من زر «📨 عندي عذر» بجدول امتحاناتك.";
 export const CLOSED_TEXT = "انتهى وقت الامتحان المحدد، وأعطيناك وقت إضافي، ولم ترسل الإجابة.";
 const MAX_UPLOAD = 15 * 1024 * 1024;
 
