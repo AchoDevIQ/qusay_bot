@@ -10,7 +10,7 @@ type Group = { exam: number; title: string; chapter: string; count: number; test
 type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
 type History = { page: number; pages: number; count: number; owner: boolean; rows: HistRow[] };
 type Rate = { mandatory: number; optional: number; deduct: number };
-type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; amount: number; created: string }[] };
+type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
 type Data = { groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -248,7 +248,13 @@ function PayCardView({ g, all, chapters, busy, act }: { g: PayCard; all: boolean
           <div><span>اعتراضات انقبلت</span><b>− {g.obj} × {iqd(g.rate.deduct)}</b></div>
           <div className="paytotal"><span>الرصيد</span><b>{iqd(g.amount)}</b></div>
         </div>
-        {all && <Confirm label="💵 تسوية الحساب (يصفر الرصيد)" disabled={busy || (!g.mand && !g.opt && !g.obj)} onYes={() => void act({ action: "settle", grader: g.id })} />}
+        {all && (g.obj ? (
+          <>
+            <div className="hint">عليه {g.obj} اعتراض انقبل. تخصمها من حسابه؟</div>
+            <Confirm label={`✂️ تسوية ويا الخصم: ${iqd(g.amount)}`} disabled={busy} onYes={() => void act({ action: "settle", grader: g.id })} />
+            <Confirm label={`🤝 تسوية بدون خصم: ${iqd(g.amount + g.obj * g.rate.deduct)}`} disabled={busy} onYes={() => void act({ action: "settle", grader: g.id, forgive: true })} />
+          </>
+        ) : <Confirm label="💵 تسوية الحساب (يصفر الرصيد)" disabled={busy || (!g.mand && !g.opt)} onYes={() => void act({ action: "settle", grader: g.id })} />)}
         {all && (
           <>
             <label>الفصول اللي يصححها</label>
@@ -267,7 +273,7 @@ function PayCardView({ g, all, chapters, busy, act }: { g: PayCard; all: boolean
           <>
             <label className="adtop">الحسابات السابقة</label>
             <table className="extable"><tbody>
-              {g.archive.map((a) => <tr key={a.id}><td>{a.created}<small className="pdmode">إجباري {a.mand} · اختياري {a.opt} · اعتراض {a.obj}</small></td><td className="p"><b>{iqd(a.amount)}</b></td></tr>)}
+              {g.archive.map((a) => <tr key={a.id}><td>{a.created}<small className="pdmode">إجباري {a.mand} · اختياري {a.opt} · اعتراض {a.obj}{a.obj ? (a.forgiven ? " بدون خصم" : " انخصم") : ""}</small></td><td className="p"><b>{iqd(a.amount)}</b></td></tr>)}
             </tbody></table>
           </>
         )}

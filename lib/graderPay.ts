@@ -1,8 +1,9 @@
 // تعويض المصححين: لكل مصحح أجر للورقة الإجبارية وأجر للاختيارية، وخصم لكل اعتراض انقبل على ورقته.
 // الرصيد هو اللي ما انحاسب بعد، والتسوية تصفره وتنحفظ بالأرشيف. أوراق التجربة ما تنحسب
-import { find, insert, one, put, update, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, one, put, update, type Row } from "./db.ts";
 import { isAdmin, staffName } from "./data.ts";
 import { send } from "./telegram.ts";
+import { addMinutes } from "./scheduleRules.ts";
 import { stamp } from "./util.ts";
 import { need } from "./webApi.ts";
 
@@ -45,7 +46,7 @@ export async function balanceOf(uid: number) {
 }
 
 const archiveOf = async (uid: number) => (await find("grader_settlements", { user_id: uid }, { order: ["-id"], limit: 12 }))
-  .map((s) => ({ id: s.id, mand: s.n_mand, opt: s.n_opt, obj: s.n_obj, amount: s.amount, created: s.created }));
+  .map((s) => ({ id: s.id, mand: s.n_mand, opt: s.n_opt, obj: s.n_obj, forgiven: !!s.forgiven, amount: s.amount, created: s.created }));
 
 /** المصححين: كل اللي عدهم صلاحية التصحيح، ويا أجورهم ورصيدهم */
 export async function graders() {
@@ -78,10 +79,41 @@ export async function payAction(uid: number, body: Row) {
   }
   const b = await balanceOf(id);
   need(b.paperIds.length || b.objIds.length, "ماكو شي ينحاسب");
-  const sid = await insert("grader_settlements", { user_id: id, n_mand: b.mand, n_opt: b.opt, n_obj: b.obj, amount: b.amount, created: stamp(), by_id: uid });
+  // صاحب البوت يختار: يخصم الاعتراضات اللي انقبلت، لو يسامحه بيها
+  const forgive = !!body.forgive && b.obj > 0;
+  const amount = forgive ? b.amount + b.obj * b.rate.deduct : b.amount;
+  const sid = await insert("grader_settlements", { user_id: id, n_mand: b.mand, n_opt: b.opt, n_obj: b.obj, amount, forgiven: forgive ? 1 : 0, created: stamp(), by_id: uid });
   for (const p of b.paperIds) await update("sched_items", { id: p }, { paid_id: sid });
   for (const o of b.objIds) await update("objections", { id: o }, { paid_id: sid });
-  const parts = [b.mand ? `${b.mand} ورقة إجبارية` : "", b.opt ? `${b.opt} ورقة اختيارية` : "", b.obj ? `خصم ${b.obj} اعتراض انقبل` : ""].filter(Boolean).join("، ");
-  await send(id, `💵 <b>قصي العميري دفعلك ${b.amount.toLocaleString("en")} دينار</b>\nعن تصحيح: ${parts}.\nرصيدك هسه صفر.`);
-  return `✅ انحاسب ${await staffName(id)}: ${b.amount.toLocaleString("en")} دينار`;
+  const parts = [b.mand ? `${b.mand} ورقة إجبارية` : "", b.opt ? `${b.opt} ورقة اختيارية` : "", b.obj ? (forgive ? `${b.obj} اعتراض انقبل وما انخصم` : `خصم ${b.obj} اعتراض انقبل`) : ""].filter(Boolean).join("، ");
+  await send(id, `💵 <b>قصي العميري دفعلك ${amount.toLocaleString("en")} دينار</b>\nعن تصحيح: ${parts}.\nرصيدك هسه صفر.`);
+  return `✅ انحاسب ${await staffName(id)}: ${amount.toLocaleString("en")} دينار${forgive ? "، بدون خصم الاعتراضات" : ""}`;
+}
+
+// ---------- خبر للمصحح: من توصل أوراق جديدة من فصوله، أكثر شي مرة كل نص ساعة حتى ما تكثر الرسائل
+const PING_GAP = 30;
+export async function notifyGraders() {
+  const papers = (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at && p.user_id > 0);
+  if (!papers.length) return 0;
+  const chapter = new Map((await find("bank_exams")).map((e) => [e.id, e.chapter]));
+  const general = new Set((await find("schedules", { mode: "general" })).map((s) => s.user_id));
+  const now = stamp().slice(0, 16);
+  let sent = 0;
+  for (const g of await graders()) {
+    const mine = await chaptersOf(g), off = new Set(await examsOffOf(g));
+    const list = papers.filter((p) => (!p.grader_id || p.grader_id === g) && (!mine.length || mine.includes(chapter.get(p.exam_id))) && !off.has(p.exam_id));
+    let last: { at?: string; top?: string } = {};
+    try { last = JSON.parse(await kvGet(`grader_ping_${g}`) ?? "{}"); } catch { /* خربانة */ }
+    const top = list.reduce((m, p) => (String(p.submitted_at ?? "") > m ? String(p.submitted_at) : m), "");
+    // ماكو ورقة جديدة من آخر خبر، أو لسه ما مر نص ساعة
+    if (!list.length || top <= (last.top ?? "") || (last.at && now < addMinutes(last.at, PING_GAP))) continue;
+    const gen = list.filter((p) => general.has(p.user_id)).length;
+    await send(g, `📥 <b>وصلتك أوراق للتصحيح</b>
+عندك هسه <b>${list.length}</b> ورقة تنتظر: ${gen} من الجدول العام و${list.length - gen} من الجدول الخاص.
+
+افتح لوحة التحكم ← ✍️ التصحيح.`);
+    await kvSet(`grader_ping_${g}`, JSON.stringify({ at: now, top }));
+    sent++;
+  }
+  return sent;
 }

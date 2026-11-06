@@ -7,7 +7,7 @@ import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 type Account = { sold: number; paid: number; owed: number; limit: number; left: number };
 type Rate = { mandatory: number; optional: number; deduct: number };
 type Topic = { id: number; title: string; chapter: string };
-type Grade = { chapters: string[]; off: number[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; amount: number; created: string }[] };
+type Grade = { chapters: string[]; off: number[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Staff = { id: number; name: string; perms: string[]; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
 type Data = { chapters: string[]; topics: Topic[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -57,7 +57,7 @@ function Rows({ s, perms, chapters, topics, open, toggle, busy, call }: { s: Sta
             <div className="stwallet" onClick={(e) => e.stopPropagation()}>
               <b>💰 {fmt(g.amount)} د</b>
               <small>{g.mand + g.opt} ورقة{g.obj ? ` · ${g.obj} اعتراض` : ""}</small>
-              {(g.mand || g.opt || g.obj) ? <Confirm label="💵 دفع" disabled={busy} onYes={() => void call({ action: "gradePay", id: s.id })} /> : null}
+              <PayGrader g={g} short busy={busy} pay={(forgive) => void call({ action: "gradePay", id: s.id, forgive })} />
             </div>
           )}
         </td>
@@ -117,6 +117,20 @@ function Panel({ s, perms, chapters, topics, busy, call }: { s: Staff; perms: Da
 }
 
 /** محفظة التصحيح: تفاصيل اللي إله، وفصوله، وأجره، والدفعات السابقة */
+/** الدفع: إذا عليه اعتراضات انقبلت، صاحب البوت يختار يخصمها لو يسامحه بيها */
+function PayGrader({ g, short, busy, pay }: { g: Grade; short?: boolean; busy: boolean; pay: (forgive: boolean) => void }) {
+  if (!g.mand && !g.opt && !g.obj) return null;
+  if (!g.obj) return <Confirm label={short ? "💵 دفع" : `💵 دفع ${fmt(g.amount)} دينار وتصفير`} disabled={busy} onYes={() => pay(false)} />;
+  const full = g.amount + g.obj * g.rate.deduct;
+  return (
+    <>
+      <small className="exhint">عليه {g.obj} اعتراض انقبل. تخصمها؟</small>
+      <Confirm label={`✂️ دفع ${fmt(g.amount)} ويا الخصم`} disabled={busy} onYes={() => pay(false)} />
+      <Confirm label={`🤝 دفع ${fmt(full)} بدون خصم`} disabled={busy} onYes={() => pay(true)} />
+    </>
+  );
+}
+
 function GradeWallet({ s, g, chapters, topics, busy, call }: { s: Staff; g: Grade; chapters: string[]; topics: Topic[]; busy: boolean; call: Call }) {
   const [rate, setRate] = useState(g.rate);
   const [chs, setChs] = useState<string[]>(g.chapters.length ? g.chapters : chapters);
@@ -137,7 +151,7 @@ function GradeWallet({ s, g, chapters, topics, busy, call }: { s: Staff; g: Grad
         <div><b>{g.obj}</b>اعتراض انقبل − {fmt(g.rate.deduct)}</div>
         <div><b>{fmt(g.amount)}</b>إله هسه (دينار)</div>
       </div>
-      {(g.mand || g.opt || g.obj) ? <Confirm label={`💵 دفع ${fmt(g.amount)} دينار وتصفير`} disabled={busy} onYes={() => void call({ action: "gradePay", id: s.id })} /> : null}
+      <PayGrader g={g} busy={busy} pay={(forgive) => void call({ action: "gradePay", id: s.id, forgive })} />
       <div className="exlabel adtop">الفصول اللي يصححها</div>
       <div className="seg wrap2">
         {chapters.map((c) => <button type="button" key={c} className={chs.includes(c) ? "on" : ""} onClick={() => setChs(chs.includes(c) ? chs.filter((x) => x !== c) : [...chs, c])}>{c}</button>)}
@@ -165,7 +179,7 @@ function GradeWallet({ s, g, chapters, topics, busy, call }: { s: Staff; g: Grad
       {num("deduct", "خصم كل اعتراض ينقبل على ورقته (دينار)")}
       <div className="exhint">الأجر الجديد ينحسب على الأوراق اللي بعدها ما اندفعت.</div>
       <button type="button" className="btn adsmallbtn" disabled={busy} onClick={() => void call({ action: "gradeRate", id: s.id, ...rate, chapters: chs, off: off.filter((x) => topics.some((t) => t.id === x && shown.includes(t.chapter))) })}>💾 حفظ الفصول والمواضيع والأجور</button>
-      {!!g.archive.length && <div className="exhint">الدفعات السابقة: {g.archive.map((a) => `${a.created.slice(0, 10)}: ${fmt(a.amount)} (${a.mand + a.opt} ورقة)`).join(" · ")}</div>}
+      {!!g.archive.length && <div className="exhint">الدفعات السابقة: {g.archive.map((a) => `${a.created.slice(0, 10)}: ${fmt(a.amount)} (${a.mand + a.opt} ورقة${a.obj ? `، ${a.obj} اعتراض ${a.forgiven ? "بدون خصم" : "انخصم"}` : ""})`).join(" · ")}</div>}
     </div>
   );
 }

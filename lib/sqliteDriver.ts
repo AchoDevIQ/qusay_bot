@@ -78,7 +78,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS checkpoint_done(user_id INTEGER, chapter TEXT, block INTEGER, passed INTEGER, score INTEGER, absent INTEGER, created TEXT, PRIMARY KEY(user_id, chapter, block));
     CREATE TABLE IF NOT EXISTS student_devices(user_id INTEGER PRIMARY KEY, device TEXT, at TEXT, tried TEXT);
     CREATE TABLE IF NOT EXISTS grader_pay(user_id INTEGER PRIMARY KEY, mandatory INTEGER, optional INTEGER, deduct INTEGER, chapters TEXT, exams_off TEXT);
-    CREATE TABLE IF NOT EXISTS grader_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, n_mand INTEGER, n_opt INTEGER, n_obj INTEGER, amount INTEGER, created TEXT, by_id INTEGER);
+    CREATE TABLE IF NOT EXISTS grader_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, n_mand INTEGER, n_opt INTEGER, n_obj INTEGER, amount INTEGER, forgiven INTEGER, created TEXT, by_id INTEGER);
     CREATE TABLE IF NOT EXISTS paper_ink(item_id INTEGER, page INTEGER, ink TEXT, PRIMARY KEY(item_id, page));
     CREATE TABLE IF NOT EXISTS question_marks(item_id INTEGER, q INTEGER, mark INTEGER, PRIMARY KEY(item_id, q));
     CREATE TABLE IF NOT EXISTS exam_answers(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER, q INTEGER, file TEXT, created TEXT);
@@ -88,6 +88,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS company_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, from_id INTEGER, to_id INTEGER, n INTEGER, gross INTEGER, fees INTEGER, net INTEGER, created TEXT);
   `);
   await addColumn("orders", "curr", "TEXT");
+  await addColumn("grader_settlements", "forgiven", "INTEGER");
   await addColumn("orders", "printed", "INTEGER DEFAULT 0");
   await addColumn("orders", "seller", "INTEGER");
   await addColumn("orders", "office_id", "INTEGER");

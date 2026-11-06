@@ -113,3 +113,32 @@ test("المواضيع: صاحب البوت يشيل موضوع من المصح�
   // صاحب البوت يشوف كل شي
   assert.ok((await g(1, "list")).groups.some((x: any) => x.title === "القطع الناقص"));
 });
+
+test("الدفع بدون خصم: الاعتراضات تنحسب بس ما تنخصم، وتنحفظ إنها بدون خصم", async () => {
+  await put("staff", { user_id: 33, name: "مصحح ثالث", perms: "grade" });
+  await g(1, "setRate", { grader: 33, mandatory: 200, optional: 150, deduct: 50, chapters: [] });
+  const p = await paper(76, v1, e1);
+  await g(33, "open", { id: p }); await g(33, "mark", { id: p, q: 1, mark: 60 }); await g(33, "finish", { id: p });
+  await insert("objections", { item_id: p, user_id: 76, q: 1, text: "x", status: "accepted", old_mark: 60, new_mark: 70, created: "x" });
+  calls.length = 0;
+  const r = await g(1, "settle", { grader: 33, forgive: true });
+  assert.match(r.notice, /200 دينار، بدون خصم/);
+  assert.match(calls.find((c) => c.p.chat_id === 33)!.p.text, /1 اعتراض انقبل وما انخصم/);
+  const a = r.pay.graders.find((x: any) => x.id === 33).archive[0];
+  assert.deepEqual([a.amount, a.obj, a.forgiven], [200, 1, true]);
+});
+
+test("المصحح يوصله خبر من تجي أوراق من فصوله، ومرة وحدة لحد ما تجي أوراق جديدة", async () => {
+  const { notifyGraders } = await import("../lib/graderPay.ts");
+  await put("staff", { user_id: 34, name: "مصحح رابع", perms: "grade" });
+  await g(1, "setRate", { grader: 34, mandatory: 1, optional: 1, deduct: 0, chapters: ["الفصل الثاني"] });
+  await insert("sched_items", { user_id: 77, exam_id: e2, at: "x", status: "done", version_id: v2, submitted_at: "2026-11-06 10:00" });
+  calls.length = 0;
+  await notifyGraders();
+  const mine = calls.filter((c) => c.p.chat_id === 34);
+  assert.equal(mine.length, 1);
+  assert.match(mine[0].p.text, /وصلتك أوراق للتصحيح[\s\S]*عندك هسه <b>\d+<\/b> ورقة تنتظر/);
+  calls.length = 0;
+  await notifyGraders();
+  assert.equal(calls.filter((c) => c.p.chat_id === 34).length, 0);
+});

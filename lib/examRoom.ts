@@ -1,4 +1,5 @@
 // غرفة الامتحان للطالب الإلكتروني: الدخول بوقته، النسخة، صور الأسئلة، ورفع الأجوبة بدون أي كود
+import { notifyGraders } from "./graderPay.ts";
 import { activeStop, checkStopped } from "./checkpoints.ts";
 import { checkDevice } from "./deviceLock.ts";
 import { randomUUID } from "node:crypto";
@@ -31,6 +32,7 @@ export async function closeFinished(uid: number, s: SchedSettings) {
     if (now < closeOf(it, e?.minutes ?? 75, s)) continue;
     const sent = (await find("exam_answers", { item_id: it.id })).length > 0;
     await update("sched_items", { id: it.id }, { status: sent ? "done" : "missed", submitted_at: sent ? now : null });
+    if (sent) try { await notifyGraders(); } catch (x) { console.error(x); }
   }
   for (const it of await find("sched_items", { user_id: uid, status: "exception" })) {
     if (now >= addMinutes(it.opened_at, s.excWindow)) await update("sched_items", { id: it.id }, { status: "missed" });
@@ -117,6 +119,7 @@ export async function submitRoom(uid: number, item: unknown, s: SchedSettings) {
   await update("sched_items", { id: it.id }, { status: "done", submitted_at: stamp() });
   const e = await one("bank_exams", { id: it.exam_id });
   await logActivity(uid, `✅ سلم امتحان ${e?.title ?? ""}`);
+  try { await notifyGraders(); } catch (x) { console.error(x); }
 }
 const kindOf = (b: Buffer) => (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff ? "jpg" : b.subarray(0, 4).toString("latin1") === "\x89PNG" ? "png" : null);
 /** صورة جواب سؤال واحد. الجواب ينحفظ باسم الطالب والامتحان والسؤال تلقائياً */
