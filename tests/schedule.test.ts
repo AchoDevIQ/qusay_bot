@@ -422,12 +422,10 @@ test("تواريخ الأسابيع 1 إلى 40 تدخل لكل مكان حسب 
   assert.equal(await dayOf(id("أثر"), "ch4", "ممنوع لو مسموح 1&2"), "2027-02-06");
   assert.equal(await dayOf(id("قصي العميري"), "ch4", "ممنوع لو مسموح 1&2"), "2027-02-05");
   assert.equal(await dayOf(id("قصي العميري"), "ch4", "ساين وكوساين 1&2"), "2027-03-01");
-  assert.equal(await dayOf(id("أثر"), "ch3", "إعادة فاينل"), "2026-12-22");
   // المنصور جلسة وحدة وره الباقين، وقبل الساين ما عندهم مواعيد
   const m = id("قمة المنصور للبنين");
   assert.equal(await dayOf(m, "ch3", "اشتقاق الساين والكوساين"), "2026-10-05");
   assert.equal(await dayOf(m, "ch3", "المعدلات الزمنية 1&2"), "2026-10-09");
-  assert.equal(await dayOf(m, "ch3", "إعادة فاينل"), "2026-12-25");
   assert.equal(await dayOf(m, "ch4", "ممنوع لو مسموح 1&2"), "2027-02-08");
   assert.equal(await dayOf(m, "ch4", "ساين وكوساين 1&2"), "2027-03-05");
   assert.equal(await dayOf(m, "ch3", "الاشتقاق 1&2"), "");

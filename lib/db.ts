@@ -114,6 +114,20 @@ export async function lastTwoOptional() {
   return moved;
 }
 
+async function removeRefinal() {
+  await tx(async () => {
+    for (const e of await find("bank_exams", { slug: "ch3", title: "إعادة فاينل" })) {
+      for (const v of await find("bank_versions", { exam_id: e.id })) {
+        await remove("bank_questions", { version_id: v.id });
+        await remove("bank_versions", { id: v.id });
+      }
+      await remove("sched_items", { exam_id: e.id, status: "waiting" });
+      await remove("place_dates", { exam_id: e.id });
+      await remove("bank_exams", { id: e.id });
+    }
+  });
+}
+
 export async function initDb() {
   const d = await driver();
   await d.init();
@@ -121,6 +135,8 @@ export async function initDb() {
   if (!await kvGet("last_two_done")) {
     try { await lastTwoOptional(); } catch (e) { console.error(e); }
   }
+  // صاحب البوت لغى «إعادة فاينل» بالفصل الثالث: إذا موجود ينشال
+  try { await removeRefinal(); } catch (e) { console.error(e); }
   if (d.seedOnce && await kvGet("seeded")) return;
   const orphan = await find("products", { cat_id: null });
   if (orphan.some((p) => p.active === 1)) await update("products", { cat_id: null }, { cat_id: await catIdFor("منتجات أخرى") });

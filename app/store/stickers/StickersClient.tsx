@@ -1,6 +1,7 @@
 "use client";
 // مكتبة الملصقات: صور وكاركترات (حتى المتحركة GIF) لكل مدى درجات. تطلع ويا درجة الطالب، وبأداة الملصقات وقت التصحيح
 import { useState } from "react";
+import { CHARACTERS } from "../../../lib/characters.ts";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Sticker = { id: number; name: string; lo: number; hi: number };
@@ -17,6 +18,7 @@ export default function StickersClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && (
           <>
+            <Ready have={data.stickers.map((s) => s.name)} busy={busy} call={call} />
             <AddSticker busy={busy} call={call} />
             {!data.stickers.length && <div className="empty">ماكو ملصقات بعد. ارفع أول ملصق من فوك.</div>}
             <div className="stgrid">{data.stickers.map((s) => <StickerCard key={s.id + s.name + s.lo + s.hi} s={s} busy={busy} call={call} />)}</div>
@@ -25,6 +27,46 @@ export default function StickersClient() {
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
+  );
+}
+
+const svgUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+/** الشخصية من رسمة لصورة PNG، حتى توصل للطالب مثل أي ملصق */
+async function toPng(svg: string) {
+  const img = new Image();
+  img.src = svgUrl(svg);
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = 600; c.height = 600;
+  c.getContext("2d")!.drawImage(img, 0, 0, 600, 600);
+  return await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("png"))), "image/png"));
+}
+
+/** شخصيات جاهزة: تنضاف للمكتبة بزر، وبعدها تتعدل وتنحذف مثل أي ملصق. اللي ينحذف يرجع يطلع هنا */
+function Ready({ have, busy, call }: { have: string[]; busy: boolean; call: Call }) {
+  const left = CHARACTERS.filter((c) => !have.includes(c.name));
+  const [working, setWorking] = useState(false);
+  if (!left.length) return null;
+  async function add() {
+    setWorking(true);
+    try {
+      for (const c of left) {
+        const fd = new FormData();
+        fd.set("file", new File([await toPng(c.svg)], "character.png", { type: "image/png" }));
+        fd.set("name", c.name); fd.set("lo", String(c.lo)); fd.set("hi", String(c.hi));
+        if (!await call(fd)) break;
+      }
+    } finally { setWorking(false); }
+  }
+  return (
+    <div className="card expad adform">
+      <div className="exlabel">🎭 شخصيات جاهزة</div>
+      <div className="exhint">«كيو» بحالات حسب الدرجة. تنضاف للمكتبة، وبعدها تگدر تغير اسمها ومداها أو تحذفها، وتضيف شخصيات غيرها.</div>
+      <div className="stgrid">{left.map((c) => (
+        <div key={c.name} className="card stcard"><img src={svgUrl(c.svg)} alt={c.name} /><b>{c.name}</b><span className="exhint">{c.lo} – {c.hi}</span></div>
+      ))}</div>
+      <button type="button" className="btn" disabled={busy || working} onClick={() => void add()}>{working ? "جاري الإضافة..." : `➕ أضف ${left.length === CHARACTERS.length ? "الشخصيات" : `الباقي (${left.length})`} للمكتبة`}</button>
+    </div>
   );
 }
 
