@@ -142,3 +142,37 @@ test("المصحح يوصله خبر من تجي أوراق من فصوله، و
   await notifyGraders();
   assert.equal(calls.filter((c) => c.p.chat_id === 34).length, 0);
 });
+
+test("أماكن المصحح: الجدول العام بالمركز والوقت، والخاص بخيار، ولوحته مقسمة عام وخاص", async () => {
+  const area = await insert("areas", { gov: "بغداد", name: "البنوك", active: 1 });
+  const c1 = await insert("centers", { area_id: area, name: "معهد البنوك", active: 1 });
+  await put("place_slots", { center_id: c1, slots: JSON.stringify([{ d: 5, t: "11:00" }, { d: 5, t: "14:00" }]) });
+  await put("staff", { user_id: 35, name: "مصحح البنوك", perms: "grade" });
+  // سبت 2026-11-07: الساعة 11 و2، وطالب خاص
+  for (const [uid, at] of [[90, "2026-11-07 11:00"], [91, "2026-11-07 14:00"]] as const) {
+    await put("schedules", { user_id: uid, mode: "general", center_id: c1, created: "x" });
+    await insert("sched_items", { user_id: uid, exam_id: e1, at, status: "done", version_id: v1, submitted_at: "x" });
+  }
+  await put("schedules", { user_id: 92, mode: "private", created: "x" });
+  await insert("sched_items", { user_id: 92, exam_id: e1, at: "2026-11-08 18:00", status: "done", version_id: v1, submitted_at: "x" });
+  const names = async () => new Set((await g(35, "list")).waiting.map((p: any) => p.id));
+  const ids = new Map<number, number>();
+  for (const u of [90, 91, 92]) ids.set(u, (await find("sched_items", { user_id: u }))[0].id);
+  const tree = (await g(1, "pay")).pay.places;
+  assert.deepEqual(tree.find((a: any) => a.id === area).centers[0].slots, [{ d: 5, t: "11:00" }, { d: 5, t: "14:00" }]);
+  await assert.rejects(g(1, "setRate", { grader: 35, mandatory: 1, optional: 1, deduct: 0, chapters: [], places: { all: false, keys: ["c999"], private: true } }), /مكان أو وقت غير معروف/);
+  // بس البنوك الساعة 11، وبدون الخاص
+  await g(1, "setRate", { grader: 35, mandatory: 1, optional: 1, deduct: 0, chapters: [], places: { all: false, keys: [`c${c1}|5|11:00`], private: false } });
+  let got = await names();
+  assert.deepEqual([got.has(ids.get(90)), got.has(ids.get(91)), got.has(ids.get(92))], [true, false, false]);
+  // كل أوقات المركز ويا الخاص. الفصول والمواضيع تبقى مثل ما هي إذا ما انبعثت
+  await g(1, "setRate", { grader: 35, mandatory: 1, optional: 1, deduct: 0, chapters: [], places: { all: false, keys: [`c${c1}`], private: true } });
+  got = await names();
+  assert.deepEqual([got.has(ids.get(90)), got.has(ids.get(91)), got.has(ids.get(92))], [true, true, true]);
+  const list = await g(35, "list");
+  const mineGroups = list.groups.filter((x: any) => x.exam === e1);
+  assert.ok(mineGroups.some((x: any) => x.general) && mineGroups.some((x: any) => !x.general));
+  // تعديل الأجور من صفحة التصحيح ما يمسح الأماكن
+  await g(1, "setRate", { grader: 35, mandatory: 5, optional: 1, deduct: 0, chapters: [] });
+  assert.deepEqual((await g(1, "pay")).pay.graders.find((x: any) => x.id === 35).places, { all: false, keys: [`c${c1}`], private: true });
+});

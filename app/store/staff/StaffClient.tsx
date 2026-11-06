@@ -7,9 +7,12 @@ import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 type Account = { sold: number; paid: number; owed: number; limit: number; left: number };
 type Rate = { mandatory: number; optional: number; deduct: number };
 type Topic = { id: number; title: string; chapter: string };
-type Grade = { chapters: string[]; off: number[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
+type Places = { all: boolean; keys: string[]; private: boolean };
+type Area = { id: number; name: string; centers: { id: number; name: string; slots: { d: number; t: string }[] }[] };
+const DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
+type Grade = { chapters: string[]; off: number[]; places: Places; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Staff = { id: number; name: string; perms: string[]; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
-type Data = { chapters: string[]; topics: Topic[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string };
+type Data = { chapters: string[]; topics: Topic[]; tree: Area[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -29,7 +32,7 @@ export default function StaffClient() {
               {data.staff.length ? (
                 <table className="extable"><tbody>
                   {data.staff.map((s) => (
-                    <Rows key={s.id} s={s} perms={data.perms} chapters={data.chapters} topics={data.topics} open={open === s.id} toggle={() => setOpen(open === s.id ? null : s.id)} busy={busy} call={call} />
+                    <Rows key={s.id} s={s} perms={data.perms} chapters={data.chapters} topics={data.topics} tree={data.tree} open={open === s.id} toggle={() => setOpen(open === s.id ? null : s.id)} busy={busy} call={call} />
                   ))}
                 </tbody></table>
               ) : <div className="empty">لا يوجد مساعدين بعد.</div>}
@@ -43,7 +46,7 @@ export default function StaffClient() {
   );
 }
 
-function Rows({ s, perms, chapters, topics, open, toggle, busy, call }: { s: Staff; perms: Data["perms"]; chapters: string[]; topics: Topic[]; open: boolean; toggle: () => void; busy: boolean; call: Call }) {
+function Rows({ s, perms, chapters, topics, tree, open, toggle, busy, call }: { s: Staff; perms: Data["perms"]; chapters: string[]; topics: Topic[]; tree: Area[]; open: boolean; toggle: () => void; busy: boolean; call: Call }) {
   const g = s.grade;
   return (
     <>
@@ -62,12 +65,12 @@ function Rows({ s, perms, chapters, topics, open, toggle, busy, call }: { s: Sta
           )}
         </td>
       </tr>
-      {open && <tr><td colSpan={2} className="expanel"><Panel key={s.perms.join() + s.name + JSON.stringify(g?.rate) + g?.chapters.join() + g?.off.join()} s={s} perms={perms} chapters={chapters} topics={topics} busy={busy} call={call} /></td></tr>}
+      {open && <tr><td colSpan={2} className="expanel"><Panel key={s.perms.join() + s.name + JSON.stringify(g?.rate) + g?.chapters.join() + g?.off.join() + JSON.stringify(g?.places)} s={s} perms={perms} chapters={chapters} topics={topics} tree={tree} busy={busy} call={call} /></td></tr>}
     </>
   );
 }
 
-function Panel({ s, perms, chapters, topics, busy, call }: { s: Staff; perms: Data["perms"]; chapters: string[]; topics: Topic[]; busy: boolean; call: Call }) {
+function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; perms: Data["perms"]; chapters: string[]; topics: Topic[]; tree: Area[]; busy: boolean; call: Call }) {
   const [name, setName] = useState(s.name);
   const [picked, setPicked] = useState(s.perms);
   const [pay, setPay] = useState("");
@@ -84,7 +87,7 @@ function Panel({ s, perms, chapters, topics, busy, call }: { s: Staff; perms: Da
         </label>
       ))}
       <button type="button" className="btn adsmallbtn" disabled={busy || same} onClick={() => void call({ action: "perms", id: s.id, perms: picked })}>حفظ الصلاحيات</button>
-      {s.grade && <GradeWallet s={s} g={s.grade} chapters={chapters} topics={topics} busy={busy} call={call} />}
+      {s.grade && <GradeWallet s={s} g={s.grade} chapters={chapters} topics={topics} tree={tree} busy={busy} call={call} />}
 
       <div className="exfoot">
         <div className="exlabel">💰 حساب مبيعاته بنفسه</div>
@@ -131,7 +134,8 @@ function PayGrader({ g, short, busy, pay }: { g: Grade; short?: boolean; busy: b
   );
 }
 
-function GradeWallet({ s, g, chapters, topics, busy, call }: { s: Staff; g: Grade; chapters: string[]; topics: Topic[]; busy: boolean; call: Call }) {
+function GradeWallet({ s, g, chapters, topics, tree, busy, call }: { s: Staff; g: Grade; chapters: string[]; topics: Topic[]; tree: Area[]; busy: boolean; call: Call }) {
+  const [pl, setPl] = useState<Places>(g.places);
   const [rate, setRate] = useState(g.rate);
   const [chs, setChs] = useState<string[]>(g.chapters.length ? g.chapters : chapters);
   const [off, setOff] = useState<number[]>(g.off);
@@ -152,6 +156,7 @@ function GradeWallet({ s, g, chapters, topics, busy, call }: { s: Staff; g: Grad
         <div><b>{fmt(g.amount)}</b>إله هسه (دينار)</div>
       </div>
       <PayGrader g={g} busy={busy} pay={(forgive) => void call({ action: "gradePay", id: s.id, forgive })} />
+      <PlacesPicker tree={tree} pl={pl} setPl={setPl} />
       <div className="exlabel adtop">الفصول اللي يصححها</div>
       <div className="seg wrap2">
         {chapters.map((c) => <button type="button" key={c} className={chs.includes(c) ? "on" : ""} onClick={() => setChs(chs.includes(c) ? chs.filter((x) => x !== c) : [...chs, c])}>{c}</button>)}
@@ -178,9 +183,47 @@ function GradeWallet({ s, g, chapters, topics, busy, call }: { s: Staff; g: Grad
       {num("optional", "أجر الورقة الاختيارية (دينار)")}
       {num("deduct", "خصم كل اعتراض ينقبل على ورقته (دينار)")}
       <div className="exhint">الأجر الجديد ينحسب على الأوراق اللي بعدها ما اندفعت.</div>
-      <button type="button" className="btn adsmallbtn" disabled={busy} onClick={() => void call({ action: "gradeRate", id: s.id, ...rate, chapters: chs, off: off.filter((x) => topics.some((t) => t.id === x && shown.includes(t.chapter))) })}>💾 حفظ الفصول والمواضيع والأجور</button>
+      <button type="button" className="btn adsmallbtn" disabled={busy} onClick={() => void call({ action: "gradeRate", id: s.id, ...rate, chapters: chs, off: off.filter((x) => topics.some((t) => t.id === x && shown.includes(t.chapter))), places: pl })}>💾 حفظ الأماكن والفصول والأجور</button>
       {!!g.archive.length && <div className="exhint">الدفعات السابقة: {g.archive.map((a) => `${a.created.slice(0, 10)}: ${fmt(a.amount)} (${a.mand + a.opt} ورقة${a.obj ? `، ${a.obj} اعتراض ${a.forgiven ? "بدون خصم" : "انخصم"}` : ""})`).join(" · ")}</div>}
     </div>
+  );
+}
+
+/** أماكن المصحح بالجدول العام: المنطقة ← المركز ← الأوقات. والجدول الخاص بالفصول والمواضيع */
+function PlacesPicker({ tree, pl, setPl }: { tree: Area[]; pl: Places; setPl: (p: Places) => void }) {
+  const keys = new Set(pl.keys);
+  const set = (k: string[]) => setPl({ ...pl, keys: [...new Set(k)] });
+  const slotKey = (c: number, x: { d: number; t: string }) => `c${c}|${x.d}|${x.t}`;
+  const centerOn = (c: number) => keys.has(`c${c}`);
+  const count = (c: Area["centers"][number]) => (centerOn(c.id) ? c.slots.length || 1 : c.slots.filter((x) => keys.has(slotKey(c.id, x))).length);
+  return (
+    <>
+      <div className="exlabel adtop">📅 الجدول العام: وين يصحح</div>
+      <label className="adcheck adflat"><input type="checkbox" checked={pl.all} onChange={(e) => setPl({ ...pl, all: e.target.checked })} /><span>كل المناطق وكل الأوقات</span></label>
+      {!pl.all && tree.map((a) => {
+        const n = a.centers.reduce((m, c) => m + count(c), 0);
+        return (
+          <details key={a.id} className="sttopics" open={n > 0}>
+            <summary>{a.name} <small>({n ? `${n} وقت` : "مو مأشرة"})</small></summary>
+            {a.centers.map((c) => (
+              <div key={c.id} className="cpexam">
+                <label className="adcheck adflat"><input type="checkbox" checked={centerOn(c.id)} onChange={(e) => set(e.target.checked ? [...pl.keys.filter((k) => !k.startsWith(`c${c.id}|`)), `c${c.id}`] : pl.keys.filter((k) => k !== `c${c.id}`))} /><span><b>{c.name}</b>: كل أوقاته</span></label>
+                {!centerOn(c.id) && !!c.slots.length && (
+                  <div className="seg wrap2">
+                    {c.slots.map((x) => {
+                      const k = slotKey(c.id, x);
+                      return <button type="button" key={k} className={keys.has(k) ? "on" : ""} onClick={() => set(keys.has(k) ? pl.keys.filter((y) => y !== k) : [...pl.keys, k])}>{DAYS[x.d]} {x.t}</button>;
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </details>
+        );
+      })}
+      <div className="exlabel adtop">🗂 الجدول الخاص</div>
+      <label className="adcheck adflat"><input type="checkbox" checked={pl.private} onChange={(e) => setPl({ ...pl, private: e.target.checked })} /><span>يصحح أوراق الجدول الخاص (حسب الفصول والمواضيع اللي جوه)</span></label>
+    </>
   );
 }
 

@@ -77,7 +77,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS student_stops(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, chapter TEXT, block INTEGER, score INTEGER, max INTEGER, need INTEGER, absent INTEGER, reason TEXT, lectures INTEGER, created TEXT, lifted TEXT, lifted_by INTEGER);
     CREATE TABLE IF NOT EXISTS checkpoint_done(user_id INTEGER, chapter TEXT, block INTEGER, passed INTEGER, score INTEGER, absent INTEGER, created TEXT, PRIMARY KEY(user_id, chapter, block));
     CREATE TABLE IF NOT EXISTS student_devices(user_id INTEGER PRIMARY KEY, device TEXT, at TEXT, tried TEXT);
-    CREATE TABLE IF NOT EXISTS grader_pay(user_id INTEGER PRIMARY KEY, mandatory INTEGER, optional INTEGER, deduct INTEGER, chapters TEXT, exams_off TEXT);
+    CREATE TABLE IF NOT EXISTS grader_pay(user_id INTEGER PRIMARY KEY, mandatory INTEGER, optional INTEGER, deduct INTEGER, chapters TEXT, exams_off TEXT, places TEXT);
     CREATE TABLE IF NOT EXISTS grader_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, n_mand INTEGER, n_opt INTEGER, n_obj INTEGER, amount INTEGER, forgiven INTEGER, created TEXT, by_id INTEGER);
     CREATE TABLE IF NOT EXISTS paper_ink(item_id INTEGER, page INTEGER, ink TEXT, PRIMARY KEY(item_id, page));
     CREATE TABLE IF NOT EXISTS question_marks(item_id INTEGER, q INTEGER, mark INTEGER, PRIMARY KEY(item_id, q));
@@ -114,6 +114,7 @@ async function init() {
   await addColumn("sched_items", "attended_at", "TEXT");
   await addColumn("sched_items", "attended_by", "INTEGER");
   await addColumn("grader_pay", "exams_off", "TEXT");
+  await addColumn("grader_pay", "places", "TEXT");
   for (const c of ["started_at", "submitted_at", "opened_at", "notified"]) await addColumn("sched_items", c, "TEXT");
   await addColumn("schedules", "mode", "TEXT");
   await addColumn("schedules", "center_id", "INTEGER");

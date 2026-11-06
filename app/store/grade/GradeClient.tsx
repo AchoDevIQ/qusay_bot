@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import Grader, { type Paper, type Prepared, type Sticker } from "./Grader";
 
-type Row = { id: number; exam: number; optional: boolean; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
+type Row = { id: number; exam: number; general: boolean; optional: boolean; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
 type ObjRow = Row & { qs: number[] };
-type Group = { exam: number; title: string; chapter: string; count: number; tests: number };
+type Group = { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number };
 type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
 type History = { page: number; pages: number; count: number; owner: boolean; rows: HistRow[] };
 type Rate = { mandatory: number; optional: number; deduct: number };
@@ -34,9 +34,9 @@ export default function GradeClient() {
   const [allDone, setAllDone] = useState(false);
   const skipped = useRef(new Set<number>());
   // الامتحان اللي فتحه: الأوراق تنفتح منه وحده لحد ما تخلص
-  const group = useRef<number | null>(null);
+  const group = useRef<string | null>(null);
   const [tab, setTab] = useState<"papers" | "history" | "pay">("papers");
-  const inGroup = (x: Row) => group.current === null || x.exam === group.current;
+  const inGroup = (x: Row) => group.current === null || `${x.exam}|${x.general}` === group.current;
   const saving = useRef(new Set<number>());
   const [savedNow, setSavedNow] = useState(0);
   const [bgErr, setBgErr] = useState("");
@@ -136,9 +136,9 @@ export default function GradeClient() {
               <button type="button" className={tab === "history" ? "on" : ""} onClick={() => { setTab("history"); void call({ action: "history" }); }}>📜 السجل</button>
               {!data.owner && <button type="button" className={tab === "pay" ? "on" : ""} onClick={() => { setTab("pay"); void call({ action: "pay" }); }}>💰 حسابي</button>}
             </div>
-            {tab === "papers" && <List data={data} busy={busy} act={act} openGroup={(exam) => {
-              group.current = exam; skipped.current.clear();
-              const p = data.waiting.find((x) => x.exam === exam);
+            {tab === "papers" && <List data={data} busy={busy} act={act} openGroup={(g) => {
+              group.current = `${g.exam}|${g.general}`; skipped.current.clear();
+              const p = data.waiting.find(inGroup);
               if (p) void act({ action: "open", id: p.id });
             }} />}
             {tab === "history" && data.history && <HistoryTab h={data.history} busy={busy} owner={data.owner} act={act} />}
@@ -152,7 +152,11 @@ export default function GradeClient() {
 }
 
 /** الأوراق: الاعتراضات أول، وبعدها الامتحانات اللي بيها أوراق تنتظر. المصحح يفتح امتحان، مو طالب */
-function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: Call; openGroup: (exam: number) => void }) {
+function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: Call; openGroup: (g: Group) => void }) {
+  const [kind, setKind] = useState<"general" | "private">("general");
+  const gen = data.groups.filter((g) => g.general), priv = data.groups.filter((g) => !g.general);
+  const sum = (l: Group[]) => l.reduce((n, g) => n + g.count, 0);
+  const shown = kind === "general" ? gen : priv;
   return (
     <>
       {!!data.objections.length && (
@@ -169,14 +173,19 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
         </div>
       )}
       <div className="card">
-        <h2>📥 امتحانات بيها أوراق: {data.groups.length}</h2>
-        {data.groups.length ? (
+        <h2>📥 أوراق تنتظر: {sum(data.groups)}</h2>
+        <div className="seg expad">
+          <button type="button" className={kind === "general" ? "on" : ""} onClick={() => setKind("general")}>📅 الجدول العام ({sum(gen)})</button>
+          <button type="button" className={kind === "private" ? "on" : ""} onClick={() => setKind("private")}>🗂 الجدول الخاص ({sum(priv)})</button>
+        </div>
+        {kind === "private" && !!priv.length && <div className="exhint expad">طلاب الجدول الخاص يمتحنون بأوقات متفرقة، فأوراقهم مجمعة حسب الموضوع حتى تصححها سوا.</div>}
+        {shown.length ? (
           <div className="gkgroups">
-            {data.groups.map((g) => (
-              <div key={g.exam} className="gkgroup">
+            {shown.map((g) => (
+              <div key={`${g.exam}|${g.general}`} className="gkgroup">
                 <div><b>{g.title}</b><small>{g.chapter}</small></div>
                 <span className="gkcount">{g.count} ورقة{g.tests ? ` (${g.tests} تجربة)` : ""}</span>
-                <button type="button" className="btn" disabled={busy} onClick={() => openGroup(g.exam)}>▶ فتح التجمع</button>
+                <button type="button" className="btn" disabled={busy} onClick={() => openGroup(g)}>▶ فتح التجمع</button>
               </div>
             ))}
           </div>

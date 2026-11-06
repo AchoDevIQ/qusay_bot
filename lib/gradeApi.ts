@@ -7,7 +7,7 @@ import { isAdmin, staffName, student } from "./data.ts";
 import { send, sendAlbum, upload } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, objectButton, openObjections, testObjection } from "./objections.ts";
-import { chaptersOf, examsOffOf, payAction, payData } from "./graderPay.ts";
+import { gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
@@ -26,24 +26,25 @@ const nameOf = async (it: Row) => (isTest(it) ? `طالب تجربة ${-it.user_
 async function paperRow(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });
   const v = it.version_id ? await one("bank_versions", { id: it.version_id }) : null;
-  return { id: it.id, exam: it.exam_id, optional: it.kind === "optional", name: await nameOf(it), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", submitted: it.submitted_at ?? "", total: it.total ?? null, graded: it.graded_at ?? "", test: isTest(it), grader: it.grader_id ? await staffName(it.grader_id) : "" };
+  const general = isTest(it) || (await one("schedules", { user_id: it.user_id }))?.mode === "general";
+  return { id: it.id, exam: it.exam_id, general, optional: it.kind === "optional", name: await nameOf(it), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", submitted: it.submitted_at ?? "", total: it.total ?? null, graded: it.graded_at ?? "", test: isTest(it), grader: it.grader_id ? await staffName(it.grader_id) : "" };
 }
 /** الأوراق اللي يگدر يصححها: ما انصححت، وما أخذها غيره، ومن فصوله */
 async function waitingFor(uid: number, papers: Row[]) {
-  const mine = await chaptersOf(uid);
-  const off = new Set(await examsOffOf(uid));
-  const chapter = new Map((await find("bank_exams")).map((e) => [e.id, e.chapter]));
-  return papers.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid) && (!mine.length || mine.includes(chapter.get(p.exam_id))) && !off.has(p.exam_id));
+  const scope = await gradeScope(uid);
+  return papers.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid) && scope.can(p));
 }
 /** الامتحانات اللي بيها أوراق تنتظر: المصحح يختار امتحان، مو طالب */
 async function examGroups(waiting: Row[]) {
   const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
-  const groups = new Map<number, { exam: number; title: string; chapter: string; count: number; tests: number; order: number }>();
+  const general = new Set((await find("schedules", { mode: "general" })).map((s) => s.user_id));
+  // الجدول العام والخاص كل واحد بروحه، وداخلهم حسب الموضوع حتى يصحح طلاب الموضوع سوا
+  const groups = new Map<string, { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; order: number }>();
   for (const p of waiting) {
-    const e = exams.get(p.exam_id);
-    const g = groups.get(p.exam_id) ?? { exam: p.exam_id, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", count: 0, tests: 0, order: (e?.pos ?? 0) * 1000 + (e?.ord ?? 0) };
+    const e = exams.get(p.exam_id), gen = general.has(p.user_id) || isTest(p), key = `${p.exam_id}|${gen}`;
+    const g = groups.get(key) ?? { exam: p.exam_id, general: gen, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", count: 0, tests: 0, order: (e?.pos ?? 0) * 1000 + (e?.ord ?? 0) };
     g.count++; if (isTest(p)) g.tests++;
-    groups.set(p.exam_id, g);
+    groups.set(key, g);
   }
   return [...groups.values()].sort((a, b) => a.order - b.order);
 }

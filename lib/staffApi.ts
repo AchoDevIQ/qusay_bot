@@ -7,7 +7,7 @@ import { mainKb } from "./keyboards.ts";
 import { send } from "./telegram.ts";
 import { money, stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
-import { allChapters, allTopics, card, graders, payAction } from "./graderPay.ts";
+import { allChapters, allTopics, card, graders, payAction, placeTree } from "./graderPay.ts";
 
 const NAME_MAX = 60;
 const nameOf = (raw: unknown) => {
@@ -25,7 +25,7 @@ async function pageData() {
   const rows = await find("staff", {}, { order: ["name"] });
   const graderIds = new Set(await graders());
   return {
-    chapters: await allChapters(), topics: await allTopics(),
+    chapters: await allChapters(), topics: await allTopics(), tree: await placeTree(),
     perms: Object.entries(PERMS).map(([key, label]) => ({ key, label })),
     staff: await Promise.all(rows.map(async (s) => ({
       id: s.user_id, name: s.name, perms: String(s.perms ?? "").split(",").filter(Boolean), account: await staffAccount(s.user_id),
