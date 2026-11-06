@@ -75,7 +75,8 @@ function CronBox({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="exfoot">
-      <div className="exlabel">⏰ مؤقت رسالة «بدأ الامتحان»</div>
+      <div className="exlabel">⏰ المؤقت</div>
+      <div className="exhint">يصحي البوت كل دقيقة حتى يدز: رسالة «بدأ الامتحان»، وحساب السيطرة، ورسالة «وصلتك أوراق» للمصحح، وتقرير الحضور لمدير المركز.</div>
       <ol className="adsteps">
         <li>انسخ الرابط من الزر جوة. هذا الرابط سري، لا تدزه لأحد.</li>
         <li>افتح موقع <code>cron-job.org</code> وسوي حساب مجاني.</li>
