@@ -38,7 +38,7 @@ export const SCHEMA: Record<string, Table> = {
   sched_items: { key: "id", auto: true, cols: nulls("user_id", "exam_id", "at", "status", "version_id", "started_at", "submitted_at", "opened_at", "notified", "grader_id", "total", "graded_at", "kind", "paid_id") },
   question_marks: { key: ["item_id", "q"], cols: { mark: null } },
   paper_ink: { key: ["item_id", "page"], cols: { ink: null } },
-  grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters") },
+  grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters", "exams_off") },
   grader_settlements: { key: "id", auto: true, cols: nulls("user_id", "n_mand", "n_opt", "n_obj", "amount", "created", "by_id") },
   objections: { key: "id", auto: true, cols: nulls("item_id", "user_id", "q", "text", "voice", "status", "old_mark", "new_mark", "reason", "created", "decided_at", "decided_by", "paid_id") },
   grade_comments: { key: "id", auto: true, cols: nulls("lo", "hi", "text", "sticker_id", "created") },

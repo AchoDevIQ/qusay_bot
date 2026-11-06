@@ -20,6 +20,13 @@ export async function chaptersOf(uid: number): Promise<string[]> {
   if (await isAdmin(uid)) return [];
   try { const j = JSON.parse((await one("grader_pay", { user_id: uid }))?.chapters || "[]"); return Array.isArray(j) ? j.map(String) : []; } catch { return []; }
 }
+/** المواضيع (الامتحانات) اللي صاحب البوت شالها من المصحح داخل فصوله */
+export async function examsOffOf(uid: number): Promise<number[]> {
+  if (await isAdmin(uid)) return [];
+  try { const j = JSON.parse((await one("grader_pay", { user_id: uid }))?.exams_off || "[]"); return Array.isArray(j) ? j.map(Number) : []; } catch { return []; }
+}
+/** كل المواضيع مرتبة حسب الكتاب، حتى صاحب البوت يشيل منها */
+export const allTopics = async () => (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => e.chapter).map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string }));
 export const allChapters = async () => [...new Set((await find("bank_exams", {}, { order: ["pos", "ord"] })).map((e) => e.chapter as string).filter(Boolean))];
 
 /** اللي ما انحاسب: الأوراق اللي صححها، والاعتراضات اللي انقبلت على أوراقه */
@@ -46,13 +53,13 @@ export async function graders() {
 }
 export async function card(uid: number) {
   const b = await balanceOf(uid);
-  return { id: uid, name: await staffName(uid), chapters: await chaptersOf(uid), rate: b.rate, mand: b.mand, opt: b.opt, obj: b.obj, amount: b.amount, archive: await archiveOf(uid) };
+  return { id: uid, name: await staffName(uid), chapters: await chaptersOf(uid), off: await examsOffOf(uid), rate: b.rate, mand: b.mand, opt: b.opt, obj: b.obj, amount: b.amount, archive: await archiveOf(uid) };
 }
 
 /** صفحة التعويض: صاحب البوت يشوف كل المصححين ويعدل أجورهم ويسوي تسوية، والمصحح يشوف حسابه بس */
 export async function payData(uid: number) {
-  if (await isAdmin(uid)) return { all: true, chapters: await allChapters(), graders: await Promise.all((await graders()).map(card)) };
-  return { all: false, chapters: [], graders: [await card(uid)] };
+  if (await isAdmin(uid)) return { all: true, chapters: await allChapters(), topics: await allTopics(), graders: await Promise.all((await graders()).map(card)) };
+  return { all: false, chapters: [], topics: [], graders: [await card(uid)] };
 }
 
 export async function payAction(uid: number, body: Row) {
@@ -63,7 +70,10 @@ export async function payAction(uid: number, body: Row) {
     const all = await allChapters();
     const chapters = Array.isArray(body.chapters) ? [...new Set((body.chapters as unknown[]).map(String))] : [];
     need(chapters.every((c) => all.includes(c)), "فصل غير معروف");
-    await put("grader_pay", { user_id: id, mandatory: money(body.mandatory, "أجر الإجباري"), optional: money(body.optional, "أجر الاختياري"), deduct: money(body.deduct, "خصم الاعتراض"), chapters: JSON.stringify(chapters.length === all.length ? [] : chapters) });
+    const topics = new Set((await allTopics()).map((t) => t.id));
+    const off = Array.isArray(body.off) ? [...new Set((body.off as unknown[]).map(Number))] : [];
+    need(off.every((x) => topics.has(x)), "موضوع غير معروف");
+    await put("grader_pay", { user_id: id, mandatory: money(body.mandatory, "أجر الإجباري"), optional: money(body.optional, "أجر الاختياري"), deduct: money(body.deduct, "خصم الاعتراض"), chapters: JSON.stringify(chapters.length === all.length ? [] : chapters), exams_off: JSON.stringify(off) });
     return "✅ انحفظ";
   }
   const b = await balanceOf(id);

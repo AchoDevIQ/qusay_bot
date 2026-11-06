@@ -6,7 +6,7 @@ import { isAdmin, staffName, student } from "./data.ts";
 import { send, sendAlbum, upload } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, objectButton, openObjections, testObjection } from "./objections.ts";
-import { chaptersOf, payAction, payData } from "./graderPay.ts";
+import { chaptersOf, examsOffOf, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
@@ -30,8 +30,9 @@ async function paperRow(it: Row) {
 /** الأوراق اللي يگدر يصححها: ما انصححت، وما أخذها غيره، ومن فصوله */
 async function waitingFor(uid: number, papers: Row[]) {
   const mine = await chaptersOf(uid);
+  const off = new Set(await examsOffOf(uid));
   const chapter = new Map((await find("bank_exams")).map((e) => [e.id, e.chapter]));
-  return papers.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid) && (!mine.length || mine.includes(chapter.get(p.exam_id))));
+  return papers.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid) && (!mine.length || mine.includes(chapter.get(p.exam_id))) && !off.has(p.exam_id));
 }
 /** الامتحانات اللي بيها أوراق تنتظر: المصحح يختار امتحان، مو طالب */
 async function examGroups(waiting: Row[]) {
@@ -174,7 +175,7 @@ export async function gradeAction(body: Row) {
     const it = await one("sched_items", { id: Number(body.id) });
     need(it?.status === "done", "الورقة غير موجودة");
     need(!it!.grader_id || it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
-    if (!it!.graded_at) need((await waitingFor(uid, [it!])).length, "هذا الفصل مو من فصولك", 403);
+    if (!it!.graded_at) need((await waitingFor(uid, [it!])).length, "هذا الموضوع مو من مواضيعك", 403);
     if (!it!.grader_id) await update("sched_items", { id: it!.id }, { grader_id: uid });
     paper = await paperView((await one("sched_items", { id: it!.id }))!);
   } else if (a === "openObj") {

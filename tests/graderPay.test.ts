@@ -49,7 +49,7 @@ test("الأوراق تطلع مجمعة حسب الامتحان، والمصح�
   const mine = await g(30, "list");
   assert.deepEqual(mine.groups.map((x: any) => x.title), ["القطع المكافئ"]);
   assert.deepEqual(mine.waiting.map((x: any) => x.id), [b1]);
-  await assert.rejects(g(30, "open", { id: a1 }), /مو من فصولك/);
+  await assert.rejects(g(30, "open", { id: a1 }), /مو من مواضيعك/);
   await assert.rejects(g(30, "setRate", { grader: 30, mandatory: 1 }), (x: any) => x.status === 403);
   await assert.rejects(g(1, "setRate", { grader: 30, mandatory: -5 }), /رقم كامل/);
   // كل الفصول = بدون تقييد
@@ -96,4 +96,20 @@ test("صفحة المساعدين: اللي إله على التصحيح يطل�
   assert.equal(r.staff.find((x: any) => x.id === 30).grade.amount, 0);
   assert.ok(calls.some((x) => x.p.chat_id === 30 && /دفعلك 300 دينار/.test(x.p.text)));
   await assert.rejects(staffAction({ initData: sign(30), action: "gradePay", id: 30 }), (x: any) => x.status === 403);
+});
+
+test("المواضيع: صاحب البوت يشيل موضوع من المصحح داخل فصله، فما تطلعله أوراقه", async () => {
+  const e3 = await insert("bank_exams", { slug: "ch2", chapter: "الفصل الثاني", ord: 2, title: "القطع الناقص", info: "", minutes: 60, pos: 2 });
+  const v3 = await insert("bank_versions", { exam_id: e3, model: "A", kind: "mandatory", ok: 1 });
+  await insert("bank_questions", { version_id: v3, n: 1, max_mark: 100, q_file: "t/q1.png" });
+  const p1 = await paper(80, v2, e2), p2 = await paper(81, v3, e3);
+  await g(1, "setRate", { grader: 30, mandatory: 200, optional: 150, deduct: 50, chapters: ["الفصل الثاني"], off: [e3] });
+  const mine = await g(30, "list");
+  assert.deepEqual(mine.groups.map((x: any) => x.title), ["القطع المكافئ"]);
+  assert.ok(mine.waiting.some((x: any) => x.id === p1));
+  await assert.rejects(g(30, "open", { id: p2 }), /مو من مواضيعك/);
+  await assert.rejects(g(1, "setRate", { grader: 30, off: [99999] }), /موضوع غير معروف/);
+  assert.deepEqual((await g(1, "pay")).pay.graders.find((x: any) => x.id === 30).off, [e3]);
+  // صاحب البوت يشوف كل شي
+  assert.ok((await g(1, "list")).groups.some((x: any) => x.title === "القطع الناقص"));
 });

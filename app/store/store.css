@@ -247,3 +247,4 @@ body.grwide .grtop{padding-left:104px}
 .stwallet{display:flex;flex-direction:column;align-items:flex-end;gap:4px;white-space:nowrap}.stwallet b{color:var(--gold)}.stwallet small{opacity:.75}
 .stwallet .exbtn,.stwallet button{padding:6px 10px;font-size:13px}
 .stfield{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:14px;margin-top:8px}
+.sttopics{border:1px solid var(--gold2);border-radius:10px;padding:6px 10px;margin-top:6px}.sttopics summary{cursor:pointer;font-weight:800;padding:4px 0}.sttopics summary small{opacity:.75;font-weight:600}
