@@ -6,6 +6,7 @@ import { isAdmin, staffName, student } from "./data.ts";
 import { send, sendAlbum, upload } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, objectButton, openObjections, testObjection } from "./objections.ts";
+import { chaptersOf, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
@@ -24,14 +25,33 @@ const nameOf = async (it: Row) => (isTest(it) ? `طالب تجربة ${-it.user_
 async function paperRow(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });
   const v = it.version_id ? await one("bank_versions", { id: it.version_id }) : null;
-  return { id: it.id, name: await nameOf(it), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", submitted: it.submitted_at ?? "", total: it.total ?? null, graded: it.graded_at ?? "", test: isTest(it), grader: it.grader_id ? await staffName(it.grader_id) : "" };
+  return { id: it.id, exam: it.exam_id, optional: it.kind === "optional", name: await nameOf(it), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", submitted: it.submitted_at ?? "", total: it.total ?? null, graded: it.graded_at ?? "", test: isTest(it), grader: it.grader_id ? await staffName(it.grader_id) : "" };
+}
+/** الأوراق اللي يگدر يصححها: ما انصححت، وما أخذها غيره، ومن فصوله */
+async function waitingFor(uid: number, papers: Row[]) {
+  const mine = await chaptersOf(uid);
+  const chapter = new Map((await find("bank_exams")).map((e) => [e.id, e.chapter]));
+  return papers.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid) && (!mine.length || mine.includes(chapter.get(p.exam_id))));
+}
+/** الامتحانات اللي بيها أوراق تنتظر: المصحح يختار امتحان، مو طالب */
+async function examGroups(waiting: Row[]) {
+  const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
+  const groups = new Map<number, { exam: number; title: string; chapter: string; count: number; tests: number; order: number }>();
+  for (const p of waiting) {
+    const e = exams.get(p.exam_id);
+    const g = groups.get(p.exam_id) ?? { exam: p.exam_id, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", count: 0, tests: 0, order: (e?.pos ?? 0) * 1000 + (e?.ord ?? 0) };
+    g.count++; if (isTest(p)) g.tests++;
+    groups.set(p.exam_id, g);
+  }
+  return [...groups.values()].sort((a, b) => a.order - b.order);
 }
 async function listData(uid: number) {
   const papers = await find("sched_items", { status: "done" }, { order: ["submitted_at"] });
-  const waiting = papers.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid));
+  const waiting = await waitingFor(uid, papers);
   const mine = papers.filter((p) => p.graded_at && (p.grader_id === uid)).slice(-30).reverse();
   return {
     objections: await objectionPapers(uid),
+    groups: await examGroups(waiting),
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
     owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid),
     errors: await errorsOf(uid),
@@ -154,6 +174,7 @@ export async function gradeAction(body: Row) {
     const it = await one("sched_items", { id: Number(body.id) });
     need(it?.status === "done", "الورقة غير موجودة");
     need(!it!.grader_id || it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
+    if (!it!.graded_at) need((await waitingFor(uid, [it!])).length, "هذا الفصل مو من فصولك", 403);
     if (!it!.grader_id) await update("sched_items", { id: it!.id }, { grader_id: uid });
     paper = await paperView((await one("sched_items", { id: it!.id }))!);
   } else if (a === "openObj") {
@@ -209,6 +230,12 @@ export async function gradeAction(body: Row) {
       await deleteTests();
       notice = "🗑 انمسحت أوراق التجربة";
     }
+  } else if (a === "pay") {
+    return { ...await listData(uid), paper: null, notice: "", pay: await payData(uid) };
+  } else if (a === "setRate" || a === "settle") {
+    return { ...await listData(uid), paper: null, notice: await payAction(uid, body), pay: await payData(uid) };
+  } else if (a === "history") {
+    return { ...await listData(uid), paper: null, notice: "", history: await historyOf(uid, Number(body.page) || 0) };
   } else need(a === "list", "أمر غير معروف");
   return { ...await listData(uid), paper, notice };
 }
@@ -347,4 +374,21 @@ async function messageStudent(uid: number, form: FormData) {
   return { ok: true, notice: isTest(it) ? "🧪 وصلتك الرسالة إنت لأنها ورقة تجربة" : "✅ وصلت الرسالة للطالب" };
 }
 
-export const waitingPapers = async (uid: number) => (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid)).length;
+export const waitingPapers = async (uid: number) => (await waitingFor(uid, await find("sched_items", { status: "done" }))).length;
+
+const PAGE = 40;
+/** سجل التصحيح: المصحح يشوف أوراقه، وصاحب البوت يشوف كل الأوراق ومنو صححها، ويا حالة الاعتراضات */
+async function historyOf(uid: number, page: number) {
+  const owner = await isAdmin(uid);
+  const all = (await find("sched_items", { status: "done" })).filter((p) => p.graded_at && (owner || p.grader_id === uid))
+    .sort((a, b) => String(b.graded_at).localeCompare(String(a.graded_at)));
+  const rows = all.slice(page * PAGE, page * PAGE + PAGE);
+  const objs = await find("objections", {});
+  return {
+    page, pages: Math.max(1, Math.ceil(all.length / PAGE)), count: all.length, owner,
+    rows: await Promise.all(rows.map(async (p) => {
+      const mine = objs.filter((o) => o.item_id === p.id);
+      return { ...await paperRow(p), objOpen: mine.filter((o) => o.status === "open").length, objOk: mine.filter((o) => o.status === "accepted").length, objNo: mine.filter((o) => o.status === "rejected").length };
+    })),
+  };
+}

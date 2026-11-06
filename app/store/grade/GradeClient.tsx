@@ -4,9 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import Grader, { type Paper, type Prepared, type Sticker } from "./Grader";
 
-type Row = { id: number; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
+type Row = { id: number; exam: number; optional: boolean; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
 type ObjRow = Row & { qs: number[] };
-type Data = { objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
+type Group = { exam: number; title: string; chapter: string; count: number; tests: number };
+type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
+type History = { page: number; pages: number; count: number; owner: boolean; rows: HistRow[] };
+type Rate = { mandatory: number; optional: number; deduct: number };
+type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; amount: number; created: string }[] };
+type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
+type Data = { groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -27,6 +33,10 @@ export default function GradeClient() {
   const [paper, setPaper] = useState<Paper | null>(null);
   const [allDone, setAllDone] = useState(false);
   const skipped = useRef(new Set<number>());
+  // الامتحان اللي فتحه: الأوراق تنفتح منه وحده لحد ما تخلص
+  const group = useRef<number | null>(null);
+  const [tab, setTab] = useState<"papers" | "history" | "pay">("papers");
+  const inGroup = (x: Row) => group.current === null || x.exam === group.current;
   const saving = useRef(new Set<number>());
   const [savedNow, setSavedNow] = useState(0);
   const [bgErr, setBgErr] = useState("");
@@ -83,14 +93,14 @@ export default function GradeClient() {
       if (nextObj) void act({ action: "openObj", id: nextObj.id });
       return;
     }
-    const nextPaper = data?.waiting.find((x) => x.id !== p.id && !skipped.current.has(x.id) && !saving.current.has(x.id));
+    const nextPaper = data?.waiting.find((x) => x.id !== p.id && inGroup(x) && !skipped.current.has(x.id) && !saving.current.has(x.id));
     setPaper(null);
     if (nextPaper) void act({ action: "open", id: nextPaper.id });
     else setAllDone(true);
   }
   /** بعد ما تتخطى، تنفتح الورقة اللي بعدها وحدها */
   async function next(r: Data | null) {
-    const p = r?.waiting.find((x) => !skipped.current.has(x.id));
+    const p = r?.waiting.find((x) => inGroup(x) && !skipped.current.has(x.id));
     setPaper(null);
     if (p) await act({ action: "open", id: p.id });
     else setAllDone(true);
@@ -103,8 +113,8 @@ export default function GradeClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
         {data && paper && (
-          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} errors={data.errors ?? []} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && !saving.current.has(x.id)).length}
-            onClose={() => { setPaper(null); setSavedNow(0); void call({ action: "list" }); }}
+          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} errors={data.errors ?? []} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
+            onClose={() => { setPaper(null); setSavedNow(0); group.current = null; void call({ action: "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onSave={(inkSaved, compose) => saveInBackground(paper, inkSaved, compose)}
             onDecide={(inkSaved, compose, rejects, accepted) => saveInBackground(paper, inkSaved, compose, { rejects, accepted })} />
@@ -113,32 +123,38 @@ export default function GradeClient() {
           <div className="gk gk-done">
             <div className="gk-check">✓</div>
             <b>انتهت الأوراق المتاحة</b>
-            <span>ماكو أوراق ثانية تنتظر التصحيح هسه.</span>
+            <span>{group.current !== null ? "خلصت أوراق هذا الامتحان. ارجع للقائمة وافتح امتحان ثاني." : "ماكو أوراق ثانية تنتظر التصحيح هسه."}</span>
             {savingLeft > 0 && <span className="gk-err">⏳ جاري حفظ {savingLeft} ورقة وإرسالها للطلاب. لا تسد الصفحة لحد ما تخلص.</span>}
             {bgErr && <span className="gk-err">{bgErr}</span>}
-            <button type="button" className="gk-finish" onClick={() => { setAllDone(false); skipped.current.clear(); setSavedNow(0); void call({ action: "list" }); }}>رجوع للقائمة</button>
+            <button type="button" className="gk-finish" onClick={() => { setAllDone(false); skipped.current.clear(); setSavedNow(0); group.current = null; void call({ action: "list" }); }}>رجوع للقائمة</button>
           </div>
         )}
-        {data && !paper && !allDone && <List data={data} busy={busy} act={act} />}
+        {data && !paper && !allDone && (
+          <>
+            <div className="seg gktabs">
+              <button type="button" className={tab === "papers" ? "on" : ""} onClick={() => { setTab("papers"); void call({ action: "list" }); }}>📥 الأوراق</button>
+              <button type="button" className={tab === "history" ? "on" : ""} onClick={() => { setTab("history"); void call({ action: "history" }); }}>📜 السجل</button>
+              <button type="button" className={tab === "pay" ? "on" : ""} onClick={() => { setTab("pay"); void call({ action: "pay" }); }}>💰 التعويض</button>
+            </div>
+            {tab === "papers" && <List data={data} busy={busy} act={act} openGroup={(exam) => {
+              group.current = exam; skipped.current.clear();
+              const p = data.waiting.find((x) => x.exam === exam);
+              if (p) void act({ action: "open", id: p.id });
+            }} />}
+            {tab === "history" && data.history && <HistoryTab h={data.history} busy={busy} owner={data.owner} act={act} />}
+            {tab === "pay" && data.pay && <PayTab pay={data.pay} busy={busy} act={act} />}
+          </>
+        )}
       </div>
       {!paper && !allDone && <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />}
     </>
   );
 }
 
-function List({ data, busy, act }: { data: Data; busy: boolean; act: Call }) {
+/** الأوراق: الاعتراضات أول، وبعدها الامتحانات اللي بيها أوراق تنتظر. المصحح يفتح امتحان، مو طالب */
+function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: Call; openGroup: (exam: number) => void }) {
   return (
     <>
-      {data.owner && (
-        <div className="card expad adform">
-          <div className="exlabel">🧪 أوراق تجربة</div>
-          <div className="exhint">5 أوراق عشوائية بدون طلاب حقيقيين، وما توصل رسالة لأحد. ورقة "الطالب" بيها هي الحل النموذجي للنسخة، حتى تجرب التصحيح على ورقة محلولة.</div>
-          <div className="exline">
-            <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "makeTests" })}>🧪 سوي أوراق تجربة</button>
-            {data.hasTests && <Confirm label="🗑 امسح أوراق التجربة" disabled={busy} onYes={() => void act({ action: "deleteTests" })} />}
-          </div>
-        </div>
-      )}
       {!!data.objections.length && (
         <div className="card">
           <h2>✋ اعتراضات تنتظر ردك: {data.objections.length}</h2>
@@ -153,33 +169,109 @@ function List({ data, busy, act }: { data: Data; busy: boolean; act: Call }) {
         </div>
       )}
       <div className="card">
-        <h2>📥 تنتظر التصحيح: {data.waiting.length}</h2>
-        {data.waiting.length ? (
-          <table className="extable"><tbody>
-            {data.waiting.map((p) => (
-              <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "open", id: p.id }); }}>
-                <td><b>{p.name}</b>{p.test && <span className="adentag">تجربة</span>}<small className="pdmode">{p.chapter} · {p.title} · نسخة {p.model}</small></td>
-                <td className="p"><span className="exbtn">صحح</span></td>
-              </tr>
+        <h2>📥 امتحانات بيها أوراق: {data.groups.length}</h2>
+        {data.groups.length ? (
+          <div className="gkgroups">
+            {data.groups.map((g) => (
+              <div key={g.exam} className="gkgroup">
+                <div><b>{g.title}</b><small>{g.chapter}</small></div>
+                <span className="gkcount">{g.count} ورقة{g.tests ? ` (${g.tests} تجربة)` : ""}</span>
+                <button type="button" className="btn" disabled={busy} onClick={() => openGroup(g.exam)}>▶ فتح التجمع</button>
+              </div>
             ))}
-          </tbody></table>
+          </div>
         ) : <div className="empty">✅ ماكو أوراق تنتظر.</div>}
       </div>
-      {!!data.done.length && (
-        <div className="card">
-          <h2>✅ صححتها أخيراً</h2>
-          <table className="extable"><tbody>
-            {data.done.map((p) => (
-              <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "open", id: p.id }); }}>
-                <td><b>{p.name}</b>{p.test && <span className="adentag">تجربة</span>}<small className="pdmode">{p.title} · {p.graded}</small>
-                  {p.test && data.owner && <button type="button" className="exbtn adtop" disabled={busy} onClick={(e) => { e.stopPropagation(); void act({ action: "testObj", id: p.id }); }}>🧪 سوي اعتراض تجربة</button>}
-                </td>
-                <td className="p">{p.total}</td>
-              </tr>
-            ))}
-          </tbody></table>
+      {data.owner && (
+        <div className="card expad adform">
+          <div className="exlabel">🧪 أوراق تجربة</div>
+          <div className="exhint">5 أوراق عشوائية بدون طلاب حقيقيين، وما توصل رسالة لأحد. ورقة "الطالب" بيها هي الحل النموذجي للنسخة، حتى تجرب التصحيح على ورقة محلولة.</div>
+          <div className="exline">
+            <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "makeTests" })}>🧪 سوي أوراق تجربة</button>
+            {data.hasTests && <Confirm label="🗑 امسح أوراق التجربة" disabled={busy} onYes={() => void act({ action: "deleteTests" })} />}
+          </div>
         </div>
       )}
     </>
+  );
+}
+
+/** سجل التصحيح: كل ورقة ودرجتها وشوكت انصححت، وحالة الاعتراضات عليها */
+function HistoryTab({ h, busy, owner, act }: { h: History; busy: boolean; owner: boolean; act: Call }) {
+  return (
+    <div className="card">
+      <h2>📜 سجل التصحيح: {h.count} ورقة</h2>
+      {h.rows.length ? (
+        <table className="extable"><tbody>
+          {h.rows.map((p) => (
+            <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "open", id: p.id }); }}>
+              <td><b>{p.name}</b>{p.test && <span className="adentag">تجربة</span>}{p.optional && <span className="adentag">اختياري</span>}
+                <small className="pdmode">{p.title} · {p.graded}{h.owner && p.grader ? ` · ${p.grader}` : ""}</small>
+                {(p.objOpen + p.objOk + p.objNo > 0) && <small className="pdmode">✋ اعتراض: {p.objOpen ? `⏳${p.objOpen} ` : ""}{p.objOk ? `✅${p.objOk} ` : ""}{p.objNo ? `❌${p.objNo}` : ""}</small>}
+                {p.test && owner && <button type="button" className="exbtn adtop" disabled={busy} onClick={(e) => { e.stopPropagation(); void act({ action: "testObj", id: p.id }); }}>🧪 سوي اعتراض تجربة</button>}
+              </td>
+              <td className="p"><b>{p.total}</b></td>
+            </tr>
+          ))}
+        </tbody></table>
+      ) : <div className="empty">لسه ما صححت أوراق.</div>}
+      {h.pages > 1 && (
+        <div className="exline adtop">
+          <button type="button" className="exbtn" disabled={busy || h.page <= 0} onClick={() => void act({ action: "history", page: h.page - 1 })}>› الأحدث</button>
+          <span>صفحة {h.page + 1} من {h.pages}</span>
+          <button type="button" className="exbtn" disabled={busy || h.page >= h.pages - 1} onClick={() => void act({ action: "history", page: h.page + 1 })}>الأقدم ‹</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const iqd = (n: number) => `${n.toLocaleString("en")} دينار`;
+/** التعويض: صاحب البوت يحدد لكل مصحح فصوله وأجوره ويحاسبه، والمصحح يشوف حسابه */
+function PayTab({ pay, busy, act }: { pay: Pay; busy: boolean; act: Call }) {
+  if (!pay.graders.length) return <div className="card"><div className="empty">ماكو مصححين بعد. انطي أحد صلاحية «✍️ التصحيح» من صفحة المساعدين.</div></div>;
+  return <>{pay.graders.map((g) => <PayCardView key={g.id} g={g} all={pay.all} chapters={pay.chapters} busy={busy} act={act} />)}</>;
+}
+function PayCardView({ g, all, chapters, busy, act }: { g: PayCard; all: boolean; chapters: string[]; busy: boolean; act: Call }) {
+  const [rate, setRate] = useState(g.rate);
+  const [chs, setChs] = useState<string[]>(g.chapters.length ? g.chapters : chapters);
+  const num = (k: keyof Rate) => (
+    <input type="number" inputMode="numeric" className="ltr" min={0} value={rate[k]} onChange={(e) => setRate({ ...rate, [k]: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+  );
+  return (
+    <div className="card">
+      <h2>✍️ {g.name}</h2>
+      <div className="form">
+        <div className="paybal">
+          <div><span>أوراق إجبارية</span><b>{g.mand} × {iqd(g.rate.mandatory)}</b></div>
+          <div><span>أوراق اختيارية</span><b>{g.opt} × {iqd(g.rate.optional)}</b></div>
+          <div><span>اعتراضات انقبلت</span><b>− {g.obj} × {iqd(g.rate.deduct)}</b></div>
+          <div className="paytotal"><span>الرصيد</span><b>{iqd(g.amount)}</b></div>
+        </div>
+        {all && <Confirm label="💵 تسوية الحساب (يصفر الرصيد)" disabled={busy || (!g.mand && !g.opt && !g.obj)} onYes={() => void act({ action: "settle", grader: g.id })} />}
+        {all && (
+          <>
+            <label>الفصول اللي يصححها</label>
+            <div className="seg wrap2">
+              {chapters.map((c) => <button type="button" key={c} className={chs.includes(c) ? "on" : ""} onClick={() => setChs(chs.includes(c) ? chs.filter((x) => x !== c) : [...chs, c])}>{c}</button>)}
+            </div>
+            {!chs.length && <div className="hint">إذا ما تختار ولا فصل، يصحح كل الفصول.</div>}
+            <label>أجر الورقة الإجبارية (دينار)</label>{num("mandatory")}
+            <label>أجر الورقة الاختيارية (دينار)</label>{num("optional")}
+            <label>خصم كل اعتراض ينقبل على ورقته (دينار)</label>{num("deduct")}
+            <div className="hint">الأجر الجديد ينحسب على الأوراق اللي بعدها ما انحاسبت.</div>
+            <button type="button" className="btn agbtn" disabled={busy} onClick={() => void act({ action: "setRate", grader: g.id, ...rate, chapters: chs })}>💾 حفظ</button>
+          </>
+        )}
+        {!!g.archive.length && (
+          <>
+            <label className="adtop">الحسابات السابقة</label>
+            <table className="extable"><tbody>
+              {g.archive.map((a) => <tr key={a.id}><td>{a.created}<small className="pdmode">إجباري {a.mand} · اختياري {a.opt} · اعتراض {a.obj}</small></td><td className="p"><b>{iqd(a.amount)}</b></td></tr>)}
+            </tbody></table>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
