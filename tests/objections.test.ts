@@ -72,6 +72,8 @@ test("الطالب يعترض بكتابة أو بصوت، كل سؤال مرة 
   // المصحح ما عنده صلاحية الاعتراضات، فالخبر يروح لصاحب البوت بس
   assert.deepEqual(calls.filter((c) => c.method === "sendMessage").map((c) => c.p.chat_id), [1]);
   assert.match(calls[0].p.text, /اعتراض جديد[\s\S]*على السؤال: 1، 2/);
+  // صاحب البوت يفتح صفحة الاعتراضات مالته
+  assert.match(calls[0].p.reply_markup.inline_keyboard[0][0].web_app.url, /\/store\/objections/);
   await assert.rejects(object(60, item, { qs: "1", text_1: "مرة ثانية" }), /اعترضت على السؤال 1 من قبل/);
   // الصوت يسمعه اللي عنده التصحيح بس
   const f = await examFile(fileToken(1), voice, "grade");

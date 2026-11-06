@@ -92,10 +92,12 @@ export async function submitObjection(form: FormData) {
   return { obj: await objectionInfo(uid!, it.id), notice: "✅ وصل اعتراضك للمصحح، والرد يوصلك بالبوت" };
 }
 
-/** خبر الاعتراض: لمصحح الورقة إذا عنده صلاحية الاعتراضات، وإذا لا لصاحب البوت */
+/** خبر الاعتراض: لصاحب البوت دائماً (صفحة الاعتراضات)، ولمصحح الورقة إذا اختاريته يتابع اعتراضاته */
 async function tellGraders(it: Row, text: string) {
-  const to = it.grader_id && await can(it.grader_id, OBJ_PERM) && !await isAdmin(it.grader_id) ? [it.grader_id as number, ...ADMIN_IDS] : [...ADMIN_IDS];
-  for (const id of new Set(to)) await send(id, text, { kb: [[{ text: "✍️ افتح الاعتراضات", web_app: { url: adminPageLink("grade") } }]] });
+  for (const id of new Set(ADMIN_IDS)) await send(id, text, { kb: [[{ text: "✋ افتح الاعتراضات", web_app: { url: adminPageLink("objections") } }]] });
+  if (it.grader_id && !ADMIN_IDS.includes(it.grader_id) && await can(it.grader_id, OBJ_PERM) && !await isAdmin(it.grader_id)) {
+    await send(it.grader_id, text, { kb: [[{ text: "✍️ افتح الاعتراضات", web_app: { url: adminPageLink("grade") } }]] });
+  }
 }
 
 /** للتجربة: صاحب البوت يسوي اعتراض على ورقة تجربة مصححة، كأن طالب اعترض */

@@ -28,6 +28,8 @@ async function homeData(uid: number) {
   if (await can(uid, "fees")) shop.push({ page: "fees", icon: "🚚", title: "أسعار التوصيل" });
   if (await can(uid, "online")) shop.push({ page: "online", icon: "💻", title: "فصول إلكترونية فقط" });
   if (await can(uid, EXAM_PERM)) people.push({ page: "exams", icon: "📝", title: "الامتحانات" });
+  // صاحب البوت: كل الاعتراضات بمربع لحاله
+  if (await isAdmin(uid)) { const o = await objectionsWaiting(uid); people.push({ page: "objections", icon: "✋", title: "الاعتراضات", note: o ? `${o} تنتظر رد` : "ماكو اعتراضات", hot: o > 0 }); }
   if (await can(uid, "grade")) {
     const n = await waitingPapers(uid), o = await objectionsWaiting(uid);
     const note = [n ? `${n} ورقة تنتظر` : "", o ? `${o} اعتراض` : ""].filter(Boolean).join(" · ") || "ماكو أوراق";

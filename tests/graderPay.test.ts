@@ -176,3 +176,15 @@ test("أماكن المصحح: الجدول العام بالمركز والوق
   await g(1, "setRate", { grader: 35, mandatory: 5, optional: 1, deduct: 0, chapters: [] });
   assert.deepEqual((await g(1, "pay")).pay.graders.find((x: any) => x.id === 35).places, { all: false, keys: [`c${c1}`], private: true });
 });
+
+test("صفحة المساعدين: جنب المصحح كم ورقة صحح اليوم وشوكت آخر ورقة", async () => {
+  const { staffAction, ago } = await import("../lib/staffApi.ts");
+  assert.equal(ago("2026-11-06 10:00", "2026-11-06 11:05"), "قبل 1 ساعة");
+  assert.equal(ago("2026-11-06 11:00", "2026-11-06 11:05"), "قبل 5 دقيقة");
+  assert.equal(ago("2026-11-06 11:05", "2026-11-06 11:05"), "هسه");
+  assert.equal(ago("2026-11-04 11:05", "2026-11-06 11:05"), "قبل 2 يوم");
+  const page = await staffAction({ initData: sign(1), action: "list" }) as any;
+  const g = page.staff.find((s: any) => s.id === 30);
+  assert.ok(g.work);
+  assert.equal(typeof g.work.today, "number");
+});

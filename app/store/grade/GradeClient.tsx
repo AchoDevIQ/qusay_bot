@@ -28,8 +28,8 @@ function useWide(on: boolean) {
   }, [on]);
 }
 
-export default function GradeClient() {
-  const { data, error, busy, call } = useAdminApi<Data>("/api/grade", "✍️ التصحيح");
+export default function GradeClient({ only }: { only?: "obj" } = {}) {
+  const { data, error, busy, call } = useAdminApi<Data>("/api/grade", only ? "✋ الاعتراضات" : "✍️ التصحيح");
   const [paper, setPaper] = useState<Paper | null>(null);
   const [allDone, setAllDone] = useState(false);
   const skipped = useRef(new Set<number>());
@@ -107,7 +107,7 @@ export default function GradeClient() {
   }
   return (
     <>
-      {!paper && !allDone && <AdminHeader title="✍️ التصحيح" />}
+      {!paper && !allDone && <AdminHeader title={only ? "✋ الاعتراضات" : "✍️ التصحيح"} />}
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
@@ -129,7 +129,10 @@ export default function GradeClient() {
             <button type="button" className="gk-finish" onClick={() => { setAllDone(false); skipped.current.clear(); setSavedNow(0); group.current = null; void call({ action: "list" }); }}>رجوع للقائمة</button>
           </div>
         )}
-        {data && !paper && !allDone && (
+        {data && !paper && only && (
+          data.objections.length ? <ObjList data={data} busy={busy} act={act} /> : <div className="empty">👏 ماكو اعتراضات تنتظر</div>
+        )}
+        {data && !paper && !allDone && !only && (
           <>
             <div className="seg gktabs">
               <button type="button" className={tab === "papers" ? "on" : ""} onClick={() => { setTab("papers"); void call({ action: "list" }); }}>📥 الأوراق</button>
@@ -151,17 +154,11 @@ export default function GradeClient() {
   );
 }
 
-/** الأوراق: الاعتراضات أول، وبعدها الامتحانات اللي بيها أوراق تنتظر. المصحح يفتح امتحان، مو طالب */
-function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: Call; openGroup: (g: Group) => void }) {
-  const [kind, setKind] = useState<"general" | "private">("general");
-  const gen = data.groups.filter((g) => g.general), priv = data.groups.filter((g) => !g.general);
-  const sum = (l: Group[]) => l.reduce((n, g) => n + g.count, 0);
-  const shown = kind === "general" ? gen : priv;
+/** الاعتراضات اللي تنتظر رد */
+function ObjList({ data, busy, act }: { data: Data; busy: boolean; act: Call }) {
   return (
-    <>
-      {!!data.objections.length && (
-        <div className="card">
-          <h2>✋ اعتراضات تنتظر ردك: {data.objections.length}</h2>
+    <div className="card">
+      <h2>✋ اعتراضات تنتظر ردك: {data.objections.length}</h2>
           <table className="extable"><tbody>
             {data.objections.map((p) => (
               <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "openObj", id: p.id }); }}>
@@ -170,10 +167,22 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
               </tr>
             ))}
           </tbody></table>
-        </div>
-      )}
+    </div>
+  );
+}
+
+/** الأوراق: الاعتراضات أول، وبعدها الامتحانات اللي بيها أوراق تنتظر. المصحح يفتح امتحان، مو طالب */
+function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: Call; openGroup: (g: Group) => void }) {
+  const [kind, setKind] = useState<"general" | "private">("general");
+  const gen = data.groups.filter((g) => g.general), priv = data.groups.filter((g) => !g.general);
+  const sum = (l: Group[]) => l.reduce((n, g) => n + g.count, 0);
+  const shown = kind === "general" ? gen : priv;
+  return (
+    <>
+      {!!data.objections.length && <ObjList data={data} busy={busy} act={act} />}
       <div className="card">
         <h2>📥 أوراق تنتظر: {sum(data.groups)}</h2>
+
         <div className="seg expad">
           <button type="button" className={kind === "general" ? "on" : ""} onClick={() => setKind("general")}>📅 الجدول العام ({sum(gen)})</button>
           <button type="button" className={kind === "private" ? "on" : ""} onClick={() => setKind("private")}>🗂 الجدول الخاص ({sum(priv)})</button>

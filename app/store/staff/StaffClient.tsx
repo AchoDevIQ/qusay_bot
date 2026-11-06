@@ -11,7 +11,7 @@ type Places = { all: boolean; keys: string[]; private: boolean };
 type Area = { id: number; name: string; centers: { id: number; name: string; slots: { d: number; t: string }[] }[] };
 const DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
 type Grade = { chapters: string[]; off: number[]; places: Places; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
-type Staff = { id: number; name: string; perms: string[]; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
+type Staff = { id: number; name: string; perms: string[]; work: { today: number; last: string } | null; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
 type Data = { chapters: string[]; topics: Topic[]; tree: Area[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -52,6 +52,7 @@ function Rows({ s, perms, chapters, topics, tree, open, toggle, busy, call }: { 
     <>
       <tr className={"exrow" + (open ? " sel" : "")} onClick={toggle}>
         <td><b>👤 {s.name}</b><small className="pdmode">{s.perms.length} صلاحية</small>
+          {s.work && <small className="pdmode">✍️ اليوم {s.work.today} ورقة · {s.work.last ? `آخر ورقة ${s.work.last}` : "ما صحح بعد"}</small>}
           {s.account.owed ? <small className="pdmode">بذمته {fmt(s.account.owed)}</small> : null}
         </td>
         <td className="p">
@@ -80,11 +81,23 @@ function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; per
   return (
     <div>
       <div className="exlabel">الصلاحيات</div>
-      {perms.map((p) => (
-        <label key={p.key} className="adcheck adflat">
-          <input type="checkbox" checked={picked.includes(p.key)} onChange={() => setPicked(picked.includes(p.key) ? picked.filter((x) => x !== p.key) : [...picked, p.key])} />
-          <span>{p.label}</span>
-        </label>
+      {perms.filter((p) => p.key !== "objections").map((p) => (
+        <div key={p.key}>
+          <label className="adcheck adflat">
+            {/* التصحيح ينشال: اعتراضاته تنشال وياه */}
+            <input type="checkbox" checked={picked.includes(p.key)} onChange={() => setPicked(picked.includes(p.key) ? picked.filter((x) => x !== p.key && !(p.key === "grade" && x === "objections")) : [...picked, p.key])} />
+            <span>{p.label}</span>
+          </label>
+          {p.key === "grade" && picked.includes("grade") && (
+            <div className="stask">
+              <span>✋ ترغب هو يتابع اعتراضات أوراقه؟ اعتراضاته توصلك إنت بكل الأحوال.</span>
+              <div className="seg">
+                <button type="button" className={picked.includes("objections") ? "on" : ""} onClick={() => setPicked([...new Set([...picked, "objections"])])}>نعم</button>
+                <button type="button" className={!picked.includes("objections") ? "on" : ""} onClick={() => setPicked(picked.filter((x) => x !== "objections"))}>لا</button>
+              </div>
+            </div>
+          )}
+        </div>
       ))}
       <button type="button" className="btn adsmallbtn" disabled={busy || same} onClick={() => void call({ action: "perms", id: s.id, perms: picked })}>حفظ الصلاحيات</button>
       {s.grade && <GradeWallet s={s} g={s.grade} chapters={chapters} topics={topics} tree={tree} busy={busy} call={call} />}

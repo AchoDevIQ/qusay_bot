@@ -5,7 +5,7 @@ import { staffAccount } from "./data.ts";
 import { parseAmount } from "./office.ts";
 import { mainKb } from "./keyboards.ts";
 import { send } from "./telegram.ts";
-import { money, stamp } from "./util.ts";
+import { money, stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 import { allChapters, allTopics, card, graders, payAction, placeTree } from "./graderPay.ts";
 
@@ -21,14 +21,39 @@ const amountOf = (raw: unknown) => {
   need(a !== null && a >= 0, "اكتب مبلغ صحيح، مثل 10000000 أو 10 مليون");
   return a!;
 };
+/** «قبل ساعة»، «قبل 5 دقايق»... */
+export function ago(at: string, now = stamp()) {
+  const ms = (x: string) => new Date(x.slice(0, 16).replace(" ", "T") + ":00Z").getTime();
+  const min = Math.max(0, Math.round((ms(now) - ms(at)) / 60000));
+  if (min < 1) return "هسه";
+  if (min < 60) return `قبل ${min} دقيقة`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `قبل ${h} ساعة`;
+  return `قبل ${Math.floor(h / 24)} يوم`;
+}
+/** شغل كل مصحح: كم ورقة صحح اليوم (من الساعة 12 بالليل)، وشوكت آخر ورقة */
+async function gradingWork() {
+  const today = todayStr(), out = new Map<number, { today: number; last: string }>();
+  for (const i of await find("sched_items")) {
+    if (!i.grader_id || !i.graded_at) continue;
+    const w = out.get(i.grader_id) ?? { today: 0, last: "" };
+    if (String(i.graded_at).startsWith(today)) w.today++;
+    if (String(i.graded_at) > w.last) w.last = String(i.graded_at);
+    out.set(i.grader_id, w);
+  }
+  return out;
+}
 async function pageData() {
   const rows = await find("staff", {}, { order: ["name"] });
+  const work = await gradingWork();
   const graderIds = new Set(await graders());
   return {
     chapters: await allChapters(), topics: await allTopics(), tree: await placeTree(),
     perms: Object.entries(PERMS).map(([key, label]) => ({ key, label })),
     staff: await Promise.all(rows.map(async (s) => ({
-      id: s.user_id, name: s.name, perms: String(s.perms ?? "").split(",").filter(Boolean), account: await staffAccount(s.user_id),
+      id: s.user_id, name: s.name, perms: String(s.perms ?? "").split(",").filter(Boolean),
+      work: graderIds.has(s.user_id) || work.has(s.user_id) ? { today: work.get(s.user_id)?.today ?? 0, last: work.get(s.user_id)?.last ? ago(work.get(s.user_id)!.last) : "" } : null,
+      account: await staffAccount(s.user_id),
       // محفظة التصحيح: اللي إله على التصحيح، تطلع برا جنب اسمه ويندفع بضغطة
       grade: graderIds.has(s.user_id) ? await card(s.user_id) : null,
       pays: (await find("staff_pay", { staff_id: s.user_id }, { order: ["-id"], limit: 8 })).map((p) => ({ id: p.id, amount: p.amount, created: p.created })),
