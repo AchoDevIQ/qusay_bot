@@ -1,13 +1,15 @@
 "use client";
 // الحضوري: المساعد يقرا كود الطالب فينسجل حضوره وتنفتح طباعة ليبله أو ورقته. وأوراق الاستنساخ، وإعدادات كل مركز
 import { useState } from "react";
-import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
+import { AdminHeader, StatusBar, pageAuth, useAdminApi } from "../adminPage";
+import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import { openOutside, scanQr } from "../shared";
 
 type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
 type Exam = { id: number; title: string; chapter: string; versions: { model: string; token: string }[] };
-type Data = { owner: boolean; centers: Center[]; exams: Exam[]; today: number; card?: Card; notice: string };
+type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
+type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const printUrl = (kind: "label" | "paper", k: string) => `${location.origin}/print/${kind}?k=${encodeURIComponent(k)}`;
@@ -22,13 +24,14 @@ export default function AttendClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && (
           <>
-            <Attend data={data} busy={busy} call={call} />
-            <div className="card expad">
+            {data.full && <Attend data={data} busy={busy} call={call} />}
+            <CamUp data={data} busy={busy} call={call} />
+            {data.full && <div className="card expad">
               <div className="exlabel">📤 أوراق السكانر</div>
               <div className="exhint">بعد الامتحان حط كل الأوراق بالسكانر، وارفع الصور كلها مرة وحدة. البوت يقرا الأكواد ويوزعها على الطلاب، وتروح للمصححين.</div>
               <a className="btn agbtn adtop" style={{ textDecoration: "none", display: "block", textAlign: "center" }} href={`/store/scanup${location.search}`}>📤 رفع أوراق السكانر</a>
-            </div>
-            <Copies exams={data.exams} />
+            </div>}
+            {data.full && <Copies exams={data.exams} />}
             {data.owner && <Centers centers={data.centers} busy={busy} call={call} />}
           </>
         )}
@@ -69,6 +72,81 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
             <button type="button" className={c.print === "label" ? "btn" : "exbtn"} onClick={() => openOutside(printUrl("label", c.label))}>🏷 اطبع الليبل</button>
             <button type="button" className={c.print === "paper" ? "btn" : "exbtn"} onClick={() => openOutside(printUrl("paper", c.paper))}>📄 اطبع ورقته كاملة</button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** ماكو سكانر: المساعد يصور ورقة الطالب بكاميرته سؤال سؤال، وتروح للتصحيح */
+function CamUp({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
+  const [num, setNum] = useState("");
+  const [q, setQ] = useState(0);
+  const [draft, setDraft] = useState<{ file: File; url: string; turns: number } | null>(null);
+  const [scan, setScan] = useState(scanDefault);
+  const [up, setUp] = useState(false);
+  const [err, setErr] = useState("");
+  const [have, setHave] = useState<number[]>([]);
+  const c = data.cam;
+  async function find(code: string) {
+    const r = await call({ action: "cam", code });
+    if (r?.cam) { setHave(r.cam.have); setQ(r.cam.qs[0] ?? 0); setDraft(null); setNum(""); }
+  }
+  function camera() {
+    const ok = scanQr("وجه الكاميرا على كود الطالب", (t) => { void find(t); return true; });
+    if (!ok) alert("الكاميرا تشتغل بس من داخل تليجرام بالتلفون. اكتب رقم الطالب بدالها.");
+  }
+  async function pick(f: File | undefined) { if (f) setDraft({ file: f, url: await previewUrl(f, scan), turns: 0 }); }
+  async function toggleScan() { const on = !scan; setScan(on); rememberScan(on); if (draft) setDraft({ ...draft, url: await previewUrl(draft.file, on) }); }
+  async function send() {
+    if (!draft || !c) return;
+    setUp(true); setErr("");
+    try {
+      const fd = new FormData();
+      fd.set("initData", pageAuth()); fd.set("item", String(c.item)); fd.set("q", String(q));
+      fd.set("file", await prepare(draft.file, draft.turns, scan), "page.jpg");
+      const res = await fetch("/api/attend/scan", { method: "POST", body: fd });
+      if (!res.ok) { setErr((await res.json()).error ?? "ما انرفعت، حاول مرة ثانية"); return; }
+      setHave([...have, q]); setDraft(null);
+      const next = c.qs.find((n) => n > q && !have.includes(n));
+      if (next) setQ(next);
+    } catch { setErr("ماكو اتصال، حاول مرة ثانية"); } finally { setUp(false); }
+  }
+  const count = (n: number) => have.filter((x) => x === n).length;
+  return (
+    <div className="card expad">
+      <div className="exlabel">📷 تصوير ورقة طالب</div>
+      <div className="exhint">إذا ماكو سكانر: اقرا كود الطالب أو اكتب رقمه، وصور جواب كل سؤال. من تخلص دوس «دز للتصحيح».</div>
+      <button type="button" className="btn agbtn adtop" disabled={busy || up} onClick={camera}>📷 اقرا كود الطالب</button>
+      <div className="atrow">
+        <input className="exinput" inputMode="numeric" dir="ltr" aria-label="رقم الطالب للتصوير" placeholder="رقم الطالب" value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ""))} />
+        <button type="button" className="exbtn" disabled={busy || up || !num} onClick={() => void find(num)}>افتح ورقته</button>
+      </div>
+      {c && (
+        <div className="atcard">
+          <b>{c.name}</b> <span dir="ltr">#{c.uid}</span>
+          <div className="exhint">{c.exam}{c.sent ? " · ✅ ورقته راحت للتصحيح" : ""}</div>
+          <div className="seg wrap2 adtop">
+            {c.qs.map((n) => <button type="button" key={n} className={n === q ? "on" : ""} disabled={up} onClick={() => { setQ(n); setDraft(null); }}>س{n}{count(n) ? ` ✅${count(n) > 1 ? count(n) : ""}` : ""}</button>)}
+          </div>
+          {draft ? (
+            <div className="adtop">
+              <img className="eximg" src={draft.url} alt={`جواب السؤال ${q}`} style={{ transform: `rotate(${draft.turns * 90}deg)` }} />
+              <div className="atrow">
+                <button type="button" className="exbtn" disabled={up} onClick={() => setDraft({ ...draft, turns: (draft.turns + 1) % 4 })}>🔄 دور</button>
+                <button type="button" className={scan ? "btn" : "exbtn"} disabled={up} onClick={() => void toggleScan()}>📄 سكانر {scan ? "✓" : ""}</button>
+                <button type="button" className="exbtn" disabled={up} onClick={() => setDraft(null)}>إلغاء</button>
+                <button type="button" className="btn" disabled={up} onClick={() => void send()}>{up ? "جاري الرفع..." : `✅ ارفع للسؤال ${q}`}</button>
+              </div>
+            </div>
+          ) : (
+            <div className="atrow">
+              <label className="btn">📷 صور السؤال {q}<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void pick(f); }} /></label>
+              <label className="exbtn">🖼 من الجهاز<input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void pick(f); }} /></label>
+            </div>
+          )}
+          {err && <div className="err">⚠️ {err}</div>}
+          <button type="button" className="btn agbtn adtop" disabled={busy || up || !have.length || !!draft} onClick={() => void call({ action: "finish", items: [c.item] })}>📨 دز للتصحيح ({have.length} صورة)</button>
         </div>
       )}
     </div>

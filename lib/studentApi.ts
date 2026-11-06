@@ -11,6 +11,8 @@ import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
+import { moveExam, retakeExam } from "./examMoves.ts";
+import { prettyAt } from "./scheduleRules.ts";
 import { resetSchedule, setPerDay, studentSchedule } from "./schedApi.ts";
 import { authed, intOf, need } from "./webApi.ts";
 
@@ -112,6 +114,12 @@ export async function studentAction(body: Row) {
   } else if (a === "examException") {
     await openException(uid, body.item);
     notice = "🔓 انفتح الامتحان للطالب، ووصله الخبر";
+  } else if (a === "examRetake") {
+    notice = `🔁 انحطت الإعادة ${prettyAt(await retakeExam(uid, body.item, body.at))}، ووصل الطالب خبر`;
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, sched: { id, ...await studentSchedule(id) } };
+  } else if (a === "examMove") {
+    notice = `⏩ صار موعده ${prettyAt(await moveExam(uid, body.item, body.at))}، ووصل الطالب خبر`;
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, sched: { id, ...await studentSchedule(id) } };
   } else if (a === "examNow") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     await startNowForTest(body.item);

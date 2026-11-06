@@ -6,7 +6,7 @@ import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
-type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string }[]; perDay: number; general: number } };
+type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -189,6 +189,20 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
   );
 }
 
+/** يختار اليوم والساعة: للإعادة ولتقديم الموعد */
+function AtPicker({ label, busy, onSave }: { label: string; busy: boolean; onSave: (at: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState("");
+  if (!open) return <button type="button" className="exbtn adsmall" disabled={busy} onClick={() => setOpen(true)}>{label}</button>;
+  return (
+    <div className="exadd">
+      <input type="datetime-local" className="ltr" aria-label="اليوم والساعة" value={at} onChange={(e) => setAt(e.target.value)} />
+      <button type="button" className="exbtn" disabled={busy || !at} onClick={() => onSave(at)}>💾 حفظ</button>
+      <button type="button" className="exbtn" disabled={busy} onClick={() => setOpen(false)}>✖</button>
+    </div>
+  );
+}
+
 const SCHED_STATE: Record<string, string> = { locked: "🔒 ينتظر", open: "🟢 بدا", missed: "⛔ فات", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده" };
 function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"]>; id: number; busy: boolean; call: Call }) {
   const [n, setN] = useState(String(sched.perDay));
@@ -196,9 +210,11 @@ function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"
     <div className="adlog">
       {sched.way && <div className="exlabel">{sched.way}</div>}
       {sched.items.length ? sched.items.map((i) => (
-        <div key={i.id} className="adsale">{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small>
+        <div key={i.id} className="adsale">{i.retake ? "🔁 " : ""}{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small>
           {i.state === "missed" && <Confirm label="🔓 افتحه باستثناء" disabled={busy} onYes={() => void call({ action: "examException", id, item: i.id })} />}
           {i.state === "locked" && <button type="button" className="exbtn adsmall" disabled={busy} onClick={() => void call({ action: "examNow", id, item: i.id })}>▶️ جربه هسه</button>}
+          {!i.optional && (i.status === "done" || i.status === "missed") && <AtPicker label="🔁 إعادة" busy={busy} onSave={(at) => void call({ action: "examRetake", id, item: i.id, at })} />}
+          {i.status === "waiting" && i.state === "locked" && <AtPicker label="⏩ قدّم الموعد" busy={busy} onSave={(at) => void call({ action: "examMove", id, item: i.id, at })} />}
         </div>
       )) : <div className="exhint">ما رتب جدوله بعد.</div>}
       <div className="exadd">

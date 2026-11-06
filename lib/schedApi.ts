@@ -69,7 +69,8 @@ async function closeMissed(uid: number, s: SchedSettings) {
 }
 const remaining = (bought: Row[], items: Row[]) => {
   // الفايت والمخلص ما يرجعون. اللي بالانتظار ينعاد توزيعه
-  const gone = new Set(items.filter((i) => i.status !== "waiting" && i.kind !== "optional").map((i) => i.exam_id));
+  // واللي موعده انحط باليد (إعادة أو تقديم) يبقى مثل ما هو
+  const gone = new Set(items.filter((i) => (i.status !== "waiting" || i.fixed) && i.kind !== "optional").map((i) => i.exam_id));
   return bought.filter((e) => !gone.has(e.id));
 };
 const toPlanExams = (rows: Row[]): PlanExam[] => rows.map((e) => ({ id: e.id, minutes: e.minutes ?? 75 }));
@@ -110,10 +111,10 @@ async function syncGeneral(uid: number, sc: Row, s: SchedSettings) {
   wanted.sort();
   const trial = new Set(items.filter((i) => i.status === "waiting" && i.notified === "test").map((i) => i.exam_id));
   const keep = wanted.filter((w) => !trial.has(Number(w.split("|")[0])));
-  const have = items.filter((i) => i.status === "waiting" && i.notified !== "test").map((i) => `${i.exam_id}|${i.at}`).sort();
+  const have = items.filter((i) => i.status === "waiting" && i.notified !== "test" && !i.fixed).map((i) => `${i.exam_id}|${i.at}`).sort();
   if (keep.join() === have.join()) return;
   await tx(async () => {
-    for (const i of items) if (i.status === "waiting" && i.notified !== "test") await remove("sched_items", { id: i.id });
+    for (const i of items) if (i.status === "waiting" && i.notified !== "test" && !i.fixed) await remove("sched_items", { id: i.id });
     for (const w of keep) { const [e, at] = w.split("|"); await insert("sched_items", { user_id: uid, exam_id: Number(e), at, status: "waiting" }); }
   });
   await closeMissed(uid, s);
@@ -129,7 +130,7 @@ async function itemsView(uid: number, s: SchedSettings) {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
-    return { id: i.id, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
+    return { id: i.id, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
   });
 }
 /** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
@@ -201,7 +202,7 @@ async function planFor(uid: number, body: Row) {
 async function saveItems(uid: number, f: Row, items: { examId: number; at: string }[]) {
   await tx(async () => {
     await put("schedules", { user_id: uid, mode: "private", center_id: null, picks: null, start_day: f.start, end_day: f.end, weekdays: JSON.stringify(f.weekdays), hour: f.hour, created: stamp() });
-    await remove("sched_items", { user_id: uid, status: "waiting" });
+    await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });
     for (const it of items) await insert("sched_items", { user_id: uid, exam_id: it.examId, at: it.at, status: "waiting" });
   });
 }
@@ -277,7 +278,7 @@ export async function myExamAction(body: Row) {
       for (const e of await lateExams(id, sc!, s)) await insert("sched_items", { user_id: id, exam_id: e.id, at: e.at, status: "missed" });
       await logActivity(id, "🗓 بقى ويا الطلاب، والامتحانات اللي فات موعدها انحسبت فايتة");
     } else {
-      await remove("sched_items", { user_id: id, status: "waiting" });
+      await remove("sched_items", { user_id: id, status: "waiting" }, { where: (r) => !r.fixed });
       await remove("schedules", { user_id: id });
       await logActivity(id, "🗓 طلع من مجموعته حتى يختار جدول ثاني");
     }
@@ -316,7 +317,7 @@ async function rebuildAll(s: SchedSettings) {
       moved++;
     } else {
       // ما يكفي الوقت: يرجع يرتب جدوله بنفسه
-      await remove("sched_items", { user_id: uid, status: "waiting" });
+      await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });
       await send(uid, "🗓 <b>لازم تعيد ترتيب جدول امتحاناتك</b> بسبب تغيير العطلة. افتح امتحاناتي ورتبه من جديد.");
       stuck++;
     }
@@ -471,7 +472,7 @@ export async function studentSchedule(uid: number) {
   return { way, items: await itemsView(uid, s), perDay: Number(await kvGet(`sched_perday_${uid}`)) || 0, general: s.perDay };
 }
 export async function resetSchedule(uid: number) {
-  await remove("sched_items", { user_id: uid, status: "waiting" });
+  await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });
   await remove("schedules", { user_id: uid });
   await logActivity(uid, "🗓 الإدارة فتحت جدوله حتى يرتبه من جديد");
   await send(uid, `🗓 <b>تگدر تعيد ترتيب جدول امتحاناتك.</b> افتح امتحاناتي ورتبه.`);

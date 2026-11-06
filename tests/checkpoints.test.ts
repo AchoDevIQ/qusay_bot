@@ -127,3 +127,26 @@ test("السيطرة الثانية تحسب بس الامتحانات اللي 
   await runCheckpoints(55);
   assert.equal((await activeStop(55))!.absent, 2);
 });
+
+test("الإعادة: الغياب ينمسح إذا اجت درجة بعده، والسيطرة تنتظر الإعادة، وإذا الأول مصحح تنحسب درجته", async () => {
+  const { find } = await import("../lib/db.ts");
+  await reg(80, "معيد");
+  await missed(80, 0); await missed(80, 1); await graded(80, 2, 60);
+  // إعادة الأول بعدها ما صارت: السيطرة تنتظر
+  const r0 = await insert("sched_items", { user_id: 80, exam_id: exams[0], at: "2099-01-01 10:00", status: "waiting", fixed: "retake" });
+  await runCheckpoints(80);
+  assert.equal((await find("checkpoint_done", { user_id: 80 })).length, 0);
+  // صارت الإعادتين وانصححن: الغياب راح وتبقى الدرجات
+  await put("sched_items", { id: r0, user_id: 80, exam_id: exams[0], at: "2026-03-01 10:00", status: "done", total: 70, graded_at: "x", fixed: "retake" });
+  await insert("sched_items", { user_id: 80, exam_id: exams[1], at: "2026-03-02 10:00", status: "done", total: 80, graded_at: "x", fixed: "retake" });
+  await runCheckpoints(80);
+  const d = (await find("checkpoint_done", { user_id: 80 }))[0];
+  assert.deepEqual([d.score, d.absent, d.passed], [210, 0, 1]);
+  assert.equal(await activeStop(80), null);
+  // الأول مصحح والإعادة أعلى: تنحسب الأولى، والثنتين يبينن
+  await reg(81, "معيد ثاني");
+  await graded(81, 0, 40); await graded(81, 1, 40); await graded(81, 2, 40);
+  await insert("sched_items", { user_id: 81, exam_id: exams[0], at: "2026-03-01 10:00", status: "done", total: 100, graded_at: "x", fixed: "retake" });
+  await runCheckpoints(81);
+  assert.equal((await find("checkpoint_done", { user_id: 81 }))[0].score, 120);
+});

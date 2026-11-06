@@ -5,8 +5,9 @@ import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { deviceId, haptic, openOutside } from "../shared";
 import QRCode from "qrcode";
 import VoiceRec from "../VoiceRec";
+import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 
-type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
+type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
@@ -222,7 +223,7 @@ function List({ info, busy, enter, object, ask }: { info: Info; busy: boolean; e
             </tr>
           ))}
           <tr className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>
-            <td><b>{i.optional ? "🎯 " : ""}{i.title}</b>{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
+            <td><b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.state === "missed" && <Excuse item={i} busy={busy} ask={ask} />}
               {i.total !== null && i.total !== undefined && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => object(i.id)}>✋ اعتراض على الدرجة</button>}
@@ -349,25 +350,14 @@ const minutesLeft = (closeAt: string, nowAt: string, since: number) => {
   const end = new Date(closeAt.replace(" ", "T") + ":00Z").getTime(), start = new Date(nowAt.replace(" ", "T") + ":00Z").getTime();
   return Math.ceil((end - start - (Date.now() - since)) / 60000);
 };
-/** يدور الصورة ويصغرها قبل الرفع */
-async function prepare(file: File, turns: number) {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
-  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
-  const c = document.createElement("canvas");
-  [c.width, c.height] = turns % 2 ? [h, w] : [w, h];
-  const g = c.getContext("2d")!;
-  g.translate(c.width / 2, c.height / 2);
-  g.rotate((turns * Math.PI) / 2);
-  g.drawImage(bmp, -w / 2, -h / 2, w, h);
-  return await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("صورة"))), "image/jpeg", 0.85));
-}
-
 function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Room) => void; call: (b: Record<string, unknown>) => Promise<Info | null>; leave: () => void }) {
   const [since] = useState(() => Date.now());
   const [tick, setTick] = useState(0);
   const [open, setOpen] = useState(room.questions[0]?.n ?? 0);
   const [draft, setDraft] = useState<{ q: number; file: File; url: string; turns: number } | null>(null);
+  const [scan, setScan] = useState(scanDefault);
+  async function pickPhoto(q: number, f: File | undefined) { if (f) setDraft({ q, file: f, url: await previewUrl(f, scan), turns: 0 }); }
+  async function toggleScan() { const on = !scan; setScan(on); rememberScan(on); if (draft) setDraft({ ...draft, url: await previewUrl(draft.file, on) }); }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [closed, setClosed] = useState(false);
@@ -381,7 +371,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       const f = new FormData();
       f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId());
       f.set("item", String(room.id)); f.set("q", String(draft.q));
-      f.set("file", await prepare(draft.file, draft.turns), "answer.jpg");
+      f.set("file", await prepare(draft.file, draft.turns, scan), "answer.jpg");
       const res = await fetch("/api/myexams", { method: "POST", body: f });
       const j = await res.json();
       if (!res.ok) { setError(j.error ?? "ما وصلت الصورة، حاول مرة ثانية"); if (res.status === 403) setClosed(true); return; }
@@ -417,14 +407,15 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                       <img className="eximg mxdraft" src={draft.url} alt="معاينة" style={{ transform: `rotate(${draft.turns * 90}deg)` }} />
                       <div className="exline">
                         <button type="button" className="exbtn" onClick={() => setDraft({ ...draft, turns: (draft.turns + 1) % 4 })}>🔄 دور الصورة</button>
+                        <button type="button" className={scan ? "btn" : "exbtn"} onClick={() => void toggleScan()}>📄 سكانر {scan ? "✓" : ""}</button>
                         <button type="button" className="exbtn" onClick={() => setDraft(null)}>إلغاء</button>
                         <button type="button" className="btn" disabled={busy} onClick={() => void send()}>{busy ? "جاري الإرسال..." : "✅ تم"}</button>
                       </div>
                     </div>
                   ) : (
                     <div className="exline">
-                      <label className="exbtn">📷 صور بالكاميرا<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setDraft({ q: q.n, file: f, url: URL.createObjectURL(f), turns: 0 }); }} /></label>
-                      <label className="exbtn">🖼 من الجهاز<input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setDraft({ q: q.n, file: f, url: URL.createObjectURL(f), turns: 0 }); }} /></label>
+                      <label className="exbtn">📷 صور بالكاميرا<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void pickPhoto(q.n, f); }} /></label>
+                      <label className="exbtn">🖼 من الجهاز<input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void pickPhoto(q.n, f); }} /></label>
                     </div>
                   )}
                 </div>

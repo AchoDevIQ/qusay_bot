@@ -77,9 +77,13 @@ export async function runCheckpoints(uid: number) {
   const s = await schedSettings();
   await closeFinished(uid, s);
   const stops = (await find("student_stops", { user_id: uid })).map((x) => [String(x.created), String(x.lifted ?? "9")]);
-  const byExam = new Map((await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional").map((i) => [i.exam_id as number, i]));
-  const done = new Set((await find("checkpoint_done", { user_id: uid })).map((d) => `${d.chapter}|${d.block}`));
   const now = stamp();
+  const isMissed = (i: Row) => i.status === "missed" || (i.status === "waiting" && itemState("waiting", i.at, s.window, now) === "missed");
+  // الامتحان اللي إله أكثر من محاولة (إعادة): تنحسب أول درجة. الغياب ينمسح إذا اجت درجة بعده
+  const tries = new Map<number, Row[]>();
+  for (const i of await find("sched_items", { user_id: uid }, { order: ["at"] })) if (i.kind !== "optional") tries.set(i.exam_id as number, [...tries.get(i.exam_id as number) ?? [], i]);
+  const byExam = new Map([...tries].map(([e, list]) => [e, list.find((i) => i.graded_at) ?? list.find((i) => !isMissed(i)) ?? list[0]]));
+  const done = new Set((await find("checkpoint_done", { user_id: uid })).map((d) => `${d.chapter}|${d.block}`));
   for (const g of segs) {
     if (done.has(`${g.chapter}|${g.exam}`)) continue;
     const its = g.ids.map((id) => byExam.get(id));
@@ -87,8 +91,7 @@ export async function runCheckpoints(uid: number) {
     const res = its.map((i) => {
       if (i!.graded_at) return { mark: Number(i!.total) || 0, absent: 0 };
       // ما بيه أجوبة = غياب، إلكتروني أو حضوري
-      const missed = i!.status === "missed" || (i!.status === "waiting" && itemState("waiting", i!.at, s.window, now) === "missed");
-      return missed ? { mark: 0, absent: 1 } : null;
+      return isMissed(i!) ? { mark: 0, absent: 1 } : null;
     });
     if (res.some((x) => x === null)) continue;   // باقي امتحان ما انصحح أو ما صار وقته
     // امتحانات فاتته وهو موقوف: هذي السيطرة ما تنحسب عليه

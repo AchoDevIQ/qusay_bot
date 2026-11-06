@@ -15,6 +15,14 @@ import { esc, stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 
 export const ATTEND_PERM = "attend";
+export const CAM_PERM = "camup";
+/** المساعد اللي عنده الحضور أو تصوير الأوراق. يرجع رقمه وإذا عنده الحضور كامل */
+async function staffIn(initData: unknown) {
+  try { return { uid: await authed(initData, ATTEND_PERM), full: true }; } catch (e) {
+    if ((e as { status?: number }).status !== 403) throw e;
+    return { uid: await authed(initData, CAM_PERM), full: false };
+  }
+}
 const KEY = "inperson_cfg";
 const MAX_PAGE = 8 * 1024 * 1024;
 export type CenterCfg = { print: "label" | "paper"; photos: boolean };
@@ -158,7 +166,7 @@ async function paperItem(raw: unknown) {
   return it!;
 }
 export async function scanUpload(form: FormData) {
-  const by = await authed(form.get("initData"), ATTEND_PERM);
+  const { uid: by } = await staffIn(form.get("initData"));
   const it = await paperItem(form.get("item"));
   const q = Number(form.get("q"));
   need(await one("bank_questions", { version_id: it.version_id, n: q }), `السؤال ${q} مو موجود بهذي النسخة`);
@@ -173,7 +181,7 @@ export async function scanUpload(form: FormData) {
   return { ok: true };
 }
 
-async function pageData(uid: number) {
+async function pageData(uid: number, full = true) {
   const owner = await isAdmin(uid);
   const cfg = await allCfg();
   const centers = owner ? (await find("centers", { active: 1 })).map((c) => ({ id: c.id as number, name: c.name as string, ...DEFAULT_CFG, ...cfg[String(c.id)] })) : [];
@@ -181,12 +189,27 @@ async function pageData(uid: number) {
   const exams = (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => versions.some((v) => v.exam_id === e.id))
     .map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ model: v.model as string, token: printToken("v", v.id) })) }));
   const today = (await find("sched_items")).filter((i) => String(i.attended_at ?? "").startsWith(todayStr())).length;
-  return { owner, centers, exams, today, notice: "" };
+  return { owner, full, centers, exams, today, notice: "" };
 }
 
 export async function attendAction(body: Row) {
-  const uid = await authed(body?.initData, ATTEND_PERM);
+  const { uid, full } = await staffIn(body?.initData);
   const a = String(body.action ?? "");
+  // اللي عنده تصوير الأوراق بس: يلگى الطالب ويصور ورقته ويدزها للتصحيح
+  need(full || ["cam", "items", "finish", "list"].includes(a), "ما عندك صلاحية", 403);
+  if (a === "cam") {
+    // تصوير ورقة طالب بالكاميرا: ينسجل حضوره (إذا بعده) وتطلع أسئلة نسخته
+    const raw = String(body.code ?? "").trim();
+    const sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
+    need(sid, "هذا مو كود طالب");
+    // إذا ورقته انرسلت اليوم وبعدها ما انصححت: تنفتح حتى يضيف صفحة نساها
+    const sent = (await find("sched_items", { user_id: sid! })).find((i) => i.status === "done" && !i.graded_at && i.version_id && String(i.at).startsWith(todayStr()));
+    const card = sent ? await itemCard(sent) : await markAttendance(sid!, uid);
+    const it = (await one("sched_items", { id: card.item }))!;
+    const qs = (await find("bank_questions", { version_id: it.version_id }, { order: ["n"] })).map((q) => q.n as number);
+    const have = (await find("exam_answers", { item_id: it.id })).map((x) => x.q as number);
+    return { ...await pageData(uid, full), cam: { item: it.id, name: card.name, uid: sid, exam: card.exam, qs, have, sent: it.status === "done" || !!it.graded_at } };
+  }
   if (a === "scan") {
     const raw = String(body.code ?? "").trim();
     const sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
@@ -217,7 +240,7 @@ export async function attendAction(body: Row) {
       n++;
     }
     try { await notifyGraders(); } catch (e) { console.error(e); }
-    return { ...await pageData(uid), notice: `✅ ${n} ورقة راحت للتصحيح` };
+    return { ...await pageData(uid, full), notice: `✅ ${n} ورقة راحت للتصحيح` };
   }
   if (a === "saveCenter") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
@@ -229,5 +252,5 @@ export async function attendAction(body: Row) {
     return { ...await pageData(uid), notice: `✅ انحفظ ${await centerName(id)}` };
   }
   need(a === "list", "أمر غير معروف");
-  return await pageData(uid);
+  return await pageData(uid, full);
 }

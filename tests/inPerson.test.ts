@@ -103,3 +103,21 @@ test("أوراق السكانر: كل صفحة لسؤالها، وبعدها ت�
   assert.equal((await find("exam_answers", { item_id: item })).length, 3);
   assert.ok(calls.some((c) => c.p.chat_id === 41 && /وصلتك أوراق/.test(c.p.text)));
 });
+
+test("تصوير الورقة بكاميرا المساعد: اللي عنده تصوير بس يلگى الطالب ويرفع ويدز، وما يگدر يطبع أو يغير المراكز", async () => {
+  await put("staff", { user_id: 42, name: "مساعد الكاميرا", perms: "camup" });
+  await put("students", { user_id: 82, name: "حضوري ثاني", exam: "حضوري", center_id: center, created: "2026-01-01 00:00" });
+  const it2 = await insert("sched_items", { user_id: 82, exam_id: ex, at: `${todayStr()} 10:00`, status: "waiting" });
+  await assert.rejects(at(41, "cam", { code: "82" }), (e: any) => e.status === 403);
+  await assert.rejects(at(42, "scan", { code: "82" }), (e: any) => e.status === 403);
+  await assert.rejects(at(42, "saveCenter", { center, print: "paper" }), (e: any) => e.status === 403);
+  const r = await at(42, "cam", { code: ip.studentCode(82) });
+  assert.equal(r.full, false);
+  assert.deepEqual([r.cam.item, r.cam.name, r.cam.qs, r.cam.have], [it2, "حضوري ثاني", [1, 2], []]);
+  assert.equal((await one("sched_items", { id: it2 }))!.status, "attended");
+  await upload(42, it2, 1); await upload(42, it2, 2);
+  const f = await at(42, "finish", { items: [it2] });
+  assert.match(f.notice, /1 ورقة راحت للتصحيح/);
+  assert.equal((await one("sched_items", { id: it2 }))!.status, "done");
+  assert.deepEqual((await at(42, "cam", { code: "82" })).cam.have.sort(), [1, 2]);
+});
