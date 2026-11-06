@@ -2,7 +2,7 @@
 // امتحاناتي: الطالب يرتب جدوله مرة وحدة، وبعدها يشوف مواعيده
 import { useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
-import { haptic } from "../shared";
+import { deviceId, haptic } from "../shared";
 import VoiceRec from "../VoiceRec";
 
 type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
@@ -29,7 +29,7 @@ export default function MyExamsClient() {
     setError("");
     try {
       const token = new URLSearchParams(location.search).get("t") ?? "";
-      const res = await fetch("/api/myexams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, ...body }) });
+      const res = await fetch("/api/myexams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, ...body, device: await deviceId() }) });
       const j: Info = await res.json();
       if (!res.ok) { setError(j.error ?? "صار خطأ، حاول مرة ثانية"); return null; }
       setInfo(j);
@@ -246,7 +246,7 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
     setBusy(true); setError(""); setNotice("");
     try {
       const f = new FormData();
-      f.set("token", new URLSearchParams(location.search).get("t") ?? "");
+      f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId());
       f.set("action", "object"); f.set("item", String(obj.id)); f.set("qs", picked.map((p) => p.n).join(","));
       for (const p of picked) { f.set(`text_${p.n}`, p.text); if (p.voice) f.set(`voice_${p.n}`, p.voice, "voice"); }
       const res = await fetch("/api/myexams", { method: "POST", body: f });
@@ -338,7 +338,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     setBusy(true); setError("");
     try {
       const f = new FormData();
-      f.set("token", new URLSearchParams(location.search).get("t") ?? "");
+      f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId());
       f.set("item", String(room.id)); f.set("q", String(draft.q));
       f.set("file", await prepare(draft.file, draft.turns), "answer.jpg");
       const res = await fetch("/api/myexams", { method: "POST", body: f });

@@ -1,7 +1,7 @@
 "use client";
 // الصفحة الرئيسية للطالب: مربعات بإطارات وألوان QMath
 import { useEffect, useState, type ReactNode } from "react";
-import { closeApp, haptic, openOutside } from "../shared";
+import { closeApp, haptic, openOutside, deviceId } from "../shared";
 
 type List = { name: string; exams: boolean; ask: boolean; myq: boolean; fresh?: boolean; link?: string | null; children?: string[] };
 type Reply = List & { url?: string; close?: boolean; error?: string };
@@ -54,7 +54,7 @@ export default function HomeClient() {
     setError("");
     try {
       const t = token || new URLSearchParams(location.search).get("t") || "";
-      const res = await fetch("/api/home", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: t, action }) });
+      const res = await fetch("/api/home", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: t, action, device: await deviceId() }) });
       const j: Reply = await res.json();
       if (!res.ok) { setError(j.error ?? "صار خطأ، حاول مرة ثانية"); return null; }
       return j;

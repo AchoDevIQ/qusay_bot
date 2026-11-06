@@ -31,7 +31,7 @@ const { POST } = await import("../app/api/home/route.ts");
 const { get, run } = await import("../lib/sqliteDriver.ts");
 
 const msg = async (uid: number, extra: object) => await handleUpdate({ message: { message_id: ++nextId, chat: { id: uid, type: "private" }, from: { id: uid, username: "u" + uid, first_name: "اسم" }, ...extra } });
-const act = (action: string, extra: object = {}, uid = 2) => homeAction({ token: homeToken(uid), action, ...extra });
+const act = (action: string, extra: object = {}, uid = 2) => homeAction({ token: homeToken(uid), device: "dev-" + String(uid).padStart(14, "0"), action, ...extra });
 const flush = () => calls.splice(0);
 
 test("الرمز: الغلط والمنتهي مرفوضين، ولحساب ثاني ما يشتغل", async () => {
@@ -101,4 +101,20 @@ test("الطلب يوصل السيرفر مباشرة وينحفظ باسم صا
   assert.equal(o.username, "u2");
   assert.ok(!calls.some((c) => /طلب جديد/.test(c.p.text ?? "")));   // الطلب يطلع بالصفحة، بدون رسالة
   flush();
+});
+
+test("قفل الجهاز: أول جهاز ينقفل عليه، الثاني ينرفض وينسجل، والإدارة تفك القفل", async () => {
+  const { deviceOf, unlockDevice } = await import("../lib/deviceLock.ts");
+  const on = (device: unknown) => homeAction({ token: homeToken(2), action: "list", device });
+  await unlockDevice(2);
+  await assert.rejects(on(undefined), (e: any) => e.status === 400);
+  await on("phone-aaaaaaaaaaaa");
+  await on("phone-aaaaaaaaaaaa");
+  await assert.rejects(on("ipad-bbbbbbbbbbbbbb"), (e: any) => e.status === 423 && /جهاز ثاني/.test(e.message));
+  assert.ok((await deviceOf(2))!.tried);
+  await unlockDevice(2);
+  await on("ipad-bbbbbbbbbbbbbb");
+  await assert.rejects(on("phone-aaaaaaaaaaaa"), (e: any) => e.status === 423);
+  // صاحب البوت والكادر بدون قفل
+  await homeAction({ token: homeToken(1), action: "list" });
 });

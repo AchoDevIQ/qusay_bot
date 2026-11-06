@@ -160,3 +160,27 @@ export function PhoneInput({ id, value, onChange, errs, setErrs }: {
     </>
   );
 }
+
+/** رقم هذا الجهاز: ينحفظ بذاكرة تلگرام على الجهاز نفسه (DeviceStorage)، وإذا ما موجودة بذاكرة الصفحة.
+ *  صفحات الطالب تدزه ويا كل طلب، والسيرفر يقفل الحساب على أول جهاز */
+type Store = { getItem(k: string, cb: (err: unknown, v?: string | null) => void): void; setItem(k: string, v: string, cb?: (err: unknown) => void): void };
+let devicePromise: Promise<string> | null = null;
+export function deviceId(): Promise<string> {
+  if (devicePromise) return devicePromise;
+  devicePromise = (async () => {
+    const KEY = "qm_device";
+    const ds = (window as unknown as { Telegram?: { WebApp?: { DeviceStorage?: Store } } }).Telegram?.WebApp?.DeviceStorage;
+    const fromDs = await new Promise<string>((ok) => {
+      if (!ds) return ok("");
+      const t = setTimeout(() => ok(""), 1500);
+      try { ds.getItem(KEY, (err, v) => { clearTimeout(t); ok(!err && v ? String(v) : ""); }); } catch { clearTimeout(t); ok(""); }
+    });
+    let local = "";
+    try { local = localStorage.getItem(KEY) ?? ""; } catch { /* بدون ذاكرة */ }
+    const id = fromDs || local || (crypto.randomUUID?.() ?? Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""));
+    try { if (!fromDs) ds?.setItem(KEY, id, () => undefined); } catch { /* نسخة قديمة */ }
+    try { if (local !== id) localStorage.setItem(KEY, id); } catch { /* بدون ذاكرة */ }
+    return id;
+  })();
+  return devicePromise;
+}

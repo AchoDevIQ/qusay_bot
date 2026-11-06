@@ -45,7 +45,7 @@ const sign = (uid: number) => {
   params.set("hash", createHmac("sha256", key).update(check).digest("hex"));
   return params.toString();
 };
-const home = (uid: number, action = "list") => homeAction({ token: homeToken(uid), action }) as Promise<any>;
+const home = (uid: number, action = "list") => homeAction({ token: homeToken(uid), device: "dev-" + String(uid).padStart(14, "0"), action }) as Promise<any>;
 const student = (uid: number, curr = "عربي") => put("students", { user_id: uid, username: "", name: `طالب رقم ${uid} اسم`, curr, grade: "السادس العلمي", gov: "البصرة", side: "", area: "العشار", phone1: "07701234567", phone2: "07801234567", exam: "إلكتروني", created: "2026-01-01 10:00:00" });
 const order = (uid: number, names: string[], o: Record<string, unknown> = {}) => insert("orders", {
   user_id: uid, name: `طالب ${uid}`, curr: "عربي", gov: "البصرة", side: "", area: "ع", phone1: "1", phone2: "2", items: JSON.stringify(names.map((name) => ({ name, qty: 1, price: 1000 }))),

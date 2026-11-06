@@ -1,4 +1,5 @@
 // الصفحة الرئيسية للطالب، وإرسال طلب المتجر للسيرفر مباشرة
+import { checkDevice } from "./deviceLock.ts";
 import { getSession, one, put, setSession, type Row } from "./db.ts";
 import { boughtCourse, canAsk, childrenOf, guardianLink, guardianOf, logActivity } from "./access.ts";
 import { allowUpdate } from "./bot.ts";
@@ -48,6 +49,7 @@ export async function homeAction(body: Row) {
   need(uid !== null, "هذا الرابط قديم. اكتب /start بالبوت وافتح القائمة من جديد", 401);
   const id = uid!;
   need(allowUpdate(id), "ضغطت هوايا، انتظر شوية", 429);
+  await checkDevice(id, body.device);
   const a = String(body.action ?? "");
   if (a === "ask" || a === "exams") need(!await boughtCourse(id) || await guardianOf(id), "اربط ولي أمرك أول، من القائمة الرئيسية");
   if (a === "list") {

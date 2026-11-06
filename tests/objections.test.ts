@@ -31,7 +31,7 @@ const sign = (uid: number) => {
 };
 const g = (uid: number, action: string, x: object = {}) => gradeAction({ initData: sign(uid), action, ...x }) as Promise<any>;
 const object = (uid: number, item: number, x: Record<string, string | Blob>) => {
-  const f = new FormData(); f.set("token", homeToken(uid)); f.set("action", "object"); f.set("item", String(item));
+  const f = new FormData(); f.set("token", homeToken(uid)); f.set("device", "dev-" + String(uid).padStart(14, "0")); f.set("action", "object"); f.set("item", String(item));
   for (const [k, v] of Object.entries(x)) f.set(k, v);
   return submitObjection(f) as Promise<any>;
 };

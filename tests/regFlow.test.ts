@@ -41,7 +41,7 @@ const initData = (uid: number) => {
   params.set("hash", createHmac("sha256", key).update(check).digest("hex"));
   return params.toString();
 };
-const act = (uid: number, action: string, extra: object = {}) => homeAction({ token: homeToken(uid), action, ...extra });
+const act = (uid: number, action: string, extra: object = {}) => homeAction({ token: homeToken(uid), device: "dev-" + String(uid).padStart(14, "0"), action, ...extra });
 const FORM = { n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "إلكتروني", c: 0, sx: "بنين" };
 
 test("كلمات الترتيب بدون العلامات الوحدها", () => {

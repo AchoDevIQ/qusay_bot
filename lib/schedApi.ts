@@ -1,4 +1,5 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
+import { checkDevice } from "./deviceLock.ts";
 import { objectionInfo } from "./objections.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
@@ -201,6 +202,7 @@ export async function myExamAction(body: Row) {
   const id = uid!;
   const a = String(body.action ?? "");
   need(await student(id), "سجل معلوماتك أول");
+  await checkDevice(id, body.device);
   if (a === "preview" || a === "confirm") {
     const info = await studentInfo(id);
     need(info.needsBuild, "جدولك مثبت. لتغييره تواصل ويا قصي العميري");

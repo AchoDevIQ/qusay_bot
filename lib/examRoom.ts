@@ -1,4 +1,5 @@
 // غرفة الامتحان للطالب الإلكتروني: الدخول بوقته، النسخة، صور الأسئلة، ورفع الأجوبة بدون أي كود
+import { checkDevice } from "./deviceLock.ts";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { find, insert, one, put, remove, update, type Row } from "./db.ts";
@@ -122,6 +123,7 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   await ensure();
   const uid = verifyHomeToken(form.get("token"));
   need(uid !== null, "هذا الرابط قديم. اكتب /start بالبوت وافتح القائمة من جديد", 401);
+  await checkDevice(uid!, form.get("device"));
   const it = await liveRoom(uid!, form.get("item"), s);
   const q = Number(form.get("q"));
   need(await one("bank_questions", { version_id: it.version_id, n: q }), "السؤال غير موجود");
