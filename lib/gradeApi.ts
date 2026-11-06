@@ -5,6 +5,7 @@ import { guardianOf, logActivity } from "./access.ts";
 import { isAdmin, staffName, student } from "./data.ts";
 import { send, sendAlbum, upload } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
+import { canHandle, objectButton, openObjections, testObjection } from "./objections.ts";
 import { files } from "./files.ts";
 import { stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
@@ -30,6 +31,7 @@ async function listData(uid: number) {
   const waiting = papers.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid));
   const mine = papers.filter((p) => p.graded_at && (p.grader_id === uid)).slice(-30).reverse();
   return {
+    objections: await objectionPapers(uid),
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
     owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid),
     errors: await errorsOf(uid),
@@ -37,21 +39,37 @@ async function listData(uid: number) {
     today: papers.filter((p) => p.grader_id === uid && String(p.graded_at ?? "").startsWith(stamp().slice(0, 10))).length,
   };
 }
+/** الأوراق اللي عليها اعتراض ينتظر رد هذا المصحح */
+async function objectionPapers(uid: number) {
+  const byItem = new Map<number, number[]>();
+  for (const o of await find("objections", { status: "open" })) byItem.set(o.item_id, [...byItem.get(o.item_id) ?? [], o.q]);
+  const out = [];
+  for (const [id, qs] of byItem) {
+    const it = await one("sched_items", { id });
+    if (it && await canHandle(uid, it)) out.push({ ...await paperRow(it), qs: qs.sort((a, b) => a - b) });
+  }
+  return out;
+}
+export const objectionsWaiting = async (uid: number) => (await objectionPapers(uid)).length;
 /** معلومات هدر الورقة المصححة: الفصل والمنهج */
 async function headerInfo(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });
   const st = isTest(it) ? null : await student(it.user_id);
   return { slug: e?.slug ?? "", info: e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar" };
 }
-async function paperView(it: Row) {
+async function paperView(it: Row, withObj = false) {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
+  // بالاعتراض: الدرجة اللي غيرها المصحح تبين، وما تنحفظ بالورقة لحد ما يحفظ الرد
+  const objs = withObj ? await openObjections(it.id) : [];
+  for (const o of objs) if (o.new_mark !== null) marks.set(o.q, o.new_mark);
   const v = await one("bank_versions", { id: it.version_id });
   const ink: Record<number, string> = {};
   for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
   return {
     ink,
+    objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark })),
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null })),
@@ -64,6 +82,19 @@ async function myPaper(uid: number, raw: unknown) {
   need(it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
   return it!;
 }
+/** ورقة يشتغل عليها: قبل الدرجة لازم تكون لهذا المصحح، وبعدها بس إذا عليها اعتراض ينتظر وهو يگدر يرد عليه */
+async function workPaper(uid: number, raw: unknown) {
+  const it = await one("sched_items", { id: Number(raw) });
+  need(it?.status === "done", "الورقة غير موجودة");
+  if (it!.graded_at) {
+    need((await openObjections(it!.id)).length, "الورقة مخلصة");
+    need(await canHandle(uid, it!), "ما عندك صلاحية على هذي الورقة", 403);
+    return { it: it!, obj: true };
+  }
+  need(it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
+  return { it: it!, obj: false };
+}
+const sumMarks = (qs: { mark: number | null }[]) => qs.reduce((s, q) => s + (q.mark ?? 0), 0);
 /** أوراق تجربة بدون طلاب حقيقيين: الجواب صورة السؤال نفسه، حتى تنجرب الشاشة وما توصل رسالة لأحد */
 async function makeTests() {
   // عشوائية: كل مرة امتحانات مختلفة، ونسخة وحدة من كل امتحان
@@ -90,6 +121,7 @@ async function deleteTests() {
     await remove("exam_answers", { item_id: it.id });
     await remove("question_marks", { item_id: it.id });
     await remove("paper_ink", { item_id: it.id });
+    await remove("objections", { item_id: it.id });
     await remove("sched_items", { id: it.id });
   }
 }
@@ -101,8 +133,7 @@ export async function gradeAction(body: Row) {
   let paper: Row | null = null;
   if (a === "ink") {
     // رسم القلم على صفحة وحدة: ينحفظ وحده أثناء التصحيح، فيرجع بسرعة بدون القائمة
-    const it = await myPaper(uid, body.id);
-    need(!it.graded_at, "الورقة مخلصة");
+    const { it } = await workPaper(uid, body.id);
     const page = Number(body.page);
     need(Number.isInteger(page) && page >= 0 && page < 500, "صفحة غير معروفة");
     const ink = String(body.ink ?? "");
@@ -125,15 +156,23 @@ export async function gradeAction(body: Row) {
     need(!it!.grader_id || it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
     if (!it!.grader_id) await update("sched_items", { id: it!.id }, { grader_id: uid });
     paper = await paperView((await one("sched_items", { id: it!.id }))!);
+  } else if (a === "openObj") {
+    const { it, obj } = await workPaper(uid, body.id);
+    need(obj, "ماكو اعتراض على هذي الورقة");
+    paper = await paperView(it, true);
   } else if (a === "mark") {
-    const it = await myPaper(uid, body.id);
-    need(!it.graded_at, "الورقة مخلصة");
+    const { it, obj } = await workPaper(uid, body.id);
     const q = await one("bank_questions", { version_id: it.version_id, n: Number(body.q) });
     need(q, "السؤال غير موجود");
     const mark = Number(body.mark);
     need(Number.isInteger(mark) && mark >= 0 && mark <= q!.max_mark, `الدرجة من 0 إلى ${q!.max_mark}، رقم كامل`);
-    await put("question_marks", { item_id: it.id, q: q!.n, mark });
-    paper = await paperView(it);
+    if (obj) {
+      // بالاعتراض تتغير بس درجة السؤال المعترض عليه
+      const o = (await openObjections(it.id)).find((x) => x.q === q!.n);
+      need(o, "الطالب ما اعترض على هذا السؤال");
+      await update("objections", { id: o!.id }, { new_mark: mark });
+    } else await put("question_marks", { item_id: it.id, q: q!.n, mark });
+    paper = await paperView(it, obj);
   } else if (a === "release") {
     const it = await myPaper(uid, body.id);
     need(!it.graded_at, "الورقة مخلصة");
@@ -143,8 +182,8 @@ export async function gradeAction(body: Row) {
     notice = "↩️ رجعت الورقة للقائمة";
   } else if (a === "prepare") {
     // قبل الحفظ: المقولة والملصق حتى الصفحة تركب صورة الغلاف
-    const it = await myPaper(uid, body.id);
-    need(!it.graded_at, "الورقة مخلصة");
+    const { it, obj } = await workPaper(uid, body.id);
+    if (obj) return { total: sumMarks((await paperView(it, true)).questions), comment: "", sticker: 0, sent: 0 };
     const view = await paperView(it);
     const left = view.questions.filter((q) => q.mark === null).map((q) => q.n);
     need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
@@ -153,6 +192,13 @@ export async function gradeAction(body: Row) {
     return { total, comment: c?.text ?? "", sticker: c?.sticker?.id ?? 0, sent: c?.id ?? 0 };
   } else if (a === "finish") {
     notice = await finishPaper(uid, body.id, [], Number(body.comment) || 0);
+  } else if (a === "decide") {
+    notice = await decidePaper(uid, body.id, [], body.rejects);
+  } else if (a === "testObj") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const it = await one("sched_items", { id: Number(body.id) });
+    need(it && isTest(it) && it.graded_at, "هذا بس لأوراق التجربة المصححة");
+    notice = `🧪 انضاف ${await testObjection(it!)} اعتراض تجربة. تلگاه فوك بالاعتراضات`;
   } else if (a === "makeTests" || a === "deleteTests") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     if (a === "makeTests") {
@@ -194,6 +240,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
     if (photos.length) await deliver(uid, `🧪 <b>هيچ توصل للطالب</b>\n${text}`);
   } else {
     await deliver(it.user_id, text);
+    await send(it.user_id, "✋ إذا تشوف درجة سؤال مو صحيحة، تگدر تعترض عليها بالكتابة أو بصوتك.", { kb: objectButton(it.user_id, it.id) });
     const g = await guardianOf(it.user_id);
     if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
     await logActivity(it.user_id, `📝 انصحح امتحان ${view.title}: ${total} من 100`);
@@ -205,21 +252,73 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
 export async function gradeUpload(form: FormData) {
   const uid = await authed(form.get("initData"), GRADE_PERM);
   if (form.get("action") === "message") return await messageStudent(uid, form);
-  need(form.get("action") === "finish", "أمر غير معروف");
+  const act = form.get("action");
+  need(act === "finish" || act === "decide", "أمر غير معروف");
   const photos: Buffer[] = [];
   for (const f of form.getAll("photo")) {
     need(f instanceof Blob && f.size <= 9_000_000, "صورة كبيرة");
     photos.push(Buffer.from(await (f as Blob).arrayBuffer()));
   }
   need(photos.length <= 40, "صور هواية");
+  if (act === "decide") return { ok: true, notice: await decidePaper(uid, form.get("id"), photos, form.get("rejects")) };
   const notice = await finishPaper(uid, form.get("id"), photos, Number(form.get("comment")) || 0);
   return { ok: true, notice };
+}
+
+/** رد المصحح على الاعتراض: الدرجة اللي تغيرت تنقبل وحدها، واللي ما تغيرت لازم تنرفض. الطالب يوصله الرد،
+ *  وإذا انقبل شي توصله ورقته من جديد ويا ولي أمره */
+async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsRaw: unknown) {
+  const { it, obj } = await workPaper(uid, raw);
+  need(obj, "ماكو اعتراض على هذي الورقة");
+  let rejects: Record<string, string> = {};
+  try { const j = typeof rejectsRaw === "string" ? JSON.parse(rejectsRaw || "{}") : rejectsRaw ?? {}; if (j && typeof j === "object") rejects = j as Record<string, string>; } catch { /* بدون رفض */ }
+  const open = (await openObjections(it.id)).sort((a, b) => a.q - b.q);
+  const changed = (o: Row) => o.new_mark !== null && o.new_mark !== o.old_mark;
+  const left = open.filter((o) => !changed(o) && !(String(o.q) in rejects)).map((o) => o.q);
+  need(!left.length, `غير الدرجة أو ارفض اعتراض السؤال: ${left.join("، ")}`);
+  const lines: string[] = [];
+  let accepted = 0;
+  for (const o of open) {
+    if (changed(o)) {
+      await put("question_marks", { item_id: it.id, q: o.q, mark: o.new_mark });
+      await update("objections", { id: o.id }, { status: "accepted", decided_at: stamp(), decided_by: uid });
+      lines.push(`✅ السؤال ${o.q}: انقبل اعتراضك، صارت درجته <b>${o.new_mark}</b> بدل ${o.old_mark}`);
+      accepted++;
+    } else {
+      const reason = String(rejects[String(o.q)] ?? "").trim().slice(0, 500);
+      await update("objections", { id: o.id }, { status: "rejected", new_mark: o.old_mark, reason: reason || null, decided_at: stamp(), decided_by: uid });
+      lines.push(`❌ السؤال ${o.q}: انرفض اعتراضك وبقت درجته ${o.old_mark}${reason ? `\nالسبب: ${esc(reason)}` : ""}`);
+    }
+  }
+  const total = (await find("question_marks", { item_id: it.id })).reduce((s, m) => s + (m.mark ?? 0), 0);
+  await update("sched_items", { id: it.id }, { total });
+  const view = await paperRow(it);
+  const text = `✋ <b>رد المصحح على اعتراضك</b>\nامتحان: ${esc(view.title)}\n\n${lines.join("\n")}\n\nدرجتك${accepted ? " الجديدة" : ""}: <b>${total}</b> من 100`;
+  const deliver = async (chat: number, caption: string) => {
+    // تعليق الألبوم أكثر شي 1024 حرف، فالطويل يروح برسالة وراه
+    if (accepted && photos.length) {
+      const short = caption.length <= 1000;
+      if (await sendAlbum(chat, photos, short ? caption : `📝 ورقتك بعد الاعتراض · الدرجة ${total} من 100`)) { if (!short) await send(chat, caption, { extra: { protect_content: true } }); return; }
+    }
+    await send(chat, caption, { extra: { protect_content: true } });
+  };
+  if (isTest(it)) await deliver(uid, `🧪 <b>هيچ يوصل للطالب</b>\n${text}`);
+  else {
+    await deliver(it.user_id, text);
+    const g = accepted ? await guardianOf(it.user_id) : null;
+    if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
+    await logActivity(it.user_id, `✋ رد المصحح على اعتراضه بامتحان ${view.title}: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total}`);
+  }
+  return `✅ انحفظ الرد: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total} من 100`;
 }
 
 const VOICE_MAX = 20 * 1024 * 1024;
 /** رسالة من المصحح للطالب: كتابة، وتسجيل صوت، وزر يفتح محادثة تلگرام. ورقة التجربة توصل للمصحح نفسه */
 async function messageStudent(uid: number, form: FormData) {
-  const it = await myPaper(uid, form.get("id"));
+  const row = await one("sched_items", { id: Number(form.get("id")) });
+  need(row?.status === "done", "الورقة غير موجودة");
+  need(row!.grader_id === uid || (row!.graded_at && await canHandle(uid, row!)), "هذي الورقة أخذها مصحح ثاني", 409);
+  const it = row!;
   const text = String(form.get("text") ?? "").trim().slice(0, 3000);
   const voice = form.get("voice");
   const hasVoice = voice instanceof Blob && voice.size > 0;

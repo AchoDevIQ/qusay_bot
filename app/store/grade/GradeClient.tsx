@@ -5,7 +5,8 @@ import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../admin
 import Grader, { type Paper, type Prepared, type Sticker } from "./Grader";
 
 type Row = { id: number; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
-type Data = { waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
+type ObjRow = Row & { qs: number[] };
+type Data = { objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -34,7 +35,7 @@ export default function GradeClient() {
   const act: Call = async (b) => { const r = await call(b); if (r?.paper) setPaper(r.paper); return r; };
   const url = (ref: string) => `/api/grade/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
   /** الحفظ بالخلفية: المصحح ما ينتظر، تنفتح الورقة الجاية والدرجة توصل للطالب وراها */
-  function saveInBackground(p: Paper, inkSaved: Promise<void>, compose: (x: Prepared) => Promise<Blob[]>) {
+  function saveInBackground(p: Paper, inkSaved: Promise<void>, compose: (x: Prepared) => Promise<Blob[]>, decide?: { rejects: Record<number, string>; accepted: number }) {
     saving.current.add(p.id);
     setSavingLeft(saving.current.size);
     setSavedNow((n) => n + 1);
@@ -48,6 +49,16 @@ export default function GradeClient() {
           return j;
         };
         const prep: Prepared = await post(JSON.stringify({ initData: pageAuth(), action: "prepare", id: p.id }), true);
+        if (decide) {
+          // رد الاعتراض: إذا انقبل شي توصل الورقة من جديد بالدرجة الجديدة
+          let photos: Blob[] = [];
+          if (decide.accepted) { try { photos = await compose(prep); } catch { photos = []; } }
+          const fd = new FormData();
+          fd.set("initData", pageAuth()); fd.set("action", "decide"); fd.set("id", String(p.id)); fd.set("rejects", JSON.stringify(decide.rejects));
+          photos.forEach((b, i) => fd.append("photo", b, `p${i}.jpg`));
+          await post(fd, false);
+          return;
+        }
         // الصفحة تركب صور الورقة المصححة، وإذا ما گدرت توصل الدرجة كرسالة بس
         let photos: Blob[] = [];
         try { photos = await compose(prep); } catch { photos = []; }
@@ -60,8 +71,18 @@ export default function GradeClient() {
       } catch (e) {
         setSavedNow((n) => n - 1);
         setBgErr(`⚠️ ورقة ${p.name} ما انحفظت${(e as Error).message ? `: ${(e as Error).message}` : ""}. افتحها من القائمة واحفظها مرة ثانية.`);
-      } finally { saving.current.delete(p.id); setSavingLeft(saving.current.size); }
+      } finally {
+        saving.current.delete(p.id); setSavingLeft(saving.current.size);
+        if (decide) void call({ action: "list" });
+      }
     })();
+    if (decide) {
+      // بعد الرد تنفتح الورقة الجاية اللي عليها اعتراض، وإذا ماكو يرجع للقائمة
+      const nextObj = data?.objections.find((x) => x.id !== p.id && !saving.current.has(x.id));
+      setPaper(null);
+      if (nextObj) void act({ action: "openObj", id: nextObj.id });
+      return;
+    }
     const nextPaper = data?.waiting.find((x) => x.id !== p.id && !skipped.current.has(x.id) && !saving.current.has(x.id));
     setPaper(null);
     if (nextPaper) void act({ action: "open", id: nextPaper.id });
@@ -85,7 +106,8 @@ export default function GradeClient() {
           <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} errors={data.errors ?? []} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && !saving.current.has(x.id)).length}
             onClose={() => { setPaper(null); setSavedNow(0); void call({ action: "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
-            onSave={(inkSaved, compose) => saveInBackground(paper, inkSaved, compose)} />
+            onSave={(inkSaved, compose) => saveInBackground(paper, inkSaved, compose)}
+            onDecide={(inkSaved, compose, rejects, accepted) => saveInBackground(paper, inkSaved, compose, { rejects, accepted })} />
         )}
         {data && !paper && allDone && (
           <div className="gk gk-done">
@@ -117,6 +139,19 @@ function List({ data, busy, act }: { data: Data; busy: boolean; act: Call }) {
           </div>
         </div>
       )}
+      {!!data.objections.length && (
+        <div className="card">
+          <h2>✋ اعتراضات تنتظر ردك: {data.objections.length}</h2>
+          <table className="extable"><tbody>
+            {data.objections.map((p) => (
+              <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "openObj", id: p.id }); }}>
+                <td><b>{p.name}</b>{p.test && <span className="adentag">تجربة</span>}<small className="pdmode">{p.title} · الدرجة {p.total} · على السؤال {p.qs.join("، ")}{p.grader ? ` · صححها ${p.grader}` : ""}</small></td>
+                <td className="p"><span className="exbtn">رد</span></td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
       <div className="card">
         <h2>📥 تنتظر التصحيح: {data.waiting.length}</h2>
         {data.waiting.length ? (
@@ -134,7 +169,14 @@ function List({ data, busy, act }: { data: Data; busy: boolean; act: Call }) {
         <div className="card">
           <h2>✅ صححتها أخيراً</h2>
           <table className="extable"><tbody>
-            {data.done.map((p) => <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "open", id: p.id }); }}><td><b>{p.name}</b><small className="pdmode">{p.title} · {p.graded}</small></td><td className="p">{p.total}</td></tr>)}
+            {data.done.map((p) => (
+              <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "open", id: p.id }); }}>
+                <td><b>{p.name}</b>{p.test && <span className="adentag">تجربة</span>}<small className="pdmode">{p.title} · {p.graded}</small>
+                  {p.test && data.owner && <button type="button" className="exbtn adtop" disabled={busy} onClick={(e) => { e.stopPropagation(); void act({ action: "testObj", id: p.id }); }}>🧪 سوي اعتراض تجربة</button>}
+                </td>
+                <td className="p">{p.total}</td>
+              </tr>
+            ))}
           </tbody></table>
         </div>
       )}

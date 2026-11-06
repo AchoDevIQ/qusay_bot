@@ -2,7 +2,7 @@
 import { count, find, setSession, sumOf, type Row } from "./db.ts";
 import { can, isAdmin, isStaff, newOrdersCount, setStudentView } from "./data.ts";
 import { EXAM_PERM } from "./examBank.ts";
-import { waitingPapers } from "./gradeApi.ts";
+import { objectionsWaiting, waitingPapers } from "./gradeApi.ts";
 import { mainKb } from "./keyboards.ts";
 import { passRequestsCount } from "./passApi.ts";
 import { send } from "./telegram.ts";
@@ -28,8 +28,9 @@ async function homeData(uid: number) {
   if (await can(uid, "online")) shop.push({ page: "online", icon: "💻", title: "فصول إلكترونية فقط" });
   if (await can(uid, EXAM_PERM)) people.push({ page: "exams", icon: "📝", title: "الامتحانات" });
   if (await can(uid, "grade")) {
-    const n = await waitingPapers(uid);
-    people.push({ page: "grade", icon: "✍️", title: "التصحيح", note: n ? `${n} ورقة تنتظر` : "ماكو أوراق", hot: n > 0 });
+    const n = await waitingPapers(uid), o = await objectionsWaiting(uid);
+    const note = [n ? `${n} ورقة تنتظر` : "", o ? `${o} اعتراض` : ""].filter(Boolean).join(" · ") || "ماكو أوراق";
+    people.push({ page: "grade", icon: "✍️", title: "التصحيح", note, hot: n + o > 0 });
   }
   if (await can(uid, "schedule")) people.push({ page: "schedule", icon: "🗓", title: "جدول الامتحانات" });
   if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` });

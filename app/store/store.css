@@ -215,3 +215,19 @@ body.grwide .grtop{padding-left:104px}
 .gk-msg label{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px;color:#111;margin:0}.gk-msg textarea,.gk-msg input{font-family:inherit;font-size:16px;border:1px solid #ccc;border-radius:10px;padding:10px;background:#fff;color:#111}.gk-msg{max-height:90vh;overflow:auto}
 .gk-voice{display:flex;flex-direction:column;gap:8px;border:1px dashed #bbb;border-radius:12px;padding:10px;font-weight:700;font-size:14px}.gk-voice .gk-btn{background:#f1f1f1;color:#111;align-self:flex-start}.gk-voice .gk-recon{background:#d32f2f;color:#fff}.gk-voice audio{max-width:100%}
 .gk-toast{position:fixed;z-index:90;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));background:#1f9d55;color:#fff;border-radius:12px;padding:12px 18px;font-weight:800}
+
+/* اعتراض الطالب */
+.obq{display:flex;flex-direction:column;gap:8px;border:1px solid var(--gold2);border-radius:12px;padding:10px}.obq.on{border-width:2px;border-color:var(--gold)}
+.obhead{display:flex;justify-content:space-between;align-items:center;gap:8px}.obhead span{font-weight:800;color:var(--gold)}
+.obq textarea{font-family:inherit;font-size:16px;border:1px solid var(--gold2);border-radius:10px;padding:10px;background:transparent;color:inherit;resize:vertical}
+.obq .exbtn{align-self:flex-start}.obq .gk-voice{border-color:var(--gold2)}
+.obstate{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:14px}.obstate small{font-weight:500;opacity:.85;white-space:pre-wrap}.obstate.accepted{color:#4caf50}.obstate.rejected{color:#ff8a80}
+/* رد الاعتراض بشاشة التصحيح */
+.gk-objtag{background:#b26a00;color:#fff;border-radius:8px;padding:4px 10px;font-size:13px}
+.gk-obj{flex-direction:column;align-items:stretch;gap:8px;background:#2b2210;border-bottom:1px solid #5a4416}
+.gk-objqs{display:flex;gap:6px;flex-wrap:wrap}.gk-objqs button{border:1px solid #8a6a2a;background:transparent;color:#f5e3b5;border-radius:999px;padding:5px 12px;font-family:inherit;font-weight:700;cursor:pointer}.gk-objqs button.on{background:#f9c445;color:#111;border-color:#f9c445}
+.gk-objbody{display:flex;flex-direction:column;gap:8px;font-size:14px;color:#f2e6c8}.gk-objbody audio{max-width:100%;height:36px}
+.gk-objtext{background:rgba(255,255,255,.06);border-radius:10px;padding:8px 10px;white-space:pre-wrap;max-height:18vh;overflow:auto;color:#fff}
+.gk-objok{color:#7ee2a0;font-weight:800}.gk-objno{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.gk-objno input{flex:1;min-width:180px;font-family:inherit;font-size:15px;border-radius:10px;border:1px solid #8a6a2a;background:#1d1708;color:#fff;padding:8px 10px}
+.gk-rej{border:0;background:#c62828;color:#fff;border-radius:10px;padding:8px 14px;font-family:inherit;font-weight:800;cursor:pointer}
+.gk-nums button.gk-was{outline:2px dashed #f9c445;outline-offset:-4px}

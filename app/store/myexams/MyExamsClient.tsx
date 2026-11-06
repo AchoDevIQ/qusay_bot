@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { haptic } from "../shared";
+import VoiceRec from "../VoiceRec";
 
 type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; at: string; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
@@ -11,8 +12,10 @@ type Info = {
   inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
-  preview?: Preview; notice?: string; error?: string; lateText: string; closedText: string; room?: Room;
+  preview?: Preview; notice?: string; error?: string; lateText: string; closedText: string; room?: Room; obj?: Obj;
 };
+type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
+type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
 type Room = { id: number; title: string; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
 const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
@@ -33,10 +36,17 @@ export default function MyExamsClient() {
       return j;
     } catch { setError("ماكو اتصال، حاول مرة ثانية"); return null; } finally { setBusy(false); }
   }
-  useEffect(() => { void call({ action: "info" }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [room, setRoom] = useState<Room | null>(null);
+  const [obj, setObj] = useState<Obj | null>(null);
+  async function openObj(item: number) { const r = await call({ action: "objInfo", item }); if (r?.obj) setObj(r.obj); }
+  useEffect(() => {
+    // زر «اعتراض على الدرجة» بالبوت يفتح الصفحة على الامتحان مباشرة
+    const o = Number(new URLSearchParams(location.search).get("obj"));
+    void (o ? openObj(o).then(() => undefined) : call({ action: "info" }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function enterOptional(exam: number) { const r = await call({ action: "openOptional", exam }); if (r?.room) setRoom(r.room); }
   async function enter(item: number) { const r = await call({ action: "openExam", item }); if (r?.room) setRoom(r.room); }
+  if (obj) return <Objection obj={obj} setObj={setObj} leave={() => { setObj(null); void call({ action: "info" }); }} />;
   if (room) return <ExamRoom room={room} setRoom={setRoom} call={call} leave={() => { setRoom(null); void call({ action: "info" }); }} />;
 
   return (
@@ -55,7 +65,7 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
-        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} />}
+        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} object={(id) => void openObj(id)} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
     </>
@@ -180,7 +190,7 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
   );
 }
 
-function List({ info, busy, enter }: { info: Info; busy: boolean; enter: (id: number) => void }) {
+function List({ info, busy, enter, object }: { info: Info; busy: boolean; enter: (id: number) => void; object: (id: number) => void }) {
   return (
     <div className="card">
       <h2>🗓 جدول امتحاناتك</h2>
@@ -191,6 +201,7 @@ function List({ info, busy, enter }: { info: Info; busy: boolean; enter: (id: nu
             <td><b>{i.optional ? "🎯 " : ""}{i.title}</b>{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.state === "missed" && <small className="pdmode exbad">{info.lateText}</small>}
+              {i.total !== null && i.total !== undefined && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => object(i.id)}>✋ اعتراض على الدرجة</button>}
             </td>
             <td className="adphone">{prettyAt(i.at)}</td>
           </tr>
@@ -218,6 +229,77 @@ function Optional({ info, busy, enter }: { info: Info; busy: boolean; enter: (ex
         ))}
       </tbody></table>
     </div>
+  );
+}
+
+/** الاعتراض: يختار السؤال اللي يشوف درجته مو صحيحة، ويكتب أو يسجل بصوته ليش. كل سؤال مرة وحدة */
+function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void; leave: () => void }) {
+  const [pick, setPick] = useState<Record<number, { text: string; voice: Blob | null }>>({});
+  const [rec, setRec] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const picked = Object.entries(pick).map(([n, v]) => ({ n: Number(n), ...v }));
+  const ready = picked.length > 0 && picked.every((p) => p.text.trim() || p.voice);
+  const set = (n: number, v: { text: string; voice: Blob | null } | null) => setPick((x) => { const y = { ...x }; if (v) y[n] = v; else delete y[n]; return y; });
+  async function send() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const f = new FormData();
+      f.set("token", new URLSearchParams(location.search).get("t") ?? "");
+      f.set("action", "object"); f.set("item", String(obj.id)); f.set("qs", picked.map((p) => p.n).join(","));
+      for (const p of picked) { f.set(`text_${p.n}`, p.text); if (p.voice) f.set(`voice_${p.n}`, p.voice, "voice"); }
+      const res = await fetch("/api/myexams", { method: "POST", body: f });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(j.error ?? "ما وصل الاعتراض، حاول مرة ثانية"); return; }
+      setObj(j.obj); setPick({}); setNotice(j.notice ?? "");
+    } catch { setError("ماكو اتصال، حاول مرة ثانية"); } finally { setBusy(false); }
+  }
+  const STATUS = (o: ObjState) => o.status === "open" ? "⏳ اعتراضك ينتظر رد المصحح"
+    : o.status === "accepted" ? `✅ انقبل اعتراضك: صارت درجته ${o.mark} بدل ${o.old}` : `❌ انرفض اعتراضك${o.reason ? `: ${o.reason}` : ""}`;
+  return (
+    <>
+      <header>
+        <img src="/logo.png" alt="" />
+        <h1 className="plain">QMath</h1>
+        <p>✋ اعتراض على الدرجة</p>
+      </header>
+      <div className="wrap">
+        <button type="button" className="exbtn" disabled={busy || rec} onClick={leave}>⬅️ رجوع لامتحاناتي</button>
+        <div className="card adtop">
+          <h2>📝 {obj.title}</h2>
+          <div className="who">درجتك: <b>{obj.total}</b> من 100</div>
+          <div className="expad exhint">اختار السؤال اللي تشوف درجته مو صحيحة، واكتب أو سجل بصوتك ليش. كل سؤال تگدر تعترض عليه مرة وحدة، والمصحح يرد عليك بالبوت.</div>
+        </div>
+        <div className="card">
+          <div className="form">
+            {obj.questions.map((q) => {
+              const mine = pick[q.n];
+              return (
+                <div key={q.n} className={"obq" + (mine ? " on" : "")}>
+                  <div className="obhead"><b>السؤال {q.n}</b><span>{q.obj?.status === "accepted" ? q.obj.mark : q.mark} من {q.max}</span></div>
+                  {q.obj ? (
+                    <div className={"obstate " + q.obj.status}>{STATUS(q.obj)}{q.obj.text && <small>اعتراضك: {q.obj.text}</small>}{q.obj.voice && <small>🎙 دزيت تسجيل صوتي</small>}</div>
+                  ) : mine ? (
+                    <>
+                      <textarea rows={3} value={mine.text} placeholder="ليش تشوف درجة هذا السؤال مو صحيحة؟" onChange={(e) => set(q.n, { ...mine, text: e.target.value })} />
+                      <VoiceRec btn="exbtn" label="🎙 أو سجل اعتراضك بصوتك (أكثر شي 5 دقايق)" value={mine.voice} onRecording={setRec} onChange={(v) => setPick((x) => (x[q.n] ? { ...x, [q.n]: { ...x[q.n], voice: v } } : x))} />
+                      <button type="button" className="exbtn" disabled={rec} onClick={() => set(q.n, null)}>إلغاء الاعتراض على هذا السؤال</button>
+                    </>
+                  ) : (
+                    <button type="button" className="exbtn" onClick={() => { haptic(); set(q.n, { text: "", voice: null }); }}>✋ أعترض على هذا السؤال</button>
+                  )}
+                </div>
+              );
+            })}
+            {error && <div className="err">⚠️ {error}</div>}
+            {notice && <div className="card warn exerr">{notice}</div>}
+            {picked.length > 0 && <button type="button" className="btn agbtn adtop" disabled={busy || rec || !ready} onClick={() => void send()}>{busy ? "جاري الإرسال..." : `📤 دز الاعتراض (${picked.length} سؤال)`}</button>}
+            {picked.length > 0 && !ready && <div className="hint">لكل سؤال اخترته اكتب السبب أو سجله بصوتك.</div>}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

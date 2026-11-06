@@ -8,7 +8,9 @@ import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
 import MessageBox from "./MessageBox";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
-export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en" };
+export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; objections?: Objection[] };
+/** اعتراض الطالب على سؤال: نصه، وتسجيله إذا موجود، ودرجته قبل الاعتراض */
+export type Objection = { q: number; text: string; voice: string | null; old: number };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
 type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
 export type Sticker = { id: number; name: string; lo: number; hi: number };
@@ -208,16 +210,22 @@ const TIP: Record<Tool, string> = { hand: "تحريك", pen: "القلم", erase
 
 const SHOWQ_KEY = "gradeShowQuestion";
 const PEN_KEY = "gradePen";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, today, left: papersLeft, errors, stickers }: {
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, today, left: papersLeft, errors, stickers }: {
   paper: Paper; url: (r: string) => string; busy: boolean; errors: string[]; stickers: Sticker[];
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null } | null>;
   onClose: () => void; onSkip: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
+  onDecide: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>, rejects: Record<number, string>, accepted: number) => void;
 }) {
+  // ورقة عليها اعتراض: تنفتح من جديد، تتغير بس درجة السؤال المعترض عليه، والتغيير يعني قبول
+  const objs = paper.objections ?? [];
+  const objMode = objs.length > 0;
+  const objOf = (n: number) => objs.find((o) => o.q === n);
+  const [rejects, setRejects] = useState<Record<number, string>>({});
   const [pages, setPages] = useState<Page[] | null>(null);
   const [at, setAt] = useState(0);
   const [inks, setInks] = useState<Record<number, Ink>>(() => Object.fromEntries(Object.entries(paper.ink ?? {}).map(([k, v]) => [Number(k), parseInk(v)])));
   const [marks, setMarks] = useState<Record<number, number | null>>(() => Object.fromEntries(paper.questions.map((q) => [q.n, q.mark])));
-  const [qSel, setQSel] = useState(paper.questions.find((q) => q.mark === null)?.n ?? paper.questions[0]?.n ?? 0);
+  const [qSel, setQSel] = useState(objs[0]?.q ?? paper.questions.find((q) => q.mark === null)?.n ?? paper.questions[0]?.n ?? 0);
   const [tool, setTool] = useState<Tool>("pen");
   // لون القلم وسمكه يبقون نفسهم بكل الصفحات والأوراق، لحد ما المصحح يبدلهم
   const [color, setColorState] = useState("#e53935");
@@ -248,7 +256,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const pendingMarks = useRef(new Set<Promise<void>>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inksRef = useRef(inks); inksRef.current = inks;
-  const locked = !!paper.graded;
+  const locked = !!paper.graded && !objMode;
   const stage = useRef<HTMLDivElement>(null);
   const qtop = useRef<HTMLDivElement>(null);
   const [fitH, setFitH] = useState(0);
@@ -266,7 +274,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     buildPages(paper, url).then((p) => {
       if (stop) return;
       setPages(p);
-      const first = p.findIndex((x) => x.q !== null && marks[x.q] === null);
+      const first = objMode ? p.findIndex((x) => x.q === objs[0].q) : p.findIndex((x) => x.q !== null && marks[x.q] === null);
       if (first > 0) setAt(first);
     }).catch(() => { if (!stop) setPages([]); });
     return () => { stop = true; };
@@ -319,9 +327,15 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const q = paper.questions.find((x) => x.n === curQ);
   const total = Object.values(marks).reduce<number>((s, m) => s + (m ?? 0), 0);
   const missing = paper.questions.filter((x) => marks[x.n] === null || marks[x.n] === undefined).length;
+  const changedObj = (o: Objection) => marks[o.q] !== null && marks[o.q] !== undefined && marks[o.q] !== o.old;
+  const undecided = objs.filter((o) => !changedObj(o) && rejects[o.q] === undefined);
+  const accepted = objs.filter(changedObj).length;
+  function goQ(n: number) { const i = pages?.findIndex((p) => p.q === n) ?? -1; if (i >= 0) go(i); else setQSel(n); }
   async function press(m: number) {
     if (!q || locked) return;
+    if (objMode && !objOf(q.n)) return;
     const n = q.n, old = marks[n] ?? null;
+    if (objMode) setRejects((x) => { const y = { ...x }; delete y[n]; return y; });
     // الدرجة تصير خضرة فوراً، وتبقى شوية حتى المصحح يشوفها، وبعدها ينتقل للسؤال اللي بعده
     setMarks((x) => ({ ...x, [n]: m }));
     setSaveErr("");
@@ -330,6 +344,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       .catch((e) => { setMarks((x) => ({ ...x, [n]: old })); setSaveErr(`ما انحفظت درجة السؤال ${n}${(e as Error).message ? `: ${(e as Error).message}` : ""}`); });
     pendingMarks.current.add(sent);
     void sent.finally(() => pendingMarks.current.delete(sent));
+    if (objMode) return;
     await new Promise((r) => setTimeout(r, 450));
     const nextQ = paper.questions[paper.questions.findIndex((x) => x.n === n) + 1];
     if (!nextQ || (q && q.n !== n)) return;
@@ -364,6 +379,11 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     }
     return out;
   }
+  /** رد الاعتراض: كل اعتراض لازم أما تتغير درجته (ينقبل) أو ينضغط رفض */
+  function decide() {
+    if (undecided.length) { setSaveErr(`غير الدرجة أو ارفض اعتراض السؤال ${undecided[0].q}`); goQ(undecided[0].q); return; }
+    onDecide(Promise.all([flush(), ...pendingMarks.current]).then(() => undefined), composeAll, rejects, accepted);
+  }
   /** حفظ الورقة: لازم كل الأسئلة عدها درجة. بعدها تنفتح الورقة الجاية مباشرة، والحفظ يكمل بالخلفية */
   function save() {
     const miss = paper.questions.find((x) => marks[x.n] === null || marks[x.n] === undefined);
@@ -391,7 +411,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         <button type="button" className="gk-skip" onClick={async () => { await flush(); onClose(); }}>⬅️ القائمة</button>
         <span>الامتحان: {paper.title} · النسخة: {paper.model}</span>
         <span>صححت: <b>{today}</b> | متبقي: <b>{papersLeft}</b>{saveErr && <span className="gk-err"> · ⚠️ {saveErr}</span>}</span>
-        {!locked && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(); onSkip(); }}>⏭ تخطي الورقة</button>}
+        {!locked && !objMode && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(); onSkip(); }}>⏭ تخطي الورقة</button>}
+        {objMode && <b className="gk-objtag">✋ اعتراض</b>}
       </div>
       <div className="gk-row gk-bar">
         <div className="gk-tools">
@@ -429,11 +450,46 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           <span className="gk-q">س{q.n}<small> من {q.max}</small></span>
           <div className="gk-nums">
             {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (
-              <button type="button" key={m} className={marks[q.n] === m ? "on" : ""} disabled={busy || locked} onClick={() => void press(m)}>{m}</button>
+              <button type="button" key={m} className={(marks[q.n] === m ? "on" : "") + (objMode && objOf(q.n)?.old === m ? " gk-was" : "")} disabled={busy || locked || (objMode && !objOf(q.n))} onClick={() => void press(m)}>{m}</button>
             ))}
           </div>
           <span className="gk-total">{total} / 100</span>
-          {!locked && <button type="button" className="gk-save" disabled={busy} onClick={save}>💾 حفظ{missing ? ` (باقي ${missing})` : ""}</button>}
+          {!locked && !objMode && <button type="button" className="gk-save" disabled={busy} onClick={save}>💾 حفظ{missing ? ` (باقي ${missing})` : ""}</button>}
+          {objMode && <button type="button" className="gk-save" disabled={busy} onClick={decide}>💾 حفظ الرد{undecided.length ? ` (باقي ${undecided.length})` : ""}</button>}
+        </div>
+      )}
+      {objMode && (
+        <div className="gk-row gk-obj">
+          <div className="gk-objqs">
+            {objs.map((o) => (
+              <button type="button" key={o.q} className={o.q === curQ ? "on" : ""} onClick={() => goQ(o.q)}>
+                س{o.q} {changedObj(o) ? "✅" : rejects[o.q] !== undefined ? "❌" : "⏳"}
+              </button>
+            ))}
+          </div>
+          {q && objOf(q.n) ? (() => {
+            const o = objOf(q.n)!;
+            return (
+              <div className="gk-objbody">
+                <div><b>اعتراض الطالب على س{o.q}</b> · درجته كانت <b>{o.old}</b> من {q.max}</div>
+                {o.text && <div className="gk-objtext">{o.text}</div>}
+                {o.voice && <audio controls preload="none" src={url(o.voice)} />}
+                {changedObj(o) ? <div className="gk-objok">✅ راح ينقبل: {o.old} ← {marks[o.q]}. ترجعه لـ {o.old} إذا غيرت رأيك.</div>
+                  : rejects[o.q] !== undefined ? (
+                    <div className="gk-objno">
+                      <span>❌ راح ينرفض، ودرجته تبقى {o.old}</span>
+                      <input value={rejects[o.q]} placeholder="سبب الرفض للطالب (اختياري)" onChange={(e) => setRejects((x) => ({ ...x, [o.q]: e.target.value }))} />
+                      <button type="button" className="gk-btn" onClick={() => setRejects((x) => { const y = { ...x }; delete y[o.q]; return y; })}>تراجع عن الرفض</button>
+                    </div>
+                  ) : (
+                    <div className="gk-objno">
+                      <span>إذا الاعتراض صحيح اضغط الدرجة الجديدة فوك. وإذا لا:</span>
+                      <button type="button" className="gk-rej" onClick={() => setRejects((x) => ({ ...x, [o.q]: "" }))}>❌ رفض الاعتراض</button>
+                    </div>
+                  )}
+              </div>
+            );
+          })() : <div className="gk-objbody">هذا السؤال ما عليه اعتراض. اختار سؤال من فوك.</div>}
         </div>
       )}
       <div className="gk-stage" ref={stage}>

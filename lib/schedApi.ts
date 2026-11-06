@@ -1,4 +1,5 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
+import { objectionInfo } from "./objections.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
@@ -268,6 +269,7 @@ export async function myExamAction(body: Row) {
     }
     return await studentInfo(id);
   }
+  if (a === "objInfo") return { ...await studentInfo(id), obj: await objectionInfo(id, body.item) };
   need(a === "info", "أمر غير معروف");
   return await studentInfo(id);
 }

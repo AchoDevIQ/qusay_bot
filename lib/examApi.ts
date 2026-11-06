@@ -1,4 +1,5 @@
 // واجهة صفحة إدارة الامتحانات: كل طلب لازم صاحبه يكون عنده صلاحية الامتحانات
+import { AUDIO } from "./objections.ts";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { CONTENT_DIR, TOKEN } from "./config.ts";
@@ -344,7 +345,8 @@ export async function examFile(token: unknown, ref: unknown, perm = EXAM_PERM) {
   const root = path.resolve(CONTENT_DIR);
   const full = path.resolve(root, r);
   need(full.startsWith(root + path.sep), "ملف غير معروف", 403);
-  const type = TYPES[path.extname(full).toLowerCase()];
+  // صوت الاعتراضات يسمعه المصحح بس، وما ينرفع من صفحات الامتحانات
+  const type = TYPES[path.extname(full).toLowerCase()] ?? (r.startsWith("objections/") ? AUDIO[path.extname(full).toLowerCase()] : undefined);
   need(type, "ملف غير معروف", 403);
   const body = await files().read(path.relative(root, full).replace(/\\/g, "/"));
   need(body, "الملف غير موجود", 404);
