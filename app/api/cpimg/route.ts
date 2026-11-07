@@ -13,5 +13,5 @@ export async function GET(req: Request) {
   const body = await files().read(ref);
   if (!body) return new Response("no", { status: 404 });
   const ext = ref.split(".").pop();
-  return new Response(new Uint8Array(body), { headers: { "Content-Type": ext === "jpg" ? "image/jpeg" : `image/${ext}`, "Cache-Control": "public, max-age=86400" } });
+  return new Response(new Uint8Array(body), { headers: { "Content-Type": ext === "jpg" ? "image/jpeg" : `image/${ext}`, "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" } });
 }

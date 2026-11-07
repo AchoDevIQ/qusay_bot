@@ -103,7 +103,7 @@ async function ordersHtml(orders: Row[]) {
 <tr><th>الاسم</th><td colspan=3 class=big>${esc(o.name)}</td></tr>
 <tr><th>المنهج</th><td>${esc(o.curr ?? "")}</td><th>المحافظة</th><td>${esc(placeOf(o))}</td></tr>
 <tr><th>المنطقة</th><td colspan=3>${esc(o.area)}</td></tr>
-<tr><th>الهاتف 1</th><td class=ph>${o.phone1}</td><th>الهاتف 2</th><td class=ph>${o.phone2}</td></tr></table>
+<tr><th>الهاتف 1</th><td class=ph>${esc(o.phone1)}</td><th>الهاتف 2</th><td class=ph>${esc(o.phone2)}</td></tr></table>
 <table class=items><tr><th>المنتج</th><th class=n>العدد</th><th class=n>السعر</th></tr>${rows}
 <tr class=s><td colspan=2>مجموع المنتجات</td><td class=n>${num(o.subtotal)}</td></tr>
 <tr class=s><td colspan=2>التوصيل</td><td class=n>${num(o.fee)}</td></tr>
