@@ -1,0 +1,12 @@
+pydantic>=2
+fastapi
+uvicorn[standard]
+openai
+anthropic
+python-dotenv
+sympy
+opencv-python-headless
+numpy
+pillow
+python-bidi
+arabic-reshaper

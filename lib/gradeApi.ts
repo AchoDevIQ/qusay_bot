@@ -11,6 +11,7 @@ import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
+import { aiResultOf } from "./aiGrade.ts";
 import { stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
@@ -92,7 +93,7 @@ async function paperView(it: Row, withObj = false) {
   const ink: Record<number, string> = {};
   for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
   return {
-    ink, errors: await errorsOf(it.exam_id), ...await voicesOf(it), inPerson: (await student(it.user_id))?.exam === "حضوري",
+    ink, errors: await errorsOf(it.exam_id), ...await voicesOf(it), ai: await aiResultOf(it.id), inPerson: (await student(it.user_id))?.exam === "حضوري",
     objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark })),
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
@@ -305,6 +306,9 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   }
   return `✅ انحفظت الدرجة ${total} من 100`;
 }
+
+/** المصحح الآلي يحفظ الورقة مثل أي مصحح: الدرجة والمقولة توصل للطالب وولي أمره */
+export const finishByAi = (uid: number, itemId: number) => finishPaper(uid, itemId, [], 0);
 
 /** الحفظ ويا صور الورقة المصححة اللي ركبتها صفحة التصحيح */
 export async function gradeUpload(form: FormData) {

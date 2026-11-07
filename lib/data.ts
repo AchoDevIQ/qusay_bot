@@ -181,7 +181,10 @@ export async function officeUnsettled(oid: number) {
   const rows = await find("orders", { printed: 3, office_id: oid, settle_id: null });
   return { n: rows.length, total: sumOf(rows, "total") };
 }
+/** رقم المصحح الآلي بالأوراق اللي صححها (مو حساب تليجرام) */
+export const AI_GRADER = -7;
 export async function staffName(uid: number | null | undefined) {
+  if (uid === AI_GRADER) return "🤖 المصحح الآلي";
   if (uid != null && await isAdmin(uid)) return "قصي العميري";
   if (uid == null) return "مساعد";
   const u = await one("office_users", { user_id: uid });

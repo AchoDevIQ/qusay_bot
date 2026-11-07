@@ -14,3 +14,5 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 firebase-debug.log
+__pycache__/
+*.pyc

@@ -10,7 +10,9 @@ import MessageBox from "./MessageBox";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
 export type GVoice = { id?: string; name: string; ref: string };
-export type Paper = { errors?: string[]; voices?: GVoice[]; myVoices?: GVoice[]; inPerson?: boolean; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
+/** شلون صحح المصحح الآلي كل سؤال: درجة كل خطوة وسببها */
+export type AiQ = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { awarded: number; possible: number; reason: string; expected: string; student: string }[] };
+export type Paper = { ai?: AiQ[] | null; errors?: string[]; voices?: GVoice[]; myVoices?: GVoice[]; inPerson?: boolean; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
 /** اعتراض الطالب على سؤال: نصه، وتسجيله إذا موجود، ودرجته قبل الاعتراض */
 export type Objection = { q: number; text: string; voice: string | null; old: number };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
@@ -550,6 +552,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           {objMode && <button type="button" className="gk-save" disabled={busy} onClick={decide}>💾 حفظ الرد{undecided.length ? ` (باقي ${undecided.length})` : ""}</button>}
         </div>
       )}
+      {q && paper.ai?.find((x) => x.n === q.n) && <AiNote a={paper.ai.find((x) => x.n === q.n)!} />}
       {objMode && (
         <div className="gk-row gk-obj">
           <div className="gk-objqs">
@@ -702,4 +705,16 @@ function ModelAnswer({ url, q }: { url: string; q: number }) {
   // ننزل للسؤال بعد ما تتحمل الصور اللي قبله، حتى يوقف بمكانه الصحيح
   const onLoad = (i: number) => { loaded.current.add(i); if (!done.current && [...Array(at + 1).keys()].every((k) => loaded.current.has(k))) { done.current = true; first.current?.scrollIntoView({ block: "start" }); } };
   return <>{parts.map((p, i) => <img key={i} ref={i === at ? first : undefined} onLoad={() => onLoad(i)} className="gk-qimg gk-modelpart" src={p.src} alt={`حل السؤال ${p.q}`} />)}</>;
+}
+
+/** المصحح الآلي: درجة كل خطوة وسببها، حتى اللي يرد على الاعتراض يعرف ليش انطى هالدرجة */
+function AiNote({ a }: { a: AiQ }) {
+  const mark = (s: AiQ["steps"][number]) => (s.awarded >= s.possible ? "✅" : s.awarded > 0 ? "➗" : "❌");
+  return (
+    <details className="gk-row gk-ai">
+      <summary>🤖 المصحح الآلي انطى س{a.n}: {a.score} من {a.max}{a.review ? " · كان غير متأكد" : ""}</summary>
+      {a.reason && <div className="gk-aireason">{a.reason}</div>}
+      <ol>{a.steps.map((s, i) => <li key={i}>{mark(s)} <b dir="ltr">{s.awarded}/{s.possible}</b> <span dir="auto">{s.reason}</span></li>)}</ol>
+    </details>
+  );
 }
