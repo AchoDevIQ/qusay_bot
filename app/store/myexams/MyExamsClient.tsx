@@ -4,7 +4,6 @@ import { Fragment, useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { deviceId, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
-import VoiceRec from "../VoiceRec";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 
 type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
@@ -42,18 +41,19 @@ export default function MyExamsClient() {
   }
   const [room, setRoom] = useState<Room | null>(null);
   const [obj, setObj] = useState<Obj | null>(null);
-  async function openObj(item: number) { const r = await call({ action: "objInfo", item }); if (r?.obj) { setPaper(null); setObj(r.obj); } }
+  const [firstQ, setFirstQ] = useState(0);
+  async function openObj(item: number, q = 0) { const r = await call({ action: "objInfo", item }); if (r?.obj) { setFirstQ(q); setObj(r.obj); } }
   const [paper, setPaper] = useState<Paper | null>(null);
   async function openPaper(item: number) { const r = await call({ action: "paper", item }); if (r?.paper) setPaper(r.paper); }
   useEffect(() => {
     // زر «اعتراض على الدرجة» بالبوت يفتح الصفحة على الامتحان مباشرة
-    const o = Number(new URLSearchParams(location.search).get("obj"));
-    void (o ? openObj(o).then(() => undefined) : call({ action: "info" }));
+    const q = new URLSearchParams(location.search), o = Number(q.get("obj")), pp = Number(q.get("paper"));
+    void (o ? openObj(o).then(() => undefined) : pp ? openPaper(pp).then(() => undefined) : call({ action: "info" }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function enterOptional(exam: number) { const r = await call({ action: "openOptional", exam }); if (r?.room) setRoom(r.room); }
   async function enter(item: number) { const r = await call({ action: "openExam", item }); if (r?.room) setRoom(r.room); }
-  if (obj) return <Objection obj={obj} setObj={setObj} leave={() => { setObj(null); void call({ action: "info" }); }} />;
-  if (paper) return <PaperView paper={paper} busy={busy} error={error} object={(id) => void openObj(id)} leave={() => { setPaper(null); void call({ action: "info" }); }} />;
+  if (obj) return <Objection obj={obj} first={firstQ} setObj={setObj} leave={() => { const back = paper?.id; setObj(null); void (back ? openPaper(back) : call({ action: "info" })); }} />;
+  if (paper) return <PaperView paper={paper} busy={busy} error={error} object={(id, q) => void openObj(id, q)} leave={() => { setPaper(null); void call({ action: "info" }); }} />;
   if (room) return <ExamRoom room={room} setRoom={setRoom} call={call} leave={() => { setRoom(null); void call({ action: "info" }); }} />;
 
   return (
@@ -295,23 +295,23 @@ function Optional({ info, busy, enter }: { info: Info; busy: boolean; enter: (ex
   );
 }
 
-/** الاعتراض: يختار السؤال اللي يشوف درجته مو صحيحة، ويكتب أو يسجل بصوته ليش. كل سؤال مرة وحدة */
-function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void; leave: () => void }) {
-  const [pick, setPick] = useState<Record<number, { text: string; voice: Blob | null }>>({});
-  const [rec, setRec] = useState(false);
+/** الاعتراض: يختار السؤال اللي يشوف درجته مو صحيحة، ويكتب ليش (كتابة بس). كل سؤال مرة وحدة */
+function Objection({ obj, first, setObj, leave }: { obj: Obj; first: number; setObj: (o: Obj) => void; leave: () => void }) {
+  const [pick, setPick] = useState<Record<number, { text: string }>>(() => (first && obj.questions.some((q) => q.n === first && !q.obj) ? { [first]: { text: "" } } : {}));
+  const rec = false;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const picked = Object.entries(pick).map(([n, v]) => ({ n: Number(n), ...v }));
-  const ready = picked.length > 0 && picked.every((p) => p.text.trim() || p.voice);
-  const set = (n: number, v: { text: string; voice: Blob | null } | null) => setPick((x) => { const y = { ...x }; if (v) y[n] = v; else delete y[n]; return y; });
+  const ready = picked.length > 0 && picked.every((p) => p.text.trim());
+  const set = (n: number, v: { text: string } | null) => setPick((x) => { const y = { ...x }; if (v) y[n] = v; else delete y[n]; return y; });
   async function send() {
     setBusy(true); setError(""); setNotice("");
     try {
       const f = new FormData();
       f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId()); f.set("pf", await platform());
       f.set("action", "object"); f.set("item", String(obj.id)); f.set("qs", picked.map((p) => p.n).join(","));
-      for (const p of picked) { f.set(`text_${p.n}`, p.text); if (p.voice) f.set(`voice_${p.n}`, p.voice, "voice"); }
+      for (const p of picked) f.set(`text_${p.n}`, p.text);
       const res = await fetch("/api/myexams", { method: "POST", body: f });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) { setError(j.error ?? "ما وصل الاعتراض، حاول مرة ثانية"); return; }
@@ -346,11 +346,10 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
                   ) : mine ? (
                     <>
                       <textarea rows={3} value={mine.text} placeholder="ليش تشوف درجة هذا السؤال مو صحيحة؟" onChange={(e) => set(q.n, { ...mine, text: e.target.value })} />
-                      <VoiceRec btn="exbtn" label="🎙 أو سجل اعتراضك بصوتك (أكثر شي 5 دقايق)" value={mine.voice} onRecording={setRec} onChange={(v) => setPick((x) => (x[q.n] ? { ...x, [q.n]: { ...x[q.n], voice: v } } : x))} />
                       <button type="button" className="exbtn" disabled={rec} onClick={() => set(q.n, null)}>إلغاء الاعتراض على هذا السؤال</button>
                     </>
                   ) : (
-                    <button type="button" className="exbtn" onClick={() => { haptic(); set(q.n, { text: "", voice: null }); }}>✋ أعترض على هذا السؤال</button>
+                    <button type="button" className="exbtn" onClick={() => { haptic(); set(q.n, { text: "" }); }}>✋ أعترض على هذا السؤال</button>
                   )}
                 </div>
               );
@@ -358,7 +357,7 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
             {error && <div className="err">⚠️ {error}</div>}
             {notice && <div className="card warn exerr">{notice}</div>}
             {picked.length > 0 && <button type="button" className="btn agbtn adtop" disabled={busy || rec || !ready} onClick={() => void send()}>{busy ? "جاري الإرسال..." : `📤 دز الاعتراض (${picked.length} سؤال)`}</button>}
-            {picked.length > 0 && !ready && <div className="hint">لكل سؤال اخترته اكتب السبب أو سجله بصوتك.</div>}
+            {picked.length > 0 && !ready && <div className="hint">لكل سؤال اخترته اكتب السبب.</div>}
           </div>
         </div>
       </div>
@@ -367,7 +366,7 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
 }
 
 /** «📂 ورقتي وتصحيحها»: كل شي عن امتحان واحد بمكان واحد */
-function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: boolean; error: string; object: (id: number) => void; leave: () => void }) {
+function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: boolean; error: string; object: (id: number, q?: number) => void; leave: () => void }) {
   const graded = paper.total !== null;
   const o = paper.objections;
   return (
@@ -384,18 +383,24 @@ function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: 
           <h2>📝 {paper.title}</h2>
           <div className="who">{graded ? <>درجتك: <b>{paper.total}</b> من 100</> : "⏳ ورقتك وصلت، وبعدها ما انصححت"}</div>
           <div className="expad exhint">{paper.chapter}{paper.submitted ? ` · سلمتها ${paper.submitted.slice(0, 16)}` : ""}{paper.graded ? ` · انصححت ${paper.graded.slice(0, 16)}` : ""}</div>
-          {graded && !!paper.marks.length && (
-            <table className="extable"><tbody>
-              {paper.marks.map((m) => <tr key={m.n}><td>السؤال {m.n}</td><td className="p"><b>{m.mark ?? "—"}</b> من {m.max}</td></tr>)}
-            </tbody></table>
-          )}
           {(o.open + o.ok + o.no > 0) && <div className="expad exhint">✋ اعتراضاتك: {o.open ? `${o.open} تنتظر رد · ` : ""}{o.ok ? `${o.ok} انقبلت · ` : ""}{o.no ? `${o.no} انرفضت` : ""}</div>}
-          {graded && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => object(paper.id)}>✋ اعتراض على الدرجة</button>}
         </div>
         {!!paper.pages.length && (
           <div className="card">
             <h2>{paper.gradedPages ? "✅ ورقتك المصححة" : "📷 جوابك مثل ما دزيته"}</h2>
             {paper.pages.map((p) => <img key={p} className="eximg" src={fileUrl(paper.id, p)} alt="ورقتك" />)}
+          </div>
+        )}
+        {graded && !!paper.marks.length && (
+          <div className="card">
+            <h2>✋ درجة كل سؤال</h2>
+            <div className="expad exhint">شفت التصحيح وتشوف درجة سؤال مو صحيحة؟ دوس «اعترض» جنبه واكتب ليش.</div>
+            <table className="extable"><tbody>
+              {paper.marks.map((m) => (
+                <tr key={m.n}><td>السؤال {m.n}<small className="pdmode"><b>{m.mark ?? "—"}</b> من {m.max}</small></td>
+                  <td className="p"><button type="button" className="exbtn" disabled={busy} onClick={() => object(paper.id, m.n)}>✋ اعترض</button></td></tr>
+              ))}
+            </tbody></table>
           </div>
         )}
         {!!paper.questions.length && (

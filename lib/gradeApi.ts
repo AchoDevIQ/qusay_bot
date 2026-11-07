@@ -3,10 +3,10 @@ import { runCheckpoints } from "./checkpoints.ts";
 import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
-import { isAdmin, staffName, student } from "./data.ts";
-import { send, sendAlbum, upload } from "./telegram.ts";
+import { examLabel, isAdmin, staffName, student } from "./data.ts";
+import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
-import { canHandle, objectButton, openObjections, testObjection } from "./objections.ts";
+import { canHandle, openObjections, testObjection } from "./objections.ts";
 import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
@@ -14,6 +14,9 @@ import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paper
 import { aiHeld, aiResultOf } from "./aiGrade.ts";
 import { guardianSent, seenButton } from "./guardianWatch.ts";
 import { stamp, todayStr } from "./util.ts";
+import { gradeCardPng } from "./documents.ts";
+import { prettyAt } from "./scheduleRules.ts";
+import { adminPageLink } from "./keyboards.ts";
 import { authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
 
@@ -305,26 +308,24 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   const head = `📝 <b>انصحح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
   const chosen = commentId ? await one("grade_comments", { id: commentId }) : null;
   const c = chosen ? { text: chosen.text as string, sticker: chosen.sticker_id ? await one("stickers", { id: chosen.sticker_id }) : null }
-    : photos.length ? null : await pickComment(it.user_id, total);
+    : await pickComment(it.user_id, total);
   const text = c ? `${head}\n┈┈┈┈┈┈┈┈┈┈┈┈\n💬 «${esc(c.text)}»\n┈┈┈┈┈┈┈┈┈┈┈┈` : head;
-  const pic = !photos.length && c?.sticker ? await files().read(c.sticker.file) : null;
-  const deliver = async (chat: number, caption: string) => {
-    if (photos.length && await sendAlbum(chat, photos, caption)) return;
-    if (pic) {
-      const gif = /\.gif$/i.test(c!.sticker!.file);
-      if (await upload(gif ? "sendAnimation" : "sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", protect_content: "true" }, gif ? "animation" : "photo", pic, path.basename(c!.sticker!.file))) return;
-    }
-    await send(chat, caption);
+  // الطالب وولي أمره توصلهم بطاقة الدرجة بس (صورة)، والأوراق المصححة يشوفوها بـ «📝 امتحاناتي»
+  const st = await student(it.user_id);
+  const when = String(it.started_at || it.attended_at || it.at || "");
+  const card = await gradeCardPng(it.id, { name: String(st?.name ?? view.name), exam: view.title, center: (await examLabel(it.user_id)).replace(/^حضوري — /, ""), total, at: when.length >= 16 ? prettyAt(when) : when });
+  const deliver = async (chat: number, caption: string, kb: Kb) => {
+    if (card && await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", protect_content: "true", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", card, "grade.png", "image/png")) return;
+    await send(chat, caption, { kb, extra: { protect_content: true } });
   };
   {
-    await deliver(it.user_id, text);
+    const paperBtn: Kb = [[{ text: "📂 شوف ورقتك المصححة", web_app: { url: `${adminPageLink("myexams", it.user_id)}&paper=${it.id}` } }]];
+    await deliver(it.user_id, `${text}\n\n👇 دوس الزر تشوف ورقتك المصححة ودرجة كل سؤال. وإذا تشوف درجة سؤال مو صحيحة، تعترض عليه من هناك.`, paperBtn);
     await sendPaperVoices(it.user_id, it.id);
-    await send(it.user_id, "✋ إذا تشوف درجة سؤال مو صحيحة، تگدر تعترض عليها بالكتابة أو بصوتك.", { kb: objectButton(it.user_id, it.id) });
     const g = await guardianOf(it.user_id);
     if (g) {
-      await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
-      // زر «استلمت»: إذا ما ينداس على ٣ درجات ورا بعض، صاحب البوت يوصله خبر
-      await send(g.guardian_id, `👆 دوس «استلمت» حتى نعرف وصلتك درجة ${esc(view.name)}.`, { kb: seenButton(it.id) });
+      // ولي الأمر: البطاقة بدون مقولة، ووياها زر «استلمت» (إذا ما ينداس على ٣ درجات ورا بعض، صاحب البوت يوصله خبر)
+      await deliver(g.guardian_id, `${head}\nالطالب: <b>${esc(String(st?.name ?? view.name))}</b>\n\n👇 دوس «استلمت» حتى نعرف وصلتك.`, seenButton(it.id));
       await guardianSent(it.user_id, g.guardian_id, it.id);
     }
     await logActivity(it.user_id, `📝 انصحح امتحان ${view.title}: ${total} من 100`);

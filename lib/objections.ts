@@ -15,7 +15,6 @@ import { ensure, need } from "./webApi.ts";
 import { verifyHomeToken } from "./webAuth.ts";
 
 export const OBJ_PERM = "objections";
-const VOICE_MAX = 20 * 1024 * 1024;
 const TEXT_MAX = 1500;
 export const AUDIO: Record<string, string> = { ".m4a": "audio/mp4", ".ogg": "audio/ogg", ".mp3": "audio/mpeg", ".webm": "audio/webm" };
 export const audioExt = (type: string) => (/mp4|m4a|aac/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : /mpeg|mp3/.test(type) ? "mp3" : "webm");
@@ -71,11 +70,9 @@ export async function submitObjection(form: FormData) {
     need(qs.has(n), "السؤال غير موجود");
     need(!done.has(n), `اعترضت على السؤال ${n} من قبل`);
     const text = String(form.get(`text_${n}`) ?? "").trim().slice(0, TEXT_MAX);
-    const v = form.get(`voice_${n}`);
-    const hasVoice = v instanceof Blob && v.size > 0;
-    need(text || hasVoice, `اكتب سبب اعتراضك على السؤال ${n} أو سجله بصوتك`);
-    if (hasVoice) need((v as Blob).size <= VOICE_MAX, "التسجيل طويل هواية");
-    rows.push({ n, text, voice: hasVoice ? v as Blob : null });
+    // الاعتراض كتابة بس (لا صوت ولا صورة)
+    need(text, `اكتب سبب اعتراضك على السؤال ${n}`);
+    rows.push({ n, text, voice: null });
   }
   for (const r of rows) {
     let voice: string | null = null;

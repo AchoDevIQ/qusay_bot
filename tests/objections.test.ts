@@ -43,31 +43,32 @@ await insert("bank_questions", { version_id: v, n: 2, max_mark: 50, q_file: "t/q
 await put("staff", { user_id: 30, name: "مصحح", perms: "grade" });
 const item = await insert("sched_items", { user_id: 60, exam_id: e, at: "x", status: "done", version_id: v, submitted_at: "x" });
 
-test("بعد الدرجة يوصل للطالب زر الاعتراض، وما يگدر يعترض قبل التصحيح", async () => {
+test("بعد الدرجة يوصل للطالب زر ورقته المصححة (والاعتراض من داخلها)، وما يگدر يعترض قبل التصحيح", async () => {
   await assert.rejects(object(60, item, { qs: "1", text_1: "x" }), /لسه ما انصحح/);
   await g(30, "open", { id: item });
   await g(30, "mark", { id: item, q: 1, mark: 30 });
   await g(30, "mark", { id: item, q: 2, mark: 40 });
   calls.length = 0;
   await g(30, "finish", { id: item });
-  const btn = calls.find((c) => c.p.reply_markup?.inline_keyboard?.[0]?.[0]?.text === "✋ اعتراض على الدرجة");
-  assert.ok(btn, "زر الاعتراض");
+  const btn = calls.find((c) => c.p.reply_markup?.inline_keyboard?.[0]?.[0]?.text === "📂 شوف ورقتك المصححة");
+  assert.ok(btn, "زر الورقة");
+  assert.equal(btn!.p.reply_markup.inline_keyboard.length, 1);
   assert.equal(btn!.p.chat_id, 60);
-  assert.match(btn!.p.reply_markup.inline_keyboard[0][0].web_app.url, new RegExp(`/store/myexams\\?.*&obj=${item}$`));
+  assert.match(btn!.p.reply_markup.inline_keyboard[0][0].web_app.url, new RegExp(`/store/myexams\\?.*&paper=${item}$`));
 });
 
-test("الطالب يعترض بكتابة أو بصوت، كل سؤال مرة وحدة، والخبر يوصل لصاحب البوت", async () => {
+test("الطالب يعترض بالكتابة بس (الصوت ما ينقبل)، كل سؤال مرة وحدة، والخبر يوصل لصاحب البوت", async () => {
   await assert.rejects(object(60, item, {}), /اختار السؤال/);
   await assert.rejects(object(60, item, { qs: "1" }), /اكتب سبب اعتراضك على السؤال 1/);
   await assert.rejects(object(61, item, { qs: "1", text_1: "x" }), /غير موجود/);
   calls.length = 0;
-  const r = await object(60, item, { qs: "1,2", text_1: "جوابي صحيح <بالطريقة الثانية>", voice_2: new File([new Uint8Array([1, 2, 3])], "v", { type: "audio/mp4" }) });
+  await assert.rejects(object(60, item, { qs: "2", voice_2: new File([new Uint8Array([1, 2, 3])], "v", { type: "audio/mp4" }) }), /اكتب سبب اعتراضك على السؤال 2/);
+  const r = await object(60, item, { qs: "1,2", text_1: "جوابي صحيح <بالطريقة الثانية>", text_2: "نسيتوا الخطوة الثانية", voice_2: new File([new Uint8Array([1, 2, 3])], "v", { type: "audio/mp4" }) });
   assert.match(r.notice, /وصل اعتراضك/);
   assert.deepEqual(r.obj.questions.map((q: any) => q.obj.status), ["open", "open"]);
   const rows = await find("objections", { item_id: item });
   assert.equal(rows.length, 2);
-  const voice = rows.find((o) => o.q === 2)!.voice as string;
-  assert.match(voice, /^objections\/60\/\d+\/q2_.+\.m4a$/);
+  assert.equal(rows.find((o) => o.q === 2)!.voice, null);
   assert.equal(rows.find((o) => o.q === 1)!.old_mark, 30);
   // المصحح ما عنده صلاحية الاعتراضات، فالخبر يروح لصاحب البوت بس
   assert.deepEqual(calls.filter((c) => c.method === "sendMessage").map((c) => c.p.chat_id), [1]);
@@ -75,9 +76,6 @@ test("الطالب يعترض بكتابة أو بصوت، كل سؤال مرة 
   // صاحب البوت يفتح صفحة الاعتراضات مالته
   assert.match(calls[0].p.reply_markup.inline_keyboard[0][0].web_app.url, /\/store\/objections/);
   await assert.rejects(object(60, item, { qs: "1", text_1: "مرة ثانية" }), /اعترضت على السؤال 1 من قبل/);
-  // الصوت يسمعه اللي عنده التصحيح بس
-  const f = await examFile(fileToken(1), voice, "grade");
-  assert.equal(f.type, "audio/mp4");
 });
 
 test("المصحح بدون صلاحية الاعتراضات ما يشوفها، وصاحب البوت يشوفها", async () => {
