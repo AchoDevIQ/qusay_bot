@@ -111,11 +111,28 @@ async function readRef(ref: string): Promise<Buffer | null> {
 }
 const isImage = (ref: string) => ref.startsWith("tg:") || /\.(jpe?g|png|webp)$/i.test(ref);
 
+// خدمة التصحيح على Cloud Run خاصة: تقبل بس حساب البوت بـ Google. على السيرفر ناخذ رمز الدخول من Google نفسه
+// (خادم المعلومات الداخلي)، ونحفظه لحد قبل ما ينتهي بشوية. برة Google (الفحوصات) ماكو رمز، والمفتاح يكفي
+let idCache: { aud: string; token: string; until: number } | null = null;
+async function googleIdToken(aud: string): Promise<string | null> {
+  if (!process.env.K_SERVICE) return null;
+  if (idCache && idCache.aud === aud && Date.now() < idCache.until) return idCache.token;
+  try {
+    const r = await fetch(`http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=${encodeURIComponent(aud)}`,
+      { headers: { "Metadata-Flavor": "Google" }, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    const token = (await r.text()).trim();
+    idCache = { aud, token, until: Date.now() + 45 * 60_000 };
+    return token;
+  } catch { return null; }
+}
+
 async function svc(route: string, body: object, ms = 120_000): Promise<any> {
   if (!aiLinked()) throw new Error("نظام التصحيح AI مو مربوط");
+  const token = await googleIdToken(svcUrl());
   const res = await fetch(svcUrl() + route, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Bot-Key": svcKey() },
+    headers: { "Content-Type": "application/json", "X-Bot-Key": svcKey(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(ms),
   });

@@ -16,6 +16,13 @@ env:
   - variable: WEBHOOK_SECRET
     secret: WEBHOOK_SECRET
     availability: [RUNTIME]
+  # نظام التصحيح AI: خدمة Cloud Run خاصة (grading-ai)، ومفتاح القفل بينها وبين البوت سر بـ Secret Manager
+  - variable: GRADING_AI_URL
+    value: "https://qmath-grading-615405892644.europe-west4.run.app"
+    availability: [RUNTIME]
+  - variable: GRADING_AI_KEY
+    secret: GRADING_AI_KEY
+    availability: [RUNTIME]
   - variable: ADMIN
     value: "7223248656"
     availability: [RUNTIME]
