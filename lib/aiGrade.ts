@@ -15,7 +15,7 @@ export type Price = { in: number; out: number };
 /** المواضيع اللي يصححها، ولكل فصل المصحح اللي توصله الأوراق اللي مو متأكد منها */
 export type AiSettings = { exams: number[]; unsure: Record<string, number> };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
-export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric"; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
+export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try"; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
 
 const rubricKey = (qid: number) => `ai_rubric_q_${qid}`;
 const resultKey = (itemId: number) => `ai_result_${itemId}`;
@@ -174,14 +174,31 @@ async function gradePaper(it: Row): Promise<AiQuestion[]> {
     if (!mine.length) return { n: q.n, score: 0, max, review: false, reason: "ما جاوب", lines: [], steps: [], usage: [] };
     const imgs = await Promise.all(mine.map((a) => readRef(a.file)));
     if (imgs.some((b) => !b)) throw new Error(`صورة جواب سؤال ${q.n} مفقودة`);
-    const r = await svc("/bot/grade", {
-      max_points: max,
-      steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
-      images: imgs.map((b) => b!.toString("base64")),
-    });
-    const score = Math.max(0, Math.min(max, Math.round(Number(r.score) || 0)));
-    return { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
+    return await gradeQuestion(q, steps, imgs as Buffer[]);
   }));
+}
+/** يرسل جواب سؤال واحد (صوره) للخدمة ويا خطوات حله */
+async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[]): Promise<AiQuestion> {
+  const max = Number(q.max_mark);
+  const r = await svc("/bot/grade", {
+    max_points: max,
+    steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
+    images: imgs.map((b) => b.toString("base64")),
+  });
+  const score = Math.max(0, Math.min(max, Math.round(Number(r.score) || 0)));
+  return { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
+}
+/** «🧪 جرّب على جواب حقيقي»: صاحب البوت يرفع صور جواب سؤال، ونظام التصحيح يصححها ويرجع النتيجة بس.
+ *  ما تنحفظ درجة لأحد وما توصل رسالة لأحد، بس الكلفة تنحسب بالسجل */
+export async function tryGrade(qid: number, imgs: Buffer[]): Promise<AiQuestion> {
+  const q = await one("bank_questions", { id: qid });
+  if (!q) throw new Error("السؤال غير موجود");
+  const steps = await rubricOf(q.id);
+  if (!steps) throw new Error("احفظ خطوات حل هذا السؤال أول");
+  if (!imgs.length) throw new Error("اختار صورة الجواب");
+  const res = await gradeQuestion(q, steps, imgs);
+  await addLog({ at: stamp(), kind: "try", q: qid, usage: sumUsage([res.usage ?? []]) });
+  return { ...res, usage: undefined };
 }
 
 /** الورقة بموضوع يصححه نظام التصحيح، وكل أسئلتها إلها خطوات، وبعده ما خلص محاولاته */

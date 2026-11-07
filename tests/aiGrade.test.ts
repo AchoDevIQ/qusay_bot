@@ -202,3 +202,28 @@ test("صفحة الطلاب: أوراق الطالب ودرجاته وصورها
   assert.ok(r.papers.list.some((p: any) => p.total === null));
   await assert.rejects(studentAction({ initData: sign(41), action: "papers", id: 90 }), /صلاحية/);
 });
+
+test("🧪 تجربة على جواب حقيقي: يرجع الدرجة والخطوات بس، ما يحفظ درجة ولا يدز رسالة، والكلفة بالسجل", async () => {
+  const { aiGradeUpload } = await import("../lib/aiGradeApi.ts");
+  const form = (uid: number, id: number, n = 1) => {
+    const f = new FormData();
+    f.set("initData", sign(uid)); f.set("action", "try"); f.set("id", String(id));
+    for (let i = 0; i < n; i++) f.append("photo", new File([new Uint8Array([0xff, 0xd8, 0xff, 1])], "a.jpg", { type: "image/jpeg" }));
+    return f;
+  };
+  await assert.rejects(aiGradeUpload(form(41, q1)), (e: any) => e.status === 403);
+  await assert.rejects(aiGradeUpload(form(1, q1, 0)), /اختار صورة الجواب/);
+  aiReply = gradeOk;
+  ai.length = 0; tg.length = 0;
+  const marks = (await find("question_marks")).length;
+  const r: any = await aiGradeUpload(form(1, q1, 2));
+  assert.equal(ai.length, 1);
+  assert.equal(ai[0].route, "/bot/grade");
+  assert.equal(ai[0].body.images.length, 2);
+  assert.equal(ai[0].body.max_points, 60);
+  assert.deepEqual([r.trial.id, r.trial.result.score, r.trial.result.max, r.trial.result.review], [q1, 48, 60, false]);
+  assert.equal(r.trial.result.steps[0].status, "correct");
+  assert.equal(tg.length, 0);
+  assert.equal((await find("question_marks")).length, marks);
+  assert.ok(r.log.some((x: any) => x.kind === "try" && x.cost > 0));
+});

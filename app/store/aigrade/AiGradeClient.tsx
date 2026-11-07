@@ -10,13 +10,14 @@ type Version = { id: number; model: string; kind: string; questions: Q[] };
 type Exam = { id: number; title: string; on: boolean; versions: Version[]; ready: boolean };
 type Chapter = { slug: string; chapter: string; grader: number; exams: Exam[] };
 type Sum = { sent: number; unsure: number; cost: number };
-type Log = { at: string; kind: "sent" | "unsure" | "rubric"; name?: string; exam?: string; total?: number; toName: string; cost: number };
+type Trial = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; expected: string; student: string }[] };
+type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try"; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
 type Data = {
   on: boolean; linked: boolean; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
-  fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; notice?: string;
+  fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; trial?: { id: number; result: Trial }; notice?: string;
 };
-type Call = (b: Record<string, unknown>) => Promise<Data | null>;
+type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 const usd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
 
 export default function AiGradeClient() {
@@ -57,7 +58,7 @@ export default function AiGradeClient() {
                   <div key={v.id} className="aig-ver">
                     <div className="exlabel">النموذج {v.model}{v.kind === "optional" ? " (اختياري)" : ""}</div>
                     {!v.questions.length && <div className="exhint">ماكو أسئلة بهذا النموذج.</div>}
-                    {v.questions.map((q) => <QCard key={q.id} q={q} busy={busy} call={call} fileUrl={fileUrl} draft={data.draft?.id === q.id ? data.draft.steps : undefined} />)}
+                    {v.questions.map((q) => <QCard key={q.id} q={q} busy={busy} call={call} fileUrl={fileUrl} draft={data.draft?.id === q.id ? data.draft.steps : undefined} trial={data.trial?.id === q.id ? data.trial.result : undefined} linked={data.linked} />)}
                   </div>
                 ))}
               </details>
@@ -128,6 +129,7 @@ function LogCard({ data }: { data: Data }) {
               {r.kind === "sent" && <>✅ <b>{r.name}</b> · {r.exam} · <b>{r.total}</b> من 100</>}
               {r.kind === "unsure" && <>↪️ <b>{r.name}</b> · {r.exam} · ما متأكد، حولها لـ {r.toName || "كل المصححين"}</>}
               {r.kind === "rubric" && <>🧩 طلّع خطوات حل سؤال</>}
+              {r.kind === "try" && <>🧪 تجربة على جواب حقيقي</>}
             </div>
             <small dir="ltr">{usd(r.cost)}</small>
           </div>
@@ -158,7 +160,7 @@ function Prices({ rows, busy, call }: { rows: PriceRow[]; busy: boolean; call: C
   );
 }
 
-function QCard({ q, busy, call, fileUrl, draft }: { q: Q; busy: boolean; call: Call; fileUrl: (r: string) => string; draft?: Step[] }) {
+function QCard({ q, busy, call, fileUrl, draft, trial, linked }: { q: Q; busy: boolean; call: Call; fileUrl: (r: string) => string; draft?: Step[]; trial?: Trial; linked: boolean }) {
   const [steps, setSteps] = useState<Step[]>(q.steps ?? []);
   const [open, setOpen] = useState(false);
   // الخطوات اللي طلعها الذكاء تنحط بالمربعات، وما تنحفظ لحد ما يدوس حفظ
@@ -192,6 +194,57 @@ function QCard({ q, busy, call, fileUrl, draft }: { q: Q; busy: boolean; call: C
             <button type="button" className="btn" disabled={busy || !ok} onClick={() => void call({ action: "save", id: q.id, steps })}>💾 حفظ الخطوات</button>
             {q.steps && <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "clear", id: q.id })}>🗑 امسح الخطوات</button>}
           </div>
+          {q.steps && <TryBox q={q} busy={busy} call={call} trial={trial} linked={linked} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** الصورة الكبيرة من الكاميرا تصغر قبل الرفع (أطول ضلع 2000) حتى توصل بسرعة */
+async function shrink(f: File): Promise<Blob> {
+  try {
+    const bmp = await createImageBitmap(f);
+    const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise<Blob>((ok) => c.toBlob((b) => ok(b ?? f), "image/jpeg", 0.88));
+  } catch { return f; }
+}
+const STEP_ICON: Record<string, string> = { correct: "✅", incorrect: "❌", not_attempted: "⬜", uncertain: "❓" };
+
+/** «🧪 جرّب على جواب حقيقي»: صور جواب طالب لهذا السؤال، ونظام التصحيح يصححها قدامك بدون ما يوصل شي لأحد */
+function TryBox({ q, busy, call, trial, linked }: { q: Q; busy: boolean; call: Call; trial?: Trial; linked: boolean }) {
+  const [pics, setPics] = useState<File[]>([]);
+  async function go() {
+    const f = new FormData();
+    f.set("action", "try"); f.set("id", String(q.id));
+    for (const p of pics) f.append("photo", await shrink(p), "answer.jpg");
+    if (await call(f)) setPics([]);
+  }
+  return (
+    <div className="aig-try">
+      <div className="exlabel">🧪 جرّب على جواب حقيقي</div>
+      <div className="exhint">صوّر جواب طالب لهذا السؤال (صورة أو أكثر) وشوف شگد ينطيه وليش. ما تنحفظ درجة لأحد وما توصل رسالة لأحد، بس كلفتها تنحسب.</div>
+      <input type="file" accept="image/*" multiple onChange={(e) => setPics([...(e.target.files ?? [])].slice(0, 6))} />
+      {!!pics.length && <div className="exhint">{pics.length} صورة جاهزة</div>}
+      <button type="button" className="btn" disabled={busy || !pics.length || !linked} onClick={() => void go()}>{busy ? "🤖 يصحح... (لحد دقيقة)" : "🤖 صحّح هذا الجواب"}</button>
+      {trial && (
+        <div className="aig-result">
+          <div className="aig-score">انطى <b>{trial.score}</b> من {trial.max}</div>
+          <div className={trial.review ? "exbad" : "fdok"}>{trial.review ? `⚠️ مو متأكد، فچان يحولها للمصحح${trial.reason ? `: ${trial.reason}` : ""}` : "✅ متأكد، فچان يدزها للطالب مباشرة"}</div>
+          {trial.steps.map((s, i) => (
+            <div key={i} className="aig-tstep">
+              <div><b>{STEP_ICON[s.status] ?? "•"} الخطوة {i + 1}</b> · <b>{s.awarded}</b> من {s.possible}</div>
+              {s.expected && <div dir="ltr" className="aig-math">المطلوب: {s.expected}</div>}
+              {s.student && <div dir="ltr" className="aig-math">كتب الطالب: {s.student}</div>}
+              {s.reason && <small>{s.reason}</small>}
+            </div>
+          ))}
+          {!!trial.lines.length && (
+            <details><summary>👁 شنو قرا من ورقة الطالب</summary><div dir="ltr" className="aig-math">{trial.lines.map((l, i) => <div key={i}>{l}</div>)}</div></details>
+          )}
         </div>
       )}
     </div>
