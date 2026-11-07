@@ -216,7 +216,12 @@ export async function framed(parts: Buffer[], top: number, bottom: number, title
   const grad = g.createLinearGradient(0, 0, W, 0); grad.addColorStop(0, "#f7c548"); grad.addColorStop(1, "#d79b1e");
   g.fillStyle = grad; g.fillRect(0, 0, W, HEAD);
   const logoPath = path.join(process.cwd(), "public", "logo.png");
-  if (fs.existsSync(logoPath)) { const logo = await loadImage(fs.readFileSync(logoPath)); const lh = 84; g.drawImage(logo, PAD, (HEAD - lh) / 2, (logo.width * lh) / logo.height, lh); }
+  if (fs.existsSync(logoPath)) {
+    // الشعار ذهبي، فيصير فوك دائرة غامقة حتى يبين
+    const logo = await loadImage(fs.readFileSync(logoPath)); const r = 48, cx = PAD + r, cy = HEAD / 2, lh = 72;
+    g.fillStyle = "#0f1a2e"; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    const lw = (logo.width * lh) / logo.height; g.drawImage(logo, cx - lw / 2, cy - lh / 2, lw, lh);
+  }
   g.fillStyle = "#0f1a2e"; g.font = "bold 46px QArabic"; g.textAlign = "right"; g.textBaseline = "middle"; g.direction = "rtl";
   g.fillText(title, W - PAD, HEAD / 2);
   // الجواب بإطار أبيض
