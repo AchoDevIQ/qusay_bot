@@ -97,8 +97,8 @@ export default function HomeClient() {
     <>
       <header>
         <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
-        <p>{data?.name ? `أهلاً بك يا ${data.name}` : "الرياضيات · السادس الإعدادي"}</p>
+        <h1>قصي العميري</h1>
+        {data?.name && <p>أهلاً بك يا {data.name}</p>}
       </header>
       <div className="wrap">
         {error && <div className="card warn exerr">⚠️ {error}</div>}

@@ -107,6 +107,7 @@ export const BTN_OFFICE = "🏪 مكتبتي";
 export const BTN_EXAMS = "📝 امتحاناتي";
 export const BTN_SCAN = "📷 افتح الكاميرا";
 export const BTN_EXIT_VIEW = "↩️ إنهاء التجربة كطالب";
+export const BTN_EXIT_GRADER = "↩️ إنهاء التجربة كمصحح";
 export const AR_WORD = /^[ء-ْٰ-ۓ]+$/;
 
 export const SEED_CURRIC = `# الأعداد المركبة | Complex Numbers

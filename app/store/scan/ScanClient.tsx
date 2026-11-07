@@ -32,7 +32,7 @@ export default function ScanClient() {
     <>
       <header>
         <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
+        <h1>قصي العميري</h1>
         <p>🔓 فتح الامتحانات</p>
       </header>
       <div className="wrap">

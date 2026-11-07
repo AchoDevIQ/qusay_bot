@@ -14,9 +14,10 @@ type Info = {
   appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
-  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj;
+  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
+type Paper = { id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
 type Room = { id: number; sid: number; title: string; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
@@ -41,7 +42,9 @@ export default function MyExamsClient() {
   }
   const [room, setRoom] = useState<Room | null>(null);
   const [obj, setObj] = useState<Obj | null>(null);
-  async function openObj(item: number) { const r = await call({ action: "objInfo", item }); if (r?.obj) setObj(r.obj); }
+  async function openObj(item: number) { const r = await call({ action: "objInfo", item }); if (r?.obj) { setPaper(null); setObj(r.obj); } }
+  const [paper, setPaper] = useState<Paper | null>(null);
+  async function openPaper(item: number) { const r = await call({ action: "paper", item }); if (r?.paper) setPaper(r.paper); }
   useEffect(() => {
     // زر «اعتراض على الدرجة» بالبوت يفتح الصفحة على الامتحان مباشرة
     const o = Number(new URLSearchParams(location.search).get("obj"));
@@ -50,13 +53,14 @@ export default function MyExamsClient() {
   async function enterOptional(exam: number) { const r = await call({ action: "openOptional", exam }); if (r?.room) setRoom(r.room); }
   async function enter(item: number) { const r = await call({ action: "openExam", item }); if (r?.room) setRoom(r.room); }
   if (obj) return <Objection obj={obj} setObj={setObj} leave={() => { setObj(null); void call({ action: "info" }); }} />;
+  if (paper) return <PaperView paper={paper} busy={busy} error={error} object={(id) => void openObj(id)} leave={() => { setPaper(null); void call({ action: "info" }); }} />;
   if (room) return <ExamRoom room={room} setRoom={setRoom} call={call} leave={() => { setRoom(null); void call({ action: "info" }); }} />;
 
   return (
     <>
       <header>
         <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
+        <h1>قصي العميري</h1>
         <p>📝 امتحاناتي</p>
       </header>
       <div className="wrap">
@@ -81,7 +85,7 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} />}
-        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} object={(id) => void openObj(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} />}
+        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} />}
         {info?.comp && <CompCard c={info.comp} busy={busy} call={call} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
@@ -222,7 +226,7 @@ function AttendCode({ code }: { code: string }) {
   );
 }
 
-function List({ info, busy, enter, object, ask, file }: { info: Info; busy: boolean; enter: (id: number) => void; object: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown> }) {
+function List({ info, busy, enter, paper, ask, file }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown> }) {
   return (
     <div className="card">
       <h2>🗓 جدول امتحاناتك</h2>
@@ -243,7 +247,7 @@ function List({ info, busy, enter, object, ask, file }: { info: Info; busy: bool
             <td><b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.state === "missed" && <Excuse item={i} busy={busy} ask={ask} />}
-              {i.total !== null && i.total !== undefined && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => object(i.id)}>✋ اعتراض على الدرجة</button>}
+              {i.state === "done" && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => paper(i.id)}>📂 ورقتي وتصحيحها</button>}
             </td>
             <td className="adphone">{prettyAt(i.at)}</td>
           </tr>
@@ -320,7 +324,7 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
     <>
       <header>
         <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
+        <h1>قصي العميري</h1>
         <p>✋ اعتراض على الدرجة</p>
       </header>
       <div className="wrap">
@@ -357,6 +361,49 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
             {picked.length > 0 && !ready && <div className="hint">لكل سؤال اخترته اكتب السبب أو سجله بصوتك.</div>}
           </div>
         </div>
+      </div>
+    </>
+  );
+}
+
+/** «📂 ورقتي وتصحيحها»: كل شي عن امتحان واحد بمكان واحد */
+function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: boolean; error: string; object: (id: number) => void; leave: () => void }) {
+  const graded = paper.total !== null;
+  const o = paper.objections;
+  return (
+    <>
+      <header>
+        <img src="/logo.png" alt="" />
+        <h1>قصي العميري</h1>
+        <p>📂 {paper.title}</p>
+      </header>
+      <div className="wrap">
+        <button type="button" className="exbtn" disabled={busy} onClick={leave}>⬅️ رجوع لامتحاناتي</button>
+        {error && <div className="card warn exerr">⚠️ {error}</div>}
+        <div className="card adtop">
+          <h2>📝 {paper.title}</h2>
+          <div className="who">{graded ? <>درجتك: <b>{paper.total}</b> من 100</> : "⏳ ورقتك وصلت، وبعدها ما انصححت"}</div>
+          <div className="expad exhint">{paper.chapter}{paper.submitted ? ` · سلمتها ${paper.submitted.slice(0, 16)}` : ""}{paper.graded ? ` · انصححت ${paper.graded.slice(0, 16)}` : ""}</div>
+          {graded && !!paper.marks.length && (
+            <table className="extable"><tbody>
+              {paper.marks.map((m) => <tr key={m.n}><td>السؤال {m.n}</td><td className="p"><b>{m.mark ?? "—"}</b> من {m.max}</td></tr>)}
+            </tbody></table>
+          )}
+          {(o.open + o.ok + o.no > 0) && <div className="expad exhint">✋ اعتراضاتك: {o.open ? `${o.open} تنتظر رد · ` : ""}{o.ok ? `${o.ok} انقبلت · ` : ""}{o.no ? `${o.no} انرفضت` : ""}</div>}
+          {graded && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => object(paper.id)}>✋ اعتراض على الدرجة</button>}
+        </div>
+        {!!paper.pages.length && (
+          <div className="card">
+            <h2>{paper.gradedPages ? "✅ ورقتك المصححة" : "📷 جوابك مثل ما دزيته"}</h2>
+            {paper.pages.map((p) => <img key={p} className="eximg" src={fileUrl(paper.id, p)} alt="ورقتك" />)}
+          </div>
+        )}
+        {!!paper.questions.length && (
+          <div className="card">
+            <h2>📄 أسئلة الامتحان</h2>
+            {paper.questions.map((p) => <img key={p} className="eximg" src={fileUrl(paper.id, p)} alt="أسئلة الامتحان" />)}
+          </div>
+        )}
       </div>
     </>
   );

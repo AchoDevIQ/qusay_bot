@@ -106,8 +106,7 @@ function Store({ D }: { D: Data }) {
     <>
       <header>
         <img src="/logo.png" alt="" />
-        <h1>متجر قصي العميري</h1>
-        <p>الرياضيات · السادس الإعدادي</p>
+        <h1>قصي العميري</h1>
         {!gate && (
           <div className="steps">
             <span className={page === 1 ? "on" : ""}>1  اختر المنتجات</span>

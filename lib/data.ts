@@ -34,8 +34,16 @@ const realStaffRow = async (uid: number) => await one("staff", { user_id: uid })
 export const isRealStaff = async (uid: number) => ADMIN_IDS.includes(uid) || await realStaffRow(uid) !== null;
 export const viewingAsStudent = async (uid: number) => await kvGet(`asstudent_${uid}`) === "1";
 export const setStudentView = async (uid: number, on: boolean) => await kvSet(`asstudent_${uid}`, on ? "1" : "0");
-export const staffRow = async (uid: number) => (await viewingAsStudent(uid) ? null : await realStaffRow(uid));
-export const isAdmin = async (uid: number) => ADMIN_IDS.includes(uid) && !await viewingAsStudent(uid);
+// «شوف كمساعد مصحح»: صاحب البوت يجرب التصحيح كامل مثل مساعد ما عنده غير ✍️ التصحيح و✋ الاعتراضات
+export const GRADER_TRY_PERMS = "grade,objections";
+export const viewingAsGrader = async (uid: number) => ADMIN_IDS.includes(uid) && await kvGet(`asgrader_${uid}`) === "1";
+export const setGraderView = async (uid: number, on: boolean) => await kvSet(`asgrader_${uid}`, on ? "1" : "0");
+export async function staffRow(uid: number) {
+  if (await viewingAsStudent(uid)) return null;
+  if (await viewingAsGrader(uid)) return { user_id: uid, name: "صاحب البوت (تجربة مصحح)", perms: GRADER_TRY_PERMS };
+  return await realStaffRow(uid);
+}
+export const isAdmin = async (uid: number) => ADMIN_IDS.includes(uid) && !await viewingAsStudent(uid) && !await viewingAsGrader(uid);
 const permList = (s: Row) => String(s.perms ?? "").split(",");
 export async function can(uid: number, perm: string) {
   if (await isAdmin(uid)) return true;
@@ -52,6 +60,7 @@ export async function staffIds(perm: string): Promise<number[]> {
 const starts = (d: string, ...p: string[]) => p.some((x) => d.startsWith(x));
 function permOf(d: string) {
   if (d === "a:menu" || d === "a:asstudent") return "any";
+  if (d === "a:asgrader") return "realowner";
   if (d.startsWith("a:ex")) return "exams";
   if (starts(d, "a:sf", "a:hr", "a:grp", "a:cur", "a:lib")) return "owner";
   if (starts(d, "a:q", "a:oq")) return "q";
@@ -63,6 +72,7 @@ export async function allowed(uid: number, d: string) {
   const p = permOf(d);
   if (p === "any") return await isStaff(uid);
   if (p === "owner") return await isAdmin(uid);
+  if (p === "realowner") return ADMIN_IDS.includes(uid);
   return await can(uid, p);
 }
 

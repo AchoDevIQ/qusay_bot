@@ -32,7 +32,7 @@ function Pos({ D }: { D: Data }) {
     <>
       <header>
         <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
+        <h1>قصي العميري</h1>
         <p>🏪 بيع بالمكتب · بدون توصيل</p>
       </header>
       <div className="wrap">

@@ -14,7 +14,7 @@ import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
 import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
-import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, openRoom, roomState, submitRoom } from "./examRoom.ts";
+import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, myPaper, openRoom, roomState, submitRoom } from "./examRoom.ts";
 import { send } from "./telegram.ts";
 import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, labelChapters, pickOptional, pickedAt, slotDays, ampm, validDay, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { stamp, todayStr } from "./util.ts";
@@ -305,6 +305,10 @@ export async function myExamAction(body: Row) {
   if (a === "askException") {
     await askException(id, body.item, body.reason, await schedSettings());
     return { ...await studentInfo(id), notice: "📨 وصل طلبك. من يوافقون ينفتحلك الامتحان وتوصلك رسالة" };
+  }
+  if (a === "paper") {
+    need(!await examInProgress(id), LOCK_TEXT, 423);
+    return { ...await studentInfo(id), paper: await myPaper(id, body.item) };
   }
   if (a === "objInfo") need(!await examInProgress(id), LOCK_TEXT, 423);
   if (a === "objInfo") return { ...await studentInfo(id), obj: await objectionInfo(id, body.item) };

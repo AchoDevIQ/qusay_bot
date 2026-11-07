@@ -62,7 +62,7 @@ export function AdminHeader({ title, home }: { title: string; home?: boolean }) 
     <header className="adhead">
       {!home && <Link className="adback" href="/store/admin">⬅️ لوحة التحكم</Link>}
       <img src="/logo.png" alt="" />
-      <h1 className="plain">QMath</h1>
+      <h1>قصي العميري</h1>
       <p>{title}</p>
     </header>
   );

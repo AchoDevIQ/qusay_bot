@@ -3,7 +3,9 @@ import { stoppedCount } from "./checkpoints.ts";
 import { birthdaysToday } from "./birthdays.ts";
 import { pendingGroups } from "./competition.ts";
 import { count, find, setSession, sumOf, type Row } from "./db.ts";
-import { can, isAdmin, isStaff, newOrdersCount, setStudentView } from "./data.ts";
+import { ADMIN_IDS } from "./config.ts";
+import { can, isAdmin, isStaff, newOrdersCount, setGraderView, setStudentView, viewingAsGrader } from "./data.ts";
+import { GRADER_TRY_TEXT, adminMenuFor } from "./admin.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { objectionsWaiting, waitingPapers } from "./gradeApi.ts";
 import { mainKb } from "./keyboards.ts";
@@ -72,7 +74,7 @@ async function homeData(uid: number) {
   if (shop.length) groups.push({ title: "المتجر", tiles: shop });
   if (people.length) groups.push({ title: "الطلاب والامتحانات", tiles: people });
   if (setup.length) groups.push({ title: "الإدارة", tiles: setup });
-  return { groups };
+  return { groups, owner: await isAdmin(uid), asGrader: await viewingAsGrader(uid) };
 }
 
 export async function adminHomeAction(body: Row) {
@@ -80,7 +82,19 @@ export async function adminHomeAction(body: Row) {
   const uid = verifyInitData(body?.initData);
   need(uid !== null, "افتح الصفحة من داخل البوت", 401);
   need(await isStaff(uid!), "ما عندك صلاحية", 403);
+  if (body.action === "asGrader" || body.action === "endGrader") {
+    need(ADMIN_IDS.includes(uid!), "هذا لصاحب البوت بس", 403);
+    const on = body.action === "asGrader";
+    await setStudentView(uid!, false);
+    await setGraderView(uid!, on);
+    await setSession(uid!, "", {});
+    await send(uid!, on ? GRADER_TRY_TEXT : "✅ رجعت لحسابك الإداري.", { replyKb: await mainKb(uid!) });
+    const [t, kb] = await adminMenuFor(uid!);
+    await send(uid!, t, { kb });
+    return await homeData(uid!);
+  }
   if (body.action === "asStudent") {
+    await setGraderView(uid!, false);
     await setStudentView(uid!, true);
     await setSession(uid!, "", {});
     await send(uid!, "👁 <b>صرت تشوف البوت مثل الطالب.</b>\nكل الأزرار والرسائل مثله بالضبط. ولمن تخلص، اضغط زر الرجوع جوة.", { replyKb: await mainKb(uid!) });

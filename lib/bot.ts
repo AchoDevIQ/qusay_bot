@@ -1,11 +1,11 @@
 // نقطة دخول كل رسالة/ضغطة زر من تليجرام
 import { getSession, initDb, kvGet, kvSet, setSession, type Row } from "./db.ts";
-import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
+import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_GRADER, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
 import { examBankMessage } from "./examBank.ts";
 import { examCb, examsMenu, redeemCode } from "./exams.ts";
 import { exceptionCb } from "./lateRequest.ts";
 import { invitePrompt, inviteCb, reviewCb } from "./competition.ts";
-import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setStudentView, student, tooManyFails, viewingAsStudent } from "./data.ts";
+import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setGraderView, setStudentView, student, tooManyFails, viewingAsGrader, viewingAsStudent } from "./data.ts";
 import { ADMIN_IDS, WEBHOOK_SECRET } from "./config.ts";
 import { guardianSeen, onMemberUpdate } from "./guardianWatch.ts";
 import { isGuardian, linkGuardian } from "./access.ts";
@@ -57,8 +57,9 @@ async function onMessage(m: Row) {
     await send(r.sid!, "✅ انربط ولي أمرك. افتح القائمة وكمل 🌷");
     return;
   }
-  if (text === BTN_EXIT_VIEW && await viewingAsStudent(uid)) {
+  if ((text === BTN_EXIT_VIEW && await viewingAsStudent(uid)) || (text === BTN_EXIT_GRADER && await viewingAsGrader(uid))) {
     await setStudentView(uid, false);
+    await setGraderView(uid, false);
     await setSession(uid, "", {});
     const [t, kb] = await adminMenuFor(uid);
     await send(chat, "✅ رجعت لحسابك الإداري.", { replyKb: await mainKb(uid) });

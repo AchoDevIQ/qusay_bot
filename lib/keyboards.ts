@@ -1,8 +1,8 @@
 // لوحات الأزرار وروابط صفحات المتجر (البيانات تنضغط داخل الرابط)
 import { find, kvGet, type Row } from "./db.ts";
-import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_HOME, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL, WORD_CHECK } from "./config.ts";
+import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_GRADER, BTN_EXIT_VIEW, BTN_HOME, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_OPEN, BTN_REG, BTN_SCAN, BTN_SHOP, GOVS, STORE_URL, WORD_CHECK } from "./config.ts";
 import { homeToken } from "./webAuth.ts";
-import { areasWithCenters, can, cats, centerName, feeOf, hasExamMenu, isRealStaff, isStaff, myOffice, newOrdersCount, products, student, viewingAsStudent } from "./data.ts";
+import { areasWithCenters, can, cats, centerName, feeOf, hasExamMenu, isRealStaff, isStaff, myOffice, newOrdersCount, products, student, viewingAsGrader, viewingAsStudent } from "./data.ts";
 import { chapterLabel } from "./orderRules.ts";
 import { b64urlEncode, btn, chunk } from "./util.ts";
 
@@ -92,7 +92,7 @@ export const scanKb = (oid: number) => ({
 export async function mainKb(uid: number) {
   const rows: { text: string; web_app?: { url: string } }[][] = [];
   // المدير والمساعد وصاحب المكتبة: زر واحد يفتح صفحتهم مباشرة، بدون شي يخص الطالب
-  if (HOME_PAGE && await isStaff(uid)) return { keyboard: [[{ text: BTN_ADMIN, web_app: { url: adminPageLink("admin", uid) } }]], resize_keyboard: true };
+  if (HOME_PAGE && await isStaff(uid)) return { keyboard: [[{ text: BTN_ADMIN, web_app: { url: adminPageLink("admin", uid) } }], ...(await viewingAsGrader(uid) ? [[{ text: BTN_EXIT_GRADER }]] : [])], resize_keyboard: true };
   if (HOME_PAGE && await myOffice(uid)) return { keyboard: [[{ text: BTN_OFFICE, web_app: { url: adminPageLink("sales", uid) } }]], resize_keyboard: true };
   if (HOME_PAGE) rows.push([{ text: BTN_HOME, web_app: { url: homeLink(uid) } }]);
   else {
@@ -104,6 +104,7 @@ export async function mainKb(uid: number) {
     rows.push([{ text: BTN_ADMIN + (n ? `  🔴 ${n}` : "") }]);
   } else if (await myOffice(uid)) rows.push([{ text: BTN_OFFICE }]);
   if (await viewingAsStudent(uid) && await isRealStaff(uid)) rows.push([{ text: BTN_EXIT_VIEW }]);
+  if (await viewingAsGrader(uid)) rows.push([{ text: BTN_EXIT_GRADER }]);
   return { keyboard: rows, resize_keyboard: true };
 }
 export const flowKb = () => ({ keyboard: [[{ text: BTN_CANCEL }]], resize_keyboard: true });

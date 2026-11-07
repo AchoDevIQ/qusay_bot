@@ -4,12 +4,12 @@
 html,body{margin:0;background:var(--ink);color:var(--txt);font-family:Cairo,system-ui,sans-serif}
 body{padding-bottom:110px}
 .wrap{max-width:640px;margin:0 auto;padding:0 14px}
-header{position:relative;padding:22px 14px 18px;text-align:center;background:
- radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.18),transparent 60%),linear-gradient(180deg,#14203a,var(--ink));border-bottom:1px solid var(--line)}
+/* الهيدر «سما زرقة»: أزرق غامق ونور من فوگ، واسم قصي العميري أبيض */
+header{position:relative;padding:24px 14px 20px;text-align:center;background:
+ radial-gradient(ellipse at 50% -10%,#3b82f6 0%,transparent 65%),linear-gradient(180deg,#1e3a8a,#0f1d40);border-bottom:1px solid #1e3a8a}
 header img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}
-header h1{font-family:Boahmed,Cairo;font-weight:400;font-size:30px;margin:6px 0 0;color:var(--gold)}
-header h1.plain{font-family:Cairo;font-weight:800;letter-spacing:1px}
-header p{margin:2px 0 0;color:var(--mut);font-size:14px}
+header h1{font-family:Boahmed,Cairo;font-weight:400;font-size:34px;margin:6px 0 0;color:#fff;text-shadow:0 2px 12px rgba(59,130,246,.7)}
+header p{margin:2px 0 0;color:#bfdbfe;font-size:14px}
 .steps{display:flex;gap:8px;justify-content:center;margin:16px 0 4px}
 .steps span{font-size:13px;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
 .steps span.on{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:700}

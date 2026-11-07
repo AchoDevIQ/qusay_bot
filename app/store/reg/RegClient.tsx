@@ -89,7 +89,7 @@ function Reg({ D }: { D: Data }) {
     <>
       <header>
         <img src="/logo.png" alt="" />
-        <h1 className="plain">QMath</h1>
+        <h1>قصي العميري</h1>
         <p>{ADM ? "تعديل معلومات طالب · الإدارة" : P ? "تعديل معلوماتك" : "التسجيل · مرة وحدة بس"}</p>
       </header>
 

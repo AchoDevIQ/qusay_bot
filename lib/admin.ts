@@ -3,7 +3,7 @@ import { catIdFor, count, find, getSession, insert, kvGet, kvSet, modeFromName, 
 import { BULK_HELP, DAYS, DAY_ORDER, DEFAULT_FEE, GOVS, GRADES, MODE_ICON, MODE_NEXT, PERMS, STORE_URL, orderReady, toLatinDigits } from "./config.ts";
 import {
   allCats, can, cat, centerName, chapters, govMode, groupId, hoursText, isAdmin, newOrdersCount, orderItems, ordersByIds, placeOf, product, products, profileText, qHours, qWhere,
-  searchStudents, setStudentView, staffAccount, staffName, staffRow, student, topics,
+  searchStudents, setGraderView, setStudentView, staffAccount, staffName, staffRow, student, topics,
 } from "./data.ts";
 import { adminPageLink, chapterLabel, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
@@ -67,6 +67,7 @@ export async function adminMenuFor(uid: number): Promise<View> {
     kb.push([btn(`🏬 المكتبات — اليوم: ${r.n} بيعة · ${money(r.t)}`, "a:lib")], [btn("⏰ أوقات استقبال الأسئلة", "a:hr")], [btn("📚 الفصول والمواضيع", "a:cur")],
       [btn("👥 المساعدين والصلاحيات", "a:sf")], [btn("🔗 ربط مجموعة الأسئلة", "a:grp")]);
   }
+  if (await isAdmin(uid)) kb.push([btn("✍️ شوف كمساعد مصحح", "a:asgrader")]);
   kb.push([btn("👁 شوف كطالب", "a:asstudent")]);
   return ["<b>⚙️ لوحة التحكم</b>", kb];
 }
@@ -306,13 +307,25 @@ export async function onAdminText(chat: number, uid: number, text: string, st: s
   return false;
 }
 
+export const GRADER_TRY_TEXT = "✍️ <b>صرت تشوف البوت مثل مساعد عنده صلاحية التصحيح بس</b> (✍️ التصحيح و✋ الاعتراضات).\nتوصلك الأوراق وتنبيهات المصححين مثله بالضبط، وتصحح وتنحسب أجورك مثله. ولمن تخلص، اضغط «↩️ إنهاء التجربة كمصحح» جوة.";
+
 // ---------- الأزرار a:*
 export async function onAdminCb(chat: number, uid: number, mid: number, d: string): Promise<string | null> {
   const sendV = ([t, kb]: View, prefix = "") => send(chat, prefix + t, { kb });
   const editV = ([t, kb]: View, prefix = "") => edit(chat, mid, prefix + t, kb);
 
   if (d.startsWith("a:ex")) return await examBankCb(chat, uid, mid, d);
+  if (d === "a:asgrader") {
+    await setStudentView(uid, false);
+    await setGraderView(uid, true);
+    await setSession(uid, "", {});
+    await send(chat, GRADER_TRY_TEXT, { replyKb: await mainKb(uid) });
+    const [t, kb] = await adminMenuFor(uid);
+    await send(chat, t, { kb });
+    return null;
+  }
   if (d === "a:asstudent") {
+    await setGraderView(uid, false);
     await setStudentView(uid, true);
     await setSession(uid, "", {});
     await send(chat, "👁 <b>صرت تشوف البوت مثل الطالب.</b>\nكل الأزرار والرسائل مثله بالضبط. ولمن تخلص، اضغط زر الرجوع جوة.", { replyKb: await mainKb(uid) });

@@ -14,6 +14,8 @@ import { adminPageLink } from "./keyboards.ts";
 import { addMinutes, answersClose, itemState, pickMandatory, type SchedSettings } from "./scheduleRules.ts";
 import { send, sendMany } from "./telegram.ts";
 import { stamp } from "./util.ts";
+import { gradedPages } from "./gradeApi.ts";
+import { studentPapers } from "./studentPapers.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
@@ -155,11 +157,26 @@ export async function roomFile(token: unknown, itemId: unknown, ref: unknown, pf
   const e = (await one("bank_exams", { id: it!.exam_id }))!;
   const v = (await one("bank_versions", { id: it!.version_id }))!;
   const st = await student(uid!);
-  const allowed = [...await pagesOf(e, v, st?.curr ?? ""), ...(await find("exam_answers", { item_id: it!.id })).map((a) => a.file as string)];
+  const allowed = [...await pagesOf(e, v, st?.curr ?? ""), ...(await find("exam_answers", { item_id: it!.id })).map((a) => a.file as string), ...await gradedPages(it!.id)];
   need(typeof ref === "string" && allowed.includes(ref), "ما عندك صلاحية", 403);
   const body = await files().read(ref as string);
   need(body, "الملف غير موجود", 404);
   return { body: body!, type: /\.png$/i.test(ref as string) ? "image/png" : "image/jpeg" };
+}
+
+/** «📂 ورقتي»: كل شي يخص امتحان سلمه الطالب: درجته، درجة كل سؤال، ورقته المصححة (أو جوابه إذا بعده ما انصحح)، والأسئلة */
+export async function myPaper(uid: number, itemId: unknown) {
+  const it = await one("sched_items", { id: Number(itemId), user_id: uid });
+  need(it?.version_id && (it.submitted_at || it.status === "done"), "هذا الامتحان بعده ما مسلم", 404);
+  const p = (await studentPapers(uid)).find((x) => x.id === it!.id);
+  need(p, "ما لگينا ورقتك", 404);
+  const e = (await one("bank_exams", { id: it!.exam_id }))!;
+  const v = (await one("bank_versions", { id: it!.version_id }))!;
+  return {
+    id: p!.id, title: p!.title, chapter: p!.chapter, submitted: p!.submitted, graded: p!.graded, total: p!.total,
+    marks: p!.marks, objections: p!.objections, pages: p!.pages, gradedPages: p!.gradedPages,
+    questions: await pagesOf(e, v, (await student(uid))?.curr ?? ""),
+  };
 }
 
 // ---------- الإدارة
