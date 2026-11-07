@@ -7,8 +7,9 @@ import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type TestStudent = { id: number; name: string; papers: number; graded: number; link: string };
+type TestVersion = { id: number; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
-type Data = { papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
+type Data = { papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -41,6 +42,7 @@ export default function StudentsClient() {
         {data && s && (
           <>
             {data.tests && <TestStudents tests={data.tests} busy={busy} act={act} />}
+            {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
             <div className="card">
               <h2>📊 الطلاب المسجلين: {s.all}</h2>
               <div className="adstats">
@@ -251,6 +253,66 @@ function TestStudents({ tests, busy, act }: { tests: TestStudent[]; busy: boolea
           <Confirm label={tests.length ? "🔄 سويهم من جديد" : "🧪 سوي طلاب تجربة"} disabled={busy} onYes={() => void act({ action: "makeTests" })} />
           {!!tests.length && <Confirm label="🗑 امسحهم" disabled={busy} onYes={() => void act({ action: "deleteTests" })} />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** الصورة الكبيرة من الكاميرا تصغر قبل الرفع (أطول ضلع 2000) */
+async function shrink(f: File): Promise<Blob> {
+  try {
+    const bmp = await createImageBitmap(f);
+    const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise<Blob>((ok) => c.toBlob((b) => ok(b ?? f), "image/jpeg", 0.88));
+  } catch { return f; }
+}
+
+/** ورقة تجربة من صور حقيقية: يختار طالب التجربة والامتحان، يرفع جواب كل سؤال، ويختار منو يصححها */
+function TestPaper({ tests, versions, busy, upload }: { tests: TestStudent[]; versions: TestVersion[]; busy: boolean; upload: (f: FormData) => Promise<unknown> }) {
+  const [sid, setSid] = useState(tests[0]?.id ?? 0);
+  const [vid, setVid] = useState(0);
+  const [who, setWho] = useState<"ai" | "me">("ai");
+  const [pics, setPics] = useState<Record<number, File[]>>({});
+  const v = versions.find((x) => x.id === vid);
+  const count = Object.values(pics).reduce((t, x) => t + x.length, 0);
+  async function go() {
+    const f = new FormData();
+    f.set("action", "testPaper"); f.set("sid", String(sid)); f.set("vid", String(vid)); f.set("who", who);
+    for (const [n, list] of Object.entries(pics)) for (const p of list) f.append(`q_${n}`, await shrink(p), "answer.jpg");
+    if (await upload(f)) setPics({});
+  }
+  return (
+    <div className="card">
+      <h2>📷 ورقة تجربة من صور حقيقية</h2>
+      <div className="form">
+        <div className="exhint">ترفع جواب طالب حقيقي باسم طالب تجربة، وتختار منو يصححها. إذا الطالب عنده ورقة بنفس الامتحان، تتبدل بهاي.</div>
+        <label>طالب التجربة</label>
+        <select value={sid} onChange={(e) => setSid(Number(e.target.value))}>{tests.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+        <label>الامتحان والنموذج</label>
+        <select value={vid} onChange={(e) => { setVid(Number(e.target.value)); setPics({}); }}>
+          <option value={0}>اختار...</option>
+          {versions.map((x) => <option key={x.id} value={x.id}>{x.title} · نموذج {x.model}{x.chapter ? ` (${x.chapter})` : ""}</option>)}
+        </select>
+        {v?.qs.map((q) => (
+          <div key={q.n}>
+            <label>جواب السؤال {q.n} <small>(من {q.max})</small>{pics[q.n]?.length ? ` · ${pics[q.n].length} صورة` : ""}</label>
+            <input type="file" accept="image/*" multiple onChange={(e) => setPics({ ...pics, [q.n]: [...(e.target.files ?? [])].slice(0, 6) })} />
+          </div>
+        ))}
+        {v && (
+          <>
+            <label>منو يصححها</label>
+            <div className="seg">
+              <button type="button" className={who === "ai" ? "on" : ""} onClick={() => setWho("ai")}>🤖 نظام التصحيح AI</button>
+              <button type="button" className={who === "me" ? "on" : ""} onClick={() => setWho("me")}>✍️ أصححها أنا</button>
+            </div>
+            {who === "ai" && <div className="exhint">حتى ياخذها: لازم موضوعها مأشر بصفحة نظام التصحيح AI، وكل أسئلة النموذج إلها خطوات، وهو شغال.</div>}
+            <button type="button" className="btn" disabled={busy || !count} onClick={() => void go()}>{busy ? "جاري الرفع..." : `📤 ارفع الورقة (${count} صورة)`}</button>
+          </>
+        )}
       </div>
     </div>
   );

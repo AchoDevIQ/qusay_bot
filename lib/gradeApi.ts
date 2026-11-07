@@ -155,6 +155,29 @@ export async function makeTests() {
   }
   return papers;
 }
+/** ورقة تجربة من صور حقيقية: صاحب البوت يرفع جواب كل سؤال لطالب تجربة، ويختار منو يصححها:
+ *  «ai» ياخذها نظام التصحيح AI (إذا الموضوع مأشر وخطواته جاهزة)، و«me» تروح لصاحب البوت نفسه وما يمسها نظام التصحيح */
+export async function addTestPaper(owner: number, sid: number, vid: number, byQ: Map<number, Buffer[]>, who: "ai" | "me") {
+  need(sid < 0 && await student(sid), "اختار طالب تجربة");
+  const v = await one("bank_versions", { id: vid });
+  need(v, "اختار الامتحان");
+  const qs = await find("bank_questions", { version_id: vid }, { order: ["n"] });
+  need(qs.length, "هذا النموذج ما بيه أسئلة");
+  need([...byQ.values()].some((x) => x.length), "ارفع صورة جواب سؤال واحد على الأقل");
+  for (const n of byQ.keys()) need(qs.some((q) => q.n === n), `السؤال ${n} مو بهذا النموذج`);
+  // ورقته القديمة بنفس الامتحان تنشال، حتى تبقى ورقة وحدة
+  for (const old of await find("sched_items", { user_id: sid, exam_id: v!.exam_id })) {
+    for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: old.id });
+    await remove("sched_items", { id: old.id });
+  }
+  const id = await insert("sched_items", { user_id: sid, exam_id: v!.exam_id, at: stamp(), status: "done", version_id: vid, started_at: stamp(), submitted_at: stamp(), grader_id: who === "me" ? owner : null });
+  for (const [n, pics] of byQ) for (const [i, b] of pics.entries()) {
+    const ref = `test_papers/${id}/q${n}_${i + 1}_${Date.now()}.jpg`;
+    await files().write(ref, b, "image/jpeg");
+    await insert("exam_answers", { item_id: id, q: n, file: ref, created: stamp() });
+  }
+  return id;
+}
 export async function deleteTests() {
   for (const it of (await find("sched_items")).filter(isTest)) {
     await remove("exam_answers", { item_id: it.id });

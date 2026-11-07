@@ -227,3 +227,32 @@ test("🧪 تجربة على جواب حقيقي: يرجع الدرجة والخ
   assert.equal((await find("question_marks")).length, marks);
   assert.ok(r.log.some((x: any) => x.kind === "try" && x.cost > 0));
 });
+
+test("ورقة تجربة من صور حقيقية: طالب تجربة 1 يصححها نظام التصحيح AI، وطالب تجربة 2 تروح لصاحب البوت وما يمسها", async () => {
+  const { studentUpload } = await import("../lib/studentApi.ts");
+  await put("students", { user_id: -1, name: "طالب تجربة 1", exam: "إلكتروني", created: stamp() });
+  await put("students", { user_id: -2, name: "طالب تجربة 2", exam: "إلكتروني", created: stamp() });
+  const form = (sid: number, who: string) => {
+    const f = new FormData();
+    f.set("initData", sign(1)); f.set("action", "testPaper"); f.set("sid", String(sid)); f.set("vid", String(ver)); f.set("who", who);
+    for (const q of [1, 2]) f.append(`q_${q}`, new File([new Uint8Array([0xff, 0xd8, 0xff, q])], "a.jpg", { type: "image/jpeg" }));
+    return f;
+  };
+  await assert.rejects(studentUpload(form(90, "ai")), /اختار طالب تجربة/);
+  await studentUpload(form(-1, "ai"));
+  const r: any = await studentUpload(form(-2, "me"));
+  assert.match(r.notice, /تنتظرك/);
+  const a = (await find("sched_items", { user_id: -1 }))[0], b = (await find("sched_items", { user_id: -2 }))[0];
+  assert.equal((await find("exam_answers", { item_id: a.id })).length, 2);
+  assert.deepEqual([a.grader_id, b.grader_id], [null, 1]);
+  // تعيد الرفع: الورقة القديمة تتبدل
+  await studentUpload(form(-1, "ai"));
+  assert.equal((await find("sched_items", { user_id: -1 })).length, 1);
+  aiReply = gradeOk;
+  for (let i = 0; i < 5; i++) await tick();
+  const a2 = (await find("sched_items", { user_id: -1 }))[0];
+  assert.equal(a2.grader_id, AI_GRADER);
+  assert.ok(a2.graded_at);
+  const b2 = (await one("sched_items", { id: b.id }))!;
+  assert.deepEqual([b2.grader_id, b2.graded_at], [1, null]);
+});

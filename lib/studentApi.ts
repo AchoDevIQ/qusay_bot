@@ -11,7 +11,7 @@ import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
-import { TEST_STUDENTS, deleteTests, makeTests } from "./gradeApi.ts";
+import { TEST_STUDENTS, addTestPaper, deleteTests, makeTests } from "./gradeApi.ts";
 import { fileToken, homeToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { guardianState, whatsappOf } from "./guardianWatch.ts";
@@ -71,7 +71,40 @@ async function pageData(q: string, f: Filters, uid = 0) {
     stats: await studentsStats(), results: await Promise.all(rows.map(view)), found: found.length, limit: RECENT, govs: GOVS,
     areas: (await areasWithCenters()).map((a) => ({ id: a.id, gov: a.gov, name: a.name, centers: centers.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, name: c.name })) })),
     tests: uid && await isAdmin(uid) ? await testStudents() : null,
+    testVersions: uid && await isAdmin(uid) ? await testVersions() : null,
   };
+}
+/** الامتحانات ونماذجها، حتى صاحب البوت يرفع عليها ورقة تجربة من صور حقيقية */
+async function testVersions() {
+  const exams = new Map((await find("bank_exams", {}, { order: ["pos", "ord"] })).map((e) => [e.id, e]));
+  const order = [...exams.keys()];
+  const qs = await find("bank_questions");
+  return (await find("bank_versions", { kind: "mandatory" })).filter((v) => exams.has(v.exam_id))
+    .sort((a, b) => order.indexOf(a.exam_id) - order.indexOf(b.exam_id) || String(a.model).localeCompare(String(b.model)))
+    .map((v) => ({ id: v.id as number, title: exams.get(v.exam_id)!.title as string, chapter: (exams.get(v.exam_id)!.chapter ?? "") as string, model: v.model as string,
+      qs: qs.filter((q) => q.version_id === v.id).sort((a, b) => a.n - b.n).map((q) => ({ n: q.n as number, max: q.max_mark as number })) }))
+    .filter((v) => v.qs.length);
+}
+const TEST_MAX_PICS = 6, TEST_MAX_BYTES = 12 * 1024 * 1024;
+/** رفع ورقة تجربة من صور حقيقية (صور جواب كل سؤال) */
+export async function studentUpload(form: FormData) {
+  const uid = await authed(form.get("initData"), STUDENTS_PERM);
+  need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+  need(form.get("action") === "testPaper", "أمر غير معروف");
+  const byQ = new Map<number, Buffer[]>();
+  for (const [k, v] of form.entries()) {
+    const m = /^q_(\d+)$/.exec(k);
+    if (!m || !(v instanceof File) || !v.size) continue;
+    need(v.size <= TEST_MAX_BYTES, "صورة كبيرة هواية");
+    const list = byQ.get(Number(m[1])) ?? [];
+    need(list.length < TEST_MAX_PICS, `أكثر شي ${TEST_MAX_PICS} صور لكل سؤال`);
+    list.push(Buffer.from(await v.arrayBuffer()));
+    byQ.set(Number(m[1]), list);
+  }
+  const who = form.get("who") === "me" ? "me" : "ai";
+  await addTestPaper(uid, Number(form.get("sid")), Number(form.get("vid")), byQ, who);
+  const name = (await student(Number(form.get("sid"))))?.name ?? "";
+  return { ...await pageData("", filtersOf({}), uid), notice: who === "ai" ? `🧪 انرفعت ورقة ${name}. نظام التصحيح AI ياخذها خلال دقيقة (إذا موضوعها مأشر وخطواته جاهزة وهو شغال)` : `🧪 انرفعت ورقة ${name}، وتنتظرك بـ ✍️ التصحيح` };
 }
 
 export async function studentAction(body: Row) {
