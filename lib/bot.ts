@@ -142,7 +142,7 @@ async function onCallback(q: Row) {
       const qq = await question(Number(d.slice(3)));
       note = qq ? await finishQuestion(qq) : "✅ اختفى السؤال";
     } else note = "ما عندك صلاحية";
-  } else if (["qc:", "qb:", "qt:", "ql:", "qf:", "qok:"].some((p) => d.startsWith(p))) {
+  } else if (["qc:", "qb:", "qt:", "ql:", "qf:", "qok:", "qx:"].some((p) => d.startsWith(p))) {
     note = await qCb(chat, uid, mid, d);
   } else if (["oc:", "ocy:", "ocn:"].some((p) => d.startsWith(p))) {
     note = await orderCancelCb(chat, uid, mid, d);

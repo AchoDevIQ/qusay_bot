@@ -37,6 +37,8 @@ async function homeData(uid: number) {
     const note = [n ? `${n} ورقة تنتظر` : "", o ? `${o} اعتراض` : ""].filter(Boolean).join(" · ") || "ماكو أوراق";
     people.push({ page: "grade", icon: "✍️", title: "التصحيح", note, hot: n + o > 0 });
   }
+  // الملازم والجواب الآلي: صاحب البوت بس
+  if (await isAdmin(uid)) people.push({ page: "booklets", icon: "📚", title: "الملازم والجواب الآلي" });
   if (await can(uid, "competition")) { const n = await pendingGroups(); people.push({ page: "competition", icon: "🏆", title: "المنافسة", note: n ? `${n} مجموعة تنتظر موافقتك` : "المجاميع وترتيب المراكز", hot: n > 0 }); }
   if (await can(uid, "birthdays")) { const n = await birthdaysToday(); people.push({ page: "birthdays", icon: "🎂", title: "أعياد الميلاد", note: n ? `اليوم: ${n}` : "ماكو اليوم", hot: n > 0 }); }
   if (await can(uid, "signups")) {
