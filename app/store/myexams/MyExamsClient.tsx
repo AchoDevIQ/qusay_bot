@@ -341,8 +341,6 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
                       <VoiceRec btn="exbtn" label="🎙 أو سجل اعتراضك بصوتك (أكثر شي 5 دقايق)" value={mine.voice} onRecording={setRec} onChange={(v) => setPick((x) => (x[q.n] ? { ...x, [q.n]: { ...x[q.n], voice: v } } : x))} />
                       <button type="button" className="exbtn" disabled={rec} onClick={() => set(q.n, null)}>إلغاء الاعتراض على هذا السؤال</button>
                     </>
-                  ) : q.mark >= q.max ? (
-                    <small className="pdmode">✅ درجة كاملة</small>
                   ) : (
                     <button type="button" className="exbtn" onClick={() => { haptic(); set(q.n, { text: "", voice: null }); }}>✋ أعترض على هذا السؤال</button>
                   )}

@@ -69,7 +69,6 @@ export async function submitObjection(form: FormData) {
   for (const n of picked) {
     need(qs.has(n), "السؤال غير موجود");
     need(!done.has(n), `اعترضت على السؤال ${n} من قبل`);
-    need(Number(marks.get(n) ?? 0) < Number(qs.get(n)!.max_mark), `السؤال ${n} أخذت درجته الكاملة`);
     const text = String(form.get(`text_${n}`) ?? "").trim().slice(0, TEXT_MAX);
     const v = form.get(`voice_${n}`);
     const hasVoice = v instanceof Blob && v.size > 0;

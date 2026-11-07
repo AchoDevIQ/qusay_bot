@@ -131,14 +131,13 @@ test("اعتراض تجربة: صاحب البوت بس، وعلى ورقة تج
   assert.ok(calls.some((c) => c.p.chat_id === 1 && /هيچ يوصل للطالب/.test(c.p.text)));
 });
 
-test("السؤال اللي أخذ درجته الكاملة ما ينعترض عليه", async () => {
+test("حتى السؤال اللي أخذ درجته الكاملة ينعترض عليه", async () => {
   await put("students", { user_id: 64, name: "كامل", exam: "إلكتروني", created: "x" });
   const full = await insert("sched_items", { user_id: 64, exam_id: e, at: "x", status: "done", version_id: v, submitted_at: "x" });
   await g(30, "open", { id: full });
   await g(30, "mark", { id: full, q: 1, mark: 50 });
   await g(30, "mark", { id: full, q: 2, mark: 20 });
   await g(30, "finish", { id: full });
-  await assert.rejects(object(64, full, { qs: "1", text_1: "x" }), /أخذت درجته الكاملة/);
-  const r = await object(64, full, { qs: "2", text_2: "جوابي صحيح" });
+  const r = await object(64, full, { qs: "1,2", text_1: "انطيتوني كاملة بس أشوف بيها غلط", text_2: "جوابي صحيح" });
   assert.match(r.notice, /وصل اعتراضك/);
 });
