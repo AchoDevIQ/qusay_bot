@@ -3,6 +3,8 @@
 // مو متأكد منها، يحفظ خطوات حل كل سؤال، ويشوف سجله وشگد صرف
 import { useEffect, useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
+import PhotoPick from "../PhotoPick";
+import Thumbs from "../Thumbs";
 
 type Step = { text: string; points: number };
 type Q = { id: number; n: number; max: number; q: string | null; a: string[]; steps: Step[] | null };
@@ -11,10 +13,10 @@ type Exam = { id: number; title: string; on: boolean; versions: Version[]; ready
 type Chapter = { slug: string; chapter: string; grader: number; exams: Exam[] };
 type Sum = { sent: number; unsure: number; cost: number };
 type Trial = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; expected: string; student: string }[] };
-type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try"; name?: string; exam?: string; total?: number; toName: string; cost: number };
+type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
 type Data = {
-  on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
+  on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
   fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; trial?: { id: number; result: Trial }; notice?: string;
 };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
@@ -44,6 +46,12 @@ export default function AiGradeClient() {
               {data.on && <div className="fdok">🤖 شغال: كل دقيقة ياخذ أوراق المواضيع المأشرة ويصححها.</div>}
             </div>
             <Money data={data} />
+            <div className="card expad">
+              <div className="exlabel">📋 أوراق مواضيعه اللي بعدها ما انصححت</div>
+              {!data.pending.length && <div className="exhint">ماكو ورقة تنتظر بالمواضيع المأشرة.</div>}
+              {data.pending.map((p) => <div key={p.id} className="aig-logrow"><div><b>{p.name}</b> · {p.exam}<br /><small>{p.state}</small></div></div>)}
+              <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "list" })}>🔄 حدّث</button>
+            </div>
             <div className="card expad">
               <div className="exlabel">الفصل</div>
               <select value={ch?.slug ?? ""} onChange={(e) => setSlug(e.target.value)}>
@@ -164,6 +172,7 @@ function LogCard({ data }: { data: Data }) {
               {r.kind === "unsure" && <>↪️ <b>{r.name}</b> · {r.exam} · ما متأكد، حولها لـ {r.toName || "كل المصححين"}</>}
               {r.kind === "rubric" && <>🧩 طلّع خطوات حل سؤال</>}
               {r.kind === "try" && <>🧪 تجربة على جواب حقيقي</>}
+              {r.kind === "failed" && <>❌ <b>{r.name}</b> · {r.exam} · ما گدر يصححها{r.note ? `: ${r.note}` : ""}</>}
             </div>
             <small dir="ltr">{usd(r.cost)}</small>
           </div>
@@ -261,7 +270,8 @@ function TryBox({ q, busy, call, trial, linked }: { q: Q; busy: boolean; call: C
     <div className="aig-try">
       <div className="exlabel">🧪 جرّب على جواب حقيقي</div>
       <div className="exhint">صوّر جواب طالب لهذا السؤال (صورة أو أكثر) وشوف شگد ينطيه وليش. ما تنحفظ درجة لأحد وما توصل رسالة لأحد، بس كلفتها تنحسب.</div>
-      <input type="file" accept="image/*" multiple onChange={(e) => setPics([...(e.target.files ?? [])].slice(0, 6))} />
+      <PhotoPick multiple onFiles={(fs) => setPics([...pics, ...fs].slice(0, 6))} />
+      <Thumbs files={pics} onRemove={(i) => setPics(pics.filter((_, j) => j !== i))} />
       {!!pics.length && <div className="exhint">{pics.length} صورة جاهزة</div>}
       <button type="button" className="btn" disabled={busy || !pics.length || !linked} onClick={() => void go()}>{busy ? "🤖 يصحح... (لحد دقيقة)" : "🤖 صحّح هذا الجواب"}</button>
       {trial && (

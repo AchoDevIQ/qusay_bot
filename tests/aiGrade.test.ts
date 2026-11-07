@@ -304,3 +304,23 @@ test("«خطوات الفصل كله»: المواضيع المأشرة تدخل
   const saved = (await Promise.all(ids.map((id) => rubricOf(id)))).filter(Boolean).length;
   assert.ok(saved >= 9, `انحفظ ${saved}`);
 });
+
+test("ورقة تجربة للذكاء وهو طافي، أو موضوعها مو مأشر: ترفض وتگول ليش، وصفحته تبين وين واقفة كل ورقة", async () => {
+  const { studentUpload } = await import("../lib/studentApi.ts");
+  const form = () => {
+    const f = new FormData();
+    f.set("initData", sign(1)); f.set("action", "testPaper"); f.set("sid", "-1"); f.set("vid", String(ver)); f.set("who", "ai");
+    f.append("q_1", new File([new Uint8Array([0xff, 0xd8, 0xff, 9])], "a.jpg", { type: "image/jpeg" }));
+    return f;
+  };
+  await setAiOn(false);
+  await assert.rejects(studentUpload(form()), /نظام التصحيح AI طافي/);
+  await setAiOn(true);
+  await setChapterScope("c1", [], 0);
+  await assert.rejects(studentUpload(form()), /مو مأشر/);
+  await setChapterScope("c1", [ex], 0);
+  await studentUpload(form());
+  const r: any = await aiGradeAction({ initData: sign(1), action: "list" });
+  const mine = r.pending.find((p: any) => p.name === "طالب تجربة 1");
+  assert.match(mine.state, /بالدور/);
+});

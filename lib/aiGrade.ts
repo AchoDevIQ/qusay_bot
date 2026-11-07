@@ -15,11 +15,12 @@ export type Price = { in: number; out: number };
 /** المواضيع اللي يصححها، ولكل فصل المصحح اللي توصله الأوراق اللي مو متأكد منها */
 export type AiSettings = { exams: number[]; unsure: Record<string, number> };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
-export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try"; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
+export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
 
 const rubricKey = (qid: number) => `ai_rubric_q_${qid}`;
 const resultKey = (itemId: number) => `ai_result_${itemId}`;
 const triesKey = (itemId: number) => `ai_try_${itemId}`;
+const errKey = (itemId: number) => `ai_err_${itemId}`;
 const ON_KEY = "ai_grade_on", SET_KEY = "ai_settings", LOG_KEY = "ai_log", PRICE_KEY = "ai_prices";
 const MAX_TRIES = 2;
 const PER_TICK = 3;
@@ -285,6 +286,38 @@ export async function tryGrade(qid: number, imgs: Buffer[]): Promise<AiQuestion>
   return { ...res, usage: undefined };
 }
 
+/** ليش نظام التصحيح ما ياخذ أوراق هذا النموذج: طافي، أو الموضوع مو مأشر، أو باقي خطوات. null يعني ياخذها */
+export async function aiWhyNot(examId: number, versionId: number): Promise<string | null> {
+  if (!aiLinked()) return "خدمة التصحيح مو مربوطة بالسيرفر";
+  if (!await aiOn()) return "نظام التصحيح AI طافي. شغّله من صفحته (▶️ شغل نظام التصحيح AI)";
+  if (!(await aiSettings()).exams.includes(examId)) return "هذا الموضوع مو مأشر بمربع «المواضيع اللي يصححها نظام التصحيح AI». أشّره ودوس حفظ";
+  const qs = await find("bank_questions", { version_id: versionId }, { order: ["n"] });
+  const missing: number[] = [];
+  for (const q of qs) if (!await rubricOf(q.id)) missing.push(q.n);
+  if (!qs.length) return "هذا النموذج ما بيه أسئلة";
+  if (missing.length) return `باقي خطوات الأسئلة ${missing.join("، ")} بهذا النموذج`;
+  return null;
+}
+/** أوراق المواضيع المأشرة اللي بعدها ما انصححت، ووين واقفة كل وحدة */
+export async function aiPending(nameOf: (it: Row) => Promise<string>, staffName: (id: number) => Promise<string>) {
+  const s = await aiSettings();
+  const scope = new Set(s.exams);
+  const items = (await find("sched_items", { status: "done" })).filter((it) => !it.graded_at && scope.has(it.exam_id)).slice(0, 40);
+  const titles = new Map((await find("bank_exams")).map((e) => [e.id, e.title]));
+  const why = new Map<number, string | null>();
+  return await Promise.all(items.map(async (it) => {
+    let state: string;
+    if (it.grader_id === AI_GRADER) state = "🤖 يصححها هسه";
+    else if (it.grader_id) state = `✍️ بيد ${await staffName(it.grader_id)}`;
+    else if ((Number(await kvGet(triesKey(it.id))) || 0) >= MAX_TRIES) state = `❌ ما گدر يصححها، فرجعت للمصححين${(await kvGet(errKey(it.id))) ? `: ${await kvGet(errKey(it.id))}` : ""}`;
+    else {
+      if (!why.has(it.version_id)) why.set(it.version_id, await aiWhyNot(it.exam_id, it.version_id));
+      state = why.get(it.version_id) ? `⏸ ${why.get(it.version_id)}` : "⏳ بالدور، ياخذها خلال دقيقة";
+    }
+    return { id: it.id as number, name: await nameOf(it), exam: titles.get(it.exam_id) ?? "", state };
+  }));
+}
+
 /** الورقة بموضوع يصححه نظام التصحيح، وكل أسئلتها إلها خطوات، وبعده ما خلص محاولاته */
 async function makeTaker() {
   const active = aiLinked() && await aiOn();
@@ -350,6 +383,9 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
     } catch (e) {
       console.error("ai grade", it.id, e);
       failed++;
+      const note = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+      await kvSet(errKey(it.id), note);
+      await addLog({ at: stamp(), kind: "failed", item: it.id, sid: it.user_id, name: await nameOf(it), exam: (await one("bank_exams", { id: it.exam_id }))?.title ?? "", note, usage: [] });
       await kvSet(triesKey(it.id), String((Number(await kvGet(triesKey(it.id))) || 0) + 1));
       const now = await one("sched_items", { id: it.id });
       if (now && !now.graded_at && now.grader_id === AI_GRADER) {

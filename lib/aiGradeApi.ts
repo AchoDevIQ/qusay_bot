@@ -1,9 +1,9 @@
 // صفحة نظام التصحيح AI: صاحب البوت يشغله ويطفيه، يختار المواضيع اللي يصححها بكل فصل،
 // ومنو توصله الأوراق اللي مو متأكد منها، ويحفظ خطوات حل كل سؤال، ويشوف سجله وفلوسه
 import { ADMIN_IDS } from "./config.ts";
-import { count, find, type Row } from "./db.ts";
+import { count, find, one, type Row } from "./db.ts";
 import { AI_GRADER, isAdmin, staffIds, staffName } from "./data.ts";
-import { aiLinked, aiLog, aiOn, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
+import { aiLinked, aiLog, aiOn, aiPending, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -20,11 +20,13 @@ async function listData(uid: number) {
   const scope = new Set(s.exams);
   let ready = 0;
   const qOf = new Map<number, Row[]>();
-  for (const q of questions) {
-    const steps = await rubricOf(q.id);
+  // كل الخطوات سوية مو وحدة وحدة، حتى الصفحة تفتح بسرعة
+  const allSteps = await Promise.all(questions.map((q) => rubricOf(q.id)));
+  questions.forEach((q, i) => {
+    const steps = allSteps[i];
     if (steps) ready++;
     qOf.set(q.version_id, [...(qOf.get(q.version_id) ?? []), { id: q.id, n: q.n, max: q.max_mark, q: q.q_file, a: JSON.parse(q.a_files || "[]"), steps }]);
-  }
+  });
   const chapters: Row[] = [];
   for (const e of exams.sort((a, b) => String(a.slug).localeCompare(String(b.slug)) || (a.pos ?? a.ord) - (b.pos ?? b.ord))) {
     let c = chapters.find((x) => x.slug === e.slug);
@@ -41,7 +43,7 @@ async function listData(uid: number) {
   const models = [...new Set([...Object.keys(p), ...log.flatMap((r) => r.usage.map((u) => u.model))])];
   const toName = new Map(graders.map((g) => [g.id, g.name]));
   return {
-    on: await aiOn(), linked: aiLinked(), draftQueue: await draftQueueState(), ready, total: await count("bank_questions"), chapters, graders, fileToken: fileToken(uid),
+    on: await aiOn(), linked: aiLinked(), draftQueue: await draftQueueState(), pending: await aiPending(async (it) => (await one("students", { user_id: it.user_id }))?.name ?? `طالب ${it.user_id}`, staffName), ready, total: await count("bank_questions"), chapters, graders, fileToken: fileToken(uid),
     graded: (await find("sched_items", { grader_id: AI_GRADER })).filter((x) => x.graded_at).length,
     money: { today: sum(log.filter((r) => r.at.startsWith(today))), month: sum(log.filter((r) => r.at.startsWith(month))), all: sum(log) },
     prices: models.map((m) => ({ model: m, in: p[m]?.in ?? 0, out: p[m]?.out ?? 0, missing: !p[m] })),

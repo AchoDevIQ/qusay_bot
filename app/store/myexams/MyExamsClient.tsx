@@ -1,6 +1,7 @@
 "use client";
 // امتحاناتي: الطالب يرتب جدوله مرة وحدة، وبعدها يشوف مواعيده
 import { WordOrder } from "../agreeSteps";
+import PhotoPick from "../PhotoPick";
 import { Fragment, useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { deviceId, haptic, openOutside, platform } from "../shared";
@@ -426,7 +427,13 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   const [open, setOpen] = useState(room.questions[0]?.n ?? 0);
   const [draft, setDraft] = useState<{ q: number; file: File; url: string; turns: number } | null>(null);
   const [scan, setScan] = useState(scanDefault);
-  async function pickPhoto(q: number, f: File | undefined) { if (f) setDraft({ q, file: f, url: await previewUrl(f, scan), turns: 0 }); }
+  // صور كثيرة مرة وحدة (أو صفحات PDF): كل وحدة تطلع للمعاينة وتندز، وبعدها اللي وراها
+  const [more, setMore] = useState<File[]>([]);
+  async function pickPhoto(q: number, files: File[]) {
+    const [f, ...rest] = files;
+    setMore(rest);
+    if (f) setDraft({ q, file: f, url: await previewUrl(f, scan), turns: 0 }); else setDraft(null);
+  }
   async function toggleScan() { const on = !scan; setScan(on); rememberScan(on); if (draft) setDraft({ ...draft, url: await previewUrl(draft.file, on) }); }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -445,7 +452,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       const res = await fetch("/api/myexams", { method: "POST", body: f });
       const j = await res.json();
       if (!res.ok) { setError(j.error ?? "ما وصلت الصورة، حاول مرة ثانية"); if (res.status === 403) setClosed(true); return; }
-      setRoom(j.room); setDraft(null);
+      setRoom(j.room);
+      if (more.length) await pickPhoto(draft.q, more); else setDraft(null);
     } catch { setError("ماكو اتصال، حاول مرة ثانية"); } finally { setBusy(false); }
   }
   const total = room.questions.reduce((n, q) => n + q.answers.length, 0);
@@ -478,18 +486,18 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                   ))}
                   {draft?.q === q.n ? (
                     <div>
+                      {more.length > 0 && <div className="exhint">باقي {more.length} صورة وراها</div>}
                       <img className="eximg mxdraft" src={draft.url} alt="معاينة" style={{ transform: `rotate(${draft.turns * 90}deg)` }} />
                       <div className="exline">
                         <button type="button" className="exbtn" onClick={() => setDraft({ ...draft, turns: (draft.turns + 1) % 4 })}>🔄 دور الصورة</button>
                         <button type="button" className={scan ? "btn" : "exbtn"} onClick={() => void toggleScan()}>📄 سكانر {scan ? "✓" : ""}</button>
-                        <button type="button" className="exbtn" onClick={() => setDraft(null)}>إلغاء</button>
+                        <button type="button" className="exbtn" onClick={() => void pickPhoto(draft.q, more)}>{more.length ? "تخطّى هاي الصورة" : "إلغاء"}</button>
                         <button type="button" className="btn" disabled={busy} onClick={() => void send()}>{busy ? "جاري الإرسال..." : "✅ تم"}</button>
                       </div>
                     </div>
                   ) : (
                     <div className="exline">
-                      <label className="exbtn">📷 صور بالكاميرا<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void pickPhoto(q.n, f); }} /></label>
-                      <label className="exbtn">🖼 من الجهاز<input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void pickPhoto(q.n, f); }} /></label>
+                      <PhotoPick multiple onFiles={(fs) => void pickPhoto(q.n, fs)} />
                     </div>
                   )}
                 </div>

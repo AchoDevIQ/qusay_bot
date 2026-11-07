@@ -14,6 +14,7 @@ import { openException, startNowForTest } from "./examRoom.ts";
 import { TEST_STUDENTS, addTestPaper, deleteTests, makeTests } from "./gradeApi.ts";
 import { fileToken, homeToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
+import { aiWhyNot } from "./aiGrade.ts";
 import { guardianState, whatsappOf } from "./guardianWatch.ts";
 import { moveExam, retakeExam } from "./examMoves.ts";
 import { prettyAt } from "./scheduleRules.ts";
@@ -102,6 +103,11 @@ export async function studentUpload(form: FormData) {
     byQ.set(Number(m[1]), list);
   }
   const who = form.get("who") === "me" ? "me" : "ai";
+  if (who === "ai") {
+    const v = await one("bank_versions", { id: Number(form.get("vid")) });
+    const why = v ? await aiWhyNot(v.exam_id, v.id) : null;
+    need(!why, `نظام التصحيح AI ما راح ياخذها: ${why}`);
+  }
   await addTestPaper(uid, Number(form.get("sid")), Number(form.get("vid")), byQ, who);
   const name = (await student(Number(form.get("sid"))))?.name ?? "";
   return { ...await pageData("", filtersOf({}), uid), notice: who === "ai" ? `🧪 انرفعت ورقة ${name}. نظام التصحيح AI ياخذها خلال دقيقة (إذا موضوعها مأشر وخطواته جاهزة وهو شغال)` : `🧪 انرفعت ورقة ${name}، وتنتظرك بـ ✍️ التصحيح` };
