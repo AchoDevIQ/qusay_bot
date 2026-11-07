@@ -30,13 +30,13 @@ T = TypeVar("T", bound=BaseModel)
 
 FEATURES = ("ocr", "grading", "feedback", "visual")
 
-# Branch defaults: gpt-5-mini OCR (low detail), gpt-4o-mini grading/feedback,
-# gpt-5 for the Visual Red-Pen Grading Lab.
+# QMath bot: Claude Haiku 5.5 for every feature (reading the page, grading, feedback,
+# visual). Set <FEATURE>_MODEL to override one feature.
 DEFAULT_MODELS = {
-    "ocr": "gpt-5-mini",
-    "grading": "gpt-4o-mini",
-    "feedback": "gpt-4o-mini",
-    "visual": "gpt-5",
+    "ocr": "claude-haiku-5-5",
+    "grading": "claude-haiku-5-5",
+    "feedback": "claude-haiku-5-5",
+    "visual": "claude-haiku-5-5",
 }
 
 # Reasoning effort per feature when <FEATURE>_EFFORT is unset. The visual lab grades

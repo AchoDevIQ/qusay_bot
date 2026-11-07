@@ -11,5 +11,6 @@ the bot does not need them.
 To update the engine, copy the same folders again from a newer commit and change the
 commit above.
 
-Local change to the engine: `llm/router.py` adds `USAGE_COLLECTOR` so each request reports
+Local changes to the engine: `llm/router.py` uses `claude-haiku-5-5` for every feature by default
+(needs ANTHROPIC_API_KEY). Also: `llm/router.py` adds `USAGE_COLLECTOR` so each request reports
 its token use (the bot shows what every paper cost). Keep it when updating.

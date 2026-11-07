@@ -82,7 +82,7 @@ function Money({ data }: { data: Data }) {
         <thead><tr><th></th><th>انرسلت للطالب</th><th>حولها لمصحح</th><th>الكلفة</th></tr></thead>
         <tbody>{row("اليوم", data.money.today)}{row("هذا الشهر", data.money.month)}{row("من البداية", data.money.all)}</tbody>
       </table>
-      <div className="exhint">الكلفة بالدولار، محسوبة من عدد التوكنات وأسعار الموديلات اللي جوه. الرقم الأدق تلگاه بحساب OpenAI نفسه.</div>
+      <div className="exhint">الكلفة بالدولار، محسوبة من عدد التوكنات وأسعار الموديلات اللي جوه. الرقم الأدق تلگاه بحساب Anthropic نفسه (console.anthropic.com).</div>
     </div>
   );
 }
@@ -142,7 +142,7 @@ function Prices({ rows, busy, call }: { rows: PriceRow[]; busy: boolean; call: C
   return (
     <details className="card cpch">
       <summary><b>⚙️ أسعار الموديلات</b> {rows.some((r) => r.missing) ? "· ⚠️ موديل بدون سعر" : ""}</summary>
-      <div className="exhint">بالدولار لكل مليون توكن، داخل وطالع. غيرها إذا تغيرت أسعار OpenAI.</div>
+      <div className="exhint">بالدولار لكل مليون توكن، داخل وطالع. غيرها إذا تغيرت الأسعار. التصحيح يستعمل claude-haiku-5-5.</div>
       {rows.map((r) => {
         const v = edit[r.model] ?? { in: r.in, out: r.out };
         return (

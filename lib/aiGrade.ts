@@ -26,6 +26,7 @@ const PER_TICK = 3;
 const LOG_MAX = 5000;
 /** أسعار الموديلات بالدولار لكل مليون توكن (داخل / طالع). صاحب البوت يگدر يغيرها من الصفحة */
 export const DEFAULT_PRICES: Record<string, Price> = {
+  "claude-haiku-5-5": { in: 0.1, out: 0.5 },
   "gpt-4o-mini": { in: 0.15, out: 0.6 },
   "gpt-5-mini": { in: 0.25, out: 2 },
   "gpt-5": { in: 1.25, out: 10 },
