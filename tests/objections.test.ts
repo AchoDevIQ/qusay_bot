@@ -134,8 +134,9 @@ test("اعتراض تجربة: صاحب البوت بس، وعلى ورقة تج
   calls.length = 0;
   await g(1, "openObj", { id: t });
   await g(1, "decide", { id: t, rejects: { 1: "", 2: "" } });
-  // ورقة التجربة: الرد يوصل لصاحب البوت نفسه
-  assert.ok(calls.some((c) => c.p.chat_id === 1 && /هيچ يوصل للطالب/.test(c.p.text)));
+  // طالب التجربة: الرد يوصل لصاحب البوت، وفوكه اسم الطالب
+  assert.ok(calls.some((c) => Number(c.p.chat_id) === 1 && /رد المصحح على اعتراضك/.test(c.p.text ?? c.p.caption ?? "")));
+  assert.ok(calls.some((c) => /الرسالة الجاية توصل لـ/.test(c.p.text ?? "")));
 });
 
 test("حتى السؤال اللي أخذ درجته الكاملة ينعترض عليه", async () => {

@@ -77,7 +77,7 @@ export const allChapters = async () => [...new Set((await find("bank_exams", {},
 /** اللي ما انحاسب: الأوراق اللي صححها، والاعتراضات اللي انقبلت على أوراقه */
 export async function balanceOf(uid: number) {
   const rate = await rateOf(uid);
-  const mine = (await find("sched_items", { grader_id: uid })).filter((p) => p.user_id > 0);
+  const mine = await find("sched_items", { grader_id: uid });
   const papers = mine.filter((p) => p.graded_at && !p.paid_id);
   const ids = new Set(mine.map((p) => p.id));
   const objs = (await find("objections", { status: "accepted" })).filter((o) => ids.has(o.item_id) && !o.paid_id);
@@ -150,7 +150,7 @@ export async function payAction(uid: number, body: Row) {
 // ---------- خبر للمصحح: من توصل أوراق جديدة من فصوله، أكثر شي مرة كل نص ساعة حتى ما تكثر الرسائل
 const PING_GAP = 30;
 export async function notifyGraders() {
-  const papers = (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at && p.user_id > 0);
+  const papers = (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at);
   if (!papers.length) return 0;
   const now = stamp().slice(0, 16);
   let sent = 0;

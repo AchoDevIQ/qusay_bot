@@ -22,7 +22,7 @@ const CODE_ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export async function averages() {
   const out = new Map<number, { sum: number; n: number }>();
   for (const i of await find("sched_items")) {
-    if (i.user_id <= 0 || i.kind === "optional") continue;
+    if (i.kind === "optional") continue;
     const graded = !!i.graded_at, missed = i.status === "missed";
     if (!graded && !missed) continue;
     const a = out.get(i.user_id) ?? { sum: 0, n: 0 };
@@ -71,7 +71,7 @@ async function checkSize(g: Row) {
 
 // ---------- الطالب
 async function canCompete(uid: number) {
-  need(uid > 0 && await student(uid), "سجل معلوماتك أول");
+  need(await student(uid), "سجل معلوماتك أول");
   need(await hasExams(uid), "المنافسة بس للي عنده امتحانات");
 }
 export async function createGroup(uid: number, rawName: unknown) {
@@ -158,14 +158,14 @@ async function rankGroup(gid: number, avg: Awaited<ReturnType<typeof averages>>)
 }
 /** كل طلاب المركز اللي امتحنوا، من أعلى معدل */
 async function rankCenter(cid: number, avg: Awaited<ReturnType<typeof averages>>) {
-  const rows = (await find("students", { center_id: cid })).filter((s) => s.user_id > 0 && avg.get(s.user_id)?.n)
+  const rows = (await find("students", { center_id: cid })).filter((s) => avg.get(s.user_id)?.n)
     .map((s) => ({ id: s.user_id as number, name: String(s.name ?? ""), gender: String(s.gender ?? ""), avg: avgOf(avg.get(s.user_id))!, exams: avg.get(s.user_id)!.n }));
   return rows.sort((a, b) => b.avg - a.avg || a.name.localeCompare(b.name, "ar")).map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
 /** اللي يشوفه الطالب بصفحة امتحاناته */
 export async function studentComp(uid: number) {
-  if (uid <= 0 || !await hasExams(uid)) return null;
+  if (!await hasExams(uid)) return null;
   const avg = await averages();
   const g = await groupOfUser(uid);
   let group = null;

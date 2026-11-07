@@ -22,7 +22,7 @@ export const STUDENTS_PERM = "students";
 const RECENT = 100;
 
 export async function studentsStats() {
-  const rows = (await find("students")).filter((r) => r.user_id > 0);
+  const rows = await find("students");
   const f = (col: string, v: string) => rows.filter((r) => r[col] === v).length;
   return { all: rows.length, g6: f("grade", GRADES[0]), g5: f("grade", GRADES[1]), in: f("exam", "حضوري"),
     on: f("exam", "إلكتروني"), ar: f("curr", "عربي"), en: f("curr", "إنجليزي") };
@@ -62,7 +62,7 @@ async function testStudents() {
   });
 }
 async function pageData(q: string, f: Filters, uid = 0) {
-  const found = (await matching(q, f)).filter((r) => r.user_id > 0);
+  const found = await matching(q, f);
   const rows = found.slice(0, RECENT);
   const centers = await find("centers", { active: 1 }, { order: ["id"] });
   return {

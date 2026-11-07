@@ -212,3 +212,13 @@ test("سجل التصحيح يوم يوم: أوراق اليوم أول، وأي
   assert.equal(owner.due, null);
   assert.ok(owner.rows.some((r: any) => r.name === "معترض"));
 });
+
+test("ورقة طالب التجربة تنحسب بأجر المصحح مثل الحقيقية", async () => {
+  const { balanceOf } = await import("../lib/graderPay.ts");
+  const before = await balanceOf(30);
+  const t = await paper(-5, v2, e2);
+  await update("sched_items", { id: t }, { grader_id: 30, graded_at: "x", total: 60 });
+  const after = await balanceOf(30);
+  assert.equal(after.mand, before.mand + 1);
+  assert.equal(after.amount, before.amount + after.rate.mandatory);
+});

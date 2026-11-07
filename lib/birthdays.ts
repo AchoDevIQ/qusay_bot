@@ -22,7 +22,7 @@ export async function birthdayCfg(): Promise<Cfg> {
 async function averages() {
   const out = new Map<number, { sum: number; n: number }>();
   for (const i of await find("sched_items")) {
-    if (!i.graded_at || i.kind === "optional" || i.user_id <= 0) continue;
+    if (!i.graded_at || i.kind === "optional") continue;
     const a = out.get(i.user_id) ?? { sum: 0, n: 0 };
     a.sum += Number(i.total) || 0; a.n++;
     out.set(i.user_id, a);
@@ -35,7 +35,7 @@ export async function birthdaysOn(date: string) {
   const md = date.slice(5);
   const avg = await averages();
   const year = Number(date.slice(0, 4));
-  return (await find("students")).filter((s: Row) => s.user_id > 0 && String(s.birth ?? "").slice(5) === md).map((s) => {
+  return (await find("students")).filter((s: Row) => String(s.birth ?? "").slice(5) === md).map((s) => {
     const a = avg.get(s.user_id);
     return { id: s.user_id as number, name: String(s.name ?? ""), age: year - Number(String(s.birth).slice(0, 4)), exams: a?.n ?? 0, avg: a?.n ? Math.round((a.sum / a.n) * 10) / 10 : null, phone: String(s.phone1 ?? ""), exam: String(s.exam ?? "") };
   }).sort((x, y) => (y.avg ?? -1) - (x.avg ?? -1) || x.name.localeCompare(y.name, "ar"));

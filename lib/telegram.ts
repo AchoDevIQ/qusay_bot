@@ -1,8 +1,8 @@
 // عميل Telegram Bot API
 import fs from "node:fs";
 import path from "node:path";
-import { TOKEN } from "./config.ts";
-import { kvGet, kvSet } from "./db.ts";
+import { ADMIN_IDS, TOKEN } from "./config.ts";
+import { kvGet, kvSet, one } from "./db.ts";
 import { isStaff } from "./data.ts";
 
 const base = () => `https://api.telegram.org/bot${TOKEN}/`;
@@ -17,7 +17,22 @@ export async function shouldProtect(method: string, chat: unknown, given: unknow
   try { return !await isStaff(id); } catch { return true; }
 }
 
+/** طالب تجربة (رقمه من -1 لـ -999، مو مجموعة): ما عنده تليجرام، فرسائله توصل لصاحب البوت وفوكها اسمه.
+ *  أزرار الكيبورد اللي جوة ما تنبدل عند صاحب البوت، بس الأزرار اللي ويا الرسالة تبقى */
+const isTestChat = (chat: unknown) => { const n = Number(chat); return Number.isInteger(n) && n < 0 && n > -1000; };
+async function toOwner(method: string, chat: unknown) {
+  if (!SENDS.has(method) || !isTestChat(chat) || !ADMIN_IDS.length) return null;
+  const name = (await one("students", { user_id: Number(chat) }).catch(() => null))?.name ?? `طالب تجربة ${-Number(chat)}`;
+  await api("sendMessage", { chat_id: ADMIN_IDS[0], text: `🧪 الرسالة الجاية توصل لـ «${name}»:`, protect_content: false });
+  return ADMIN_IDS[0];
+}
+const innerOnly = (rm: unknown) => {
+  const o = typeof rm === "string" ? (() => { try { return JSON.parse(rm); } catch { return null; } })() : rm;
+  return o && typeof o === "object" && "inline_keyboard" in (o as object) ? rm : undefined;
+};
 export async function api<T = any>(method: string, params: Record<string, unknown> = {}, tries = 2): Promise<T | null> {
+  const owner = await toOwner(method, params.chat_id);
+  if (owner) { params = { ...params, chat_id: owner, protect_content: false }; const rm = innerOnly(params.reply_markup); if (rm) params.reply_markup = rm; else delete params.reply_markup; }
   if (await shouldProtect(method, params.chat_id, params.protect_content)) params = { ...params, protect_content: true };
   try {
     const r = await fetch(base() + method, {
@@ -59,6 +74,8 @@ export async function sendMany<T>(list: T[], one: (x: T) => Promise<unknown>, pe
 export async function upload(method: string, fields: Record<string, string>, fileField: string,
   file: string | Buffer, fname = typeof file === "string" ? path.basename(file) : "file", ctype = "application/octet-stream") {
   const fd = new FormData();
+  const owner = await toOwner(method, fields.chat_id);
+  if (owner) { fields = { ...fields, chat_id: String(owner), protect_content: "false" }; const rm = innerOnly(fields.reply_markup); if (rm) fields.reply_markup = String(rm); else delete fields.reply_markup; }
   if (await shouldProtect(method, fields.chat_id, fields.protect_content)) fields = { ...fields, protect_content: "true" };
   for (const [k, v] of Object.entries(fields)) fd.append(k, v);
   fd.append(fileField, new Blob([typeof file === "string" ? fs.readFileSync(file) : new Uint8Array(file)], { type: ctype }), fname);
@@ -109,6 +126,8 @@ export async function sendImage(chat: number | string, filePath: string, key: st
 /** ألبوم صور: كل 10 برسالة، والكلام على أول صورة. يرجع عدد الرسائل اللي وصلت */
 export async function sendAlbum(chat: number | string, photos: Buffer[], caption: string, protect = true) {
   let sent = 0;
+  const owner = await toOwner("sendMediaGroup", chat);
+  if (owner) { chat = owner; protect = false; }
   for (let i = 0; i < photos.length; i += 10) {
     const part = photos.slice(i, i + 10);
     const withCaption = i === 0;

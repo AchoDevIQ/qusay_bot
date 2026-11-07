@@ -98,7 +98,7 @@ test("لمن تخلص الورقة، الطالب وولي أمره توصلهم
   assert.equal(photos[0].p.protect_content, "true");
 });
 
-test("الحفظ ويا صور الورقة: الطالب وولي أمره يوصلهم ألبوم، وأوراق التجربة توصل للمصحح", async () => {
+test("الحفظ ويا صور الورقة: الطالب وولي أمره يوصلهم ألبوم، وطالب التجربة توصل رسائله لصاحب البوت", async () => {
   const { gradeUpload } = await import("../lib/gradeApi.ts");
   await put("students", { user_id: 52, name: "علي حسن محمد كاظم", curr: "إنجليزي", exam: "إلكتروني", created: "2026-01-01 10:00" });
   const e = await insert("bank_exams", { slug: "ch3", chapter: "الفصل الثالث", ord: 2, title: "امتحان", info: "Exam", minutes: 60, pos: 1 });
@@ -123,7 +123,10 @@ test("الحفظ ويا صور الورقة: الطالب وولي أمره يو
   assert.deepEqual(real.filter((x) => x.method === "sendMediaGroup").map((x) => x.p.chat_id), ["52"]);
   assert.equal(real[0].p.protect_content, "true");
   const test = await send(-9, 1);
-  assert.deepEqual(test.map((x) => [x.method, x.p.chat_id]), [["sendPhoto", "30"]]);   // التجربة توصل للمصحح بس
+  // طالب التجربة: كل اللي يوصله يوصل لصاحب البوت، وفوكه اسمه
+  assert.ok(test.length && test.every((x) => String(x.p.chat_id) === "1"));
+  assert.ok(test.some((x) => /الرسالة الجاية توصل لـ «طالب تجربة 9»/.test(x.p.text ?? "")));
+  assert.ok(test.some((x) => x.method === "sendPhoto"));
 });
 
 test("رسالة المصحح: كتابة أو صوت، والزر يحتاج اسم صحيح، وورقة التجربة توصل للمصحح", async () => {

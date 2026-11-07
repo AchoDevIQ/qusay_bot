@@ -21,12 +21,12 @@ const MAX_INK = 400_000;
 // الأخطاء الشائعة لكل امتحان (موضوع): كل المصححين يشوفونها من يصححون نفس الامتحان، وما تطلع بامتحان ثاني
 const errKey = (examId: number) => `grade_errors_exam_${examId}`;
 async function errorsOf(examId: number): Promise<string[]> { try { const j = JSON.parse(await kvGet(errKey(examId)) ?? "[]"); return Array.isArray(j) ? j.map(String) : []; } catch { return []; } }
-const nameOf = async (it: Row) => (isTest(it) ? `طالب تجربة ${-it.user_id}` : (await student(it.user_id))?.name ?? "طالب");
+const nameOf = async (it: Row) => (await student(it.user_id))?.name ?? (isTest(it) ? `طالب تجربة ${-it.user_id}` : "طالب");
 
 async function paperRow(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });
   const v = it.version_id ? await one("bank_versions", { id: it.version_id }) : null;
-  const general = isTest(it) || (await one("schedules", { user_id: it.user_id }))?.mode === "general";
+  const general = (await one("schedules", { user_id: it.user_id }))?.mode === "general";
   return { id: it.id, exam: it.exam_id, general, optional: it.kind === "optional", name: await nameOf(it), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", submitted: it.submitted_at ?? "", total: it.total ?? null, graded: it.graded_at ?? "", test: isTest(it), grader: it.grader_id ? await staffName(it.grader_id) : "" };
 }
 /** الأوراق اللي يگدر يصححها: ما انصححت، وما أخذها غيره، ومن فصوله */
@@ -41,7 +41,7 @@ async function examGroups(waiting: Row[]) {
   // الجدول العام والخاص كل واحد بروحه، وداخلهم حسب الموضوع حتى يصحح طلاب الموضوع سوا
   const groups = new Map<string, { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; order: number }>();
   for (const p of waiting) {
-    const e = exams.get(p.exam_id), gen = general.has(p.user_id) || isTest(p), key = `${p.exam_id}|${gen}`;
+    const e = exams.get(p.exam_id), gen = general.has(p.user_id), key = `${p.exam_id}|${gen}`;
     const g = groups.get(key) ?? { exam: p.exam_id, general: gen, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", count: 0, tests: 0, order: (e?.pos ?? 0) * 1000 + (e?.ord ?? 0) };
     g.count++; if (isTest(p)) g.tests++;
     groups.set(key, g);
@@ -76,8 +76,8 @@ export const objectionsWaiting = async (uid: number) => (await objectionPapers(u
 /** معلومات هدر الورقة المصححة: الفصل والمنهج */
 async function headerInfo(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });
-  const st = isTest(it) ? null : await student(it.user_id);
-  return { slug: e?.slug ?? "", info: e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar", sid: isTest(it) ? 0 : it.user_id };
+  const st = await student(it.user_id);
+  return { slug: e?.slug ?? "", info: e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar", sid: it.user_id };
 }
 async function paperView(it: Row, withObj = false) {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
@@ -221,7 +221,7 @@ export async function gradeAction(body: Row) {
     const left = view.questions.filter((q) => q.mark === null).map((q) => q.n);
     need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
     const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
-    const c = await pickComment(isTest(it) ? uid : it.user_id, total, !isTest(it));
+    const c = await pickComment(it.user_id, total);
     return { total, comment: c?.text ?? "", sticker: c?.sticker?.id ?? 0, sent: c?.id ?? 0 };
   } else if (a === "finish") {
     notice = await finishPaper(uid, body.id, [], Number(body.comment) || 0);
@@ -263,7 +263,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   const head = `📝 <b>انصحح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
   const chosen = commentId ? await one("grade_comments", { id: commentId }) : null;
   const c = chosen ? { text: chosen.text as string, sticker: chosen.sticker_id ? await one("stickers", { id: chosen.sticker_id }) : null }
-    : photos.length ? null : await pickComment(isTest(it) ? uid : it.user_id, total, !isTest(it));
+    : photos.length ? null : await pickComment(it.user_id, total);
   const text = c ? `${head}\n┈┈┈┈┈┈┈┈┈┈┈┈\n💬 «${esc(c.text)}»\n┈┈┈┈┈┈┈┈┈┈┈┈` : head;
   const pic = !photos.length && c?.sticker ? await files().read(c.sticker.file) : null;
   const deliver = async (chat: number, caption: string) => {
@@ -274,10 +274,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
     }
     await send(chat, caption);
   };
-  if (isTest(it)) {
-    // أوراق التجربة: الصور توصل للمصحح نفسه حتى يشوف شنو يوصل للطالب
-    if (photos.length) await deliver(uid, `🧪 <b>هيچ توصل للطالب</b>\n${text}`);
-  } else {
+  {
     await deliver(it.user_id, text);
     await send(it.user_id, "✋ إذا تشوف درجة سؤال مو صحيحة، تگدر تعترض عليها بالكتابة أو بصوتك.", { kb: objectButton(it.user_id, it.id) });
     const g = await guardianOf(it.user_id);
@@ -342,8 +339,7 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
     }
     await send(chat, caption, { extra: { protect_content: true } });
   };
-  if (isTest(it)) await deliver(uid, `🧪 <b>هيچ يوصل للطالب</b>\n${text}`);
-  else {
+  {
     await deliver(it.user_id, text);
     // ولي الأمر: الدرجة الجديدة بس، باسم الطالب الرباعي والامتحان، بدون تفاصيل الاعتراض
     const g = accepted ? await guardianOf(it.user_id) : null;
@@ -369,7 +365,7 @@ async function messageStudent(uid: number, form: FormData) {
   const user = String(form.get("btnUser") ?? "").trim().replace(/^@/, "").replace(/^https?:\/\/t\.me\//, "");
   if (btnText || user) need(btnText && /^[A-Za-z0-9_]{4,32}$/.test(user), "الزر يحتاج نص واسم مستخدم تلگرام صحيح");
   const view = await paperRow(it);
-  const to = isTest(it) ? uid : it.user_id;
+  const to = it.user_id;
   const kb = btnText ? { inline_keyboard: [[{ text: btnText, url: `https://t.me/${user}` }]] } : undefined;
   const caption = `📩 <b>رسالة من المصحح</b>\nبخصوص امتحان: ${esc(view.title)}${text ? `\n\n${esc(text)}` : ""}`;
   if (hasVoice) {
@@ -384,8 +380,8 @@ async function messageStudent(uid: number, form: FormData) {
   } else {
     await send(to, caption, { extra: { protect_content: true, ...(kb ? { reply_markup: kb } : {}) } });
   }
-  if (!isTest(it)) await logActivity(it.user_id, `📩 وصلته رسالة من المصحح بخصوص ${view.title}`);
-  return { ok: true, notice: isTest(it) ? "🧪 وصلتك الرسالة إنت لأنها ورقة تجربة" : "✅ وصلت الرسالة للطالب" };
+  await logActivity(it.user_id, `📩 وصلته رسالة من المصحح بخصوص ${view.title}`);
+  return { ok: true, notice: isTest(it) ? "🧪 وصلت الرسالة إلك إنت، لأنه طالب تجربة" : "✅ وصلت الرسالة للطالب" };
 }
 
 export const waitingPapers = async (uid: number) => (await waitingFor(uid, await find("sched_items", { status: "done" }))).length;

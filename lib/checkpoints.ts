@@ -114,7 +114,6 @@ async function rewardStudent(uid: number, st: Row, band: Band | null, pic: strin
 
 /** يحسب السيطرات اللي كملت للطالب، ويوقفه إذا ما عبر وحدة منها */
 export async function runCheckpoints(uid: number) {
-  if (uid <= 0) return;
   const cfg = await loadCfg();
   if (!Object.keys(cfg.rules).length || await activeStop(uid)) return;
   const st = await student(uid);

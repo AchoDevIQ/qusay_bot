@@ -99,7 +99,7 @@ test("التصحيح: الصلاحية، أول مصحح ياخذ الورقة،
   assert.equal((await g(21, "list")).waiting.length, 1);
 });
 
-test("أوراق التجربة: لصاحب البوت بس، وما توصل رسالة، وتنمسح", async () => {
+test("طلاب التجربة: صاحب البوت يسويهم، ورسائلهم توصله هو، وينمسحون", async () => {
   await assert.rejects(g(20, "makeTests"), (x: any) => x.status === 403);
   const withPdf = await exam();
   await update("bank_versions", { id: withPdf.v }, { answer_pdf: "answers/t/e1/A.pdf" });
@@ -115,7 +115,8 @@ test("أوراق التجربة: لصاحب البوت بس، وما توصل ر
   for (const q of qs) await g(1, "mark", { id: t.id, q: q.n, mark: q.max });
   calls.length = 0;
   await g(1, "finish", { id: t.id });
-  assert.equal(calls.length, 0);
+  assert.ok(calls.length && calls.every((x) => String(x.p.chat_id) === "1"));
+  assert.ok(calls.some((x) => /الرسالة الجاية توصل لـ «طالب تجربة/.test(x.p.text ?? "")));
   const gone = await g(1, "deleteTests");
   assert.equal(gone.hasTests, false);
   assert.equal((await find("sched_items", {}, { where: (i) => i.user_id < 0 })).length, 0);

@@ -30,13 +30,13 @@ const today = todayStr(), md = today.slice(5);
 const ex = await insert("bank_exams", { slug: "c1", chapter: "الفصل الأول", ord: 1, title: "امتحان", minutes: 60, pos: 1 });
 await put("staff", { user_id: 30, name: "مساعد الأعياد", perms: "birthdays" });
 await put("staff", { user_id: 31, name: "مصحح", perms: "grade" });
-for (const [uid, name, birth] of [[60, "شاطر", `2008-${md}`], [61, "عادي", `2007-${md}`], [62, "جديد", `2008-${md}`], [63, "مو اليوم", "2008-01-01"], [-1, "تجربة", `2008-${md}`]] as const) {
+for (const [uid, name, birth] of [[60, "شاطر", `2008-${md}`], [61, "عادي", `2007-${md}`], [62, "جديد", `2008-${md}`], [63, "مو اليوم", "2008-01-01"]] as const) {
   await put("students", { user_id: uid, name, exam: "إلكتروني", birth, created: "x" });
 }
 const graded = (uid: number, total: number, kind: string | null = null) => insert("sched_items", { user_id: uid, exam_id: ex, at: "x", status: "done", graded_at: "x", total, kind });
 await graded(60, 96); await graded(60, 92); await graded(61, 70); await graded(61, 100, "optional");
 
-test("اليوم: الطلاب الحقيقيين بس، ومعدلهم من الإجباري المصحح، والأعلى أول", async () => {
+test("اليوم: الطلاب، ومعدلهم من الإجباري المصحح، والأعلى أول", async () => {
   const l = await birthdaysOn(today);
   assert.deepEqual(l.map((s) => [s.name, s.avg, s.exams]), [["شاطر", 94, 2], ["عادي", 70, 1], ["جديد", null, 0]]);
   if (md !== "01-01") assert.ok(!l.some((s) => s.name === "مو اليوم"));
