@@ -52,7 +52,7 @@ test("جدول الطالب: المحاضرات قبل امتحانها، وال
   await put("students", { user_id: 60, name: "طالب", exam: "إلكتروني", created: "2026-01-01 00:00:00" });
   await insert("sched_items", { user_id: 60, exam_id: exams[0], at: "2027-02-01 10:00", status: "waiting" });
   await insert("sched_items", { user_id: 60, exam_id: exams[4], at: "2027-02-02 10:00", status: "waiting" });
-  const info = async () => await myExamAction({ token: homeToken(60), device: "dev-00000000000060", action: "info" }) as any;
+  const info = async () => await myExamAction({ token: homeToken(60), pf: "ios", device: "dev-00000000000060", action: "info" }) as any;
   const r = await info();
   assert.deepEqual(r.items.map((i: any) => [i.title, i.lectures]), [["قطع مكافئ 1&2", ["قطع مكافئ: المحاضرة 1", "قطع مكافئ: المحاضرة 2"]], ["نصف فاينل", []]]);
   assert.equal(r.appLink, "");   // امتحانات بس: يشوف الأسماء بدون رابط

@@ -158,7 +158,7 @@ test("الاختياري: مرة وحدة بوقته، ما يأثر على ال
   const o = (await find("bank_versions", { exam_id: e, model: "O" }))[0];
   await insert("bank_questions", { version_id: o.id, n: 1, max_mark: 100, q_file: "t/q.png" });
   await put("students", { user_id: 60, name: "علي حسن محمد كاظم", curr: "عربي", exam: "إلكتروني", created: "2026-01-01 10:00" });
-  const act = (action: string, x: object = {}) => myExamAction({ token: homeToken(60), device: "dev-" + String(60).padStart(14, "0"), action, ...x }) as Promise<any>;
+  const act = (action: string, x: object = {}) => myExamAction({ token: homeToken(60), pf: "ios", device: "dev-" + String(60).padStart(14, "0"), action, ...x }) as Promise<any>;
   assert.equal((await act("info")).optional.length, 0);               // ما اشترى
   await put("exam_access", { user_id: 60, chapter: "فصل الاختياري", order_id: 1, created: "1" });
   const info = await act("info");
@@ -174,9 +174,9 @@ test("الاختياري: مرة وحدة بوقته، ما يأثر على ال
   await schedAdminAction({ action: "save", initData: sign(1), window: 15, extra: 15, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, excluded: "", blockedHours: [], optionalOpen: false });
   await put("students", { user_id: 61, name: "علي حسن محمد كاظم", curr: "عربي", exam: "إلكتروني", created: "2026-01-01 10:00" });
   await put("exam_access", { user_id: 61, chapter: "فصل الاختياري", order_id: 1, created: "1" });
-  const closed = await myExamAction({ token: homeToken(61), device: "dev-" + String(61).padStart(14, "0"), action: "info" }) as any;
+  const closed = await myExamAction({ token: homeToken(61), pf: "ios", device: "dev-" + String(61).padStart(14, "0"), action: "info" }) as any;
   assert.equal(closed.optional.length, 0);
-  await assert.rejects(myExamAction({ token: homeToken(61), device: "dev-" + String(61).padStart(14, "0"), action: "openOptional", exam: e }), /مسدودة/);
+  await assert.rejects(myExamAction({ token: homeToken(61), pf: "ios", device: "dev-" + String(61).padStart(14, "0"), action: "openOptional", exam: e }), /مسدودة/);
   await schedAdminAction({ action: "save", initData: sign(1), window: 15, extra: 15, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, excluded: "", blockedHours: [], optionalOpen: true });
 });
 

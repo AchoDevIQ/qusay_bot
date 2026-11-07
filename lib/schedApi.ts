@@ -3,7 +3,7 @@ import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { photosAllowed, studentCode } from "./inPerson.ts";
 import { appLink, lectureMap, sendLectureFile, visibleLectureFiles } from "./lectures.ts";
 import { checkStopped, checkpointCard, seeCheckpoint } from "./checkpoints.ts";
-import { checkDevice } from "./deviceLock.ts";
+import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { objectionInfo } from "./objections.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
 import { boughtLectures, logActivity } from "./access.ts";
@@ -224,6 +224,7 @@ export async function myExamAction(body: Row) {
   const a = String(body.action ?? "");
   need(await student(id), "سجل معلوماتك أول");
   await checkDevice(id, body.device);
+  await checkPhone(id, body.pf);
   await checkStopped(id);
   if (a === "preview" || a === "confirm") {
     const info = await studentInfo(id);

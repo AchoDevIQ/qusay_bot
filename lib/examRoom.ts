@@ -2,7 +2,7 @@
 import { photosAllowed } from "./inPerson.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { activeStop, checkStopped } from "./checkpoints.ts";
-import { checkDevice } from "./deviceLock.ts";
+import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { find, insert, one, put, remove, update, type Row } from "./db.ts";
@@ -129,6 +129,7 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   const uid = verifyHomeToken(form.get("token"));
   need(uid !== null, "هذا الرابط قديم. اكتب /start بالبوت وافتح القائمة من جديد", 401);
   await checkDevice(uid!, form.get("device"));
+  await checkPhone(uid!, form.get("pf"));
   await checkStopped(uid!);
   const it = await liveRoom(uid!, form.get("item"), s);
   const q = Number(form.get("q"));
@@ -144,10 +145,11 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   return await roomView(it, s);
 }
 /** صور الأسئلة والأجوبة: بس لصاحب الامتحان، وبس ملفات امتحانه */
-export async function roomFile(token: unknown, itemId: unknown, ref: unknown) {
+export async function roomFile(token: unknown, itemId: unknown, ref: unknown, pf?: unknown) {
   await ensure();
   const uid = verifyHomeToken(token);
   need(uid !== null, "الرابط انتهى", 401);
+  await checkPhone(uid!, pf);
   const it = await one("sched_items", { id: Number(itemId), user_id: uid! });
   need(it?.version_id, "ما عندك صلاحية", 403);
   const e = (await one("bank_exams", { id: it!.exam_id }))!;

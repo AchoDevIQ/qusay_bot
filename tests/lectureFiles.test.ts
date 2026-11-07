@@ -32,7 +32,7 @@ const sign = (uid: number) => {
   return params.toString();
 };
 const lec = (action: string, x: object = {}) => lecturesAction({ initData: sign(1), action, ...x }) as Promise<any>;
-const me = (action: string, x: object = {}) => myExamAction({ token: homeToken(60), device: "dev-00000000000060", action, ...x }) as Promise<any>;
+const me = (action: string, x: object = {}) => myExamAction({ token: homeToken(60), pf: "ios", device: "dev-00000000000060", action, ...x }) as Promise<any>;
 const NAME = "قطع مكافئ: المحاضرة 1";
 const ex = await insert("bank_exams", { slug: "c2", chapter: "الفصل الثاني", ord: 1, title: "قطع مكافئ 1&2", minutes: 60, pos: 2 });
 const v = await insert("bank_versions", { exam_id: ex, model: "A", kind: "mandatory", ok: 1 });
@@ -85,4 +85,16 @@ test("بنص الامتحان: ماكو ملفات ولا أسئلة ولا اع
 test("الحذف يشيل الملف من الطالب", async () => {
   await lec("fileDelete", { name: NAME });
   assert.deepEqual((await me("info")).lectureFiles, []);
+});
+
+test("صفحة امتحاناتي ما تشتغل بتلگرام الكمبيوتر ولا بالمتصفح، بس الموبايل", async () => {
+  for (const pf of ["tdesktop", "macos", "web", "weba", "unknown", ""]) {
+    await assert.rejects(me("info", { pf }), (e: any) => e.status === 403 && /الموبايل/.test(e.message), pf);
+  }
+  for (const pf of ["android", "android_x", "ios"]) assert.ok(await me("info", { pf }));
+  const { roomFile } = await import("../lib/examRoom.ts");
+  await assert.rejects(roomFile(homeToken(60), 1, "x.png", "tdesktop"), (e: any) => e.status === 403 && /الموبايل/.test(e.message));
+  // الطالب التجريبي يفتح من الكمبيوتر حتى صاحب البوت يجرب
+  await put("students", { user_id: -5, name: "تجريبي", exam: "إلكتروني", created: "2026-01-01 00:00:00" });
+  assert.ok(await myExamAction({ token: homeToken(-5), device: "dev-00000000000005", pf: "tdesktop", action: "info" }));
 });

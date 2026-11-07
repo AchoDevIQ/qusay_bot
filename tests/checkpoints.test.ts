@@ -79,7 +79,7 @@ test("درجة قليلة: تنوقف الامتحانات، والرسالة ت
   assert.match(calls[1].p.text, /على الطالب واطي/);
   assert.equal(await lecturesStopped(51), false);   // ما مشتري محاضرات
   // صفحة امتحاناته ما تنفتح
-  await assert.rejects(myExamAction({ token: homeToken(51), device: "dev-00000000000051", action: "info" }), (e: any) => e.status === 423 && /توقفت عليك الامتحانات/.test(e.message));
+  await assert.rejects(myExamAction({ token: homeToken(51), pf: "ios", device: "dev-00000000000051", action: "info" }), (e: any) => e.status === 423 && /توقفت عليك الامتحانات/.test(e.message));
   // مرة ثانية ما توصل رسالة ثانية
   calls.length = 0;
   await runCheckpoints(51);
@@ -105,7 +105,7 @@ test("فك الإيقاف يرجعه، والرسائل تتعدل", async () =>
   assert.ok(!after.stopped.some((s: any) => s.id === 51));
   assert.equal(await activeStop(51), null);
   assert.match(calls[0].p.text, /رجعت الامتحانات/);
-  await myExamAction({ token: homeToken(51), device: "dev-00000000000051", action: "info" });
+  await myExamAction({ token: homeToken(51), pf: "ios", device: "dev-00000000000051", action: "info" });
   const t = await cp("saveTexts", { student: "وقف {الاسم} {الدرجة}", guardian: "ولي {الاسم}" });
   assert.equal(t.student, "وقف {الاسم} {الدرجة}");
   assert.equal((await cp("resetTexts")).student.startsWith("⛔"), true);

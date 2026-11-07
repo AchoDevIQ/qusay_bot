@@ -161,6 +161,17 @@ export function PhoneInput({ id, value, onChange, errs, setErrs }: {
   );
 }
 
+/** نوع الجهاز مثل ما يگوله تلگرام (android / ios / tdesktop / web ...). السكربت يتحمل بعد الصفحة فننتظره شوية */
+let platformPromise: Promise<string> | null = null;
+export function platform(): Promise<string> {
+  platformPromise ??= new Promise((ok) => {
+    let tries = 0;
+    const read = () => (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "";
+    const t = setInterval(() => { const p = read(); if (p || ++tries > 25) { clearInterval(t); ok(p); } }, 120);
+  });
+  return platformPromise;
+}
+
 /** رقم هذا الجهاز: ينحفظ بذاكرة تلگرام على الجهاز نفسه (DeviceStorage)، وإذا ما موجودة بذاكرة الصفحة.
  *  صفحات الطالب تدزه ويا كل طلب، والسيرفر يقفل الحساب على أول جهاز */
 type Store = { getItem(k: string, cb: (err: unknown, v?: string | null) => void): void; setItem(k: string, v: string, cb?: (err: unknown) => void): void };

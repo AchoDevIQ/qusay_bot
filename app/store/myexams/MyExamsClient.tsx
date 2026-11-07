@@ -2,7 +2,7 @@
 // امتحاناتي: الطالب يرتب جدوله مرة وحدة، وبعدها يشوف مواعيده
 import { Fragment, useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
-import { deviceId, haptic, openOutside } from "../shared";
+import { deviceId, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
 import VoiceRec from "../VoiceRec";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
@@ -32,7 +32,7 @@ export default function MyExamsClient() {
     setError("");
     try {
       const token = new URLSearchParams(location.search).get("t") ?? "";
-      const res = await fetch("/api/myexams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, ...body, device: await deviceId() }) });
+      const res = await fetch("/api/myexams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, ...body, device: await deviceId(), pf: await platform() }) });
       const j: Info = await res.json();
       if (!res.ok) { setError(j.error ?? "صار خطأ، حاول مرة ثانية"); if (res.status === 423) setStopPic(j.stop?.image || "none"); return null; }
       setInfo(j);
@@ -305,7 +305,7 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
     setBusy(true); setError(""); setNotice("");
     try {
       const f = new FormData();
-      f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId());
+      f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId()); f.set("pf", await platform());
       f.set("action", "object"); f.set("item", String(obj.id)); f.set("qs", picked.map((p) => p.n).join(","));
       for (const p of picked) { f.set(`text_${p.n}`, p.text); if (p.voice) f.set(`voice_${p.n}`, p.voice, "voice"); }
       const res = await fetch("/api/myexams", { method: "POST", body: f });
@@ -362,7 +362,7 @@ function Objection({ obj, setObj, leave }: { obj: Obj; setObj: (o: Obj) => void;
   );
 }
 
-const fileUrl = (item: number, ref: string) => `/api/myexams/file?t=${encodeURIComponent(new URLSearchParams(location.search).get("t") ?? "")}&item=${item}&ref=${encodeURIComponent(ref)}`;
+const fileUrl = (item: number, ref: string) => `/api/myexams/file?t=${encodeURIComponent(new URLSearchParams(location.search).get("t") ?? "")}&item=${item}&ref=${encodeURIComponent(ref)}&pf=${encodeURIComponent((window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "")}`;
 const minutesLeft = (closeAt: string, nowAt: string, since: number) => {
   const end = new Date(closeAt.replace(" ", "T") + ":00Z").getTime(), start = new Date(nowAt.replace(" ", "T") + ":00Z").getTime();
   return Math.ceil((end - start - (Date.now() - since)) / 60000);
@@ -386,7 +386,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     setBusy(true); setError("");
     try {
       const f = new FormData();
-      f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId());
+      f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId()); f.set("pf", await platform());
       f.set("item", String(room.id)); f.set("q", String(draft.q));
       f.set("file", await prepare(draft.file, draft.turns, scan), "answer.jpg");
       const res = await fetch("/api/myexams", { method: "POST", body: f });

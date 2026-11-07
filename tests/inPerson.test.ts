@@ -86,7 +86,7 @@ test("إعدادات المركز لصاحب البوت بس، والورقة ا
   assert.deepEqual(r.centers.find((c: any) => c.id === center), { id: center, name: "معهد تجربة", print: "paper", photos: true });
   assert.equal((await at(40, "scan", { code: "80" })).card.print, "paper");
   // التصوير من التلفون: كود الحضور يطلع بصفحته
-  const info = await myExamAction({ token: homeToken(80), device: "dev-00000000000080", action: "info" }) as any;
+  const info = await myExamAction({ token: homeToken(80), pf: "ios", device: "dev-00000000000080", action: "info" }) as any;
   assert.equal(info.attendCode, ip.studentCode(80));
 });
 

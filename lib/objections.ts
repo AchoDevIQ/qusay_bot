@@ -1,6 +1,6 @@
 // الاعتراضات: الطالب يعترض على درجة سؤال أو أكثر، بكتابة أو بصوت. الاعتراض يروح لمصحح الورقة،
 // وإذا غير الدرجة ينقبل وحده، وإذا ما غيرها لازم يضغط رفض. كل سؤال ينعترض عليه مرة وحدة
-import { checkDevice } from "./deviceLock.ts";
+import { checkDevice, checkPhone } from "./deviceLock.ts";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { ADMIN_IDS } from "./config.ts";
@@ -59,6 +59,7 @@ export async function submitObjection(form: FormData) {
   const uid = verifyHomeToken(form.get("token"));
   need(uid !== null, "هذا الرابط قديم. اكتب /start بالبوت وافتح القائمة من جديد", 401);
   await checkDevice(uid!, form.get("device"));
+  await checkPhone(uid!, form.get("pf"));
   const it = await gradedItem(uid!, form.get("item"));
   const qs = new Map((await find("bank_questions", { version_id: it.version_id })).map((q) => [q.n as number, q]));
   const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));

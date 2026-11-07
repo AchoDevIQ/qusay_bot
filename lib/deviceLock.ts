@@ -9,6 +9,16 @@ import { need } from "./webApi.ts";
 export const LOCKED_TEXT = "🔒 حسابك مفتوح على جهاز ثاني. الحساب يشتغل على جهاز واحد بس. إذا بدلت جهازك تواصل ويا قصي العميري حتى يفك القفل.";
 const DEVICE_RE = /^[A-Za-z0-9-]{16,64}$/;
 
+// ضد التسريب: صفحة امتحاناتي (الامتحان وملفاته والاعتراضات وملفات المحاضرات) تشتغل بس من تلگرام الموبايل،
+// لأن الموبايل يمنع تصوير الشاشة وتلگرام الكمبيوتر ما يمنع. الصفحة تدز نوع الجهاز اللي يعطيه تلگرام.
+// الطلاب التجريبيين (أرقام سالبة) والكادر مستثنين حتى صاحب البوت يگدر يجرب من الكمبيوتر
+export const PHONE_TEXT = "📱 هاي الصفحة تنفتح بس من تلگرام الموبايل. ما تشتغل بتلگرام الكمبيوتر ولا بالمتصفح.";
+const PHONES = new Set(["android", "android_x", "ios"]);
+export async function checkPhone(uid: number, pf: unknown) {
+  if (uid < 0 || await isStaff(uid)) return;
+  need(PHONES.has(String(pf ?? "")), PHONE_TEXT, 403);
+}
+
 export async function checkDevice(uid: number, raw: unknown) {
   if (await isStaff(uid) || !await student(uid)) return;
   const dev = String(raw ?? "").trim();

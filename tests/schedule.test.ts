@@ -36,7 +36,7 @@ const sign = (uid: number) => {
   params.set("hash", createHmac("sha256", key).update(check).digest("hex"));
   return params.toString();
 };
-const act = (uid: number, action: string, extra: object = {}) => myExamAction({ token: homeToken(uid), device: "dev-" + String(uid).padStart(14, "0"), action, ...extra }) as Promise<any>;
+const act = (uid: number, action: string, extra: object = {}) => myExamAction({ token: homeToken(uid), pf: "ios", device: "dev-" + String(uid).padStart(14, "0"), action, ...extra }) as Promise<any>;
 const exams = (n: number, minutes = 60) => Array.from({ length: n }, (_, i) => ({ id: i + 1, minutes }));
 const S = DEFAULT_SETTINGS;
 const base = { start: "2027-02-01", end: "2027-02-28", weekdays: [0, 2], hour: 16, perDay: 2, settings: S };   // 2027-02-01 اثنين
@@ -131,7 +131,7 @@ test("غير المسجل مرفوض", async () => {
 });
 
 test("مربع امتحاناتي يفتح الصفحة", async () => {
-  const r: any = await homeAction({ token: homeToken(70), device: "dev-" + String(70).padStart(14, "0"), action: "exams" }).catch((e) => { throw e; });
+  const r: any = await homeAction({ token: homeToken(70), pf: "ios", device: "dev-" + String(70).padStart(14, "0"), action: "exams" }).catch((e) => { throw e; });
   assert.match(r.url, /\/store\/myexams\?.*t=/);
 });
 
@@ -280,7 +280,7 @@ test("الحضوري: أوقات مركزه بس، وفصوله من الطلب�
   assert.deepEqual(info.days[0].times.map((x: any) => x.t), ["08:00", "09:30"]);
   await assert.rejects(act(83, "joinPlace", { picks: { "4": "16:00" } }), /لكل يوم/);
   await put("guardians", { guardian_id: 9001, student_id: 83, created: "x" });
-  const r: any = await homeAction({ token: homeToken(83), device: "dev-" + String(83).padStart(14, "0"), action: "exams" });
+  const r: any = await homeAction({ token: homeToken(83), pf: "ios", device: "dev-" + String(83).padStart(14, "0"), action: "exams" });
   assert.match(r.url, /myexams/);
   const rows = (await schedAdminAction({ action: "list", center: c1, initData: admin }) as any).rows.filter((x: any) => x.chapter === "الفصل الأول");
   const fri = nextWeekday(4);
@@ -459,7 +459,7 @@ test("ملفات الفصل تدخل على جدول الكتاب حسب الع�
 const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]);
 const upload = async (uid: number, item: number, q: number, body: Buffer = JPG) => {
   const f = new FormData();
-  f.set("token", homeToken(uid)); f.set("device", "dev-" + String(uid).padStart(14, "0")); f.set("item", String(item)); f.set("q", String(q));
+  f.set("token", homeToken(uid)); f.set("pf", "ios"); f.set("device", "dev-" + String(uid).padStart(14, "0")); f.set("item", String(item)); f.set("q", String(q));
   f.set("file", new Blob([new Uint8Array(body)]), "a.jpg");
   return await uploadAnswer(f, await schedSettings()) as any;
 };
@@ -491,9 +491,9 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
 
   const ans = r.questions[0].answers[0];
   assert.match(ans.file, /student_answers\/90\//);
-  assert.ok((await roomFile(homeToken(90), item, ans.file)).body.length);
-  await assert.rejects(roomFile(homeToken(91), item, ans.file), (x: any) => x.status === 403);
-  await assert.rejects(roomFile(homeToken(90), item, "ch1/secret.png"), (x: any) => x.status === 403);
+  assert.ok((await roomFile(homeToken(90), item, ans.file, "ios")).body.length);
+  await assert.rejects(roomFile(homeToken(91), item, ans.file, "ios"), (x: any) => x.status === 403);
+  await assert.rejects(roomFile(homeToken(90), item, "ch1/secret.png", "ios"), (x: any) => x.status === 403);
   const del = await act(90, "delAnswer", { item, answer: ans.id });
   assert.equal(del.room.questions[0].answers.length, 0);
   await upload(90, item, 2);
