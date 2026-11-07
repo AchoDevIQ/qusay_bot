@@ -184,7 +184,7 @@ export async function officeUnsettled(oid: number) {
 /** رقم المصحح الآلي بالأوراق اللي صححها (مو حساب تليجرام) */
 export const AI_GRADER = -7;
 export async function staffName(uid: number | null | undefined) {
-  if (uid === AI_GRADER) return "🤖 المصحح الآلي";
+  if (uid === AI_GRADER) return "🤖 نظام التصحيح AI";
   if (uid != null && await isAdmin(uid)) return "قصي العميري";
   if (uid == null) return "مساعد";
   const u = await one("office_users", { user_id: uid });

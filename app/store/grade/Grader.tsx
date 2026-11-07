@@ -712,7 +712,7 @@ function AiNote({ a }: { a: AiQ }) {
   const mark = (s: AiQ["steps"][number]) => (s.awarded >= s.possible ? "✅" : s.awarded > 0 ? "➗" : "❌");
   return (
     <details className="gk-row gk-ai">
-      <summary>🤖 المصحح الآلي انطى س{a.n}: {a.score} من {a.max}{a.review ? " · كان غير متأكد" : ""}</summary>
+      <summary>🤖 نظام التصحيح AI انطى س{a.n}: {a.score} من {a.max}{a.review ? " · كان غير متأكد" : ""}</summary>
       {a.reason && <div className="gk-aireason">{a.reason}</div>}
       <ol>{a.steps.map((s, i) => <li key={i}>{mark(s)} <b dir="ltr">{s.awarded}/{s.possible}</b> <span dir="auto">{s.reason}</span></li>)}</ol>
     </details>

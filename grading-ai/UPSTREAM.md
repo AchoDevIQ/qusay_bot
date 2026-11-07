@@ -10,3 +10,6 @@ the bot does not need them.
 `bot_api.py` is new: a small locked service the bot calls (see its header).
 To update the engine, copy the same folders again from a newer commit and change the
 commit above.
+
+Local change to the engine: `llm/router.py` adds `USAGE_COLLECTOR` so each request reports
+its token use (the bot shows what every paper cost). Keep it when updating.

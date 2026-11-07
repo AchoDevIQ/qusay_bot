@@ -11,7 +11,7 @@ import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
-import { aiResultOf } from "./aiGrade.ts";
+import { aiHeld, aiResultOf } from "./aiGrade.ts";
 import { stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
@@ -35,7 +35,9 @@ async function paperRow(it: Row) {
 /** الأوراق اللي يگدر يصححها: ما انصححت، وما أخذها غيره، ومن فصوله */
 async function waitingFor(uid: number, papers: Row[]) {
   const scope = await gradeScope(uid);
-  return papers.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid) && scope.can(p));
+  // أوراق ينتظرها نظام التصحيح AI ما تطلع. والورقة اللي حولها لهذا المصحح تطلعله حتى لو مو من فصوله
+  const held = await aiHeld(papers);
+  return papers.filter((p) => !p.graded_at && !held.has(p.id) && (p.grader_id === uid || (!p.grader_id && scope.can(p))));
 }
 /** الامتحانات اللي بيها أوراق تنتظر: المصحح يختار امتحان، مو طالب */
 async function examGroups(waiting: Row[]) {
@@ -308,6 +310,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
 }
 
 /** المصحح الآلي يحفظ الورقة مثل أي مصحح: الدرجة والمقولة توصل للطالب وولي أمره */
+export const paperName = nameOf;
 export const finishByAi = (uid: number, itemId: number) => finishPaper(uid, itemId, [], 0);
 
 /** الحفظ ويا صور الورقة المصححة اللي ركبتها صفحة التصحيح */

@@ -1,5 +1,6 @@
 // تعويض المصححين: لكل مصحح أجر للورقة الإجبارية وأجر للاختيارية، وخصم لكل اعتراض انقبل على ورقته.
 // الرصيد هو اللي ما انحاسب بعد، والتسوية تصفره وتنحفظ بالأرشيف. أوراق التجربة ما تنحسب
+import { aiHeld } from "./aiGrade.ts";
 import { find, insert, kvGet, kvSet, one, put, update, type Row } from "./db.ts";
 import { isAdmin, staffName } from "./data.ts";
 import { send } from "./telegram.ts";
@@ -150,13 +151,16 @@ export async function payAction(uid: number, body: Row) {
 // ---------- خبر للمصحح: من توصل أوراق جديدة من فصوله، أكثر شي مرة كل نص ساعة حتى ما تكثر الرسائل
 const PING_GAP = 30;
 export async function notifyGraders() {
-  const papers = (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at);
+  const all = (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at);
+  // أوراق ينتظرها نظام التصحيح AI ما ينبلغ بيها أحد
+  const held = await aiHeld(all);
+  const papers = all.filter((p) => !held.has(p.id));
   if (!papers.length) return 0;
   const now = stamp().slice(0, 16);
   let sent = 0;
   for (const g of await graders()) {
     const scope = await gradeScope(g);
-    const list = papers.filter((p) => (!p.grader_id || p.grader_id === g) && scope.can(p));
+    const list = papers.filter((p) => p.grader_id === g || (!p.grader_id && scope.can(p)));
     let last: { at?: string; top?: string } = {};
     try { last = JSON.parse(await kvGet(`grader_ping_${g}`) ?? "{}"); } catch { /* خربانة */ }
     const top = list.reduce((m, p) => (String(p.submitted_at ?? "") > m ? String(p.submitted_at) : m), "");

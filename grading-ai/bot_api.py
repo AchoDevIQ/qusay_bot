@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from grading_service import extract_student_steps_from_pages, grade_single_question
-from llm.router import any_credentials
+from llm.router import USAGE_COLLECTOR, any_credentials
 
 MAX_IMAGES = 12
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -79,6 +79,23 @@ def split_points(n: int, total: float) -> List[float]:
     return [float(base + (1 if i >= n - extra else 0)) for i in range(n)]
 
 
+def start_usage() -> list:
+    bucket: list = []
+    USAGE_COLLECTOR.set(bucket)
+    return bucket
+
+
+def usage_report(bucket: list) -> list:
+    """Tokens per model for this request; the bot turns them into money with its own prices."""
+    out: dict = {}
+    for u in bucket:
+        row = out.setdefault(u.model, {"model": u.model, "calls": 0, "input": 0, "output": 0})
+        row["calls"] += 1
+        row["input"] += int(u.input_tokens or 0)
+        row["output"] += int(u.output_tokens or 0)
+    return list(out.values())
+
+
 @app.get("/health")
 async def health():
     return {"ok": True, "llm": any_credentials()}
@@ -86,6 +103,7 @@ async def health():
 
 @app.post("/bot/grade", dependencies=[Depends(check_key)])
 async def bot_grade(req: GradeReq):
+    bucket = start_usage()
     pages = decode_images(req.images)
     lines = await extract_student_steps_from_pages(pages) if pages else []
     texts = [l.get("text", "") for l in lines if (l.get("text") or "").strip()]
@@ -104,6 +122,7 @@ async def bot_grade(req: GradeReq):
         "requires_review": bool(res.get("requires_review")) or ocr_failed or not res.get("success", False),
         "review_reason": res.get("review_reason") or ("قراءة الصورة فشلت" if ocr_failed else ""),
         "student_lines": texts,
+        "usage": usage_report(bucket),
         "steps": [
             {
                 "status": s.get("status"),
@@ -122,10 +141,11 @@ async def bot_grade(req: GradeReq):
 async def bot_rubric(req: RubricReq):
     """Draft steps from the teacher's solution pages: one step per written line, points
     shared evenly. The owner reviews and edits them in the bot before they are used."""
+    bucket = start_usage()
     pages = decode_images(req.images)
     lines = await extract_student_steps_from_pages(pages)
     if any(l.get("ocr_error") for l in lines) and not any((l.get("text") or "").strip() for l in lines):
         raise HTTPException(status_code=502, detail="ocr failed")
     texts = [l["text"].strip() for l in lines if (l.get("text") or "").strip()]
     pts = split_points(len(texts), req.max_points)
-    return {"steps": [{"text": t, "points": p, "objective": t} for t, p in zip(texts, pts)]}
+    return {"steps": [{"text": t, "points": p, "objective": t} for t, p in zip(texts, pts)], "usage": usage_report(bucket)}

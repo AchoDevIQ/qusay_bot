@@ -18,6 +18,7 @@ import json
 import re
 import logging
 import os
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Type, TypeVar
 
@@ -186,7 +187,15 @@ def _anthropic_usage(model: str, response, feature: str = "") -> LLMUsage:
     return usage
 
 
+# QMath bot: every model call of one HTTP request is collected here, so the bot can
+# show what each paper cost. bot_api.py sets a fresh list per request.
+USAGE_COLLECTOR: ContextVar[Optional[list]] = ContextVar("usage_collector", default=None)
+
+
 def _log_usage(usage: LLMUsage) -> None:
+    bucket = USAGE_COLLECTOR.get()
+    if bucket is not None:
+        bucket.append(usage)
     logger.info(
         f"LLM [{usage.provider}:{usage.model}] tokens: input={usage.input_tokens}, "
         f"output={usage.output_tokens} (reasoning={usage.reasoning_tokens})"

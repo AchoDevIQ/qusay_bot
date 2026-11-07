@@ -31,8 +31,9 @@ globalThis.fetch = (async (url: string, init: any) => {
   return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }));
 }) as typeof fetch;
 
-const { aiGradeTick, saveRubric, rubricOf, setAiOn, aiResultOf } = await import("../lib/aiGrade.ts");
-const { finishByAi, gradeAction } = await import("../lib/gradeApi.ts");
+const { aiGradeTick, saveRubric, rubricOf, setAiOn, aiResultOf, setChapterScope } = await import("../lib/aiGrade.ts");
+const { finishByAi, paperName, gradeAction } = await import("../lib/gradeApi.ts");
+const tick = () => aiGradeTick(finishByAi, paperName);
 const { aiGradeAction } = await import("../lib/aiGradeApi.ts");
 const { AI_GRADER, staffName } = await import("../lib/data.ts");
 const { initDb, insert, one, find, put } = await import("../lib/db.ts");
@@ -58,8 +59,8 @@ const paper = async (uid: number, qs: number[]) => {
   return id;
 };
 const gradeOk = (route: string, body: any) => Response.json(route === "/bot/grade"
-  ? { score: body.max_points === 60 ? 47.6 : 99, requires_review: false, review_reason: "", student_lines: ["x=2"], steps: [{ status: "correct", awarded: 30, possible: 30, reason: "صح", expected: "", student: "x=2" }] }
-  : { steps: [{ text: "a+bi = 1+2i", points: 30 }, { text: "x = 2", points: 30 }] });
+  ? { score: body.max_points === 60 ? 47.6 : 99, requires_review: false, review_reason: "", student_lines: ["x=2"], steps: [{ status: "correct", awarded: 30, possible: 30, reason: "صح", expected: "", student: "x=2" }], usage: [{ model: "gpt-4o-mini", calls: 2, input: 1_000_000, output: 0 }] }
+  : { steps: [{ text: "a+bi = 1+2i", points: 30 }, { text: "x = 2", points: 30 }], usage: [{ model: "gpt-5-mini", calls: 1, input: 0, output: 1_000_000 }] });
 
 test("الخطوات لازم مجموعها يساوي درجة السؤال", async () => {
   await assert.rejects(saveRubric(q1, [{ text: "x=1", points: 10 }], 1), /لازم يساوي درجة السؤال 60/);
@@ -68,12 +69,14 @@ test("الخطوات لازم مجموعها يساوي درجة السؤال", 
   assert.equal((await rubricOf(q1))!.length, 2);
 });
 
-test("طافي، أو سؤال بدون خطوات: ما يمس الورقة", async () => {
+test("طافي، أو موضوع مو مأشر، أو سؤال بدون خطوات: ما يمس الورقة", async () => {
   const p = await paper(90, [1, 2]);
-  assert.deepEqual(await aiGradeTick(finishByAi), { off: true });
+  assert.deepEqual(await tick(), { off: true });
   await setAiOn(true);
   ai.length = 0;
-  assert.deepEqual(await aiGradeTick(finishByAi), { graded: 0, failed: 0 });
+  assert.deepEqual(await tick(), { graded: 0, unsure: 0, failed: 0 });
+  await setChapterScope("c1", [ex], 0);
+  assert.deepEqual(await tick(), { graded: 0, unsure: 0, failed: 0 });
   assert.equal(ai.length, 0);
   assert.equal((await one("sched_items", { id: p }))!.grader_id, null);
 });
@@ -83,9 +86,9 @@ test("يصحح وحده: الدرجة تنحفظ وتوصل للطالب، وا�
   const p = await paper(90, [1]);
   aiReply = gradeOk;
   ai.length = 0; tg.length = 0;
-  const r = await aiGradeTick(finishByAi);
+  const r = await tick();
   // الورقة اللي قبل (س1 وس2) وهاي (س1 بس)
-  assert.deepEqual(r, { graded: 2, failed: 0 });
+  assert.deepEqual(r, { graded: 2, unsure: 0, failed: 0 });
   assert.ok(ai.every((c) => c.key === "secret-k" && c.route === "/bot/grade"));
   const call = ai.find((c) => c.body.max_points === 60)!;
   assert.deepEqual(call.body.steps.map((s: any) => s.points), [20, 40]);
@@ -98,19 +101,19 @@ test("يصحح وحده: الدرجة تنحفظ وتوصل للطالب، وا�
   assert.deepEqual(marks.map((m) => [m.q, m.mark]).sort(), [[1, 48], [2, 0]]);
   assert.ok(tg.some((c) => c.method === "sendMessage" && String(c.p.chat_id) === "90" && /الدرجة: <b>48<\/b>/.test(c.p.text)));
   assert.equal((await aiResultOf(p))![0].steps[0].reason, "صح");
-  assert.equal(await staffName(AI_GRADER), "🤖 المصحح الآلي");
+  assert.equal(await staffName(AI_GRADER), "🤖 نظام التصحيح AI");
 });
 
 test("الخدمة عطلانة: الورقة ترجع للمصححين، وبعد محاولتين يبطل يحاول عليها", async () => {
   const p = await paper(90, [1, 2]);
   aiReply = () => new Response("boom", { status: 500 });
-  assert.deepEqual(await aiGradeTick(finishByAi), { graded: 0, failed: 1 });
+  assert.deepEqual(await tick(), { graded: 0, unsure: 0, failed: 1 });
   let row = (await one("sched_items", { id: p }))!;
   assert.deepEqual([row.grader_id, row.graded_at], [null, null]);
   assert.equal((await find("question_marks", { item_id: p })).length, 0);
-  await aiGradeTick(finishByAi);
+  await tick();
   ai.length = 0;
-  assert.deepEqual(await aiGradeTick(finishByAi), { graded: 0, failed: 0 });
+  assert.deepEqual(await tick(), { graded: 0, unsure: 0, failed: 0 });
   assert.equal(ai.length, 0);
   // المصحح البشري يشوفها ويگدر ياخذها
   const open = await gradeAction({ initData: sign(41), action: "open", id: p }) as any;
@@ -135,4 +138,52 @@ test("صفحة المصحح الآلي: لصاحب البوت بس، وتطلع 
   await assert.rejects(aiGradeAction({ initData: sign(1), action: "save", id: q1, steps: [{ text: "x", points: 5 }] }), /لازم يساوي/);
   const off = await aiGradeAction({ initData: sign(1), action: "on", on: false }) as any;
   assert.equal(off.on, false);
+});
+
+test("ما متأكد: الورقة ما توصل للطالب، تروح للمصحح اللي اختاره صاحب البوت لهذا الفصل وتوصله رسالة", async () => {
+  // الفحص اللي قبل طفاه من الصفحة
+  await setAiOn(true);
+  await setChapterScope("c1", [ex], 41);
+  const p = await paper(90, [1, 2]);
+  // قبل لا يجربها نظام التصحيح: ما تطلع للمصحح حتى ما ياخذها قبله
+  const before = await gradeAction({ initData: sign(41), action: "list" }) as any;
+  assert.ok(!JSON.stringify(before.groups).includes(`"id":${p},`));
+  assert.equal(before.waiting?.some?.((w: any) => w.id === p) ?? false, false);
+  aiReply = (route, body) => body.max_points === 40
+    ? Response.json({ score: 10, requires_review: true, review_reason: "الخط ما ينقرا", steps: [], usage: [] })
+    : gradeOk(route, body);
+  tg.length = 0;
+  assert.deepEqual(await tick(), { graded: 0, unsure: 1, failed: 0 });
+  const row = (await one("sched_items", { id: p }))!;
+  assert.deepEqual([row.grader_id, row.graded_at, row.total], [41, null, null]);
+  assert.equal((await find("question_marks", { item_id: p })).length, 0);
+  assert.ok(!tg.some((c) => String(c.p.chat_id) === "90"));
+  const msg = tg.find((c) => c.method === "sendMessage" && String(c.p.chat_id) === "41")!;
+  assert.match(msg.p.text, /حوّلك ورقة/);
+  assert.match(msg.p.text, /طالب أول/);
+  assert.match(msg.p.text, /: 2$/m);
+  // المصحح يفتحها ويشوف شنو انطى نظام التصحيح
+  const open = await gradeAction({ initData: sign(41), action: "open", id: p }) as any;
+  assert.equal(open.paper.ai.find((q: any) => q.n === 2).review, true);
+  // ما يرجع ياخذها
+  ai.length = 0;
+  await tick();
+  assert.equal(ai.length, 0);
+});
+
+test("السجل والفلوس: كل ورقة وكلفتها حسب أسعار الموديلات", async () => {
+  const d = await aiGradeAction({ initData: sign(1), action: "list" }) as any;
+  assert.equal(d.money.all.unsure, 1);
+  assert.ok(d.money.all.sent >= 2);
+  // ورقة بسؤال واحد جاوبه: مليون توكن داخل بـ gpt-4o-mini = 0.15 دولار
+  const one1 = d.log.find((r: any) => r.kind === "sent" && r.total === 48);
+  assert.equal(one1.cost, 0.15);
+  // خطوات من صورة الحل: مليون توكن طالع بـ gpt-5-mini = 2 دولار
+  assert.equal(d.log.find((r: any) => r.kind === "rubric").cost, 2);
+  assert.equal(d.log.find((r: any) => r.kind === "unsure").toName, "مصحح");
+  const changed = await aiGradeAction({ initData: sign(1), action: "price", model: "gpt-4o-mini", in: 0.3, out: 1 }) as any;
+  assert.equal(changed.log.find((r: any) => r.kind === "sent" && r.total === 48).cost, 0.3);
+  assert.equal(d.chapters[0].grader, 41);
+  assert.equal(d.chapters[0].exams[0].on, true);
+  await assert.rejects(aiGradeAction({ initData: sign(1), action: "scope", slug: "c1", exams: [ex], grader: 90 }), /صلاحية التصحيح/);
 });
