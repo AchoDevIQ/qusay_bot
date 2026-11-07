@@ -277,3 +277,30 @@ test("«طلّع واحفظ خطوات كل أسئلة الموضوع»: كل س
   await aiGradeAction({ initData: sign(1), action: "draftAll", id: e2 });
   assert.equal(ai.length, 0);
 });
+
+test("«خطوات الفصل كله»: المواضيع المأشرة تدخل بالدور، والمؤقت يحفظها 8 بالدقيقة، واللي يفشل مرتين ينكتب", async () => {
+  const { draftQueueTick } = await import("../lib/aiGrade.ts");
+  const e3 = await insert("bank_exams", { slug: "c8", chapter: "فصل كبير", ord: 1, title: "موضوع 1", minutes: 60, pos: 1 });
+  const e4 = await insert("bank_exams", { slug: "c8", chapter: "فصل كبير", ord: 2, title: "موضوع 2", minutes: 60, pos: 2 });
+  const v3 = await insert("bank_versions", { exam_id: e3, model: "A", kind: "mandatory", ok: 1 });
+  const v4 = await insert("bank_versions", { exam_id: e4, model: "A", kind: "mandatory", ok: 1 });
+  const ids: number[] = [];
+  for (let n = 1; n <= 10; n++) ids.push(await insert("bank_questions", { version_id: v3, n, max_mark: 10, q_file: "none/q.png", a_files: JSON.stringify(["ans/sol.png"]) }));
+  const skip = await insert("bank_questions", { version_id: v4, n: 1, max_mark: 10, q_file: "none/q.png", a_files: JSON.stringify(["ans/sol.png"]) });
+  aiReply = (route, body) => Response.json({ steps: [{ text: "x = 1", points: body.max_points }], usage: [] });
+  const r: any = await aiGradeAction({ initData: sign(1), action: "draftChapter", exams: [e3] });
+  assert.match(r.notice, /انحطت 10 سؤال بالدور/);
+  assert.equal(r.draftQueue.left, 10);
+  // الخدمة تفشل مرتين: السؤال يرجع لآخر الدور ويكمل
+  const realReply = aiReply;
+  let calls = 0;
+  aiReply = (route, body) => { calls++; return calls === 1 || calls === 10 ? new Response("", { status: 500 }) : realReply(route, body); };
+  const t1: any = await draftQueueTick(1);
+  assert.equal(t1.done, 7);
+  for (let i = 0; i < 4; i++) await draftQueueTick(1);
+  const st: any = await aiGradeAction({ initData: sign(1), action: "list" });
+  assert.equal(st.draftQueue.left, 0);
+  assert.equal(await rubricOf(skip), null);
+  const saved = (await Promise.all(ids.map((id) => rubricOf(id)))).filter(Boolean).length;
+  assert.ok(saved >= 9, `انحفظ ${saved}`);
+});

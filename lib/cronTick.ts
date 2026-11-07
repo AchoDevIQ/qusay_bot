@@ -8,7 +8,8 @@ import { sweepBirthdays } from "./birthdays.ts";
 import { kvGet, kvSet } from "./db.ts";
 import { notifyStarted } from "./examRoom.ts";
 import { notifyGraders } from "./graderPay.ts";
-import { aiGradeTick } from "./aiGrade.ts";
+import { aiGradeTick, draftQueueTick } from "./aiGrade.ts";
+import { ADMIN_IDS } from "./config.ts";
 import { finishByAi, paperName } from "./gradeApi.ts";
 import { schedSettings } from "./schedApi.ts";
 import { ApiError, ensure } from "./webApi.ts";
@@ -31,6 +32,7 @@ export async function cronTick(key: unknown) {
     await step("started", async () => notifyStarted(key, await schedSettings()));
     await step("checked", () => sweepCheckpoints());
     await step("ai", () => aiGradeTick(finishByAi, paperName));
+    await step("aiDraft", () => draftQueueTick(ADMIN_IDS[0] ?? 0));
     await step("graders", () => notifyGraders());
     await step("sessions", () => sweepSessions());
     await step("signups", () => sweepSignups());

@@ -14,7 +14,7 @@ type Trial = { n: number; score: number; max: number; review: boolean; reason: s
 type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try"; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
 type Data = {
-  on: boolean; linked: boolean; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
+  on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
   fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; trial?: { id: number; result: Trial }; notice?: string;
 };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
@@ -50,6 +50,7 @@ export default function AiGradeClient() {
                 {data.chapters.map((c) => <option key={c.slug} value={c.slug}>{c.chapter}</option>)}
               </select>
             </div>
+            {ch && <ChapterDraft key={"d" + ch.slug + JSON.stringify(ch.exams.map((e) => e.ready))} ch={ch} queue={data.draftQueue} linked={data.linked} busy={busy} call={call} />}
             {ch && <Scope key={ch.slug + JSON.stringify(ch.exams.map((e) => e.on)) + ch.grader} ch={ch} graders={data.graders} busy={busy} call={call} />}
             {ch?.exams.map((e) => (
               <details key={e.id} className="card cpch">
@@ -90,6 +91,33 @@ function Money({ data }: { data: Data }) {
         <tbody>{row("اليوم", data.money.today)}{row("هذا الشهر", data.money.month)}{row("من البداية", data.money.all)}</tbody>
       </table>
       <div className="exhint">الكلفة بالدولار، محسوبة من عدد التوكنات وأسعار الموديلات اللي جوه. الرقم الأدق تلگاه بحساب Anthropic نفسه (console.anthropic.com).</div>
+    </div>
+  );
+}
+
+/** خطوات الفصل كله: يأشر المواضيع (الجاهزة ما مأشرة)، وزر واحد يحطها بالدور، والمؤقت يكملها */
+function ChapterDraft({ ch, queue, linked, busy, call }: { ch: Chapter; queue: Data["draftQueue"]; linked: boolean; busy: boolean; call: Call }) {
+  const [on, setOn] = useState<number[]>(ch.exams.filter((e) => !e.ready).map((e) => e.id));
+  const all = on.length === ch.exams.length;
+  return (
+    <div className="card expad">
+      <div className="exlabel">🤖 خطوات الفصل كله</div>
+      <div className="exhint">يقرا الحل النموذجي لكل سؤال بكل نماذج المواضيع المأشرة، ويطلّع الخطوات بالدرجات المكتوبة على الحل ويحفظها. شيل الصح من الموضوع اللي ما تريده. الأسئلة اللي إلها خطوات من قبل ما تنمس.</div>
+      <button type="button" className="btn ghost" onClick={() => setOn(all ? [] : ch.exams.map((e) => e.id))}>{all ? "شيل الكل" : "أشّر الكل"}</button>
+      <div className="aig-topics">
+        {ch.exams.map((e) => (
+          <label key={e.id} className="aig-topic">
+            <input type="checkbox" checked={on.includes(e.id)} onChange={(x) => setOn(x.target.checked ? [...on, e.id] : on.filter((i) => i !== e.id))} />
+            <span>{e.title}</span>
+            {e.ready && <small className="fdok">✅ جاهز</small>}
+          </label>
+        ))}
+      </div>
+      <button type="button" className="btn" disabled={busy || !linked || !on.length} onClick={() => void call({ action: "draftChapter", exams: on })}>🤖 طلّع واحفظ خطوات المواضيع المأشرة</button>
+      {queue.left > 0 && (
+        <div className="exhint">⏳ باقي <b>{queue.left}</b> سؤال بالدور، كل دقيقة 8 أسئلة. <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "list" })}>🔄 حدّث</button></div>
+      )}
+      {!!queue.failed.length && <div className="exbad">⚠️ ما طلعت خطوات: {queue.failed.join("، ")}. افتحها واكتب خطواتها، أو دوس الزر مرة ثانية.</div>}
     </div>
   );
 }

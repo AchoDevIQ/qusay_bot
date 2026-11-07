@@ -99,6 +99,66 @@ export async function saveRubric(qid: number, raw: unknown, by: number) {
 }
 export const clearRubric = (qid: number) => kvSet(rubricKey(qid), "null");
 
+// «خطوات الفصل كله»: المواضيع المأشرة تدخل بالدور، والمؤقت كل دقيقة يطلّع ويحفظ خطوات كم سؤال
+// (الفصل ممكن بيه مية سؤال، فما يخلص بطلب واحد)
+type DraftQueue = { q: number[]; tries: Record<string, number>; failed: string[] };
+const QUEUE = "ai_draft_queue", DRAFT_PER_TICK = 8, DRAFT_TRIES = 2;
+const readQueue = () => readJson<DraftQueue>(QUEUE, { q: [], tries: {}, failed: [] });
+async function needsDraft(examIds: number[]) {
+  const todo: Row[] = [];
+  let noSol = 0;
+  for (const id of examIds) for (const v of await find("bank_versions", { exam_id: id })) for (const q of await find("bank_questions", { version_id: v.id }, { order: ["n"] })) {
+    if (await rubricOf(q.id)) continue;
+    if (!(JSON.parse(q.a_files || "[]") as string[]).some(isImage)) { noSol++; continue; }
+    todo.push(q);
+  }
+  return { todo, noSol };
+}
+export async function queueDrafts(examIds: number[]) {
+  const { todo, noSol } = await needsDraft(examIds);
+  const st = await readQueue();
+  const q = [...new Set([...st.q, ...todo.map((x) => x.id as number)])];
+  await kvSet(QUEUE, JSON.stringify({ q, tries: st.tries, failed: [] }));
+  return { added: todo.length, left: q.length, noSol };
+}
+export async function draftQueueState() {
+  const st = await readQueue();
+  return { left: st.q.length, failed: st.failed };
+}
+async function qLabel(qid: number) {
+  const q = await one("bank_questions", { id: qid });
+  const v = q && await one("bank_versions", { id: q.version_id });
+  const e = v && await one("bank_exams", { id: v.exam_id });
+  return q ? `${e?.title ?? ""} ${v?.model ?? ""} س${q.n}` : `سؤال ${qid}`;
+}
+/** دكة المؤقت: كم سؤال من الدور، أربعة بنفس الوقت. اللي يفشل مرتين يطلع من الدور وينكتب */
+export async function draftQueueTick(by: number, limit = DRAFT_PER_TICK) {
+  if (!aiLinked()) return { off: true };
+  const st = await readQueue();
+  if (!st.q.length) return { left: 0 };
+  const batch = st.q.slice(0, limit);
+  const ok: number[] = [], bad: number[] = [];
+  const queue = [...batch];
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      try { if (!await rubricOf(id)) await saveRubric(id, await draftRubric(id), by); ok.push(id); }
+      catch { bad.push(id); }
+    }
+  }));
+  const now = await readQueue();
+  const failed = [...now.failed];
+  const tries = { ...now.tries };
+  const drop = new Set(ok);
+  for (const id of bad) {
+    tries[id] = (tries[id] ?? 0) + 1;
+    if (tries[id] >= DRAFT_TRIES) { drop.add(id); failed.push(await qLabel(id)); delete tries[id]; }
+  }
+  // اللي فشل مرة يرجع لآخر الدور
+  const left = now.q.filter((id) => !drop.has(id) && !bad.includes(id)).concat(bad.filter((id) => !drop.has(id)));
+  await kvSet(QUEUE, JSON.stringify({ q: left, tries, failed: failed.slice(-50) }));
+  return { done: ok.length, failed: bad.length, left: left.length };
+}
+
 /** «طلّع واحفظ خطوات كل أسئلة الموضوع»: كل سؤال بكل نماذج الامتحان إله صورة حل وما إله خطوات،
  *  تنطلع خطواته بدرجاتها المكتوبة على الحل وتنحفظ مباشرة. أربعة أسئلة بنفس الوقت */
 export async function draftExam(examId: number, by: number) {

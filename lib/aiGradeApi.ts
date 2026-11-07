@@ -3,7 +3,7 @@
 import { ADMIN_IDS } from "./config.ts";
 import { count, find, type Row } from "./db.ts";
 import { AI_GRADER, isAdmin, staffIds, staffName } from "./data.ts";
-import { aiLinked, aiLog, aiOn, aiSettings, clearRubric, costOf, draftExam, draftRubric, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
+import { aiLinked, aiLog, aiOn, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -41,7 +41,7 @@ async function listData(uid: number) {
   const models = [...new Set([...Object.keys(p), ...log.flatMap((r) => r.usage.map((u) => u.model))])];
   const toName = new Map(graders.map((g) => [g.id, g.name]));
   return {
-    on: await aiOn(), linked: aiLinked(), ready, total: await count("bank_questions"), chapters, graders, fileToken: fileToken(uid),
+    on: await aiOn(), linked: aiLinked(), draftQueue: await draftQueueState(), ready, total: await count("bank_questions"), chapters, graders, fileToken: fileToken(uid),
     graded: (await find("sched_items", { grader_id: AI_GRADER })).filter((x) => x.graded_at).length,
     money: { today: sum(log.filter((r) => r.at.startsWith(today))), month: sum(log.filter((r) => r.at.startsWith(month))), all: sum(log) },
     prices: models.map((m) => ({ model: m, in: p[m]?.in ?? 0, out: p[m]?.out ?? 0, missing: !p[m] })),
@@ -77,6 +77,13 @@ export async function aiGradeAction(body: Row) {
     need(aiLinked(), "خدمة التصحيح مو مربوطة بعد بالسيرفر");
     const steps = await draftRubric(id).catch(fail);
     return { ...await listData(uid), draft: { id, steps }, notice: "راجع الخطوات ودرجاتها، وبعدين دوس حفظ" };
+  }
+  if (a === "draftChapter") {
+    need(aiLinked(), "خدمة التصحيح مو مربوطة بعد بالسيرفر");
+    const ids = (Array.isArray(body.exams) ? body.exams : []).map(Number).filter(Boolean);
+    need(ids.length, "أشّر موضوع واحد على الأقل");
+    const r = await queueDrafts(ids);
+    return { ...await listData(uid), notice: r.added ? `⏳ انحطت ${r.added} سؤال بالدور. كل دقيقة يطلّع ويحفظ خطوات 8 أسئلة، وتگدر تسكر الصفحة${r.noSol ? ` · ${r.noSol} سؤال بدون صورة حل` : ""}` : `ماكو سؤال يحتاج خطوات بالمواضيع المأشرة${r.noSol ? ` · ${r.noSol} سؤال بدون صورة حل` : ""}` };
   }
   if (a === "draftAll") {
     need(aiLinked(), "خدمة التصحيح مو مربوطة بعد بالسيرفر");
