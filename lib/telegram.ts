@@ -30,6 +30,9 @@ const innerOnly = (rm: unknown) => {
   const o = typeof rm === "string" ? (() => { try { return JSON.parse(rm); } catch { return null; } })() : rm;
   return o && typeof o === "object" && "inline_keyboard" in (o as object) ? rm : undefined;
 };
+// منو حاظر البوت: رسالة إله فشلت بـ 403. ولي الأمر يتابعها (guardianWatch)
+const blocked = new Map<string, number>();
+export const wasBlocked = (chat: unknown) => blocked.has(String(chat));
 export async function api<T = any>(method: string, params: Record<string, unknown> = {}, tries = 2): Promise<T | null> {
   const owner = await toOwner(method, params.chat_id);
   if (owner) { params = { ...params, chat_id: owner, protect_content: false }; const rm = innerOnly(params.reply_markup); if (rm) params.reply_markup = rm; else delete params.reply_markup; }
@@ -46,6 +49,8 @@ export async function api<T = any>(method: string, params: Record<string, unknow
       await new Promise((ok) => setTimeout(ok, wait * 1000));
       return api<T>(method, params, tries - 1);
     }
+    if (j?.error_code === 403 && /blocked by the user|user is deactivated/i.test(String(j.description ?? "")) && params.chat_id !== undefined) blocked.set(String(params.chat_id), Date.now());
+    else if (j?.ok && params.chat_id !== undefined) blocked.delete(String(params.chat_id));
     if (!j.ok && !String(j.description ?? "").includes("message is not modified")) {
       console.error("Telegram error:", method, j.description);
     }

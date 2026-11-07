@@ -14,6 +14,7 @@ import { openException, startNowForTest } from "./examRoom.ts";
 import { TEST_STUDENTS, deleteTests, makeTests } from "./gradeApi.ts";
 import { fileToken, homeToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
+import { guardianState, whatsappOf } from "./guardianWatch.ts";
 import { moveExam, retakeExam } from "./examMoves.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { resetSchedule, setPerDay, studentSchedule } from "./schedApi.ts";
@@ -36,7 +37,7 @@ export async function sendStudentsPdf(chat: number, fifth: boolean) {
 }
 const view = async (s: Row) => ({
   id: s.user_id, username: s.username ?? "", name: s.name, curr: s.curr, grade: s.grade, gov: s.gov, side: s.side ?? "", area: s.area,
-  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
+  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), gw: await guardianOf(s.user_id) ? await guardianState(s.user_id) : null, wa: whatsappOf(s.phone2), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
 });
 
 type Filters = { curr?: string; grade?: string; exam?: string; gov?: string };

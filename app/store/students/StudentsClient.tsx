@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
-type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
+type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type TestStudent = { id: number; name: string; papers: number; graded: number; link: string };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
@@ -141,6 +141,9 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
           </>
         ) : <span className="exhint">📱 لسه ما فتح صفحاته من أي جهاز</span>}
         {s.guardian ? <Confirm label="👨‍👧 مربوط بولي أمر: فك الربط" disabled={busy} onYes={() => void call({ action: "unlink", id: s.id })} /> : <span className="exhint">ولي الأمر غير مربوط</span>}
+        {s.gw?.blockedAt && <span className="exhint exbad">⛔ ولي الأمر سوى بلوك للبوت من {s.gw.blockedAt.slice(0, 10)}</span>}
+        {s.gw && !s.gw.blockedAt && <span className={s.gw.unseen >= 3 ? "exhint exbad" : "exhint"}>✅ آخر مرة استلم درجة: {s.gw.lastSeen ? s.gw.lastSeen.slice(0, 16) : "بعده ما داس استلمت"}{s.gw.unseen ? ` · ${s.gw.unseen} درجة ما فتحها` : ""}</span>}
+        {s.wa && <a className="exbtn" href={s.wa} target="_blank" rel="noreferrer">💬 واتساب ولي الأمر</a>}
       </div>
       {data.papers?.id === s.id && <PapersPanel papers={data.papers} />}
       {data.sched?.id === s.id && <SchedPanel key={data.sched.perDay} sched={data.sched} id={s.id} busy={busy} call={call} />}
@@ -166,7 +169,7 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
       <input value={area} onChange={(e) => setArea(e.target.value)} />
       <label>الهاتف الأول</label>
       <input className="ltr" inputMode="tel" value={p1} onChange={(e) => setP1(e.target.value)} />
-      <label>الهاتف الثاني</label>
+      <label>رقم ولي الأمر (واتساب)</label>
       <input className="ltr" inputMode="tel" value={p2} onChange={(e) => setP2(e.target.value)} />
       <label>نوع الامتحان</label>
       <Seg options={EXAM_OPTS} value={exam} onPick={setExam} />

@@ -141,7 +141,7 @@ function Reg({ D }: { D: Data }) {
             <label>رقم الهاتف الأول (بالأرقام الإنجليزية)</label>
             <PhoneInput id="ph1" value={ph1} onChange={setPh1} errs={errs} setErrs={setErrs} />
 
-            <label>رقم الهاتف الثاني (بالأرقام الإنجليزية)</label>
+            <label>رقم ولي الأمر، لازم بيه واتساب (بالأرقام الإنجليزية)</label>
             <PhoneInput id="ph2" value={ph2} onChange={setPh2} errs={errs} setErrs={setErrs} />
           </div>
         </div>

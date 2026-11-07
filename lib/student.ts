@@ -515,7 +515,7 @@ export async function regText(chat: number, uid: number, text: string, st: strin
     if (err) { await send(chat, err); return; }
     r.phone1 = ph;
     await setSession(uid, "r:p2", data);
-    await send(chat, "📞 اكتب رقم الهاتف الثاني <b>بالإنجليزي</b> (لازم يختلف عن الأول)");
+    await send(chat, "📞 اكتب رقم <b>ولي أمرك</b> بالإنجليزي، ولازم يكون بيه <b>واتساب</b> (ويختلف عن رقمك)");
   } else if (st === "r:p2") {
     const [ph, err] = checkPhone(text);
     if (err) { await send(chat, err); return; }

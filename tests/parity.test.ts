@@ -37,8 +37,13 @@ function scrub(s: string) {
 }
 // صفحات المتجر انتقلت عمداً: /index + /reg.html + /pos.html صارت /store و/store/reg و/store/pos
 const PAGE: Record<string, string> = { "": "store", "/store": "store", "/reg.html": "reg", "/store/reg": "reg", "/pos.html": "pos", "/store/pos": "pos" };
+// نصوص تغيرت عمداً عن البوت القديم: الرقم الثاني بتسجيل الطالب صار رقم ولي الأمر بالواتساب
+const RENAMED: [string, string][] = [
+  ["📞 اكتب رقم <b>ولي أمرك</b> بالإنجليزي، ولازم يكون بيه <b>واتساب</b> (ويختلف عن رقمك)", "📞 اكتب رقم الهاتف الثاني <b>بالإنجليزي</b> (لازم يختلف عن الأول)"],
+];
 function normal(v: any): any {
   if (typeof v === "string") {
+    for (const [now, old] of RENAMED) if (v === now) return old;
     const u = /^https:\/\/x\.test([^?]*)\?v=\d+&d=(.*)$/.exec(v);
     if (u) return { page: PAGE[u[1]] ?? u[1], d: normal(JSON.parse(Buffer.from(u[2], "base64url").toString("utf8"))) };
     return scrub(v);

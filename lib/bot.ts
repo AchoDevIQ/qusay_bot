@@ -6,7 +6,8 @@ import { examCb, examsMenu, redeemCode } from "./exams.ts";
 import { exceptionCb } from "./lateRequest.ts";
 import { invitePrompt, inviteCb, reviewCb } from "./competition.ts";
 import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setStudentView, student, tooManyFails, viewingAsStudent } from "./data.ts";
-import { ADMIN_IDS } from "./config.ts";
+import { ADMIN_IDS, WEBHOOK_SECRET } from "./config.ts";
+import { guardianSeen, onMemberUpdate } from "./guardianWatch.ts";
 import { isGuardian, linkGuardian } from "./access.ts";
 import { HOME_PAGE, mainKb, regKb } from "./keyboards.ts";
 import { api, answerCb, send } from "./telegram.ts";
@@ -131,7 +132,10 @@ async function onCallback(q: Row) {
   const d = String(q.data ?? "");
   const { state: st, data } = await getSession(uid);
   let note: string | null = null;
-  if (d.startsWith("a:")) {
+  if (d.startsWith("gs:")) {
+    note = d === "gs:done" ? "✅ مستلمة" : await guardianSeen(uid, Number(d.slice(3)));
+    if (d !== "gs:done" && note.startsWith("✅") && mid) await api("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [[{ text: "✅ استلمت", callback_data: "gs:done" }]] } });
+  } else if (d.startsWith("a:")) {
     note = await allowed(uid, d) ? await onAdminCb(chat, uid, mid, d) : "ما عندك صلاحية";
   } else if (["rc:", "rg:", "rv:", "rd:", "rx:", "ra:", "rb:", "rn:", "rs:"].includes(d.slice(0, 3))) {
     note = await regCb(chat, uid, mid, d, st, data, q.from);
@@ -163,6 +167,15 @@ async function onCallback(q: Row) {
   await answerCb(q.id, note ?? undefined);
 }
 
+/** على السيرفر: نطلب من تليگرام يخبرنا منو يحظر البوت (my_chat_member)، حتى ينكشف بلوك ولي الأمر */
+async function watchBlocks() {
+  if (!process.env.K_SERVICE || !WEBHOOK_SECRET) return;
+  const info: any = await api("getWebhookInfo");
+  const types: string[] = info?.allowed_updates ?? [];
+  if (!info?.url || types.includes("my_chat_member")) return;
+  await api("setWebhook", { url: info.url, secret_token: WEBHOOK_SECRET, allowed_updates: [...new Set([...(types.length ? types : ["message", "callback_query"]), "my_chat_member"])] });
+}
+
 let ready = false;
 export async function handleUpdate(u: any) {
   if (!ready) {
@@ -170,9 +183,11 @@ export async function handleUpdate(u: any) {
     ready = true;
     const me: any = await api("getMe");
     if (me?.username) await kvSet("bot_username", me.username);
+    await watchBlocks();
   }
   if (u.message) await onMessage(u.message);
   else if (u.callback_query) await onCallback(u.callback_query);
+  else if (u.my_chat_member) await onMemberUpdate(u.my_chat_member);
 }
 
 // حماية من الإغراق: اللي يرسل أكثر من الحد تنهمل رسائله الزايدة، حتى ما يعطل البوت على الباقين

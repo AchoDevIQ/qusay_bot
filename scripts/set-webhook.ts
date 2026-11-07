@@ -9,7 +9,7 @@ if (!domain?.startsWith("https://") || !WEBHOOK_SECRET) {
 }
 const r = await api("setWebhook", {
   url: domain + "/api/telegram", secret_token: WEBHOOK_SECRET,
-  allowed_updates: ["message", "callback_query"], drop_pending_updates: false,
+  allowed_updates: ["message", "callback_query", "my_chat_member"], drop_pending_updates: false,
 });
 console.log("setWebhook:", r);
 console.log(await api("getWebhookInfo"));

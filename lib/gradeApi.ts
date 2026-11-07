@@ -12,6 +12,7 @@ import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
 import { aiHeld, aiResultOf } from "./aiGrade.ts";
+import { guardianSent, seenButton } from "./guardianWatch.ts";
 import { stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
@@ -320,7 +321,12 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
     await sendPaperVoices(it.user_id, it.id);
     await send(it.user_id, "✋ إذا تشوف درجة سؤال مو صحيحة، تگدر تعترض عليها بالكتابة أو بصوتك.", { kb: objectButton(it.user_id, it.id) });
     const g = await guardianOf(it.user_id);
-    if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
+    if (g) {
+      await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
+      // زر «استلمت»: إذا ما ينداس على ٣ درجات ورا بعض، صاحب البوت يوصله خبر
+      await send(g.guardian_id, `👆 دوس «استلمت» حتى نعرف وصلتك درجة ${esc(view.name)}.`, { kb: seenButton(it.id) });
+      await guardianSent(it.user_id, g.guardian_id, it.id);
+    }
     await logActivity(it.user_id, `📝 انصحح امتحان ${view.title}: ${total} من 100`);
     try { await runCheckpoints(it.user_id); } catch (e) { console.error(e); }
   }
@@ -395,7 +401,8 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
     await deliver(it.user_id, text);
     // ولي الأمر: الدرجة الجديدة بس، باسم الطالب الرباعي والامتحان، بدون تفاصيل الاعتراض
     const g = accepted ? await guardianOf(it.user_id) : null;
-    if (g) await send(g.guardian_id, `📝 <b>تعديل درجة بعد اعتراض</b>\nدرجة الطالب <b>${esc(view.name)}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`, { extra: { protect_content: true } });
+    if (g) await send(g.guardian_id, `📝 <b>تعديل درجة بعد اعتراض</b>\nدرجة الطالب <b>${esc(view.name)}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`, { kb: seenButton(it.id), extra: { protect_content: true } });
+    if (g) await guardianSent(it.user_id, g.guardian_id, it.id);
     await logActivity(it.user_id, `✋ رد المصحح على اعتراضه بامتحان ${view.title}: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total}`);
   }
   return `✅ انحفظ الرد: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total} من 100`;
