@@ -1,26 +1,16 @@
 "use client";
-// اختيار صورة الجواب: أول مرة يختار كاميرا أو استوديو أو ملف، والبوت يتذكر اختياره ويطلعله نفس الزر بعدين.
-// ملف PDF يتحول كل صفحة منه لصورة
+// اختيار صورة الجواب: أول مرة يختار كاميرا أو استوديو، والبوت يتذكر اختياره ويطلعله نفس الزر بعدين.
+// ماكو ملفات: الطالب لازم يصور ورقته
 import { useEffect, useRef, useState } from "react";
 
-export type Way = "camera" | "gallery" | "file";
+export type Way = "camera" | "gallery";
 const KEY = "qmathPickWay";
-const LABEL: Record<Way, string> = { camera: "📷 الكاميرا", gallery: "🖼 الاستوديو", file: "📄 ملف (PDF أو صورة)" };
+const LABEL: Record<Way, string> = { camera: "📷 الكاميرا", gallery: "🖼 الاستوديو" };
 
 function savedWay(): Way | null {
-  try { const w = localStorage.getItem(KEY); return w === "camera" || w === "gallery" || w === "file" ? w : null; } catch { return null; }
+  try { const w = localStorage.getItem(KEY); return w === "camera" || w === "gallery" ? w : null; } catch { return null; }
 }
 function saveWay(w: Way) { try { localStorage.setItem(KEY, w); } catch { /* المتصفح مانع الحفظ */ } }
-
-/** كل صفحة من PDF تصير صورة JPG */
-async function pdfFiles(f: File): Promise<File[]> {
-  const { pdfToImages } = await import("./PdfPages");
-  const url = URL.createObjectURL(f);
-  try {
-    const pages = await pdfToImages(url, 1600);
-    return await Promise.all(pages.map(async (u, i) => new File([await (await fetch(u)).blob()], `page${i + 1}.jpg`, { type: "image/jpeg" })));
-  } finally { URL.revokeObjectURL(url); }
-}
 
 export default function PhotoPick({ onFiles, multiple = false, busy = false }: { onFiles: (files: File[]) => void; multiple?: boolean; busy?: boolean }) {
   const [way, setWay] = useState<Way | null>(null);
@@ -38,27 +28,25 @@ export default function PhotoPick({ onFiles, multiple = false, busy = false }: {
     try {
       const out: File[] = [];
       for (const f of files) {
-        if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) out.push(...await pdfFiles(f));
-        else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic)$/i.test(f.name)) out.push(f);
+        if (f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic)$/i.test(f.name)) out.push(f);
       }
-      if (!out.length) setErr("لازم صورة أو ملف PDF");
+      if (!out.length) setErr("لازم صورة");
       else onFiles(out);
-    } catch { setErr("ما گدرت أفتح الملف، جرب صورة"); } finally { setWorking(false); }
+    } catch { setErr("ما گدرت أفتح الصورة، جرب مرة ثانية"); } finally { setWorking(false); }
   }
   const input = (w: Way) => (
-    <input type="file" hidden multiple={multiple || w === "file"}
-      accept={w === "file" ? "image/*,application/pdf" : "image/*"}
+    <input type="file" hidden multiple={multiple && w === "gallery"} accept="image/*"
       {...(w === "camera" ? { capture: "environment" as const } : {})}
       onChange={(e) => { const l = e.target.files; void got(l); e.target.value = ""; }} />
   );
   const pick = (w: Way) => <label key={w} className="exbtn" onClick={() => { next.current = w; }}>{LABEL[w]}{input(w)}</label>;
-  if (working) return <div className="exhint">⏳ جاري تجهيز الملف...</div>;
+  if (working) return <div className="exhint">⏳ جاري تجهيز الصورة...</div>;
   return (
     <div className="pkwrap">
       {!way || choose ? (
         <>
           {!way && <div className="exhint">منين تريد تجيب الصورة؟ البوت يتذكر اختيارك للمرات الجاية.</div>}
-          <div className="exline">{(["camera", "gallery", "file"] as Way[]).map(pick)}</div>
+          <div className="exline">{(["camera", "gallery"] as Way[]).map(pick)}</div>
         </>
       ) : (
         <div className="exline">

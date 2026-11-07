@@ -324,3 +324,11 @@ test("ورقة تجربة للذكاء وهو طافي، أو موضوعها م�
   const mine = r.pending.find((p: any) => p.name === "طالب تجربة 1");
   assert.match(mine.state, /بالدور/);
 });
+
+test("يأشر مواضيع ويحفظ وهو طافي: نظام التصحيح AI يشتغل وحده", async () => {
+  const { aiOn } = await import("../lib/aiGrade.ts");
+  await setAiOn(false);
+  const r: any = await aiGradeAction({ initData: sign(1), action: "scope", slug: "c1", exams: [ex], grader: 0 });
+  assert.match(r.notice, /اشتغل/);
+  assert.equal(await aiOn(), true);
+});

@@ -67,8 +67,12 @@ export async function aiGradeAction(body: Row) {
     need(typeof body.slug === "string" && body.slug, "اختار الفصل");
     const grader = Number(body.grader) || 0;
     need(!grader || (await staffIds("grade")).includes(grader), "هذا الشخص ما عنده صلاحية التصحيح");
-    await setChapterScope(body.slug as string, Array.isArray(body.exams) ? body.exams : [], grader);
-    return { ...await listData(uid), notice: "✅ انحفظ" };
+    const exams = Array.isArray(body.exams) ? body.exams : [];
+    await setChapterScope(body.slug as string, exams, grader);
+    // أشّر مواضيع وحفظ: يعني يريده يصحح، فيشتغل وحده إذا طافي
+    const turnedOn = exams.length > 0 && aiLinked() && !await aiOn();
+    if (turnedOn) await setAiOn(true);
+    return { ...await listData(uid), notice: turnedOn ? "✅ انحفظ، ونظام التصحيح AI اشتغل" : "✅ انحفظ" };
   }
   if (a === "price") {
     need(typeof body.model === "string" && body.model, "اسم الموديل");
