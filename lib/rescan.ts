@@ -27,8 +27,18 @@ async function uploaders(item: number): Promise<number[]> { try { const j = JSON
 export async function rescanPaper(by: number, it: { id: number; user_id: number; exam_id: number; at: string; graded_at?: string | null }, stamp: string) {
   need(!it.graded_at, "الورقة انصححت، ما تنمسح");
   const st = await student(it.user_id);
-  need(st?.exam === "حضوري", "هذا بس لأوراق الحضوري اللي انرفعت بالسكنر");
   const e = await one("bank_exams", { id: it.exam_id });
+  // الإلكتروني: الطالب نفسه رفعها، فتنمسح وينفتح إله الامتحان من جديد حتى يعيد رفعها
+  if (st?.exam !== "حضوري") {
+    await remove("exam_answers", { item_id: it.id });
+    await remove("question_marks", { item_id: it.id });
+    await remove("paper_ink", { item_id: it.id });
+    await clearPaperVoices(it.id);
+    await update("sched_items", { id: it.id }, { status: "exception", opened_at: stamp, started_at: null, submitted_at: null, grader_id: null });
+    if (it.user_id > 0) await send(it.user_id, `🔁 <b>صور امتحان ${esc(e?.title ?? "")} ما طلعت واضحة</b>، فانمسحت. انفتح إلك الامتحان من جديد: ادخل من «📝 امتحاناتي» وعيد رفع أجوبتك.`);
+    await logActivity(it.user_id, `🔁 انمسحت أوراق ${e?.title ?? "امتحان"} وانفتح الامتحان حتى يعيد رفعها`);
+    return -1;
+  }
   const entry: Rescan = { item: it.id, sid: it.user_id, name: st?.name ?? "طالب", center: await centerName(st?.center_id) || "", at: String(it.at ?? ""), exam: e?.title ?? "امتحان", by: await uploaders(it.id), when: stamp };
   await remove("exam_answers", { item_id: it.id });
   await remove("question_marks", { item_id: it.id });

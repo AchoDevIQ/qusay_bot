@@ -228,7 +228,7 @@ export async function gradeAction(body: Row) {
     // السكنر طلع غلط: الورقة تنمسح وترجع للي رفعها حتى يعيدها
     const it = await myPaper(uid, body.id);
     const n = await rescanPaper(uid, it as never, stamp());
-    notice = `🔁 انمسحت ورقة ${await nameOf(it)}، ووصلت رسالة لـ ${n} من اللي يرفعون السكنر حتى يعيدون رفعها`;
+    notice = n < 0 ? `🔁 انمسحت أوراق ${await nameOf(it)}، وانفتح إله الامتحان من جديد حتى يعيد رفعها` : `🔁 انمسحت أوراق ${await nameOf(it)}، ووصلت رسالة لـ ${n} من اللي يرفعون السكنر حتى يعيدون رفعها`;
   } else if (a === "release") {
     const it = await myPaper(uid, body.id);
     need(!it.graded_at, "الورقة مخلصة");

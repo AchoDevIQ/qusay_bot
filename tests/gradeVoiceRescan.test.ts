@@ -108,7 +108,7 @@ test("السكنر غلط: الورقة تنمسح، وتوصل رسالة لل�
   await put("question_marks", { item_id: it, q: 1, mark: 10 });
   calls.length = 0;
   const r = await g(41, "rescan", { id: it });
-  assert.match(r.notice, /انمسحت ورقة حضوري أول/);
+  assert.match(r.notice, /انمسحت أوراق حضوري أول/);
   const msgs = calls.filter((c) => c.method === "sendMessage");
   assert.deepEqual(msgs.map((c) => c.p.chat_id), [42]);
   assert.match(msgs[0].p.text, /عيد رفع ورقة/);
@@ -132,8 +132,16 @@ test("السكنر غلط: الورقة تنمسح، وتوصل رسالة لل�
   assert.equal((await one("sched_items", { id: it }))!.status, "done");
 });
 
-test("الورقة الإلكترونية أو المصححة ما تنمسح بهذا الزر", async () => {
+test("الورقة الإلكترونية: كل أوراقه تنمسح، وينفتح إله الامتحان، وتوصله رسالة يعيد رفعها", async () => {
   const p3 = await paper(91);
   await g(41, "open", { id: p3 });
-  await assert.rejects(g(41, "rescan", { id: p3 }), /الحضوري/);
+  calls.length = 0;
+  const r = await g(41, "rescan", { id: p3 });
+  assert.match(r.notice, /انفتح إله الامتحان/);
+  const row = (await one("sched_items", { id: p3 }))!;
+  assert.deepEqual([row.status, row.submitted_at, row.grader_id], ["exception", null, null]);
+  assert.equal((await find("exam_answers", { item_id: p3 })).length, 0);
+  const msgs = calls.filter((c) => c.method === "sendMessage");
+  assert.deepEqual(msgs.map((c) => c.p.chat_id), [91]);
+  assert.match(msgs[0].p.text, /عيد رفع أجوبتك/);
 });
