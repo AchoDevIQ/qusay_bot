@@ -283,3 +283,4 @@ body.grwide .grtop{padding-left:104px}
 .gkdays button.on{background:var(--gold);color:#111;border-color:var(--gold)}
 .gkdays small{font-size:11px;opacity:.8}
 .rgbirth{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px}.rgbirth select{width:100%;min-width:0}
+.lcfile{margin:4px 0 8px;display:flex;flex-direction:column;gap:4px}

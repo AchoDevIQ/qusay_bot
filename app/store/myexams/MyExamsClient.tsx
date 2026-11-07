@@ -14,7 +14,7 @@ type Info = {
   appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
-  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; comp?: Comp | null; lateText: string; closedText: string; room?: Room; obj?: Obj;
+  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj;
 };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
@@ -81,7 +81,7 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} />}
-        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} object={(id) => void openObj(id)} ask={(item, reason) => call({ action: "askException", item, reason })} />}
+        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} object={(id) => void openObj(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} />}
         {info?.comp && <CompCard c={info.comp} busy={busy} call={call} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
@@ -222,7 +222,7 @@ function AttendCode({ code }: { code: string }) {
   );
 }
 
-function List({ info, busy, enter, object, ask }: { info: Info; busy: boolean; enter: (id: number) => void; object: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown> }) {
+function List({ info, busy, enter, object, ask, file }: { info: Info; busy: boolean; enter: (id: number) => void; object: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown> }) {
   return (
     <div className="card">
       <h2>🗓 جدول امتحاناتك</h2>
@@ -233,7 +233,10 @@ function List({ info, busy, enter, object, ask }: { info: Info; busy: boolean; e
           {(i.lectures ?? []).map((l) => (
             <tr key={l} className="lcrow">
               <td>📺 {l}<small className="pdmode">{info.appLink ? "شوفها بالتطبيق قبل الامتحان" : "ادرسها قبل الامتحان"}</small></td>
-              <td className="p">{info.appLink && <button type="button" className="exbtn" onClick={() => openOutside(info.appLink)}>▶️ افتح</button>}</td>
+              <td className="p">
+                {info.appLink && !info.inExam && <button type="button" className="exbtn" onClick={() => openOutside(info.appLink)}>▶️ افتح</button>}
+                {info.lectureFiles?.includes(l) && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void file(l)}>📄 الملف</button>}
+              </td>
             </tr>
           ))}
           <tr className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>

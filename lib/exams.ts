@@ -1,4 +1,5 @@
 // الامتحانات: تنفتح بعد الشراء، مباشرة من المكتبة، أو برمز QR بوصل التوصيل لمن يوصل الطلب
+import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { randomInt } from "node:crypto";
 import { count, find, insert, insertIgnore, one, setSession, tx, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
@@ -86,6 +87,7 @@ export async function redeemCode(chat: number, uid: number, raw: string) {
 
 // ---------- الطالب
 export async function examsMenu(chat: number, uid: number) {
+  if (await examInProgress(uid)) { await send(chat, LOCK_TEXT); return; }
   const chapters = await myChapters(uid), pend = await pendingCodes(uid);
   if (!chapters.length && !pend.length) { await send(chat, "ما عندك امتحانات مفتوحة بعد. تنفتح لمن تشتري امتحانات أي فصل من 🛒 المتجر أو من المكتبة."); return; }
   const kb: Kb = [...chapters.map((c, i) => [btn("📝 " + c, `xc:${i}`)]), ...pend.map((o) => [btn(`📷 وصلني الطلب #${o.id}: افتح الامتحانات`, `xs:${o.id}`)])];

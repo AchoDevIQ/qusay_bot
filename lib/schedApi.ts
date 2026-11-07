@@ -1,6 +1,7 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
+import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { photosAllowed, studentCode } from "./inPerson.ts";
-import { appLink, lectureMap } from "./lectures.ts";
+import { appLink, lectureMap, sendLectureFile, visibleLectureFiles } from "./lectures.ts";
 import { checkStopped, checkpointCard, seeCheckpoint } from "./checkpoints.ts";
 import { checkDevice } from "./deviceLock.ts";
 import { objectionInfo } from "./objections.ts";
@@ -182,6 +183,9 @@ async function studentInfo(uid: number) {
     optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
     // آخر سيطرة عبرها: تومض ويا شخصيتها لحد ما يشوفها
     cp: await checkpointCard(uid),
+    // ملفات المحاضرات اللي صاحب البوت خلاها ظاهرة. وبنص الامتحان ماكو ملفات ولا رابط التطبيق
+    inExam: await examInProgress(uid),
+    lectureFiles: await examInProgress(uid) ? [] : await visibleLectureFiles(),
     // المنافسة: مجموعته وترتيبه بالمركز
     comp: await studentComp(uid),
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
@@ -295,11 +299,13 @@ export async function myExamAction(body: Row) {
     else await leaveGroup(id);
     return { ...await studentInfo(id), notice: a === "compCreate" ? "✅ انسوت المجموعة. دز الرابط لأصدقائك" : a === "compJoin" ? "✅ فتت للمجموعة" : "🚪 طلعت من المجموعة" };
   }
+  if (a === "lectureFile") { await sendLectureFile(id, body.name); return { ...await studentInfo(id), notice: "📄 وصلك ملف المحاضرة بالبوت" }; }
   if (a === "cpSeen") { await seeCheckpoint(id, body.key); return await studentInfo(id); }
   if (a === "askException") {
     await askException(id, body.item, body.reason, await schedSettings());
     return { ...await studentInfo(id), notice: "📨 وصل طلبك. من يوافقون ينفتحلك الامتحان وتوصلك رسالة" };
   }
+  if (a === "objInfo") need(!await examInProgress(id), LOCK_TEXT, 423);
   if (a === "objInfo") return { ...await studentInfo(id), obj: await objectionInfo(id, body.item) };
   need(a === "info", "أمر غير معروف");
   return await studentInfo(id);

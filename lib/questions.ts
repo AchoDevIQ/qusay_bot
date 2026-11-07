@@ -1,4 +1,5 @@
 // الأسئلة العلمية: الطالب يسأل، وكل سؤال ينفتحله موضوع بمجموعة الأساتذة
+import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { find, insert, kvGet, kvSet, one, remove, setSession, type Row } from "./db.ts";
 import { canAsk, logActivity } from "./access.ts";
 import { ADMIN_IDS, BTN_ASK, BTN_MYQ, TOKEN } from "./config.ts";
@@ -15,6 +16,7 @@ const chaptersKb = async (en: boolean): Promise<Kb> => (await chapters()).map((c
 const isEn = (s: Row | null) => !!s && s.curr === "إنجليزي";
 
 export async function askStart(chat: number, uid: number) {
+  if (await examInProgress(uid)) { await send(chat, LOCK_TEXT); return; }
   const s = await student(uid);
   if (!s) {
     await send(chat, "حتى تسأل، سجّل معلوماتك أول مرة 👇");
@@ -174,6 +176,8 @@ async function studentHead(q: Row, s: Row, title: string) {
 
 /** أول رسالة بالسؤال: يفتح موضوع بالمجموعة وينقلها */
 export async function qNewMessage(chat: number, uid: number, m: Row, data: Row) {
+  // دخل امتحان وهو بنص السؤال: ما يوصل شي لحد ما يخلص
+  if (await examInProgress(uid)) { await setSession(uid, "", {}); await send(chat, LOCK_TEXT, { replyKb: await mainKb(uid) }); return; }
   const g = await groupId();
   const s = await student(uid);
   if (!g || !s) {
@@ -213,6 +217,7 @@ export async function qNewMessage(chat: number, uid: number, m: Row, data: Row) 
 }
 
 export async function qFollowMessage(chat: number, uid: number, m: Row, data: Row) {
+  if (await examInProgress(uid)) { await setSession(uid, "", {}); await send(chat, LOCK_TEXT, { replyKb: await mainKb(uid) }); return; }
   const q = await question(data.qid ?? 0);
   const g = await groupId();
   await setSession(uid, "", {});
@@ -288,6 +293,7 @@ export async function onGroupMessage(m: Row) {
 }
 
 export async function myQuestions(chat: number, uid: number) {
+  if (await examInProgress(uid)) { await send(chat, LOCK_TEXT); return; }
   const qs = await find("questions", { user_id: uid }, { order: ["-id"], limit: 10 });
   if (!qs.length) { await send(chat, `ما عندك أسئلة بعد. اضغط «${BTN_ASK}» حتى تسأل.`); return; }
   const st: Record<string, string> = { open: "🟡 بانتظار الجواب", answered: "🟢 تم الجواب", closed: "✅ مغلق" };
