@@ -269,3 +269,5 @@ body.grwide .grtop{padding-left:104px}
 .cppic{display:flex;flex-direction:column;align-items:center;gap:8px;margin:8px 0}.cppic img{max-width:100%;max-height:180px;object-fit:contain;border-radius:10px}
 .cpbands{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line,#444)}
 .cppics{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.cppics div{display:flex;flex-direction:column;align-items:center;gap:4px}.cppics img{width:90px;height:90px;object-fit:contain;border-radius:8px;background:#fff}
+/* السؤال الطويل ما يطلع برا الشاشة: الصورة تصغر وية العرض */
+.gk-qtop{overflow:hidden}.gk-qtop img{flex:0 1 auto;min-width:0}
