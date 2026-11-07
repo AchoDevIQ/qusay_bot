@@ -7,7 +7,8 @@ import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type TestStudent = { id: number; name: string; papers: number; graded: number; link: string };
-type Data = { tests?: TestStudent[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
+type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
+type Data = { papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -126,6 +127,7 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
       <div className="exline">
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "log", id: s.id })}>📜 عمليات الطالب</button>
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "sched", id: s.id })}>🗓 جدوله</button>
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "papers", id: s.id })}>📝 أوراقه</button>
         {s.stop && (
           <>
             <span className="exhint exbad">⛔ موقوفة عليه {s.stop.what} من {s.stop.at.slice(0, 10)}: {s.stop.reason} ({s.stop.chapter}: {s.stop.score} من {s.stop.max}، غياب {s.stop.absent})</span>
@@ -140,6 +142,7 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
         ) : <span className="exhint">📱 لسه ما فتح صفحاته من أي جهاز</span>}
         {s.guardian ? <Confirm label="👨‍👧 مربوط بولي أمر: فك الربط" disabled={busy} onYes={() => void call({ action: "unlink", id: s.id })} /> : <span className="exhint">ولي الأمر غير مربوط</span>}
       </div>
+      {data.papers?.id === s.id && <PapersPanel papers={data.papers} />}
       {data.sched?.id === s.id && <SchedPanel key={data.sched.perDay} sched={data.sched} id={s.id} busy={busy} call={call} />}
       {data.log?.id === s.id && (
         <div className="adlog">
@@ -246,6 +249,32 @@ function TestStudents({ tests, busy, act }: { tests: TestStudent[]; busy: boolea
           {!!tests.length && <Confirm label="🗑 امسحهم" disabled={busy} onYes={() => void act({ action: "deleteTests" })} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** أوراق الطالب: كل امتحان سلمه، درجته وصور ورقته المصححة، محفوظة يم صاحب البوت */
+function PapersPanel({ papers }: { papers: NonNullable<Data["papers"]> }) {
+  const url = (ref: string) => `/api/students/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(papers.fileToken)}`;
+  if (!papers.list.length) return <div className="adlog"><div className="exhint">بعده ما سلم أي امتحان.</div></div>;
+  return (
+    <div className="adlog stp">
+      {papers.list.map((p) => (
+        <details key={p.id} className="stp-paper">
+          <summary>
+            <b>{p.title}</b>{p.optional ? " (اختياري)" : ""} · {p.total !== null ? <b>{p.total} من 100</b> : <span className="exbad">بعده ما انصحح</span>}
+            <small> · {(p.graded || p.submitted).slice(0, 10)}</small>
+          </summary>
+          <div className="exhint">
+            {p.chapter} · النموذج {p.model} · سلّم {p.submitted.slice(0, 16)}
+            {p.graded && <> · صححه {p.ai ? "🤖 " : ""}{p.grader || "مصحح"} {p.graded.slice(0, 16)}</>}
+          </div>
+          <div className="stp-marks">{p.marks.map((m) => <span key={m.n}>س{m.n}: <b>{m.mark ?? "-"}</b>/{m.max}</span>)}</div>
+          {(p.objections.open + p.objections.ok + p.objections.no > 0) && <div className="exhint">✋ اعتراضات: {p.objections.open} تنتظر · {p.objections.ok} انقبل · {p.objections.no} انرفض</div>}
+          {!p.gradedPages && p.pages.length > 0 && <div className="exhint">{p.graded ? "صور جوابه مثل ما رفعها (هذي الورقة انصححت بدون صور مصححة)" : "صور جوابه مثل ما رفعها"}</div>}
+          <div className="stp-pages">{p.pages.map((r) => <img key={r} src={url(r)} alt="الورقة" loading="lazy" />)}</div>
+        </details>
+      ))}
     </div>
   );
 }

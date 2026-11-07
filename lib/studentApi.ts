@@ -12,7 +12,8 @@ import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
 import { TEST_STUDENTS, deleteTests, makeTests } from "./gradeApi.ts";
-import { homeToken } from "./webAuth.ts";
+import { fileToken, homeToken } from "./webAuth.ts";
+import { studentPapers } from "./studentPapers.ts";
 import { moveExam, retakeExam } from "./examMoves.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { resetSchedule, setPerDay, studentSchedule } from "./schedApi.ts";
@@ -119,6 +120,9 @@ export async function studentAction(body: Row) {
   } else if (a === "log") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, log: { id, rows: await activityOf(id) } };
+  } else if (a === "papers") {
+    need(await one("students", { user_id: id }), "الطالب غير موجود");
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, papers: { id, list: await studentPapers(id), fileToken: fileToken(uid) } };
   } else if (a === "sched") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };

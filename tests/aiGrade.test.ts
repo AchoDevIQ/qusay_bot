@@ -187,3 +187,18 @@ test("السجل والفلوس: كل ورقة وكلفتها حسب أسعار 
   assert.equal(d.chapters[0].exams[0].on, true);
   await assert.rejects(aiGradeAction({ initData: sign(1), action: "scope", slug: "c1", exams: [ex], grader: 90 }), /صلاحية التصحيح/);
 });
+
+test("صفحة الطلاب: أوراق الطالب ودرجاته وصورها محفوظة يم صاحب البوت", async () => {
+  const { studentAction } = await import("../lib/studentApi.ts");
+  const r = await studentAction({ initData: sign(1), action: "papers", id: 90 }) as any;
+  assert.equal(r.papers.id, 90);
+  const graded = r.papers.list.find((p: any) => p.total === 48);
+  assert.equal(graded.ai, true);
+  assert.equal(graded.grader, "🤖 نظام التصحيح AI");
+  assert.deepEqual(graded.marks.map((m: any) => [m.n, m.mark, m.max]), [[1, 48, 60], [2, 0, 40]]);
+  // نظام التصحيح ما يرسم على الورقة، فتنعرض صور جوابه
+  assert.equal(graded.gradedPages, false);
+  assert.deepEqual(graded.pages, ["ans/a.jpg"]);
+  assert.ok(r.papers.list.some((p: any) => p.total === null));
+  await assert.rejects(studentAction({ initData: sign(41), action: "papers", id: 90 }), /صلاحية/);
+});

@@ -274,6 +274,23 @@ export async function gradeAction(body: Row) {
   } else need(a === "list", "أمر غير معروف");
   return { ...await listData(uid), paper, notice };
 }
+/** صور الورقة المصححة تنحفظ يم صاحب البوت، حتى يشوفها من صفحة الطالب. بعد الاعتراض تتبدل بالجديدة */
+const pagesKey = (itemId: number) => `graded_pages_${itemId}`;
+async function keepPages(itemId: number, photos: Buffer[]) {
+  if (!photos.length) return;
+  const at = Date.now();
+  const refs: string[] = [];
+  for (const [i, b] of photos.entries()) {
+    const png = b[0] === 0x89 && b[1] === 0x50;
+    const ref = `graded/${itemId}/${at}_${i + 1}.${png ? "png" : "jpg"}`;
+    await files().write(ref, b, png ? "image/png" : "image/jpeg");
+    refs.push(ref);
+  }
+  await kvSet(pagesKey(itemId), JSON.stringify(refs));
+}
+export async function gradedPages(itemId: number): Promise<string[]> {
+  try { const j = JSON.parse(await kvGet(pagesKey(itemId)) ?? "[]"); return Array.isArray(j) ? j.map(String) : []; } catch { return []; }
+}
 /** حفظ الورقة: المجموع، وتوصل للطالب وولي أمره صور ورقته المصححة ويا المقولة. أوراق التجربة توصل للمصحح نفسه */
 async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentId: number) {
   const it = await myPaper(uid, raw);
@@ -283,6 +300,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
   const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
   await update("sched_items", { id: it.id }, { total, graded_at: stamp() });
+  await keepPages(it.id, photos);
   const head = `📝 <b>انصحح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
   const chosen = commentId ? await one("grade_comments", { id: commentId }) : null;
   const c = chosen ? { text: chosen.text as string, sticker: chosen.sticker_id ? await one("stickers", { id: chosen.sticker_id }) : null }
@@ -362,6 +380,7 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
   }
   const total = (await find("question_marks", { item_id: it.id })).reduce((s, m) => s + (m.mark ?? 0), 0);
   await update("sched_items", { id: it.id }, { total });
+  if (accepted) await keepPages(it.id, photos);
   const view = await paperRow(it);
   const text = `✋ <b>رد المصحح على اعتراضك</b>\nامتحان: ${esc(view.title)}\n\n${lines.join("\n")}\n\nدرجتك${accepted ? " الجديدة" : ""}: <b>${total}</b> من 100`;
   const deliver = async (chat: number, caption: string) => {
