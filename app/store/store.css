@@ -1,7 +1,9 @@
-@font-face{font-family:Boahmed;src:url(/boahmed.ttf)}
+/* خط اسم قصي العميري لكل التطبيق. بس الأرقام الإنگليزية والحروف الفارسية (گ چ پ ژ ڤ ک ی) تجي من Cairo، لأن خطه يرسمها فارغة أو بالأرقام الهندية */
+@font-face{font-family:Boahmed;src:url(/boahmed.ttf);font-display:swap;unicode-range:U+0000-002F,U+003A-067D,U+067F-0685,U+0687-0697,U+0699-06A3,U+06A5-06A8,U+06AA-06AE,U+06B0-06CB,U+06CD-10FFFF}
 :root{--ink:#101929;--ink2:#162238;--ink3:#1d2c47;--line:#2a3b5c;--gold:#F9C445;--gold2:#CEA239;--txt:#F4F1E8;--mut:#9fb0c9;--red:#ff7a6b;--ok:#6ee7a8}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--ink);color:var(--txt);font-family:Cairo,system-ui,sans-serif}
+html,body{margin:0;background:var(--ink);color:var(--txt);font-family:Boahmed,Cairo,system-ui,sans-serif}
+button,input,select,textarea{font-family:inherit}
 body{padding-bottom:110px}
 .wrap{max-width:640px;margin:0 auto;padding:0 14px}
 /* الهيدر «سما زرقة»: أزرق غامق ونور من فوگ، واسم قصي العميري أبيض */
