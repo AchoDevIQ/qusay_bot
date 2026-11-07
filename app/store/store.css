@@ -284,3 +284,8 @@ body.grwide .grtop{padding-left:104px}
 .gkdays small{font-size:11px;opacity:.8}
 .rgbirth{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px}.rgbirth select{width:100%;min-width:0}
 .lcfile{margin:4px 0 8px;display:flex;flex-direction:column;gap:4px}
+
+.gk-kind{display:flex;gap:6px}.gk-kind button{flex:1;border:1px solid #d6d6d6;border-radius:10px;background:#f4f4f4;color:#111;font-family:inherit;font-weight:800;font-size:15px;padding:9px;cursor:pointer}.gk-kind button.on{background:#1565c0;border-color:#1565c0;color:#fff}
+.gk-vname{border:1px solid #ccc;border-radius:10px;padding:9px;font-family:inherit;font-size:15px;color:#111;background:#fff}
+.gk-rescan{background:#fff3e0!important;color:#e65100!important;border-color:#ffb74d!important}.gk-rescan.on{background:#e65100!important;color:#fff!important}
+.rescan{border:1px solid #ffb74d}.rescan .exlabel{color:#ffb74d}

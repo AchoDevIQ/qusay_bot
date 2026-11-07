@@ -11,6 +11,7 @@ import { centerName, isAdmin, student } from "./data.ts";
 import { versionOf } from "./examRoom.ts";
 import { files } from "./files.ts";
 import { notifyGraders } from "./graderPay.ts";
+import { recordUploader, rescanDone, rescanFor, rescanItemOf } from "./rescan.ts";
 import { esc, stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 
@@ -177,6 +178,7 @@ export async function scanUpload(form: FormData) {
   const ref = path.posix.join("student_answers", String(it.user_id), String(it.id), `q${q}_${randomUUID()}.jpg`);
   await files().write(ref, buf, "image/jpeg");
   await insert("exam_answers", { item_id: it.id, q, file: ref, created: stamp() });
+  await recordUploader(it.id, by);
   if (it.status !== "attended" && it.status !== "done") await update("sched_items", { id: it.id }, { status: "attended", attended_at: it.attended_at ?? stamp(), attended_by: it.attended_by ?? by });
   return { ok: true };
 }
@@ -189,7 +191,7 @@ async function pageData(uid: number, full = true) {
   const exams = (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => versions.some((v) => v.exam_id === e.id))
     .map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ model: v.model as string, token: printToken("v", v.id) })) }));
   const today = (await find("sched_items")).filter((i) => String(i.attended_at ?? "").startsWith(todayStr())).length;
-  return { owner, full, centers, exams, today, notice: "" };
+  return { owner, full, centers, exams, today, rescan: await rescanFor(uid), notice: "" };
 }
 
 export async function attendAction(body: Row) {
@@ -204,7 +206,9 @@ export async function attendAction(body: Row) {
     need(sid, "هذا مو كود طالب");
     // إذا ورقته انرسلت اليوم وبعدها ما انصححت: تنفتح حتى يضيف صفحة نساها
     const sent = (await find("sched_items", { user_id: sid! })).find((i) => i.status === "done" && !i.graded_at && i.version_id && String(i.at).startsWith(todayStr()));
-    const card = sent ? await itemCard(sent) : await markAttendance(sid!, uid);
+    // ورقته انمسحت حتى تنرفع من جديد (حتى لو مو اليوم): تنفتح نفس الورقة
+    const again = sent ? 0 : await rescanItemOf(sid!);
+    const card = sent ? await itemCard(sent) : again ? await itemCard((await one("sched_items", { id: again }))!) : await markAttendance(sid!, uid);
     const it = (await one("sched_items", { id: card.item }))!;
     const qs = (await find("bank_questions", { version_id: it.version_id }, { order: ["n"] })).map((q) => q.n as number);
     const have = (await find("exam_answers", { item_id: it.id })).map((x) => x.q as number);
@@ -233,12 +237,15 @@ export async function attendAction(body: Row) {
     // بعد ما تنرفع صفحاتهم: الأوراق تصير جاهزة للتصحيح
     const ids = (Array.isArray(body.items) ? body.items : []).map(Number).slice(0, 2000);
     let n = 0;
+    const sentNow: number[] = [];
     for (const id of ids) {
       const it = await one("sched_items", { id });
       if (!it || it.graded_at || it.status === "done" || !(await find("exam_answers", { item_id: id })).length) continue;
       await update("sched_items", { id }, { status: "done", submitted_at: stamp() });
+      sentNow.push(id);
       n++;
     }
+    await rescanDone(sentNow);
     try { await notifyGraders(); } catch (e) { console.error(e); }
     return { ...await pageData(uid, full), notice: `✅ ${n} ورقة راحت للتصحيح` };
   }

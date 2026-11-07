@@ -116,6 +116,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
           <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
             onClose={() => { setPaper(null); setSavedNow(0); group.current = null; void call({ action: "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
+            onRescan={async () => { skipped.current.add(paper.id); await next(await call({ action: "rescan", id: paper.id })); }}
             onSave={(inkSaved, compose) => saveInBackground(paper, inkSaved, compose)}
             onDecide={(inkSaved, compose, rejects, accepted) => saveInBackground(paper, inkSaved, compose, { rejects, accepted })} />
         )}

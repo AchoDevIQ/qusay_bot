@@ -5,10 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pageAuth } from "../adminPage";
 import PdfPages, { pdfByQuestion, pdfToImages } from "../PdfPages";
 import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
+import VoiceRec from "../VoiceRec";
 import MessageBox from "./MessageBox";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
-export type Paper = { errors?: string[]; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
+export type GVoice = { id?: string; name: string; ref: string };
+export type Paper = { errors?: string[]; voices?: GVoice[]; myVoices?: GVoice[]; inPerson?: boolean; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
 /** اعتراض الطالب على سؤال: نصه، وتسجيله إذا موجود، ودرجته قبل الاعتراض */
 export type Objection = { q: number; text: string; voice: string | null; old: number };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
@@ -166,17 +168,17 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, locked, onA
   function down(e: React.PointerEvent) {
     e.preventDefault(); top.current!.setPointerCapture(e.pointerId);
     const [x, y] = pt(e);
-    if (tool === "hand") {
+    // التحريك بالإيد، وأداة التعليق هم تسحب التعليق المكتوب مباشرة بدون ما تروح للإيد
+    if (tool === "hand" || tool === "text") {
       const i = locked ? -1 : hit(x, y);
-      if (i >= 0) { const it = ink.items[i] as { x: number; y: number }; drag.current = { i, dx: x - it.x, dy: y - it.y }; setMoving({ i, x: it.x, y: it.y }); }
-      else drag.current = { pan: true, x: e.clientX, y: e.clientY };
-      return;
+      if (i >= 0 && (tool === "hand" || ink.items[i].t === "x")) { const it = ink.items[i] as { x: number; y: number }; drag.current = { i, dx: x - it.x, dy: y - it.y }; setMoving({ i, x: it.x, y: it.y }); return; }
+      if (tool === "hand") { drag.current = { pan: true, x: e.clientX, y: e.clientY }; return; }
     }
     if (tool === "pen") { live.current = { t: "s", c: color, w: width, p: [x, y] }; redraw(); }
     if (tool === "eraser") onErase(x, y);
   }
   function move(e: React.PointerEvent) {
-    if (tool === "hand") {
+    if (drag.current || tool === "hand") {
       const d = drag.current; if (!d) return;
       if ("pan" in d) {
         // ماكو شي تحت الإصبع: الصفحة نفسها تتحرك
@@ -191,7 +193,7 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, locked, onA
     if (tool === "eraser") onErase(x, y);
   }
   function up(e: React.PointerEvent) {
-    if (tool === "hand") {
+    if (drag.current || tool === "hand") {
       if (moving) onMove(moving.i, +moving.x.toFixed(4), +moving.y.toFixed(4));
       drag.current = null; setMoving(null);
       return;
@@ -250,15 +252,15 @@ function TrimmedImage({ src, alt }: { src: string; alt: string }) {
   return out ? <img src={out} alt={alt} /> : <span className="gk-qwait">...</span>;
 }
 
-const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "T", stamp: "✅", wrong: "❌", sticker: "🖼" };
-const TIP: Record<Tool, string> = { hand: "تحريك: اسحب الكتابة أو الختم أو الملصق لمكان ثاني، أو اسحب الصفحة", pen: "القلم", eraser: "الممحاة", text: "كتابة", stamp: "ختم صح", wrong: "ختم خطأ", sticker: "ملصق" };
+const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "💬", stamp: "✅", wrong: "❌", sticker: "🖼" };
+const TIP: Record<Tool, string> = { hand: "تحريك: اسحب الكتابة أو الختم أو الملصق لمكان ثاني، أو اسحب الصفحة", pen: "القلم", eraser: "الممحاة", text: "تعليق: كتابة أو فويس. والتعليق المكتوب تسحبه وتحركه بنفس الأداة", stamp: "ختم صح", wrong: "ختم خطأ", sticker: "ملصق" };
 
 const SHOWQ_KEY = "gradeShowQuestion";
 const PEN_KEY = "gradePen";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, today, left: papersLeft, stickers }: {
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers }: {
   paper: Paper; url: (r: string) => string; busy: boolean; stickers: Sticker[];
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null; errors?: string[] } | null>;
-  onClose: () => void; onSkip: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
+  onClose: () => void; onSkip: () => void; onRescan: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
   onDecide: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>, rejects: Record<number, string>, accepted: number) => void;
 }) {
   // ورقة عليها اعتراض: تنفتح من جديد، تتغير بس درجة السؤال المعترض عليه، والتغيير يعني قبول
@@ -293,8 +295,46 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const [stickerBox, setStickerBox] = useState(false);
   const [msgBox, setMsgBox] = useState(false);
   const [msgDone, setMsgDone] = useState("");
+  const [rescanAsk, setRescanAsk] = useState(false);
   // الأخطاء الشائعة مال هذا الامتحان: يشوفها كل مصحح يصححه، وما تطلع بامتحان ثاني
   const [errors, setErrors] = useState<string[]>(paper.errors ?? []);
+  // التعليق الصوتي: الفويسات المحفوظة مال هذا الامتحان، والفويسات اللي انضافت لهذي الورقة (توصل للطالب ويا ورقته)
+  const [kind, setKind] = useState<"text" | "voice">("text");
+  const [voices, setVoices] = useState<GVoice[]>(paper.voices ?? []);
+  const [myVoices, setMyVoices] = useState<GVoice[]>(paper.myVoices ?? []);
+  const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
+  const [voiceName, setVoiceName] = useState("");
+  const [recOn, setRecOn] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceErr, setVoiceErr] = useState("");
+  async function voicePost(body: BodyInit, json: boolean) {
+    setVoiceBusy(true); setVoiceErr("");
+    try {
+      const res = await fetch("/api/grade", { method: "POST", ...(json ? { headers: { "Content-Type": "application/json" } } : {}), body });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setVoiceErr(j.error ?? "صار خطأ"); return null; }
+      setVoices(j.voices ?? []); setMyVoices(j.myVoices ?? []);
+      return j as { myVoices: GVoice[] };
+    } catch { setVoiceErr("ماكو اتصال، حاول مرة ثانية"); return null; } finally { setVoiceBusy(false); }
+  }
+  const voiceJson = (b: Record<string, unknown>) => voicePost(JSON.stringify({ initData: pageAuth(), id: paper.id, ...b }), true);
+  /** علامة 🎙 برقم الفويس بالمكان اللي انداس، حتى الطالب يعرف الفويس على أي شي */
+  function markVoice(n: number) {
+    if (textAt) addItem({ t: "x", c: color, x: textAt.x, y: textAt.y, s: `🎙${n}`, z: 0.032 });
+    setTextAt(null); setVoiceBlob(null); setVoiceName(""); setKeepErr(false);
+  }
+  async function addVoice() {
+    if (!voiceBlob) { setVoiceErr("سجل الفويس أول"); return; }
+    if (keepErr && !voiceName.trim()) { setVoiceErr("اكتب اسم قصير للفويس حتى يبين بالأخطاء الشائعة"); return; }
+    const fd = new FormData();
+    fd.set("initData", pageAuth()); fd.set("action", "voice"); fd.set("id", String(paper.id));
+    fd.set("name", voiceName.trim()); fd.set("keep", keepErr ? "1" : "0"); fd.set("voice", voiceBlob, "voice");
+    const r = await voicePost(fd, false);
+    if (r) markVoice(r.myVoices.length);
+  }
+  async function useSaved(id: string) { const r = await voiceJson({ action: "voiceUse", vid: id }); if (r) markVoice(r.myVoices.length); }
+  const playing = useRef<HTMLAudioElement | null>(null);
+  function play(ref: string) { playing.current?.pause(); const a = new Audio(url(ref)); playing.current = a; void a.play().catch(() => setVoiceErr("ما اشتغل الصوت")); }
   const errAct = async (b: Record<string, unknown>) => { const r = await act({ ...b, id: paper.id }); if (r?.errors) setErrors(r.errors); };
   useEffect(() => { try { if (localStorage.getItem(SHOWQ_KEY) === "0") setShowQ(false); } catch { /* بدون حفظ */ } }, []);
   function toggleQ() { const v = !showQ; setShowQ(v); try { localStorage.setItem(SHOWQ_KEY, v ? "1" : "0"); } catch { /* بدون حفظ */ } }
@@ -475,7 +515,10 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           <span className="gk-pg">{at + 1}{pages ? ` / ${pages.length}` : ""}</span>
           <button type="button" className="gk-ic" disabled={!pages || at >= pages.length - 1} onClick={() => go(at + 1)}>‹</button>
         </div>
-        {!locked && <button type="button" className="gk-clear" onClick={() => ink.items.length && change({ ...ink, items: [] })}>🗑 مسح الصفحة</button>}
+        {!locked && <button type="button" className="gk-clear" title="يمسح بس الكتابة والأختام اللي حطيتها على هذي الصفحة" onClick={() => ink.items.length && change({ ...ink, items: [] })}>🧽 امسح تصحيح الصفحة</button>}
+        {!locked && !objMode && paper.inPerson && (rescanAsk
+          ? <button type="button" className="gk-clear gk-rescan on" disabled={busy} onClick={async () => { setRescanAsk(false); await flush(); onRescan(); }}>⚠️ متأكد؟ اضغط مرة ثانية</button>
+          : <button type="button" className="gk-clear gk-rescan" title="السكنر ما انقرا زين: تنمسح ورقة الطالب كلها وتوصل رسالة للي رفعها حتى يعيد رفعها" onClick={() => setRescanAsk(true)}>🔁 السكنر غلط: امسح الورقة</button>)}
         {!locked && <div className="gk-tools gk-pens">
           {(["sticker", "wrong", "stamp", "text", "eraser", "pen", "hand"] as Tool[]).map((t) => (
             <button type="button" key={t} title={TIP[t]} className={"gk-ic" + (tool === t ? " on" : "")} onClick={() => pickTool(t)}>
@@ -548,9 +591,45 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={fitH} locked={locked} onAdd={addItem} onErase={erase} onMove={moveItem} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
       </div>
       {textAt && (
-        <div className="gk-modal" onClick={() => setTextAt(null)}>
+        <div className="gk-modal" onClick={() => !recOn && !voiceBusy && setTextAt(null)}>
           <div className="gk-dialog" onClick={(e) => e.stopPropagation()}>
-            <b>إضافة تعليق نصي</b>
+            <b>إضافة تعليق</b>
+            <div className="gk-kind">
+              <button type="button" className={kind === "text" ? "on" : ""} disabled={recOn} onClick={() => setKind("text")}>✍️ كتابة</button>
+              <button type="button" className={kind === "voice" ? "on" : ""} onClick={() => setKind("voice")}>🎙 فويس</button>
+            </div>
+            {kind === "voice" ? (
+              <>
+                <VoiceRec value={voiceBlob} onChange={setVoiceBlob} onRecording={setRecOn} label="🎙 سجل تعليقك (أكثر شي 5 دقايق). يوصل للطالب ويا ورقته المصححة" />
+                <label className="gk-keep"><input type="checkbox" checked={keepErr} onChange={(e) => setKeepErr(e.target.checked)} /> حفظ في الأخطاء الشائعة</label>
+                {keepErr && <input className="gk-vname" value={voiceName} maxLength={60} placeholder="اسم قصير للفويس، مثال: خطأ بالإشارة" onChange={(e) => setVoiceName(e.target.value)} />}
+                {voiceErr && <div className="gk-err">⚠️ {voiceErr}</div>}
+                {!!voices.length && (
+                  <div className="gk-errs">
+                    <div className="gk-lbl">الأخطاء الشائعة (فويس): ▶ تسمعه، واضغط اسمه حتى ينضاف لهذي الورقة</div>
+                    {voices.map((v) => (
+                      <span key={v.id} className="gk-errchip">
+                        <button type="button" aria-label="سماع" onClick={() => play(v.ref)}>▶</button>
+                        <button type="button" disabled={voiceBusy || recOn} onClick={() => void useSaved(v.id!)}>🎙 {v.name}</button>
+                        <button type="button" aria-label="حذف" className="gk-x" disabled={voiceBusy} onClick={() => void voiceJson({ action: "voiceDel", vid: v.id })}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {!!myVoices.length && (
+                  <div className="gk-errs">
+                    <div className="gk-lbl">فويسات هذي الورقة (إذا تشيل واحد، امسح علامته من الورقة)</div>
+                    {myVoices.map((v, i) => (
+                      <span key={i} className="gk-errchip">
+                        <button type="button" onClick={() => play(v.ref)}>▶ 🎙{i + 1} {v.name}</button>
+                        <button type="button" aria-label="حذف" className="gk-x" disabled={voiceBusy} onClick={() => void voiceJson({ action: "voiceDrop", n: i + 1 })}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="gk-tools"><button type="button" className="gk-finish" disabled={voiceBusy || recOn || !voiceBlob} onClick={() => void addVoice()}>{voiceBusy ? "جاري الحفظ..." : "إضافة الفويس"}</button><button type="button" className="gk-btn" disabled={recOn} onClick={() => setTextAt(null)}>إلغاء</button></div>
+              </>
+            ) : (<>
             <textarea autoFocus rows={3} value={text} placeholder="اكتب التعليق..." onChange={(e) => setText(e.target.value)} />
             <label className="gk-keep"><input type="checkbox" checked={keepErr} onChange={(e) => setKeepErr(e.target.checked)} /> حفظ في الأخطاء الشائعة</label>
             {!!errors.length && (
@@ -565,6 +644,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
               </div>
             )}
             <div className="gk-tools"><button type="button" className="gk-finish" onClick={() => addText()}>إضافة</button><button type="button" className="gk-btn" onClick={() => setTextAt(null)}>إلغاء</button></div>
+            </>)}
           </div>
         </div>
       )}

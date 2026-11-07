@@ -346,7 +346,7 @@ export async function examFile(token: unknown, ref: unknown, perm = EXAM_PERM) {
   const full = path.resolve(root, r);
   need(full.startsWith(root + path.sep), "ملف غير معروف", 403);
   // صوت الاعتراضات يسمعه المصحح بس، وما ينرفع من صفحات الامتحانات
-  const type = TYPES[path.extname(full).toLowerCase()] ?? (r.startsWith("objections/") ? AUDIO[path.extname(full).toLowerCase()] : undefined);
+  const type = TYPES[path.extname(full).toLowerCase()] ?? (/^(objections|gradevoices)\//.test(r) ? AUDIO[path.extname(full).toLowerCase()] : undefined);
   need(type, "ملف غير معروف", 403);
   const body = await files().read(path.relative(root, full).replace(/\\/g, "/"));
   need(body, "الملف غير موجود", 404);

@@ -4,12 +4,13 @@ import { useState } from "react";
 import { AdminHeader, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import { openOutside, scanQr } from "../shared";
+import RescanList, { type Rescan } from "./RescanList";
 
 type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
 type Exam = { id: number; title: string; chapter: string; versions: { model: string; token: string }[] };
 type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
-type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; notice: string };
+type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const printUrl = (kind: "label" | "paper", k: string) => `${location.origin}/print/${kind}?k=${encodeURIComponent(k)}`;
@@ -24,6 +25,7 @@ export default function AttendClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && (
           <>
+            <RescanList list={data.rescan} />
             {data.full && <Attend data={data} busy={busy} call={call} />}
             <CamUp data={data} busy={busy} call={call} />
             {data.full && <div className="card expad">

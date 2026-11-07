@@ -3,7 +3,8 @@
 // الليبل أو ورقة الطالب تعرّف الطالب، وكود الصفحة يعرّف السؤال، والصفحات اللي وراه إله لحد الطالب الجاي.
 // الصفحات البيضاء تنشال، والمشاكل تطلع بقائمة. بعدها كل صفحة تنرفع لطالبها، والأوراق تروح للتصحيح
 import jsQR from "jsqr";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import RescanList, { type Rescan } from "../attend/RescanList";
 import { AdminHeader, pageAuth } from "../adminPage";
 
 type Src = { file: File; page: number };           // page = رقم صفحة الـ PDF، أو 0 للصورة
@@ -79,6 +80,10 @@ export default function ScanUpClient() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
+  const [rescan, setRescan] = useState<Rescan[]>([]);
+  // قائمة الأوراق اللي لازم تنرفع من جديد، وتتحدث بعد كل رفع
+  const loadRescan = () => post({ action: "list" }).then((r) => setRescan(r.rescan ?? [])).catch(() => undefined);
+  useEffect(() => { void loadRescan(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function pick(list: FileList | null) {
     setError("");
@@ -158,6 +163,7 @@ export default function ScanUpClient() {
       setResult([r.notice, ...fails].join("\n"));
     } catch (e) { setResult([e instanceof Error ? e.message : "صار خطأ", ...fails].join("\n")); }
     setStep("done");
+    void loadRescan();
   }
 
   const students = plan ? [...plan.items.values()].filter((x) => x.ok) : [];
@@ -165,6 +171,7 @@ export default function ScanUpClient() {
     <>
       <AdminHeader title="📤 أوراق السكانر" />
       <div className="wrap">
+        <RescanList list={rescan} />
         <div className="card expad">
           <div className="exlabel">1. اختار صور السكانر</div>
           <div className="exhint">كل الصور مرة وحدة، أو ملف PDF. المهم أوراق كل طالب تكون ورا بعض، والليبل على أول صفحة. الترتيب بين الطلاب ما يهم.</div>

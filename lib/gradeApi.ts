@@ -9,6 +9,8 @@ import { pickComment } from "./commentsApi.ts";
 import { canHandle, objectButton, openObjections, testObjection } from "./objections.ts";
 import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
+import { rescanPaper } from "./rescan.ts";
+import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
 import { stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
@@ -90,13 +92,14 @@ async function paperView(it: Row, withObj = false) {
   const ink: Record<number, string> = {};
   for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
   return {
-    ink, errors: await errorsOf(it.exam_id),
+    ink, errors: await errorsOf(it.exam_id), ...await voicesOf(it), inPerson: (await student(it.user_id))?.exam === "حضوري",
     objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark })),
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null })),
   };
 }
+const voicesOf = async (it: Row) => ({ voices: (await examVoices(it.exam_id)).map(({ id, name, ref }) => ({ id, name, ref })), myVoices: (await paperVoices(it.id)).map((v) => ({ name: v.name, ref: v.ref })) });
 /** الورقة لازم تكون لهذا المصحح، حتى ما يكتب اثنين على نفس الورقة */
 async function myPaper(uid: number, raw: unknown) {
   const it = await one("sched_items", { id: Number(raw) });
@@ -182,6 +185,17 @@ export async function gradeAction(body: Row) {
     await kvSet(errKey(it!.exam_id), JSON.stringify(list.slice(0, 100)));
     return { ...await listData(uid), paper: null, errors: list.slice(0, 100), notice: a === "saveError" ? "✅ انحفظ بالأخطاء الشائعة" : "" };
   }
+  if (a === "voiceUse" || a === "voiceDrop") {
+    const { it } = await workPaper(uid, body.id);
+    if (a === "voiceUse") await useVoice(it.id, it.exam_id, body.vid); else await dropFromPaper(it.id, body.n);
+    return { ok: true, ...await voicesOf(it) };
+  }
+  if (a === "voiceDel") {
+    const it = await one("sched_items", { id: Number(body.id) });
+    need(it?.exam_id, "الورقة غير موجودة");
+    await dropSaved(it!.exam_id, body.vid);
+    return { ok: true, ...await voicesOf(it!) };
+  }
   if (a === "open") {
     const it = await one("sched_items", { id: Number(body.id) });
     need(it?.status === "done", "الورقة غير موجودة");
@@ -206,11 +220,17 @@ export async function gradeAction(body: Row) {
       await update("objections", { id: o!.id }, { new_mark: mark });
     } else await put("question_marks", { item_id: it.id, q: q!.n, mark });
     paper = await paperView(it, obj);
+  } else if (a === "rescan") {
+    // السكنر طلع غلط: الورقة تنمسح وترجع للي رفعها حتى يعيدها
+    const it = await myPaper(uid, body.id);
+    const n = await rescanPaper(uid, it as never, stamp());
+    notice = `🔁 انمسحت ورقة ${await nameOf(it)}، ووصلت رسالة لـ ${n} من اللي يرفعون السكنر حتى يعيدون رفعها`;
   } else if (a === "release") {
     const it = await myPaper(uid, body.id);
     need(!it.graded_at, "الورقة مخلصة");
     await remove("question_marks", { item_id: it.id });
     await remove("paper_ink", { item_id: it.id });
+    await clearPaperVoices(it.id);
     await update("sched_items", { id: it.id }, { grader_id: null });
     notice = "↩️ رجعت الورقة للقائمة";
   } else if (a === "prepare") {
@@ -276,6 +296,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   };
   {
     await deliver(it.user_id, text);
+    await sendPaperVoices(it.user_id, it.id);
     await send(it.user_id, "✋ إذا تشوف درجة سؤال مو صحيحة، تگدر تعترض عليها بالكتابة أو بصوتك.", { kb: objectButton(it.user_id, it.id) });
     const g = await guardianOf(it.user_id);
     if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
@@ -289,6 +310,11 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
 export async function gradeUpload(form: FormData) {
   const uid = await authed(form.get("initData"), GRADE_PERM);
   if (form.get("action") === "message") return await messageStudent(uid, form);
+  if (form.get("action") === "voice") {
+    const { it } = await workPaper(uid, form.get("id"));
+    await addVoice(it.id, it.exam_id, form.get("voice"), form.get("name"), form.get("keep") === "1");
+    return { ok: true, ...await voicesOf(it) };
+  }
   const act = form.get("action");
   need(act === "finish" || act === "decide", "أمر غير معروف");
   const photos: Buffer[] = [];
