@@ -483,6 +483,11 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   const opened = await act(90, "openExam", { item });
   assert.equal(opened.room.questions.length, 2);
   assert.equal(opened.room.extra, 15);
+  // قبل القسم ما تنفتح الكاميرا
+  assert.equal(opened.room.sworn, false);
+  assert.match(opened.room.oath, /^أقسم بالله الكريم أني الطالب .+ لم أغش في هذا الامتحان$/);
+  await assert.rejects(upload(90, item, 1), /رتب جملة القسم/);
+  assert.equal((await act(90, "oath", { item })).room.sworn, true);
   await assert.rejects(upload(91, item, 1), /غير موجود/);      // طالب ثاني
   await assert.rejects(upload(90, item, 9), /السؤال/);
   await assert.rejects(upload(90, item, 1, Buffer.from("not image")), /صورة/);
@@ -520,6 +525,7 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.equal((await act(92, "info")).items.find((i: any) => i.id === it2).state, "open");
   const back = await act(92, "openExam", { item: it2 });
   assert.ok(back.room.closeAt > stamp());                     // وقته يبدي من دخوله
+  await act(92, "oath", { item: it2 });
   assert.ok(await upload(92, it2, 1));
 });
 test("الحضوري ما يدخل غرفة الامتحان، ورسالة البدء مرة وحدة وبالمفتاح بس", async () => {

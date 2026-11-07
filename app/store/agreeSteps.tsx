@@ -28,7 +28,7 @@ export function AgreeNotice({ step, title = "⚠️ تنبيه مهم", children
   );
 }
 
-export function WordOrder({ step, sentence, onDone }: { step?: string; sentence: string; onDone: () => void }) {
+export function WordOrder({ step, sentence, onDone, title = "✍️ رتب الجملة", intro = "حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، اضغط الكلمات بالترتيب:", okLabel = "✅ موافق" }: { step?: string; sentence: string; onDone: () => void; title?: string; intro?: string; okLabel?: string }) {
   const [pool, setPool] = useState(() => shuffled(sentence));
   const [picked, setPicked] = useState<number[]>([]);
   const [wrong, setWrong] = useState(false);
@@ -47,14 +47,14 @@ export function WordOrder({ step, sentence, onDone }: { step?: string; sentence:
   }
   return (
     <div className="card agcard">
-      <h2>✍️ رتب الجملة</h2>
+      <h2>{title}</h2>
       <div className="agbody">
         {step && <small className="agstep">{step}</small>}
-        <p className="agtext agsmall">حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، اضغط الكلمات بالترتيب:</p>
+        <p className="agtext agsmall">{intro}</p>
         <p className="agtext">{sentence}</p>
         <div className={"agbuilt" + (done ? " ok" : "")} aria-live="polite">{built || "اضغط أول كلمة..."}</div>
         {wrong && <div className="agwrong">⚠️ الترتيب غلط، رتبها مرة ثانية.</div>}
-        {done ? <button type="button" className="btn agbtn" onClick={() => { haptic(); onDone(); }}>✅ موافق</button> : (
+        {done ? <button type="button" className="btn agbtn" onClick={() => { haptic(); onDone(); }}>{okLabel}</button> : (
           <>
             <div className="agwords">
               {pool.map((w, i) => !picked.includes(i) && <button type="button" key={i} className="agword" onClick={() => pick(i)}>{w}</button>)}

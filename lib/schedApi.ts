@@ -14,7 +14,7 @@ import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
 import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
-import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, myPaper, openRoom, roomState, submitRoom } from "./examRoom.ts";
+import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
 import { send } from "./telegram.ts";
 import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, labelChapters, pickOptional, pickedAt, slotDays, ampm, validDay, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { stamp, todayStr } from "./util.ts";
@@ -272,10 +272,11 @@ export async function myExamAction(body: Row) {
     const room = await openRoom(id, item, s);
     return { ...await studentInfo(id), room };
   }
-  if (a === "openExam" || a === "delAnswer" || a === "submitExam") {
+  if (a === "openExam" || a === "delAnswer" || a === "submitExam" || a === "oath") {
     const s = await schedSettings();
     // الغرفة أول: تحديث المواعيد يعيد كتابة الامتحانات اللي لسه ما بدت
     if (a === "openExam") { const room = await openRoom(id, body.item, s); return { ...await studentInfo(id), room }; }
+    if (a === "oath") { const room = await takeOath(id, body.item, s); return { ...await studentInfo(id), room }; }
     if (a === "delAnswer") { const room = await deleteAnswer(id, body.item, body.answer, s); return { ...await studentInfo(id), room }; }
     await submitRoom(id, body.item, s);
     return { ...await studentInfo(id), notice: "✅ وصلت أجوبتك" };

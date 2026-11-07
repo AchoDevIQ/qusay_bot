@@ -5,7 +5,7 @@ import { activeStop, checkStopped } from "./checkpoints.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { find, insert, one, put, remove, update, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { STORE_URL } from "./config.ts";
 import { can, student } from "./data.ts";
@@ -69,6 +69,18 @@ async function pagesOf(e: Row, v: Row, curr: string) {
   }
   return [];
 }
+// القسم: قبل ما تنفتح الكاميرا، الطالب يرتب جملة «أقسم بالله الكريم أني الطالب (اسمه الرباعي) لم أغش في هذا الامتحان»
+const oathKey = (item: number) => `oath_${item}`;
+export const oathSentence = (name: string) => `أقسم بالله الكريم أني الطالب ${String(name ?? "").replace(/\s+/g, " ").trim()} لم أغش في هذا الامتحان`;
+export async function takeOath(uid: number, id: unknown, s: SchedSettings) {
+  const it = await liveRoom(uid, id, s);
+  if (!await kvGet(oathKey(it.id))) {
+    await kvSet(oathKey(it.id), stamp());
+    const e = await one("bank_exams", { id: it.exam_id });
+    await logActivity(uid, `🤲 رتب جملة القسم إنه ما غش بامتحان ${e?.title ?? ""}`);
+  }
+  return await roomView(it, s);
+}
 async function roomView(it: Row, s: SchedSettings) {
   const e = (await one("bank_exams", { id: it.exam_id }))!;
   const v = (await one("bank_versions", { id: it.version_id }))!;
@@ -76,7 +88,7 @@ async function roomView(it: Row, s: SchedSettings) {
   const qs = await find("bank_questions", { version_id: v.id }, { order: ["n"] });
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   return {
-    id: it.id, sid: it.user_id, title: e.title, model: v.model, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra,
+    id: it.id, sid: it.user_id, title: e.title, model: v.model, oath: oathSentence(st?.name ?? ""), sworn: !!await kvGet(oathKey(it.id)), closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra,
     pages: await pagesOf(e, v, st?.curr ?? ""),
     questions: qs.map((q) => ({ n: q.n, answers: answers.filter((a) => a.q === q.n).map((a) => ({ id: a.id, file: a.file })) })),
   };
@@ -134,6 +146,7 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   await checkPhone(uid!, form.get("pf"));
   await checkStopped(uid!);
   const it = await liveRoom(uid!, form.get("item"), s);
+  need(await kvGet(oathKey(it.id)), "رتب جملة القسم أول، وبعدها تنفتح الكاميرا");
   const q = Number(form.get("q"));
   need(await one("bank_questions", { version_id: it.version_id, n: q }), "السؤال غير موجود");
   const f = form.get("file");

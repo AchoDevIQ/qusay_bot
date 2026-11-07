@@ -1,5 +1,6 @@
 "use client";
 // امتحاناتي: الطالب يرتب جدوله مرة وحدة، وبعدها يشوف مواعيده
+import { WordOrder } from "../agreeSteps";
 import { Fragment, useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { deviceId, haptic, openOutside, platform } from "../shared";
@@ -18,7 +19,7 @@ type Info = {
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Paper = { id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
-type Room = { id: number; sid: number; title: string; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
+type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
 const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
@@ -461,6 +462,10 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       </div>
       {/* رقم الطالب فوك كل صفحة: إذا أحد صورها ونشرها نعرف منو */}
       {room.pages.map((p) => <div key={p} className="exidwrap"><span className="exid">🆔 {room.sid}</span><img className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" /></div>)}
+      {!room.sworn ? (
+        <WordOrder key={room.id} title="🤲 القسم قبل الكاميرا" intro="قبل ما تصور أجوبتك، رتب الجملة بالضغط على الكلمات بالترتيب:" okLabel="📷 افتح الكاميرا" sentence={room.oath}
+          onDone={async () => { setBusy(true); const r = await call({ action: "oath", item: room.id }); setBusy(false); if (r?.room) setRoom(r.room); }} />
+      ) : (
       <div className="card"><h2>📷 صور جواب كل سؤال</h2>
         <div className="form">
           {room.questions.map((q) => (
@@ -495,6 +500,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
           <button type="button" className="btn agbtn adtop" disabled={busy || !total} onClick={async () => { setBusy(true); const r = await call({ action: "submitExam", item: room.id }); setBusy(false); if (r) leave(); }}>✅ سلم الامتحان</button>
         </div>
       </div>
+      )}
     </div>
   );
 }
