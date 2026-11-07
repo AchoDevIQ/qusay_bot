@@ -1,6 +1,7 @@
 // الصفحة الرئيسية للوحة التحكم: الأقسام حسب صلاحية كل واحد
 import { stoppedCount } from "./checkpoints.ts";
 import { birthdaysToday } from "./birthdays.ts";
+import { pendingGroups } from "./competition.ts";
 import { count, find, setSession, sumOf, type Row } from "./db.ts";
 import { can, isAdmin, isStaff, newOrdersCount, setStudentView } from "./data.ts";
 import { EXAM_PERM } from "./examBank.ts";
@@ -36,6 +37,7 @@ async function homeData(uid: number) {
     const note = [n ? `${n} ورقة تنتظر` : "", o ? `${o} اعتراض` : ""].filter(Boolean).join(" · ") || "ماكو أوراق";
     people.push({ page: "grade", icon: "✍️", title: "التصحيح", note, hot: n + o > 0 });
   }
+  if (await can(uid, "competition")) { const n = await pendingGroups(); people.push({ page: "competition", icon: "🏆", title: "المنافسة", note: n ? `${n} مجموعة تنتظر موافقتك` : "المجاميع وترتيب المراكز", hot: n > 0 }); }
   if (await can(uid, "birthdays")) { const n = await birthdaysToday(); people.push({ page: "birthdays", icon: "🎂", title: "أعياد الميلاد", note: n ? `اليوم: ${n}` : "ماكو اليوم", hot: n > 0 }); }
   if (await can(uid, "signups")) {
     const n = (await find("exam_access")).filter((r) => String(r.created ?? "").startsWith(todayStr())).length;

@@ -345,8 +345,9 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
   if (isTest(it)) await deliver(uid, `🧪 <b>هيچ يوصل للطالب</b>\n${text}`);
   else {
     await deliver(it.user_id, text);
+    // ولي الأمر: الدرجة الجديدة بس، باسم الطالب الرباعي والامتحان، بدون تفاصيل الاعتراض
     const g = accepted ? await guardianOf(it.user_id) : null;
-    if (g) await deliver(g.guardian_id, `${text}\nالطالب: ${view.name}`);
+    if (g) await send(g.guardian_id, `📝 <b>تعديل درجة بعد اعتراض</b>\nدرجة الطالب <b>${esc(view.name)}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`, { extra: { protect_content: true } });
     await logActivity(it.user_id, `✋ رد المصحح على اعتراضه بامتحان ${view.title}: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total}`);
   }
   return `✅ انحفظ الرد: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total} من 100`;

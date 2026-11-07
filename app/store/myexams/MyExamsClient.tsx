@@ -14,7 +14,7 @@ type Info = {
   appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
-  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; lateText: string; closedText: string; room?: Room; obj?: Obj;
+  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; comp?: Comp | null; lateText: string; closedText: string; room?: Room; obj?: Obj;
 };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
@@ -82,6 +82,7 @@ export default function MyExamsClient() {
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} />}
         {info && !!info.items.length && <List info={info} busy={busy} enter={enter} object={(id) => void openObj(id)} ask={(item, reason) => call({ action: "askException", item, reason })} />}
+        {info?.comp && <CompCard c={info.comp} busy={busy} call={call} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
     </>
@@ -438,6 +439,72 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
           {error && <div className="err">⚠️ {error}</div>}
           <button type="button" className="btn agbtn adtop" disabled={busy || !total} onClick={async () => { setBusy(true); const r = await call({ action: "submitExam", item: room.id }); setBusy(false); if (r) leave(); }}>✅ سلم الامتحان</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+type CompMember = { id: number; name: string; avg: number | null; exams: number; rank: number };
+type Comp = {
+  group: { name: string; status: string; count: number; need: number; link: string; owner: boolean; members: CompMember[] } | null;
+  center: { name: string; avg: number | null; rank: number | null; total: number } | null; myAvg: number | null; kind: string;
+};
+/** المنافسة: مجموعته وترتيبهم، أو يسوي مجموعة أو يفوت لوحدة بالكود. وترتيبه بمركزه إذا من أول 100 */
+function CompCard({ c, busy, call }: { c: Comp; busy: boolean; call: (b: Record<string, unknown>) => Promise<unknown> }) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [sure, setSure] = useState(false);
+  const g = c.group;
+  const share = (link: string) => openOutside(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(`تعال ويانا بمجموعة المنافسة «${g?.name ?? ""}» 🏆`)}`);
+  return (
+    <div className="card">
+      <h2>🏆 المنافسة</h2>
+      <div className="expad">
+        {c.center && (
+          <div className="atcard">
+            <b>🏫 {c.center.name}</b>
+            {c.center.rank ? <div className="exhint atok">ترتيبك بالمركز: <b>{c.center.rank}</b> من {c.center.total} · معدلك {c.center.avg}</div>
+              : <div className="exhint">معدلك {c.center.avg ?? "—"}. ترتيبك يبين من تصير من أول 100 بالمركز 💪</div>}
+          </div>
+        )}
+        {!g && (
+          <>
+            <div className="exhint adtop">سوي مجموعة ويا أصدقائك ({c.kind})، وتتنافسون بالمعدل. من تصيرون {5} أو أكثر يروح طلبكم للإدارة.</div>
+            <div className="exadd adtop">
+              <input className="exinput" maxLength={30} placeholder="اسم المجموعة، مثلاً المجد" value={name} onChange={(e) => setName(e.target.value)} />
+              <button type="button" className="exbtn" disabled={busy || name.trim().length < 3} onClick={() => void call({ action: "compCreate", name })}>➕ سوي</button>
+            </div>
+            <div className="exadd adtop">
+              <input className="exinput" dir="ltr" maxLength={8} placeholder="كود مجموعة صديقك" value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} />
+              <button type="button" className="exbtn" disabled={busy || code.length !== 8} onClick={() => void call({ action: "compJoin", code })}>👥 فوت</button>
+            </div>
+          </>
+        )}
+        {g && (
+          <>
+            <div className="exlabel adtop">👥 مجموعة «{g.name}» <small className="pdmode">الكود: <span dir="ltr">{g.link.split("grp_")[1]}</span></small></div>
+            {g.status === "approved" ? (
+              <table className="extable"><tbody>
+                {g.members.map((m) => (
+                  <tr key={m.id}>
+                    <td><b>{m.rank <= 3 && m.avg !== null ? ["🥇", "🥈", "🥉"][m.rank - 1] : `${m.rank}.`} {m.name}</b><small className="pdmode">{m.exams ? `${m.exams} امتحان` : "بعده ما امتحن"}</small></td>
+                    <td className="p"><b>{m.avg ?? "—"}</b></td>
+                  </tr>
+                ))}
+              </tbody></table>
+            ) : (
+              <>
+                <div className="exhint">{g.status === "pending" ? "⏳ صرتوا " + g.count + "، وطلبكم عند الإدارة. ننتظر الموافقة." : `بيها ${g.count} من ${g.need}. دز الرابط لأصدقائك، ومن يصيرون ${g.need} يروح طلبكم للإدارة.`}</div>
+                <div className="exhint">{g.members.map((m) => m.name).join("، ")}</div>
+              </>
+            )}
+            <div className="exline adtop">
+              <button type="button" className="btn" onClick={() => share(g.link)}>📤 دز الرابط لأصدقائك</button>
+              {!sure ? <button type="button" className="exbtn" onClick={() => setSure(true)}>🚪 اطلع من المجموعة</button>
+                : <button type="button" className="exbtn exbad" disabled={busy} onClick={() => void call({ action: "compLeave" })}>متأكد؟ اطلع</button>}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

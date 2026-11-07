@@ -4,6 +4,7 @@ import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_VIEW, BTN_ME, BTN_M
 import { examBankMessage } from "./examBank.ts";
 import { examCb, examsMenu, redeemCode } from "./exams.ts";
 import { exceptionCb } from "./lateRequest.ts";
+import { invitePrompt, inviteCb, reviewCb } from "./competition.ts";
 import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setStudentView, student, tooManyFails, viewingAsStudent } from "./data.ts";
 import { ADMIN_IDS } from "./config.ts";
 import { isGuardian, linkGuardian } from "./access.ts";
@@ -65,6 +66,7 @@ async function onMessage(m: Row) {
   }
   const idWord = text.toLowerCase().split("@")[0].replace(/^[/ ]+|[/ ]+$/g, "").replace(/ /g, "");
   if (["myid", "id", "رقمي", "ايدي", "آيدي"].includes(idWord)) { await send(chat, `رقم حسابك: <code>${uid}</code>`); return; }
+  if (text.startsWith("/start grp_")) return await invitePrompt(chat, uid, text.slice(text.indexOf("grp_") + 4).trim());
   if (text.startsWith("/start lib_")) return await joinOfficeByCode(chat, uid, text.slice(text.indexOf("lib_") + 4).trim(), m.from ?? {});
   const digits = toLatinDigits(text).replace(/ /g, "");
   if (/^\d{8}$/.test(digits)) {
@@ -146,6 +148,10 @@ async function onCallback(q: Row) {
     note = await orderCancelCb(chat, uid, mid, d);
   } else if (d === "xm" || ["xs:", "xc:"].some((p) => d.startsWith(p))) {
     note = await examCb(chat, uid, d);
+  } else if (d.startsWith("cj:")) {
+    note = await inviteCb(chat, uid, mid, d);
+  } else if (d.startsWith("cg:")) {
+    note = await reviewCb(chat, uid, mid, d);
   } else if (d.startsWith("ek:")) {
     note = await exceptionCb(chat, uid, mid, d);
   } else if (d === "me:edit") {

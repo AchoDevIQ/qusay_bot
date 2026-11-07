@@ -96,6 +96,8 @@ test("تغيير الدرجة يعني قبول، واللي ما تغير لا�
   assert.equal((await one("question_marks", { item_id: item, q: 1 }))!.mark, 30);
   assert.equal((await g(30, "prepare", { id: item })).total, 85);
   await assert.rejects(g(30, "decide", { id: item }), /ارفض اعتراض السؤال: 2/);
+  await put("guardians", { guardian_id: 160, student_id: 60, created: "x" });
+  await put("students", { user_id: 60, name: "علي حسن محمد كاظم", exam: "إلكتروني", created: "x" });
   calls.length = 0;
   const f = new FormData();
   f.set("initData", sign(30)); f.set("action", "decide"); f.set("id", String(item)); f.set("rejects", JSON.stringify({ 2: "الخطوة الأخيرة غلط" }));
@@ -108,6 +110,11 @@ test("تغيير الدرجة يعني قبول، واللي ما تغير لا�
   assert.ok(sent, "الرد يوصل للطالب");
   const text = String(sent.p.caption ?? sent.p.text ?? JSON.stringify(sent.p));
   assert.match(text, /انقبل اعتراضك/);
+  // ولي الأمر: الاسم الرباعي والامتحان والدرجة الجديدة بس، بدون السبب ولا الأسئلة
+  const gm = calls.filter((c) => Number(c.p.chat_id) === 160);
+  assert.equal(gm.length, 1);
+  assert.match(gm[0].p.text, /درجة الطالب <b>علي حسن محمد كاظم<\/b> في امتحان <b>امتحان الاعتراض<\/b> صارت <b>85<\/b> من 100/);
+  assert.doesNotMatch(gm[0].p.text, /السؤال|السبب|الخطوة/);
   const info = await objectionInfo(60, item);
   assert.deepEqual(info.questions.map((q: any) => q.obj.status), ["accepted", "rejected"]);
   assert.equal(info.questions[1].obj.reason, "الخطوة الأخيرة غلط");

@@ -12,6 +12,7 @@ import { centerName, isAdmin, student } from "./data.ts";
 import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
 import { askException } from "./lateRequest.ts";
+import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, openRoom, roomState, submitRoom } from "./examRoom.ts";
 import { send } from "./telegram.ts";
 import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, labelChapters, pickOptional, pickedAt, slotDays, ampm, validDay, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
@@ -181,6 +182,8 @@ async function studentInfo(uid: number) {
     optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
     // آخر سيطرة عبرها: تومض ويا شخصيتها لحد ما يشوفها
     cp: await checkpointCard(uid),
+    // المنافسة: مجموعته وترتيبه بالمركز
+    comp: await studentComp(uid),
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
     items: [...await itemsView(uid, s), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
     week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s),
@@ -285,6 +288,12 @@ export async function myExamAction(body: Row) {
       await logActivity(id, "🗓 طلع من مجموعته حتى يختار جدول ثاني");
     }
     return await studentInfo(id);
+  }
+  if (a === "compCreate" || a === "compJoin" || a === "compLeave") {
+    if (a === "compCreate") await createGroup(id, body.name);
+    else if (a === "compJoin") await joinGroup(id, body.code);
+    else await leaveGroup(id);
+    return { ...await studentInfo(id), notice: a === "compCreate" ? "✅ انسوت المجموعة. دز الرابط لأصدقائك" : a === "compJoin" ? "✅ فتت للمجموعة" : "🚪 طلعت من المجموعة" };
   }
   if (a === "cpSeen") { await seeCheckpoint(id, body.key); return await studentInfo(id); }
   if (a === "askException") {
