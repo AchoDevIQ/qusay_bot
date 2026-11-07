@@ -2,12 +2,12 @@
 import { find, insert, kvGet, kvSet, one, remove, setSession, type Row } from "./db.ts";
 import { canAsk, logActivity } from "./access.ts";
 import { ADMIN_IDS, BTN_ASK, BTN_MYQ, TOKEN } from "./config.ts";
-import { bookletCfg, booklets, matchQuestion, replyText } from "./booklets.ts";
+import { answerFromBooklets, autoReady, bookletCfg, replyText } from "./booklets.ts";
 import {
   can, centerName, chLabel, chapters, groupId, hoursText, qHours, qOpenNow, qWhere, question, setQ, student, topic, topics,
 } from "./data.ts";
 import { HOME_PAGE, flowKb, mainKb } from "./keyboards.ts";
-import { api, edit, send, type Kb } from "./telegram.ts";
+import { api, edit, send, upload, type Kb } from "./telegram.ts";
 import { btn, chunk, cut, esc, stamp, words } from "./util.ts";
 import { startReg } from "./student.ts";
 
@@ -79,13 +79,10 @@ async function qWrite(chat: number, uid: number, mid: number, tid: number, lec: 
   await setSession(uid, "q:write", { t: tid, l: lec });
   const where = en ? `${t.en || t.ar} — ${lec ? `Lecture ${lec}` : ""}` : `${t.ar}${lec ? ` — المحاضرة ${lec}` : ""}`;
   await edit(chat, mid, `❓ <b>${esc(where)}</b>`);
-  if (await needsPhoto(t.chapter_id)) await send(chat, "📸 <b>صور السؤال من الملزمة</b> وأرسل الصورة. وإذا تريد اكتب استفسارك ويا الصورة.", { replyKb: flowKb() });
-  else await send(chat, "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:", { replyKb: flowKb() });
+  await send(chat, "✍️ هسه <b>اكتب سؤالك</b>، أو أرسل <b>صورة</b> أو <b>تسجيل صوتي</b>:", { replyKb: flowKb() });
 }
 /** رقم الفصل بالكتاب (1 لـ 5) من فصول الأسئلة */
 const chapterNo = async (chapterId: unknown) => Number((await one("chapters", { id: Number(chapterId) }))?.ord) || 0;
-/** إذا ملازم هذا الفصل مرفوعة، الطالب لازم يصور السؤال من الملزمة */
-async function needsPhoto(chapterId: unknown) { const n = await chapterNo(chapterId); return n > 0 && (await booklets()).some((b) => b.chapter === n); }
 /** صورة الطالب من تليجرام */
 async function photoOf(m: Row) {
   const best = (m.photo as Row[] | undefined)?.at(-1);
@@ -95,24 +92,28 @@ async function photoOf(m: Row) {
   const res = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${info.file_path}`).catch(() => null);
   return res?.ok ? Buffer.from(await res.arrayBuffer()) : null;
 }
-/** الجواب الآلي: إذا السؤال بالملزمة ومشروح، الطالب يوصله وين، ويا زر يوصل سؤاله للأستاذ إذا بعده ما فهم.
- *  إذا نفس السؤال سأله قبل، أو ما لگيناه، يرجع false والسؤال يروح للأستاذ */
+/** الجواب الآلي: إذا الأستاذ حال هذا السؤال بالملازم، الطالب يوصله الحل نفسه بصورة بإطار، ويا زر يوصل سؤاله للأستاذ
+ *  إذا بعده ما فهم. إذا نفس الحل وصله قبل، أو ما لگيناه، يرجع false والسؤال يروح للأستاذ */
 async function autoAnswer(chat: number, uid: number, m: Row, data: Row, en: boolean) {
   const t = await topic(data.t);
   const n = await chapterNo(t?.chapter_id);
-  const img = await photoOf(m);
-  if (!img || !n) return false;
-  const match = await matchQuestion(img, "image/jpeg", n, en ? "en" : "ar");
-  if (!match) return false;
-  const key = `${match.booklet.id}|${match.page}`;
+  if (!n || !await autoReady(n)) return false;
+  const text = String(m.text ?? m.caption ?? "").trim();
+  const image = m.photo ? await photoOf(m) : null;
+  if (!n || (!image && !text)) return false;
+  const r = await answerFromBooklets({ image: image ?? undefined, text: text || undefined }, n, en ? "en" : "ar");
+  if (!r) return false;
+  const key = `${r.match.booklet.id}|${r.match.from}`;
   const seen: string[] = JSON.parse(await kvGet(`qseen_${uid}`) || "[]");
   if (seen.includes(key)) return false;
   await kvSet(`qseen_${uid}`, JSON.stringify([...seen, key].slice(-200)));
   await kvSet(`qauto_${uid}`, JSON.stringify({ mid: m.message_id, t: data.t, l: data.l || 0 }));
   await setSession(uid, "", {});
-  await send(chat, replyText((await bookletCfg()).reply, match), { kb: [[btn("❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]] });
+  const caption = replyText((await bookletCfg()).reply);
+  const kb = [[btn("❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]];
+  if (!await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", r.image, "answer.jpg", "image/jpeg")) return false;
   await send(chat, "👆", { replyKb: await mainKb(uid) });
-  await logActivity(uid, `📖 سؤاله موجود بالملزمة: ${match.booklet.name} صفحة ${match.page}`);
+  await logActivity(uid, `📘 وصله حل سؤاله من الملزمة (${r.match.booklet.name})`);
   return true;
 }
 
@@ -188,12 +189,8 @@ export async function qNewMessage(chat: number, uid: number, m: Row, data: Row) 
     return;
   }
   if (!data.t) return;
-  // الملازم: صورة السؤال لازمة، وإذا السؤال مشروح بالملزمة يوصله الجواب الآلي
-  const tt = await topic(data.t);
-  if (!data.direct && await needsPhoto(tt?.chapter_id)) {
-    if (!m.photo) { await send(chat, "📸 لازم ترسل <b>صورة السؤال من الملزمة</b>. صوره وأرسله هنا."); return; }
-    if (await autoAnswer(chat, uid, m, data, s.curr === "إنجليزي")) return;
-  }
+  // الجواب الآلي: إذا الأستاذ حال هذا السؤال بالملازم، يوصله الحل ويا زر للأستاذ
+  if (!data.direct && await autoAnswer(chat, uid, m, data, s.curr === "إنجليزي")) return;
   const qid = await insert("questions", { user_id: uid, chapter_id: (await topic(data.t))?.chapter_id ?? null, topic_id: data.t, lecture: data.l || 0, status: "open", created: stamp(), updated: stamp() });
   const q = (await question(qid))!;
   const r: any = await api("createForumTopic", { chat_id: g, name: await topicTitle(q) });

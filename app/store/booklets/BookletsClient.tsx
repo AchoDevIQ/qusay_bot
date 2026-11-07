@@ -5,7 +5,7 @@ import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Lecture = { from: number; to: number; topic: string; lecture: number };
-type Booklet = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; pages: number; lectures: Lecture[]; created: string };
+type Booklet = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; pages: number; lectures: Lecture[]; created: string; pdf?: boolean };
 type Data = { list: Booklet[]; on: boolean; key: boolean; reply: string; tags: string[]; used: number; matched: number; cost: number; model: string; notice: string };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 const KIND: Record<Booklet["kind"], string> = { main: "الملزمة", extra: "الاثرائيات", exams: "الوزاريات" };
@@ -20,7 +20,7 @@ export default function BookletsClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && (
           <>
-            <div className="exhint tmhint">الطالب يصور السؤال من الملزمة. إذا الجواب الآلي شغال ولگينا السؤال، يوصله وين مشروح. وإذا بعده ما فهم، أو سأل نفس السؤال مرة ثانية، سؤاله يوصلك. وإذا الجواب الآلي طافي، الأسئلة توصلك مثل قبل.</div>
+            <div className="exhint tmhint">الطالب يسأل عادي (صورة أو كتابة). إذا الجواب الآلي شغال وسؤاله إنت حاله بالملازم، يوصله الحل نفسه من الملزمة بصورة بإطار. وإذا بعده ما فهم، أو نفس الحل وصله قبل، أو ما لگيناه، سؤاله يوصلك. وإذا الجواب الآلي طافي، الأسئلة توصلك مثل قبل.</div>
             <AutoCard data={data} busy={busy} call={call} />
             <Upload busy={busy} call={call} />
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((ch) => {
@@ -58,9 +58,7 @@ function AutoCard({ data, busy, call }: { data: Data; busy: boolean; call: Call 
           <div><b>${data.cost}</b>الكلفة لحد هسه</div>
           <div><b>{data.used ? `$${(data.cost / data.used).toFixed(3)}` : "—"}</b>للسؤال الواحد</div>
         </div>
-        <div className="exlabel adtop">✉️ نص الرد للطالب</div>
-        <div className="exhint">هاي الكلمات تتبدل وحدها:</div>
-        <div className="cptags">{data.tags.map((t) => <code key={t}>{t}</code>)}</div>
+        <div className="exlabel adtop">✉️ الكلام اللي ويا صورة الحل</div>
         <textarea className="tmtext" aria-label="نص الرد" rows={7} value={reply} onChange={(e) => setReply(e.target.value)} />
         <div className="exline pdactions">
           <button type="button" className="btn" disabled={busy || !reply.trim() || reply === data.reply} onClick={() => void call({ action: "settings", reply })}>💾 حفظ الرد</button>
@@ -72,31 +70,32 @@ function AutoCard({ data, busy, call }: { data: Data; busy: boolean; call: Call 
 }
 
 function Upload({ busy, call }: { busy: boolean; call: Call }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [chapter, setChapter] = useState("");
-  const [lang, setLang] = useState<"ar" | "en">("ar");
-  const [kind, setKind] = useState<Booklet["kind"]>("main");
-  const bundle = !!file && /\.json$/i.test(file.name);
-  function send() {
-    if (!file) return;
-    const f = new FormData();
-    f.set("action", bundle ? "bundle" : "upload"); f.set("file", file); f.set("chapter", chapter); f.set("lang", lang); f.set("kind", kind);
-    void call(f).then((r) => { if (r) setFile(null); });
+  const [list, setList] = useState<File[]>([]);
+  const [done, setDone] = useState(0);
+  const [errs, setErrs] = useState<string[]>([]);
+  const [going, setGoing] = useState(false);
+  // ملف الملازم.json أول، بعده ملفات الـ PDF
+  async function send() {
+    setGoing(true); setDone(0); setErrs([]);
+    const ordered = [...list].sort((a, b) => Number(b.name.endsWith(".json")) - Number(a.name.endsWith(".json")));
+    const bad: string[] = [];
+    for (const [i, file] of ordered.entries()) {
+      const f = new FormData();
+      f.set("action", /\.json$/i.test(file.name) ? "bundle" : "upload"); f.set("file", file);
+      if (!await call(f)) bad.push(file.name);
+      setDone(i + 1);
+    }
+    setErrs(bad); setGoing(false);
+    if (!bad.length) setList([]);
   }
   return (
     <div className="card">
-      <h2>⬆️ رفع ملزمة</h2>
+      <h2>⬆️ رفع الملازم</h2>
       <div className="expad">
-        <div className="exhint">ارفع ملف PDF مطلع من Word، أو ملف «الملازم.json» اللي يجهزه البرنامج (بيه كل الملازم مرة وحدة). الملف الجديد يحل محل القديم لنفس الفصل والمنهج والنوع.</div>
-        <label className="exbtn adtop">📎 {file ? file.name : "اختار الملف"}<input type="file" accept="application/pdf,.json,application/json" hidden onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} /></label>
-        {file && !bundle && (
-          <>
-            <div className="seg wrap2 adtop">{[1, 2, 3, 4, 5].map((n) => <button type="button" key={n} className={chapter === String(n) ? "on" : ""} onClick={() => setChapter(String(n))}>الفصل {n}</button>)}</div>
-            <div className="seg adtop"><button type="button" className={lang === "ar" ? "on" : ""} onClick={() => setLang("ar")}>عربي</button><button type="button" className={lang === "en" ? "on" : ""} onClick={() => setLang("en")}>إنجليزي</button></div>
-            <div className="seg adtop">{(Object.keys(KIND) as Booklet["kind"][]).map((k) => <button type="button" key={k} className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{KIND[k]}</button>)}</div>
-          </>
-        )}
-        {file && <button type="button" className="btn adtop" disabled={busy || (!bundle && !chapter)} onClick={send}>⬆️ ارفع</button>}
+        <div className="exhint">من مجلد «للرفع» بحاسبتك: اختار ملف «الملازم.json» وكل ملفات الـ PDF سوا، ودوس ارفع. ملف PDF وحده (اسمه مثل 2-ar-main.pdf) ينضاف لملزمته.</div>
+        <label className="exbtn adtop">📎 {list.length ? `${list.length} ملف` : "اختار الملفات"}<input type="file" multiple accept="application/pdf,.json,application/json" hidden onChange={(e) => { setList([...(e.target.files ?? [])]); e.target.value = ""; }} /></label>
+        {!!list.length && <button type="button" className="btn adtop" disabled={busy || going} onClick={() => void send()}>{going ? `جاري الرفع ${done} من ${list.length}...` : `⬆️ ارفع ${list.length} ملف`}</button>}
+        {!!errs.length && <div className="exhint exbad adtop">ما انرفعت: {errs.join("، ")}</div>}
       </div>
     </div>
   );
@@ -108,7 +107,7 @@ function BookletRow({ b, busy, call }: { b: Booklet; busy: boolean; call: Call }
   return (
     <div className="cpbox expad">
       <b>📄 {KIND[b.kind]} · {b.lang === "ar" ? "عربي" : "إنجليزي"}</b>
-      <div className="exhint">{b.pages} صفحة · {b.lectures.length} محاضرة · انرفع {b.created}</div>
+      <div className="exhint">{b.pages} صفحة · {b.lectures.length} محاضرة · {b.pdf ? "✅ PDF مرفوع" : "⚠️ بعده ما مرفوع PDF (بدونه ما تطلع صورة الحل)"}</div>
       {!b.lectures.length && <div className="exhint">ما لگينا عناوين محاضرات بهذا الملف (عادي للاثرائيات والوزاريات). الجواب يگول الصفحة بس.</div>}
       {!!b.lectures.length && (
         <details className="adtop">

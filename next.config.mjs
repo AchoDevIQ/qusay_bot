@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ["firebase-admin", "@sparticuz/chromium", "puppeteer-core"],
+  serverExternalPackages: ["firebase-admin", "@sparticuz/chromium", "puppeteer-core", "@napi-rs/canvas"],
   // ملفات يقراها البوت من القرص، ولازم توصل وية التطبيق للسيرفر
   outputFileTracingIncludes: { "/api/**": ["./assets/*.jpg", "./assets/fonts/*", "./public/logo.png", "./public/boahmed.ttf", "./node_modules/@sparticuz/chromium/bin/**"] },
   // صفحات المتجر ما تتخزن، حتى التليجرام ما يفتح نسخة قديمة

@@ -7,7 +7,7 @@ import path from "node:path";
 
 const root = path.resolve(process.argv[2] ?? "data/الملازم");
 const idx = path.join(root, "_index");
-type Item = { chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; pages: string[]; source: string; mtime: number };
+type Item = { chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; pages: string[]; source: string; mtime: number; docx: string };
 const picked = new Map<string, Item>();
 for (const f of fs.readdirSync(idx).filter((x) => x.endsWith(".json"))) {
   const j = JSON.parse(fs.readFileSync(path.join(idx, f), "utf8")) as { file: string; pages: string[] };
@@ -22,11 +22,15 @@ for (const f of fs.readdirSync(idx).filter((x) => x.endsWith(".json"))) {
   const key = `${chapter}|${lang}|${kind}`;
   const old = picked.get(key);
   if (old) console.log(`ℹ️ ${key}: أكثر من ملف، ${mtime > old.mtime ? "اخترت" : "تركت"} ${name} (${mtime > old.mtime ? "تركت" : "اخترت"} ${old.source})`);
-  if (!old || mtime > old.mtime) picked.set(key, { chapter, lang, kind, name: name.replace(/\.docx$/i, "").trim(), pages: j.pages, source: name, mtime });
+  if (!old || mtime > old.mtime) picked.set(key, { chapter, lang, kind, name: name.replace(/\.docx$/i, "").trim(), pages: j.pages, source: name, mtime, docx });
 }
 const booklets = [...picked.values()].sort((a, b) => a.chapter - b.chapter || a.lang.localeCompare(b.lang) || a.kind.localeCompare(b.kind))
   .map(({ chapter, lang, kind, name, pages }) => ({ chapter, lang, kind, name, pages }));
-const out = path.join(root, "الملازم.json");
+// كلشي ينرفع بمجلد واحد «للرفع»: ملف الملازم.json، وPDF لكل ملزمة باسم مثل 2-ar-main.pdf (يطلعه Word بعدين من القائمة)
+const upDir = path.join(root, "للرفع");
+fs.mkdirSync(upDir, { recursive: true });
+const out = path.join(upDir, "الملازم.json");
+fs.writeFileSync(path.join(upDir, "_export.txt"), [...picked.values()].map((b) => `${b.docx}|${path.join(upDir, `${b.chapter}-${b.lang}-${b.kind}.pdf`)}`).join("\n"), "utf8");
 fs.writeFileSync(out, JSON.stringify({ made: new Date().toISOString(), booklets }));
 for (const b of booklets) console.log(`الفصل ${b.chapter} · ${b.lang} · ${b.kind} · ${b.pages.length} صفحة · ${b.name}`);
 console.log(`\n✅ ${booklets.length} ملزمة بالملف: ${out} (${Math.round(fs.statSync(out).size / 1024)} KB)`);
