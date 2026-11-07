@@ -51,7 +51,7 @@ function normal(v: any): any {
 const NEW_TABLES = ["schedules", "place_slots", "place_dates", "exam_answers", "question_marks", "paper_ink", "objections", "grader_pay", "grader_settlements", "student_devices", "student_stops", "checkpoint_done", "center_rent", "grade_comments", "stickers", "comment_sent", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
-  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(exams|schedule|exception|retake|move|camup|signups|grade|objections|attend|sales|company|fees|online|centers)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
+  if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(exams|schedule|exception|retake|move|camup|signups|birthdays|grade|objections|attend|sales|company|fees|online|centers)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
   return e;
 }
 // الحماية ميزة جديدة: كل اللي يوصل للطلاب ممنوع من الحفظ وإعادة التوجيه
@@ -71,7 +71,7 @@ function normalDb(db: Record<string, any[]>) {
     out[t] = rows.map((r) => {
       const x = { ...r };
       if (t === "products") { delete x.hidden; delete x.ask; }   // الإخفاء من المتجر وحق السؤال ميزات جديدة
-      if (t === "students" || t === "centers") delete x.gender;   // بنين وبنات ميزة جديدة
+      if (t === "students" || t === "centers") { delete x.gender; delete x.birth; }   // بنين وبنات والمواليد ميزات جديدة
       if (t === "orders") { delete x.printed_by; delete x.printed_at; }
       if (t === "orders" && x.items) x.items = JSON.parse(x.items);
       if (t === "sessions" && x.data) x.data = JSON.parse(x.data);

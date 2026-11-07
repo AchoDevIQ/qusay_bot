@@ -6,7 +6,8 @@ import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
-type Data = { stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
+type TestStudent = { id: number; name: string; papers: number; graded: number; link: string };
+type Data = { tests?: TestStudent[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -38,6 +39,7 @@ export default function StudentsClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && s && (
           <>
+            {data.tests && <TestStudents tests={data.tests} busy={busy} act={act} />}
             <div className="card">
               <h2>📊 الطلاب المسجلين: {s.all}</h2>
               <div className="adstats">
@@ -222,6 +224,28 @@ function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "perDay", id, value: n })}>حفظ حده باليوم (0 = العام: {sched.general})</button>
       </div>
       {!!sched.way && <Confirm label="🗓 خليه يرتب جدوله من جديد" disabled={busy} onYes={() => void call({ action: "schedReset", id })} />}
+    </div>
+  );
+}
+
+/** طلاب تجربة لصاحب البوت: أوراقهم تنتظر بالتصحيح مثل أي طالب، ويفتح صفحتهم كأنه هو حتى يشوف الدرجة ويعترض */
+function TestStudents({ tests, busy, act }: { tests: TestStudent[]; busy: boolean; act: (b: Record<string, unknown>) => unknown }) {
+  return (
+    <div className="card">
+      <h2>🧪 طلاب تجربة</h2>
+      <div className="expad">
+        <div className="exhint">3 طلاب تجربة، لكل واحد ورقة مسلمة بكل امتحان جاهز (جوابها الحل النموذجي). أوراقهم تطلع بالتصحيح مثل أي طالب. بعد التصحيح افتح صفحة الطالب وشوف درجته واعترض كأنك هو. ما توصلهم رسائل وما ينحسبون بأجور المصححين ولا بأرقام الطلاب.</div>
+        {tests.map((t) => (
+          <div key={t.id} className="atrow">
+            <span><b>{t.name}</b> <small className="pdmode">{t.papers} ورقة · انصححت {t.graded}</small></span>
+            <a className="exbtn" style={{ textDecoration: "none" }} href={t.link}>👁 افتح صفحته كطالب</a>
+          </div>
+        ))}
+        <div className="exline adtop">
+          <Confirm label={tests.length ? "🔄 سويهم من جديد" : "🧪 سوي طلاب تجربة"} disabled={busy} onYes={() => void act({ action: "makeTests" })} />
+          {!!tests.length && <Confirm label="🗑 امسحهم" disabled={busy} onYes={() => void act({ action: "deleteTests" })} />}
+        </div>
+      </div>
     </div>
   );
 }

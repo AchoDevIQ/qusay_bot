@@ -7,20 +7,20 @@ import { isAdmin, staffName, student } from "./data.ts";
 import { send, sendAlbum, upload } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, objectButton, openObjections, testObjection } from "./objections.ts";
-import { gradeScope, payAction, payData } from "./graderPay.ts";
+import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
-import { stamp } from "./util.ts";
+import { stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
 
 export const GRADE_PERM = "grade";
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const TEST_PAPERS = 5;
 const isTest = (it: Row) => it.user_id < 0;
 const MAX_INK = 400_000;
 /** الأخطاء الشائعة: تعليقات كل مصحح يحفظها حتى يعيدها بضغطة */
-const errKey = (uid: number) => `grade_errors_${uid}`;
-async function errorsOf(uid: number): Promise<string[]> { try { const j = JSON.parse(await kvGet(errKey(uid)) ?? "[]"); return Array.isArray(j) ? j.map(String) : []; } catch { return []; } }
+// الأخطاء الشائعة لكل امتحان (موضوع): كل المصححين يشوفونها من يصححون نفس الامتحان، وما تطلع بامتحان ثاني
+const errKey = (examId: number) => `grade_errors_exam_${examId}`;
+async function errorsOf(examId: number): Promise<string[]> { try { const j = JSON.parse(await kvGet(errKey(examId)) ?? "[]"); return Array.isArray(j) ? j.map(String) : []; } catch { return []; } }
 const nameOf = async (it: Row) => (isTest(it) ? `طالب تجربة ${-it.user_id}` : (await student(it.user_id))?.name ?? "طالب");
 
 async function paperRow(it: Row) {
@@ -57,7 +57,6 @@ async function listData(uid: number) {
     groups: await examGroups(waiting),
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
     owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid),
-    errors: await errorsOf(uid),
     stickers: (await find("stickers", {})).sort((a, b) => a.lo - b.lo || a.id - b.id).map((s) => ({ id: s.id, name: s.name, lo: s.lo, hi: s.hi })),
     today: papers.filter((p) => p.grader_id === uid && String(p.graded_at ?? "").startsWith(stamp().slice(0, 10))).length,
   };
@@ -91,7 +90,7 @@ async function paperView(it: Row, withObj = false) {
   const ink: Record<number, string> = {};
   for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
   return {
-    ink,
+    ink, errors: await errorsOf(it.exam_id),
     objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark })),
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
@@ -119,34 +118,42 @@ async function workPaper(uid: number, raw: unknown) {
 }
 const sumMarks = (qs: { mark: number | null }[]) => qs.reduce((s, q) => s + (q.mark ?? 0), 0);
 /** أوراق تجربة بدون طلاب حقيقيين: الجواب صورة السؤال نفسه، حتى تنجرب الشاشة وما توصل رسالة لأحد */
-async function makeTests() {
-  // عشوائية: كل مرة امتحانات مختلفة، ونسخة وحدة من كل امتحان
-  // الأفضل نسخ عدها ملف حلول، حتى تبين الورقة مثل ورقة طالب حل
-  const versions = (await find("bank_versions", { kind: "mandatory", ok: 1 })).map((v) => ({ v, r: Math.random() - (v.answer_pdf ? 1 : 0) })).sort((a, b) => a.r - b.r).map((x) => x.v);
-  const seen = new Set<number>();
-  const last = Math.min(0, ...(await find("sched_items", { status: "done" })).filter(isTest).map((i) => i.user_id));
-  let made = 0;
+/** طلاب تجربة: 3 طلاب، لكل واحد ورقة مسلمة بكل امتحان جاهز (جوابها الحل النموذجي).
+ *  مثل الطلاب الحقيقيين: صاحب البوت يفتح صفحتهم ويعترض كأنه الطالب. أرقامهم سالبة، فما توصلهم رسائل وما تنحسب بالأجور */
+export const TEST_STUDENTS = 3;
+const TEST_EXAMS = 8;
+export async function makeTests() {
+  await deleteTests();
+  const versions = (await find("bank_versions", { kind: "mandatory", ok: 1 })).sort((x, y) => (y.answer_pdf ? 1 : 0) - (x.answer_pdf ? 1 : 0));
+  const picked: Row[] = [];
   for (const v of versions) {
-    if (made >= TEST_PAPERS) break;
-    if (seen.has(v.exam_id)) continue;
-    seen.add(v.exam_id);
-    const qs = await find("bank_questions", { version_id: v.id }, { order: ["n"] });
-    if (!qs.length || !qs.every((q) => q.q_file)) continue;
-    const id = await insert("sched_items", { user_id: last - made - 1, exam_id: v.exam_id, at: stamp(), status: "done", version_id: v.id, started_at: stamp(), submitted_at: stamp() });
-    if (v.answer_pdf) await insert("exam_answers", { item_id: id, q: 0, file: v.answer_pdf, created: stamp() });
-    else for (const q of qs) await insert("exam_answers", { item_id: id, q: q.n, file: q.q_file, created: stamp() });
-    made++;
+    if (picked.length >= TEST_EXAMS || picked.some((x) => x.exam_id === v.exam_id)) continue;
+    const qs = await find("bank_questions", { version_id: v.id });
+    if (qs.length && qs.every((q) => q.q_file)) picked.push(v);
   }
-  return made;
+  if (!picked.length) return 0;
+  let papers = 0;
+  for (let k = 1; k <= TEST_STUDENTS; k++) {
+    const uid = -k;
+    await put("students", { user_id: uid, name: `طالب تجربة ${k}`, curr: "عربي", grade: "السادس العلمي", gov: "بغداد", area: "تجربة", phone1: "", phone2: "", exam: "إلكتروني", created: stamp() });
+    for (const v of picked) {
+      const id = await insert("sched_items", { user_id: uid, exam_id: v.exam_id, at: stamp(), status: "done", version_id: v.id, started_at: stamp(), submitted_at: stamp() });
+      if (v.answer_pdf) await insert("exam_answers", { item_id: id, q: 0, file: v.answer_pdf, created: stamp() });
+      else for (const q of await find("bank_questions", { version_id: v.id }, { order: ["n"] })) await insert("exam_answers", { item_id: id, q: q.n, file: q.q_file, created: stamp() });
+      papers++;
+    }
+  }
+  return papers;
 }
-async function deleteTests() {
-  for (const it of (await find("sched_items", { status: "done" })).filter(isTest)) {
+export async function deleteTests() {
+  for (const it of (await find("sched_items")).filter(isTest)) {
     await remove("exam_answers", { item_id: it.id });
     await remove("question_marks", { item_id: it.id });
     await remove("paper_ink", { item_id: it.id });
     await remove("objections", { item_id: it.id });
     await remove("sched_items", { id: it.id });
   }
+  for (const st of (await find("students")).filter((x) => x.user_id < 0)) await remove("students", { user_id: st.user_id });
 }
 
 export async function gradeAction(body: Row) {
@@ -168,10 +175,12 @@ export async function gradeAction(body: Row) {
   if (a === "saveError" || a === "delError") {
     const text = String(body.text ?? "").trim().slice(0, 300);
     need(text, "اكتب التعليق");
-    const list = (await errorsOf(uid)).filter((x) => x !== text);
+    const it = await one("sched_items", { id: Number(body.id) });
+    need(it?.exam_id, "الورقة غير موجودة");
+    const list = (await errorsOf(it!.exam_id)).filter((x) => x !== text);
     if (a === "saveError") list.unshift(text);
-    await kvSet(errKey(uid), JSON.stringify(list.slice(0, 100)));
-    return { ...await listData(uid), paper: null, notice: a === "saveError" ? "✅ انحفظ بالأخطاء الشائعة" : "" };
+    await kvSet(errKey(it!.exam_id), JSON.stringify(list.slice(0, 100)));
+    return { ...await listData(uid), paper: null, errors: list.slice(0, 100), notice: a === "saveError" ? "✅ انحفظ بالأخطاء الشائعة" : "" };
   }
   if (a === "open") {
     const it = await one("sched_items", { id: Number(body.id) });
@@ -238,7 +247,7 @@ export async function gradeAction(body: Row) {
   } else if (a === "setRate" || a === "settle") {
     return { ...await listData(uid), paper: null, notice: await payAction(uid, body), pay: await payData(uid) };
   } else if (a === "history") {
-    return { ...await listData(uid), paper: null, notice: "", history: await historyOf(uid, Number(body.page) || 0) };
+    return { ...await listData(uid), paper: null, notice: "", history: await historyOf(uid, body.day) };
   } else need(a === "list", "أمر غير معروف");
   return { ...await listData(uid), paper, notice };
 }
@@ -380,16 +389,28 @@ async function messageStudent(uid: number, form: FormData) {
 
 export const waitingPapers = async (uid: number) => (await waitingFor(uid, await find("sched_items", { status: "done" }))).length;
 
-const PAGE = 40;
 /** سجل التصحيح: المصحح يشوف أوراقه، وصاحب البوت يشوف كل الأوراق ومنو صححها، ويا حالة الاعتراضات */
-async function historyOf(uid: number, page: number) {
+/** السجل يوم يوم: أول ما يفوت أوراق اليوم، وفوك أيام هذا الشهر يرجع بيها. والمصحح يشوف المبلغ اللي إله */
+async function historyOf(uid: number, rawDay: unknown) {
   const owner = await isAdmin(uid);
-  const all = (await find("sched_items", { status: "done" })).filter((p) => p.graded_at && (owner || p.grader_id === uid))
-    .sort((a, b) => String(b.graded_at).localeCompare(String(a.graded_at)));
-  const rows = all.slice(page * PAGE, page * PAGE + PAGE);
+  const today = todayStr();
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(rawDay ?? "")) && String(rawDay) <= today ? String(rawDay) : today;
+  const mine = (await find("sched_items", { status: "done" })).filter((p) => p.graded_at && (owner || p.grader_id === uid));
+  const all = mine.filter((p) => String(p.graded_at).startsWith(day)).sort((a, b) => String(b.graded_at).localeCompare(String(a.graded_at)));
+  const rows = all;
   const objs = await find("objections", {});
+  const month = day.slice(0, 7);
+  const counts = new Map<string, number>();
+  for (const p of mine) { const d = String(p.graded_at).slice(0, 10); if (d.startsWith(month)) counts.set(d, (counts.get(d) ?? 0) + 1); }
+  // أيام الشهر لحد اليوم (إذا الشهر هو الحالي)، والأشهر اللي قبله تبين كلها
+  const last = month === today.slice(0, 7) ? Number(today.slice(8, 10)) : new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const days = Array.from({ length: last }, (_, i) => `${month}-${String(last - i).padStart(2, "0")}`).map((d) => ({ d, n: counts.get(d) ?? 0 }));
+  const prev = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+  const next = month < today.slice(0, 7) ? new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1)).toISOString().slice(0, 7) : "";
+  const due = owner ? null : (await balanceOf(uid)).amount;
   return {
-    page, pages: Math.max(1, Math.ceil(all.length / PAGE)), count: all.length, owner,
+    day, days, prev: `${prev}-01`, next: next ? (next === today.slice(0, 7) ? today : `${next}-01`) : "", due,
+    page: 0, pages: 1, count: all.length, owner,
     rows: await Promise.all(rows.map(async (p) => {
       const mine = objs.filter((o) => o.item_id === p.id);
       return { ...await paperRow(p), objOpen: mine.filter((o) => o.status === "open").length, objOk: mine.filter((o) => o.status === "accepted").length, objNo: mine.filter((o) => o.status === "rejected").length };

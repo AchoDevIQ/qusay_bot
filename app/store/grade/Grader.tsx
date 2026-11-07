@@ -8,21 +8,22 @@ import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
 import MessageBox from "./MessageBox";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
-export type Paper = { id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
+export type Paper = { errors?: string[]; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
 /** اعتراض الطالب على سؤال: نصه، وتسجيله إذا موجود، ودرجته قبل الاعتراض */
 export type Objection = { q: number; text: string; voice: string | null; old: number };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
-type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
+type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "w"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
 export type Sticker = { id: number; name: string; lo: number; hi: number };
 type Ink = { rot: number; items: Item[] };
 type Page = { src: string | null; q: number | null };
-type Tool = "hand" | "pen" | "eraser" | "text" | "stamp" | "sticker";
+type Tool = "hand" | "pen" | "eraser" | "text" | "stamp" | "wrong" | "sticker";
 
 const COLORS = ["#111111", "#555555", "#9e9e9e", "#ffffff", "#e53935", "#c62828", "#ff5252", "#ff7043", "#fb8c00", "#ffb300", "#fdd835", "#c0ca33",
   "#7cb342", "#1f9d55", "#00897b", "#00acc1", "#039be5", "#1e5bd8", "#3949ab", "#5e35b1", "#8e24aa", "#d81b60", "#ec407a", "#6d4c41"];
 const WIDTHS = [2, 5];
 const ZOOMS = [0.75, 1, 1.25, 1.5, 2, 2.5];
 const GREEN = "#1f9d55";
+const RED = "#e53935";
 const isPdf = (f: string) => /\.pdf$/i.test(f);
 const parseInk = (s: string | undefined): Ink => { try { const j = JSON.parse(s || ""); return { rot: Number(j.rot) || 0, items: Array.isArray(j.items) ? j.items : [] }; } catch { return { rot: 0, items: [] }; } };
 
@@ -74,6 +75,12 @@ function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: n
     } else if (it.t === "i") {
       const im = imgs?.get(it.id);
       if (im?.complete && im.naturalWidth) { const dw = it.w * w, dh = (dw * im.naturalHeight) / im.naturalWidth; ctx.drawImage(im, it.x * w - dw / 2, it.y * h - dh / 2, dw, dh); }
+    } else if (it.t === "w") {
+      // ختم الخطأ: دائرة حمرة بيها ✗
+      const r = 0.028 * w, x = it.x * w, y = it.y * h, a = r * 0.4;
+      ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = r * 0.28; ctx.beginPath();
+      ctx.moveTo(x - a, y - a); ctx.lineTo(x + a, y + a); ctx.moveTo(x + a, y - a); ctx.lineTo(x - a, y + a); ctx.stroke();
     } else {
       const r = 0.028 * w, x = it.x * w, y = it.y * h;
       ctx.fillStyle = GREEN; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
@@ -84,10 +91,12 @@ function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: n
 }
 
 /** صفحة وحدة: الصورة جوة والرسم فوكها */
-function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, onAdd, onErase, onTap }: {
-  page: Page; ink: Ink; zoom: number; tool: Tool; color: string; width: number; sticker: number; fitH: number;
-  onAdd: (it: Item) => void; onErase: (x: number, y: number) => void; onTap: (x: number, y: number) => void;
+function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, locked, onAdd, onErase, onTap, onMove }: {
+  page: Page; ink: Ink; zoom: number; tool: Tool; color: string; width: number; sticker: number; fitH: number; locked: boolean;
+  onAdd: (it: Item) => void; onErase: (x: number, y: number) => void; onTap: (x: number, y: number) => void; onMove: (i: number, x: number, y: number) => void;
 }) {
+  const drag = useRef<{ i: number; dx: number; dy: number } | { pan: true; x: number; y: number } | null>(null);
+  const [moving, setMoving] = useState<{ i: number; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const bg = useRef<HTMLCanvasElement>(null);
   const top = useRef<HTMLCanvasElement>(null);
@@ -133,28 +142,64 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, onAdd, onEr
   const redraw = useCallback(() => {
     const c = top.current; if (!c) return;
     const ctx = c.getContext("2d")!; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawItems(ctx, ink.items, w, h, live.current, imgs.current);
-  }, [ink.items, w, h, dpr, loaded]);
+    // العنصر اللي يتحرك يبين بمكانه الجديد
+    const items = moving ? ink.items.map((it, i) => (i === moving.i && it.t !== "s" ? { ...it, x: moving.x, y: moving.y } : it)) : ink.items;
+    drawItems(ctx, items, w, h, live.current, imgs.current);
+  }, [ink.items, w, h, dpr, loaded, moving]);
   useEffect(() => { const c = top.current; if (c) { c.width = w * dpr; c.height = h * dpr; } redraw(); }, [w, h, dpr, redraw]);
   const pt = (e: React.PointerEvent) => { const r = top.current!.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height] as const; };
+  /** أقرب كتابة أو ختم أو ملصق للمكان اللي انداس */
+  function hit(x: number, y: number) {
+    let best = -1, bestD = 0.05;
+    ink.items.forEach((it, i) => {
+      if (it.t === "s") return;
+      // الكتابة العربية تنكتب من نقطتها لليسار، فنقيس لنصها تقريباً
+      const lines = it.t === "x" ? it.s.split(/\r?\n/) : [];
+      const len = it.t === "x" ? Math.max(...lines.map((l) => l.length)) * it.z * 0.55 : 0;
+      const cx = it.t === "x" ? it.x - len / 2 : it.x;
+      const d = Math.hypot(cx - x, it.y - y);
+      const onText = it.t === "x" && y >= it.y - it.z && y <= it.y + it.z * (lines.length + 0.2) && x >= it.x - len - 0.02 && x <= it.x + 0.02;
+      if (d < bestD || onText) { best = i; bestD = Math.min(d, bestD); }
+    });
+    return best;
+  }
   function down(e: React.PointerEvent) {
-    if (tool === "hand") return;
     e.preventDefault(); top.current!.setPointerCapture(e.pointerId);
     const [x, y] = pt(e);
+    if (tool === "hand") {
+      const i = locked ? -1 : hit(x, y);
+      if (i >= 0) { const it = ink.items[i] as { x: number; y: number }; drag.current = { i, dx: x - it.x, dy: y - it.y }; setMoving({ i, x: it.x, y: it.y }); }
+      else drag.current = { pan: true, x: e.clientX, y: e.clientY };
+      return;
+    }
     if (tool === "pen") { live.current = { t: "s", c: color, w: width, p: [x, y] }; redraw(); }
     if (tool === "eraser") onErase(x, y);
   }
   function move(e: React.PointerEvent) {
-    if (tool === "hand" || !(e.buttons & 1)) return;
+    if (tool === "hand") {
+      const d = drag.current; if (!d) return;
+      if ("pan" in d) {
+        // ماكو شي تحت الإصبع: الصفحة نفسها تتحرك
+        const st = box.current?.parentElement; if (st) st.scrollBy(d.x - e.clientX, d.y - e.clientY);
+        drag.current = { pan: true, x: e.clientX, y: e.clientY };
+      } else { const [x, y] = pt(e); setMoving({ i: d.i, x: Math.min(1, Math.max(0, x - d.dx)), y: Math.min(1, Math.max(0, y - d.dy)) }); }
+      return;
+    }
+    if (!(e.buttons & 1)) return;
     const [x, y] = pt(e);
     if (tool === "pen" && live.current?.t === "s") { live.current.p.push(+x.toFixed(4), +y.toFixed(4)); redraw(); }
     if (tool === "eraser") onErase(x, y);
   }
   function up(e: React.PointerEvent) {
-    if (tool === "hand") return;
+    if (tool === "hand") {
+      if (moving) onMove(moving.i, +moving.x.toFixed(4), +moving.y.toFixed(4));
+      drag.current = null; setMoving(null);
+      return;
+    }
     const [x, y] = pt(e);
     if (tool === "pen" && live.current) { const s = live.current; live.current = null; onAdd(s); }
     if (tool === "stamp") onAdd({ t: "k", x, y });
+    if (tool === "wrong") onAdd({ t: "w", x, y });
     if (tool === "sticker" && sticker) onAdd({ t: "i", id: sticker, x, y, w: 0.22 });
     if (tool === "text") onTap(x, y);
   }
@@ -166,8 +211,8 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, onAdd, onEr
       {img && (
         <div className="gk-sheet" style={{ width: w, height: h }}>
           <canvas ref={bg} style={{ width: w, height: h }} />
-          <canvas ref={top} style={{ width: w, height: h, touchAction: tool === "hand" ? "auto" : "none", cursor: tool === "hand" ? "default" : "crosshair" }}
-            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { live.current = null; redraw(); }} />
+          <canvas ref={top} style={{ width: w, height: h, touchAction: "none", cursor: tool === "hand" ? (moving ? "grabbing" : "grab") : "crosshair" }}
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { live.current = null; drag.current = null; setMoving(null); redraw(); }} />
         </div>
       )}
     </div>
@@ -205,14 +250,14 @@ function TrimmedImage({ src, alt }: { src: string; alt: string }) {
   return out ? <img src={out} alt={alt} /> : <span className="gk-qwait">...</span>;
 }
 
-const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "T", stamp: "✅", sticker: "🖼" };
-const TIP: Record<Tool, string> = { hand: "تحريك", pen: "القلم", eraser: "الممحاة", text: "كتابة", stamp: "ختم صح", sticker: "ملصق" };
+const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "T", stamp: "✅", wrong: "❌", sticker: "🖼" };
+const TIP: Record<Tool, string> = { hand: "تحريك: اسحب الكتابة أو الختم أو الملصق لمكان ثاني، أو اسحب الصفحة", pen: "القلم", eraser: "الممحاة", text: "كتابة", stamp: "ختم صح", wrong: "ختم خطأ", sticker: "ملصق" };
 
 const SHOWQ_KEY = "gradeShowQuestion";
 const PEN_KEY = "gradePen";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, today, left: papersLeft, errors, stickers }: {
-  paper: Paper; url: (r: string) => string; busy: boolean; errors: string[]; stickers: Sticker[];
-  act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null } | null>;
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, today, left: papersLeft, stickers }: {
+  paper: Paper; url: (r: string) => string; busy: boolean; stickers: Sticker[];
+  act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null; errors?: string[] } | null>;
   onClose: () => void; onSkip: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
   onDecide: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>, rejects: Record<number, string>, accepted: number) => void;
 }) {
@@ -248,6 +293,9 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const [stickerBox, setStickerBox] = useState(false);
   const [msgBox, setMsgBox] = useState(false);
   const [msgDone, setMsgDone] = useState("");
+  // الأخطاء الشائعة مال هذا الامتحان: يشوفها كل مصحح يصححه، وما تطلع بامتحان ثاني
+  const [errors, setErrors] = useState<string[]>(paper.errors ?? []);
+  const errAct = async (b: Record<string, unknown>) => { const r = await act({ ...b, id: paper.id }); if (r?.errors) setErrors(r.errors); };
   useEffect(() => { try { if (localStorage.getItem(SHOWQ_KEY) === "0") setShowQ(false); } catch { /* بدون حفظ */ } }, []);
   function toggleQ() { const v = !showQ; setShowQ(v); try { localStorage.setItem(SHOWQ_KEY, v ? "1" : "0"); } catch { /* بدون حفظ */ } }
   const undo = useRef<Record<number, Item[][]>>({});
@@ -303,6 +351,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     timer.current = setTimeout(() => void flush(), 1200);
   }
   const addItem = (it: Item) => change({ ...ink, items: [...ink.items, it] });
+  const moveItem = (i: number, x: number, y: number) => change({ ...ink, items: ink.items.map((it, j) => (j === i && it.t !== "s" ? { ...it, x, y } : it)) });
   function erase(x: number, y: number) {
     const r = 0.025;
     const near = (px: number, py: number) => Math.hypot(px - x, py - y) < r;
@@ -358,7 +407,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   function addText(value = text) {
     const v = value.trim();
     if (textAt && v) addItem({ t: "x", c: color, x: textAt.x, y: textAt.y, s: v, z: 0.032 });
-    if (v && keepErr && !errors.includes(v)) void act({ action: "saveError", text: v });
+    if (v && keepErr && !errors.includes(v)) void errAct({ action: "saveError", text: v });
     setTextAt(null); setText(""); setKeepErr(false);
   }
   /** صور الورقة المصححة اللي توصل للطالب: غلاف، وبعده كل صفحة بتصحيحها */
@@ -428,7 +477,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         </div>
         {!locked && <button type="button" className="gk-clear" onClick={() => ink.items.length && change({ ...ink, items: [] })}>🗑 مسح الصفحة</button>}
         {!locked && <div className="gk-tools gk-pens">
-          {(["sticker", "stamp", "text", "eraser", "pen", "hand"] as Tool[]).map((t) => (
+          {(["sticker", "wrong", "stamp", "text", "eraser", "pen", "hand"] as Tool[]).map((t) => (
             <button type="button" key={t} title={TIP[t]} className={"gk-ic" + (tool === t ? " on" : "")} onClick={() => pickTool(t)}>
               {t === "pen" ? <span style={{ color }}>{ICON[t]}</span> : t === "sticker" && sticker ? <img className="gk-stic" src={stickerUrl(sticker)} alt="" /> : ICON[t]}
             </button>
@@ -448,7 +497,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         <div className="gk-row gk-marks">
           {page?.q === null && <div className="gk-qs">{paper.questions.map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
           <span className="gk-q">س{q.n}<small> من {q.max}</small></span>
-          <div className="gk-nums">
+          <div className="gk-nums" style={{ ["--cols" as string]: q.max + 1 <= 16 ? q.max + 1 : Math.ceil((q.max + 1) / 2) }}>
             {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (
               <button type="button" key={m} className={(marks[q.n] === m ? "on" : "") + (objMode && objOf(q.n)?.old === m ? " gk-was" : "")} disabled={busy || locked || (objMode && !objOf(q.n))} onClick={() => void press(m)}>{m}</button>
             ))}
@@ -496,7 +545,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         {!pages && <div className="gk-empty">جاري تجهيز الورقة...</div>}
         {pages && !pages.length && <div className="gk-empty">⚠️ ماكو صفحات بهذي الورقة.</div>}
         {page && showQ && q && <div className="gk-qtop" ref={qtop}><b>س{q.n}</b><TrimmedImage src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
-        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={fitH} onAdd={addItem} onErase={erase} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
+        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={fitH} locked={locked} onAdd={addItem} onErase={erase} onMove={moveItem} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
       </div>
       {textAt && (
         <div className="gk-modal" onClick={() => setTextAt(null)}>
@@ -510,7 +559,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
                 {errors.map((e) => (
                   <span key={e} className="gk-errchip">
                     <button type="button" onClick={() => addText(e)}>{e}</button>
-                    <button type="button" aria-label="حذف" className="gk-x" onClick={() => void act({ action: "delError", text: e })}>✕</button>
+                    <button type="button" aria-label="حذف" className="gk-x" onClick={() => void errAct({ action: "delError", text: e })}>✕</button>
                   </span>
                 ))}
               </div>
@@ -541,11 +590,36 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         <div className="gk-over">
           <div className="gk-row gk-head"><button type="button" className="gk-btn" onClick={() => setOverlay("")}>⬅️ رجوع للورقة</button><b>{overlay === "model" ? "📄 الجواب النموذجي" : `📋 السؤال ${q?.n ?? ""}`}</b></div>
           <div className="gk-stage">
-            {overlay === "model" && (paper.answerPdf ? <PdfPages url={url(paper.answerPdf)} outside={false} /> : <div className="gk-empty">ماكو جواب نموذجي مرفوع لهذي النسخة.</div>)}
+            {overlay === "model" && (paper.answerPdf ? <ModelAnswer url={url(paper.answerPdf)} q={q?.n ?? 0} /> : <div className="gk-empty">ماكو جواب نموذجي مرفوع لهذي النسخة.</div>)}
             {overlay === "question" && q && <img className="gk-qimg" src={url(q.image)} alt={`السؤال ${q.n}`} />}
           </div>
         </div>
       )}
     </div>
   );
+}
+
+/** الجواب النموذجي: الملف كله، بس ينفتح على السؤال اللي دا يصححه */
+// الجواب النموذجي يتقسم مرة وحدة لكل نسخة، وبعدها ينفتح فوراً
+const modelCache = new Map<string, Promise<{ q: number; src: string }[]>>();
+const cacheKey = (u: string) => u.replace(/([?&])t=[^&]*/, "$1");
+function ModelAnswer({ url, q }: { url: string; q: number }) {
+  const [parts, setParts] = useState<{ q: number; src: string }[] | null>(null);
+  const first = useRef<HTMLImageElement>(null);
+  const loaded = useRef(new Set<number>());
+  const done = useRef(false);
+  useEffect(() => {
+    let stop = false;
+    const k = cacheKey(url);
+    if (!modelCache.has(k)) modelCache.set(k, pdfByQuestion(url).catch(() => []));
+    modelCache.get(k)!.then((p) => { if (!stop) setParts(p); });
+    return () => { stop = true; };
+  }, [url]);
+  if (!parts) return <div className="gk-empty">جاري فتح الجواب النموذجي...</div>;
+  // إذا ما گدرنا نلگى الأسئلة بالملف، يطلع كامل مثل قبل
+  if (!parts.some((p) => p.q === q)) return <PdfPages url={url} outside={false} />;
+  const at = parts.findIndex((p) => p.q === q);
+  // ننزل للسؤال بعد ما تتحمل الصور اللي قبله، حتى يوقف بمكانه الصحيح
+  const onLoad = (i: number) => { loaded.current.add(i); if (!done.current && [...Array(at + 1).keys()].every((k) => loaded.current.has(k))) { done.current = true; first.current?.scrollIntoView({ block: "start" }); } };
+  return <>{parts.map((p, i) => <img key={i} ref={i === at ? first : undefined} onLoad={() => onLoad(i)} className="gk-qimg gk-modelpart" src={p.src} alt={`حل السؤال ${p.q}`} />)}</>;
 }

@@ -13,6 +13,11 @@ type Done = { password: string; url?: string; close?: boolean };
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس العلمي" }, { v: "الخامس العلمي", label: "الخامس العلمي" }];
 const GENDER_OPTS = [{ v: "بنين", label: "👦 بنين" }, { v: "بنات", label: "👧 بنات" }];
 const EXAM_OPTS = [{ v: "حضوري", label: "🏫 حضوري" }, { v: "إلكتروني", label: "💻 إلكتروني" }];
+// تاريخ الميلاد: قوائم بسيطة، والسنين من 10 لـ 30 سنة للوراء
+const DAYS_31 = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
+const MONTHS_AR = ["كانون الثاني", "شباط", "آذار", "نيسان", "أيار", "حزيران", "تموز", "آب", "أيلول", "تشرين الأول", "تشرين الثاني", "كانون الأول"];
+const YEARS = Array.from({ length: 21 }, (_, i) => String(new Date().getFullYear() - 10 - i));
+const validDate = (y: string, m: string, d: string) => { const t = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d))); return t.getUTCMonth() === Number(m) - 1 && t.getUTCDate() === Number(d); };
 const NAME_PARTS = [
   { key: "n1", label: "الاسم الأول", hint: "عبد الله" }, { key: "n2", label: "اسم الأب", hint: "مصطفى" },
   { key: "n3", label: "اسم الجد", hint: "علي" }, { key: "n4", label: "الاسم الرابع", hint: "احمد" },
@@ -114,6 +119,8 @@ export default function RegFlow({ D }: { D: RegData }) {
     for (const p of NAME_PARTS) if (!nameOk([f[p.key] ?? "x", "ا", "ا", "ا"].join(" ").trim())) e[p.key] = "اكتب هذا الاسم بالحروف العربية فقط";
     for (const p of NAME_PARTS) if (!(f[p.key] ?? "").trim()) e[p.key] = `اكتب ${p.label}`;
     if (!f.sx) e.sx = "اختار بنين لو بنات";
+    if (!f.bd || !f.bm || !f.by) e.birth = "اختار تاريخ ميلادك: اليوم والشهر والسنة";
+    else if (!validDate(f.by, f.bm, f.bd)) e.birth = "هذا التاريخ ما موجود، تأكد من اليوم";
     const p1 = cleanPhone(f.p1 ?? ""), p2 = cleanPhone(f.p2 ?? "");
     const a = phoneErr(p1), b = phoneErr(p2);
     if (a) e.p1 = a;
@@ -139,7 +146,7 @@ export default function RegFlow({ D }: { D: RegData }) {
     setMaking(true);
     window.scrollTo(0, 0);
     const n = NAME_PARTS.map((p) => (f[p.key] ?? "").trim().replace(/\s+/g, " ")).join(" ");
-    const form = { n, cu: f.curr, gr: f.grade, g: gov, s: gov === "بغداد" ? f.side : "", a: (f.area ?? "").trim(), p1: cleanPhone(f.p1 ?? ""), p2: cleanPhone(f.p2 ?? ""), e: exam, c: exam === "حضوري" ? center : 0, sx: f.sx };
+    const form = { n, cu: f.curr, gr: f.grade, g: gov, s: gov === "بغداد" ? f.side : "", a: (f.area ?? "").trim(), p1: cleanPhone(f.p1 ?? ""), p2: cleanPhone(f.p2 ?? ""), e: exam, c: exam === "حضوري" ? center : 0, sx: f.sx, b: `${f.by}-${f.bm}-${f.bd}` };
     try { setDone(await homeCall<Done>(token, { action: "register", rev: info!.rev, form })); }
     catch (err) { setSendErr((err as Error).message); }
     setMaking(false);
@@ -165,6 +172,15 @@ export default function RegFlow({ D }: { D: RegData }) {
             <label>بنين لو بنات؟ <i>*</i></label>
             <Seg options={GENDER_OPTS} value={f.sx ?? ""} onPick={(v) => { set("sx", v); setCarea(0); setCenter(0); }} />
             <Err id="sx" errs={errs} />
+          </div>
+          <div className="rgcard" id="birth">
+            <label>تاريخ ميلادك <i>*</i></label>
+            <div className="rgbirth">
+              <select aria-label="اليوم" value={f.bd ?? ""} onChange={(e) => set("bd", e.target.value)}><option value="">اليوم</option>{DAYS_31.map((d) => <option key={d} value={d}>{Number(d)}</option>)}</select>
+              <select aria-label="الشهر" value={f.bm ?? ""} onChange={(e) => set("bm", e.target.value)}><option value="">الشهر</option>{MONTHS_AR.map((m, i) => <option key={m} value={String(i + 1).padStart(2, "0")}>{i + 1} - {m}</option>)}</select>
+              <select aria-label="السنة" value={f.by ?? ""} onChange={(e) => set("by", e.target.value)}><option value="">السنة</option>{YEARS.map((y) => <option key={y} value={y}>{y}</option>)}</select>
+            </div>
+            <Err id="birth" errs={errs} />
           </div>
           <div className="rgcard">
             <label>رقم هاتفك <i>*</i></label>

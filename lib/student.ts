@@ -445,12 +445,24 @@ export async function studentFromForm(o: any, byAdmin: boolean): Promise<{ errs:
     cid = toInt(o.c || 0) ?? 0;
     if (!cid || !await centerName(cid)) { errs.push("اختر المركز الامتحاني"); cid = null; }
   }
-  return { errs, r: { name, curr: cu, grade: gr, gov: g, side: sd, area, phone1: p1, phone2: p2, exam, center_id: cid, gender: GENDERS.includes(o.sx) ? o.sx : null } };
+  // المواليد: يوم وشهر وسنة. الطالب لازم يكتبها، والإدارة إذا ما كتبتها تبقى مثل ما جانت
+  const birth = birthOf(o.b);
+  if (o.b && !birth) errs.push("تاريخ الميلاد غير صحيح");
+  return { errs, r: { name, curr: cu, grade: gr, gov: g, side: sd, area, phone1: p1, phone2: p2, exam, center_id: cid, gender: GENDERS.includes(o.sx) ? o.sx : null, birth } };
+}
+/** «2008-04-17»: تاريخ حقيقي، والعمر بين 10 و40 سنة */
+export function birthOf(raw: unknown) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(raw ?? ""));
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (d.getUTCMonth() !== Number(m[2]) - 1 || d.getUTCDate() !== Number(m[3])) return null;
+  const age = new Date().getUTCFullYear() - Number(m[1]);
+  return age >= 10 && age <= 40 ? m[0] : null;
 }
 export async function saveStudent(uid: number, username: string, r: Row, old: Row | null) {
   await put("students", {
     user_id: uid, username, name: r.name, curr: r.curr, grade: r.grade, gov: r.gov, side: r.side ?? "", area: r.area,
-    phone1: r.phone1, phone2: r.phone2, exam: r.exam, center_id: r.center_id ?? null, gender: r.gender ?? old?.gender ?? null, created: old ? old.created : stamp(), updated: stamp(),
+    phone1: r.phone1, phone2: r.phone2, exam: r.exam, center_id: r.center_id ?? null, gender: r.gender ?? old?.gender ?? null, birth: r.birth ?? old?.birth ?? null, created: old ? old.created : stamp(), updated: stamp(),
   });
 }
 

@@ -22,7 +22,7 @@ const { notifyStarted } = await import("../lib/examRoom.ts");
 const { schedSettings } = await import("../lib/schedApi.ts");
 const { adminHomeAction } = await import("../lib/adminHomeApi.ts");
 const { homeToken, cronKey } = await import("../lib/webAuth.ts");
-const { initDb, find, insert, one, put, update } = await import("../lib/db.ts");
+const { initDb, find, insert, one, put, remove, update } = await import("../lib/db.ts");
 await initDb();
 const sign = (uid: number) => {
   const params = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: uid }) });
@@ -71,11 +71,15 @@ test("التصحيح: الصلاحية، أول مصحح ياخذ الورقة،
   await assert.rejects(g(20, "ink", { id, page: -1, ink }), /صفحة/);
   await assert.rejects(g(20, "ink", { id, page: 0, ink: "{bad" }), /غير مفهوم/);
   assert.deepEqual(await g(20, "ink", { id, page: 0, ink }), { ok: true });
-  await g(20, "saveError", { text: "خطأ بالإشارة" });
-  assert.deepEqual((await g(20, "saveError", { text: "نسيت الثابت" })).errors, ["نسيت الثابت", "خطأ بالإشارة"]);
-  assert.deepEqual((await g(20, "list")).errors, ["نسيت الثابت", "خطأ بالإشارة"]);
-  assert.deepEqual((await g(21, "list")).errors, []);              // كل مصحح إله أخطاءه
-  assert.deepEqual((await g(20, "delError", { text: "نسيت الثابت" })).errors, ["خطأ بالإشارة"]);
+  // الأخطاء الشائعة لكل امتحان: كل المصححين يشوفونها بنفس الامتحان، وما تطلع بامتحان ثاني
+  await g(20, "saveError", { id, text: "خطأ بالإشارة" });
+  assert.deepEqual((await g(20, "saveError", { id, text: "نسيت الثابت" })).errors, ["نسيت الثابت", "خطأ بالإشارة"]);
+  assert.deepEqual((await g(20, "open", { id })).paper.errors, ["نسيت الثابت", "خطأ بالإشارة"]);
+  const other = await insert("bank_exams", { slug: "c1", chapter: "الفصل الأول", ord: 99, title: "امتحان ثاني", minutes: 60, pos: 1 });
+  const otherPaper = await insert("sched_items", { user_id: 50, exam_id: other, at: "x", status: "done", version_id: v, submitted_at: "x" });
+  assert.deepEqual((await g(20, "saveError", { id: otherPaper, text: "غلط بالرسم" })).errors, ["غلط بالرسم"]);
+  assert.deepEqual((await g(20, "delError", { id, text: "نسيت الثابت" })).errors, ["خطأ بالإشارة"]);
+  await remove("sched_items", { id: otherPaper });
   assert.equal((await g(20, "open", { id })).paper.ink[0], ink);
   calls.length = 0;
   const done = await g(20, "finish", { id });

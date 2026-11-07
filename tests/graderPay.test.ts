@@ -19,7 +19,7 @@ globalThis.fetch = (async (url: string, init: any) => {
 const { gradeAction, gradeUpload } = await import("../lib/gradeApi.ts");
 const { objectionInfo, submitObjection } = await import("../lib/objections.ts");
 const { examFile } = await import("../lib/examApi.ts");
-const { initDb, find, insert, one, put } = await import("../lib/db.ts");
+const { initDb, find, insert, one, put, update } = await import("../lib/db.ts");
 const { homeToken, fileToken } = await import("../lib/webAuth.ts");
 await initDb();
 const sign = (uid: number) => {
@@ -187,4 +187,28 @@ test("صفحة المساعدين: جنب المصحح كم ورقة صحح ال
   const g = page.staff.find((s: any) => s.id === 30);
   assert.ok(g.work);
   assert.equal(typeof g.work.today, "number");
+});
+
+test("الاعتراض ينحسب على الورقة: أكثر من سؤال انقبل بنفس الورقة يبقى اعتراض واحد على المصحح", async () => {
+  const { balanceOf } = await import("../lib/graderPay.ts");
+  const { todayStr } = await import("../lib/util.ts");
+  const before = await balanceOf(30);
+  const p = await paper(76, v2, e2);
+  await put("students", { user_id: 76, name: "معترض", exam: "إلكتروني", created: "x" });
+  await update("sched_items", { id: p }, { grader_id: 30, graded_at: `${todayStr()} 10:00`, total: 50 });
+  for (const q of [1, 2, 3]) await insert("objections", { item_id: p, user_id: 76, q, text: "x", status: "accepted", old_mark: 1, new_mark: 2, created: "x" });
+  const after = await balanceOf(30);
+  assert.equal(after.obj, before.obj + 1);
+});
+
+test("سجل التصحيح يوم يوم: أوراق اليوم أول، وأيام الشهر فوك، والمصحح يشوف المبلغ المستحق إله", async () => {
+  const { todayStr } = await import("../lib/util.ts");
+  const h = (await g(30, "history")).history;
+  assert.equal(h.day, todayStr());
+  assert.equal(h.days[0].d, todayStr());
+  assert.equal(typeof h.due, "number");
+  assert.ok(h.rows.every((r: any) => String(r.graded).startsWith(todayStr())));
+  const owner = (await g(1, "history", { day: todayStr() })).history;
+  assert.equal(owner.due, null);
+  assert.ok(owner.rows.some((r: any) => r.name === "معترض"));
 });

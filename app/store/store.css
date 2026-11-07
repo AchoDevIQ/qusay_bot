@@ -271,3 +271,15 @@ body.grwide .grtop{padding-left:104px}
 .cppics{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.cppics div{display:flex;flex-direction:column;align-items:center;gap:4px}.cppics img{width:90px;height:90px;object-fit:contain;border-radius:8px;background:#fff}
 /* السؤال الطويل ما يطلع برا الشاشة: الصورة تصغر وية العرض */
 .gk-qtop{overflow:hidden}.gk-qtop img{flex:0 1 auto;min-width:0}
+/* التصحيح: مربع الجدول العام والخاص ينزل عن العنوان، وأزرار الدرجات كلها تدخل بالصف */
+.gktabs2{margin-top:12px}
+.gk-nums{display:grid;grid-template-columns:repeat(var(--cols,16),minmax(0,1fr));gap:4px}
+.gk-nums button{min-width:0;width:100%;padding:0;height:38px;font-size:clamp(12px,2.1vw,17px)}
+.gk-modelpart{margin-bottom:8px}
+/* سجل التصحيح يوم يوم */
+.gkmonth{justify-content:space-between;align-items:center}
+.gkdays{display:flex;gap:6px;overflow-x:auto;padding:4px 12px 10px}
+.gkdays button{flex:none;min-width:58px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;border-radius:10px;border:1px solid var(--line,#444);background:transparent;color:inherit;font-family:inherit;cursor:pointer}
+.gkdays button.on{background:var(--gold);color:#111;border-color:var(--gold)}
+.gkdays small{font-size:11px;opacity:.8}
+.rgbirth{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px}.rgbirth select{width:100%;min-width:0}

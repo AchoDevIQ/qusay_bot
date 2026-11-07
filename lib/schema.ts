@@ -11,7 +11,7 @@ export const SCHEMA: Record<string, Table> = {
   sessions: { key: "user_id", cols: nulls("state", "data") },
   kv: { key: "k", cols: { v: null } },
   orders: { key: "id", auto: true, cols: { ...nulls("user_id", "username", "name", "gov", "side", "area", "phone1", "phone2", "items", "subtotal", "fee", "total", "created", "curr", "seller", "office_id", "settle_id", "printed_by", "printed_at"), printed: 0 } },
-  students: { key: "user_id", cols: nulls("username", "name", "curr", "grade", "gov", "side", "area", "phone1", "phone2", "exam", "center_id", "created", "updated", "gender") },
+  students: { key: "user_id", cols: nulls("username", "name", "curr", "grade", "gov", "side", "area", "phone1", "phone2", "exam", "center_id", "created", "updated", "gender", "birth") },
   student_pass: { key: "user_id", cols: nulls("hash", "created") },
   pass_requests: { key: "user_id", cols: { created: null } },
   areas: { key: "id", auto: true, cols: { gov: null, name: null, active: 1 } },

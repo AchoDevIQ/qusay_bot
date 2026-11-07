@@ -11,6 +11,8 @@ import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
+import { TEST_STUDENTS, deleteTests, makeTests } from "./gradeApi.ts";
+import { homeToken } from "./webAuth.ts";
 import { moveExam, retakeExam } from "./examMoves.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { resetSchedule, setPerDay, studentSchedule } from "./schedApi.ts";
@@ -20,7 +22,7 @@ export const STUDENTS_PERM = "students";
 const RECENT = 100;
 
 export async function studentsStats() {
-  const rows = await find("students");
+  const rows = (await find("students")).filter((r) => r.user_id > 0);
   const f = (col: string, v: string) => rows.filter((r) => r[col] === v).length;
   return { all: rows.length, g6: f("grade", GRADES[0]), g5: f("grade", GRADES[1]), in: f("exam", "حضوري"),
     on: f("exam", "إلكتروني"), ar: f("curr", "عربي"), en: f("curr", "إنجليزي") };
@@ -51,13 +53,22 @@ async function sendPicked(chat: number, title: string, rows: Row[]) {
   return await listPdf(chat, title, ["الاسم", "الصف", "المنهج", "المحافظة", "الهاتف 1", "الهاتف 2", "الامتحان"],
     await Promise.all(rows.map(async (r) => [r.name, r.grade, r.curr, placeOf(r), r.phone1, r.phone2, (r.exam ?? "") + (r.center_id ? " - " + await centerName(r.center_id) : "")])), "students");
 }
-async function pageData(q: string, f: Filters) {
-  const found = await matching(q, f);
+/** طلاب التجربة: كل واحد ويا رابط يفتح صفحة امتحاناته كأنه هو */
+async function testStudents() {
+  const items = await find("sched_items");
+  return (await find("students")).filter((x) => x.user_id < 0).sort((a, b) => b.user_id - a.user_id).map((x) => {
+    const mine = items.filter((i) => i.user_id === x.user_id);
+    return { id: x.user_id as number, name: x.name as string, papers: mine.length, graded: mine.filter((i) => i.graded_at).length, link: `/store/myexams?t=${homeToken(x.user_id)}` };
+  });
+}
+async function pageData(q: string, f: Filters, uid = 0) {
+  const found = (await matching(q, f)).filter((r) => r.user_id > 0);
   const rows = found.slice(0, RECENT);
   const centers = await find("centers", { active: 1 }, { order: ["id"] });
   return {
     stats: await studentsStats(), results: await Promise.all(rows.map(view)), found: found.length, limit: RECENT, govs: GOVS,
     areas: (await areasWithCenters()).map((a) => ({ id: a.id, gov: a.gov, name: a.name, centers: centers.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, name: c.name })) })),
+    tests: uid && await isAdmin(uid) ? await testStudents() : null,
   };
 }
 
@@ -107,19 +118,23 @@ export async function studentAction(body: Row) {
     notice = "✅ الملف وصلك بمحادثة البوت";
   } else if (a === "log") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, log: { id, rows: await activityOf(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, log: { id, rows: await activityOf(id) } };
   } else if (a === "sched") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, sched: { id, ...await studentSchedule(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
   } else if (a === "examException") {
     await openException(uid, body.item);
     notice = "🔓 انفتح الامتحان للطالب، ووصله الخبر";
   } else if (a === "examRetake") {
     notice = `🔁 انحطت الإعادة ${prettyAt(await retakeExam(uid, body.item, body.at))}، ووصل الطالب خبر`;
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, sched: { id, ...await studentSchedule(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
   } else if (a === "examMove") {
     notice = `⏩ صار موعده ${prettyAt(await moveExam(uid, body.item, body.at))}، ووصل الطالب خبر`;
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice, sched: { id, ...await studentSchedule(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
+  } else if (a === "makeTests" || a === "deleteTests") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    if (a === "makeTests") { const n = await makeTests(); need(n, "ماكو نسخة إجبارية جاهزة بيها صور أسئلة"); notice = `🧪 انضافوا ${TEST_STUDENTS} طلاب تجربة، و${n} ورقة تنتظر التصحيح`; }
+    else { await deleteTests(); notice = "🗑 انمسحوا طلاب التجربة وأوراقهم"; }
   } else if (a === "examNow") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     await startNowForTest(body.item);
@@ -141,5 +156,5 @@ export async function studentAction(body: Row) {
     await logActivity(id, "👨‍👧 الإدارة فكت ربط ولي الأمر");
     notice = "✅ انفك الربط. الطالب يگدر يدز الرابط لولي أمر ثاني";
   } else need(a === "list", "أمر غير معروف");
-  return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters)), notice };
+  return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice };
 }

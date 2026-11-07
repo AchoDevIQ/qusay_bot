@@ -42,7 +42,7 @@ const initData = (uid: number) => {
   return params.toString();
 };
 const act = (uid: number, action: string, extra: object = {}) => homeAction({ token: homeToken(uid), device: "dev-" + String(uid).padStart(14, "0"), action, ...extra });
-const FORM = { n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "إلكتروني", c: 0, sx: "بنين" };
+const FORM = { n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "إلكتروني", c: 0, sx: "بنين", b: "2008-04-17" };
 
 test("كلمات الترتيب بدون العلامات الوحدها", () => {
   assert.deepEqual(termWords("- سيتم *** عرض\nالتعليمات / 25"), ["سيتم", "عرض", "التعليمات", "25"]);
@@ -70,6 +70,9 @@ test("الرابط يحمل الرمز للطالب الجديد بس، والت
   assert.equal(info.registered, false);
   await assert.rejects(act(2, "register", { rev: "old", form: FORM }), (e: any) => e.status === 409);
   await assert.rejects(act(2, "register", { rev: info.rev, form: { ...FORM, n: "علي" } }), (e: any) => e.status === 400);
+  // المواليد لازمة، والتاريخ لازم يكون حقيقي
+  await assert.rejects(act(2, "register", { rev: info.rev, form: { ...FORM, b: "" } }), /تاريخ ميلادك/);
+  await assert.rejects(act(2, "register", { rev: info.rev, form: { ...FORM, b: "2008-02-31" } }), /تاريخ الميلاد غير صحيح/);
   assert.equal(await get("SELECT user_id FROM students WHERE user_id=2"), null);
 
   calls.length = 0;
@@ -77,6 +80,7 @@ test("الرابط يحمل الرمز للطالب الجديد بس، والت
   assert.match(r.password, /^[a-z2-9]{8}$/);
   assert.equal(new URL(r.url).pathname, "/store/home");
   assert.equal((await get("SELECT username FROM students WHERE user_id=2"))!.username, "ali_tg");
+  assert.equal((await get("SELECT birth FROM students WHERE user_id=2"))!.birth, "2008-04-17");
   const stored = (await get("SELECT hash FROM student_pass WHERE user_id=2"))!.hash as string;
   assert.ok(!stored.includes(r.password));
   assert.ok(verifyPassword(r.password, stored));

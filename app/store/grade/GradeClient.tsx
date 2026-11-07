@@ -8,7 +8,7 @@ type Row = { id: number; exam: number; general: boolean; optional: boolean; name
 type ObjRow = Row & { qs: number[] };
 type Group = { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number };
 type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
-type History = { page: number; pages: number; count: number; owner: boolean; rows: HistRow[] };
+type History = { day: string; days: { d: string; n: number }[]; prev: string; next: string; due: number | null; count: number; owner: boolean; rows: HistRow[] };
 type Rate = { mandatory: number; optional: number; deduct: number };
 type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
@@ -113,7 +113,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
         {data && paper && (
-          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} errors={data.errors ?? []} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
+          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
             onClose={() => { setPaper(null); setSavedNow(0); group.current = null; void call({ action: "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onSave={(inkSaved, compose) => saveInBackground(paper, inkSaved, compose)}
@@ -182,8 +182,7 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
       {!!data.objections.length && <ObjList data={data} busy={busy} act={act} />}
       <div className="card">
         <h2>📥 أوراق تنتظر: {sum(data.groups)}</h2>
-
-        <div className="seg expad">
+        <div className="seg expad gktabs2">
           <button type="button" className={kind === "general" ? "on" : ""} onClick={() => setKind("general")}>📅 الجدول العام ({sum(gen)})</button>
           <button type="button" className={kind === "private" ? "on" : ""} onClick={() => setKind("private")}>🗂 الجدول الخاص ({sum(priv)})</button>
         </div>
@@ -200,46 +199,43 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
           </div>
         ) : <div className="empty">✅ ماكو أوراق تنتظر.</div>}
       </div>
-      {data.owner && (
-        <div className="card expad adform">
-          <div className="exlabel">🧪 أوراق تجربة</div>
-          <div className="exhint">5 أوراق عشوائية بدون طلاب حقيقيين، وما توصل رسالة لأحد. ورقة "الطالب" بيها هي الحل النموذجي للنسخة، حتى تجرب التصحيح على ورقة محلولة.</div>
-          <div className="exline">
-            <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "makeTests" })}>🧪 سوي أوراق تجربة</button>
-            {data.hasTests && <Confirm label="🗑 امسح أوراق التجربة" disabled={busy} onYes={() => void act({ action: "deleteTests" })} />}
-          </div>
-        </div>
-      )}
     </>
   );
 }
 
 /** سجل التصحيح: كل ورقة ودرجتها وشوكت انصححت، وحالة الاعتراضات عليها */
-function HistoryTab({ h, busy, owner, act }: { h: History; busy: boolean; owner: boolean; act: Call }) {
+function HistoryTab({ h, busy, act }: { h: History; busy: boolean; owner: boolean; act: Call }) {
+  const go = (day: string) => void act({ action: "history", day });
+  const MONTHS = ["كانون الثاني", "شباط", "آذار", "نيسان", "أيار", "حزيران", "تموز", "آب", "أيلول", "تشرين الأول", "تشرين الثاني", "كانون الأول"];
   return (
     <div className="card">
-      <h2>📜 سجل التصحيح: {h.count} ورقة</h2>
+      <h2>📜 سجل التصحيح</h2>
+      {h.due !== null && <div className="expad"><div className="adstats adstats2"><div><b>{iqd(h.due)}</b>المبلغ المستحق إلك</div><div><b>{h.count}</b>ورقة بهذا اليوم</div></div></div>}
+      <div className="exline expad gkmonth">
+        <button type="button" className="exbtn" disabled={busy} onClick={() => go(h.prev)}>› الشهر اللي قبله</button>
+        <b>{MONTHS[Number(h.day.slice(5, 7)) - 1]} {h.day.slice(0, 4)}</b>
+        {h.next ? <button type="button" className="exbtn" disabled={busy} onClick={() => go(h.next)}>الشهر اللي بعده ‹</button> : <span />}
+      </div>
+      <div className="gkdays">
+        {h.days.map((x, i) => (
+          <button type="button" key={x.d} className={x.d === h.day ? "on" : ""} disabled={busy} onClick={() => go(x.d)}>
+            <b>{i === 0 && !h.next ? "اليوم" : Number(x.d.slice(8, 10))}</b><small>{x.n ? `${x.n} ورقة` : "—"}</small>
+          </button>
+        ))}
+      </div>
       {h.rows.length ? (
         <table className="extable"><tbody>
           {h.rows.map((p) => (
             <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "open", id: p.id }); }}>
-              <td><b>{p.name}</b>{p.test && <span className="adentag">تجربة</span>}{p.optional && <span className="adentag">اختياري</span>}
-                <small className="pdmode">{p.title} · {p.graded}{h.owner && p.grader ? ` · ${p.grader}` : ""}</small>
+              <td><b>{p.name}</b>{p.optional && <span className="adentag">اختياري</span>}
+                <small className="pdmode">{p.title} · {String(p.graded).slice(11, 16)}{h.owner && p.grader ? ` · ${p.grader}` : ""}</small>
                 {(p.objOpen + p.objOk + p.objNo > 0) && <small className="pdmode">✋ اعتراض: {p.objOpen ? `⏳${p.objOpen} ` : ""}{p.objOk ? `✅${p.objOk} ` : ""}{p.objNo ? `❌${p.objNo}` : ""}</small>}
-                {p.test && owner && <button type="button" className="exbtn adtop" disabled={busy} onClick={(e) => { e.stopPropagation(); void act({ action: "testObj", id: p.id }); }}>🧪 سوي اعتراض تجربة</button>}
               </td>
               <td className="p"><b>{p.total}</b></td>
             </tr>
           ))}
         </tbody></table>
-      ) : <div className="empty">لسه ما صححت أوراق.</div>}
-      {h.pages > 1 && (
-        <div className="exline adtop">
-          <button type="button" className="exbtn" disabled={busy || h.page <= 0} onClick={() => void act({ action: "history", page: h.page - 1 })}>› الأحدث</button>
-          <span>صفحة {h.page + 1} من {h.pages}</span>
-          <button type="button" className="exbtn" disabled={busy || h.page >= h.pages - 1} onClick={() => void act({ action: "history", page: h.page + 1 })}>الأقدم ‹</button>
-        </div>
-      )}
+      ) : <div className="empty">ماكو أوراق مصححة بهذا اليوم.</div>}
     </div>
   );
 }

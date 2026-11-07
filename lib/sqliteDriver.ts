@@ -107,6 +107,7 @@ async function init() {
   await addColumn("bank_exams", "pos", "INTEGER");
   await addColumn("bank_exams", "group_versions", "TEXT");
   await addColumn("students", "gender", "TEXT");
+  await addColumn("students", "birth", "TEXT");
   await addColumn("centers", "gender", "TEXT");
   await addColumn("sched_items", "version_id", "INTEGER");
   for (const c of ["grader_id", "total"]) await addColumn("sched_items", c, "INTEGER");

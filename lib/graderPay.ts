@@ -82,9 +82,11 @@ export async function balanceOf(uid: number) {
   const ids = new Set(mine.map((p) => p.id));
   const objs = (await find("objections", { status: "accepted" })).filter((o) => ids.has(o.item_id) && !o.paid_id);
   const mand = papers.filter((p) => p.kind !== "optional").length, opt = papers.length - mand;
+  // الاعتراض ينحسب على الورقة: سؤال واحد انقبل أو خمسة، يبقى اعتراض واحد على المصحح
+  const obj = new Set(objs.map((o) => o.item_id)).size;
   return {
-    rate, mand, opt, obj: objs.length,
-    amount: mand * rate.mandatory + opt * rate.optional - objs.length * rate.deduct,
+    rate, mand, opt, obj,
+    amount: mand * rate.mandatory + opt * rate.optional - obj * rate.deduct,
     paperIds: papers.map((p) => p.id as number), objIds: objs.map((o) => o.id as number),
   };
 }

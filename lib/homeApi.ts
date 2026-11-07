@@ -25,6 +25,7 @@ async function registerFromPage(id: number, body: Row) {
   const { errs, r } = await studentFromForm(body.form ?? {}, false);
   need(!errs.length, errs.join("، "));
   need(r.gender, "اختار بنين لو بنات");
+  need(r.birth, "اختار تاريخ ميلادك: اليوم والشهر والسنة");
   // الصفحة ما تعرف معرف تليجرام، وإذا ما وصلنا التسجيل يكمل بدونه
   const username = await api("getChat", { chat_id: id }).then((c: any) => c?.username ?? "").catch(() => "");
   const { state, data } = await getSession(id);
