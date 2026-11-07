@@ -54,6 +54,12 @@ export default function AiGradeClient() {
             {ch?.exams.map((e) => (
               <details key={e.id} className="card cpch">
                 <summary><b>{e.title}</b> {e.ready ? "· ✅ خطواته جاهزة" : "· ⏳ باقي خطوات"}</summary>
+                {!e.ready && (
+                  <div className="aig-ver">
+                    <button type="button" className="btn" disabled={busy || !data.linked} onClick={() => void call({ action: "draftAll", id: e.id })}>{busy ? "🤖 يقرا الحلول... (لحد 3 دقايق)" : "🤖 طلّع واحفظ خطوات كل أسئلة هذا الموضوع"}</button>
+                    <div className="exhint">يقرا الحل النموذجي لكل سؤال بكل النماذج، ويطلّع خطواته بالدرجات المكتوبة على الحل، ويحفظها مباشرة. بعدها تگدر تفتح أي سؤال وتصلّحه.</div>
+                  </div>
+                )}
                 {e.versions.map((v) => (
                   <div key={v.id} className="aig-ver">
                     <div className="exlabel">النموذج {v.model}{v.kind === "optional" ? " (اختياري)" : ""}</div>

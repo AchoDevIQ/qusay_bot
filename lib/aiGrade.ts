@@ -99,6 +99,30 @@ export async function saveRubric(qid: number, raw: unknown, by: number) {
 }
 export const clearRubric = (qid: number) => kvSet(rubricKey(qid), "null");
 
+/** «طلّع واحفظ خطوات كل أسئلة الموضوع»: كل سؤال بكل نماذج الامتحان إله صورة حل وما إله خطوات،
+ *  تنطلع خطواته بدرجاتها المكتوبة على الحل وتنحفظ مباشرة. أربعة أسئلة بنفس الوقت */
+export async function draftExam(examId: number, by: number) {
+  const versions = await find("bank_versions", { exam_id: examId });
+  const todo: Row[] = [];
+  let noSol = 0;
+  for (const v of versions) for (const q of await find("bank_questions", { version_id: v.id }, { order: ["n"] })) {
+    if (await rubricOf(q.id)) continue;
+    if (!(JSON.parse(q.a_files || "[]") as string[]).some(isImage)) { noSol++; continue; }
+    todo.push(q);
+  }
+  const failed: string[] = [];
+  let done = 0;
+  const model = new Map(versions.map((v) => [v.id, v.model]));
+  const queue = [...todo];
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+    for (let q = queue.shift(); q; q = queue.shift()) {
+      try { await saveRubric(q.id, await draftRubric(q.id), by); done++; }
+      catch { failed.push(`${model.get(q.version_id) ?? ""} س${q.n}`); }
+    }
+  }));
+  return { done, failed, noSol };
+}
+
 /** صورة من مخزن الملفات، أو من تليجرام إذا انرفعت بالمحادثة */
 async function readRef(ref: string): Promise<Buffer | null> {
   if (ref.startsWith("tg:")) {

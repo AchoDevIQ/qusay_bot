@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from grading_service import extract_student_steps_from_pages, grade_single_question
-from llm.router import USAGE_COLLECTOR, any_credentials
+from llm.router import USAGE_COLLECTOR, any_credentials, complete_vision_json
 
 MAX_IMAGES = 12
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -137,15 +137,73 @@ async def bot_grade(req: GradeReq):
     }
 
 
+class RubricStepOut(BaseModel):
+    text: str = Field(description="The step exactly as written on the solution, as plain math (e.g. x^2 - y^2 = 7)")
+    points: float = Field(ge=0, description="Marks the teacher wrote for this step; 0 when none is written")
+
+
+class RubricOut(BaseModel):
+    steps: List[RubricStepOut]
+    marks_written: bool = Field(description="True when the teacher wrote marks next to the steps on the page")
+
+
+RUBRIC_PROMPT = """These pages are a math teacher's model solution for ONE exam question worth {max} marks in total.
+The teacher usually writes the mark of each step next to it (a number such as 2, (2), 2 درجة, or a circled number).
+
+List the solution's marking steps in order, top to bottom:
+- One entry per marked step. When the teacher's marks group several lines under one mark, keep them as ONE step (join the lines with "  ;  ").
+- text: the math of the step, copied faithfully as plain text (use ^ for powers, sqrt() for roots, i for the imaginary unit). Do not include the mark number itself in the text.
+- points: the mark written for that step. If no marks are written anywhere, set marks_written to false and give every step 0.
+Ignore page headers, question numbers and decoration."""
+
+
+def page_media(b: bytes) -> str:
+    return "image/png" if b[:4] == bytes([0x89, 0x50, 0x4E, 0x47]) else "image/webp" if b[8:12] == b"WEBP" else "image/jpeg"
+
+
+def fit_points(points: List[float], total: float) -> List[float]:
+    """Keep the teacher's marks when they add up; otherwise scale them to the question's mark
+    (or split evenly when none were written). Whole marks, the remainder on the last steps."""
+    n = len(points)
+    if n == 0:
+        return []
+    s = sum(points)
+    if abs(s - total) < 0.01:
+        return [float(p) for p in points]
+    if s <= 0:
+        return split_points(n, total)
+    scaled = [p * total / s for p in points]
+    whole = [float(int(x)) for x in scaled]
+    left = int(round(total - sum(whole)))
+    order = sorted(range(n), key=lambda i: scaled[i] - whole[i], reverse=True)
+    for i in order[:max(0, left)]:
+        whole[i] += 1
+    if abs(sum(whole) - total) > 0.01:
+        whole[-1] += total - sum(whole)
+    return whole
+
+
 @app.post("/bot/rubric", dependencies=[Depends(check_key)])
 async def bot_rubric(req: RubricReq):
-    """Draft steps from the teacher's solution pages: one step per written line, points
-    shared evenly. The owner reviews and edits them in the bot before they are used."""
+    """Draft steps from the teacher's solution pages, with the marks the teacher wrote next to
+    each step. Falls back to one step per written line with points shared evenly."""
     bucket = start_usage()
     pages = decode_images(req.images)
+    try:
+        out = await complete_vision_json(
+            "visual", RUBRIC_PROMPT.format(max=req.max_points), schema=RubricOut, detail="high",
+            images=[(b, page_media(b), f"Solution page {i + 1}") for i, b in enumerate(pages)],
+        )
+        steps = [s for s in out.get("steps", []) if (s.get("text") or "").strip()]
+        if steps:
+            pts = fit_points([float(s.get("points") or 0) for s in steps], req.max_points)
+            return {"steps": [{"text": s["text"].strip(), "points": p, "objective": s["text"].strip()} for s, p in zip(steps, pts)],
+                    "marks_written": bool(out.get("marks_written")), "usage": usage_report(bucket)}
+    except Exception:
+        pass
     lines = await extract_student_steps_from_pages(pages)
     if any(l.get("ocr_error") for l in lines) and not any((l.get("text") or "").strip() for l in lines):
         raise HTTPException(status_code=502, detail="ocr failed")
     texts = [l["text"].strip() for l in lines if (l.get("text") or "").strip()]
     pts = split_points(len(texts), req.max_points)
-    return {"steps": [{"text": t, "points": p, "objective": t} for t, p in zip(texts, pts)], "usage": usage_report(bucket)}
+    return {"steps": [{"text": t, "points": p, "objective": t} for t, p in zip(texts, pts)], "marks_written": False, "usage": usage_report(bucket)}

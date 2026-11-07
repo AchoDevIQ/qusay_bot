@@ -4,7 +4,7 @@ import { apiResponse } from "../../../lib/webApi.ts";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // تطليع الخطوات من صورة الحل ياخذ وقت
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export const POST = (req: Request) => apiResponse(async () => {
   // تجربة على جواب حقيقي: صور

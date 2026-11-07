@@ -256,3 +256,24 @@ test("ورقة تجربة من صور حقيقية: طالب تجربة 1 يصح
   const b2 = (await one("sched_items", { id: b.id }))!;
   assert.deepEqual([b2.grader_id, b2.graded_at], [1, null]);
 });
+
+test("«طلّع واحفظ خطوات كل أسئلة الموضوع»: كل سؤال بيه صورة حل وما إله خطوات تنحفظ خطواته مباشرة", async () => {
+  const e2 = await insert("bank_exams", { slug: "c9", chapter: "الجذور", ord: 1, title: "الجذور التربيعية", minutes: 60, pos: 1 });
+  const va = await insert("bank_versions", { exam_id: e2, model: "A", kind: "mandatory", ok: 1 });
+  const vb = await insert("bank_versions", { exam_id: e2, model: "B", kind: "mandatory", ok: 1 });
+  const qa = await insert("bank_questions", { version_id: va, n: 1, max_mark: 20, q_file: "none/q.png", a_files: JSON.stringify(["ans/sol.png"]) });
+  const qb = await insert("bank_questions", { version_id: vb, n: 1, max_mark: 20, q_file: "none/q.png", a_files: JSON.stringify(["ans/sol.png"]) });
+  const qn = await insert("bank_questions", { version_id: vb, n: 2, max_mark: 20, q_file: "none/q.png", a_files: "[]" });
+  aiReply = (route, body) => Response.json({ steps: [{ text: "x^2 - y^2 = 7", points: body.max_points / 2 }, { text: "x = 4", points: body.max_points / 2 }], usage: [] });
+  ai.length = 0;
+  const r: any = await aiGradeAction({ initData: sign(1), action: "draftAll", id: e2 });
+  assert.equal(ai.filter((x) => x.route === "/bot/rubric").length, 2);
+  assert.match(r.notice, /انحفظت خطوات 2 سؤال[\s\S]*1 سؤال بدون صورة حل/);
+  assert.equal((await rubricOf(qa))!.length, 2);
+  assert.equal((await rubricOf(qb))![1].points, 10);
+  assert.equal(await rubricOf(qn), null);
+  // مرة ثانية ما يعيد اللي انحفظ
+  ai.length = 0;
+  await aiGradeAction({ initData: sign(1), action: "draftAll", id: e2 });
+  assert.equal(ai.length, 0);
+});

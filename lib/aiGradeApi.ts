@@ -3,7 +3,7 @@
 import { ADMIN_IDS } from "./config.ts";
 import { count, find, type Row } from "./db.ts";
 import { AI_GRADER, isAdmin, staffIds, staffName } from "./data.ts";
-import { aiLinked, aiLog, aiOn, aiSettings, clearRubric, costOf, draftRubric, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
+import { aiLinked, aiLog, aiOn, aiSettings, clearRubric, costOf, draftExam, draftRubric, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -77,6 +77,14 @@ export async function aiGradeAction(body: Row) {
     need(aiLinked(), "خدمة التصحيح مو مربوطة بعد بالسيرفر");
     const steps = await draftRubric(id).catch(fail);
     return { ...await listData(uid), draft: { id, steps }, notice: "راجع الخطوات ودرجاتها، وبعدين دوس حفظ" };
+  }
+  if (a === "draftAll") {
+    need(aiLinked(), "خدمة التصحيح مو مربوطة بعد بالسيرفر");
+    const r = await draftExam(id, uid);
+    const parts = [r.done ? `✅ انحفظت خطوات ${r.done} سؤال من الحل النموذجي بدرجاته` : "ماكو سؤال جديد يحتاج خطوات"];
+    if (r.failed.length) parts.push(`⚠️ ما طلعت: ${r.failed.join("، ")}. دوس الزر مرة ثانية`);
+    if (r.noSol) parts.push(`${r.noSol} سؤال بدون صورة حل`);
+    return { ...await listData(uid), notice: parts.join(" · ") };
   }
   if (a === "save") {
     await saveRubric(id, body.steps, uid).catch(fail);
