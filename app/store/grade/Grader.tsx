@@ -8,7 +8,7 @@ import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
 import VoiceRec from "../VoiceRec";
 import MessageBox from "./MessageBox";
 
-export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null };
+export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null; byAi?: boolean };
 export type GVoice = { id?: string; name: string; ref: string };
 /** شلون صحح المصحح الآلي كل سؤال: درجة كل خطوة وسببها */
 export type AiQ = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { awarded: number; possible: number; reason: string; expected: string; student: string }[] };
@@ -540,10 +540,10 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       {q && (
         <div className="gk-row gk-marks">
           {page?.q === null && <div className="gk-qs">{paper.questions.map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
-          <span className="gk-q">س{q.n}<small> من {q.max}</small></span>
+          <span className="gk-q">س{q.n}<small> من {q.max}</small>{q.byAi && <small className="gk-byai"> · 🤖 صححه AI</small>}</span>
           <div className="gk-nums" style={{ ["--cols" as string]: q.max + 1 <= 16 ? q.max + 1 : Math.ceil((q.max + 1) / 2) }}>
             {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (
-              <button type="button" key={m} className={(marks[q.n] === m ? "on" : "") + (objMode && objOf(q.n)?.old === m ? " gk-was" : "")} disabled={busy || locked || (objMode && !objOf(q.n))} onClick={() => void press(m)}>{m}</button>
+              <button type="button" key={m} className={(marks[q.n] === m ? "on" : "") + (objMode && objOf(q.n)?.old === m ? " gk-was" : "")} disabled={busy || locked || (objMode && !objOf(q.n)) || (!objMode && !!q.byAi)} onClick={() => void press(m)}>{m}</button>
             ))}
           </div>
           <span className="gk-total">{total} / 100</span>

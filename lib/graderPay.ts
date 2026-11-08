@@ -1,6 +1,6 @@
 // تعويض المصححين: لكل مصحح أجر للورقة الإجبارية وأجر للاختيارية، وخصم لكل اعتراض انقبل على ورقته.
 // الرصيد هو اللي ما انحاسب بعد، والتسوية تصفره وتنحفظ بالأرشيف. أوراق التجربة ما تنحسب
-import { aiHeld } from "./aiGrade.ts";
+import { aiHeld, aiPartialOf, graderShare } from "./aiGrade.ts";
 import { find, insert, kvGet, kvSet, one, put, update, type Row } from "./db.ts";
 import { isAdmin, staffName } from "./data.ts";
 import { send } from "./telegram.ts";
@@ -81,13 +81,19 @@ export async function balanceOf(uid: number) {
   const mine = await find("sched_items", { grader_id: uid });
   const papers = mine.filter((p) => p.graded_at && !p.paid_id);
   const ids = new Set(mine.map((p) => p.id));
-  const objs = (await find("objections", { status: "accepted" })).filter((o) => ids.has(o.item_id) && !o.paid_id);
-  const mand = papers.filter((p) => p.kind !== "optional").length, opt = papers.length - mand;
+  // الاعتراض على سؤال صححه نظام التصحيح AI ما ينحسب على المصحح
+  const parts = new Map(await Promise.all([...ids].map(async (id) => [id, await aiPartialOf(id)] as const)));
+  const objs = (await find("objections", { status: "accepted" })).filter((o) => ids.has(o.item_id) && !o.paid_id && (!parts.get(o.item_id) || parts.get(o.item_id)!.includes(o.q)));
+  // الورقة اللي حوّلها نظام التصحيح AI بس كم سؤال منها: ينحسب منها على قد أسئلته (مثلاً 2 من 5 = 0.4 ورقة)
+  const shares = await Promise.all(papers.map((p) => graderShare(p)));
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const mand = round2(papers.reduce((t, p, i) => t + (p.kind !== "optional" ? shares[i] : 0), 0));
+  const opt = round2(papers.reduce((t, p, i) => t + (p.kind === "optional" ? shares[i] : 0), 0));
   // الاعتراض ينحسب على الورقة: سؤال واحد انقبل أو خمسة، يبقى اعتراض واحد على المصحح
   const obj = new Set(objs.map((o) => o.item_id)).size;
   return {
     rate, mand, opt, obj,
-    amount: mand * rate.mandatory + opt * rate.optional - obj * rate.deduct,
+    amount: Math.round(mand * rate.mandatory + opt * rate.optional - obj * rate.deduct),
     paperIds: papers.map((p) => p.id as number), objIds: objs.map((o) => o.id as number),
   };
 }

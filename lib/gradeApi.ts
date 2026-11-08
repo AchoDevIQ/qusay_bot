@@ -11,7 +11,7 @@ import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
-import { aiHeld, aiResultOf } from "./aiGrade.ts";
+import { aiHeld, aiPartialOf, aiResultOf } from "./aiGrade.ts";
 import { guardianSent, seenButton } from "./guardianWatch.ts";
 import { stamp, todayStr } from "./util.ts";
 import { gradeCardPng } from "./documents.ts";
@@ -96,6 +96,7 @@ async function paperView(it: Row, withObj = false) {
   const objs = withObj ? await openObjections(it.id) : [];
   for (const o of objs) if (o.new_mark !== null) marks.set(o.q, o.new_mark);
   const v = await one("bank_versions", { id: it.version_id });
+  const part = await aiPartialOf(it.id);
   const ink: Record<number, string> = {};
   for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
   return {
@@ -103,7 +104,8 @@ async function paperView(it: Row, withObj = false) {
     objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark })),
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
-    questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null })),
+    // byAi: صححه نظام التصحيح AI، فالمصحح ما يغيره (يصحح بس الأسئلة اللي حوّلها)
+    questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null, byAi: !!part && !part.includes(q.n) })),
   };
 }
 const voicesOf = async (it: Row) => ({ voices: (await examVoices(it.exam_id)).map(({ id, name, ref }) => ({ id, name, ref })), myVoices: (await paperVoices(it.id)).map((v) => ({ name: v.name, ref: v.ref })) });
@@ -243,6 +245,8 @@ export async function gradeAction(body: Row) {
     need(q, "السؤال غير موجود");
     const mark = Number(body.mark);
     need(Number.isInteger(mark) && mark >= 0 && mark <= q!.max_mark, `الدرجة من 0 إلى ${q!.max_mark}، رقم كامل`);
+    const part = obj ? null : await aiPartialOf(it.id);
+    need(!part || part.includes(q!.n) || await isAdmin(uid), "هذا السؤال صححه نظام التصحيح AI، إنت صحح بس الأسئلة اللي حوّلها إلك");
     if (obj) {
       // بالاعتراض تتغير بس درجة السؤال المعترض عليه
       const o = (await openObjections(it.id)).find((x) => x.q === q!.n);

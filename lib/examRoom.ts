@@ -16,7 +16,7 @@ import { send, sendMany } from "./telegram.ts";
 import { stamp } from "./util.ts";
 import { gradedPages } from "./gradeApi.ts";
 import { studentPapers } from "./studentPapers.ts";
-import { aiResultOf } from "./aiGrade.ts";
+import { aiPartialOf, aiResultOf } from "./aiGrade.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
@@ -193,11 +193,18 @@ export async function myPaper(uid: number, itemId: unknown) {
     marks: p!.marks, objections: p!.objections, pages: p!.pages, gradedPages: p!.gradedPages,
     questions: await pagesOf(e, v, (await student(uid))?.curr ?? ""),
     // صححها نظام التصحيح AI: الطالب يشوف كل خطوة صح لو غلط وليش
-    ai: it!.graded_at && it!.grader_id === AI_GRADER ? ((await aiResultOf(it!.id)) ?? []).map((q) => ({
-      n: q.n, score: q.score, max: q.max, note: q.note ?? "",
-      steps: q.steps.map((st) => ({ status: st.status, awarded: st.awarded, possible: st.possible, expected: st.expected, reason: st.reason_ar || st.reason })),
-    })) : [],
+    ai: await aiShown(it!),
   };
+}
+/** تصحيح نظام التصحيح AI اللي يشوفه الطالب: كل الورقة إذا هو صححها، أو بس أسئلته إذا حوّل الباقي لمصحح */
+async function aiShown(it: Row) {
+  if (!it.graded_at) return [];
+  const part = await aiPartialOf(it.id);
+  if (it.grader_id !== AI_GRADER && !part) return [];
+  return ((await aiResultOf(it.id)) ?? []).filter((q) => !part || !part.includes(q.n)).map((q) => ({
+      n: q.n, score: q.score, max: q.max, note: q.note ?? "",
+    steps: q.steps.map((st) => ({ status: st.status, awarded: st.awarded, possible: st.possible, expected: st.expected, reason: st.reason_ar || st.reason })),
+  }));
 }
 
 // ---------- الإدارة

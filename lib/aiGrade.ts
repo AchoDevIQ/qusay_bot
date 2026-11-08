@@ -21,6 +21,19 @@ const rubricKey = (qid: number) => `ai_rubric_q_${qid}`;
 const resultKey = (itemId: number) => `ai_result_${itemId}`;
 const triesKey = (itemId: number) => `ai_try_${itemId}`;
 const errKey = (itemId: number) => `ai_err_${itemId}`;
+// الأسئلة اللي حوّلها للمصحح: الباقي صححه هو، والمصحح يصحح بس هذني وياخذ أجره على قدها
+const partialKey = (itemId: number) => `ai_partial_${itemId}`;
+export async function aiPartialOf(itemId: number): Promise<number[] | null> {
+  const j = await readJson<number[] | null>(partialKey(itemId), null);
+  return Array.isArray(j) && j.length ? j.map(Number) : null;
+}
+/** حصة المصحح من الورقة: كل الورقة 1، وإذا حوّله أسئلة بس، عددها ÷ عدد أسئلة الورقة */
+export async function graderShare(it: Row): Promise<number> {
+  const part = await aiPartialOf(it.id);
+  if (!part) return 1;
+  const total = (await find("bank_questions", { version_id: it.version_id })).length;
+  return total ? Math.min(1, part.length / total) : 1;
+}
 const ON_KEY = "ai_grade_on", SET_KEY = "ai_settings", LOG_KEY = "ai_log", PRICE_KEY = "ai_prices";
 // مشكلة تقنية (الخدمة ما ردت) تنعاد بالدكة الجاية، لحد 3 مرات
 const MAX_TRIES = 3;
@@ -324,6 +337,7 @@ export async function aiRetry(itemId: number) {
   await kvSet(triesKey(itemId), "0");
   await kvSet(errKey(itemId), "");
   await kvSet(resultKey(itemId), "null");
+  await kvSet(partialKey(itemId), "[]");
   await remove("question_marks", { item_id: itemId });
   await update("sched_items", { id: itemId }, { grader_id: null });
 }
@@ -379,10 +393,14 @@ async function forward(it: Row, res: AiQuestion[], usage: Usage[], nameOf: (it: 
   const to = e ? (await aiSettings()).unsure[e.slug] ?? 0 : 0;
   // ما ينحسب كمحاولة فاشلة، بس ما يرجع ياخذها
   await kvSet(triesKey(it.id), String(MAX_TRIES));
+  // الأسئلة الواثق منها تنحفظ درجتها، والمصحح يصحح بس اللي ما متأكد منها
+  const unsureQs = res.filter((q) => q.review).map((q) => q.n);
+  for (const q of res) if (!q.review) await put("question_marks", { item_id: it.id, q: q.n, mark: q.score });
+  await kvSet(partialKey(it.id), JSON.stringify(unsureQs.length < res.length ? unsureQs : []));
   await update("sched_items", { id: it.id }, { grader_id: to || null });
   const name = await nameOf(it);
   const why = res.filter((q) => q.review).map((q) => `• س${q.n}: ${q.reason || "ما متأكد"}`).join("\n");
-  const text = `👤 <b>لصاحب البوت بس، ما توصل للطالب</b>\n🤖 <b>نظام التصحيح AI حوّل ورقة</b>\nما متأكد من تصحيحها، فلازم تنصحح بالإيد.\nالطالب: <b>${name}</b>\nالامتحان: ${e?.title ?? ""}\n${why}\n\nافتح لوحة التحكم ← ✍️ التصحيح.`;
+  const text = `👤 <b>لصاحب البوت بس، ما توصل للطالب</b>\n🤖 <b>نظام التصحيح AI حوّل ورقة</b>\nصحح باقي الأسئلة، وهذني ما متأكد منها، فلازم تنصحح بالإيد (بس هذني):\nالطالب: <b>${name}</b>\nالامتحان: ${e?.title ?? ""}\n${why}\n\nافتح لوحة التحكم ← ✍️ التصحيح.`;
   // ما محدد مصحح لهذا الفصل: الخبر يوصل لصاحب البوت، حتى الورقة ما تضيع بالقائمة بدون ما أحد يدري
   for (const id of to ? [to] : ADMIN_IDS) await send(id, text);
   await addLog({ at: stamp(), kind: "unsure", item: it.id, sid: it.user_id, name, exam: e?.title ?? "", to: to || null, usage });

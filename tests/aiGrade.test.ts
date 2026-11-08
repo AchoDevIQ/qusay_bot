@@ -163,7 +163,8 @@ test("ما متأكد: الورقة ما توصل للطالب، تروح للم
   assert.deepEqual(await tick(), { graded: 0, unsure: 1, failed: 0 });
   const row = (await one("sched_items", { id: p }))!;
   assert.deepEqual([row.grader_id, row.graded_at, row.total], [41, null, null]);
-  assert.equal((await find("question_marks", { item_id: p })).length, 0);
+  // س1 الواثق منه انحفظت درجته، وس2 بس للمصحح
+  assert.deepEqual((await find("question_marks", { item_id: p })).map((m) => [m.q, m.mark]), [[1, 48]]);
   assert.ok(!tg.some((c) => String(c.p.chat_id) === "90"));
   const msg = tg.find((c) => c.method === "sendMessage" && String(c.p.chat_id) === "41")!;
   assert.match(msg.p.text, /حوّل ورقة/);
@@ -172,10 +173,23 @@ test("ما متأكد: الورقة ما توصل للطالب، تروح للم
   // المصحح يفتحها ويشوف شنو انطى نظام التصحيح
   const open = await gradeAction({ initData: sign(41), action: "open", id: p }) as any;
   assert.equal(open.paper.ai.find((q: any) => q.n === 2).review, true);
+  assert.deepEqual(open.paper.questions.map((q: any) => [q.n, q.byAi, q.mark]), [[1, true, 48], [2, false, null]]);
   // ما يرجع ياخذها
   ai.length = 0;
   await tick();
   assert.equal(ai.length, 0);
+  // المصحح ما يغير سؤال الذكاء، يصحح بس س2، وأجره على قد سؤال من سؤالين
+  await assert.rejects(gradeAction({ initData: sign(41), action: "mark", id: p, q: 1, mark: 60 }), /صححه نظام التصحيح AI/);
+  await gradeAction({ initData: sign(41), action: "mark", id: p, q: 2, mark: 30 });
+  const { balanceOf } = await import("../lib/graderPay.ts");
+  const { put: putRow } = await import("../lib/db.ts");
+  await putRow("grader_pay", { user_id: 41, mandatory: 200, optional: 100, deduct: 0 });
+  const { update: upd } = await import("../lib/db.ts");
+  await upd("sched_items", { id: p }, { graded_at: stamp(), total: 78 });
+  const b = await balanceOf(41);
+  assert.equal(b.mand, 0.5);
+  assert.equal(b.amount, 100);
+  await upd("sched_items", { id: p }, { graded_at: null, total: null });
 });
 
 test("السجل والفلوس: كل ورقة وكلفتها حسب أسعار الموديلات", async () => {
