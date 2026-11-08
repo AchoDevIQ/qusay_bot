@@ -79,7 +79,7 @@ export async function aiGradeAction(body: Row) {
     const n = Number(body.n);
     need(Number.isInteger(n) && n >= 0 && n <= 50, "اكتب رقم من 0 لـ 50");
     await setCalib(n);
-    return { ...await listData(uid), notice: n ? `✅ أول ${n} ورقة بكل موضوع تصححها إنت قبله` : "✅ انحفظ: يبدي يصحح من أول ورقة" };
+    return { ...await listData(uid), notice: n ? `✅ أول ${n} ورقة من كل نموذج تصححها إنت قبله` : "✅ انحفظ: يبدي يصحح من أول ورقة" };
   }
   if (a === "price") {
     need(typeof body.model === "string" && body.model, "اسم الموديل");

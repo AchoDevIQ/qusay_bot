@@ -449,6 +449,9 @@ test("🎓 أول أوراق الموضوع للأستاذ: نظام التصح�
   const v2 = await insert("bank_versions", { exam_id: ex2, model: "A", kind: "mandatory", ok: 1 });
   const qa = await insert("bank_questions", { version_id: v2, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
   await saveRubric(qa, [{ text: "a^2 = 1/4", points: 10 }], 1);
+  const vB = await insert("bank_versions", { exam_id: ex2, model: "B", kind: "mandatory", ok: 1 });
+  const qb = await insert("bank_questions", { version_id: vB, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  await saveRubric(qb, [{ text: "x = 1", points: 10 }], 1);
   await setChapterScope("c6", [ex2], 0);
   await setCalib(2);
   await put("staff", { user_id: 42, name: "مساعد المعايرة", perms: "grade,aicalib" });
@@ -462,7 +465,7 @@ test("🎓 أول أوراق الموضوع للأستاذ: نظام التصح�
   const seen: any[] = [];
   aiReply = (route, body) => { if (route === "/bot/grade") seen.push(body); return Response.json({ score: 6, requires_review: false, review_reason: "", student_lines: ["a^2=1/4"], steps: [{ status: "partial", awarded: 6, possible: 10, reason: "x", expected: "", student: "a^2=1/4" }], usage: [] }); };
   await tick();
-  assert.deepEqual(await calibList(ex2), [p1, p2]);
+  assert.deepEqual(await calibList(v2), [p1, p2]);
   // الأولى والثانية ما أخذها، بس صححها بالسر بدون أمثلة
   for (const p of [p1, p2]) {
     const row = (await one("sched_items", { id: p }))!;
@@ -488,8 +491,15 @@ test("🎓 أول أوراق الموضوع للأستاذ: نظام التصح�
   // صفحة صاحب البوت: كم صحح، ودرجته جنب درجة نظام التصحيح
   const page = await aiGradeAction({ initData: sign(1), action: "list" }) as any;
   const t = page.calib.topics.find((x: any) => x.exam === ex2);
-  assert.deepEqual([page.calib.n, t.done, t.of], [2, 1, 2]);
-  assert.deepEqual(t.papers.map((p: any) => [p.teacher, p.ai]), [[10, 6], [null, 6]]);
+  assert.deepEqual([page.calib.n, t.done, t.of], [2, 1, 4]);
+  assert.deepEqual(t.versions.map((v: any) => [v.model, v.done, v.of]), [["A", 1, 2], ["B", 0, 2]]);
+  assert.deepEqual(t.versions[0].papers.map((p: any) => [p.teacher, p.ai]), [[10, 6], [null, 6]]);
+  // النموذج B عدّه بروحه: أول ورقة بيه تبقى للأستاذ حتى لو A خلص
+  const pb = await insert("sched_items", { user_id: 99, exam_id: ex2, at: `${todayStr()} 10:00`, status: "done", version_id: vB, started_at: stamp(), submitted_at: stamp() });
+  await insert("exam_answers", { item_id: pb, q: 1, file: "ans/a.jpg", created: stamp() });
+  await tick();
+  assert.deepEqual(await calibList(vB), [pb]);
+  assert.equal((await one("sched_items", { id: pb }))!.graded_at, null);
   await aiGradeAction({ initData: sign(1), action: "calib", n: 0 });
   assert.equal(((await aiGradeAction({ initData: sign(1), action: "list" })) as any).calib.n, 0);
 });

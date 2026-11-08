@@ -16,7 +16,7 @@ type Trial = { n: number; score: number; max: number; review: boolean; reason: s
 type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
 type Data = {
-  calib: { n: number; topics: { exam: number; title: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] };
+  calib: { n: number; topics: { exam: number; title: string; done: number; of: number; versions: { model: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] }[] };
   on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string; retry: boolean }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
   fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; trial?: { id: number; result: Trial }; notice?: string;
 };
@@ -303,8 +303,8 @@ function Calib({ calib, busy, call }: { calib: Data["calib"]; busy: boolean; cal
   const [n, setN] = useState(String(calib.n));
   return (
     <div className="card expad">
-      <div className="exlabel">🎓 أول أوراق كل موضوع تصححها إنت</div>
-      <div className="exhint">أول الأوراق بكل موضوع ما ياخذها نظام التصحيح: تصححها إنت، أو مساعد تنطيه صلاحية «🎓 يصحح أول أوراق المواضيع» من صفحة الموظفين. وبنفس الوقت هو يصححها بالسر (ما توصل للطالب)، فتشوف هنا درجتك جنب درجته. بعدها يصحح الباقي وحده، ويتعلم من درجاتك. أوراق التجربة ما تنحسب.</div>
+      <div className="exlabel">🎓 أول أوراق كل نموذج تصححها إنت</div>
+      <div className="exhint">العدد لكل نموذج (A، B، C...) لحاله، لأن أسئلة كل نموذج غير: إذا تكتب 5 والموضوع بيه 4 نماذج، تصحح 20 ورقة. أول الأوراق ما ياخذها نظام التصحيح: تصححها إنت، أو مساعد تنطيه صلاحية «🎓 يصحح أول أوراق المواضيع» من صفحة الموظفين. وبنفس الوقت هو يصححها بالسر (ما توصل للطالب)، فتشوف هنا درجتك جنب درجته. بعدها يصحح الباقي وحده، ويتعلم من درجاتك. أوراق التجربة ما تنحسب.</div>
       <div className="exline">
         <input type="number" min={0} max={50} value={n} onChange={(e) => setN(e.target.value)} style={{ maxWidth: 90 }} />
         <button type="button" className="exbtn" disabled={busy || n === String(calib.n)} onClick={() => void call({ action: "calib", n: Number(n) })}>💾 احفظ العدد</button>
@@ -315,10 +315,15 @@ function Calib({ calib, busy, call }: { calib: Data["calib"]; busy: boolean; cal
         <details key={t.exam} className="cpch">
           <summary><b>{t.title}</b> <small className="pdmode">{t.done >= t.of ? "✅ خلصت، هسه يصحح وحده" : `صححت ${t.done} من ${t.of}`}</small></summary>
           <div className="expad">
-            {!t.papers.length && <div className="exhint">بعد ما وصلت ورقة.</div>}
-            {t.papers.map((p, i) => (
-              <div key={i} className="aig-logrow">
-                <div><b>{p.name}</b><br /><small>درجتك: {p.teacher ?? "بعدك ما صححتها"} · درجته: {p.ai ?? "بعده"}{p.teacher !== null && p.ai !== null ? (p.teacher === p.ai ? " ✅ نفس الشي" : ` · الفرق ${Math.abs(p.teacher - p.ai)}`) : ""}</small></div>
+            {t.versions.map((v) => (
+              <div key={v.model}>
+                <div className="exlabel">النموذج {v.model} · {v.done >= v.of ? "✅ خلص" : `صححت ${v.done} من ${v.of}`}</div>
+                {!v.papers.length && <div className="exhint">بعد ما وصلت ورقة.</div>}
+                {v.papers.map((p, i) => (
+                  <div key={i} className="aig-logrow">
+                    <div><b>{p.name}</b><br /><small>درجتك: {p.teacher ?? "بعدك ما صححتها"} · درجته: {p.ai ?? "بعده"}{p.teacher !== null && p.ai !== null ? (p.teacher === p.ai ? " ✅ نفس الشي" : ` · الفرق ${Math.abs(p.teacher - p.ai)}`) : ""}</small></div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>

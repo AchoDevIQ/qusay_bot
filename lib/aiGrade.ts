@@ -13,7 +13,7 @@ export type RubricStep = { text: string; points: number };
 export type Usage = { model: string; calls: number; input: number; output: number };
 export type Price = { in: number; out: number };
 /** المواضيع اللي يصححها، ولكل فصل المصحح اللي توصله الأوراق اللي مو متأكد منها */
-/** calib: أول كم ورقة بكل موضوع يصححها الأستاذ (أو مساعد عنده صلاحية 🎓) قبل ما يبدي، ونظام التصحيح يتعلم منها */
+/** calib: أول كم ورقة بكل نموذج (A، B، C...) يصححها الأستاذ (أو مساعد عنده صلاحية 🎓) قبل ما يبدي، ونظام التصحيح يتعلم منها */
 export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
 export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed" | "objection" | "calib"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
@@ -23,13 +23,14 @@ const resultKey = (itemId: number) => `ai_result_${itemId}`;
 const triesKey = (itemId: number) => `ai_try_${itemId}`;
 const errKey = (itemId: number) => `ai_err_${itemId}`;
 // أول أوراق الموضوع: الأستاذ يصححها بإيده، ونظام التصحيح يصححها بالسر حتى نقارن ويتعلم من درجات الأستاذ
-const calibKey = (examId: number) => `ai_calib_${examId}`;
+// بكل نموذج لحاله، لأن أسئلة كل نموذج غير، والتعلم يصير على نفس السؤال
+const calibKey = (versionId: number) => `ai_calib_v_${versionId}`;
 const shadowKey = (itemId: number) => `ai_shadow_${itemId}`;
 const shadowTryKey = (itemId: number) => `ai_shadow_try_${itemId}`;
 export const CALIB_PERM = "aicalib";
-export const CALIB_DEFAULT = 10;
-export async function calibList(examId: number): Promise<number[]> {
-  const j = await readJson<number[]>(calibKey(examId), []);
+export const CALIB_DEFAULT = 5;
+export async function calibList(versionId: number): Promise<number[]> {
+  const j = await readJson<number[]>(calibKey(versionId), []);
   return Array.isArray(j) ? j.map(Number) : [];
 }
 export async function shadowOf(itemId: number): Promise<AiQuestion[] | null> {
@@ -320,11 +321,11 @@ async function gradePaper(it: Row, withExamples = true): Promise<AiQuestion[]> {
 type Example = { student: string; ai: number; teacher: number };
 /** أمثلة من أول أوراق الموضوع اللي صححها الأستاذ بإيده: شنو قرا نظام التصحيح، شگد كان يعطي، وشگد عطى الأستاذ.
  *  اللي اختلف بيها أول، لأن منها يتعلم */
-export async function examplesFor(examId: number, versionId: number, n: number): Promise<Example[]> {
+export async function examplesFor(_examId: number, versionId: number, n: number): Promise<Example[]> {
   const out: Example[] = [];
-  for (const id of await calibList(examId)) {
+  for (const id of await calibList(versionId)) {
     const it = await one("sched_items", { id });
-    if (!it?.graded_at || it.version_id !== versionId) continue;
+    if (!it?.graded_at) continue;
     const ai = (await shadowOf(id))?.find((x) => x.n === n);
     const mark = await one("question_marks", { item_id: id, q: n });
     if (!ai || !mark || !ai.lines?.length) continue;
@@ -450,10 +451,10 @@ async function makeTaker() {
     if (!verReady.get(it.version_id)) return false;
     // أول أوراق الموضوع (مو أوراق التجربة) تبقى للأستاذ: يصححها بإيده، ونظام التصحيح يتعلم منها
     if (s.calib > 0 && it.user_id > 0) {
-      if (!calib.has(it.exam_id)) calib.set(it.exam_id, await calibList(it.exam_id));
-      const list = calib.get(it.exam_id)!;
+      if (!calib.has(it.version_id)) calib.set(it.version_id, await calibList(it.version_id));
+      const list = calib.get(it.version_id)!;
       if (list.includes(it.id)) return false;
-      if (list.length < s.calib) { list.push(it.id); await kvSet(calibKey(it.exam_id), JSON.stringify(list)); return false; }
+      if (list.length < s.calib) { list.push(it.id); await kvSet(calibKey(it.version_id), JSON.stringify(list)); return false; }
     }
     return true;
   };
@@ -466,28 +467,33 @@ export async function aiCalibIds(papers: Row[]): Promise<Set<number>> {
   const lists = new Map<number, Set<number>>();
   for (const p of papers) {
     if (p.graded_at || !s.exams.includes(p.exam_id)) continue;
-    if (!lists.has(p.exam_id)) lists.set(p.exam_id, new Set(await calibList(p.exam_id)));
-    if (lists.get(p.exam_id)!.has(p.id)) out.add(p.id);
+    if (!p.version_id) continue;
+    if (!lists.has(p.version_id)) lists.set(p.version_id, new Set(await calibList(p.version_id)));
+    if (lists.get(p.version_id)!.has(p.id)) out.add(p.id);
   }
   return out;
 }
-/** صفحة صاحب البوت: لكل موضوع مأشر، كم ورقة صحح هو، ودرجته جنب درجة نظام التصحيح */
+type CalibPaper = { name: string; teacher: number | null; ai: number | null };
+/** صفحة صاحب البوت: لكل موضوع مأشر وكل نموذج بيه، كم ورقة صحح هو، ودرجته جنب درجة نظام التصحيح */
 export async function calibState(nameOf: (it: Row) => Promise<string>) {
   const s = await aiSettings();
   const titles = new Map((await find("bank_exams")).map((e) => [e.id as number, String(e.title ?? "")]));
-  const out: { exam: number; title: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] = [];
+  const out: { exam: number; title: string; done: number; of: number; versions: { model: string; done: number; of: number; papers: CalibPaper[] }[] }[] = [];
   for (const examId of s.exams) {
-    const ids = await calibList(examId);
-    const papers = [];
-    let done = 0;
-    for (const id of ids) {
-      const it = await one("sched_items", { id });
-      if (!it) continue;
-      if (it.graded_at) done++;
-      const sh = await shadowOf(id);
-      papers.push({ name: await nameOf(it), teacher: it.graded_at ? Number(it.total ?? 0) : null, ai: sh ? sh.reduce((t, q) => t + q.score, 0) : null });
+    const versions = [];
+    for (const v of await find("bank_versions", { exam_id: examId }, { order: ["model"] })) {
+      const papers: CalibPaper[] = [];
+      let done = 0;
+      for (const id of await calibList(v.id)) {
+        const it = await one("sched_items", { id });
+        if (!it) continue;
+        if (it.graded_at) done++;
+        const sh = await shadowOf(id);
+        papers.push({ name: await nameOf(it), teacher: it.graded_at ? Number(it.total ?? 0) : null, ai: sh ? sh.reduce((t, q) => t + q.score, 0) : null });
+      }
+      versions.push({ model: String(v.model ?? ""), done, of: s.calib, papers });
     }
-    out.push({ exam: examId, title: titles.get(examId) ?? "", done, of: s.calib, papers });
+    out.push({ exam: examId, title: titles.get(examId) ?? "", done: versions.reduce((t, v) => t + v.done, 0), of: s.calib * versions.length, versions });
   }
   return out;
 }
@@ -495,8 +501,9 @@ export async function calibState(nameOf: (it: Row) => Promise<string>) {
 async function shadowTick(limit: number) {
   const s = await aiSettings();
   let n = 0;
-  for (const examId of s.exams) {
-    for (const id of await calibList(examId)) {
+  const vids = (await find("bank_versions")).filter((v) => s.exams.includes(v.exam_id)).map((v) => v.id as number);
+  for (const vid of vids) {
+    for (const id of await calibList(vid)) {
       if (n >= limit) return n;
       if (await shadowOf(id)) continue;
       const tries = Number(await kvGet(shadowTryKey(id))) || 0;
