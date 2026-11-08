@@ -360,6 +360,8 @@ export async function schedAdminAction(body: Row) {
     const next: SchedSettings = {
       window: intOf(body.window, 1, 600, "وقت الدخول بالدقائق، من 1 إلى 600"), extra: intOf(body.extra, 0, 600, "الوقت الإضافي بالدقائق، من 0 إلى 600"), excWindow: body.excWindow === undefined ? old.excWindow : intOf(body.excWindow, 1, 10000, "وقت الاستثناء بالدقائق"), optionalOpen: body.optionalOpen === undefined ? old.optionalOpen : !!body.optionalOpen, perDay: intOf(body.perDay, 1, 10, "امتحانات اليوم من 1 إلى 10"), gap: intOf(body.gap, 0, 600, "الفاصل بالدقائق، من 0 إلى 600"),
       holidayStart, holidayDays: intOf(body.holidayDays, 0, 120, "أيام العطلة من 0 إلى 120"), blockedHours: hours, excluded: dayList(body.excluded),
+      // الطالب يگدر يختار صورة جوابه من الاستوديو، لو الكاميرا بس
+      gallery: body.gallery === undefined ? old.gallery : !!body.gallery,
     };
     await kvSet("sched_settings", JSON.stringify(next));
     notice = "✅ انحفظت الإعدادات";

@@ -483,6 +483,7 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   const opened = await act(90, "openExam", { item });
   assert.equal(opened.room.questions.length, 2);
   assert.equal(opened.room.extra, 15);
+  assert.equal(opened.room.gallery, false);   // الاستوديو مطفي من البداية: الكاميرا بس
   // قبل القسم ما تنفتح الكاميرا
   assert.equal(opened.room.sworn, false);
   assert.match(opened.room.oath, /^أقسم بالله الكريم أني الطالب .+ لم أغش في هذا الامتحان$/);

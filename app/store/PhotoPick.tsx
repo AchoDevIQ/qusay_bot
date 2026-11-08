@@ -16,7 +16,8 @@ function savedWay(): Way | null {
 const isIos = () => { try { return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform === "ios"; } catch { return false; } };
 function saveWay(w: Way) { try { localStorage.setItem(KEY, w); } catch { /* المتصفح مانع الحفظ */ } }
 
-export default function PhotoPick({ onFiles, multiple = false, busy = false, label }: { onFiles: (files: File[]) => void; multiple?: boolean; busy?: boolean; label?: string }) {
+/** gallery=false: الكاميرا بس، بدون استوديو (صاحب البوت يقرر من إعدادات الامتحانات) */
+export default function PhotoPick({ onFiles, multiple = false, busy = false, label, gallery = true }: { onFiles: (files: File[]) => void; multiple?: boolean; busy?: boolean; label?: string; gallery?: boolean }) {
   const [way, setWay] = useState<Way | null>(null);
   const [choose, setChoose] = useState(false);
   const [cam, setCam] = useState(false);
@@ -24,7 +25,7 @@ export default function PhotoPick({ onFiles, multiple = false, busy = false, lab
   const [nativeCam, setNativeCam] = useState(false);
   const [err, setErr] = useState("");
   const [ios, setIos] = useState(false);
-  useEffect(() => { setWay(savedWay()); setIos(isIos()); }, []);
+  useEffect(() => { setWay(gallery ? savedWay() : "camera"); setIos(isIos()); }, [gallery]);
   function use(w: Way) { saveWay(w); setWay(w); setChoose(false); }
   function got(list: FileList | null, w: Way) {
     const files = [...(list ?? [])].filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
@@ -57,10 +58,10 @@ export default function PhotoPick({ onFiles, multiple = false, busy = false, lab
       ) : (
         <div className="exline">
           {button(way, "btn", label ? `${LABEL[way]} · ${label}` : LABEL[way])}
-          <button type="button" className="exbtn" onClick={() => setChoose(true)}>🔄 غيّر الطريقة</button>
+          {gallery && <button type="button" className="exbtn" onClick={() => setChoose(true)}>🔄 غيّر الطريقة</button>}
         </div>
       )}
-      {ios && (way === "gallery" || !way || choose) && <div className="exhint">🖼 بالآيفون، من تدوس الاستوديو تطلع قائمة صغيرة: اختار «مكتبة الصور».</div>}
+      {ios && gallery && (way === "gallery" || !way || choose) && <div className="exhint">🖼 بالآيفون، من تدوس الاستوديو تطلع قائمة صغيرة: اختار «مكتبة الصور».</div>}
       {err && <div className="err">⚠️ {err}</div>}
     </div>
   );

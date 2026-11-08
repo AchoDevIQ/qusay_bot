@@ -5,7 +5,7 @@ import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; versions: Record<string, number>; models: { id: number; model: string }[] };
-type Data = { cronUrl: string; optionalOpen: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string };
+type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
 export default function ScheduleClient() {
@@ -18,7 +18,7 @@ export default function ScheduleClient() {
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && <Place d={data} busy={busy} act={act} />}
-        {data && <Form key={JSON.stringify([data.optionalOpen, data.window, data.extra, data.excWindow, data.perDay, data.gap, data.holidayStart, data.holidayDays, data.blockedHours, data.excluded])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
+        {data && <Form key={JSON.stringify([data.optionalOpen, data.gallery, data.window, data.extra, data.excWindow, data.perDay, data.gap, data.holidayStart, data.holidayDays, data.blockedHours, data.excluded])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
@@ -30,6 +30,7 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
   const [extra, setExtra] = useState(String(d.extra));
   const [excWindow, setExcWindow] = useState(String(d.excWindow));
   const [optionalOpen, setOptionalOpen] = useState(d.optionalOpen);
+  const [gallery, setGallery] = useState(d.gallery);
   const [perDay, setPerDay] = useState(String(d.perDay));
   const [gap, setGap] = useState(String(d.gap));
   const [holidayStart, setHolidayStart] = useState(d.holidayStart);
@@ -47,6 +48,7 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <label>وقت الدخول بعد ما تفتح امتحان باستثناء (دقيقة)</label>
         <input className="ltr" inputMode="numeric" value={excWindow} onChange={(e) => setExcWindow(e.target.value)} />
         <label className="adcheck adflat"><input type="checkbox" checked={optionalOpen} onChange={(e) => setOptionalOpen(e.target.checked)} /><span>الامتحانات الاختيارية مفتوحة للطلاب</span></label>
+        <label className="adcheck adflat"><input type="checkbox" checked={gallery} onChange={(e) => setGallery(e.target.checked)} /><span>🖼 الطالب يگدر يختار صورة جوابه من الاستوديو (إذا مطفي: الكاميرا بس)</span></label>
         <label>أكثر عدد امتحانات باليوم بالجدول الخاص</label>
         <input className="ltr" inputMode="numeric" value={perDay} onChange={(e) => setPerDay(e.target.value)} />
         <label>الفاصل بين امتحانين بنفس اليوم (دقيقة)</label>
@@ -65,7 +67,7 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         </div>
         <div className="exhint">⚠️ إذا غيرت العطلة أو الأيام المستثناة، جداول الطلاب تنعاد من باجر، وكل طالب يوصله الخبر.</div>
         {d.cronUrl && <CronBox url={d.cronUrl} />}
-        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, excWindow, optionalOpen, perDay, gap, holidayStart, holidayDays, excluded, blockedHours: blocked })}>حفظ</button>
+        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, excWindow, optionalOpen, gallery, perDay, gap, holidayStart, holidayDays, excluded, blockedHours: blocked })}>حفظ</button>
       </div>
     </div>
   );

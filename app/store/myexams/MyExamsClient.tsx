@@ -20,7 +20,7 @@ type Info = {
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Paper = { id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
-type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
+type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
 const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
@@ -493,7 +493,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                         <button type="button" className="exbtn" onClick={() => setDraft({ ...draft, turns: (draft.turns + 1) % 4 })}>🔄 دور الصورة</button>
                         <button type="button" className={scan ? "btn" : "exbtn"} onClick={() => void toggleScan()}>📄 سكانر {scan ? "✓" : ""}</button>
                         <button type="button" className="exbtn" onClick={() => void pickPhoto(draft.q, more)}>{more.length ? "تخطّى هاي الصورة" : "إلغاء"}</button>
-                        <PhotoPick label="بدّل الصورة" onFiles={(fs) => void pickPhoto(draft.q, fs)} />
+                        <PhotoPick gallery={room.gallery} label="بدّل الصورة" onFiles={(fs) => void pickPhoto(draft.q, fs)} />
                         <button type="button" className="btn" disabled={busy} onClick={() => void send()}>{busy ? "جاري الإرسال..." : "✅ تم"}</button>
                       </div>
                     </div>
@@ -501,7 +501,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                     <div className="exhint">صورة وحدة لكل سؤال. إذا تريد تبدلها، احذفها وصور غيرها.</div>
                   ) : (
                     <div className="exline">
-                      <PhotoPick label={`السؤال ${q.n}`} onFiles={(fs) => void pickPhoto(q.n, fs)} />
+                      <PhotoPick gallery={room.gallery} label={`السؤال ${q.n}`} onFiles={(fs) => void pickPhoto(q.n, fs)} />
                     </div>
                   )}
                 </div>
