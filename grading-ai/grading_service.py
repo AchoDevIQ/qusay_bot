@@ -71,7 +71,8 @@ async def grade_single_question(
     student_steps_text: List[str],
     strictness: str = "standard",
     allow_equivalence: bool = True,
-    generate_ai_feedback: bool = False
+    generate_ai_feedback: bool = False,
+    images: Optional[list] = None
 ) -> Dict[str, Any]:
     """
     Grades student steps for a specific question against teacher question steps and rubric.
@@ -97,7 +98,7 @@ async def grade_single_question(
     stu_parsed = [{"raw_text": line.strip()} for line in student_steps_text if line.strip()]
 
     try:
-        grading_result: GradingResult = await calculate_grade(ref_parsed, stu_parsed, rubric, config)
+        grading_result: GradingResult = await calculate_grade(ref_parsed, stu_parsed, rubric, config, images=images)
         review_task = detect_review_needed(grading_result)
         
         feedback_text = None

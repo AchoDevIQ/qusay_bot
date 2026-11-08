@@ -610,3 +610,44 @@ test("🚦 فقاعة السيطرة: مقاس الصورة ينقرا، وال�
   const h = bubbleHtml("data:image/png;base64,AA", "وقف <b>حبيبي</b>", 900, 1200);
   assert.ok(h.includes("&lt;b&gt;") && !h.includes("<b>حبيبي"));
 });
+
+test("🔬 المقارنة: المصحح الثاني يصحح بالسر، وما يكتب درجة ولا يوصل شي للطالب، ويتأجل إذا أكو أوراق حقيقية", async () => {
+  const { compareState, setCalib, shadowOf } = await import("../lib/aiGrade.ts");
+  await setAiOn(true);
+  await setCalib(1);
+  const ex3 = await insert("bank_exams", { slug: "c77", chapter: "الفصل السابع", ord: 1, title: "موضوع المقارنة", minutes: 60, pos: 7 });
+  const v3 = await insert("bank_versions", { exam_id: ex3, model: "A", kind: "mandatory", ok: 1 });
+  const q3 = await insert("bank_questions", { version_id: v3, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  await saveRubric(q3, [{ text: "x = 1", points: 10 }], 1);
+  await setChapterScope("c77", [ex3], 0);
+  const mk = async (uid: number) => {
+    const id = await insert("sched_items", { user_id: uid, exam_id: ex3, at: `${todayStr()} 10:00`, status: "done", version_id: v3, started_at: stamp(), submitted_at: stamp() });
+    await insert("exam_answers", { item_id: id, q: 1, file: "ans/a.jpg", created: stamp() });
+    return id;
+  };
+  aiReply = (route, body) => route === "/bot/grade" ? Response.json({ score: body.engine === "photo" ? 9 : 6, requires_review: false, review_reason: "", student_lines: ["x=1"], steps: [{ status: "partial", awarded: 6, possible: 10, reason: "x", expected: "", student: "x=1" }], usage: [] }) : Response.json({});
+  const held = await mk(120);          // من أول الأوراق: تبقى للأستاذ
+  const live = await mk(121);          // ورقة حقيقية: هذي الدكة تصححها
+  ai.length = 0;
+  await tick();
+  assert.ok((await one("sched_items", { id: live }))!.graded_at);
+  assert.ok(!ai.some((c) => c.body.engine === "photo"), "ما يشتغل والدكة بيها أوراق حقيقية");
+  for (let i = 0; i < 12; i++) await tick();
+  const sentBefore = tg.length;
+  const photo = ai.filter((c) => c.body.engine === "photo");
+  assert.ok(photo.length >= 1);
+  assert.equal(photo[0].body.feedback, false);
+  // الورقة المحجوزة: بدون درجة، وبدون مصحح، والتصحيح المخفي الحالي بقى مثل ما هو
+  const row = (await one("sched_items", { id: held }))!;
+  assert.deepEqual([row.grader_id, row.graded_at], [null, null]);
+  assert.equal(await one("question_marks", { item_id: held, q: 1 }), null);
+  assert.equal((await shadowOf(held))![0].score, 6);
+  const { update: upd } = await import("../lib/db.ts");
+  await upd("sched_items", { id: held }, { graded_at: stamp(), total: 8, grader_id: 1 });
+  const c = await compareState(async () => "طالب", {});
+  const r = c.rows.find((x: any) => x.id === held)!;
+  assert.deepEqual([r.teacher, r.current, r.photo], [8, 6, 9]);
+  assert.equal(c.photoGap !== null && c.currentGap !== null, true);
+  await tick();
+  assert.equal(tg.slice(sentBefore).filter((m) => String(m.p.chat_id) === "120").length, 0);
+});

@@ -20,6 +20,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from grading_service import extract_student_steps_from_pages, grade_single_question
+from finals import match as finals_match
 from rubric_engine import judge
 from llm.router import USAGE_COLLECTOR, any_credentials, complete_structured, complete_vision_json
 
@@ -55,7 +56,8 @@ class GradeReq(BaseModel):
     strictness: str = "standard"
     examples: List[Example] = Field(default_factory=list, max_length=8)
     review: bool = True  # classic engine only: second look at the steps that lost marks
-    engine: str = Field(default="rubric", pattern="^(rubric|classic)$")  # rubric: same paper, same mark
+    engine: str = Field(default="rubric", pattern="^(rubric|classic|photo)$")  # rubric: same paper, same mark. photo: Math-Grading's grader looking at the photos
+    feedback: bool = True  # False: skip the Arabic wording (hidden comparison runs)
 
 
 class RubricReq(BaseModel):
@@ -293,11 +295,13 @@ async def bot_grade(req: GradeReq):
         "steps": [{**s.model_dump(), "objective": (s.objective or s.text) + EQUIV_NOTE} for s in req.steps],
     }
     # A grading error is a hiccup (timeout, busy model), not doubt about the answer: try again
-    res = await grade_single_question(question, texts, strictness=req.strictness)
+    photo = req.engine == "photo" and bool(pages)
+    imgs = [(b, page_media(b), f"Student's answer, page {k + 1}") for k, b in enumerate(pages)] if photo else None
+    res = await grade_single_question(question, texts, strictness=req.strictness, images=imgs)
     for _ in range(2):
         if res.get("success", False):
             break
-        res = await grade_single_question(question, texts, strictness=req.strictness)
+        res = await grade_single_question(question, texts, strictness=req.strictness, images=imgs)
     if not res.get("success", False) and not ocr_failed:
         # Still failing: tell the bot to retry the paper later instead of handing it to a human
         raise HTTPException(status_code=503, detail=str(res.get("review_reason") or "grading error")[:300])
@@ -331,11 +335,38 @@ async def bot_grade(req: GradeReq):
     ]
     # Second look with the photos at the steps that lost marks: fixes page-reading slips and other valid routes
     look = {"changed": 0, "final": None}
-    if req.review and not ocr_failed and res.get("success", False) and score < float(req.max_points):
+    if photo and res.get("success", False) and steps:
+        # The final answer by algebra, as in the rubric engine: the share of the teacher's final values the student got
+        look["final"] = await photo_final(req, imgs, steps)
+        score = max(0.0, min(sum(float(st["awarded"]) for st in steps), float(req.max_points)))
+    elif not photo and req.review and not ocr_failed and res.get("success", False) and score < float(req.max_points):
         look = await second_look(req, pages, steps)
         if look["changed"]:
             score = max(0.0, min(sum(float(st["awarded"]) for st in steps), float(req.max_points)))
-    return await finish(req, bucket, steps, score, confidence, doubt, texts, look, "classic")
+    return await finish(req, bucket, steps, score, confidence, doubt, texts, look, "photo" if photo else "classic")
+
+
+class PhotoFinals(BaseModel):
+    student_finals: List[str] = Field(description="Each final value the student wrote at the very end, one value per item, plain math (^ powers, / fractions, sqrt(), i); empty list if none")
+
+
+async def photo_final(req: "GradeReq", imgs: list, steps: list) -> Optional[float]:
+    """Sets the last step's marks from the final values compared by SymPy. None when they can't be compared (the grader's mark stays)."""
+    try:
+        out = PhotoFinals(**await complete_vision_json("grading", "Read only the final answer the student reached in these photos of one math question. Copy exactly what is written, signs included.", schema=PhotoFinals, detail="high", images=imgs))
+    except Exception:
+        return None
+    if not out.student_finals:
+        return None
+    share = finals_match(req.steps[-1].text or "", out.student_finals)
+    if share is None:
+        return None
+    last, pts = steps[-1], float(req.steps[-1].points)
+    mark = round(pts * share * 2) / 2  # to the nearest half mark
+    last["awarded"] = mark
+    last["status"] = "correct" if mark >= pts else ("partially_correct" if mark > 0 else "incorrect")
+    last["reason"] = f"Final answer checked by algebra: {share:.0%} of the teacher's values. " + str(last["reason"])
+    return share
 
 
 def examples_text(req: "GradeReq") -> str:
@@ -350,17 +381,18 @@ async def finish(req: "GradeReq", bucket: list, steps: list, score: float, confi
     # The student reads the marking: each step's reason, and one short note, in plain Arabic
     note = ""
     try:
-        ar = await complete_structured("feedback", ARABIC_PROMPT.format(
-            max=req.max_points, score=round(score, 1),
-            steps=json.dumps([{k: st[k] for k in ("status", "awarded", "possible", "reason", "expected", "student")} for st in steps], ensure_ascii=False)),
-            ArabicOut)
-        if len(ar.reasons) == len(steps):
-            for st, r in zip(steps, ar.reasons):
-                st["reason_ar"] = r.strip()
-        if len(ar.student_math) == len(steps):
-            for st, m in zip(steps, ar.student_math):
-                st["student_tex"] = m.strip()
-        note = ar.note.strip()
+        if req.feedback:
+            ar = await complete_structured("feedback", ARABIC_PROMPT.format(
+                max=req.max_points, score=round(score, 1),
+                steps=json.dumps([{k: st[k] for k in ("status", "awarded", "possible", "reason", "expected", "student")} for st in steps], ensure_ascii=False)),
+                ArabicOut)
+            if len(ar.reasons) == len(steps):
+                for st, r in zip(steps, ar.reasons):
+                    st["reason_ar"] = r.strip()
+            if len(ar.student_math) == len(steps):
+                for st, m in zip(steps, ar.student_math):
+                    st["student_tex"] = m.strip()
+            note = ar.note.strip()
     except Exception:
         pass
     return {

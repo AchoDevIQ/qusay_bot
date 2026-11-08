@@ -3,7 +3,7 @@
 import { ADMIN_IDS } from "./config.ts";
 import { count, find, one, type Row } from "./db.ts";
 import { AI_GRADER, isAdmin, staffIds, staffName } from "./data.ts";
-import { aiLinked, aiStudentsState, calibState, setAiStudent, setCalib, aiLog, aiOn, aiPending, aiRetry, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
+import { compareState, aiLinked, aiStudentsState, calibState, setAiStudent, setCalib, aiLog, aiOn, aiPending, aiRetry, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -47,6 +47,7 @@ async function listData(uid: number) {
     graded: (await find("sched_items", { grader_id: AI_GRADER })).filter((x) => x.graded_at).length,
     aiStudents: await aiStudentsState(async (id) => (await one("students", { user_id: id }))?.name ?? `طالب ${id}`),
     calib: { n: s.calib, topics: await calibState(async (it) => (await one("students", { user_id: it.user_id }))?.name ?? `طالب ${it.user_id}`) },
+    compare: await compareState(async (it) => (await one("students", { user_id: it.user_id }))?.name ?? `طالب ${it.user_id}`, p),
     money: { today: sum(log.filter((r) => r.at.startsWith(today))), month: sum(log.filter((r) => r.at.startsWith(month))), all: sum(log) },
     prices: models.map((m) => ({ model: m, in: p[m]?.in ?? 0, out: p[m]?.out ?? 0, missing: !p[m] })),
     log: log.slice(-LOG_SHOW).reverse().map((r) => ({ ...r, cost: round(costOf(r.usage, p)), toName: r.to ? toName.get(r.to) ?? "مصحح" : "", usage: undefined })),

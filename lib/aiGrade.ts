@@ -29,6 +29,9 @@ const errKey = (itemId: number) => `ai_err_${itemId}`;
 const calibKey = (versionId: number) => `ai_calib_v_${versionId}`;
 const shadowKey = (itemId: number) => `ai_shadow_${itemId}`;
 const shadowTryKey = (itemId: number) => `ai_shadow_try_${itemId}`;
+// 🔬 المقارنة: مصحح Math-Grading يشوف الصور، بالسر. ما تنحفظ درجة وما يوصل شي للطالب
+const photoKey = (itemId: number) => `ai_photo_${itemId}`;
+const photoTryKey = (itemId: number) => `ai_photo_try_${itemId}`;
 export const CALIB_PERM = "aicalib";
 export const CALIB_DEFAULT = 5;
 export async function calibList(versionId: number): Promise<number[]> {
@@ -331,7 +334,7 @@ export async function aiResultOf(itemId: number): Promise<AiQuestion[] | null> {
 }
 
 /** يصحح ورقة وحدة: يرجع درجة كل سؤال، أو يرمي خطأ إذا ما يگدر */
-async function gradePaper(it: Row, withExamples = true): Promise<AiQuestion[]> {
+async function gradePaper(it: Row, withExamples = true, photo = false): Promise<AiQuestion[]> {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   if (!qs.length) throw new Error("ماكو أسئلة");
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
@@ -348,6 +351,7 @@ async function gradePaper(it: Row, withExamples = true): Promise<AiQuestion[]> {
     if (!mine.length) return { n: q.n, score: 0, max, review: false, reason: "ما جاوب", lines: [], steps: [], usage: [] };
     const imgs = await Promise.all(mine.map((a) => readRef(a.file)));
     if (imgs.some((b) => !b)) throw new Error(`صورة جواب سؤال ${q.n} مفقودة`);
+    if (photo) return await gradePhoto(q, steps, imgs as Buffer[]);
     return await gradeQuestion(q, steps, imgs as Buffer[], withExamples ? await examplesFor(it.exam_id, it.version_id, q.n) : []);
   }));
 }
@@ -394,6 +398,16 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], exampl
   // ما نحفظ نتيجة ما متأكد منها: المرة الجاية تنصحح من جديد
   if (useCache && !res.review) await kvSet(key, JSON.stringify({ ...res, usage: [] }));
   return res;
+}
+/** 🔬 نفس السؤال بمصحح Math-Grading وهو يشوف الصور، للمقارنة بس */
+async function gradePhoto(q: Row, steps: RubricStep[], imgs: Buffer[]): Promise<AiQuestion> {
+  const max = Number(q.max_mark);
+  const r = await svc("/bot/grade", {
+    max_points: max, engine: "photo", feedback: false,
+    steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
+    images: imgs.map((b) => b.toString("base64")),
+  }, 230_000);
+  return { n: q.n, score: Math.max(0, Math.min(max, Math.round(Number(r.score) || 0))), max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
 }
 /** «🧪 جرّب على جواب حقيقي»: صاحب البوت يرفع صور جواب سؤال، ونظام التصحيح يصححها ويرجع النتيجة بس.
  *  ما تنحفظ درجة لأحد وما توصل رسالة لأحد، بس الكلفة تنحسب بالسجل */
@@ -572,6 +586,56 @@ async function shadowTick(limit: number) {
   }
   return n;
 }
+/** الأوراق اللي تدخل المقارنة: أول أوراق كل نموذج، وأوراق طلاب التجربة، بالمواضيع المأشرة */
+async function compareItems(): Promise<Row[]> {
+  const s = await aiSettings();
+  const seen = new Map<number, Row>();
+  for (const v of await find("bank_versions")) {
+    if (!s.exams.includes(v.exam_id)) continue;
+    for (const id of await calibList(v.id)) { const it = await one("sched_items", { id }); if (it) seen.set(id, it); }
+  }
+  for (const it of await find("sched_items", { status: "done" })) if (it.user_id < 0 && s.exams.includes(it.exam_id)) seen.set(it.id, it);
+  return [...seen.values()].filter((it) => it.status === "done" && it.version_id).sort((a, b) => b.id - a.id);
+}
+/** 🔬 يصحح الأوراق بالسر بالمصحح الثاني. يشتغل بس إذا ماكو أوراق حقيقية تنتظر بهذي الدكة */
+async function photoTick(limit: number) {
+  const todo: Row[] = [];
+  for (const it of await compareItems()) {
+    if (todo.length >= limit) break;
+    if (await readJson<AiQuestion[] | null>(photoKey(it.id), null)) continue;
+    const tries = Number(await kvGet(photoTryKey(it.id))) || 0;
+    if (tries >= MAX_TRIES) continue;
+    await kvSet(photoTryKey(it.id), String(tries + 1));
+    todo.push(it);
+  }
+  await Promise.all(todo.map(async (it) => {
+    try {
+      const res = await gradePaper(it, false, true);
+      await kvSet(photoKey(it.id), JSON.stringify(res));
+      await addLog({ at: stamp(), kind: "calib", note: "🔬 المقارنة", item: it.id, sid: it.user_id, exam: (await one("bank_exams", { id: it.exam_id }))?.title ?? "", total: res.reduce((t, q) => t + q.score, 0), usage: sumUsage(res.map((q) => q.usage ?? [])) });
+    } catch (e) { console.error("ai photo", it.id, e); }
+  }));
+  return todo.length;
+}
+const totalOf = (r: AiQuestion[] | null) => (r ? r.reduce((t, q) => t + q.score, 0) : null);
+/** 🔬 صفحة صاحب البوت: درجة الأستاذ ودرجة كل مصحح وكلفته، ومعدل بُعد كل مصحح عن الأستاذ */
+export async function compareState(nameOf: (it: Row) => Promise<string>, prices: Record<string, Price>) {
+  const titles = new Map((await find("bank_exams")).map((e) => [e.id as number, String(e.title ?? "")]));
+  const models = new Map((await find("bank_versions")).map((v) => [v.id as number, String(v.model ?? "")]));
+  const rows: { id: number; name: string; exam: string; model: string; teacher: number | null; current: number | null; photo: number | null; currentIqd: number | null; photoIqd: number | null }[] = [];
+  for (const it of (await compareItems()).slice(0, 40)) {
+    const cur = await shadowOf(it.id) ?? await aiResultOf(it.id);
+    const photo = await readJson<AiQuestion[] | null>(photoKey(it.id), null);
+    const paid = (r: AiQuestion[] | null) => (r ? Math.round(costOf(r.flatMap((q) => q.usage ?? []), prices) * 1600) : null);
+    rows.push({ id: it.id as number, name: await nameOf(it), exam: titles.get(it.exam_id) ?? "", model: models.get(it.version_id) ?? "",
+      teacher: it.graded_at && it.grader_id !== AI_GRADER ? Number(it.total ?? 0) : null, current: totalOf(cur), photo: totalOf(photo), currentIqd: paid(cur), photoIqd: paid(photo) });
+  }
+  const gap = (k: "current" | "photo") => {
+    const both = rows.filter((r) => r.teacher !== null && r[k] !== null);
+    return both.length ? Math.round((both.reduce((t, r) => t + Math.abs(r[k]! - r.teacher!), 0) / both.length) * 10) / 10 : null;
+  };
+  return { rows, compared: rows.filter((r) => r.teacher !== null && r.current !== null && r.photo !== null).length, currentGap: gap("current"), photoGap: gap("photo") };
+}
 /** أوراق ينتظرها نظام التصحيح: ما تطلع للمصححين لحد ما يجربها، حتى ما ياخذها مصحح قبله */
 export async function aiHeld(papers: Row[]): Promise<Set<number>> {
   const take = await makeTaker();
@@ -640,5 +704,7 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
       }
     }
   }));
-  return { graded, unsure, failed, ...(shadow ? { shadow } : {}) };
+  // المقارنة ما تأخر التصحيح الحقيقي
+  const compared = picked.length ? 0 : await photoTick(2);
+  return { graded, unsure, failed, ...(shadow ? { shadow } : {}), ...(compared ? { compared } : {}) };
 }

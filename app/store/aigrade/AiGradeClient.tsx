@@ -15,7 +15,9 @@ type Sum = { sent: number; unsure: number; cost: number };
 type Trial = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; expected: string; student: string }[] };
 type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
+type CmpRow = { id: number; name: string; exam: string; model: string; teacher: number | null; current: number | null; photo: number | null; currentIqd: number | null; photoIqd: number | null };
 type Data = {
+  compare: { rows: CmpRow[]; compared: number; currentGap: number | null; photoGap: number | null };
   aiStudents: { minAvg: number; minPapers: number; chosen: StuRow[]; candidates: StuRow[] };
   calib: { n: number; topics: { exam: number; title: string; done: number; of: number; versions: { model: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] }[] };
   on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string; retry: boolean }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
@@ -50,6 +52,7 @@ export default function AiGradeClient() {
             </div>
             <Money data={data} />
             <Calib key={data.calib.n} calib={data.calib} busy={busy} call={call} />
+            <Compare c={data.compare} />
             <AiStudents st={data.aiStudents} busy={busy} call={call} />
             <div className="card expad">
               <div className="exlabel">📋 أوراق مواضيعه اللي بعدها ما انصححت</div>
@@ -298,6 +301,29 @@ function TryBox({ q, busy, call, trial, linked }: { q: Q; busy: boolean; call: C
         </div>
       )}
     </div>
+  );
+}
+
+/** 🔬 المصحح الثاني (مصحح Math-Grading وهو يشوف الصور) يصحح بالسر، حتى نقارنه بالأستاذ وبالمصحح الحالي */
+function Compare({ c }: { c: Data["compare"] }) {
+  const n = (v: number | null) => (v === null ? "—" : v);
+  return (
+    <details className="card cpch">
+      <summary><b>🔬 مقارنة المصححين</b> <small className="pdmode">{c.compared} ورقة جاهزة للمقارنة</small></summary>
+      <div className="expad">
+        <div className="exhint">المصحح الثاني يصحح أول أوراق كل نموذج وأوراق طلاب التجربة بالسر: ما تنحفظ درجته وما يوصل شي للطالب، بس كلفته تنحسب. يشتغل لمن ماكو أوراق حقيقية تنتظر. الرقم الأقل هو الأقرب لدرجات الأستاذ.</div>
+        <div className="adstats adstats2 adtop">
+          <div><b>{n(c.currentGap)}</b>بُعد الحالي عن الأستاذ</div>
+          <div><b>{n(c.photoGap)}</b>بُعد الثاني عن الأستاذ</div>
+        </div>
+        {!c.rows.length && <div className="exhint">بعد ماكو أوراق.</div>}
+        {c.rows.map((r) => (
+          <div key={r.id} className="aig-logrow">
+            <div><b>{r.name}</b> · {r.exam} ({r.model})<br /><small>الأستاذ: {n(r.teacher)} · الحالي: {n(r.current)}{r.currentIqd !== null ? ` (${r.currentIqd} د)` : ""} · الثاني: {n(r.photo)}{r.photoIqd !== null ? ` (${r.photoIqd} د)` : ""}</small></div>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

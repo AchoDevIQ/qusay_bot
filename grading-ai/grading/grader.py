@@ -11,7 +11,20 @@ load_dotenv()
 
 from grading.rubric import Rubric
 from grading.strictness import GradingConfig
-from llm.router import complete_structured, any_credentials, LLMUnavailableError
+from llm.router import complete_structured, complete_vision_json, any_credentials, LLMUnavailableError
+
+# QMath: added to the prompt only when the student's photos are passed in
+PHOTO_RULES = """
+
+## The Student's Photos
+The photos of the student's handwritten answer are attached. The "Student's Solution" text above is a machine reading of them and can be wrong.
+Whenever the text and the photo differ, or the text is empty, the PHOTO is what the student wrote. Read signs, fractions, powers, +- and which x goes with which y from the photo yourself.
+Apply these fixed rules the same way every time:
+- A pair (x, y) whose signs do not satisfy the equations (for example 2xy = -3 needs opposite signs) is incorrect.
+- Writing x = +-a and y = +-b without the right pairing, then listing a wrongly paired root, is incorrect for those milestones.
+- A correct final answer does not make an earlier wrong step correct.
+- If the photo cannot be read for a milestone, classify it as "uncertain".
+"""
 
 class ErrorDetail(BaseModel):
     type: str = Field(description="The type of error: math_error, arithmetic_error, parse_error, propagated_error, uncertain_verification")
@@ -297,6 +310,7 @@ async def _async_calculate_grade(
     rubric: Rubric, 
     config: GradingConfig = GradingConfig(),
     _skip_deterministic: bool = False,
+    images: Optional[list] = None,
 ) -> GradingResult:
     """
     Internal asynchronous grader:
@@ -306,7 +320,7 @@ async def _async_calculate_grade(
     max_total = sum(obj.points for obj in rubric.objectives)
     
     has_student_work = any(bool(s.get("raw_text", "").strip()) for s in student) if student else False
-    if not has_student_work:
+    if not has_student_work and not images:
         # Fast path for empty student solutions
         steps = []
         for i, obj in enumerate(rubric.objectives):
@@ -403,12 +417,22 @@ Grading Strictness Mode: {config.strictness}
 """
 
     try:
-        result = await complete_structured(
-            "grading",
-            prompt,
-            GradingResult,
-            system="You are a precise, fair, and mathematically rigorous grading API.",
-        )
+        if images:
+            result = GradingResult(**await complete_vision_json(
+                "grading",
+                prompt + PHOTO_RULES,
+                schema=GradingResult,
+                detail="high",
+                images=images,
+                system="You are a precise, fair, and mathematically rigorous grading API.",
+            ))
+        else:
+            result = await complete_structured(
+                "grading",
+                prompt,
+                GradingResult,
+                system="You are a precise, fair, and mathematically rigorous grading API.",
+            )
     except LLMUnavailableError as e:
         raise ValueError(f"LLM grading failed: {e}")
 
@@ -612,7 +636,8 @@ def calculate_grade(
     reference: List[dict], 
     student: List[dict], 
     rubric: Rubric, 
-    config: GradingConfig = GradingConfig()
+    config: GradingConfig = GradingConfig(),
+    images: Optional[list] = None,
 ):
     """
     Grades student solution against teacher reference and rubric.
@@ -626,7 +651,7 @@ def calculate_grade(
         return GradingResult(score=0.0, max_score=0.0, confidence=1.0, steps=[])
 
     has_student_work = any(bool(s.get("raw_text", "").strip()) for s in student) if student else False
-    if not has_student_work:
+    if not has_student_work and not images:
         # Fast path for empty student solutions
         steps = []
         for i, obj in enumerate(rubric.objectives):
@@ -651,10 +676,10 @@ def calculate_grade(
     if loop and loop.is_running():
         # When called inside an async event loop, run Tier 1 inside _async_calculate_grade
         # via asyncio.to_thread so we never block the event loop.
-        return _async_calculate_grade(reference, student, rubric, config, _skip_deterministic=False)
+        return _async_calculate_grade(reference, student, rubric, config, _skip_deterministic=False, images=images)
 
     # Synchronous caller: run Tier 1 directly on the current thread
     deterministic_result = _attempt_deterministic_grading(reference, student, rubric)
     if deterministic_result is not None:
         return deterministic_result
-    return asyncio.run(_async_calculate_grade(reference, student, rubric, config, _skip_deterministic=True))
+    return asyncio.run(_async_calculate_grade(reference, student, rubric, config, _skip_deterministic=True, images=images))
