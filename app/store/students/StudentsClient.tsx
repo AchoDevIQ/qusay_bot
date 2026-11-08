@@ -225,7 +225,7 @@ function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"
       {sched.items.length ? sched.items.map((i) => (
         <div key={i.id} className="adsale">{i.retake ? "🔁 " : ""}{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small>
           {i.state === "missed" && <Confirm label="🔓 افتحه باستثناء" disabled={busy} onYes={() => void call({ action: "examException", id, item: i.id })} />}
-          {i.state === "locked" && <button type="button" className="exbtn adsmall" disabled={busy} onClick={() => void call({ action: "examNow", id, item: i.id })}>▶️ جربه هسه</button>}
+          {(i.state === "locked" || i.state === "center") && <button type="button" className="exbtn adsmall" disabled={busy} onClick={() => void call({ action: "examNow", id, item: i.id })}>▶️ جربه هسه</button>}
           {!i.optional && (i.status === "done" || i.status === "missed") && <AtPicker label="🔁 إعادة" busy={busy} onSave={(at) => void call({ action: "examRetake", id, item: i.id, at })} />}
           {i.status === "waiting" && i.state === "locked" && <AtPicker label="⏩ قدّم الموعد" busy={busy} onSave={(at) => void call({ action: "examMove", id, item: i.id, at })} />}
         </div>
