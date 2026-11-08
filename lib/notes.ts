@@ -146,8 +146,19 @@ export async function watermark(jpg: Buffer, name: string, uid: number) {
   g.restore();
   return Buffer.from(await c.encode("jpeg", 82));
 }
-export async function notePage(token: unknown, book: unknown, rawPage: unknown, pf: unknown) {
+// حد للصفحات بالدقيقة، حتى ما أحد يسحب الملزمة كلها أو يشغل السيرفر عن غيره
+const PAGE_LIMIT = 60;
+const pageHits = new Map<number, number[]>();
+function limitPages(uid: number, now = Date.now()) {
+  if (pageHits.size > 10_000) pageHits.clear();
+  const hits = (pageHits.get(uid) ?? []).filter((t) => now - t < 60_000);
+  need(hits.length < PAGE_LIMIT, "قلبت هواية صفحات، انتظر دقيقة", 429);
+  pageHits.set(uid, [...hits, now]);
+}
+export async function notePage(token: unknown, book: unknown, rawPage: unknown, pf: unknown, device?: unknown) {
   const uid = await studentUid(token, pf);
+  await checkDevice(uid, device);
+  limitPages(uid);
   const b = await myBook(uid, book);
   const jpg = await cleanPage(b, pageOf(b, rawPage));
   need(jpg, "الصفحة غير موجودة", 404);

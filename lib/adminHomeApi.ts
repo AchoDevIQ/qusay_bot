@@ -80,7 +80,7 @@ async function homeData(uid: number) {
 export async function adminHomeAction(body: Row) {
   await ensure();
   const uid = verifyInitData(body?.initData);
-  need(uid !== null, "افتح الصفحة من داخل البوت", 401);
+  need(uid !== null, "هذا الرابط انتهى. اكتب /start بالبوت وافتح الصفحة من جديد", 401);
   need(await isStaff(uid!), "ما عندك صلاحية", 403);
   if (body.action === "asGrader" || body.action === "endGrader") {
     need(ADMIN_IDS.includes(uid!), "هذا لصاحب البوت بس", 403);

@@ -5,7 +5,7 @@ import PhotoPick from "../PhotoPick";
 import AiCompare, { type AiQ } from "./AiCompare";
 import { Fragment, useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
-import { deviceId, haptic, openOutside, platform } from "../shared";
+import { deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 
@@ -422,7 +422,7 @@ function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: 
   );
 }
 
-const fileUrl = (item: number, ref: string) => `/api/myexams/file?t=${encodeURIComponent(new URLSearchParams(location.search).get("t") ?? "")}&item=${item}&ref=${encodeURIComponent(ref)}&pf=${encodeURIComponent((window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "")}`;
+const fileUrl = (item: number, ref: string) => `/api/myexams/file?t=${encodeURIComponent(new URLSearchParams(location.search).get("t") ?? "")}&item=${item}&ref=${encodeURIComponent(ref)}&pf=${encodeURIComponent((window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "")}&d=${encodeURIComponent(deviceNow())}`;
 const minutesLeft = (closeAt: string, nowAt: string, since: number) => {
   const end = new Date(closeAt.replace(" ", "T") + ":00Z").getTime(), start = new Date(nowAt.replace(" ", "T") + ":00Z").getTime();
   return Math.ceil((end - start - (Date.now() - since)) / 60000);

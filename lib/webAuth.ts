@@ -9,7 +9,12 @@ const hmac = (key: string | Buffer, data: string) => createHmac("sha256", key).u
 export function verifyInitData(raw: unknown, now = Date.now() / 1000): number | null {
   if (typeof raw !== "string" || !raw || !TOKEN) return null;
   // الصفحة المفتوحة من زر أسفل المحادثة ترسل رمزها الموقع بدل توقيع تليجرام
-  if (raw.startsWith("tk:")) return verifyHomeToken(raw.slice(3), now);
+  if (raw.startsWith("tk:")) {
+    // هذا الرمز يدخل لوحة التحكم، فيشتغل أسبوع بس من يوم انعمل. بعدها /start يجدده
+    const uid = verifyHomeToken(raw.slice(3), now);
+    const age = HOME_TTL_S - (Number(raw.slice(3).split(".")[1]) - now);
+    return uid !== null && age <= PANEL_TTL_S ? uid : null;
+  }
   const params = new URLSearchParams(raw);
   const hash = params.get("hash");
   if (!hash) return null;
@@ -29,6 +34,7 @@ export function verifyInitData(raw: unknown, now = Date.now() / 1000): number | 
 // زر أسفل المحادثة ما يعطي الصفحة توقيع تليجرام، فرابطه يحمل رمز موقع منا.
 // الرمز يتجدد كل ما وصلت الأزرار، ولو انتهى الطالب يكتب /start
 const HOME_TTL_S = 60 * 24 * 3600;
+const PANEL_TTL_S = 7 * 24 * 3600;
 const homeSig = (uid: number, exp: number) => hmac(hmac("QMathHome", TOKEN), `${uid}.${exp}`).toString("hex");
 export function homeToken(uid: number, now = Date.now() / 1000) {
   const exp = Math.floor(now) + HOME_TTL_S;

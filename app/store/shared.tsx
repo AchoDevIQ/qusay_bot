@@ -176,6 +176,9 @@ export function platform(): Promise<string> {
  *  صفحات الطالب تدزه ويا كل طلب، والسيرفر يقفل الحساب على أول جهاز */
 type Store = { getItem(k: string, cb: (err: unknown, v?: string | null) => void): void; setItem(k: string, v: string, cb?: (err: unknown) => void): void };
 let devicePromise: Promise<string> | null = null;
+let deviceKnown = "";
+/** رقم الجهاز لروابط الصور. جاهز بعد أول طلب للسيرفر، والصور تطلع بعده */
+export const deviceNow = () => deviceKnown;
 export function deviceId(): Promise<string> {
   if (devicePromise) return devicePromise;
   devicePromise = (async () => {
@@ -191,6 +194,7 @@ export function deviceId(): Promise<string> {
     const id = fromDs || local || (crypto.randomUUID?.() ?? Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""));
     try { if (!fromDs) ds?.setItem(KEY, id, () => undefined); } catch { /* نسخة قديمة */ }
     try { if (local !== id) localStorage.setItem(KEY, id); } catch { /* بدون ذاكرة */ }
+    deviceKnown = id;
     return id;
   })();
   return devicePromise;

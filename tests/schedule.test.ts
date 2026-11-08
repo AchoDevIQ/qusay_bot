@@ -498,9 +498,10 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
 
   const ans = r.questions[0].answers[0];
   assert.match(ans.file, /student_answers\/90\//);
-  assert.ok((await roomFile(homeToken(90), item, ans.file, "ios")).body.length);
-  await assert.rejects(roomFile(homeToken(91), item, ans.file, "ios"), (x: any) => x.status === 403);
-  await assert.rejects(roomFile(homeToken(90), item, "ch1/secret.png", "ios"), (x: any) => x.status === 403);
+  assert.ok((await roomFile(homeToken(90), item, ans.file, "ios", "dev-" + String(90).padStart(14, "0"))).body.length);
+  await assert.rejects(roomFile(homeToken(90), item, ans.file, "ios", "dev-another-device-00"), (x: any) => x.status === 423);
+  await assert.rejects(roomFile(homeToken(91), item, ans.file, "ios", "dev-" + String(91).padStart(14, "0")), (x: any) => x.status === 403);
+  await assert.rejects(roomFile(homeToken(90), item, "ch1/secret.png", "ios", "dev-" + String(90).padStart(14, "0")), (x: any) => x.status === 403);
   const del = await act(90, "delAnswer", { item, answer: ans.id });
   assert.equal(del.room.questions[0].answers.length, 0);
   await upload(90, item, 2);

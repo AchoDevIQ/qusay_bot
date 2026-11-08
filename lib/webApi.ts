@@ -20,7 +20,7 @@ export const intOf = (v: unknown, min: number, max: number, label: string) => {
 export async function authed(initData: unknown, perm: string) {
   await ensure();
   const uid = verifyInitData(initData);
-  need(uid !== null, "افتح الصفحة من داخل البوت", 401);
+  need(uid !== null, "هذا الرابط انتهى. اكتب /start بالبوت وافتح الصفحة من جديد", 401);
   need(await can(uid!, perm), "ما عندك صلاحية", 403);
   return uid!;
 }

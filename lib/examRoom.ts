@@ -164,11 +164,12 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   return await roomView(it, s);
 }
 /** صور الأسئلة والأجوبة: بس لصاحب الامتحان، وبس ملفات امتحانه */
-export async function roomFile(token: unknown, itemId: unknown, ref: unknown, pf?: unknown) {
+export async function roomFile(token: unknown, itemId: unknown, ref: unknown, pf?: unknown, device?: unknown) {
   await ensure();
   const uid = verifyHomeToken(token);
   need(uid !== null, "الرابط انتهى", 401);
   await checkPhone(uid!, pf);
+  await checkDevice(uid!, device);
   const it = await one("sched_items", { id: Number(itemId), user_id: uid! });
   need(it?.version_id, "ما عندك صلاحية", 403);
   const e = (await one("bank_exams", { id: it!.exam_id }))!;

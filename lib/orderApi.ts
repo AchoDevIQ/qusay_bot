@@ -57,7 +57,7 @@ const idList = (raw: unknown) => {
 async function pageUser(body: Row) {
   await ensure();
   const uid = verifyInitData(body?.initData);
-  need(uid !== null, "افتح الصفحة من داخل البوت", 401);
+  need(uid !== null, "هذا الرابط انتهى. اكتب /start بالبوت وافتح الصفحة من جديد", 401);
   return uid!;
 }
 export async function orderAction(body: Row) {

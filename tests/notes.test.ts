@@ -71,7 +71,7 @@ test("بدون تلگرام الموبايل، أو بدون ولي أمر، أ�
   const { stamp } = await import("../lib/util.ts");
   const item = await insert("sched_items", { user_id: 10, exam_id: exam, at: stamp() || now, status: "started", started_at: stamp(), opened_at: stamp() });
   await assert.rejects(act(10, "list"), /امتحان مفتوح/);
-  await assert.rejects(notePage(homeToken(10), 1, 1, "android"), /امتحان مفتوح/);
+  await assert.rejects(notePage(homeToken(10), 1, 1, "android", dev(10)), /امتحان مفتوح/);
   await update("sched_items", { id: item }, { status: "done" });
   assert.equal((await act(10, "list")).books.length, 1);
 });
@@ -82,7 +82,8 @@ test("صورة الصفحة: تطلع من صورة جاهزة وعليها عل
   const clean = Buffer.from(await c.encode("jpeg", 90));
   await files().write("notes/b1/p1.jpg", clean, "image/jpeg");
   const [b] = await myBooks(10);
-  const out = await notePage(homeToken(10), b.id, 1, "android");
+  await assert.rejects(notePage(homeToken(10), b.id, 1, "android", "dev-another-device-000"), (e: any) => e.status === 423);
+  const out = await notePage(homeToken(10), b.id, 1, "android", dev(10));
   assert.equal(out[0], 0xff);
   assert.notDeepEqual(out, clean);
 });
@@ -106,4 +107,12 @@ test("طلب محاضرات بالتوصيل: ينطيه كود، والكود �
   assert.ok(sent.some((t) => t.includes("انفتحت ملازمك")));
   assert.deepEqual((await myBooks(15)).map((b) => b.title), ["ثالث"]);
   assert.equal(await one("exam_access", { user_id: 15 }), null);   // ما يفتح امتحانات
+});
+
+test("رابط لوحة التحكم يشتغل أسبوع بس، ورابط الطالب يبقى", async () => {
+  const { verifyInitData, verifyHomeToken } = await import("../lib/webAuth.ts");
+  const now = Date.now() / 1000, t = homeToken(1, now);
+  assert.equal(verifyInitData(`tk:${t}`, now + 6 * 86400), 1);
+  assert.equal(verifyInitData(`tk:${t}`, now + 8 * 86400), null);
+  assert.equal(verifyHomeToken(t, now + 8 * 86400), 1);
 });

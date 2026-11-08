@@ -2,7 +2,7 @@
 // ملازمي: الطالب يشوف ملازم فصوله، يقلب صفحاتها، ويكتب فوكها بالقلم أو يظلل. كتابته تنحفظ وحدها.
 // الصفحة ترتسم على canvas، فما بيها صورة ينضغط عليها حتى تنحفظ
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deviceId, haptic, platform } from "../shared";
+import { deviceId, deviceNow, haptic, platform } from "../shared";
 
 type Book = { id: number; title: string; chapter: string; pages: number };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
@@ -99,7 +99,7 @@ function Reader({ book, onClose }: { book: Book; onClose: () => void }) {
     catch (e) { dirty.current = p; setErr((e as Error).message); }
   }, [book.id]);
 
-  const src = useCallback((n: number) => `/api/notes/page?t=${encodeURIComponent(token())}&book=${book.id}&page=${n}&pf=${encodeURIComponent((window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "")}`, [book.id]);
+  const src = useCallback((n: number) => `/api/notes/page?t=${encodeURIComponent(token())}&book=${book.id}&page=${n}&pf=${encodeURIComponent((window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "")}&d=${encodeURIComponent(deviceNow())}`, [book.id]);
   useEffect(() => {
     let stop = false;
     setImg(null); setStrokes([]); setErr(""); undo.current = [];
