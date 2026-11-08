@@ -268,6 +268,43 @@ export async function gradeCardPng(item: number, c: GradeCard, tag = ""): Promis
   return null;
 }
 
+// ---------- صورة الشخصية ويا كتابة صاحب البوت بفقاعة كلام فوكها
+/** عرض وارتفاع الصورة من بدايتها (PNG أو JPG). غيرها: نسبة 3:4 */
+export function imageSize(b: Buffer): { w: number; h: number } {
+  if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47) return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    for (let i = 2; i + 9 < b.length;) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const m = b[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { w: b.readUInt16BE(i + 7), h: b.readUInt16BE(i + 5) };
+      i += 2 + b.readUInt16BE(i + 2);
+    }
+  }
+  return { w: 900, h: 1200 };
+}
+export function bubbleHtml(src: string, text: string, w: number, h: number) {
+  const n = text.length, size = Math.round((n <= 40 ? 0.052 : n <= 90 ? 0.042 : 0.033) * w);
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
+${cardFont()}
+*{box-sizing:border-box}html,body{margin:0;width:${w}px;height:${h}px;overflow:hidden;background:#111}
+img{display:block;width:${w}px;height:${h}px}
+.b{position:absolute;top:${Math.round(w * 0.02)}px;right:${Math.round(w * 0.02)}px;width:${Math.round(w * 0.46)}px;padding:${Math.round(w * 0.04)}px ${Math.round(w * 0.035)}px;background:#fff;border:${Math.max(3, Math.round(w * 0.005))}px solid #000;border-radius:50%;color:#000;text-align:center;white-space:pre-wrap;font-family:Boahmed,'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:${size}px;line-height:1.35}
+.b:after{content:"";position:absolute;left:12%;bottom:-${Math.round(w * 0.045)}px;border-top:${Math.round(w * 0.06)}px solid #000;border-right:${Math.round(w * 0.05)}px solid transparent}
+</style></head><body><img src="${src}"><div class="b">${esc(text)}</div></body></html>`;
+}
+/** يرسم الكتابة بفقاعة على الصورة. إذا ما صار الرسم يرجع null، والمرسل يدز الصورة والكتابة كل وحدة لحالها */
+export async function bubblePng(img: Buffer, type: string, text: string, tag: string): Promise<Buffer | null> {
+  try {
+    ensureDir();
+    const s = imageSize(img);
+    const w = 900, h = Math.min(1600, Math.round((s.h / s.w) * w));
+    const hp = path.join(PDF_DIR, `bubble_${tag}.html`), pp = path.join(PDF_DIR, `bubble_${tag}.png`);
+    fs.writeFileSync(hp, bubbleHtml(`data:${type};base64,${img.toString("base64")}`, text, w, h), "utf8");
+    if (await htmlToPng(hp, pp, w, h)) return fs.readFileSync(pp);
+  } catch (e) { console.error(e); }
+  return null;
+}
+
 // ---------- الوصولات
 /** وصل ورقي لطابعة الوصولات (عرض 58 ملم) */
 async function receiptPaperHtml(o: Row, items: Row[]) {

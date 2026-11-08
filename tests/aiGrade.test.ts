@@ -601,3 +601,12 @@ test("➕ زيد طالب تجربة: الرقم الجاي، وما يستخد�
   assert.equal(new Set(nums).size, 9);
   assert.ok(!nums.includes(7));
 });
+
+test("🚦 فقاعة السيطرة: مقاس الصورة ينقرا، والكتابة تنحط بأمان", async () => {
+  const { bubbleHtml, imageSize } = await import("../lib/documents.ts");
+  const png = Buffer.alloc(30); png.writeUInt32BE(0x89504e47, 0); png.writeUInt32BE(800, 16); png.writeUInt32BE(1100, 20);
+  assert.deepEqual(imageSize(png), { w: 800, h: 1100 });
+  assert.deepEqual(imageSize(Buffer.from("xx")), { w: 900, h: 1200 });
+  const h = bubbleHtml("data:image/png;base64,AA", "وقف <b>حبيبي</b>", 900, 1200);
+  assert.ok(h.includes("&lt;b&gt;") && !h.includes("<b>حبيبي"));
+});

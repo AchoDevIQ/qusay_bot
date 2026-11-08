@@ -10,7 +10,7 @@ type Exam = { id: number; title: string; since: number; from: string; cp: Cp | n
 type Chapter = { chapter: string; exams: Exam[] };
 type Stop = { id: number; name: string; at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number };
 type Mode = "marks" | "percent";
-type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; bandTags: string[]; stopUrl: string; mode: Mode; pct: { min: number; absent: number; bands: Band[] }; stopped: Stop[]; notice: string };
+type Data = { chapters: Chapter[]; student: string; guardian: string; tags: string[]; bandTags: string[]; stopUrl: string; stopBubble: string; mode: Mode; pct: { min: number; absent: number; bands: Band[] }; stopped: Stop[]; notice: string };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 
 export default function CheckpointsClient() {
@@ -56,7 +56,7 @@ export default function CheckpointsClient() {
               );
             })}
             <Texts key={data.student + data.guardian} data={data} busy={busy} call={call} />
-            <StopPicture url={data.stopUrl} busy={busy} call={call} />
+            <StopPicture key={data.stopBubble} url={data.stopUrl} bubble={data.stopBubble} busy={busy} call={call} />
           </>
         )}
       </div>
@@ -142,7 +142,8 @@ function PicturePick({ url, file, setFile, drop, setDrop }: { url: string; file:
 }
 
 /** شخصية الإيقاف: مثل شرطي مرور يكول «أوگف» */
-function StopPicture({ url, busy, call }: { url: string; busy: boolean; call: Call }) {
+function StopPicture({ url, bubble, busy, call }: { url: string; bubble: string; busy: boolean; call: Call }) {
+  const [words, setWords] = useState(bubble);
   const [file, setFile] = useState<File | null>(null);
   const [drop, setDrop] = useState(false);
   function save() {
@@ -157,7 +158,12 @@ function StopPicture({ url, busy, call }: { url: string; busy: boolean; call: Ca
       <div className="expad">
         <div className="exhint">توصل للطالب ويا رسالة الإيقاف بالبوت، وتومض بصفحة امتحاناته. ولي أمره توصله الرسالة بدون صورة. مثلاً إنت لابس مرور وتكول «أوگف أوگف».</div>
         <PicturePick url={url} file={file} setFile={setFile} drop={drop} setDrop={setDrop} />
-        <button type="button" className="btn adsmallbtn" disabled={busy || (!file && !drop)} onClick={save}>💾 حفظ</button>
+        <button type="button" className="btn adsmallbtn" disabled={busy || (!file && !drop)} onClick={save}>💾 حفظ الصورة</button>
+        <div className="exlabel">✍️ الكتابة اللي تطلع بالفقاعة على الصورة</div>
+        <div className="exhint">حط الصورة بدون كتابة، وخلي فوك يمينها مكان فاضي، لأن الفقاعة تطلع هناك. أكثر شي 220 حرف. تگدر تكتب {"{الاسم}"} ويتبدل باسم الطالب.</div>
+        <textarea className="tmtext" aria-label="كتابة الفقاعة" rows={3} maxLength={220} value={words} onChange={(e) => setWords(e.target.value)} />
+        <button type="button" className="btn adsmallbtn" disabled={busy || words === bubble} onClick={() => void call({ action: "stopBubble", text: words })}>💾 حفظ الكتابة</button>
+        {url && words.trim() && <><div className="exlabel">شكلها عند الطالب</div><div className="cpbubw"><img src={url} alt="شخصية الإيقاف" style={{ maxHeight: 340 }} /><div className="cpbub">{words}</div></div></>}
       </div>
     </div>
   );
@@ -199,7 +205,7 @@ function BandRow({ exam, max, b, busy, call, done }: { exam: number | "pct"; max
         <label>إلى {unit}<input className="exnum" inputMode="numeric" value={to} onChange={(x) => setTo(x.target.value.replace(/\D/g, ""))} /></label>
       </div>
       <textarea className="tmtext" aria-label="رسالة هاي النتيجة" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
-      <div className="exhint">الصور: كل مرة يوصل للطالب صورة ما شافها قبل. ولي الأمر توصله الكتابة بس.</div>
+      <div className="exhint">الكتابة فوك تطلع بفقاعة على الصورة (لحد 220 حرف، خلي فوك يمين الصورة فاضي). كل مرة يوصل للطالب صورة ما شافها قبل. ولي الأمر توصله الكتابة بس.</div>
       <div className="cppics">
         {kept.map((p) => <div key={p.ref}><img src={p.url} alt="شخصية" /><button type="button" className="exbtn" onClick={() => setDrop([...drop, p.ref])}>🗑</button></div>)}
         {added.map((a, i) => <div key={a.url}><img src={a.url} alt="شخصية جديدة" /><button type="button" className="exbtn" onClick={() => setAdded(added.filter((_, j) => j !== i))}>🗑</button></div>)}

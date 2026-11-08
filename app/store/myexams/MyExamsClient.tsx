@@ -16,7 +16,7 @@ type Info = {
   appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number } | null; items: Item[];
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
-  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
+  preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Paper = { ai: AiQ[]; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
@@ -29,6 +29,7 @@ export default function MyExamsClient() {
   const [info, setInfo] = useState<Info | null>(null);
   const [error, setError] = useState("");
   const [stopPic, setStopPic] = useState("");
+  const [stopWords, setStopWords] = useState("");
   const [busy, setBusy] = useState(false);
   async function call(body: Record<string, unknown>) {
     setBusy(true);
@@ -37,7 +38,7 @@ export default function MyExamsClient() {
       const token = new URLSearchParams(location.search).get("t") ?? "";
       const res = await fetch("/api/myexams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, ...body, device: await deviceId(), pf: await platform() }) });
       const j: Info = await res.json();
-      if (!res.ok) { setError(j.error ?? "صار خطأ، حاول مرة ثانية"); if (res.status === 423) setStopPic(j.stop?.image || "none"); return null; }
+      if (!res.ok) { setError(j.error ?? "صار خطأ، حاول مرة ثانية"); if (res.status === 423) { setStopPic(j.stop?.image || "none"); setStopWords(j.stop?.bubble ?? ""); } return null; }
       setInfo(j);
       return j;
     } catch { setError("ماكو اتصال، حاول مرة ثانية"); return null; } finally { setBusy(false); }
@@ -69,14 +70,13 @@ export default function MyExamsClient() {
       <div className="wrap">
         {error && stopPic ? (
           <div className="card cpflash stop">
-            {stopPic !== "none" && <img src={stopPic} alt="سيطرة" />}
+            {stopPic !== "none" && <div className="cpbubw"><img src={stopPic} alt="سيطرة" />{stopWords && <div className="cpbub">{stopWords}</div>}</div>}
             <div className="cpflashtext">🚦 {error}</div>
           </div>
         ) : error && <div className="card warn exerr">⚠️ {error}</div>}
         {info?.cp && (
           <div className="card cpflash">
-            {info.cp.image && <img src={info.cp.image} alt="سيطرة" />}
-            <div className="cpflashtext">🚦 {info.cp.text}</div>
+            {info.cp.image ? <div className="cpbubw"><img src={info.cp.image} alt="سيطرة" /><div className="cpbub">{info.cp.text}</div></div> : <div className="cpflashtext">🚦 {info.cp.text}</div>}
             <button type="button" className="btn agbtn" disabled={busy} onClick={() => void call({ action: "cpSeen", key: info.cp!.key })}>👍 تمام</button>
           </div>
         )}

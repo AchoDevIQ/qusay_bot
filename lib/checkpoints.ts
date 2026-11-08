@@ -11,6 +11,7 @@ import { itemState } from "./scheduleRules.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { files } from "./files.ts";
 import { send, upload } from "./telegram.ts";
+import { bubblePng } from "./documents.ts";
 import { esc, stamp } from "./util.ts";
 import { ApiError, authed, intOf, need } from "./webApi.ts";
 
@@ -22,7 +23,7 @@ export type Rule = { min: number; absent: number; bands?: Band[] };
 /** طريقتين: «marks» كل سيطرة إلها شرطها ونتائجها بالدرجات، «percent» نسبة وحدة لكل السيطرات */
 export type Mode = "marks" | "percent";
 type Pct = { min: number; absent: number; bands: Band[] };
-type Cfg = { rules: Record<string, Rule>; student: string; guardian: string; stopImage: string | null; mode: Mode; pct: Pct };
+type Cfg = { rules: Record<string, Rule>; student: string; guardian: string; stopImage: string | null; stopBubble: string; mode: Mode; pct: Pct };
 type Seg = Rule & { exam: number; chapter: string; title: string; from: string; ids: number[] };
 const KEY = "checkpoints_v2";
 const PER_EXAM = 100;
@@ -34,13 +35,15 @@ export const cpImageUrl = (ref: string | null) => (ref && IMG.test(ref) ? `/api/
 const LOW = "عدم تحقيق الدرجة المطلوبة للعبور";
 const ABSENT = "كثرة الغيابات";
 
+export const DEFAULT_BUBBLE = "وقف حبيبي وين رايح؟\nانت مخالف لأن ما عبرت الدرجة المسموحة";
+const BUBBLE_MAX = 220;
 export const DEFAULT_STUDENT = "⛔ توقفت عليك {الموقوف}\n\nالسبب: {السبب}\n\nسيطرة {الفصل}، آخر {العدد} امتحانات:\nمجموعك {الدرجة} من {الكلي}، والمطلوب {المطلوب}\nغياباتك: {الغياب}\n\nحتى ترجع لازم يحضر ولي أمرك ويا قصي العميري.";
 export const DEFAULT_GUARDIAN = "⛔ توقفت {الموقوف} على الطالب {الاسم}\n\nالسبب: {السبب}\n\nسيطرة {الفصل}، آخر {العدد} امتحانات:\nمجموعه {الدرجة} من {الكلي}، والمطلوب {المطلوب}\nغياباته: {الغياب}\n\nحتى يرجع لازم تحضر ويا قصي العميري.";
 
 export async function loadCfg(): Promise<Cfg> {
   let saved: Partial<Cfg> = {};
   try { saved = JSON.parse(await kvGet(KEY) ?? "{}"); } catch { /* إعدادات خربانة */ }
-  return { rules: saved.rules ?? {}, student: saved.student || DEFAULT_STUDENT, guardian: saved.guardian || DEFAULT_GUARDIAN, stopImage: saved.stopImage ?? null,
+  return { rules: saved.rules ?? {}, student: saved.student || DEFAULT_STUDENT, guardian: saved.guardian || DEFAULT_GUARDIAN, stopImage: saved.stopImage ?? null, stopBubble: saved.stopBubble ?? DEFAULT_BUBBLE,
     mode: saved.mode === "percent" ? "percent" : "marks",
     pct: { min: Number(saved.pct?.min ?? 50), absent: Number(saved.pct?.absent ?? 0), bands: Array.isArray(saved.pct?.bands) ? saved.pct!.bands : [] } };
 }
@@ -86,12 +89,18 @@ const fill = (text: string, v: Record<string, string | number>) => esc(text).rep
 const plain = (text: string, v: Record<string, string | number>) => text.replace(/\{([^{}]+)\}/g, (m, k) => (k in v ? String(v[k]) : m));
 export const bandOf = (bands: Band[] | undefined, score: number) => (bands ?? []).find((b) => score >= b.from && score <= b.to) ?? null;
 /** صورة الشخصية بالبوت (إذا موجودة) */
-async function sendPicture(chat: number, ref: string | null) {
-  if (!ref || !IMG.test(ref)) return;
+async function sendPicture(chat: number, ref: string | null, bubble = "") {
+  if (!ref || !IMG.test(ref)) return false;
   const buf = await files().read(ref);
-  if (!buf) return;
+  if (!buf) return false;
   const ext = ref.split(".").pop()!;
+  // الكتابة بفقاعة على الصورة. إذا طويلة هواية أو ما انرسمت، الصورة لحالها والكتابة تنرسل بعدها
+  if (bubble.trim() && bubble.length <= BUBBLE_MAX) {
+    const png = await bubblePng(buf, ext === "jpg" ? "image/jpeg" : `image/${ext}`, bubble.trim(), `${chat}_${Date.now()}`);
+    if (png) { try { if (await upload("sendPhoto", { chat_id: String(chat) }, "photo", png, "c.png", "image/png")) return true; } catch (e) { console.error(e); } }
+  }
   try { await upload("sendPhoto", { chat_id: String(chat) }, "photo", buf, `c.${ext}`, ext === "jpg" ? "image/jpeg" : `image/${ext}`); } catch (e) { console.error(e); }
+  return false;
 }
 /** صورة ما وصلت للطالب قبل، وإذا كلهن وصلن: وحدة غير آخر وحدة إذا أكو */
 async function freshPicture(uid: number, band: Band) {
@@ -106,8 +115,9 @@ async function freshPicture(uid: number, band: Band) {
 async function rewardStudent(uid: number, st: Row, band: Band | null, pic: string | null, v: Record<string, string | number>) {
   if (!band) return;
   const text = fill(band.text, { "الاسم": st.name ?? "", ...v });
-  await sendPicture(uid, pic);
-  try { await send(uid, text); } catch (e) { console.error(e); }
+  // كتابة هاي النتيجة تطلع بالفقاعة على الصورة، وإذا ماكو صورة تنرسل كتابة
+  const drawn = await sendPicture(uid, pic, plain(band.text, { "الاسم": st.name ?? "", ...v }));
+  if (!drawn) try { await send(uid, text); } catch (e) { console.error(e); }
   const g = (await guardianOf(uid))?.guardian_id;
   if (g) try { await send(g, text); } catch (e) { console.error(e); }
 }
@@ -169,7 +179,7 @@ async function stopStudent(uid: number, st: Row, cfg: Cfg, x: { chapter: string;
   await logActivity(uid, `⛔ توقفت عليه ${what}: ${x.reason} (سيطرة ${x.chapter}، ${x.score} من ${row.max}، غياب ${x.absent})`);
   const v = { "الاسم": st.name ?? "", "الموقوف": what, "السبب": x.reason, "الفصل": x.chapter, "العدد": x.every, "الدرجة": x.score, "الكلي": row.max, "المطلوب": x.need, "الغياب": x.absent };
   const safe = async (chat: number, text: string) => { try { await send(chat, text); } catch (e) { console.error(e); } };
-  await sendPicture(uid, cfg.stopImage);
+  await sendPicture(uid, cfg.stopImage, plain(cfg.stopBubble, v));
   await safe(uid, fill(cfg.student, v));
   const g = await guardianOf(uid);
   if (g) await safe(g.guardian_id, fill(cfg.guardian, v));   // ولي الأمر: الكتابة بس، بدون صورة
@@ -197,7 +207,7 @@ export async function checkStopped(uid: number) {
   if (await isStaff(uid) || !await student(uid)) return;
   await runCheckpoints(uid);
   const s = await activeStop(uid);
-  if (s) throw new ApiError(423, `⛔ توقفت عليك ${whatOf(s)} بسبب ${s.reason}. حتى ترجع تواصل ويا قصي العميري.`, { stop: { image: cpImageUrl((await loadCfg()).stopImage) } });
+  if (s) throw new ApiError(423, `⛔ توقفت عليك ${whatOf(s)} بسبب ${s.reason}. حتى ترجع تواصل ويا قصي العميري.`, { stop: await (async () => { const c = await loadCfg(); return { image: cpImageUrl(c.stopImage), bubble: plain(c.stopBubble, { "الاسم": (await student(uid))?.name ?? "" }) }; })() });
 }
 
 export async function liftStop(uid: number, by: number) {
@@ -243,7 +253,7 @@ async function pageData() {
   }
   return {
     chapters, student: cfg.student, guardian: cfg.guardian, tags: TAGS, bandTags: BAND_TAGS, stopped, notice: "",
-    stopUrl: cpImageUrl(cfg.stopImage), mode: cfg.mode,
+    stopUrl: cpImageUrl(cfg.stopImage), stopBubble: cfg.stopBubble, mode: cfg.mode,
     pct: { min: cfg.pct.min, absent: cfg.pct.absent, bands: bandsView(cfg.pct.bands) },
   };
 }
@@ -317,6 +327,11 @@ export async function checkpointsAction(raw: Row | FormData) {
     cfg.pct = { ...cfg.pct, min, absent };
     await saveCfg(cfg);
     notice = `✅ انحفظت: أقل نسبة ${min}%${absent ? `، ويوقف إذا غاب ${absent}` : ""}`;
+  } else if (a === "stopBubble") {
+    const cfg = await loadCfg();
+    cfg.stopBubble = String(body.text ?? "").trim().slice(0, BUBBLE_MAX);
+    await saveCfg(cfg);
+    notice = "✅ انحفظت كتابة الفقاعة";
   } else if (a === "stopImage") {
     const cfg = await loadCfg();
     cfg.stopImage = body.dropImage === "1" ? null : await savePicture(body.file);
