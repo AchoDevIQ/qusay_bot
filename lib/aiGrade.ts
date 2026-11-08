@@ -22,7 +22,8 @@ const resultKey = (itemId: number) => `ai_result_${itemId}`;
 const triesKey = (itemId: number) => `ai_try_${itemId}`;
 const errKey = (itemId: number) => `ai_err_${itemId}`;
 const ON_KEY = "ai_grade_on", SET_KEY = "ai_settings", LOG_KEY = "ai_log", PRICE_KEY = "ai_prices";
-const MAX_TRIES = 2;
+// مشكلة تقنية (الخدمة ما ردت) تنعاد بالدكة الجاية، لحد 3 مرات
+const MAX_TRIES = 3;
 const PER_TICK = 3;
 const LOG_MAX = 5000;
 /** أسعار الموديلات بالدولار لكل مليون توكن (داخل / طالع). صاحب البوت يگدر يغيرها من الصفحة */
@@ -316,6 +317,16 @@ export async function aiWhyNot(examId: number, versionId: number): Promise<strin
   if (missing.length) return `باقي خطوات الأسئلة ${missing.join("، ")} بهذا النموذج`;
   return null;
 }
+/** «🔁 خلي يعيد تصحيحها»: الورقة اللي حوّلها أو فشل بيها ترجع لدوره من جديد (إذا بعدها ما انصححت) */
+export async function aiRetry(itemId: number) {
+  const it = await one("sched_items", { id: itemId });
+  if (!it || it.graded_at) throw new Error("الورقة انصححت، ما ترجع");
+  await kvSet(triesKey(itemId), "0");
+  await kvSet(errKey(itemId), "");
+  await kvSet(resultKey(itemId), "null");
+  await remove("question_marks", { item_id: itemId });
+  await update("sched_items", { id: itemId }, { grader_id: null });
+}
 /** أوراق المواضيع المأشرة اللي بعدها ما انصححت، ووين واقفة كل وحدة */
 export async function aiPending(nameOf: (it: Row) => Promise<string>, staffName: (id: number) => Promise<string>) {
   const s = await aiSettings();
@@ -332,7 +343,8 @@ export async function aiPending(nameOf: (it: Row) => Promise<string>, staffName:
       if (!why.has(it.version_id)) why.set(it.version_id, await aiWhyNot(it.exam_id, it.version_id));
       state = why.get(it.version_id) ? `⏸ ${why.get(it.version_id)}` : "⏳ بالدور، ياخذها خلال دقيقة";
     }
-    return { id: it.id as number, name: await nameOf(it), exam: titles.get(it.exam_id) ?? "", state };
+    const retry = (Number(await kvGet(triesKey(it.id))) || 0) >= MAX_TRIES || (!!it.grader_id && it.grader_id !== AI_GRADER);
+    return { id: it.id as number, name: await nameOf(it), exam: titles.get(it.exam_id) ?? "", state, retry };
   }));
 }
 
@@ -370,7 +382,7 @@ async function forward(it: Row, res: AiQuestion[], usage: Usage[], nameOf: (it: 
   await update("sched_items", { id: it.id }, { grader_id: to || null });
   const name = await nameOf(it);
   const why = res.filter((q) => q.review).map((q) => `• س${q.n}: ${q.reason || "ما متأكد"}`).join("\n");
-  const text = `🤖 <b>نظام التصحيح AI حوّل ورقة</b>\nما متأكد من تصحيحها، فلازم تنصحح بالإيد.\nالطالب: <b>${name}</b>\nالامتحان: ${e?.title ?? ""}\n${why}\n\nافتح لوحة التحكم ← ✍️ التصحيح.`;
+  const text = `👤 <b>لصاحب البوت بس، ما توصل للطالب</b>\n🤖 <b>نظام التصحيح AI حوّل ورقة</b>\nما متأكد من تصحيحها، فلازم تنصحح بالإيد.\nالطالب: <b>${name}</b>\nالامتحان: ${e?.title ?? ""}\n${why}\n\nافتح لوحة التحكم ← ✍️ التصحيح.`;
   // ما محدد مصحح لهذا الفصل: الخبر يوصل لصاحب البوت، حتى الورقة ما تضيع بالقائمة بدون ما أحد يدري
   for (const id of to ? [to] : ADMIN_IDS) await send(id, text);
   await addLog({ at: stamp(), kind: "unsure", item: it.id, sid: it.user_id, name, exam: e?.title ?? "", to: to || null, usage });
@@ -406,7 +418,10 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
       const note = (e instanceof Error ? e.message : String(e)).slice(0, 200);
       await kvSet(errKey(it.id), note);
       await addLog({ at: stamp(), kind: "failed", item: it.id, sid: it.user_id, name: await nameOf(it), exam: (await one("bank_exams", { id: it.exam_id }))?.title ?? "", note, usage: [] });
-      await kvSet(triesKey(it.id), String((Number(await kvGet(triesKey(it.id))) || 0) + 1));
+      const tries = (Number(await kvGet(triesKey(it.id))) || 0) + 1;
+      await kvSet(triesKey(it.id), String(tries));
+      // آخر محاولة فشلت: الورقة ترجع للمصححين، وصاحب البوت يدري
+      if (tries >= MAX_TRIES) for (const id of ADMIN_IDS) await send(id, `👤 <b>لصاحب البوت بس، ما توصل للطالب</b>\n⚠️ نظام التصحيح AI ما گدر يصحح ورقة <b>${await nameOf(it)}</b> (${MAX_TRIES} مرات)، فرجعت للمصححين.\nالسبب: ${note}`);
       const now = await one("sched_items", { id: it.id });
       if (now && !now.graded_at && now.grader_id === AI_GRADER) {
         await update("sched_items", { id: it.id }, { grader_id: null });

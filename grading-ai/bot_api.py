@@ -136,7 +136,15 @@ async def bot_grade(req: GradeReq):
         "max_points": req.max_points,
         "steps": [s.model_dump() for s in req.steps],
     }
+    # A grading error is a hiccup (timeout, busy model), not doubt about the answer: try again
     res = await grade_single_question(question, texts, strictness=req.strictness)
+    for _ in range(2):
+        if res.get("success", False):
+            break
+        res = await grade_single_question(question, texts, strictness=req.strictness)
+    if not res.get("success", False) and not ocr_failed:
+        # Still failing: tell the bot to retry the paper later instead of handing it to a human
+        raise HTTPException(status_code=503, detail=str(res.get("review_reason") or "grading error")[:300])
     # The rubric's points decide the scale; keep the mark inside the question's max
     score = max(0.0, min(float(res["score"]), float(req.max_points)))
     # QMath: the AI grades on its own. A paper goes to a human only on real doubt (the page could

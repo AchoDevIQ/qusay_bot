@@ -16,7 +16,7 @@ type Trial = { n: number; score: number; max: number; review: boolean; reason: s
 type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
 type Data = {
-  on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
+  on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string; retry: boolean }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
   fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; trial?: { id: number; result: Trial }; notice?: string;
 };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
@@ -49,7 +49,7 @@ export default function AiGradeClient() {
             <div className="card expad">
               <div className="exlabel">📋 أوراق مواضيعه اللي بعدها ما انصححت</div>
               {!data.pending.length && <div className="exhint">ماكو ورقة تنتظر بالمواضيع المأشرة.</div>}
-              {data.pending.map((p) => <div key={p.id} className="aig-logrow"><div><b>{p.name}</b> · {p.exam}<br /><small>{p.state}</small></div></div>)}
+              {data.pending.map((p) => <div key={p.id} className="aig-logrow"><div><b>{p.name}</b> · {p.exam}<br /><small>{p.state}</small></div>{p.retry && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "retry", id: p.id })}>🔁 خلي يعيد تصحيحها</button>}</div>)}
               <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "list" })}>🔄 حدّث</button>
             </div>
             <div className="card expad">

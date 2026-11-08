@@ -108,7 +108,7 @@ test("يصحح وحده: الدرجة تنحفظ وتوصل للطالب، وا�
   assert.equal(await staffName(AI_GRADER), "🤖 نظام التصحيح AI");
 });
 
-test("الخدمة عطلانة: الورقة ترجع للمصححين، وبعد محاولتين يبطل يحاول عليها", async () => {
+test("الخدمة عطلانة: الورقة ترجع للمصححين، وبعد 3 محاولات يبطل يحاول عليها ويخبر صاحب البوت", async () => {
   const p = await paper(90, [1, 2]);
   aiReply = () => new Response("boom", { status: 500 });
   assert.deepEqual(await tick(), { graded: 0, unsure: 0, failed: 1 });
@@ -116,6 +116,9 @@ test("الخدمة عطلانة: الورقة ترجع للمصححين، وبع
   assert.deepEqual([row.grader_id, row.graded_at], [null, null]);
   assert.equal((await find("question_marks", { item_id: p })).length, 0);
   await tick();
+  tg.length = 0;
+  await tick();
+  assert.ok(tg.some((c) => String(c.p.chat_id) === "1" && /ما گدر يصحح ورقة/.test(c.p.text ?? "")));
   ai.length = 0;
   assert.deepEqual(await tick(), { graded: 0, unsure: 0, failed: 0 });
   assert.equal(ai.length, 0);
@@ -377,4 +380,21 @@ test("الورقة اللي صححها نظام التصحيح AI: الطالب 
   assert.equal(view.ai.length, 2);
   assert.equal(view.ai[0].note, "غلطت بالإشارة بآخر خطوة");
   assert.deepEqual(view.ai[0].steps.map((s: any) => s.reason), ["صح", "غلط بالإشارة"]);
+});
+
+test("«🔁 خلي يعيد تصحيحها»: الورقة اللي حوّلها ترجع لدوره ويصححها", async () => {
+  await setAiOn(true);
+  await setChapterScope("c1", [ex], 0);
+  const p = await paper(90, [1, 2]);
+  aiReply = (route, body) => Response.json({ score: 5, requires_review: body.max_points === 40, review_reason: "قراءة الصورة فشلت", student_lines: [], steps: [], usage: [] });
+  await tick();
+  assert.equal((await one("sched_items", { id: p }))!.graded_at, null);
+  const before: any = await aiGradeAction({ initData: sign(1), action: "list" });
+  assert.ok(before.pending.find((x: any) => x.id === p).retry);
+  await aiGradeAction({ initData: sign(1), action: "retry", id: p });
+  aiReply = gradeOk;
+  for (let i = 0; i < 4 && !(await one("sched_items", { id: p }))!.graded_at; i++) await tick();
+  const row = (await one("sched_items", { id: p }))!;
+  assert.ok(row.graded_at);
+  assert.equal(row.grader_id, AI_GRADER);
 });
