@@ -22,17 +22,20 @@ const INK_MAX = 400_000;
 const PAGE_WIDTH = 1400;
 const OLD_LINK = "هذا الرابط قديم. اكتب /start بالبوت وافتح القائمة من جديد";
 
-/** الفصول اللي استلمها الطالب، محاضرات أو امتحانات: الطلب الملغي أو اللي بعده ما انطبع ما يفتح شي */
+/** الفصول اللي اكتمل شراءها، محاضرات أو امتحانات: بيع المكتبة فوراً، والتوصيل بعد ما الطالب يقرا كود الوصل. غيرها ما يفتح شي */
 export async function ownedChapters(uid: number): Promise<string[]> {
   const st = await student(uid);
   if (!st) return [];
   const out = new Set<string>();
   for (const r of await find("exam_access", { user_id: uid })) for (const c of labelChapters(String(r.chapter))) out.add(c);
   const orders = await find("orders", { user_id: uid }, { where: (o) => (o.printed === 1 || o.printed === 3) && String(o.created) >= String(st.created) });
-  for (const o of orders) for (const it of JSON.parse(o.items || "[]") as Row[]) {
+  for (const o of orders) {
+    if (o.printed === 1 && !(await one("order_codes", { order_id: o.id }))?.used_at) continue;
+    for (const it of JSON.parse(o.items || "[]") as Row[]) {
     if (!firstRoundOnly(it.name)) continue;
     const label = chapterLabel(it.name)?.replace("الاول", "الأول");
     if (label) for (const c of labelChapters(label)) out.add(c);
+    }
   }
   return [...out];
 }

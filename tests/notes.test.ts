@@ -28,7 +28,11 @@ await insert("note_books", { title: "رابع", chapter: "الفصل الراب�
 
 test("الملازم تطلع للي استلم الفصل، محاضرات أو امتحانات، وحسب منهجه", async () => {
   await stud(10); await stud(11, "إنجليزي"); await stud(12); await stud(13);
-  await order(10, "محاضرات الفصل الثالث", 1);
+  // التوصيل: ينطبع الطلب وما تنفتح، لحد ما الطالب يقرا كود الوصل
+  const oid = await order(10, "محاضرات الفصل الثالث", 1);
+  await insert("order_codes", { code: "111111", order_id: oid, chapters: "[]" });
+  assert.deepEqual(await myBooks(10), []);
+  await update("order_codes", { code: "111111" }, { used_at: created });
   assert.deepEqual((await myBooks(10)).map((b) => b.title), ["ثالث"]);
   await put("exam_access", { user_id: 11, chapter: "الفصل الثالث", created });
   assert.deepEqual((await myBooks(11)).map((b) => b.title), ["ثالث", "ثالث انكليزي"]);
@@ -38,7 +42,7 @@ test("الملازم تطلع للي استلم الفصل، محاضرات أو
   await order(12, "دفتر محاضرات الفصل الثالث", 1);
   assert.deepEqual(await myBooks(12), []);
   // الفصلين اللي ينباعون سوية يفتحون الثنين
-  await order(13, "امتحانات الفصل الرابع والخامس", 3);
+  await order(13, "امتحانات الفصل الرابع والخامس", 3);   // المكتبة: تنفتح فوراً
   assert.ok((await ownedChapters(13)).includes("الفصل الرابع"));
   assert.ok((await ownedChapters(13)).includes("الفصل الخامس"));
 });
@@ -60,7 +64,7 @@ test("الكتابة تنحفظ لكل طالب وحده، وملزمة غير �
 
 test("بدون تلگرام الموبايل، أو بدون ولي أمر، أو أثناء الامتحان: مقفولة", async () => {
   await assert.rejects(noteAction({ token: homeToken(10), device: dev(10), pf: "tdesktop", action: "list" }), /الموبايل/);
-  await stud(14); await order(14, "محاضرات الفصل الثالث", 1);
+  await stud(14); await order(14, "محاضرات الفصل الثالث", 3);
   await assert.rejects(act(14, "list"), /ولي أمرك/);
   const exam = await insert("bank_exams", { slug: "ch3", chapter: "الفصل الثالث", ord: 1, title: "ا", minutes: 60 });
   const now = new Date().toISOString().slice(0, 19).replace("T", " ");
@@ -81,4 +85,25 @@ test("صورة الصفحة: تطلع من صورة جاهزة وعليها عل
   const out = await notePage(homeToken(10), b.id, 1, "android");
   assert.equal(out[0], 0xff);
   assert.notDeepEqual(out, clean);
+});
+
+test("طلب محاضرات بالتوصيل: ينطيه كود، والكود يفتح الملازم بس بعد ما ينطبع الطلب", async () => {
+  const sent: string[] = [];
+  globalThis.fetch = (async (_u: string, init: any) => { const p = init.body instanceof FormData ? Object.fromEntries(init.body.entries()) : JSON.parse(init.body); sent.push(String(p.text ?? p.caption ?? "")); return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } })); }) as typeof fetch;
+  const { createOrderCode, redeemCode, readyExtras } = await import("../lib/exams.ts");
+  await stud(15); await guardian(15);
+  const items = [{ name: "محاضرات الفصل الثالث", qty: 1 }];
+  const oid = await order(15, items[0].name, 0);
+  const code = (await createOrderCode(oid, items))!;
+  assert.match(code, /^\d{6}$/);
+  assert.equal(await createOrderCode(oid + 1000, [{ name: "ملزمة الفصل الثالث", qty: 1 }]), null);
+  await redeemCode(15, 15, code);
+  assert.deepEqual(await myBooks(15), []);          // بعده ما انطبع
+  await update("orders", { id: oid }, { printed: 1 });
+  assert.match((await readyExtras(oid)).text, /ملازمك/);
+  assert.deepEqual(await myBooks(15), []);          // انطبع بس بعده ما وصل
+  await redeemCode(15, 15, code);
+  assert.ok(sent.some((t) => t.includes("انفتحت ملازمك")));
+  assert.deepEqual((await myBooks(15)).map((b) => b.title), ["ثالث"]);
+  assert.equal(await one("exam_access", { user_id: 15 }), null);   // ما يفتح امتحانات
 });

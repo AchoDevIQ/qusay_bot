@@ -6,6 +6,7 @@ import { logActivity } from "./access.ts";
 import { BTN_EXAMS, STORE_URL, toLatinDigits } from "./config.ts";
 import { noteFail, pendingCodes, tooManyFails } from "./data.ts";
 import { chapterLabel, flowKb, mainKb, scanKb } from "./keyboards.ts";
+import { firstRoundOnly } from "./orderRules.ts";
 import { send, type Kb } from "./telegram.ts";
 import { btn, esc, stamp } from "./util.ts";
 
@@ -40,7 +41,8 @@ export async function unlockFromSale(sid: number, items: Row[], oid: number) {
 // ---------- طلب التوصيل: رمز بالوصل
 export async function createOrderCode(oid: number, items: Row[]) {
   const chapters = chaptersOf(items);
-  if (!chapters.length) return null;
+  // طلب المحاضرات هم إله كود بالوصل، حتى ملازمه تنفتح لمن يوصله الطلب
+  if (!chapters.length && !items.some((i) => firstRoundOnly(i.name) && chapterLabel(i.name))) return null;
   // أرقام بس حتى ما يخربط بالكابيتال والسمول. الرمز يشتغل لصاحب الطلب فقط، والمحاولات محدودة
   const make = () => String(randomInt(100000, 1000000));
   let code = make();
@@ -50,7 +52,12 @@ export async function createOrderCode(oid: number, items: Row[]) {
 }
 /** زر رسالة «تم تجهيز طلبك»، إذا الطلب بيه امتحانات */
 export async function readyExtras(oid: number): Promise<{ text: string; kb?: Kb }> {
-  if (!await one("order_codes", { order_id: oid, used_at: null })) return { text: "" };
+  const code = await one("order_codes", { order_id: oid, used_at: null });
+  if (!code) return { text: "" };
+  if (!JSON.parse(code.chapters || "[]").length) return {
+    text: "\n\n📘 <b>لمن يوصلك الطلب</b> اضغط الزر جوة، ووجه الكاميرا على الكود المطبوع بالوصل، وتنفتح ملازمك.",
+    kb: [[btn("📷 وصلني الطلب: افتح ملازمي", `xs:${oid}`)]],
+  };
   return {
     text: "\n\n📝 طلبك بيه امتحانات. <b>لمن يوصلك الطلب</b> اضغط الزر جوة، ووجه الكاميرا على الكود المطبوع بالوصل، وتنفتح امتحاناتك.",
     kb: [[btn("📷 وصلني الطلب: افتح الامتحانات", `xs:${oid}`)]],
@@ -74,12 +81,21 @@ export async function redeemCode(chat: number, uid: number, raw: string) {
   if (r.printed === 2) { await setSession(uid, "", {}); await send(chat, "⚠️ هذا الطلب ملغي.", { replyKb: await mainKb(uid) }); return; }
   if (r.printed !== 1) { await send(chat, "⏳ طلبك لسه ما تجهز. جرب بعد ما يوصلك."); return; }
   await setSession(uid, "", {});
-  if (r.used_at) { await send(chat, "ℹ️ هذا الكود انستخدم قبل، وامتحاناته مفتوحة عندك.", { replyKb: await mainKb(uid) }); await examsMenu(chat, uid); return; }
   const chapters: string[] = JSON.parse(r.chapters);
+  if (r.used_at) {
+    await send(chat, chapters.length ? "ℹ️ هذا الكود انستخدم قبل، وامتحاناته مفتوحة عندك." : "ℹ️ هذا الكود انستخدم قبل، وملازمك مفتوحة عندك.", { replyKb: await mainKb(uid) });
+    if (chapters.length) await examsMenu(chat, uid);
+    return;
+  }
   await tx(async () => {
     await grantExams(uid, chapters, r.order_id);
     await update("order_codes", { code: r.code }, { used_at: stamp() });
   });
+  if (!chapters.length) {
+    await logActivity(uid, "🔓 فتح ملازمه برمز الوصل");
+    await send(chat, "🔓 <b>انفتحت ملازمك</b>\nتلگاها بمربع «ملازمي» بالقائمة الرئيسية.", { replyKb: await mainKb(uid) });
+    return;
+  }
   await logActivity(uid, `🔓 فتح امتحانات ${chapters.join("، ")} برمز الوصل`);
   await send(chat, `🔓 <b>انفتحت امتحاناتك</b>\n${chaptersText(chapters)}`, { replyKb: await mainKb(uid) });
   await examsMenu(chat, uid);
@@ -90,7 +106,7 @@ export async function examsMenu(chat: number, uid: number) {
   if (await examInProgress(uid)) { await send(chat, LOCK_TEXT); return; }
   const chapters = await myChapters(uid), pend = await pendingCodes(uid);
   if (!chapters.length && !pend.length) { await send(chat, "ما عندك امتحانات مفتوحة بعد. تنفتح لمن تشتري امتحانات أي فصل من 🛒 المتجر أو من المكتبة."); return; }
-  const kb: Kb = [...chapters.map((c, i) => [btn("📝 " + c, `xc:${i}`)]), ...pend.map((o) => [btn(`📷 وصلني الطلب #${o.id}: افتح الامتحانات`, `xs:${o.id}`)])];
+  const kb: Kb = [...chapters.map((c, i) => [btn("📝 " + c, `xc:${i}`)]), ...pend.map((o) => [btn(`📷 وصلني الطلب #${o.id}: افتحه`, `xs:${o.id}`)])];
   await send(chat, chapters.length ? "<b>📝 امتحاناتك</b>\nاختر الفصل:" : "<b>📝 امتحاناتك</b>\nلمن يوصلك الطلب، اضغط الزر جوة 👇", { kb });
 }
 export async function examCb(chat: number, uid: number, d: string): Promise<string | null> {
@@ -101,7 +117,11 @@ export async function examCb(chat: number, uid: number, d: string): Promise<stri
     const c = ord && await one("order_codes", { order_id: oid });
     if (!c) return "الطلب غير موجود";
     const o = { printed: ord!.printed, used_at: c.used_at };
-    if (o.used_at) { await examsMenu(chat, uid); return null; }
+    if (o.used_at) {
+      if (JSON.parse(c.chapters || "[]").length) await examsMenu(chat, uid);
+      else await send(chat, "ℹ️ ملازمك مفتوحة عندك بمربع «ملازمي» بالقائمة الرئيسية.");
+      return null;
+    }
     if (o.printed !== 1) return "طلبك لسه ما تجهز";
     await setSession(uid, "x:code", { oid });
     await send(chat, (STORE_URL ? "📷 اضغط الزر جوة ووجه الكاميرا على الكود المطبوع بالوصل.\nأو " : "") + "اكتب هنا الرمز المطبوع تحت الكود، مثل <code>482917</code>:",

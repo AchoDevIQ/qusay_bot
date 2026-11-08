@@ -86,7 +86,7 @@ async function examQr(oid: number) {
   const svg = await QRCode.toString(code, { type: "svg", margin: 1, errorCorrectionLevel: "M" });
   return `<div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding:8px 10px;border:1.5px solid #101929;border-radius:10px;break-inside:avoid">
 <div style="width:92px;height:92px;flex:none">${svg}</div>
-<div style="font-size:11.5px;line-height:1.7"><b style="font-size:13px">🔓 افتح امتحاناتك</b><br>اضغط زر «وصلني الطلب» بالبوت، ووجه الكاميرا على هذا الكود.<br>أو اكتب الرقم: <b dir="ltr" style="font-size:20px;letter-spacing:2px">${code}</b></div>
+<div style="font-size:11.5px;line-height:1.7"><b style="font-size:13px">🔓 افتح طلبك بالبوت</b><br>اضغط زر «وصلني الطلب» بالبوت، ووجه الكاميرا على هذا الكود.<br>أو اكتب الرقم: <b dir="ltr" style="font-size:20px;letter-spacing:2px">${code}</b></div>
 </div>`;
 }
 

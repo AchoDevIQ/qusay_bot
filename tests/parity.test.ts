@@ -64,6 +64,11 @@ function dropProtect(e: any) {
   if (e.p && typeof e.p === "object") delete e.p.protect_content;
   return e;
 }
+// كود الملازم بطلب المحاضرات ميزة جديدة: رسالة «تم تجهيز طلبك» كانت بدونه
+function dropNotesCode(e: any) {
+  if (typeof e.p?.text === "string" && e.p.text.includes("وتنفتح ملازمك")) { e.p.text = e.p.text.slice(0, e.p.text.indexOf("\n\n📘")); delete e.p.reply_markup; }
+  return e;
+}
 // قائمة لوحة التحكم صارت صفحة وحدة، فأزرارها ما تنقارن بالبوت القديم
 function dropMenuButtons(e: any) {
   if (e.p?.text === "<b>⚙️ لوحة التحكم</b>") delete e.p.reply_markup;
@@ -95,7 +100,7 @@ function normalDb(db: Record<string, any[]>) {
 }
 const scrubFiles = (f: Record<string, string>) =>
   // السطور الفارغة بالـ HTML ما تأثر على الرسم (الوصل القديم بيه سطر فارغ داخل التنسيق)
-  Object.fromEntries(Object.entries(f).map(([k, v]) => [scrub(k), scrub(v).replace(/\n{2,}/g, "\n")]));
+  Object.fromEntries(Object.entries(f).map(([k, v]) => [scrub(k), scrub(v).replace(/<div style="display:flex;align-items:center;gap:12px;margin-top:10px[\s\S]*?افتح طلبك بالبوت[\s\S]*?<\/div>\s*<\/div>/g, "").replace(/\n{2,}/g, "\n")]));
 
 const sorted = (db: Record<string, any[]>) => Object.fromEntries(Object.entries(db).map(([t, rows]) => [t, rows.map((r) => JSON.stringify(Object.entries(r).sort())).sort()]));
 for (const driver of ["sqlite", "firestore"]) for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).sort()) {
@@ -108,7 +113,7 @@ for (const driver of ["sqlite", "firestore"]) for (const file of fs.readdirSync(
       // طلب من صاحب البوت: صورة نجاح الطلب تطلع لوحدها، لأن نفس الكلام مكتوب داخلها
       const photoOnly = (e: any) => { if (e.m === "sendPhoto" && /تم استلام طلبك/.test(e.p.caption ?? "")) { delete e.p.caption; delete e.p.parse_mode; } return e; };
       const dropPhotoMode = (e: any) => { if (e.m === "sendPhoto" && !e.p.caption) delete e.p.parse_mode; return e; };
-      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode).map(dropMenuButtons).map(dropProtect)), b = normal(py.trace.map(photoOnly).map(dropMenuButtons));
+      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode).map(dropMenuButtons).map(dropProtect).map(dropNotesCode)), b = normal(py.trace.map(photoOnly).map(dropMenuButtons));
       for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
       if (driver === "firestore") assert.deepEqual(sorted(normalDb(ts.db)), sorted(normalDb(py.db)));
       else assert.deepEqual(normalDb(ts.db), normalDb(py.db));
