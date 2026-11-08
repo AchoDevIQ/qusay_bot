@@ -12,6 +12,8 @@ const LABEL: Record<Way, string> = { camera: "📷 الكاميرا", gallery: "
 function savedWay(): Way | null {
   try { const w = localStorage.getItem(KEY); return w === "camera" || w === "gallery" ? w : null; } catch { return null; }
 }
+/** آيفون: زر الاستوديو دائماً يطلع قائمة (مكتبة الصور / التقاط صورة / اختيار ملف)، وهذا من آبل ما ينشال */
+const isIos = () => { try { return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform === "ios"; } catch { return false; } };
 function saveWay(w: Way) { try { localStorage.setItem(KEY, w); } catch { /* المتصفح مانع الحفظ */ } }
 
 export default function PhotoPick({ onFiles, multiple = false, busy = false, label }: { onFiles: (files: File[]) => void; multiple?: boolean; busy?: boolean; label?: string }) {
@@ -21,7 +23,8 @@ export default function PhotoPick({ onFiles, multiple = false, busy = false, lab
   // الموبايل ما سمح بالكاميرا داخل الصفحة: زر الكاميرا يصير زر الموبايل العادي
   const [nativeCam, setNativeCam] = useState(false);
   const [err, setErr] = useState("");
-  useEffect(() => { setWay(savedWay()); }, []);
+  const [ios, setIos] = useState(false);
+  useEffect(() => { setWay(savedWay()); setIos(isIos()); }, []);
   function use(w: Way) { saveWay(w); setWay(w); setChoose(false); }
   function got(list: FileList | null, w: Way) {
     const files = [...(list ?? [])].filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
@@ -57,6 +60,7 @@ export default function PhotoPick({ onFiles, multiple = false, busy = false, lab
           <button type="button" className="exbtn" onClick={() => setChoose(true)}>🔄 غيّر الطريقة</button>
         </div>
       )}
+      {ios && (way === "gallery" || !way || choose) && <div className="exhint">🖼 بالآيفون، من تدوس الاستوديو تطلع قائمة صغيرة: اختار «مكتبة الصور».</div>}
       {err && <div className="err">⚠️ {err}</div>}
     </div>
   );
