@@ -6,7 +6,7 @@ import { find, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts"
 import { AI_GRADER } from "./data.ts";
 import { files } from "./files.ts";
 import { api, send } from "./telegram.ts";
-import { TOKEN } from "./config.ts";
+import { ADMIN_IDS, TOKEN } from "./config.ts";
 import { stamp } from "./util.ts";
 
 export type RubricStep = { text: string; points: number };
@@ -37,7 +37,8 @@ const svcUrl = () => (process.env.GRADING_AI_URL ?? "").trim().replace(/\/+$/, "
 const svcKey = () => (process.env.GRADING_AI_KEY ?? "").trim();
 /** الخدمة مربوطة: رابطها ومفتاحها بأسرار السيرفر */
 export const aiLinked = () => !!svcUrl() && !!svcKey();
-export const aiOn = async () => (await kvGet(ON_KEY)) === "1";
+// شغال دائماً من البداية، إلا إذا صاحب البوت وگفه بإيده
+export const aiOn = async () => (await kvGet(ON_KEY)) !== "0";
 export const setAiOn = (on: boolean) => kvSet(ON_KEY, on ? "1" : "0");
 
 const readJson = async <T>(k: string, def: T): Promise<T> => { try { return JSON.parse((await kvGet(k)) ?? "null") ?? def; } catch { return def; } };
@@ -351,8 +352,10 @@ async function forward(it: Row, res: AiQuestion[], usage: Usage[], nameOf: (it: 
   await kvSet(triesKey(it.id), String(MAX_TRIES));
   await update("sched_items", { id: it.id }, { grader_id: to || null });
   const name = await nameOf(it);
-  const qs = res.filter((q) => q.review).map((q) => q.n).join("، ");
-  if (to) await send(to, `🤖 <b>نظام التصحيح AI حوّلك ورقة</b>\nما متأكد من تصحيحها، فصححها إنت.\nالطالب: <b>${name}</b>\nالامتحان: ${e?.title ?? ""}\nالأسئلة اللي ما متأكد منها: ${qs}\n\nافتح لوحة التحكم ← ✍️ التصحيح.`);
+  const why = res.filter((q) => q.review).map((q) => `• س${q.n}: ${q.reason || "ما متأكد"}`).join("\n");
+  const text = `🤖 <b>نظام التصحيح AI حوّل ورقة</b>\nما متأكد من تصحيحها، فلازم تنصحح بالإيد.\nالطالب: <b>${name}</b>\nالامتحان: ${e?.title ?? ""}\n${why}\n\nافتح لوحة التحكم ← ✍️ التصحيح.`;
+  // ما محدد مصحح لهذا الفصل: الخبر يوصل لصاحب البوت، حتى الورقة ما تضيع بالقائمة بدون ما أحد يدري
+  for (const id of to ? [to] : ADMIN_IDS) await send(id, text);
   await addLog({ at: stamp(), kind: "unsure", item: it.id, sid: it.user_id, name, exam: e?.title ?? "", to: to || null, usage });
 }
 

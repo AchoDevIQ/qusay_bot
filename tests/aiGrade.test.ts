@@ -71,6 +71,10 @@ test("الخطوات لازم مجموعها يساوي درجة السؤال", 
 
 test("طافي، أو موضوع مو مأشر، أو سؤال بدون خطوات: ما يمس الورقة", async () => {
   const p = await paper(90, [1, 2]);
+  // شغال من البداية، بس صاحب البوت يگدر يوگفه
+  const { aiOn } = await import("../lib/aiGrade.ts");
+  assert.equal(await aiOn(), true);
+  await setAiOn(false);
   assert.deepEqual(await tick(), { off: true });
   await setAiOn(true);
   ai.length = 0;
@@ -159,9 +163,9 @@ test("ما متأكد: الورقة ما توصل للطالب، تروح للم
   assert.equal((await find("question_marks", { item_id: p })).length, 0);
   assert.ok(!tg.some((c) => String(c.p.chat_id) === "90"));
   const msg = tg.find((c) => c.method === "sendMessage" && String(c.p.chat_id) === "41")!;
-  assert.match(msg.p.text, /حوّلك ورقة/);
+  assert.match(msg.p.text, /حوّل ورقة/);
   assert.match(msg.p.text, /طالب أول/);
-  assert.match(msg.p.text, /: 2$/m);
+  assert.match(msg.p.text, /س2: /);
   // المصحح يفتحها ويشوف شنو انطى نظام التصحيح
   const open = await gradeAction({ initData: sign(41), action: "open", id: p }) as any;
   assert.equal(open.paper.ai.find((q: any) => q.n === 2).review, true);
@@ -331,4 +335,16 @@ test("يأشر مواضيع ويحفظ وهو طافي: نظام التصحيح 
   const r: any = await aiGradeAction({ initData: sign(1), action: "scope", slug: "c1", exams: [ex], grader: 0 });
   assert.match(r.notice, /اشتغل/);
   assert.equal(await aiOn(), true);
+});
+
+test("ما متأكد وماكو مصحح محدد للفصل: الخبر يوصل لصاحب البوت ويا السبب، حتى الورقة ما تضيع", async () => {
+  await setAiOn(true);
+  await setChapterScope("c1", [ex], 0);
+  const p = await paper(90, [1, 2]);
+  aiReply = (route, body) => Response.json({ score: 5, requires_review: body.max_points === 40, review_reason: "قراءة الصورة فشلت", student_lines: [], steps: [], usage: [] });
+  tg.length = 0;
+  for (let i = 0; i < 4 && (await one("sched_items", { id: p }))!.grader_id !== null || i === 0; i++) await tick();
+  const msg = tg.find((c) => c.method === "sendMessage" && String(c.p.chat_id) === "1" && /حوّل ورقة/.test(c.p.text));
+  assert.ok(msg, "خبر لصاحب البوت");
+  assert.match(msg!.p.text, /س2: قراءة الصورة فشلت/);
 });

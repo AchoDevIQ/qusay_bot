@@ -115,12 +115,27 @@ async def bot_grade(req: GradeReq):
     res = await grade_single_question(question, texts, strictness=req.strictness)
     # The rubric's points decide the scale; keep the mark inside the question's max
     score = max(0.0, min(float(res["score"]), float(req.max_points)))
+    # QMath: the AI grades on its own. A paper goes to a human only on real doubt (the page could
+    # not be read, grading did not finish, a step it is unsure of, or very low confidence), not
+    # because the student lost many marks: heavy deductions are part of normal grading.
+    uncertain = [st for st in res.get("steps", []) if st.get("status") == "uncertain"]
+    confidence = float(res.get("confidence") or 0.0)
+    if ocr_failed:
+        doubt = "قراءة الصورة فشلت"
+    elif not res.get("success", False):
+        doubt = "التصحيح ما كمل"
+    elif uncertain:
+        doubt = f"{len(uncertain)} خطوة ما متأكد منها"
+    elif confidence < 0.5:
+        doubt = f"ثقته بالتصحيح قليلة ({confidence:.2f})"
+    else:
+        doubt = ""
     return {
         "score": round(score, 1),
         "max_score": float(req.max_points),
-        "confidence": res.get("confidence", 0.0),
-        "requires_review": bool(res.get("requires_review")) or ocr_failed or not res.get("success", False),
-        "review_reason": res.get("review_reason") or ("قراءة الصورة فشلت" if ocr_failed else ""),
+        "confidence": confidence,
+        "requires_review": bool(doubt),
+        "review_reason": doubt,
         "student_lines": texts,
         "usage": usage_report(bucket),
         "steps": [

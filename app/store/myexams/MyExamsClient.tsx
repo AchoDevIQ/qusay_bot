@@ -487,17 +487,19 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                   {draft?.q === q.n ? (
                     <div>
                       {more.length > 0 && <div className="exhint">باقي {more.length} صورة وراها</div>}
+                      <div className="exhint exbad">⚠️ لازم الكتابة عدلة، مو مقلوبة ولا مايلة، وإلا الورقة ما تتصحح. إذا مقلوبة دوس «🔄 دور الصورة» لحد ما تصير عدلة.</div>
                       <img className="eximg mxdraft" src={draft.url} alt="معاينة" style={{ transform: `rotate(${draft.turns * 90}deg)` }} />
                       <div className="exline">
                         <button type="button" className="exbtn" onClick={() => setDraft({ ...draft, turns: (draft.turns + 1) % 4 })}>🔄 دور الصورة</button>
                         <button type="button" className={scan ? "btn" : "exbtn"} onClick={() => void toggleScan()}>📄 سكانر {scan ? "✓" : ""}</button>
                         <button type="button" className="exbtn" onClick={() => void pickPhoto(draft.q, more)}>{more.length ? "تخطّى هاي الصورة" : "إلغاء"}</button>
+                        <PhotoPick label="بدّل الصورة" onFiles={(fs) => void pickPhoto(draft.q, fs)} />
                         <button type="button" className="btn" disabled={busy} onClick={() => void send()}>{busy ? "جاري الإرسال..." : "✅ تم"}</button>
                       </div>
                     </div>
                   ) : (
                     <div className="exline">
-                      <PhotoPick multiple onFiles={(fs) => void pickPhoto(q.n, fs)} />
+                      <PhotoPick label={`السؤال ${q.n}`} onFiles={(fs) => void pickPhoto(q.n, fs)} />
                     </div>
                   )}
                 </div>
