@@ -308,3 +308,4 @@ body.grwide .grtop{padding-left:104px}
 .aiccell{background:#f8fafc;color:#0f172a;border:1px solid #cbd5e1;border-radius:10px;padding:8px 6px;display:flex;flex-direction:column;gap:4px;min-width:0;overflow-x:auto}.aiccell.bad{background:#fee2e2;border-color:#fca5a5}.aiccell.half{background:#fef9c3;border-color:#fde047}.aiccell small{color:#475569;font-size:12px}.aicmark{font-size:12px;color:#334155}.aicmiss{color:#94a3b8;font-size:13px;text-align:center}
 .aimath{font-size:14px;text-align:center}.aimath .katex{font-size:1em}
 .aicbig{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:10px}.aicbig img{max-width:100%;max-height:100%}.aicbig span{position:absolute;top:calc(14px + var(--tg-safe-area-inset-top,0px));left:14px;color:#fff;font-size:22px}
+.aiinl{display:inline-block;unicode-bidi:isolate}.aiinl .katex{font-size:1.05em}

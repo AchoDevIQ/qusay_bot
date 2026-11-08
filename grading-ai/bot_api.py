@@ -125,6 +125,13 @@ async def health():
     return {"ok": True, "llm": any_credentials()}
 
 
+EQUIV_NOTE = (" [Grade this step by its RESULT, not by its exact wording: any mathematically equivalent form gets full marks "
+              "(sides of an equation swapped: 1 = x is x = 1; an equation multiplied by -1; terms reordered; equivalent or simplified fractions and radicals; "
+              "a ± answer written as two cases). If the student reached the same result by a different valid route (e.g. found c first and then a^2 = 1/4), "
+              "the step is fully correct. The page reading can drop a minus sign or misread a symbol: if a later line is correct and follows from this one, "
+              "do not deduct for a doubtful reading of this line.]")
+
+
 @app.post("/bot/grade", dependencies=[Depends(check_key)])
 async def bot_grade(req: GradeReq):
     bucket = start_usage()
@@ -132,9 +139,10 @@ async def bot_grade(req: GradeReq):
     lines = await extract_student_steps_from_pages(pages) if pages else []
     texts = [l.get("text", "") for l in lines if (l.get("text") or "").strip()]
     ocr_failed = any(l.get("ocr_error") for l in lines)
+    # Same answer written another way is fully correct (1 = x for x = 1, terms reordered, equivalent or simplified fractions)
     question = {
         "max_points": req.max_points,
-        "steps": [s.model_dump() for s in req.steps],
+        "steps": [{**s.model_dump(), "objective": (s.objective or s.text) + EQUIV_NOTE} for s in req.steps],
     }
     # A grading error is a hiccup (timeout, busy model), not doubt about the answer: try again
     res = await grade_single_question(question, texts, strictness=req.strictness)
@@ -183,6 +191,9 @@ async def bot_grade(req: GradeReq):
         if len(ar.reasons) == len(steps):
             for st, r in zip(steps, ar.reasons):
                 st["reason_ar"] = r.strip()
+        if len(ar.student_math) == len(steps):
+            for st, m in zip(steps, ar.student_math):
+                st["student_tex"] = m.strip()
         note = ar.note.strip()
     except Exception:
         pass
@@ -200,16 +211,20 @@ async def bot_grade(req: GradeReq):
 
 
 class ArabicOut(BaseModel):
-    reasons: List[str] = Field(description="One short Arabic sentence per step, same order and count as the input steps")
-    note: str = Field(description="One or two short Arabic sentences to the student about this question")
+    reasons: List[str] = Field(description="One short Arabic sentence per step, same order and count as the input steps; math inside $...$ as LaTeX")
+    student_math: List[str] = Field(description="Per step, same order and count: what the student wrote for that step as clean LaTeX math only (no words); empty string if nothing")
+    note: str = Field(description="One or two short Arabic sentences to the student about this question; math inside $...$ as LaTeX")
 
 
-ARABIC_PROMPT = """A math teacher's grading of one student's answer (question worth {max} marks, the student got {score}).
+ARABIC_PROMPT = r"""A math teacher's grading of one student's answer (question worth {max} marks, the student got {score}).
 Here are the graded steps as JSON (status, marks awarded/possible, the grader's reason, the expected math, what the student wrote):
 {steps}
 
-Write for the STUDENT, in simple clear Arabic (Iraqi students; plain words, no English except math):
-- reasons: for each step, in the same order and the same count, one short sentence saying what was right or exactly what was wrong (e.g. «صح» or «غلط بالإشارة: المفروض y = -3/(2x)»). Keep math expressions as they are.
+Write for the STUDENT, in simple clear Arabic (Iraqi students; plain words):
+- Never use English words (no "square", "sqrt", "root", "step", "both sides"...). Say it in Arabic: تربيع، جذر، الطرفين، الإشارة.
+- Every math expression goes between dollar signs as LaTeX, e.g. $y=-\frac{{3}}{{2x}}$, $x^{{2}}-y^{{2}}=4$, $\sqrt{{3}}$. Write every fraction with \frac (never a slash like 3/(2x)). Never write x^2 or sqrt(3) outside dollar signs.
+- reasons: for each step, in the same order and the same count, one short sentence saying what was right or exactly what was wrong (e.g. «صح» or «غلط بالإشارة: المفروض $y=-\frac{{3}}{{2x}}$»).
+- student_math: for each step, in the same order and the same count, what the student actually wrote for it, as clean LaTeX only (no $ signs, no words, fractions with \frac), e.g. x^{{2}}-y^{{2}}=4 ; y=\frac{{-3}}{{x}}. Use " ; " between several lines. Empty string if the student wrote nothing for it.
 - note: one or two short sentences summarising where the student lost marks and what to fix; if full marks, a short praise."""
 
 

@@ -8,19 +8,33 @@ import { useState } from "react";
 export type AiStep = { status: string; awarded: number; possible: number; expected: string; student?: string; reason: string };
 export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[] };
 
-/** الرياضيات تنكتب مثل الكتاب. السطر اللي بيه كلام عربي ينكتب نص عادي */
+/** كتابة الطالب أو الملزمة (x^2 ، sqrt(3) ، 3/(2x)) تصير LaTeX، والكسر بخط أفقي مثل ما ينكتب باليد */
+const OPERAND = String.raw`(\((?:[^()]|\([^()]*\))*\)|\\sqrt\{[^{}]*\}|\\frac\{[^{}]*\}\{[^{}]*\}|[A-Za-z0-9.]+)`;
+const unwrap = (x: string) => (x.startsWith("(") && x.endsWith(")") ? x.slice(1, -1) : x);
+export function toTex(p: string) {
+  let t = p.replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
+    .replace(/=>|⇒|⟹/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ").replace(/−/g, "-").replace(/×/g, "\\times ");
+  const re = new RegExp(`${OPERAND}\\s*/\\s*${OPERAND}`);
+  for (let i = 0; i < 12 && re.test(t); i++) t = t.replace(re, (_, x: string, y: string) => `\\frac{${unwrap(x)}}{${unwrap(y)}}`);
+  return t;
+}
+const tex = (p: string) => { try { return katex.renderToString(toTex(p), { throwOnError: false, strict: false, output: "html" }); } catch { return ""; } };
+
+/** خطوة رياضيات: كل سطر (مفصول بـ ;) ينكتب مثل الكتاب. السطر اللي بيه كلام عربي ينكتب نص */
 function MathText({ text }: { text: string }) {
   const parts = String(text ?? "").split(/\s*;\s*/).filter(Boolean);
   return (
     <div className="aimath" dir="ltr">
-      {parts.map((p, i) => {
-        if (/[\u0600-\u06FF]/.test(p)) return <div key={i} dir="rtl">{p}</div>;
-        const tex = p.replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/=>|⇒/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ");
-        try { return <div key={i} dangerouslySetInnerHTML={{ __html: katex.renderToString(tex, { throwOnError: false, strict: false, output: "html" }) }} />; }
-        catch { return <div key={i}>{p}</div>; }
-      })}
+      {parts.map((p, i) => (/[\u0600-\u06FF]/.test(p) ? <div key={i} dir="rtl"><Inline text={p} /></div> : <div key={i} dangerouslySetInnerHTML={{ __html: tex(p) || p }} />))}
     </div>
   );
+}
+/** جملة عربية بيها رياضيات بين $ $: الرياضيات تنكتب مثل الكتاب */
+function Inline({ text }: { text: string }) {
+  const parts = String(text ?? "").split(/(\$[^$]+\$)/);
+  return <>{parts.map((p, i) => (p.startsWith("$") && p.endsWith("$") && p.length > 2
+    ? <span key={i} dir="ltr" className="aiinl" dangerouslySetInnerHTML={{ __html: tex(p.slice(1, -1)) }} />
+    : <span key={i}>{p}</span>))}</>;
 }
 
 export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: string) => string }) {
@@ -51,7 +65,7 @@ export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: s
               <small>اضغط على الصورة حتى تكبر</small>
             </div>
           )}
-          {q.note && <div className="exhint">💬 {q.note}</div>}
+          {q.note && <div className="exhint">💬 <Inline text={q.note} /></div>}
           <div className="aicgrid">
             <div className="aiccol">📐 الحل النموذجي</div>
             <div className="aiccol">✍️ حلك</div>
@@ -61,7 +75,7 @@ export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: s
                 <div className={"aiccell " + mark(s)}>
                   {s.student ? <MathText text={s.student} /> : <span className="aicmiss">ما مكتوب</span>}
                   <div className="aicmark">{mark(s) === "ok" ? "✅" : mark(s) === "bad" ? "❌" : "🟡"} {s.awarded} / {s.possible}</div>
-                  {mark(s) !== "ok" && s.reason && <small>{s.reason}</small>}
+                  {mark(s) !== "ok" && s.reason && <small><Inline text={s.reason} /></small>}
                 </div>
               </div>
             ))}

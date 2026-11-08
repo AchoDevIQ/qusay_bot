@@ -16,7 +16,7 @@ import { send, sendMany } from "./telegram.ts";
 import { stamp } from "./util.ts";
 import { gradedPages } from "./gradeApi.ts";
 import { studentPapers } from "./studentPapers.ts";
-import { aiPartialOf, aiResultOf } from "./aiGrade.ts";
+import { aiPartialOf, aiResultOf, rubricOf } from "./aiGrade.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
@@ -202,10 +202,17 @@ async function aiShown(it: Row) {
   const part = await aiPartialOf(it.id);
   if (it.grader_id !== AI_GRADER && !part) return [];
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
-  return ((await aiResultOf(it.id)) ?? []).filter((q) => !part || !part.includes(q.n)).map((q) => ({
-    n: q.n, score: q.score, max: q.max, note: q.note ?? "",
-    photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
-    steps: q.steps.map((st) => ({ status: st.status, awarded: st.awarded, possible: st.possible, expected: st.expected, student: st.student, reason: st.reason_ar || st.reason })),
+  const qs = new Map((await find("bank_questions", { version_id: it.version_id })).map((q) => [q.n as number, q.id as number]));
+  return await Promise.all(((await aiResultOf(it.id)) ?? []).filter((q) => !part || !part.includes(q.n)).map(async (q) => {
+    // عمود الحل النموذجي: خطواتك المحفوظة نفسها (مو صياغة الذكاء بالإنگليزي)
+    const mine = qs.has(q.n) ? await rubricOf(qs.get(q.n)!) : null;
+    const sameCount = !!mine && mine.length === q.steps.length;
+    return {
+      n: q.n, score: q.score, max: q.max, note: q.note ?? "",
+      photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
+      steps: q.steps.map((st, i) => ({ status: st.status, awarded: st.awarded, possible: st.possible,
+        expected: sameCount ? mine![i].text : st.expected, student: st.student_tex || st.student, reason: st.reason_ar || st.reason })),
+    };
   }));
 }
 
