@@ -4,11 +4,11 @@ import { runCheckpoints } from "./checkpoints.ts";
 import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
-import { AI_GRADER, examLabel, isAdmin, staffName, staffRow, student } from "./data.ts";
+import { AI_GRADER, examLabel, isAdmin, staffIds, staffName, staffRow, student } from "./data.ts";
 import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, openObjections, testObjection } from "./objections.ts";
-import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
+import { balanceOf, gradeOnly, gradeScope, payAction, payData, setGradeOnly } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
@@ -61,11 +61,20 @@ async function examGroups(waiting: Row[]) {
   }
   return [...groups.values()].sort((a, b) => a.order - b.order);
 }
+/** مربع صاحب البوت: الفصول وامتحاناتها، والمصححين، والامتحانات المحددة هسه */
+async function onlyData() {
+  const exams = (await find("bank_exams")).sort((a, b) => String(a.slug).localeCompare(String(b.slug)) || (a.pos ?? a.ord) - (b.pos ?? b.ord));
+  const ids = (await staffIds(GRADE_PERM)).filter((id) => !ADMIN_IDS.includes(id));
+  const graders = await Promise.all(ids.map(async (id) => ({ id, name: await staffName(id) })));
+  const rules = Object.entries(await gradeOnly()).map(([exam, r]) => ({ exam: Number(exam), title: String(exams.find((e) => e.id === Number(exam))?.title ?? ""), until: r.until, names: r.ids.map((i) => graders.find((g) => g.id === i)?.name ?? String(i)) }));
+  return { exams: exams.map((e) => ({ id: e.id as number, slug: String(e.slug), chapter: String(e.chapter ?? ""), title: String(e.title ?? "") })), graders, rules };
+}
 async function listData(uid: number) {
   const papers = await find("sched_items", { status: "done" }, { order: ["submitted_at"] });
   const waiting = await waitingFor(uid, papers);
   const mine = papers.filter((p) => p.graded_at && (p.grader_id === uid)).slice(-30).reverse();
   return {
+    only: await isAdmin(uid) ? await onlyData() : undefined,
     objections: await objectionPapers(uid),
     groups: await examGroups(waiting),
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
@@ -370,6 +379,16 @@ export async function gradeAction(body: Row) {
     return { ...await listData(uid), paper: null, notice: await payAction(uid, body), pay: await payData(uid) };
   } else if (a === "history") {
     return { ...await listData(uid), paper: null, notice: "", history: await historyOf(uid, body.day) };
+  } else if (a === "only") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const exam = Number(body.exam);
+    need(await one("bank_exams", { id: exam }), "اختار الامتحان");
+    const allowed = new Set(await staffIds(GRADE_PERM));
+    const ids = (Array.isArray(body.ids) ? body.ids.map(Number) : []).filter((i: number) => allowed.has(i));
+    const until = String(body.until ?? "").replace("T", " ").slice(0, 16);
+    need(!until || until > stamp(), "الوقت لازم يكون جاي، مو فايت");
+    await setGradeOnly(exam, ids, until);
+    notice = ids.length ? `✅ أوراق هذا الامتحان تطلع لـ ${ids.length} مصحح بس${until ? ` لحد ${until}` : ""}` : "✅ رجع لكل المصححين";
   } else need(a === "list", "أمر غير معروف");
   return { ...await listData(uid), paper, notice };
 }
@@ -390,6 +409,16 @@ async function keepPages(itemId: number, photos: Buffer[]) {
 export async function gradedPages(itemId: number): Promise<string[]> {
   try { const j = JSON.parse(await kvGet(pagesKey(itemId)) ?? "[]"); return Array.isArray(j) ? j.map(String) : []; } catch { return []; }
 }
+/** صورة الملصق جاهزة تنحط بالبطاقة. إذا ماكو أو ما انقرت، البطاقة تطلع بدونه */
+async function stickerData(s: Row | null | undefined) {
+  if (!s?.file) return "";
+  const ext = path.extname(String(s.file)).slice(1).toLowerCase();
+  if (!["png", "jpg", "jpeg", "webp", "gif"].includes(ext)) return "";
+  try {
+    const b = await files().read(String(s.file));
+    return b ? `data:image/${ext === "jpg" ? "jpeg" : ext};base64,${b.toString("base64")}` : "";
+  } catch { return ""; }
+}
 /** حفظ الورقة: المجموع، وتوصل للطالب وولي أمره صور ورقته المصححة ويا المقولة. أوراق التجربة توصل للمصحح نفسه */
 async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentId: number) {
   const it = await myPaper(uid, raw);
@@ -408,14 +437,18 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   // الطالب وولي أمره توصلهم بطاقة الدرجة بس (صورة)، والأوراق المصححة يشوفوها بـ «📝 امتحاناتي»
   const st = await student(it.user_id);
   const when = String(it.started_at || it.attended_at || it.at || "");
-  const card = await gradeCardPng(it.id, { name: String(st?.name ?? view.name), exam: view.title, center: (await examLabel(it.user_id)).replace(/^حضوري — /, ""), total, at: when.length >= 16 ? prettyAt(when) : when });
-  const deliver = async (chat: number, caption: string, kb: Kb) => {
-    if (card && await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", protect_content: "true", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", card, "grade.png", "image/png")) return;
+  const cardInfo = { name: String(st?.name ?? view.name), exam: view.title, center: (await examLabel(it.user_id)).replace(/^حضوري — /, ""), total, at: when.length >= 16 ? prettyAt(when) : when };
+  // بطاقة الطالب بيها الملصق حسب درجته، وبطاقة ولي الأمر بدون ملصق
+  const sticker = await stickerData(c?.sticker);
+  const card = await gradeCardPng(it.id, cardInfo);
+  const studentCard = sticker ? (await gradeCardPng(it.id, { ...cardInfo, sticker }, "_s")) ?? card : card;
+  const deliver = async (chat: number, caption: string, kb: Kb, pic = card) => {
+    if (pic && await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", protect_content: "true", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", pic, "grade.png", "image/png")) return;
     await send(chat, caption, { kb, extra: { protect_content: true } });
   };
   {
     const paperBtn: Kb = [[{ text: "📂 شوف ورقتك المصححة", web_app: { url: `${adminPageLink("myexams", it.user_id)}&paper=${it.id}` } }]];
-    await deliver(it.user_id, `${text}\n\n👇 دوس الزر تشوف ورقتك المصححة ودرجة كل سؤال. وإذا تشوف درجة سؤال مو صحيحة، تعترض عليه من هناك.`, paperBtn);
+    await deliver(it.user_id, `${text}\n\n👇 دوس الزر تشوف ورقتك المصححة ودرجة كل سؤال. وإذا تشوف درجة سؤال مو صحيحة، تعترض عليه من هناك.`, paperBtn, studentCard);
     await sendPaperVoices(it.user_id, it.id);
     const g = await guardianOf(it.user_id);
     if (g) {

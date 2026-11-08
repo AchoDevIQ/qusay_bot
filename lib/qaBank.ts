@@ -1,7 +1,7 @@
 // الأسئلة العلمية من ملازم الأستاذ (Word): الطالب يختار الفصل والموضوع والمحاضرة ويسأل.
 // ١. يدور بالمحاضرة اللي اختارها. ٢. إذا ما لگاه، يدور بالموضوع بس (مو بالفصل كله). ٣. إذا ما لگاه، نظام الذكاء يحله على طريقة الأستاذ.
 // الجواب يوصل للطالب كتابة (صفحة بيها الرياضيات مكتوبة مثل الكتاب)، مو صورة من الملزمة، حتى يبقى رخيص
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { find, kvGet, kvSet, one, type Row } from "./db.ts";
 import { files } from "./files.ts";
 import { aiLinked, isImage, readRef, rubricOf, solutionPdf, svc } from "./aiGrade.ts";
@@ -15,7 +15,7 @@ export const QA_KIND: Record<QaKind, string> = { main: "الملزمة", extra: 
 type Lecture = { topic: string; lecture: number; text: string };
 /** tid: موضوع البوت اللي ينربط بيه موضوع الملزمة (الأسماء تختلف: «ديموافر» = «الصيغة القطبية وديموافر»). null يعني ما ينربط */
 export type QaBook = { id: string; chapter: number; lang: "ar" | "en"; kind: QaKind; name: string; topics: { topic: string; lectures: number[]; tid?: number | null }[]; chars: number; created: string };
-export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; inTok: number; outTok: number };
+export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; inTok: number; outTok: number };
 const BOOKS = "qa_books", CFG = "qa_cfg";
 const DEF: QaCfg = { on: false, direct: true, asked: 0, fromBook: 0, solved: 0, inTok: 0, outTok: 0 };
 // Haiku 5.5: 0.10$ داخل و0.50$ طالع لكل مليون توكن
@@ -279,18 +279,100 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
   for (const x of await examQas(tid)) mine.push({ kind: "tests", l: { topic: `${x.exam} نموذج ${x.model} سؤال ${x.n}`, lecture: 0, text: `السؤال: ${x.question}\nالحل:\n${x.solution}` } });
   if (!mine.length) return null;
   const cfg = await qaCfg(); cfg.asked++; await saveCfg(cfg);
-  const inLecture = lecture ? mine.filter((x) => x.l.lecture === lecture) : [];
-  if (inLecture.length) {
-    const r = await call("find", joinCtx(inLecture, LECTURE_MAX), q, lang);
+  // ١. صورة السؤال تنقرا كتابة مرة وحدة (طلب صغير)، ونفس الصورة ما تنقرا مرتين
+  let text = (q.text ?? "").trim();
+  if (q.image) {
+    const ik = `qa_img_${sha(q.image)}`;
+    let read = (await kvGet(ik)) ?? "";
+    if (!read) {
+      try {
+        const r = await svc("/bot/extract", { question_images: [q.image.toString("base64")] }, 120_000);
+        await addUsage(r.usage);
+        read = String(r.question ?? "").trim();
+        if (read) await kvSet(ik, read);
+      } catch (e) { console.error("qa read", e); }
+    }
+    text = [read, text].filter(Boolean).join("\n");
+  }
+  // ما انقرت الصورة: الطريقة القديمة على المحاضرة بس (مو الموضوع كله)
+  if (!text) {
+    const lec = lecture ? mine.filter((x) => x.l.lecture === lecture) : mine;
+    const r = await call("find", joinCtx(lec, LECTURE_MAX), q, lang);
     if (r.found && r.solution) return done("lecture", r.solution);
+    const s = await call("solve", joinCtx(lec, LECTURE_MAX), q, lang);
+    return s.solution ? done("ai", s.solution) : null;
   }
-  const rest = mine.filter((x) => !inLecture.includes(x));
-  if (rest.length || !inLecture.length) {
-    const r = await call("find", joinCtx(rest.length ? rest : mine, TOPIC_MAX), q, lang);
-    if (r.found && r.solution) return done("topic", r.solution);
+  // ٢. نفس السؤال انسأل قبل بنفس الموضوع وبنفس اللغة: الجواب المحفوظ يرجع بلا كلفة
+  // المفتاح نص السؤال كامل (نفس الأرقام ممكن طلب ثاني: «جد» غير «اثبت»)، والملازم الحالية: إذا تبدلت ملزمة ينحل من جديد
+  const ck = `qa_cache_${sha(`${tid}|${lang}|${all.map((b) => b.id).sort().join(",")}|${text.replace(/\s+/g, " ").toLowerCase()}`)}`;
+  try {
+    const hit = JSON.parse((await kvGet(ck)) ?? "null");
+    if (hit?.solution) { const c = await qaCfg(); c.cached = (c.cached ?? 0) + 1; await saveCfg(c); return { source: hit.source, solution: hit.solution }; }
+  } catch { /* نكمل */ }
+  // ٣. البوت نفسه يدور بالملزمة (ببلاش) على أقرب الأسئلة، ويدز للذكاء هذني بس، مو المحاضرة والموضوع كله
+  const blocks = splitBlocks(mine);
+  const ranked = blocks.map((b) => ({ b, s: blockScore(text, b, lecture) })).sort((x, y) => y.s - x.s);
+  const top = ranked.slice(0, TOP_BLOCKS).filter((x) => x.s > 0);
+  const ask: QaAsk = { text };
+  const save = async (r: QaResult) => { await kvSet(ck, JSON.stringify(r)); return r; };
+  const close = top.length && top[0].s >= CLOSE;
+  if (close) {
+    const r = await call("find", blocksCtx(top.map((x) => x.b)), ask, lang);
+    if (r.found && r.solution) return save(await done(top[0].b.lecture === lecture && lecture ? "lecture" : "topic", r.solution));
+  } else if (lecture) {
+    // السؤال ما بيه أرقام تكفي للبحث: نشوف المحاضرة اللي اختارها بس
+    const lec = mine.filter((x) => x.l.lecture === lecture);
+    if (lec.length) {
+      const r = await call("find", joinCtx(lec, LECTURE_MAX), ask, lang);
+      if (r.found && r.solution) return save(await done("lecture", r.solution));
+    }
   }
-  const s = await call("solve", joinCtx([...inLecture, ...rest], TOPIC_MAX), q, lang);
-  return s.solution ? done("ai", s.solution) : null;
+  // ٤. ما موجود: يحله على طريقة الأستاذ، والأمثلة أقرب أسئلة محلولة (أو محاضرته إذا ماكو قريب)
+  const examples = top.length ? blocksCtx(top.map((x) => x.b)) : joinCtx(lecture ? mine.filter((x) => x.l.lecture === lecture) : mine, LECTURE_MAX);
+  const s = await call("solve", examples || joinCtx(mine, LECTURE_MAX), ask, lang);
+  return s.solution ? save(await done("ai", s.solution)) : null;
+}
+
+// ---------- البحث بالملزمة بدون ذكاء: الملزمة تتقسم أسئلة (س1، مثال، Q1...)، وكل سؤال إله درجة قرب من سؤال الطالب
+const TOP_BLOCKS = 6, CLOSE = 0.35, BLOCK_MAX = 2500;
+const sha = (x: string | Buffer) => createHash("sha256").update(x).digest("hex").slice(0, 40);
+const HEAD = /^\s*(س\s*\d+|سؤال\s*\d*|مثال|مثل|واجب|تمرين|Q\s*\d+|Ex(ample)?\b|Question\b)/i;
+type Block = { kind: Part["kind"]; topic: string; lecture: number; text: string; head: string };
+function splitBlocks(parts: Part[]): Block[] {
+  const out: Block[] = [];
+  for (const p of parts) {
+    if (p.kind === "tests") { out.push({ kind: p.kind, topic: p.l.topic, lecture: 0, text: p.l.text.slice(0, BLOCK_MAX * 2), head: p.l.text.slice(0, 600) }); continue; }
+    let cur: string[] = [];
+    const flush = () => { const t = cur.join("\n").trim(); if (t) out.push({ kind: p.kind, topic: p.l.topic, lecture: p.l.lecture, text: t.slice(0, BLOCK_MAX), head: t.slice(0, 600) }); cur = []; };
+    for (const line of p.l.text.split("\n")) { if (HEAD.test(line) && cur.length) flush(); cur.push(line); }
+    flush();
+  }
+  return out;
+}
+/** الرياضيات بالسؤال بس، بشكل واحد: أرقام ومتغيرات وعمليات، بدون كلام ومسافات وأقواس LaTeX */
+export function mathKey(s: string) {
+  return s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/²/g, "^2").replace(/³/g, "^3").replace(/√/g, "sqrt")
+    .replace(/\\(left|right|cdot|times)/g, "").replace(/\\frac/g, "frac").replace(/\\sqrt/g, "sqrt")
+    .toLowerCase().replace(/\b(?!sqrt|frac|sin|cos|tan|log)[a-z]{3,}\b/g, "").replace(/[^0-9a-z+\-*/^=().,]/g, "");
+}
+const grams = (s: string) => { const g = new Set<string>(); for (let i = 0; i + 3 <= s.length; i++) g.add(s.slice(i, i + 3)); return g; };
+/** كم من رياضيات سؤال الطالب موجودة ببداية هذا السؤال (0 لـ 1). المحاضرة اللي اختارها تاخذ زيادة صغيرة */
+export function blockScore(question: string, b: { head: string; lecture: number }, lecture = 0) {
+  const a = grams(mathKey(question));
+  if (!a.size) return 0;
+  const h = grams(mathKey(b.head));
+  let hit = 0;
+  for (const x of a) if (h.has(x)) hit++;
+  if (!hit) return 0;
+  return hit / a.size + (lecture && b.lecture === lecture ? 0.05 : 0);
+}
+function blocksCtx(list: Block[]) {
+  return list.map((b) => b.kind === "tests" ? `### أسئلة الامتحانات — ${b.topic}\n${b.text}` : `### ${QA_KIND[b.kind as QaKind]} — ${b.topic} المحاضرة ${b.lecture}\n${b.text}`).join("\n\n");
+}
+async function addUsage(usage: any[] = []) {
+  const cfg = await qaCfg();
+  for (const u of usage) { cfg.inTok += Number(u.input) || 0; cfg.outTok += Number(u.output) || 0; }
+  await saveCfg(cfg);
 }
 async function done(source: QaResult["source"], solution: string): Promise<QaResult> {
   const cfg = await qaCfg();

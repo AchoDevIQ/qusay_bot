@@ -231,7 +231,7 @@ export async function sendProfileCard(chat: number, s: Row, title: string, capti
 }
 
 // ---------- بطاقة الدرجة: توصل للطالب وولي أمره بعد التصحيح (الأوراق نفسها بصفحة امتحاناتي)
-export type GradeCard = { name: string; exam: string; center: string; total: number; at: string };
+export type GradeCard = { name: string; exam: string; center: string; total: number; at: string; sticker?: string };
 /** خط «قصي العميري»، بس الأرقام والحروف الفارسية (گ چ پ...) من خط ثاني لأن خطه يرسمها فارغة أو هندية */
 const cardFont = () => (fs.existsSync(FONT) ? `@font-face{font-family:Boahmed;src:url(data:font/ttf;base64,${b64(FONT)});unicode-range:U+0000-002F,U+003A-067D,U+067F-0685,U+0687-0697,U+0699-06A3,U+06A5-06A8,U+06AA-06AE,U+06B0-06CB,U+06CD-10FFFF}` : "");
 export function gradeCardHtml(c: GradeCard) {
@@ -245,6 +245,7 @@ ${cardFont()}
 .top h1{margin:8px 0 0;font-size:52px;font-weight:400;color:#fff;text-shadow:0 2px 14px rgba(59,130,246,.75)}
 .top p{margin:4px 0 0;font-size:24px;color:#bfdbfe}
 .grade{margin:-34px auto 0;width:300px;height:300px;border-radius:50%;background:#162238;border:10px solid ${color};display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 18px 40px rgba(0,0,0,.45);position:relative}
+.gradew{position:relative}.stk{position:absolute;left:16px;top:44px;width:205px;height:205px;object-fit:contain;filter:drop-shadow(0 8px 16px rgba(0,0,0,.5))}
 .grade b{font-family:'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:130px;line-height:1;color:${color};font-weight:800}
 .grade span{font-family:'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:34px;color:#9fb0c9;font-weight:700}
 table{width:calc(100% - 56px);margin:30px 28px 34px;border-collapse:collapse;background:#162238;border:1px solid #2a3b5c;border-radius:22px;overflow:hidden}
@@ -252,15 +253,15 @@ td{padding:16px 22px;border-top:1px solid #2a3b5c;font-size:27px;vertical-align:
 td.k{width:36%;color:#9fb0c9;white-space:nowrap}td.k span{display:inline-block;width:46px}td.v{color:#fff}
 </style></head><body>
 <div class="top">${logoTag()}<h1>قصي العميري</h1><p>نتيجة الامتحان</p></div>
-<div class="grade"><b>${c.total}</b><span>من 100</span></div>
+<div class="gradew">${c.sticker ? `<img class="stk" src="${c.sticker}">` : ""}<div class="grade"><b>${c.total}</b><span>من 100</span></div></div>
 <table>${row("👤", "الطالب", c.name)}${row("📝", "الامتحان", c.exam)}${row("🏫", "المركز", c.center)}${row("🕐", "وقت الامتحان", c.at)}</table>
 </body></html>`;
 }
 /** يرسم بطاقة الدرجة صورة. إذا ما صار الرسم يرجع null، والمرسل يدز نص بدالها */
-export async function gradeCardPng(item: number, c: GradeCard): Promise<Buffer | null> {
+export async function gradeCardPng(item: number, c: GradeCard, tag = ""): Promise<Buffer | null> {
   try {
     ensureDir();
-    const hp = path.join(PDF_DIR, `grade_${item}.html`), pp = path.join(PDF_DIR, `grade_${item}.png`);
+    const hp = path.join(PDF_DIR, `grade_${item}${tag}.html`), pp = path.join(PDF_DIR, `grade_${item}${tag}.png`);
     fs.writeFileSync(hp, gradeCardHtml(c), "utf8");
     if (await htmlToPng(hp, pp, 760, 940)) return fs.readFileSync(pp);
   } catch (e) { console.error(e); }

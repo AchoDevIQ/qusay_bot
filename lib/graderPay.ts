@@ -40,8 +40,24 @@ export async function placesOf(uid: number): Promise<Places> {
 /** اليوم (0 = الاثنين) والساعة من موعد الامتحان */
 const slotOf = (at: string) => { const d = new Date(String(at).slice(0, 10) + "T00:00:00Z"); return { d: (d.getUTCDay() + 6) % 7, t: String(at).slice(11, 16) }; };
 /** شنو يگدر يصحح هذا المصحح: فصوله ومواضيعه، والجدول العام بأماكنه وأوقاته، والخاص إذا مسموح إله */
+// «هذا الامتحان لهذول المصححين بس»: صاحب البوت يختار امتحان ومصححين، ولحد وقت يحدده (أو لحد ما يشيلها).
+// الباقين ما تطلعلهم أوراق هذا الامتحان، وبعد الوقت يرجع مثل قبل
+export type GradeOnly = Record<string, { ids: number[]; until: string }>;
+const ONLY_KEY = "grade_only";
+export async function gradeOnly(): Promise<GradeOnly> {
+  let all: GradeOnly = {};
+  try { all = JSON.parse((await kvGet(ONLY_KEY)) ?? "{}") ?? {}; } catch { /* خربانة */ }
+  const now = stamp();
+  return Object.fromEntries(Object.entries(all).filter(([, r]) => !r.until || r.until > now));
+}
+export async function setGradeOnly(exam: number, ids: number[], until: string) {
+  const all = await gradeOnly();
+  if (ids.length) all[exam] = { ids, until }; else delete all[exam];
+  await kvSet(ONLY_KEY, JSON.stringify(all));
+}
 export async function gradeScope(uid: number) {
   const mine = await chaptersOf(uid), off = new Set(await examsOffOf(uid)), pl = await placesOf(uid);
+  const only = await gradeOnly(), boss = await isAdmin(uid);
   const chapter = new Map((await find("bank_exams")).map((e) => [e.id, e.chapter]));
   const sched = new Map((await find("schedules")).map((s) => [s.user_id, s]));
   const keys = new Set(pl.keys);
@@ -51,6 +67,7 @@ export async function gradeScope(uid: number) {
     can: (p: Row) => {
       if (mine.length && !mine.includes(chapter.get(p.exam_id))) return false;
       if (off.has(p.exam_id)) return false;
+      if (!boss && only[p.exam_id] && !only[p.exam_id].ids.includes(uid)) return false;
       if (p.user_id < 0 || p.kind === "optional") return true;   // التجربة والاختياري ما إلهم مكان
       if (!isGeneral(p)) return pl.private;
       if (pl.all) return true;

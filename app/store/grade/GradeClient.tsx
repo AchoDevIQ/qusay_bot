@@ -12,7 +12,8 @@ type History = { day: string; days: { d: string; n: number }[]; prev: string; ne
 type Rate = { mandatory: number; optional: number; deduct: number };
 type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
-type Data = { groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
+type Only = { exams: { id: number; slug: string; chapter: string; title: string }[]; graders: { id: number; name: string }[]; rules: { exam: number; title: string; until: string; names: string[] }[] };
+type Data = { only?: Only; groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -181,6 +182,7 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
   return (
     <>
       {!!data.objections.length && <ObjList data={data} busy={busy} act={act} />}
+      {data.only && <OnlyCard only={data.only} busy={busy} act={act} />}
       <div className="card">
         <h2>📥 أوراق تنتظر: {sum(data.groups)}</h2>
         <div className="seg expad gktabs2">
@@ -201,6 +203,44 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
         ) : <div className="empty">✅ ماكو أوراق تنتظر.</div>}
       </div>
     </>
+  );
+}
+
+/** صاحب البوت: أوراق هذا الامتحان تطلع لمصححين يختارهم بس، لحد وقت يحدده */
+function OnlyCard({ only, busy, act }: { only: Only; busy: boolean; act: Call }) {
+  const [slug, setSlug] = useState("");
+  const [exam, setExam] = useState(0);
+  const [ids, setIds] = useState<number[]>([]);
+  const [until, setUntil] = useState("");
+  const chapters = only.exams.filter((e, i) => only.exams.findIndex((x) => x.slug === e.slug) === i);
+  const pickExam = (id: number) => { setExam(id); setIds([]); };
+  return (
+    <details className="card cpch">
+      <summary><b>🎯 هذا الامتحان لمصححين معينين</b>{only.rules.length ? <small className="pdmode"> {only.rules.length} محدد هسه</small> : null}</summary>
+      <div className="form">
+        <div className="exhint">تختار امتحان وتأشر المصححين: أوراقه تطلع إلهم بس، والباقين ما يشوفوها. إذا حددت وقت، بعده ترجع لكل المصححين وحدها. الأوراق اللي مصحح فاتحها قبل تبقى يمه.</div>
+        {only.rules.map((r) => (
+          <div key={r.exam} className="aig-logrow"><div><b>{r.title}</b><br /><small>{r.names.join("، ")} · {r.until ? `لحد ${r.until}` : "لحد ما تشيلها"}</small></div>
+            <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "only", exam: r.exam, ids: [] })}>↩️ رجّعه للكل</button></div>
+        ))}
+        <select value={slug} onChange={(e) => { setSlug(e.target.value); pickExam(0); }}>
+          <option value="">اختار الفصل...</option>
+          {chapters.map((c) => <option key={c.slug} value={c.slug}>{c.chapter || c.slug}</option>)}
+        </select>
+        {slug && <select value={exam} onChange={(e) => pickExam(Number(e.target.value))}>
+          <option value={0}>اختار الامتحان...</option>
+          {only.exams.filter((e) => e.slug === slug).map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
+        </select>}
+        {exam > 0 && (
+          <>
+            {only.graders.map((g) => <label key={g.id} className="adcheck adflat"><input type="checkbox" checked={ids.includes(g.id)} onChange={(e) => setIds(e.target.checked ? [...ids, g.id] : ids.filter((x) => x !== g.id))} /><span>{g.name}</span></label>)}
+            <label>لحد وقت (اختياري)</label>
+            <input type="datetime-local" value={until} onChange={(e) => setUntil(e.target.value)} />
+            <button type="button" className="btn" disabled={busy || !ids.length} onClick={() => void act({ action: "only", exam, ids, until })}>💾 احفظ ({ids.length} مصحح)</button>
+          </>
+        )}
+      </div>
+    </details>
   );
 }
 

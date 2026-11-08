@@ -86,7 +86,12 @@ test("رفع الملزمة لصاحب البوت بس، والبحث: المح�
   ai.length = 0;
   const a2 = await qa.qaAnswer({ text: "7+24i" }, 1, await tidOf("الجذور التربيعية"), 1, "ar");
   assert.equal(a2!.source, "topic");
-  assert.equal(ai.length, 2);
+  // البوت لگى السؤال بنفسه: طلب واحد، وبيه أقرب الأسئلة بس
+  assert.equal(ai.length, 1);
+  // نفس السؤال مرة ثانية: الجواب المحفوظ بلا أي طلب
+  ai.length = 0;
+  assert.deepEqual(await qa.qaAnswer({ text: "7+24i" }, 1, await tidOf("الجذور التربيعية"), 1, "ar"), a2);
+  assert.equal(ai.length, 0);
   // مو موجود: يحله على طريقته، والسياق موضوعه بس
   reply = (b) => (b.mode === "solve" ? { found: true, solution: "حل جديد" } : { found: false, solution: "" });
   ai.length = 0;
@@ -109,7 +114,7 @@ test("رفع الملزمة لصاحب البوت بس، والبحث: المح�
   assert.equal(v.solution, "$x+yi=\\sqrt{8i}$");
   await assert.rejects(qa.answerView({ token: homeToken(71), id }), (e: any) => e.status === 404);
   const page: any = await qa.qaAction({ initData: sign(1), action: "list" });
-  assert.equal(page.qa.asked, 4);   // الموضوع اللي ما بالملزمة ما ينحسب
+  assert.equal(page.qa.asked, 5);   // الموضوع اللي ما بالملزمة ما ينحسب
   assert.equal(page.qa.fromBook, 2);
   assert.equal(page.qa.solved, 2);
   assert.ok(page.qa.cost > 0);

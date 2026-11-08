@@ -552,3 +552,24 @@ test("👤 طالب يختاره صاحب البوت: أوراقه يصححها 
   await aiGradeAction({ initData: sign(1), action: "aiStudent", sid: 300, on: false });
   await assert.rejects(aiGradeAction({ initData: sign(41), action: "aiStudent", sid: 300, on: true }));
 });
+
+test("🎯 هذا الامتحان لمصححين معينين: الباقي ما يشوفون أوراقه، وبعد الوقت ترجع للكل", async () => {
+  const { update: upd } = await import("../lib/db.ts");
+  const ex4 = await insert("bank_exams", { slug: "c4", chapter: "فصل التحديد", ord: 1, title: "امتحان محدد", minutes: 60, pos: 4 });
+  const v4 = await insert("bank_versions", { exam_id: ex4, model: "A", kind: "mandatory", ok: 1 });
+  await insert("bank_questions", { version_id: v4, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  const p = await insert("sched_items", { user_id: 301, exam_id: ex4, at: stamp(), status: "done", version_id: v4, started_at: stamp(), submitted_at: stamp() });
+  const sees = async (uid: number) => ((await gradeAction({ initData: sign(uid), action: "list" })) as any).waiting.some((w: any) => w.id === p);
+  assert.equal(await sees(41), true);
+  await assert.rejects(gradeAction({ initData: sign(41), action: "only", exam: ex4, ids: [41], until: "" }), /لصاحب البوت/);
+  await gradeAction({ initData: sign(1), action: "only", exam: ex4, ids: [42], until: "" });
+  assert.equal(await sees(41), false);
+  assert.equal(await sees(42), true);
+  assert.equal(await sees(1), true);
+  // لحد وقت: وقت فايت ما ينقبل، وإذا خلص الوقت ترجع للكل
+  await assert.rejects(gradeAction({ initData: sign(1), action: "only", exam: ex4, ids: [42], until: "2020-01-01T10:00" }), /فايت/);
+  const { kvSet } = await import("../lib/db.ts");
+  await kvSet("grade_only", JSON.stringify({ [ex4]: { ids: [42], until: "2020-01-01 10:00" } }));
+  assert.equal(await sees(41), true);
+  await upd("sched_items", { id: p }, { status: "cancelled" });
+});
