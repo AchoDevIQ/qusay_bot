@@ -77,12 +77,14 @@ async function pageData(q: string, f: Filters, uid = 0) {
 }
 /** الامتحانات ونماذجها، حتى صاحب البوت يرفع عليها ورقة تجربة من صور حقيقية */
 async function testVersions() {
-  const exams = new Map((await find("bank_exams", {}, { order: ["pos", "ord"] })).map((e) => [e.id, e]));
+  // مرتبة حسب الفصل، وداخل الفصل حسب ترتيب المواضيع
+  const list = (await find("bank_exams")).sort((a, b) => String(a.slug).localeCompare(String(b.slug)) || (a.pos ?? a.ord) - (b.pos ?? b.ord));
+  const exams = new Map(list.map((e) => [e.id, e]));
   const order = [...exams.keys()];
   const qs = await find("bank_questions");
   return (await find("bank_versions", { kind: "mandatory" })).filter((v) => exams.has(v.exam_id))
     .sort((a, b) => order.indexOf(a.exam_id) - order.indexOf(b.exam_id) || String(a.model).localeCompare(String(b.model)))
-    .map((v) => ({ id: v.id as number, title: exams.get(v.exam_id)!.title as string, chapter: (exams.get(v.exam_id)!.chapter ?? "") as string, model: v.model as string,
+    .map((v) => ({ id: v.id as number, exam: v.exam_id as number, slug: String(exams.get(v.exam_id)!.slug ?? ""), title: exams.get(v.exam_id)!.title as string, chapter: (exams.get(v.exam_id)!.chapter ?? "") as string, model: v.model as string,
       qs: qs.filter((q) => q.version_id === v.id).sort((a, b) => a.n - b.n).map((q) => ({ n: q.n as number, max: q.max_mark as number })) }))
     .filter((v) => v.qs.length);
 }

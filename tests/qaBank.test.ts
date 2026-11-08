@@ -19,9 +19,10 @@ globalThis.fetch = (async (url: string, init: any) => {
 
 const { docxLines } = await import("../lib/docxText.ts");
 const qa = await import("../lib/qaBank.ts");
-const { initDb } = await import("../lib/db.ts");
+const { initDb, find } = await import("../lib/db.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 await initDb();
+const tidOf = async (ar: string) => Number((await find("topics")).find((t) => t.ar === ar)?.id);
 const sign = (uid: number) => {
   const params = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: uid }) });
   const check = [...params.entries()].map(([k, v]) => `${k}=${v}`).sort().join("\n");
@@ -55,6 +56,14 @@ test("Word: المعادلات تصير LaTeX، والأس المرفوع ^{}، 
   assert.ok(qa.sameTopic("القطع الناقص والزائد", "القطع الناقص و الزائد"));
   assert.ok(qa.sameTopic("الجذور التربيعيه", "الجذور التربيعية"));
   assert.ok(!qa.sameTopic("رسم الدوال", "الجذور التربيعية"));
+  // عناوين الأستاذ بأشكالها، وربطها بمواضيع البوت ولو الاسم يختلف
+  assert.deepEqual(qa.lectureHead("الاساسيات (1) lecturer"), { topic: "الاساسيات", lecture: 1 });
+  assert.deepEqual(qa.lectureHead("De Movier’s [ lecturer 2]"), { topic: "De Movier’s", lecture: 2 });
+  assert.deepEqual(qa.lectureHead("فصل المتغيرات المحاضره 3 الثنائية (اثرائيات)"), { topic: "فصل المتغيرات", lecture: 3 });
+  assert.deepEqual(qa.lectureHead("Lecture 2 الربط"), { topic: "الربط", lecture: 2 });
+  assert.equal(qa.lectureHead("نعوض بالمحاضرة 2 x=3 → y=5"), null);
+  const c1 = [{ id: 1, ar: "ما قبل إيجاد x و y", en: "Before Finding x and y" }, { id: 4, ar: "إيجاد قيم x و y", en: "Finding x and y" }, { id: 6, ar: "الصيغة القطبية وديموافر", en: "Polar Form and De Moivre's Theorem" }, { id: 5, ar: "الأوميگا ω", en: "Omega (Cube Roots of Unity)" }];
+  assert.deepEqual(["قبل x & y", "x,y", "ديموافر", "De Movier’s", "الاوميكا", "Cubic Roots of one Integer ω", "الاساسيات"].map((t) => qa.bestTopic(t, c1)), [1, 4, 6, 6, 5, 5, null]);
 });
 
 test("رفع الملزمة لصاحب البوت بس، والبحث: المحاضرة، ثم الموضوع بس، ثم الحل على طريقة الأستاذ", async () => {
@@ -68,32 +77,32 @@ test("رفع الملزمة لصاحب البوت بس، والبحث: المح�
   // موجود بالمحاضرة اللي اختارها
   reply = (b) => (b.mode === "find" && b.context.includes("8i") ? { found: true, solution: "$x+yi=\\sqrt{8i}$" } : { found: false, solution: "" });
   ai.length = 0;
-  const a1 = await qa.qaAnswer({ text: "جد جذور 8i" }, 1, "الجذور التربيعية", 1, "ar");
+  const a1 = await qa.qaAnswer({ text: "جد جذور 8i" }, 1, await tidOf("الجذور التربيعية"), 1, "ar");
   assert.deepEqual(a1, { source: "lecture", solution: "$x+yi=\\sqrt{8i}$" });
   assert.equal(ai.length, 1);
   assert.ok(!ai[0].body.context.includes("اوسع مجال"));   // موضوع ثاني ما يدخل
   // مو بالمحاضرة 1، موجود بالمحاضرة 2 من نفس الموضوع
   reply = (b) => (b.mode === "find" && b.context.includes("7+24i") && !b.context.includes("8i") ? { found: true, solution: "حل 7+24i" } : { found: false, solution: "" });
   ai.length = 0;
-  const a2 = await qa.qaAnswer({ text: "7+24i" }, 1, "الجذور التربيعية", 1, "ar");
+  const a2 = await qa.qaAnswer({ text: "7+24i" }, 1, await tidOf("الجذور التربيعية"), 1, "ar");
   assert.equal(a2!.source, "topic");
   assert.equal(ai.length, 2);
   // مو موجود: يحله على طريقته، والسياق موضوعه بس
   reply = (b) => (b.mode === "solve" ? { found: true, solution: "حل جديد" } : { found: false, solution: "" });
   ai.length = 0;
-  const a3 = await qa.qaAnswer({ text: "جد جذور 3-4i" }, 1, "الجذور التربيعية", 1, "ar");
+  const a3 = await qa.qaAnswer({ text: "جد جذور 3-4i" }, 1, await tidOf("الجذور التربيعية"), 1, "ar");
   assert.equal(a3!.source, "ai");
   assert.equal(ai.at(-1)!.body.mode, "solve");
   assert.ok(!ai.at(-1)!.body.context.includes("اوسع مجال"));
   // طالب المنهج الإنگليزي: ماكو ملزمة إنگليزية، فتنقرا العربية والحل ينطلب بالإنگليزي، والصفحة تعرف لغته
   ai.length = 0;
-  const en = await qa.qaAnswer({ text: "roots of 3-4i" }, 1, ["الجذور التربيعية", "Square roots"], 1, "en");
+  const en = await qa.qaAnswer({ text: "roots of 3-4i" }, 1, await tidOf("الجذور التربيعية"), 1, "en");
   assert.equal(en!.source, "ai");
   assert.ok(ai.every((x) => x.body.lang === "en"));
   const enId = await qa.saveAnswer(70, "roots", en!, "Square roots — Lecture 1", "en");
   assert.equal(((await qa.answerView({ token: homeToken(70), id: enId })) as any).lang, "en");
   // موضوع ما بالملزمة: يرجع null والسؤال يروح للأستاذ
-  assert.equal(await qa.qaAnswer({ text: "x" }, 1, "ديموافر", 1, "ar"), null);
+  assert.equal(await qa.qaAnswer({ text: "x" }, 1, await tidOf("أشكال آرگاند"), 1, "ar"), null);
   // الحل يفتح لصاحبه بس
   const id = await qa.saveAnswer(70, "جد جذور 8i", a1!, "الجذور التربيعية — المحاضرة 1");
   const v: any = await qa.answerView({ token: homeToken(70), id });

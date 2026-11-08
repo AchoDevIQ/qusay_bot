@@ -109,7 +109,7 @@ async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean)
   // ما تطلع رسالة «لحظة»: الطالب يوصله الحل بس
   await api("sendChatAction", { chat_id: chat, action: "typing" });
   let r = null;
-  try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined }, n, [String(t.ar ?? ""), String(t.en ?? "")], Number(data.l) || 0, en ? "en" : "ar"); }
+  try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined }, n, Number(t.id), Number(data.l) || 0, en ? "en" : "ar"); }
   catch (e) { console.error("qa", e); }
   if (!r) return false;
   // حل نظام الذكاء (مو من الملزمة): إذا صاحب البوت يريد يشوفه أول، السؤال يروح للأستاذ مثل العادة

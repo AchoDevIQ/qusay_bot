@@ -4,8 +4,8 @@
 import { useState } from "react";
 import { Confirm, StatusBar, useAdminApi } from "../adminPage";
 
-type Book = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; topics: { topic: string; lectures: number[] }[]; chars: number; created: string };
-type Data = { qa: { on: boolean; direct: boolean; linked: boolean; asked: number; fromBook: number; solved: number; cost: number; books: Book[] }; notice: string };
+type Book = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; topics: { topic: string; lectures: number[]; tid?: number | null }[]; chars: number; created: string };
+type Data = { qa: { on: boolean; direct: boolean; linked: boolean; asked: number; fromBook: number; solved: number; cost: number; books: Book[]; botTopics: Record<number, { id: number; ar: string }[]> }; notice: string };
 const KIND: Record<Book["kind"], string> = { main: "الملزمة", extra: "الاثرائيات", exams: "الوزاريات" };
 
 export default function QaCard() {
@@ -48,7 +48,16 @@ export default function QaCard() {
                 <details key={b.id} className="cpch">
                   <summary><b>الفصل {b.chapter} · {KIND[b.kind]} · {b.lang === "ar" ? "عربي" : "إنجليزي"}</b> <small className="pdmode">{b.topics.length} موضوع · {b.created}</small></summary>
                   <div className="expad">
-                    {b.topics.map((t) => <div key={t.topic} className="exhint">📌 {t.topic}: المحاضرات {t.lectures.join("، ")}</div>)}
+                    <div className="exhint">كل موضوع بالملزمة مربوط بموضوع بالبوت: الطالب اللي يختار موضوع البوت، يدور بالمواضيع المربوطة بيه. إذا الربط غلط، غيّره.</div>
+                    {b.topics.map((t) => (
+                      <div key={t.topic} className="exline">
+                        <span className="exhint">📌 {t.topic} (المحاضرات {t.lectures.join("، ")}) ←</span>
+                        <select value={t.tid === undefined ? "" : String(t.tid ?? "")} disabled={busy} onChange={(e) => void call({ action: "map", id: b.id, topic: t.topic, tid: Number(e.target.value) || 0 })}>
+                          <option value="">⚠️ ما مربوط</option>
+                          {(qa.botTopics[b.chapter] ?? []).map((x) => <option key={x.id} value={x.id}>{x.ar}</option>)}
+                        </select>
+                      </div>
+                    ))}
                     <Confirm label="🗑 احذف" disabled={busy} onYes={() => void call({ action: "delete", id: b.id })} />
                   </div>
                 </details>

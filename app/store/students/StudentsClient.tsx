@@ -9,7 +9,7 @@ import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type TestStudent = { id: number; name: string; papers: number; graded: number; link: string };
-type TestVersion = { id: number; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
+type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type Data = { papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -276,6 +276,12 @@ async function shrink(f: File): Promise<Blob> {
 function TestPaper({ tests, versions, busy, upload }: { tests: TestStudent[]; versions: TestVersion[]; busy: boolean; upload: (f: FormData) => Promise<unknown> }) {
   const [sid, setSid] = useState(tests[0]?.id ?? 0);
   const [vid, setVid] = useState(0);
+  const [slug, setSlug] = useState("");
+  const [exam, setExam] = useState(0);
+  // الفصل أول، بعدين مواضيع هذا الفصل بس، بعدين النموذج
+  const chapters = versions.filter((x, i) => versions.findIndex((y) => y.slug === x.slug) === i);
+  const topics = versions.filter((x, i) => x.slug === slug && versions.findIndex((y) => y.exam === x.exam) === i);
+  const models = versions.filter((x) => x.exam === exam);
   const [who, setWho] = useState<"ai" | "me">("ai");
   const [pics, setPics] = useState<Record<number, File[]>>({});
   const v = versions.find((x) => x.id === vid);
@@ -293,11 +299,28 @@ function TestPaper({ tests, versions, busy, upload }: { tests: TestStudent[]; ve
         <div className="exhint">ترفع جواب طالب حقيقي باسم طالب تجربة، وتختار منو يصححها. إذا الطالب عنده ورقة بنفس الامتحان، تتبدل بهاي.</div>
         <label>طالب التجربة</label>
         <select value={sid} onChange={(e) => setSid(Number(e.target.value))}>{tests.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-        <label>الامتحان والنموذج</label>
-        <select value={vid} onChange={(e) => { setVid(Number(e.target.value)); setPics({}); }}>
-          <option value={0}>اختار...</option>
-          {versions.map((x) => <option key={x.id} value={x.id}>{x.title} · نموذج {x.model}{x.chapter ? ` (${x.chapter})` : ""}</option>)}
+        <label>الفصل</label>
+        <select value={slug} onChange={(e) => { setSlug(e.target.value); setExam(0); setVid(0); setPics({}); }}>
+          <option value="">اختار الفصل...</option>
+          {chapters.map((x) => <option key={x.slug} value={x.slug}>{x.chapter || x.slug}</option>)}
         </select>
+        {slug && (
+          <>
+            <label>الموضوع (الامتحان)</label>
+            <select value={exam} onChange={(e) => { const id = Number(e.target.value); setExam(id); const m = versions.filter((x) => x.exam === id); setVid(m.length === 1 ? m[0].id : 0); setPics({}); }}>
+              <option value={0}>اختار الموضوع...</option>
+              {topics.map((x) => <option key={x.exam} value={x.exam}>{x.title}</option>)}
+            </select>
+          </>
+        )}
+        {exam > 0 && models.length > 1 && (
+          <>
+            <label>النموذج</label>
+            <div className="seg">
+              {models.map((x) => <button key={x.id} type="button" className={vid === x.id ? "on" : ""} onClick={() => { setVid(x.id); setPics({}); }}>{x.model}</button>)}
+            </div>
+          </>
+        )}
         {v?.qs.map((q) => (
           <div key={q.n}>
             <label>جواب السؤال {q.n} <small>(من {q.max})</small>{pics[q.n]?.length ? ` · ${pics[q.n].length} صورة` : ""}</label>
