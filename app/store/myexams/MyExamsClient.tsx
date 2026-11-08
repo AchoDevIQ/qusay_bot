@@ -385,16 +385,17 @@ function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: 
         <div className="card adtop">
           <h2>📝 {paper.title}</h2>
           <div className="who">{graded ? <>درجتك: <b>{paper.total}</b> من 100</> : "⏳ ورقتك وصلت، وبعدها ما انصححت"}</div>
-          <div className="expad exhint">{paper.chapter}{paper.submitted ? ` · سلمتها ${paper.submitted.slice(0, 16)}` : ""}{paper.graded ? ` · انصححت ${paper.graded.slice(0, 16)}` : ""}</div>
+          <div className="expad exhint">{paper.chapter}{paper.submitted ? ` · سلمتها ${paper.submitted.slice(0, 16)}` : ""}{paper.graded ? ` · تم التصحيح ${paper.graded.slice(0, 16)}` : ""}</div>
           {(o.open + o.ok + o.no > 0) && <div className="expad exhint">✋ اعتراضاتك: {o.open ? `${o.open} تنتظر رد · ` : ""}{o.ok ? `${o.ok} انقبلت · ` : ""}{o.no ? `${o.no} انرفضت` : ""}</div>}
         </div>
-        {!!paper.pages.length && (
+        {graded && !!paper.ai.length && <AiCompare qs={paper.ai} fileUrl={(r) => fileUrl(paper.id, r)} />}
+        {/* صححها نظام التصحيح AI: صور جوابه موجودة داخل كل سؤال («📷 ورقتي»)، فما نكررها هنا. الورقة المصححة بالقلم من مصحح تبقى */}
+        {!!paper.pages.length && (paper.gradedPages || !paper.ai.length) && (
           <div className="card">
             <h2>{paper.gradedPages ? "✅ ورقتك المصححة" : "📷 جوابك مثل ما دزيته"}</h2>
             {paper.pages.map((p) => <img key={p} className="eximg" src={fileUrl(paper.id, p)} alt="ورقتك" />)}
           </div>
         )}
-        {graded && !!paper.ai.length && <AiCompare qs={paper.ai} fileUrl={(r) => fileUrl(paper.id, r)} />}
         {graded && !!paper.marks.length && (
           <div className="card">
             <h2>✋ درجة كل سؤال</h2>
