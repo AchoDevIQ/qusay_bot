@@ -364,3 +364,17 @@ test("الحل النموذجي PDF للنموذج كله: الخطوات تنط
   const page = r.chapters.find((c: any) => c.slug === "c7").exams[0].versions[0];
   assert.equal(page.pdf, true);
 });
+
+test("الورقة اللي صححها نظام التصحيح AI: الطالب يشوف بورقته كل خطوة صح لو غلط وليش بالعربي", async () => {
+  const { myPaper } = await import("../lib/examRoom.ts");
+  await setAiOn(true);
+  await setChapterScope("c1", [ex], 0);
+  const p = await paper(90, [1, 2]);
+  aiReply = (route, body) => Response.json({ score: 10, requires_review: false, review_reason: "", note: "غلطت بالإشارة بآخر خطوة", student_lines: [], usage: [],
+    steps: [{ status: "correct", awarded: 10, possible: 10, reason: "correct", reason_ar: "صح", expected: "x=2", student: "x=2" }, { status: "incorrect", awarded: 0, possible: 10, reason: "sign error", reason_ar: "غلط بالإشارة", expected: "y=-1", student: "y=1" }] });
+  for (let i = 0; i < 4 && !(await one("sched_items", { id: p }))!.graded_at; i++) await tick();
+  const view: any = await myPaper(90, p);
+  assert.equal(view.ai.length, 2);
+  assert.equal(view.ai[0].note, "غلطت بالإشارة بآخر خطوة");
+  assert.deepEqual(view.ai[0].steps.map((s: any) => s.reason), ["صح", "غلط بالإشارة"]);
+});

@@ -8,7 +8,7 @@ import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { STORE_URL } from "./config.ts";
-import { can, student } from "./data.ts";
+import { AI_GRADER, can, student } from "./data.ts";
 import { files } from "./files.ts";
 import { adminPageLink } from "./keyboards.ts";
 import { addMinutes, answersClose, itemState, pickMandatory, type SchedSettings } from "./scheduleRules.ts";
@@ -16,6 +16,7 @@ import { send, sendMany } from "./telegram.ts";
 import { stamp } from "./util.ts";
 import { gradedPages } from "./gradeApi.ts";
 import { studentPapers } from "./studentPapers.ts";
+import { aiResultOf } from "./aiGrade.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
@@ -191,6 +192,11 @@ export async function myPaper(uid: number, itemId: unknown) {
     id: p!.id, title: p!.title, chapter: p!.chapter, submitted: p!.submitted, graded: p!.graded, total: p!.total,
     marks: p!.marks, objections: p!.objections, pages: p!.pages, gradedPages: p!.gradedPages,
     questions: await pagesOf(e, v, (await student(uid))?.curr ?? ""),
+    // صححها نظام التصحيح AI: الطالب يشوف كل خطوة صح لو غلط وليش
+    ai: it!.graded_at && it!.grader_id === AI_GRADER ? ((await aiResultOf(it!.id)) ?? []).map((q) => ({
+      n: q.n, score: q.score, max: q.max, note: q.note ?? "",
+      steps: q.steps.map((st) => ({ status: st.status, awarded: st.awarded, possible: st.possible, expected: st.expected, reason: st.reason_ar || st.reason })),
+    })) : [],
   };
 }
 

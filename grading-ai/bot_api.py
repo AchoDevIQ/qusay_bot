@@ -12,6 +12,7 @@ Engine source: https://github.com/Muammal/Math-Grading (see UPSTREAM.md).
 """
 import base64
 import hmac
+import json
 import os
 from typing import List, Optional
 
@@ -19,7 +20,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from grading_service import extract_student_steps_from_pages, grade_single_question
-from llm.router import USAGE_COLLECTOR, any_credentials, complete_vision_json
+from llm.router import USAGE_COLLECTOR, any_credentials, complete_structured, complete_vision_json
 
 MAX_IMAGES = 12
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -153,6 +154,30 @@ async def bot_grade(req: GradeReq):
         doubt = f"ثقته بالتصحيح قليلة ({confidence:.2f})"
     else:
         doubt = ""
+    steps = [
+        {
+            "status": s.get("status"),
+            "awarded": s.get("points_awarded", 0.0),
+            "possible": s.get("points_possible", 0.0),
+            "reason": s.get("reason", ""),
+            "expected": s.get("expected", ""),
+            "student": s.get("student", ""),
+        }
+        for s in res.get("steps", [])
+    ]
+    # The student reads the marking: each step's reason, and one short note, in plain Arabic
+    note = ""
+    try:
+        ar = await complete_structured("feedback", ARABIC_PROMPT.format(
+            max=req.max_points, score=round(score, 1),
+            steps=json.dumps([{k: st[k] for k in ("status", "awarded", "possible", "reason", "expected", "student")} for st in steps], ensure_ascii=False)),
+            ArabicOut)
+        if len(ar.reasons) == len(steps):
+            for st, r in zip(steps, ar.reasons):
+                st["reason_ar"] = r.strip()
+        note = ar.note.strip()
+    except Exception:
+        pass
     return {
         "score": round(score, 1),
         "max_score": float(req.max_points),
@@ -160,19 +185,24 @@ async def bot_grade(req: GradeReq):
         "requires_review": bool(doubt),
         "review_reason": doubt,
         "student_lines": texts,
+        "note": note,
         "usage": usage_report(bucket),
-        "steps": [
-            {
-                "status": s.get("status"),
-                "awarded": s.get("points_awarded", 0.0),
-                "possible": s.get("points_possible", 0.0),
-                "reason": s.get("reason", ""),
-                "expected": s.get("expected", ""),
-                "student": s.get("student", ""),
-            }
-            for s in res.get("steps", [])
-        ],
+        "steps": steps,
     }
+
+
+class ArabicOut(BaseModel):
+    reasons: List[str] = Field(description="One short Arabic sentence per step, same order and count as the input steps")
+    note: str = Field(description="One or two short Arabic sentences to the student about this question")
+
+
+ARABIC_PROMPT = """A math teacher's grading of one student's answer (question worth {max} marks, the student got {score}).
+Here are the graded steps as JSON (status, marks awarded/possible, the grader's reason, the expected math, what the student wrote):
+{steps}
+
+Write for the STUDENT, in simple clear Arabic (Iraqi students; plain words, no English except math):
+- reasons: for each step, in the same order and the same count, one short sentence saying what was right or exactly what was wrong (e.g. «صح» or «غلط بالإشارة: المفروض y = -3/(2x)»). Keep math expressions as they are.
+- note: one or two short sentences summarising where the student lost marks and what to fix; if full marks, a short praise."""
 
 
 class RubricStepOut(BaseModel):

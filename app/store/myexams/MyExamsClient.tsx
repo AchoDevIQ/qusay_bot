@@ -18,7 +18,8 @@ type Info = {
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
-type Paper = { id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
+type AiQ = { n: number; score: number; max: number; note: string; steps: { status: string; awarded: number; possible: number; expected: string; reason: string }[] };
+type Paper = { ai: AiQ[]; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
 type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
@@ -391,6 +392,29 @@ function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: 
           <div className="card">
             <h2>{paper.gradedPages ? "✅ ورقتك المصححة" : "📷 جوابك مثل ما دزيته"}</h2>
             {paper.pages.map((p) => <img key={p} className="eximg" src={fileUrl(paper.id, p)} alt="ورقتك" />)}
+          </div>
+        )}
+        {graded && !!paper.ai.length && (
+          <div className="card">
+            <h2>🤖 تصحيح كل سؤال</h2>
+            <div className="expad">
+              {paper.ai.map((q) => (
+                <div key={q.n} className="aiq">
+                  <div className="obhead"><b>السؤال {q.n}</b><span><b>{q.score}</b> من {q.max}</span></div>
+                  {q.note && <div className="exhint">💬 {q.note}</div>}
+                  {q.steps.map((st, i) => {
+                    const full = st.awarded >= st.possible && st.possible > 0, none = st.awarded <= 0;
+                    return (
+                      <div key={i} className={"aistep " + (full ? "ok" : none ? "bad" : "half")}>
+                        <div><b>{full ? "✅" : none ? "❌" : "🟡"} الخطوة {i + 1}</b> · {st.awarded} من {st.possible}</div>
+                        {st.expected && <div dir="ltr" className="aig-math">{st.expected}</div>}
+                        {st.reason && <small>{st.reason}</small>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {graded && !!paper.marks.length && (

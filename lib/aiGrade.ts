@@ -255,7 +255,7 @@ export async function draftRubric(qid: number): Promise<RubricStep[]> {
   return (r.steps ?? []).map((s: any) => ({ text: String(s.text ?? ""), points: Number(s.points) || 0 }));
 }
 
-export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; expected: string; student: string }[]; usage?: Usage[] };
+export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; note?: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; reason_ar?: string; expected: string; student: string }[]; usage?: Usage[] };
 export async function aiResultOf(itemId: number): Promise<AiQuestion[] | null> {
   const j = await readJson<AiQuestion[] | null>(resultKey(itemId), null);
   return Array.isArray(j) ? j : null;
@@ -289,7 +289,7 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[]): Promi
     images: imgs.map((b) => b.toString("base64")),
   });
   const score = Math.max(0, Math.min(max, Math.round(Number(r.score) || 0)));
-  return { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
+  return { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), note: String(r.note ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
 }
 /** «🧪 جرّب على جواب حقيقي»: صاحب البوت يرفع صور جواب سؤال، ونظام التصحيح يصححها ويرجع النتيجة بس.
  *  ما تنحفظ درجة لأحد وما توصل رسالة لأحد، بس الكلفة تنحسب بالسجل */
