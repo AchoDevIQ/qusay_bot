@@ -1,4 +1,5 @@
 // عميل Telegram Bot API
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { ADMIN_IDS, TOKEN } from "./config.ts";
@@ -113,7 +114,8 @@ export const answerCb = (id: string, text?: string) =>
 /** صورة من ملف: أول مرة ترفع، بعدين تستخدم file_id المحفوظ */
 export async function sendImage(chat: number | string, filePath: string, key: string, caption: string, replyKb: unknown, fallback = caption) {
   if (!fs.existsSync(filePath)) return send(chat, fallback, { replyKb });
-  const stamp = String(Math.floor(fs.statSync(filePath).mtimeMs / 1000));
+  // البصمة من محتوى الصورة مو من تاريخ الملف: على السيرفر التاريخ ثابت بكل نسخة، فچانت تنرسل الصورة القديمة
+  const stamp = createHash("sha1").update(fs.readFileSync(filePath)).digest("hex").slice(0, 16);
   const fid = await kvGet(key + "_id");
   const text: Record<string, string> = caption ? { caption, parse_mode: "HTML" } : {};   // بدون نص: الصورة لوحدها
   if (fid && await kvGet(key + "_stamp") === stamp) {
