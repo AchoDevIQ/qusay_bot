@@ -20,12 +20,22 @@ export function toTex(p: string) {
 }
 const tex = (p: string) => { try { return katex.renderToString(toTex(p), { throwOnError: false, strict: false, output: "html" }); } catch { return ""; } };
 
-/** خطوة رياضيات: كل سطر (مفصول بـ ;) ينكتب مثل الكتاب. السطر اللي بيه كلام عربي ينكتب نص */
+/** خطوة رياضيات: كل سطر (مفصول بـ ;) ينكتب مثل الكتاب. السطر اللي بيه كلام عربي ينكتب نص.
+ *  السطر الطويل ما ينقطع بنص المعادلة: ينزل سطر جديد بس عند «⇒» أو «→»، وكل قطعة كاملة بسطرها */
+const ARROW = /\s*(?:=>|⇒|⟹|->|→|\\Rightarrow|\\to)\s*/;
 function MathText({ text }: { text: string }) {
   const parts = String(text ?? "").split(/\s*;\s*/).filter(Boolean);
   return (
     <div className="aimath" dir="ltr">
-      {parts.map((p, i) => (/[\u0600-\u06FF]/.test(p) ? <div key={i} dir="rtl"><Inline text={p} /></div> : <div key={i} dangerouslySetInnerHTML={{ __html: tex(p) || p }} />))}
+      {parts.map((p, i) => {
+        if (/[\u0600-\u06FF]/.test(p)) return <div key={i} dir="rtl"><Inline text={p} /></div>;
+        const pieces = p.split(ARROW).filter((x) => x.trim());
+        return (
+          <div key={i} className="aichain">
+            {pieces.map((x, j) => <span key={j} className="aipiece" dangerouslySetInnerHTML={{ __html: (j ? tex("\\Rightarrow") + " " : "") + (tex(x) || x) }} />)}
+          </div>
+        );
+      })}
     </div>
   );
 }
