@@ -15,7 +15,7 @@ export type Price = { in: number; out: number };
 /** المواضيع اللي يصححها، ولكل فصل المصحح اللي توصله الأوراق اللي مو متأكد منها */
 export type AiSettings = { exams: number[]; unsure: Record<string, number> };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
-export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
+export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed" | "objection"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
 
 const rubricKey = (qid: number) => `ai_rubric_q_${qid}`;
 const resultKey = (itemId: number) => `ai_result_${itemId}`;
@@ -330,6 +330,33 @@ export async function aiWhyNot(examId: number, versionId: number): Promise<strin
   if (missing.length) return `باقي خطوات الأسئلة ${missing.join("، ")} بهذا النموذج`;
   return null;
 }
+/** أسئلة الورقة اللي صححها نظام التصحيح AI (اعتراضها يراجعه هو، مو المصحح) */
+export async function aiQuestions(it: Row): Promise<Set<number>> {
+  const qs = (await find("bank_questions", { version_id: it.version_id })).map((q) => q.n as number);
+  if (it.grader_id === AI_GRADER) return new Set(qs);
+  const part = await aiPartialOf(it.id);
+  return new Set(part ? qs.filter((n) => !part.includes(n)) : []);
+}
+/** نظام التصحيح AI يراجع اعتراض الطالب على سؤال صححه: يقبل ويعطي الدرجة الجديدة، لو يرفض ويگول ليش */
+export async function aiJudgeObjection(it: Row, qn: number, text: string, oldMark: number) {
+  const q = await one("bank_questions", { version_id: it.version_id, n: qn });
+  if (!q) throw new Error("السؤال غير موجود");
+  const steps = await rubricOf(q.id);
+  if (!steps) throw new Error(`سؤال ${qn} بدون خطوات`);
+  const imgs = (await Promise.all((await find("exam_answers", { item_id: it.id, q: qn }, { order: ["id"] })).map((a) => readRef(a.file)))).filter((b): b is Buffer => !!b);
+  if (!imgs.length) throw new Error("ماكو صورة جواب لهذا السؤال");
+  const old = (await aiResultOf(it.id))?.find((x) => x.n === qn);
+  const r = await svc("/bot/objection", {
+    max_points: Number(q.max_mark), old_score: oldMark, objection: text || "الطالب يشوف درجته مو صحيحة",
+    steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
+    old_steps: old ? JSON.stringify(old.steps.map((s) => ({ status: s.status, awarded: s.awarded, possible: s.possible, reason: s.reason_ar || s.reason, expected: s.expected }))) : "",
+    images: imgs.map((b) => b.toString("base64")),
+  });
+  await addLog({ at: stamp(), kind: "objection", item: it.id, sid: it.user_id, note: r.accept ? `قبل اعتراض س${qn}` : `رفض اعتراض س${qn}`, usage: sumUsage([r.usage ?? []]) });
+  const mark = Math.max(0, Math.min(Number(q.max_mark), Math.round(Number(r.new_score) || 0)));
+  return { accept: !!r.accept && mark !== oldMark, mark, reason: String(r.reason ?? "") };
+}
+
 /** «🔁 خلي يعيد تصحيحها»: الورقة اللي حوّلها أو فشل بيها ترجع لدوره من جديد (إذا بعدها ما انصححت) */
 export async function aiRetry(itemId: number) {
   const it = await one("sched_items", { id: itemId });

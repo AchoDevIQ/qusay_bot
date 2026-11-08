@@ -86,7 +86,14 @@ export async function submitObjection(form: FormData) {
   const e = await one("bank_exams", { id: it.exam_id });
   const list = rows.map((r) => r.n).join("، ");
   await logActivity(uid!, `✋ اعترض على درجة امتحان ${e?.title ?? ""}: السؤال ${list}`);
-  await tellGraders(it, `✋ <b>اعتراض جديد</b>\nالطالب: ${esc((await student(uid!))?.name ?? "")}\nالامتحان: ${esc(e?.title ?? "")}\nعلى السؤال: ${list}`);
+  // اعتراض على سؤال صححه نظام التصحيح AI يراجعه هو، والمصحح يوصله بس اعتراض أسئلته
+  const { aiQuestions } = await import("./aiGrade.ts");
+  const ai = await aiQuestions(it);
+  const human = rows.map((r) => r.n).filter((n) => !ai.has(n));
+  const aiList = rows.map((r) => r.n).filter((n) => ai.has(n));
+  const head = `✋ <b>اعتراض جديد</b>\nالطالب: ${esc((await student(uid!))?.name ?? "")}\nالامتحان: ${esc(e?.title ?? "")}`;
+  if (human.length) await tellGraders(it, `${head}\nعلى السؤال: ${human.join("، ")}`);
+  else for (const id of new Set(ADMIN_IDS)) await send(id, `👤 <b>لصاحب البوت بس</b>\n${head}\n🤖 على السؤال ${aiList.join("، ")}، ويراجعه نظام التصحيح AI لأنه هو صححه.`);
   return { obj: await objectionInfo(uid!, it.id), notice: "✅ وصل اعتراضك للمصحح، والرد يوصلك بالبوت" };
 }
 

@@ -1,9 +1,10 @@
 // صفحة التصحيح: أول مصحح يفتح الورقة تصير إله، يضغط درجة كل سؤال، والبوت يجمع ويبلغ الطالب وولي أمره
+import { ADMIN_IDS } from "./config.ts";
 import { runCheckpoints } from "./checkpoints.ts";
 import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
-import { examLabel, isAdmin, staffName, student } from "./data.ts";
+import { AI_GRADER, examLabel, isAdmin, staffName, student } from "./data.ts";
 import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, openObjections, testObjection } from "./objections.ts";
@@ -11,7 +12,7 @@ import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
-import { aiHeld, aiPartialOf, aiResultOf } from "./aiGrade.ts";
+import { aiHeld, aiJudgeObjection, aiPartialOf, aiQuestions, aiResultOf } from "./aiGrade.ts";
 import { guardianSent, seenButton } from "./guardianWatch.ts";
 import { stamp, todayStr } from "./util.ts";
 import { gradeCardPng } from "./documents.ts";
@@ -72,14 +73,76 @@ async function listData(uid: number) {
 }
 /** الأوراق اللي عليها اعتراض ينتظر رد هذا المصحح */
 async function objectionPapers(uid: number) {
-  const byItem = new Map<number, number[]>();
-  for (const o of await find("objections", { status: "open" })) byItem.set(o.item_id, [...byItem.get(o.item_id) ?? [], o.q]);
+  const ids = new Set((await find("objections", { status: "open" })).map((o) => o.item_id as number));
   const out = [];
-  for (const [id, qs] of byItem) {
+  for (const id of ids) {
     const it = await one("sched_items", { id });
-    if (it && await canHandle(uid, it)) out.push({ ...await paperRow(it), qs: qs.sort((a, b) => a - b) });
+    if (!it || !await canHandle(uid, it)) continue;
+    const qs = (await humanObjections(it)).map((o) => o.q as number);
+    if (qs.length) out.push({ ...await paperRow(it), qs: qs.sort((a, b) => a - b) });
   }
   return out;
+}
+// اعتراض على سؤال صححه نظام التصحيح AI: يراجعه هو. إذا ما گدر مرتين، يرجع لصاحب البوت
+const objTriesKey = (oid: number) => `ai_obj_try_${oid}`;
+const OBJ_TRIES = 2;
+/** الاعتراضات اللي يرد عليها إنسان: على أسئلة المصحح، أو أسئلة الذكاء اللي ما گدر يراجعها */
+async function humanObjections(it: Row) {
+  const ai = await aiQuestions(it);
+  const out: Row[] = [];
+  for (const o of await openObjections(it.id)) if (!ai.has(o.q) || (Number(await kvGet(objTriesKey(o.id))) || 0) >= OBJ_TRIES) out.push(o);
+  return out;
+}
+/** دكة المؤقت: نظام التصحيح AI يراجع الاعتراضات على أسئلته ويرد على الطالب */
+export async function aiObjectionsTick(limit = 4) {
+  const byItem = new Map<number, Row[]>();
+  for (const o of await find("objections", { status: "open" }, { order: ["id"] })) {
+    if ((Number(await kvGet(objTriesKey(o.id))) || 0) >= OBJ_TRIES) continue;
+    byItem.set(o.item_id, [...byItem.get(o.item_id) ?? [], o]);
+  }
+  let done = 0;
+  for (const [id, objs] of byItem) {
+    if (done >= limit) break;
+    const it = await one("sched_items", { id });
+    if (!it?.graded_at) continue;
+    const ai = await aiQuestions(it);
+    const mine = objs.filter((o) => ai.has(o.q));
+    if (!mine.length) continue;
+    const lines: string[] = [];
+    let accepted = 0;
+    for (const o of mine) {
+      try {
+        const r = await aiJudgeObjection(it, o.q, String(o.text ?? ""), Number(o.old_mark ?? 0));
+        if (r.accept) {
+          await put("question_marks", { item_id: it.id, q: o.q, mark: r.mark });
+          await update("objections", { id: o.id }, { status: "accepted", new_mark: r.mark, reason: r.reason || null, decided_at: stamp(), decided_by: AI_GRADER });
+          lines.push(`✅ السؤال ${o.q}: انقبل اعتراضك، صارت درجته <b>${r.mark}</b> بدل ${o.old_mark}${r.reason ? `\n${esc(r.reason)}` : ""}`);
+          accepted++;
+        } else {
+          await update("objections", { id: o.id }, { status: "rejected", new_mark: o.old_mark, reason: r.reason || null, decided_at: stamp(), decided_by: AI_GRADER });
+          lines.push(`❌ السؤال ${o.q}: انرفض اعتراضك وبقت درجته ${o.old_mark}${r.reason ? `\nالسبب: ${esc(r.reason)}` : ""}`);
+        }
+        done++;
+      } catch (e) {
+        console.error("ai objection", o.id, e);
+        const tries = (Number(await kvGet(objTriesKey(o.id))) || 0) + 1;
+        await kvSet(objTriesKey(o.id), String(tries));
+        if (tries >= OBJ_TRIES) for (const a of ADMIN_IDS) await send(a, `👤 <b>لصاحب البوت بس، ما توصل للطالب</b>\n⚠️ نظام التصحيح AI ما گدر يراجع اعتراض السؤال ${o.q} على ورقة ${await nameOf(it)}، فصار ينتظرك بـ ✋ الاعتراضات.`);
+      }
+    }
+    if (!lines.length) continue;
+    const total = (await find("question_marks", { item_id: it.id })).reduce((s, m) => s + (m.mark ?? 0), 0);
+    await update("sched_items", { id: it.id }, { total });
+    const view = await paperRow(it);
+    await send(it.user_id, `🤖 <b>رد نظام التصحيح AI على اعتراضك</b>\nامتحان: ${esc(view.title)}\n\n${lines.join("\n\n")}\n\nدرجتك${accepted ? " الجديدة" : ""}: <b>${total}</b> من 100`, { extra: { protect_content: true } });
+    const g = accepted ? await guardianOf(it.user_id) : null;
+    if (g) {
+      await send(g.guardian_id, `📝 <b>تعديل درجة بعد اعتراض</b>\nدرجة الطالب <b>${esc(view.name)}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`, { kb: seenButton(it.id), extra: { protect_content: true } });
+      await guardianSent(it.user_id, g.guardian_id, it.id);
+    }
+    await logActivity(it.user_id, `🤖 نظام التصحيح AI رد على اعتراضه بامتحان ${view.title}: ${accepted} انقبل. الدرجة ${total}`);
+  }
+  return { done };
 }
 export const objectionsWaiting = async (uid: number) => (await objectionPapers(uid)).length;
 /** معلومات هدر الورقة المصححة: الفصل والمنهج */
@@ -93,7 +156,7 @@ async function paperView(it: Row, withObj = false) {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
   // بالاعتراض: الدرجة اللي غيرها المصحح تبين، وما تنحفظ بالورقة لحد ما يحفظ الرد
-  const objs = withObj ? await openObjections(it.id) : [];
+  const objs = withObj ? await humanObjections(it) : [];
   for (const o of objs) if (o.new_mark !== null) marks.set(o.q, o.new_mark);
   const v = await one("bank_versions", { id: it.version_id });
   const part = await aiPartialOf(it.id);
@@ -121,7 +184,7 @@ async function workPaper(uid: number, raw: unknown) {
   const it = await one("sched_items", { id: Number(raw) });
   need(it?.status === "done", "الورقة غير موجودة");
   if (it!.graded_at) {
-    need((await openObjections(it!.id)).length, "الورقة مخلصة");
+    need((await humanObjections(it!)).length, "الورقة مخلصة");
     need(await canHandle(uid, it!), "ما عندك صلاحية على هذي الورقة", 403);
     return { it: it!, obj: true };
   }
@@ -249,7 +312,7 @@ export async function gradeAction(body: Row) {
     need(!part || part.includes(q!.n) || await isAdmin(uid), "هذا السؤال صححه نظام التصحيح AI، إنت صحح بس الأسئلة اللي حوّلها إلك");
     if (obj) {
       // بالاعتراض تتغير بس درجة السؤال المعترض عليه
-      const o = (await openObjections(it.id)).find((x) => x.q === q!.n);
+      const o = (await humanObjections(it)).find((x) => x.q === q!.n);
       need(o, "الطالب ما اعترض على هذا السؤال");
       await update("objections", { id: o!.id }, { new_mark: mark });
     } else await put("question_marks", { item_id: it.id, q: q!.n, mark });
@@ -394,7 +457,7 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
   need(obj, "ماكو اعتراض على هذي الورقة");
   let rejects: Record<string, string> = {};
   try { const j = typeof rejectsRaw === "string" ? JSON.parse(rejectsRaw || "{}") : rejectsRaw ?? {}; if (j && typeof j === "object") rejects = j as Record<string, string>; } catch { /* بدون رفض */ }
-  const open = (await openObjections(it.id)).sort((a, b) => a.q - b.q);
+  const open = (await humanObjections(it)).sort((a, b) => a.q - b.q);
   const changed = (o: Row) => o.new_mark !== null && o.new_mark !== o.old_mark;
   const left = open.filter((o) => !changed(o) && !(String(o.q) in rejects)).map((o) => o.q);
   need(!left.length, `غير الدرجة أو ارفض اعتراض السؤال: ${left.join("، ")}`);

@@ -412,3 +412,29 @@ test("«🔁 خلي يعيد تصحيحها»: الورقة اللي حوّله�
   assert.ok(row.graded_at);
   assert.equal(row.grader_id, AI_GRADER);
 });
+
+test("اعتراض على سؤال صححه نظام التصحيح AI: هو يراجعه ويرد على الطالب، والمصحح ما يشوفه", async () => {
+  const { aiObjectionsTick } = await import("../lib/gradeApi.ts");
+  await setAiOn(true);
+  await setChapterScope("c1", [ex], 0);
+  const p = await paper(90, [1, 2]);
+  aiReply = gradeOk;
+  for (let i = 0; i < 4 && !(await one("sched_items", { id: p }))!.graded_at; i++) await tick();
+  assert.equal((await one("sched_items", { id: p }))!.grader_id, AI_GRADER);
+  const o1 = await insert("objections", { item_id: p, user_id: 90, q: 1, text: "حليتها بطريقة ثانية", voice: null, status: "open", old_mark: 48, new_mark: null, reason: null, created: stamp(), decided_at: null, decided_by: null });
+  // المصحح والاعتراضات: ما تطلعله
+  const g = await gradeAction({ initData: sign(1), action: "list" }) as any;
+  assert.ok(!g.objections.some((x: any) => x.id === p));
+  aiReply = (route, body) => route === "/bot/objection"
+    ? Response.json({ accept: true, new_score: 55, reason: "طريقتك صحيحة", usage: [] })
+    : gradeOk(route, body);
+  tg.length = 0; ai.length = 0;
+  await aiObjectionsTick();
+  assert.equal(ai[0].route, "/bot/objection");
+  assert.equal(ai[0].body.objection, "حليتها بطريقة ثانية");
+  const o = (await one("objections", { id: o1 }))!;
+  assert.deepEqual([o.status, o.new_mark, o.decided_by], ["accepted", 55, AI_GRADER]);
+  assert.equal((await find("question_marks", { item_id: p })).find((m) => m.q === 1)!.mark, 55);
+  const msg = tg.find((c) => String(c.p.chat_id) === "90");
+  assert.match(msg!.p.text, /رد نظام التصحيح AI على اعتراضك[\s\S]*طريقتك صحيحة/);
+});
