@@ -348,3 +348,19 @@ test("ما متأكد وماكو مصحح محدد للفصل: الخبر يوص
   assert.ok(msg, "خبر لصاحب البوت");
   assert.match(msg!.p.text, /س2: قراءة الصورة فشلت/);
 });
+
+test("الحل النموذجي PDF للنموذج كله: الخطوات تنطلع من الـ PDF ويا رقم السؤال", async () => {
+  fs.writeFileSync(path.join(tmp, "ans", "v.pdf"), Buffer.from("%PDF-1.4 fake"));
+  const e5 = await insert("bank_exams", { slug: "c7", chapter: "القطوع", ord: 1, title: "القطع الناقص والزائد 3&4", minutes: 60, pos: 1 });
+  const v5 = await insert("bank_versions", { exam_id: e5, model: "A", kind: "mandatory", ok: 1, answer_pdf: "ans/v.pdf" });
+  const q3 = await insert("bank_questions", { version_id: v5, n: 3, max_mark: 20, q_file: "none/q.png", a_files: "[]" });
+  aiReply = (route, body) => Response.json({ steps: [{ text: "x^2/a^2 + y^2/b^2 = 1", points: 20 }], usage: [] });
+  ai.length = 0;
+  const r: any = await aiGradeAction({ initData: sign(1), action: "draftAll", id: e5 });
+  assert.match(r.notice, /انحفظت خطوات 1 سؤال/);
+  assert.equal(ai[0].body.question, 3);
+  assert.ok(ai[0].body.pdf && !ai[0].body.images);
+  assert.equal((await rubricOf(q3))![0].points, 20);
+  const page = r.chapters.find((c: any) => c.slug === "c7").exams[0].versions[0];
+  assert.equal(page.pdf, true);
+});

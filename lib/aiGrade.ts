@@ -111,7 +111,7 @@ async function needsDraft(examIds: number[]) {
   let noSol = 0;
   for (const id of examIds) for (const v of await find("bank_versions", { exam_id: id })) for (const q of await find("bank_questions", { version_id: v.id }, { order: ["n"] })) {
     if (await rubricOf(q.id)) continue;
-    if (!(JSON.parse(q.a_files || "[]") as string[]).some(isImage)) { noSol++; continue; }
+    if (!await hasSolution(q)) { noSol++; continue; }
     todo.push(q);
   }
   return { todo, noSol };
@@ -169,7 +169,7 @@ export async function draftExam(examId: number, by: number) {
   let noSol = 0;
   for (const v of versions) for (const q of await find("bank_questions", { version_id: v.id }, { order: ["n"] })) {
     if (await rubricOf(q.id)) continue;
-    if (!(JSON.parse(q.a_files || "[]") as string[]).some(isImage)) { noSol++; continue; }
+    if (!await hasSolution(q)) { noSol++; continue; }
     todo.push(q);
   }
   const failed: string[] = [];
@@ -196,6 +196,16 @@ async function readRef(ref: string): Promise<Buffer | null> {
   return await files().read(ref);
 }
 const isImage = (ref: string) => ref.startsWith("tg:") || /\.(jpe?g|png|webp)$/i.test(ref);
+/** PDF الحل النموذجي مال النموذج (إذا الحل مرفوع ملف وحد مو صورة لكل سؤال) */
+async function solutionPdf(versionId: number): Promise<Buffer | null> {
+  const v = await one("bank_versions", { id: versionId });
+  return v?.answer_pdf ? await readRef(String(v.answer_pdf)) : null;
+}
+/** السؤال إله حل نموذجي: صورة إله، أو PDF النموذج */
+async function hasSolution(q: Row) {
+  if ((JSON.parse(q.a_files || "[]") as string[]).some(isImage)) return true;
+  return !!(await one("bank_versions", { id: q.version_id }))?.answer_pdf;
+}
 
 // خدمة التصحيح على Cloud Run خاصة: تقبل بس حساب البوت بـ Google. على السيرفر ناخذ رمز الدخول من Google نفسه
 // (خادم المعلومات الداخلي)، ونحفظه لحد قبل ما ينتهي بشوية. برة Google (الفحوصات) ماكو رمز، والمفتاح يكفي
@@ -232,8 +242,15 @@ export async function draftRubric(qid: number): Promise<RubricStep[]> {
   if (!q) throw new Error("السؤال غير موجود");
   const refs: string[] = JSON.parse(q.a_files || "[]");
   const imgs = (await Promise.all(refs.filter(isImage).map(readRef))).filter((b): b is Buffer => !!b);
-  if (!imgs.length) throw new Error("هذا السؤال ما بيه صورة حل");
-  const r = await svc("/bot/rubric", { max_points: Number(q.max_mark), images: imgs.map((b) => b.toString("base64")) });
+  let body: object;
+  if (imgs.length) body = { max_points: Number(q.max_mark), images: imgs.map((b) => b.toString("base64")) };
+  else {
+    // الحل النموذجي مرفوع PDF للنموذج كله: الخدمة تلگى السؤال بداخله من علامة «س1، س2...»
+    const pdf = await solutionPdf(q.version_id);
+    if (!pdf) throw new Error("هذا السؤال ما بيه صورة حل ولا PDF حل للنموذج");
+    body = { max_points: Number(q.max_mark), pdf: pdf.toString("base64"), question: Number(q.n) };
+  }
+  const r = await svc("/bot/rubric", body, 180_000);
   await addLog({ at: stamp(), kind: "rubric", q: qid, usage: sumUsage([r.usage ?? []]) });
   return (r.steps ?? []).map((s: any) => ({ text: String(s.text ?? ""), points: Number(s.points) || 0 }));
 }

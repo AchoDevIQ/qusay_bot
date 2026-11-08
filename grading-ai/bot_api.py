@@ -48,7 +48,30 @@ class GradeReq(BaseModel):
 
 class RubricReq(BaseModel):
     max_points: float = Field(gt=0)
-    images: List[str] = Field(min_length=1)  # base64 pages of the teacher's solution
+    images: List[str] = []  # base64 pages of the teacher's solution for this question
+    pdf: Optional[str] = None  # or: base64 PDF of the whole exam's model solution...
+    question: Optional[int] = None  # ...and the question number to take from it
+
+
+MAX_PDF_BYTES = 25 * 1024 * 1024
+MAX_PDF_PAGES = 20
+
+
+def pdf_pages(raw: str) -> List[bytes]:
+    """Render each page of the solution PDF to PNG (about 130 dpi, enough to read handwriting)."""
+    import fitz  # PyMuPDF
+    if "," in raw[:100]:
+        raw = raw.split(",", 1)[1]
+    try:
+        data = base64.b64decode(raw, validate=False)
+    except Exception:
+        raise HTTPException(status_code=400, detail="bad pdf")
+    if not data or len(data) > MAX_PDF_BYTES:
+        raise HTTPException(status_code=400, detail="bad pdf size")
+    doc = fitz.open(stream=data, filetype="pdf")
+    if doc.page_count > MAX_PDF_PAGES:
+        raise HTTPException(status_code=400, detail="pdf has too many pages")
+    return [page.get_pixmap(dpi=130).tobytes("png") for page in doc]
 
 
 def decode_images(raw: List[str]) -> List[bytes]:
@@ -171,6 +194,12 @@ List the solution's marking steps in order, top to bottom:
 - points: the mark written for that step. If no marks are written anywhere, set marks_written to false and give every step 0.
 Ignore page headers, question numbers and decoration."""
 
+PDF_PART = """
+
+IMPORTANT: these pages hold the model solutions of the WHOLE exam, not just one question.
+Use ONLY question {n}. Its solution starts at the label for question {n} (written like س{n}, سؤال {n} or Q{n}, usually at the right margin)
+and ends where question {next} starts (or at the end of the pages). Ignore every other question."""
+
 
 def page_media(b: bytes) -> str:
     return "image/png" if b[:4] == bytes([0x89, 0x50, 0x4E, 0x47]) else "image/webp" if b[8:12] == b"WEBP" else "image/jpeg"
@@ -203,10 +232,17 @@ async def bot_rubric(req: RubricReq):
     """Draft steps from the teacher's solution pages, with the marks the teacher wrote next to
     each step. Falls back to one step per written line with points shared evenly."""
     bucket = start_usage()
-    pages = decode_images(req.images)
+    if req.pdf and req.question:
+        pages = pdf_pages(req.pdf)
+        prompt = RUBRIC_PROMPT.format(max=req.max_points) + PDF_PART.format(n=req.question, next=req.question + 1)
+    else:
+        if not req.images:
+            raise HTTPException(status_code=400, detail="no solution pages")
+        pages = decode_images(req.images)
+        prompt = RUBRIC_PROMPT.format(max=req.max_points)
     try:
         out = await complete_vision_json(
-            "visual", RUBRIC_PROMPT.format(max=req.max_points), schema=RubricOut, detail="high",
+            "visual", prompt, schema=RubricOut, detail="high",
             images=[(b, page_media(b), f"Solution page {i + 1}") for i, b in enumerate(pages)],
         )
         steps = [s for s in out.get("steps", []) if (s.get("text") or "").strip()]
@@ -216,6 +252,8 @@ async def bot_rubric(req: RubricReq):
                     "marks_written": bool(out.get("marks_written")), "usage": usage_report(bucket)}
     except Exception:
         pass
+    if req.pdf:
+        raise HTTPException(status_code=502, detail="could not read this question from the pdf")
     lines = await extract_student_steps_from_pages(pages)
     if any(l.get("ocr_error") for l in lines) and not any((l.get("text") or "").strip() for l in lines):
         raise HTTPException(status_code=502, detail="ocr failed")

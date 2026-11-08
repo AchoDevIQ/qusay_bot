@@ -8,7 +8,7 @@ import Thumbs from "../Thumbs";
 
 type Step = { text: string; points: number };
 type Q = { id: number; n: number; max: number; q: string | null; a: string[]; steps: Step[] | null };
-type Version = { id: number; model: string; kind: string; questions: Q[] };
+type Version = { id: number; model: string; kind: string; pdf: boolean; questions: Q[] };
 type Exam = { id: number; title: string; on: boolean; versions: Version[]; ready: boolean };
 type Chapter = { slug: string; chapter: string; grader: number; exams: Exam[] };
 type Sum = { sent: number; unsure: number; cost: number };
@@ -73,7 +73,7 @@ export default function AiGradeClient() {
                   <div key={v.id} className="aig-ver">
                     <div className="exlabel">النموذج {v.model}{v.kind === "optional" ? " (اختياري)" : ""}</div>
                     {!v.questions.length && <div className="exhint">ماكو أسئلة بهذا النموذج.</div>}
-                    {v.questions.map((q) => <QCard key={q.id} q={q} busy={busy} call={call} fileUrl={fileUrl} draft={data.draft?.id === q.id ? data.draft.steps : undefined} trial={data.trial?.id === q.id ? data.trial.result : undefined} linked={data.linked} />)}
+                    {v.questions.map((q) => <QCard key={q.id} q={q} pdf={v.pdf} busy={busy} call={call} fileUrl={fileUrl} draft={data.draft?.id === q.id ? data.draft.steps : undefined} trial={data.trial?.id === q.id ? data.trial.result : undefined} linked={data.linked} />)}
                   </div>
                 ))}
               </details>
@@ -203,7 +203,7 @@ function Prices({ rows, busy, call }: { rows: PriceRow[]; busy: boolean; call: C
   );
 }
 
-function QCard({ q, busy, call, fileUrl, draft, trial, linked }: { q: Q; busy: boolean; call: Call; fileUrl: (r: string) => string; draft?: Step[]; trial?: Trial; linked: boolean }) {
+function QCard({ q, pdf, busy, call, fileUrl, draft, trial, linked }: { q: Q; pdf: boolean; busy: boolean; call: Call; fileUrl: (r: string) => string; draft?: Step[]; trial?: Trial; linked: boolean }) {
   const [steps, setSteps] = useState<Step[]>(q.steps ?? []);
   const [open, setOpen] = useState(false);
   // الخطوات اللي طلعها الذكاء تنحط بالمربعات، وما تنحفظ لحد ما يدوس حفظ
@@ -221,8 +221,9 @@ function QCard({ q, busy, call, fileUrl, draft, trial, linked }: { q: Q; busy: b
         <div className="aig-body">
           {q.q && <img className="eximg" src={fileUrl(q.q)} alt={`س ${q.n}`} loading="lazy" />}
           {q.a.length ? <div className="aig-sol">{q.a.map((r) => <img key={r} className="eximg" src={fileUrl(r)} alt="الحل" loading="lazy" />)}</div>
-            : <div className="exbad">ماكو صورة حل لهذا السؤال، فلازم تكتب الخطوات بإيدك.</div>}
-          {q.a.length > 0 && <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "draft", id: q.id })}>🤖 طلّع الخطوات من صورة الحل</button>}
+            : pdf ? <div className="exhint">📄 الحل النموذجي مرفوع PDF للنموذج كله، والذكاء يلگى هذا السؤال بداخله.</div>
+            : <div className="exbad">ماكو حل نموذجي لهذا السؤال، فلازم تكتب الخطوات بإيدك.</div>}
+          {(q.a.length > 0 || pdf) && <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "draft", id: q.id })}>🤖 طلّع الخطوات من صورة الحل</button>}
           {steps.map((s, i) => (
             <div key={i} className="aig-step">
               <span className="aig-n">{i + 1}</span>

@@ -8,5 +8,6 @@ sympy
 opencv-python-headless
 numpy
 pillow
+pymupdf
 python-bidi
 arabic-reshaper
