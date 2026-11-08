@@ -17,7 +17,8 @@ import { ApiError, ensure } from "./webApi.ts";
 import { cronKey } from "./webAuth.ts";
 
 const LOCK = "cron_lock";
-const STALE = 5 * 60 * 1000;   // قفل أقدم من 5 دقايق يعني الدكة وگفت بنص الطريق
+const STALE = 5 * 60 * 1000;
+const AI_LOCK = "cron_ai_lock", AI_STALE = 6 * 60 * 1000;   // قفل أقدم من 5 دقايق يعني الدكة وگفت بنص الطريق
 
 export async function cronTick(key: unknown) {
   await ensure();
@@ -32,16 +33,24 @@ export async function cronTick(key: unknown) {
   try {
     await step("started", async () => notifyStarted(key, await schedSettings()));
     await step("checked", () => sweepCheckpoints());
-    await step("ai", () => aiGradeTick(finishByAi, paperName));
-    await step("aiDraft", () => draftQueueTick(ADMIN_IDS[0] ?? 0));
-    await step("qaExams", () => examQueueTick());
-    await step("aiObjections", () => aiObjectionsTick());
     await step("graders", () => notifyGraders());
     await step("sessions", () => sweepSessions());
     await step("signups", () => sweepSignups());
     await step("birthdays", () => sweepBirthdays());
   } finally {
     await kvSet(LOCK, "0");
+  }
+  // نظام التصحيح AI بقفل لحاله: شغله ياخذ دقايق (أوراق هواية سوا)، فما يأخر رسائل بدء الامتحانات بالدكة الجاية
+  const aiHeld = Number(await kvGet(AI_LOCK)) || 0;
+  if (aiHeld && Date.now() - aiHeld < AI_STALE) { out.aiBusy = true; return out; }
+  await kvSet(AI_LOCK, String(Date.now()));
+  try {
+    await step("ai", () => aiGradeTick(finishByAi, paperName));
+    await step("aiDraft", () => draftQueueTick(ADMIN_IDS[0] ?? 0));
+    await step("qaExams", () => examQueueTick());
+    await step("aiObjections", () => aiObjectionsTick());
+  } finally {
+    await kvSet(AI_LOCK, "0");
   }
   return out;
 }

@@ -53,7 +53,9 @@ export async function graderShare(it: Row): Promise<number> {
 const ON_KEY = "ai_grade_on", SET_KEY = "ai_settings", LOG_KEY = "ai_log", PRICE_KEY = "ai_prices";
 // مشكلة تقنية (الخدمة ما ردت) تنعاد بالدكة الجاية، لحد 3 مرات
 const MAX_TRIES = 3;
-const PER_TICK = 3;
+// كم ورقة بالدكة، كلها سوا (مو وحدة ورا وحدة)، وكل أسئلة الورقة سوا. 1000 طالب يخلصون بحدود ساعة.
+// الحد الحقيقي: كم طلب بالدقيقة تسمح شركة الذكاء الاصطناعي لحسابنا، وكم نسخة من خدمة التصحيح (10)
+const PER_TICK = 20;
 const LOG_MAX = 5000;
 /** أسعار الموديلات بالدولار لكل مليون توكن (داخل / طالع). صاحب البوت يگدر يغيرها من الصفحة */
 export const DEFAULT_PRICES: Record<string, Price> = {
