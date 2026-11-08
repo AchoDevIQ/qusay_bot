@@ -314,3 +314,18 @@ body.grwide .grtop{padding-left:104px}
 .aiinl{display:inline-block;unicode-bidi:isolate}.aiinl .katex{font-size:1.05em}
 .aichain{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 6px}.aipiece{white-space:nowrap;max-width:100%;overflow-x:auto}
 .ansq{white-space:pre-wrap;font-size:16px;line-height:1.8}.anssol{display:flex;flex-direction:column;gap:6px}.ansline{background:#f8fafc;color:#0f172a;border:1px solid #cbd5e1;border-radius:10px;padding:8px 10px;line-height:1.9;overflow-x:auto}.ansline .aimath{font-size:15px}
+
+/* ملازمي: قراءة الملزمة والكتابة فوكها */
+.ntlist{display:flex;flex-direction:column;gap:8px;padding:10px}
+.nt{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:#26303f;color:#fff;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.ntbar{flex:none;display:flex;align-items:center;gap:6px;padding:6px 8px;background:#0f1a2e}
+.ntcolors{justify-content:center}
+.ntgap{flex:1}
+.nttitle{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:center;font-size:14px}
+.ntok{color:#7dd99b;white-space:nowrap}.ntwait{color:#f7c548;white-space:nowrap}
+.ntbad{flex:none;padding:6px 10px;background:#b3261e;font-size:13px}
+.ntstage{flex:1 1 0;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
+.ntsheet{position:relative;background:#fff;margin:0 auto}
+.ntsheet canvas{position:absolute;inset:0;display:block}
+.ntpages{justify-content:space-between}
+.ntpages select{padding:6px 10px;border-radius:8px;font-size:15px}
