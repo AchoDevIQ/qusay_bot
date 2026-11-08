@@ -70,9 +70,9 @@ async function pagesOf(e: Row, v: Row, curr: string) {
   }
   return [];
 }
-// القسم: قبل ما تنفتح الكاميرا، الطالب يرتب جملة «أقسم بالله الكريم أني الطالب (اسمه الرباعي) لم أغش في هذا الامتحان»
+// القسم: قبل ما تنفتح الأسئلة، الطالب يرتب جملة «أني الطالب (اسمه الرباعي) أقسم بالله أنني لن أغش في هذا الامتحان»
 const oathKey = (item: number) => `oath_${item}`;
-export const oathSentence = (name: string) => `أقسم بالله الكريم أني الطالب ${String(name ?? "").replace(/\s+/g, " ").trim()} لم أغش في هذا الامتحان`;
+export const oathSentence = (name: string) => `أني الطالب ${String(name ?? "").replace(/\s+/g, " ").trim()} أقسم بالله أنني لن أغش في هذا الامتحان`;
 export async function takeOath(uid: number, id: unknown, s: SchedSettings) {
   const it = await liveRoom(uid, id, s);
   if (!await kvGet(oathKey(it.id))) {
@@ -90,7 +90,8 @@ async function roomView(it: Row, s: SchedSettings) {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   return {
     id: it.id, sid: it.user_id, title: e.title, model: v.model, oath: oathSentence(st?.name ?? ""), sworn: !!await kvGet(oathKey(it.id)), gallery: s.gallery, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra,
-    pages: await pagesOf(e, v, st?.curr ?? ""),
+    // صور الأسئلة ما توصل للصفحة أصلاً قبل القسم
+    pages: await kvGet(oathKey(it.id)) ? await pagesOf(e, v, st?.curr ?? "") : [],
     questions: qs.map((q) => ({ n: q.n, answers: answers.filter((a) => a.q === q.n).map((a) => ({ id: a.id, file: a.file })) })),
   };
 }

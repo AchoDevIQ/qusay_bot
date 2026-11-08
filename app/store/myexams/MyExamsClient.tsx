@@ -475,11 +475,12 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
         <div className="who">⏳ باقي <b>{left}</b> دقيقة<br /><small className="hint">الوقت {room.minutes} دقيقة، وفوقه {room.extra} دقيقة حتى تصور وتدز.</small></div>
       </div>
       {/* رقم الطالب فوك كل صفحة: إذا أحد صورها ونشرها نعرف منو */}
-      {room.pages.map((p) => <div key={p} className="exidwrap"><span className="exid">🆔 {room.sid}</span><img className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" /></div>)}
       {!room.sworn ? (
-        <WordOrder key={room.id} title="🤲 القسم قبل الكاميرا" intro="قبل ما تصور أجوبتك، رتب الجملة بالضغط على الكلمات بالترتيب:" okLabel="📷 افتح الكاميرا" sentence={room.oath}
+        <WordOrder key={room.id} title="🤲 القسم قبل الأسئلة" intro="الأسئلة تنفتح بعد ما ترتب هذي الجملة بالضغط على الكلمات بالترتيب:" okLabel="📖 افتح الأسئلة" sentence={room.oath}
           onDone={async () => { setBusy(true); const r = await call({ action: "oath", item: room.id }); setBusy(false); if (r?.room) setRoom(r.room); }} />
       ) : (
+      <>
+      {room.pages.map((p) => <div key={p} className="exidwrap"><span className="exid">🆔 {room.sid}</span><img className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" /></div>)}
       <div className="card"><h2>📷 صور جواب كل سؤال</h2>
         <div className="form">
           {room.questions.map((q) => (
@@ -518,6 +519,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
           <button type="button" className="btn agbtn adtop" disabled={busy || !total} onClick={async () => { setBusy(true); const r = await call({ action: "submitExam", item: room.id }); setBusy(false); if (r) leave(); }}>✅ سلم الامتحان</button>
         </div>
       </div>
+      </>
       )}
     </div>
   );

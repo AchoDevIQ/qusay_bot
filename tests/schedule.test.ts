@@ -486,7 +486,8 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.equal(opened.room.gallery, false);   // الاستوديو مطفي من البداية: الكاميرا بس
   // قبل القسم ما تنفتح الكاميرا
   assert.equal(opened.room.sworn, false);
-  assert.match(opened.room.oath, /^أقسم بالله الكريم أني الطالب .+ لم أغش في هذا الامتحان$/);
+  assert.match(opened.room.oath, /^أني الطالب .+ أقسم بالله أنني لن أغش في هذا الامتحان$/);
+  assert.deepEqual(opened.room.pages, []);   // الأسئلة ما تنفتح قبل القسم
   await assert.rejects(upload(90, item, 1), /رتب جملة القسم/);
   assert.equal((await act(90, "oath", { item })).room.sworn, true);
   await assert.rejects(upload(91, item, 1), /غير موجود/);      // طالب ثاني
