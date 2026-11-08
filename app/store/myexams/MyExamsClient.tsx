@@ -478,7 +478,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
         <div className="form">
           {room.questions.map((q) => (
             <div key={q.n}>
-              <button type="button" className={"exqhead" + (open === q.n ? " on" : "")} onClick={() => setOpen(q.n)}><span>السؤال {q.n}</span><span>{q.answers.length ? `✅ ${q.answers.length} صورة` : "ما مدزوز"}</span></button>
+              <button type="button" className={"exqhead" + (open === q.n ? " on" : "")} onClick={() => setOpen(q.n)}><span>السؤال {q.n}</span><span>{q.answers.length ? "✅ مدزوزة" : "ما مدزوز"}</span></button>
               {open === q.n && (
                 <div className="exqbody">
                   {q.answers.map((a) => (
@@ -487,7 +487,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                   {draft?.q === q.n ? (
                     <div>
                       {more.length > 0 && <div className="exhint">باقي {more.length} صورة وراها</div>}
-                      <div className="exhint exbad">⚠️ لازم الكتابة عدلة، مو مقلوبة ولا مايلة، وإلا الورقة ما تتصحح. إذا مقلوبة دوس «🔄 دور الصورة» لحد ما تصير عدلة.</div>
+                      <div className="exhint exbad">⚠️ لازم الصورة عدلة مو مگلوبة، عداها الورقة ما تتصحح.</div>
                       <img className="eximg mxdraft" src={draft.url} alt="معاينة" style={{ transform: `rotate(${draft.turns * 90}deg)` }} />
                       <div className="exline">
                         <button type="button" className="exbtn" onClick={() => setDraft({ ...draft, turns: (draft.turns + 1) % 4 })}>🔄 دور الصورة</button>
@@ -497,6 +497,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                         <button type="button" className="btn" disabled={busy} onClick={() => void send()}>{busy ? "جاري الإرسال..." : "✅ تم"}</button>
                       </div>
                     </div>
+                  ) : q.answers.length ? (
+                    <div className="exhint">صورة وحدة لكل سؤال. إذا تريد تبدلها، احذفها وصور غيرها.</div>
                   ) : (
                     <div className="exline">
                       <PhotoPick label={`السؤال ${q.n}`} onFiles={(fs) => void pickPhoto(q.n, fs)} />

@@ -527,6 +527,8 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.ok(back.room.closeAt > stamp());                     // وقته يبدي من دخوله
   await act(92, "oath", { item: it2 });
   assert.ok(await upload(92, it2, 1));
+  // صورة وحدة لكل سؤال: الثانية تبدل الأولى
+  assert.equal((await upload(92, it2, 1)).questions[0].answers.length, 1);
 });
 test("الحضوري ما يدخل غرفة الامتحان، ورسالة البدء مرة وحدة وبالمفتاح بس", async () => {
   const s = await schedSettings();

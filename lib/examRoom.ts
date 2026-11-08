@@ -156,6 +156,8 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   need(kind, "لازم صورة");
   const ref = path.posix.join("student_answers", String(uid), String(it.id), `q${q}_${randomUUID()}.${kind}`);
   await files().write(ref, buf, kind === "png" ? "image/png" : "image/jpeg");
+  // صورة وحدة لكل سؤال: الجديدة تبدل القديمة
+  await remove("exam_answers", { item_id: it.id, q });
   await insert("exam_answers", { item_id: it.id, q, file: ref, created: stamp() });
   return await roomView(it, s);
 }

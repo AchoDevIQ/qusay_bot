@@ -301,7 +301,7 @@ function TestPaper({ tests, versions, busy, upload }: { tests: TestStudent[]; ve
         {v?.qs.map((q) => (
           <div key={q.n}>
             <label>جواب السؤال {q.n} <small>(من {q.max})</small>{pics[q.n]?.length ? ` · ${pics[q.n].length} صورة` : ""}</label>
-            <PhotoPick multiple onFiles={(fs) => setPics({ ...pics, [q.n]: [...(pics[q.n] ?? []), ...fs].slice(0, 6) })} />
+            <PhotoPick label={pics[q.n]?.length ? "بدّل الصورة" : `السؤال ${q.n}`} onFiles={(fs) => setPics({ ...pics, [q.n]: fs.slice(0, 1) })} />
             <Thumbs files={pics[q.n] ?? []} onRemove={(i) => setPics({ ...pics, [q.n]: (pics[q.n] ?? []).filter((_, j) => j !== i) })} />
           </div>
         ))}
