@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Book = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; topics: { topic: string; lectures: number[]; tid?: number | null }[]; chars: number; created: string };
-type Data = { qa: { on: boolean; direct: boolean; linked: boolean; asked: number; fromBook: number; solved: number; cost: number; books: Book[]; botTopics: Record<number, { id: number; ar: string }[]> }; notice: string };
+type Data = { exams?: { left: number; done: number; total: number; failed: string[] }; qa: { on: boolean; direct: boolean; linked: boolean; asked: number; fromBook: number; solved: number; cost: number; books: Book[]; botTopics: Record<number, { id: number; ar: string }[]> }; notice: string };
 const KIND: Record<Book["kind"], string> = { main: "الملزمة", extra: "الاثرائيات", exams: "الوزاريات" };
 
 export default function QaCard() {
@@ -35,6 +35,11 @@ export default function QaCard() {
               <label className="adcheck adflat"><input type="checkbox" checked={qa.on} disabled={busy} onChange={(e) => void call({ action: "settings", on: e.target.checked })} /><span>شغّل الجواب من ملازم Word</span></label>
               <label className="adcheck adflat"><input type="checkbox" checked={qa.direct} disabled={busy} onChange={(e) => void call({ action: "settings", direct: e.target.checked })} /><span>السؤال اللي ما موجود بالملزمة: الحل على طريقتك يوصل للطالب مباشرة (إذا مطفي: السؤال يوصلك إنت)</span></label>
               <div className="exhint">انسأل {qa.asked} سؤال: {qa.fromBook} من الملازم، {qa.solved} انحل على طريقتك · الكلفة <b dir="ltr">${qa.cost}</b></div>
+              <div className="exlabel">📝 أسئلة الامتحانات وحلولها</div>
+              <div className="exhint">الطالب ممكن يسأل سؤال جاي بامتحان. هذا الزر يقرا كل أسئلة الامتحانات وحلولها مرة وحدة ويحفظها كتابة ويا موضوعها، وبعدها البوت يدور بيها ويا الملزمة. الحل ياخذه من خطوات التصحيح المحفوظة، وإذا ماكو من صورة الحل. إذا أضفت امتحانات جديدة، دوسه مرة ثانية ويقرا الجديدة بس.</div>
+              {data?.exams && <div className="exhint">انقرت <b>{data.exams.done}</b> من {data.exams.total || data.exams.done} سؤال{data.exams.left ? ` · ⏳ باقي ${data.exams.left} (كل دقيقة 6)` : ""}</div>}
+              {!!data?.exams?.failed.length && <div className="exbad">⚠️ ما انقرت: {data.exams.failed.join("، ")}</div>}
+              <button type="button" className="exbtn" disabled={busy || !qa.linked} onClick={() => void call({ action: "exams" })}>📝 اقرا أسئلة الامتحانات</button>
               <div className="exlabel">ارفع ملزمة Word</div>
               <div className="exhint">لازم كل محاضرة تبدي بعنوان مثل «رسم الدوال المحاضرة 1». نفس الفصل والمنهج والنوع يتبدل بالجديد.</div>
               <div className="exline">

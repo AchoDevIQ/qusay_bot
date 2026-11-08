@@ -4,7 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { find, kvGet, kvSet, one, type Row } from "./db.ts";
 import { files } from "./files.ts";
-import { aiLinked, svc } from "./aiGrade.ts";
+import { aiLinked, isImage, readRef, rubricOf, solutionPdf, svc } from "./aiGrade.ts";
 import { docxLines } from "./docxText.ts";
 import { verifyHomeToken } from "./webAuth.ts";
 import { isAdmin } from "./data.ts";
@@ -121,17 +121,128 @@ async function lecturesOf(b: QaBook): Promise<Lecture[]> {
   return list;
 }
 
-/** فيه ملازم لهذا الفصل؟ (والذكاء مربوط) */
+/** فيه ملازم لهذا الفصل، أو أسئلة امتحانات انقرت؟ (والذكاء مربوط) */
 export async function qaReady(chapter: number) {
-  return aiLinked() && (await qaCfg()).on && (await qaBooks()).some((b) => b.chapter === chapter);
+  if (!aiLinked() || !(await qaCfg()).on) return false;
+  if ((await qaBooks()).some((b) => b.chapter === chapter)) return true;
+  return (await examState()).done > 0;
+}
+
+// ---------- أسئلة الامتحانات وحلولها: تنقرا مرة وحدة كتابة، وتنحفظ ويا موضوعها، والطالب يدور بيها ويا الملزمة
+type ExamQa = { qid: number; exam: string; model: string; n: number; question: string; solution: string };
+type ExamQueue = { q: number[]; tries: Record<string, number>; failed: string[]; done: number; total: number };
+const EXAM_Q = "qa_exam_queue", EXAM_PER_TICK = 6, EXAM_TRIES = 2;
+const examTopicKey = (tid: number) => `qa_exam_t_${tid}`;
+const examDoneKey = (qid: number) => `qa_exam_done_${qid}`;
+const readExamQ = () => readJson<ExamQueue>(EXAM_Q, { q: [], tries: {}, failed: [], done: 0, total: 0 });
+export async function examState() {
+  const s = await readExamQ();
+  return { left: s.q.length, done: s.done, total: s.total, failed: s.failed };
+}
+export async function examQas(tid: number): Promise<ExamQa[]> {
+  try { const j = JSON.parse((await kvGet(examTopicKey(tid))) ?? "[]"); return Array.isArray(j) ? j : []; } catch { return []; }
+}
+/** رقم الفصل للامتحان: من رمزه (ch3) أو من اسم فصله */
+const ORD = ["الاول", "الثاني", "الثالث", "الرابع", "الخامس"];
+function examChapter(e: Row): number {
+  const m = /(\d+)/.exec(String(e.slug ?? ""));
+  if (m) return Number(m[1]);
+  const i = ORD.findIndex((w) => norm(String(e.chapter ?? "")).join(" ").includes(norm(w)[0]));
+  return i + 1;
+}
+/** موضوع البوت لكل امتحان (نفس الربط مال الملازم) */
+async function examTopic(examId: number): Promise<number | null> {
+  const e = await one("bank_exams", { id: examId });
+  if (!e) return null;
+  const n = examChapter(e);
+  return n ? bestTopic(String(e.title ?? ""), await chapterTopics(n)) : null;
+}
+/** «📝 اقرا أسئلة الامتحانات»: كل سؤال إله صورة وبعده ما انقرا يدخل بالدور */
+export async function queueExams() {
+  const todo: number[] = [];
+  for (const q of await find("bank_questions")) {
+    if (!q.q_file || !isImage(String(q.q_file))) continue;
+    if (await kvGet(examDoneKey(q.id))) continue;
+    todo.push(Number(q.id));
+  }
+  const s = await readExamQ();
+  const list = [...new Set([...s.q, ...todo])];
+  await kvSet(EXAM_Q, JSON.stringify({ ...s, q: list, failed: [], total: s.done + list.length }));
+  return list.length;
+}
+/** يقرا سؤال امتحان وحله كتابة. الحل من خطوات التصحيح المحفوظة إذا موجودة، وإلا من صورة الحل أو PDF النموذج */
+async function readExamQuestion(qid: number): Promise<{ tid: number | null; row: ExamQa; usage: any[] }> {
+  const q = await one("bank_questions", { id: qid });
+  if (!q) throw new Error("السؤال غير موجود");
+  const v = await one("bank_versions", { id: q.version_id });
+  const e = v && await one("bank_exams", { id: v.exam_id });
+  if (!v || !e) throw new Error("الامتحان غير موجود");
+  const qImg = await readRef(String(q.q_file));
+  if (!qImg) throw new Error("صورة السؤال مفقودة");
+  const body: Row = { question_images: [qImg.toString("base64")] };
+  const steps = await rubricOf(qid);
+  if (steps) body.solution_text = steps.map((s) => s.text).join("\n");
+  else {
+    const sol = (await Promise.all((JSON.parse(q.a_files || "[]") as string[]).filter(isImage).map(readRef))).filter((b): b is Buffer => !!b);
+    if (sol.length) body.solution_images = sol.map((b) => b.toString("base64"));
+    else {
+      const pdf = await solutionPdf(q.version_id);
+      if (pdf) { body.pdf = pdf.toString("base64"); body.n = Number(q.n); }
+    }
+  }
+  const r = await svc("/bot/extract", body, 180_000);
+  const row: ExamQa = { qid, exam: String(e.title ?? ""), model: String(v.model ?? ""), n: Number(q.n), question: String(r.question ?? "").trim(), solution: String(r.solution ?? "").trim() };
+  if (!row.question) throw new Error("ما انقرا السؤال");
+  return { tid: await examTopic(Number(e.id)), row, usage: r.usage ?? [] };
+}
+/** دكة المؤقت: كم سؤال من الدور، ثلاثة بنفس الوقت. اللي يفشل مرتين يطلع من الدور وينكتب */
+export async function examQueueTick(limit = EXAM_PER_TICK) {
+  if (!aiLinked()) return { off: true };
+  const s = await readExamQ();
+  if (!s.q.length) return { left: 0 };
+  const batch = s.q.slice(0, limit), queue = [...batch];
+  const got: { tid: number | null; row: ExamQa; usage: any[] }[] = [];
+  const bad: number[] = [];
+  await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      try { got.push(await readExamQuestion(id)); } catch (e) { console.error("qa exam", id, e); bad.push(id); }
+    }
+  }));
+  // الحفظ واحد واحد حتى ما يضيع سؤال من نفس الموضوع
+  const cfg = await qaCfg();
+  for (const g of got) {
+    if (g.tid) {
+      const list = (await examQas(g.tid)).filter((x) => x.qid !== g.row.qid);
+      list.push(g.row);
+      await kvSet(examTopicKey(g.tid), JSON.stringify(list));
+    }
+    await kvSet(examDoneKey(g.row.qid), g.tid ? String(g.tid) : "none");
+    for (const u of g.usage) { cfg.inTok += Number(u.input) || 0; cfg.outTok += Number(u.output) || 0; }
+  }
+  await saveCfg(cfg);
+  const now = await readExamQ();
+  const tries = { ...now.tries }, failed = [...now.failed];
+  const drop = new Set(got.map((g) => g.row.qid));
+  for (const id of bad) {
+    tries[id] = (tries[id] ?? 0) + 1;
+    if (tries[id] >= EXAM_TRIES) {
+      drop.add(id); delete tries[id];
+      const q = await one("bank_questions", { id }), v = q && await one("bank_versions", { id: q.version_id }), e = v && await one("bank_exams", { id: v.exam_id });
+      failed.push(q ? `${e?.title ?? ""} ${v?.model ?? ""} س${q.n}` : `سؤال ${id}`);
+    }
+  }
+  const left = now.q.filter((id) => !drop.has(id) && !bad.includes(id)).concat(bad.filter((id) => !drop.has(id)));
+  await kvSet(EXAM_Q, JSON.stringify({ q: left, tries, failed: failed.slice(-50), done: now.done + got.length, total: now.total }));
+  return { done: got.length, failed: bad.length, left: left.length };
 }
 
 export type QaAsk = { text?: string; image?: Buffer };
 export type QaResult = { source: "lecture" | "topic" | "ai"; solution: string };
-const joinCtx = (list: { kind: QaKind; l: Lecture }[], max: number) => {
+type Part = { kind: QaKind | "tests"; l: Lecture };
+const joinCtx = (list: Part[], max: number) => {
   let s = "";
   for (const { kind, l } of list) {
-    const part = `### ${QA_KIND[kind]} — ${l.topic} المحاضرة ${l.lecture}\n${l.text}\n\n`;
+    const part = kind === "tests" ? `### أسئلة الامتحانات — ${l.topic}\n${l.text}\n\n` : `### ${QA_KIND[kind]} — ${l.topic} المحاضرة ${l.lecture}\n${l.text}\n\n`;
     if (s.length + part.length > max) break;
     s += part;
   }
@@ -158,12 +269,14 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
   const all = (await qaBooks()).filter((b) => b.chapter === chapter);
   // ملازم منهج الطالب أول. إذا الموضوع ما بيها، ملازم المنهج الثاني، والحل ينكتب بلغة الطالب
   const pick = async (books: QaBook[]) => {
-    const out: { kind: QaKind; l: Lecture }[] = [];
+    const out: Part[] = [];
     for (const b of books) for (const l of await lecturesOf(b)) if (linked(b, l.topic)) out.push({ kind: b.kind, l });
     return out;
   };
   let mine = await pick(all.filter((b) => b.lang === lang));
   if (!mine.length) mine = await pick(all.filter((b) => b.lang !== lang));
+  // أسئلة الامتحانات مال هذا الموضوع: تدخل بالبحث بالموضوع (مو بالمحاضرة)
+  for (const x of await examQas(tid)) mine.push({ kind: "tests", l: { topic: `${x.exam} نموذج ${x.model} سؤال ${x.n}`, lecture: 0, text: `السؤال: ${x.question}\nالحل:\n${x.solution}` } });
   if (!mine.length) return null;
   const cfg = await qaCfg(); cfg.asked++; await saveCfg(cfg);
   const inLecture = lecture ? mine.filter((x) => x.l.lecture === lecture) : [];
@@ -209,7 +322,7 @@ async function pageData() {
   const list = (await qaBooks()).sort((a, b) => a.chapter - b.chapter || a.lang.localeCompare(b.lang) || a.kind.localeCompare(b.kind));
   const botTopics: Record<number, { id: number; ar: string }[]> = {};
   for (const n of new Set(list.map((b) => b.chapter))) botTopics[n] = (await chapterTopics(n)).map((t) => ({ id: t.id, ar: t.ar }));
-  return { qa: { on: cfg.on, direct: cfg.direct, linked: aiLinked(), asked: cfg.asked, fromBook: cfg.fromBook, solved: cfg.solved, cost, books: list, botTopics } };
+  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, linked: aiLinked(), asked: cfg.asked, fromBook: cfg.fromBook, solved: cfg.solved, cost, books: list, botTopics } };
 }
 const DOCX_MAX = 60 * 1024 * 1024;
 export async function qaAction(raw: Row | FormData) {
@@ -246,6 +359,9 @@ export async function qaAction(raw: Row | FormData) {
     need(list.some((b) => b.id === body.id), "الملف غير موجود");
     await saveBooks(list.filter((b) => b.id !== body.id));
     notice = "🗑 انحذف";
+  } else if (a === "exams") {
+    const n = await queueExams();
+    notice = n ? `⏳ انحطت ${n} سؤال امتحان بالدور. كل دقيقة يقرا ${EXAM_PER_TICK}، وتگدر تسكر الصفحة` : "كل أسئلة الامتحانات انقرت";
   } else if (a === "map") {
     // صاحب البوت يصلّح الربط: موضوع الملزمة هذا يروح لموضوع البوت هذا (أو لا شي)
     const list = await qaBooks();

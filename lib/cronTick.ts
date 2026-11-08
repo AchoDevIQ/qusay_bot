@@ -9,6 +9,7 @@ import { kvGet, kvSet } from "./db.ts";
 import { notifyStarted } from "./examRoom.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { aiGradeTick, draftQueueTick } from "./aiGrade.ts";
+import { examQueueTick } from "./qaBank.ts";
 import { ADMIN_IDS } from "./config.ts";
 import { finishByAi, paperName, aiObjectionsTick } from "./gradeApi.ts";
 import { schedSettings } from "./schedApi.ts";
@@ -33,6 +34,7 @@ export async function cronTick(key: unknown) {
     await step("checked", () => sweepCheckpoints());
     await step("ai", () => aiGradeTick(finishByAi, paperName));
     await step("aiDraft", () => draftQueueTick(ADMIN_IDS[0] ?? 0));
+    await step("qaExams", () => examQueueTick());
     await step("aiObjections", () => aiObjectionsTick());
     await step("graders", () => notifyGraders());
     await step("sessions", () => sweepSessions());

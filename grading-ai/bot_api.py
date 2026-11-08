@@ -567,6 +567,48 @@ Do not use any method that does not appear in the booklet. Check the arithmetic 
 If the question is not a math question of this topic, or cannot be read, say so in one short Arabic line.""" + QA_FORMAT
 
 
+class ExtractReq(BaseModel):
+    question_images: List[str] = Field(default_factory=list)  # the exam question (base64 pages)
+    solution_images: List[str] = Field(default_factory=list)  # the teacher's model solution pages, if any
+    pdf: Optional[str] = None  # or the version's whole solution PDF...
+    n: Optional[int] = None  # ...and this question's number in it
+    solution_text: str = ""  # or the solution steps the bot already has as text
+
+
+class ExtractOut(BaseModel):
+    question: str = Field(description="The exam question, transcribed exactly")
+    solution: str = Field(description="The teacher's full solution of this question, one step per line; empty if none is given")
+
+
+EXTRACT_PROMPT = r"""These are pages from a math teacher's exam (Iraqi 6th grade): the QUESTION photo first, then (if present) his model SOLUTION.
+Transcribe them so a student can later read them as text.
+- question: the question exactly as written (all its parts and numbers), Arabic words as written.
+- solution: the teacher's solution of THIS question exactly as he wrote it, his steps in his order. Leave out marks written in the margin.
+{given}""" + QA_FORMAT
+
+
+@app.post("/bot/extract", dependencies=[Depends(check_key)])
+async def bot_extract(req: ExtractReq):
+    """Exam question and its model solution as text, read once, so students' questions can be answered from the exams too."""
+    bucket = start_usage()
+    q_pages = decode_images(req.question_images)
+    if not q_pages:
+        raise HTTPException(status_code=400, detail="no question image")
+    imgs = [(b, page_media(b), f"QUESTION page {i + 1}") for i, b in enumerate(q_pages)]
+    given = ""
+    if req.solution_text.strip():
+        given = "The solution is not in the photos; here are the teacher's solution steps as text (rewrite them in the format below, keep his steps):\n" + req.solution_text[:6000]
+    elif req.solution_images:
+        imgs += [(b, page_media(b), f"SOLUTION page {i + 1}") for i, b in enumerate(decode_images(req.solution_images))]
+    elif req.pdf and req.n:
+        imgs += [(b, page_media(b), f"SOLUTION PDF page {i + 1}") for i, b in enumerate(pdf_pages(req.pdf))]
+        given = f"The solution PDF has all the questions of this exam: take only question {req.n} (marked س{req.n} or {req.n})."
+    if len(imgs) > MAX_IMAGES + 8:
+        imgs = imgs[: MAX_IMAGES + 8]
+    out = await complete_vision_json("grading", EXTRACT_PROMPT.replace("{given}", given), schema=ExtractOut, detail="high", images=imgs)
+    return {"question": str(out.get("question") or "").strip(), "solution": str(out.get("solution") or "").strip(), "usage": usage_report(bucket)}
+
+
 @app.post("/bot/qa", dependencies=[Depends(check_key)])
 async def bot_qa(req: QaReq):
     bucket = start_usage()

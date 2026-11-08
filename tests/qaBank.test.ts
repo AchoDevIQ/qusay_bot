@@ -19,7 +19,7 @@ globalThis.fetch = (async (url: string, init: any) => {
 
 const { docxLines } = await import("../lib/docxText.ts");
 const qa = await import("../lib/qaBank.ts");
-const { initDb, find } = await import("../lib/db.ts");
+const { initDb, find, insert } = await import("../lib/db.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 await initDb();
 const tidOf = async (ar: string) => Number((await find("topics")).find((t) => t.ar === ar)?.id);
@@ -113,4 +113,31 @@ test("رفع الملزمة لصاحب البوت بس، والبحث: المح�
   assert.equal(page.qa.fromBook, 2);
   assert.equal(page.qa.solved, 2);
   assert.ok(page.qa.cost > 0);
+});
+
+test("أسئلة الامتحانات: تنقرا مرة وحدة كتابة ويا موضوعها، والطالب يلگى سؤاله بيها", async () => {
+  fs.mkdirSync(path.join(tmp, "ex"), { recursive: true });
+  fs.writeFileSync(path.join(tmp, "ex", "q1.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2]));
+  const e = await insert("bank_exams", { slug: "ch1", chapter: "الفصل الأول", ord: 50, title: "الجذور التربيعية", minutes: 60, pos: 50 });
+  const v = await insert("bank_versions", { exam_id: e, model: "A", kind: "mandatory", ok: 1 });
+  const qid = await insert("bank_questions", { version_id: v, n: 1, max_mark: 10, q_file: "ex/q1.jpg", a_files: "[]" });
+  const { saveRubric } = await import("../lib/aiGrade.ts");
+  await saveRubric(qid, [{ text: "x^2-y^2=5", points: 5 }, { text: "x=3", points: 5 }], 1);
+  reply = (b) => b.question_images ? { question: "جد الجذور التربيعية للعدد 5-12i", solution: "$x^{2}-y^{2}=5$" }
+    : b.mode === "find" && b.context.includes("5-12i") ? { found: true, solution: "حل الامتحان" } : { found: false, solution: "" };
+  const r: any = await qa.qaAction({ initData: sign(1), action: "exams" });
+  assert.match(r.notice, /انحطت 1 سؤال/);
+  ai.length = 0;
+  assert.deepEqual(await qa.examQueueTick(), { done: 1, failed: 0, left: 0 });
+  // الحل راح من خطوات التصحيح المحفوظة، مو صورة
+  assert.equal(ai[0].route, "/bot/extract");
+  assert.match(ai[0].body.solution_text, /x\^2-y\^2=5/);
+  const tid = await tidOf("الجذور التربيعية");
+  assert.equal((await qa.examQas(tid)).length, 1);
+  // ما بالمحاضرة، بس جاي بالامتحان: يلگاه بالبحث بالموضوع
+  const a = await qa.qaAnswer({ text: "جذور 5-12i" }, 1, tid, 1, "ar");
+  assert.deepEqual(a, { source: "topic", solution: "حل الامتحان" });
+  // مرة ثانية ما يعيد قراءته
+  assert.match(((await qa.qaAction({ initData: sign(1), action: "exams" })) as any).notice, /كل أسئلة الامتحانات انقرت/);
+  assert.equal(((await qa.qaAction({ initData: sign(1), action: "list" })) as any).exams.done, 1);
 });

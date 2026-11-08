@@ -222,7 +222,7 @@ export async function draftExam(examId: number, by: number) {
 }
 
 /** صورة من مخزن الملفات، أو من تليجرام إذا انرفعت بالمحادثة */
-async function readRef(ref: string): Promise<Buffer | null> {
+export async function readRef(ref: string): Promise<Buffer | null> {
   if (ref.startsWith("tg:")) {
     const info: any = await api("getFile", { file_id: ref.slice(3) });
     if (!info?.file_path) return null;
@@ -231,9 +231,9 @@ async function readRef(ref: string): Promise<Buffer | null> {
   }
   return await files().read(ref);
 }
-const isImage = (ref: string) => ref.startsWith("tg:") || /\.(jpe?g|png|webp)$/i.test(ref);
+export const isImage = (ref: string) => ref.startsWith("tg:") || /\.(jpe?g|png|webp)$/i.test(ref);
 /** PDF الحل النموذجي مال النموذج (إذا الحل مرفوع ملف وحد مو صورة لكل سؤال) */
-async function solutionPdf(versionId: number): Promise<Buffer | null> {
+export async function solutionPdf(versionId: number): Promise<Buffer | null> {
   const v = await one("bank_versions", { id: versionId });
   return v?.answer_pdf ? await readRef(String(v.answer_pdf)) : null;
 }
