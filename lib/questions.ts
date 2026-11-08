@@ -4,10 +4,11 @@ import { find, insert, kvGet, kvSet, one, remove, setSession, type Row } from ".
 import { canAsk, logActivity } from "./access.ts";
 import { ADMIN_IDS, BTN_ASK, BTN_MYQ, TOKEN } from "./config.ts";
 import { answerFromBooklets, autoReady, bookletCfg, replyText } from "./booklets.ts";
+import { qaAnswer, qaCfg, qaReady, saveAnswer } from "./qaBank.ts";
 import {
   can, centerName, chLabel, chapters, groupId, hoursText, qHours, qOpenNow, qWhere, question, setQ, student, topic, topics,
 } from "./data.ts";
-import { HOME_PAGE, flowKb, mainKb } from "./keyboards.ts";
+import { HOME_PAGE, adminPageLink, flowKb, mainKb } from "./keyboards.ts";
 import { api, edit, send, upload, type Kb } from "./telegram.ts";
 import { btn, chunk, cut, esc, stamp, words } from "./util.ts";
 import { startReg } from "./student.ts";
@@ -96,7 +97,36 @@ async function photoOf(m: Row) {
 }
 /** الجواب الآلي: إذا الأستاذ حال هذا السؤال بالملازم، الطالب يوصله الحل نفسه بصورة بإطار، ويا زر يوصل سؤاله للأستاذ
  *  إذا بعده ما فهم. إذا نفس الحل وصله قبل، أو ما لگيناه، يرجع false والسؤال يروح للأستاذ */
+/** الجواب من ملازم Word (كتابة): يدور بالمحاضرة، بعدين بالموضوع، وإذا ما لگاه يحله نظام الذكاء على طريقة الأستاذ.
+ *  الطالب يوصله زر يفتح الحل مكتوب مثل الكتاب. إذا ماكو ملازم لهذا الموضوع، يرجع false ويكمل الطريق القديم */
+async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean) {
+  const t = await topic(data.t);
+  const n = await chapterNo(t?.chapter_id);
+  if (!t || !n || !await qaReady(n)) return false;
+  const text = String(m.text ?? m.caption ?? "").trim();
+  const image = m.photo ? await photoOf(m) : null;
+  if (!image && !text) return false;
+  const wait: any = await send(chat, "⏳ لحظة، دا أدور على حل سؤالك بملازم الأستاذ...");
+  let r = null;
+  try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined }, n, String(t.ar ?? ""), Number(data.l) || 0, en ? "en" : "ar"); }
+  catch (e) { console.error("qa", e); }
+  if (wait?.message_id) await api("deleteMessage", { chat_id: chat, message_id: wait.message_id });
+  if (!r) return false;
+  // حل نظام الذكاء (مو من الملزمة): إذا صاحب البوت يريد يشوفه أول، السؤال يروح للأستاذ مثل العادة
+  if (r.source === "ai" && !(await qaCfg()).direct) return false;
+  const where = `${t.ar}${data.l ? ` — المحاضرة ${data.l}` : ""}`;
+  const id = await saveAnswer(uid, text, r, where);
+  await kvSet(`qauto_${uid}`, JSON.stringify({ mid: m.message_id, t: data.t, l: data.l || 0 }));
+  await setSession(uid, "", {});
+  const kb: Kb = [[{ text: "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }], [btn("❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]];
+  await send(chat, r.source === "ai" ? "🤖 <b>حليت سؤالك على طريقة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة." : "📘 <b>سؤالك محلول بملزمة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة.", { kb });
+  await send(chat, "👆", { replyKb: await mainKb(uid) });
+  await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : `📘 وصله حل سؤاله من الملزمة (${where})`);
+  return true;
+}
+
 async function autoAnswer(chat: number, uid: number, m: Row, data: Row, en: boolean) {
+  if (await qaAuto(chat, uid, m, data, en)) return true;
   const t = await topic(data.t);
   const n = await chapterNo(t?.chapter_id);
   if (!n || !await autoReady(n)) return false;

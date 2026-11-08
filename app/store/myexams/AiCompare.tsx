@@ -23,7 +23,7 @@ const tex = (p: string) => { try { return katex.renderToString(toTex(p), { throw
 /** خطوة رياضيات: كل سطر (مفصول بـ ;) ينكتب مثل الكتاب. السطر اللي بيه كلام عربي ينكتب نص.
  *  السطر الطويل ما ينقطع بنص المعادلة: ينزل سطر جديد بس عند «⇒» أو «→»، وكل قطعة كاملة بسطرها */
 const ARROW = /\s*(?:=>|⇒|⟹|->|→|\\Rightarrow|\\to)\s*/;
-function MathText({ text }: { text: string }) {
+export function MathText({ text }: { text: string }) {
   const parts = String(text ?? "").split(/\s*;\s*/).filter(Boolean);
   return (
     <div className="aimath" dir="ltr">
@@ -40,7 +40,7 @@ function MathText({ text }: { text: string }) {
   );
 }
 /** جملة عربية بيها رياضيات بين $ $: الرياضيات تنكتب مثل الكتاب */
-function Inline({ text }: { text: string }) {
+export function Inline({ text }: { text: string }) {
   const parts = String(text ?? "").split(/(\$[^$]+\$)/);
   return <>{parts.map((p, i) => (p.startsWith("$") && p.endsWith("$") && p.length > 2
     ? <span key={i} dir="ltr" className="aiinl" dangerouslySetInnerHTML={{ __html: tex(p.slice(1, -1)) }} />

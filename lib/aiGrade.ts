@@ -237,7 +237,7 @@ async function googleIdToken(aud: string): Promise<string | null> {
   } catch { return null; }
 }
 
-async function svc(route: string, body: object, ms = 120_000): Promise<any> {
+export async function svc(route: string, body: object, ms = 120_000): Promise<any> {
   if (!aiLinked()) throw new Error("نظام التصحيح AI مو مربوط");
   const token = await googleIdToken(svcUrl());
   const res = await fetch(svcUrl() + route, {

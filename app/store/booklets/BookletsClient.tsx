@@ -3,6 +3,7 @@
 // ويشغل أو يطفي الجواب الآلي، ويكتب نص الرد للطالب، ويشوف الكلفة
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
+import QaCard from "./QaCard";
 
 type Lecture = { from: number; to: number; topic: string; lecture: number };
 type Booklet = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; pages: number; lectures: Lecture[]; created: string; pdf?: boolean };
@@ -21,6 +22,8 @@ export default function BookletsClient() {
         {data && (
           <>
             <div className="exhint tmhint">الطالب يسأل عادي (صورة أو كتابة). إذا الجواب الآلي شغال وسؤاله إنت حاله بالملازم، يوصله الحل نفسه من الملزمة بصورة بإطار. وإذا بعده ما فهم، أو نفس الحل وصله قبل، أو ما لگيناه، سؤاله يوصلك. وإذا الجواب الآلي طافي، الأسئلة توصلك مثل قبل.</div>
+            <QaCard />
+            <details className="card cpch"><summary><b>📕 الطريقة القديمة: صور من PDF الملازم</b></summary>
             <AutoCard data={data} busy={busy} call={call} />
             <Upload busy={busy} call={call} />
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((ch) => {
@@ -33,6 +36,7 @@ export default function BookletsClient() {
                 </details>
               );
             })}
+            </details>
           </>
         )}
       </div>
