@@ -573,3 +573,31 @@ test("🎯 هذا الامتحان لمصححين معينين: الباقي م�
   assert.equal(await sees(41), true);
   await upd("sched_items", { id: p }, { status: "cancelled" });
 });
+
+test("📝 امتحن بنفسك: امتحان حي باسم طالب تجربة، والقسم قبل الكاميرا، ويگدر يعيده", async () => {
+  const { startTestExam } = await import("../lib/gradeApi.ts");
+  const { openRoom, takeOath } = await import("../lib/examRoom.ts");
+  const { schedSettings } = await import("../lib/schedApi.ts");
+  const s = await schedSettings();
+  await put("students", { user_id: -9, name: "طالب تجربة 9", curr: "عربي", exam: "إلكتروني", created: stamp() });
+  await assert.rejects(startTestExam(90, ver), /طالب تجربة/);
+  const a = await startTestExam(-9, ver);
+  const room: any = await openRoom(-9, a, s);
+  assert.equal(room.sworn, false);
+  assert.match(room.oath, /طالب تجربة 9/);
+  assert.equal(((await takeOath(-9, a, s)) as any).sworn, true);
+  // يعيدها: الورقة القديمة تنمسح، والقسم يرجع يطلع
+  const b = await startTestExam(-9, ver);
+  assert.equal(await one("sched_items", { id: a }), null);
+  assert.equal(((await openRoom(-9, b, s)) as any).sworn, false);
+  const { remove } = await import("../lib/db.ts");
+  await remove("sched_items", { id: b });
+});
+
+test("➕ زيد طالب تجربة: الرقم الجاي، وما يستخدم رقم نظام التصحيح", async () => {
+  const { addTestStudent } = await import("../lib/gradeApi.ts");
+  const nums = [];
+  for (let i = 0; i < 9; i++) nums.push(await addTestStudent());
+  assert.equal(new Set(nums).size, 9);
+  assert.ok(!nums.includes(7));
+});

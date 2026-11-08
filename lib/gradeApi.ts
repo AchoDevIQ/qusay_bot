@@ -257,6 +257,28 @@ export async function addTestPaper(owner: number, sid: number, vid: number, byQ:
   await update("sched_items", { id }, { status: "done" });
   return id;
 }
+/** يزيد طالب تجربة واحد بالرقم الجاي، بدون ما يمس الباقين. الرقم 7 ما ينستخدم لأن -7 رقم نظام التصحيح AI */
+export async function addTestStudent() {
+  const used = (await find("students")).filter((x) => x.user_id < 0).map((x) => -x.user_id as number);
+  need(used.length < 30, "وصلت 30 طالب تجربة");
+  let k = 1;
+  while (used.includes(k) || k === 7) k++;
+  await put("students", { user_id: -k, name: `طالب تجربة ${k}`, curr: "عربي", grade: "السادس العلمي", gov: "بغداد", area: "تجربة", phone1: "", phone2: "", exam: "إلكتروني", created: stamp() });
+  return k;
+}
+/** «📝 امتحن بنفسك»: صاحب البوت يدخل امتحان حي باسم طالب تجربة: الأسئلة، القسم، الكاميرا، التسليم، مثل الطالب بالضبط.
+ *  ورقة نفس الطالب القديمة بنفس الامتحان تنشال، فيگدر يعيد التجربة */
+export async function startTestExam(sid: number, vid: number) {
+  need(sid < 0 && await student(sid), "اختار طالب تجربة");
+  const v = await one("bank_versions", { id: vid });
+  need(v, "اختار الامتحان");
+  for (const old of await find("sched_items", { user_id: sid, exam_id: v!.exam_id })) {
+    for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: old.id });
+    await remove("sched_items", { id: old.id });
+  }
+  const now = stamp();
+  return await insert("sched_items", { user_id: sid, exam_id: v!.exam_id, at: now, status: "started", version_id: vid, started_at: now, opened_at: now, notified: "test" });
+}
 export async function deleteTests() {
   for (const it of (await find("sched_items")).filter(isTest)) {
     await remove("exam_answers", { item_id: it.id });

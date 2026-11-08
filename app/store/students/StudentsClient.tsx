@@ -44,6 +44,7 @@ export default function StudentsClient() {
         {data && s && (
           <>
             {data.tests && <TestStudents tests={data.tests} busy={busy} act={act} />}
+            {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions} busy={busy} act={act} />}
             {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
             <div className="card">
               <h2>📊 الطلاب المسجلين: {s.all}</h2>
@@ -253,6 +254,7 @@ function TestStudents({ tests, busy, act }: { tests: TestStudent[]; busy: boolea
         ))}
         <div className="exline adtop">
           <Confirm label={tests.length ? "🔄 سويهم من جديد" : "🧪 سوي طلاب تجربة"} disabled={busy} onYes={() => void act({ action: "makeTests" })} />
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "addTest" })}>➕ زيد طالب تجربة</button>
           {!!tests.length && <Confirm label="🗑 امسحهم" disabled={busy} onYes={() => void act({ action: "deleteTests" })} />}
         </div>
       </div>
@@ -270,6 +272,42 @@ async function shrink(f: File): Promise<Blob> {
     c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
     return await new Promise<Blob>((ok) => c.toBlob((b) => ok(b ?? f), "image/jpeg", 0.88));
   } catch { return f; }
+}
+
+/** صاحب البوت يمتحن بنفسه باسم طالب تجربة: امتحان حي يبدي هسه، بالأسئلة والقسم والكاميرا والتسليم */
+function TryExam({ tests, versions, busy, act }: { tests: TestStudent[]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown }) {
+  const [sid, setSid] = useState(tests[0]?.id ?? 0);
+  const [slug, setSlug] = useState("");
+  const [exam, setExam] = useState(0);
+  const [vid, setVid] = useState(0);
+  const chapters = versions.filter((x, i) => versions.findIndex((y) => y.slug === x.slug) === i);
+  const topics = versions.filter((x, i) => x.slug === slug && versions.findIndex((y) => y.exam === x.exam) === i);
+  const models = versions.filter((x) => x.exam === exam);
+  async function go() {
+    const link = tests.find((t) => t.id === sid)?.link;
+    if (link && await act({ action: "tryExam", sid, vid })) location.href = link;
+  }
+  return (
+    <div className="card">
+      <h2>📝 امتحن بنفسك كطالب</h2>
+      <div className="form">
+        <div className="exhint">يبدي امتحان حي هسه باسم طالب التجربة، وتمشي نفس خطوات الطالب: الأسئلة، القسم، الكاميرا، والتسليم. تدوس «📝 ادخل الامتحان» بالصفحة اللي تنفتح. إذا عدتها، ورقته القديمة بهذا الامتحان تنمسح.</div>
+        <label>طالب التجربة</label>
+        <select value={sid} onChange={(e) => setSid(Number(e.target.value))}>{tests.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+        <label>الفصل</label>
+        <select value={slug} onChange={(e) => { setSlug(e.target.value); setExam(0); setVid(0); }}>
+          <option value="">اختار الفصل...</option>
+          {chapters.map((x) => <option key={x.slug} value={x.slug}>{x.chapter || x.slug}</option>)}
+        </select>
+        {slug && <select value={exam} onChange={(e) => { const id = Number(e.target.value); setExam(id); const m = versions.filter((x) => x.exam === id); setVid(m.length === 1 ? m[0].id : 0); }}>
+          <option value={0}>اختار الموضوع...</option>
+          {topics.map((x) => <option key={x.exam} value={x.exam}>{x.title}</option>)}
+        </select>}
+        {exam > 0 && models.length > 1 && <div className="seg">{models.map((x) => <button key={x.id} type="button" className={vid === x.id ? "on" : ""} onClick={() => setVid(x.id)}>{x.model}</button>)}</div>}
+        <button type="button" className="btn" disabled={busy || !vid} onClick={() => void go()}>▶️ ابدي الامتحان</button>
+      </div>
+    </div>
+  );
 }
 
 /** ورقة تجربة من صور حقيقية: يختار طالب التجربة والامتحان، يرفع جواب كل سؤال، ويختار منو يصححها */

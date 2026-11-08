@@ -367,7 +367,7 @@ export async function examplesFor(_examId: number, versionId: number, n: number)
   return out.sort((a, b) => Math.abs(b.teacher - b.ai) - Math.abs(a.teacher - a.ai)).slice(0, 6);
 }
 // نفس الصور ونفس الخطوات = نفس النتيجة: تنحفظ أول مرة، والمرة الثانية ترجع المحفوظة بدون تصحيح جديد ولا كلفة
-const ENGINE = "rubric-1";
+const ENGINE = "rubric-2";
 const cacheKey = (steps: RubricStep[], imgs: Buffer[]) => {
   const h = createHash("sha256").update(ENGINE).update(JSON.stringify(steps));
   for (const b of imgs) h.update(b);

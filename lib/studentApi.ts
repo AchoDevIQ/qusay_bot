@@ -11,7 +11,7 @@ import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
-import { TEST_STUDENTS, addTestPaper, deleteTests, makeTests } from "./gradeApi.ts";
+import { TEST_STUDENTS, addTestPaper, addTestStudent, deleteTests, makeTests, startTestExam } from "./gradeApi.ts";
 import { fileToken, homeToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { aiWhyNot } from "./aiGrade.ts";
@@ -181,6 +181,13 @@ export async function studentAction(body: Row) {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     if (a === "makeTests") { const n = await makeTests(); need(n, "ماكو نسخة إجبارية جاهزة بيها صور أسئلة"); notice = `🧪 انضافوا ${TEST_STUDENTS} طلاب تجربة، و${n} ورقة تنتظر التصحيح`; }
     else { await deleteTests(); notice = "🗑 انمسحوا طلاب التجربة وأوراقهم"; }
+  } else if (a === "addTest") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    notice = `➕ انضاف طالب تجربة ${await addTestStudent()}`;
+  } else if (a === "tryExam") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    await startTestExam(Number(body.sid), Number(body.vid));
+    notice = "📝 بدا الامتحان";
   } else if (a === "examNow") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     await startNowForTest(body.item);

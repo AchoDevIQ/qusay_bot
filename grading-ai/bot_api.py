@@ -382,7 +382,7 @@ async def finish(req: "GradeReq", bucket: list, steps: list, score: float, confi
 class ArabicOut(BaseModel):
     reasons: List[str] = Field(description="One short Arabic sentence per step, same order and count as the input steps; math inside $...$ as LaTeX")
     student_math: List[str] = Field(description="Per step, same order and count: what the student wrote for that step as clean LaTeX math only (no words); empty string if nothing")
-    note: str = Field(description="One or two short Arabic sentences to the student about this question; math inside $...$ as LaTeX")
+    note: str = Field(description="One very short Arabic sentence to the student about this question; math inside $...$ as LaTeX")
 
 
 ARABIC_PROMPT = r"""A math teacher's grading of one student's answer (question worth {max} marks, the student got {score}).
@@ -392,9 +392,9 @@ Here are the graded steps as JSON (status, marks awarded/possible, the grader's 
 Write for the STUDENT, in simple clear Arabic (Iraqi students; plain words):
 - Never use English words (no "square", "sqrt", "root", "step", "both sides"...). Say it in Arabic: تربيع، جذر، الطرفين، الإشارة.
 - Every math expression goes between dollar signs as LaTeX, e.g. $y=-\frac{{3}}{{2x}}$, $x^{{2}}-y^{{2}}=4$, $\sqrt{{3}}$. Write every fraction with \frac (never a slash like 3/(2x)). Never write x^2 or sqrt(3) outside dollar signs.
-- reasons: for each step, in the same order and the same count, one short sentence saying what was right or exactly what was wrong (e.g. «صح» or «غلط بالإشارة: المفروض $y=-\frac{{3}}{{2x}}$»).
+- reasons: for each step, in the same order and the same count, as short as possible. A right step: only «صح». A wrong step: the kind of mistake and the right result, at most about six words besides the math (e.g. «غلط بالإشارة: المفروض $y=-\frac{{3}}{{2x}}$»). A missing step: «ما مكتوبة». No explanation of why.
 - student_math: for each step, in the same order and the same count, what the student actually wrote for it, as clean LaTeX only (no $ signs, no words, fractions with \frac), e.g. x^{{2}}-y^{{2}}=4 ; y=\frac{{-3}}{{x}}. Use " ; " between several lines. Empty string if the student wrote nothing for it.
-- note: one or two short sentences summarising where the student lost marks and what to fix; if full marks, a short praise."""
+- note: one very short Arabic sentence, at most about six words, naming what to watch (e.g. «انتبه لإشارة $y$»); if full marks, one word of praise."""
 
 
 class RubricStepOut(BaseModel):
