@@ -309,3 +309,4 @@ body.grwide .grtop{padding-left:104px}
 .aimath{font-size:14px;text-align:center}.aimath .katex{font-size:1em}
 .aicbig{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:10px}.aicbig img{max-width:100%;max-height:100%}.aicbig span{position:absolute;top:calc(14px + var(--tg-safe-area-inset-top,0px));left:14px;color:#fff;font-size:22px}
 .aiinl{display:inline-block;unicode-bidi:isolate}.aiinl .katex{font-size:1.05em}
+.aichain{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 6px}.aipiece{white-space:nowrap;max-width:100%;overflow-x:auto}
