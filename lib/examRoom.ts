@@ -201,9 +201,11 @@ async function aiShown(it: Row) {
   if (!it.graded_at) return [];
   const part = await aiPartialOf(it.id);
   if (it.grader_id !== AI_GRADER && !part) return [];
+  const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   return ((await aiResultOf(it.id)) ?? []).filter((q) => !part || !part.includes(q.n)).map((q) => ({
-      n: q.n, score: q.score, max: q.max, note: q.note ?? "",
-    steps: q.steps.map((st) => ({ status: st.status, awarded: st.awarded, possible: st.possible, expected: st.expected, reason: st.reason_ar || st.reason })),
+    n: q.n, score: q.score, max: q.max, note: q.note ?? "",
+    photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
+    steps: q.steps.map((st) => ({ status: st.status, awarded: st.awarded, possible: st.possible, expected: st.expected, student: st.student, reason: st.reason_ar || st.reason })),
   }));
 }
 

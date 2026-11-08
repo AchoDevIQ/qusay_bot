@@ -24,6 +24,7 @@
     "@sparticuz/chromium": "^153.0.0",
     "firebase-admin": "^14.5.0",
     "jsqr": "^1.4.0",
+    "katex": "^0.16.22",
     "next": "^15",
     "pdfjs-dist": "^6.5.438",
     "puppeteer-core": "^25.16.0",
