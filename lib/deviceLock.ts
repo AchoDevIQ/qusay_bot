@@ -20,7 +20,8 @@ export async function checkPhone(uid: number, pf: unknown) {
 }
 
 export async function checkDevice(uid: number, raw: unknown) {
-  if (await isStaff(uid) || !await student(uid)) return;
+  // طلاب التجربة (أرقام سالبة) يفتحهم صاحب البوت من أي جهاز، مثل checkPhone
+  if (uid < 0 || await isStaff(uid) || !await student(uid)) return;
   const dev = String(raw ?? "").trim();
   need(DEVICE_RE.test(dev), "حدّث تلگرام وافتح الصفحة من جديد", 400);
   const row = await one("student_devices", { user_id: uid });
