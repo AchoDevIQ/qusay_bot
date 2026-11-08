@@ -235,12 +235,14 @@ export async function addTestPaper(owner: number, sid: number, vid: number, byQ:
     for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: old.id });
     await remove("sched_items", { id: old.id });
   }
-  const id = await insert("sched_items", { user_id: sid, exam_id: v!.exam_id, at: stamp(), status: "done", version_id: vid, started_at: stamp(), submitted_at: stamp(), grader_id: who === "me" ? owner : null });
+  // «uploading» لحد ما تنرفع كل الصور: قبلها نظام التصحيح چان ياخذها فاضية ويعطي صفر
+  const id = await insert("sched_items", { user_id: sid, exam_id: v!.exam_id, at: stamp(), status: "uploading", version_id: vid, started_at: stamp(), submitted_at: stamp(), grader_id: who === "me" ? owner : null });
   for (const [n, pics] of byQ) for (const [i, b] of pics.entries()) {
     const ref = `test_papers/${id}/q${n}_${i + 1}_${Date.now()}.jpg`;
     await files().write(ref, b, "image/jpeg");
     await insert("exam_answers", { item_id: id, q: n, file: ref, created: stamp() });
   }
+  await update("sched_items", { id }, { status: "done" });
   return id;
 }
 export async function deleteTests() {
@@ -395,7 +397,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
   await update("sched_items", { id: it.id }, { total, graded_at: stamp() });
   await keepPages(it.id, photos);
-  const head = `📝 <b>انصحح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
+  const head = `📝 <b>تم تصحيح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
   const chosen = commentId ? await one("grade_comments", { id: commentId }) : null;
   const c = chosen ? { text: chosen.text as string, sticker: chosen.sticker_id ? await one("stickers", { id: chosen.sticker_id }) : null }
     : await pickComment(it.user_id, total);
@@ -418,7 +420,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
       await deliver(g.guardian_id, `${head}\nالطالب: <b>${esc(String(st?.name ?? view.name))}</b>\n\n👇 دوس «استلمت» حتى نعرف وصلتك.`, seenButton(it.id));
       await guardianSent(it.user_id, g.guardian_id, it.id);
     }
-    await logActivity(it.user_id, `📝 انصحح امتحان ${view.title}: ${total} من 100`);
+    await logActivity(it.user_id, `📝 تم تصحيح امتحان ${view.title}: ${total} من 100`);
     try { await runCheckpoints(it.user_id); } catch (e) { console.error(e); }
   }
   return `✅ انحفظت الدرجة ${total} من 100`;

@@ -282,6 +282,8 @@ async function gradePaper(it: Row): Promise<AiQuestion[]> {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   if (answers.some((a) => !a.q)) throw new Error("الجواب ملف كامل");
   if (answers.some((a) => !isImage(a.file))) throw new Error("الجواب مو صورة");
+  // ورقة بلا ولا صورة جواب: مو «ما جاوب»، الصور بعدها ما وصلت
+  if (!answers.length) throw new Error("ماكو صور جواب بالورقة");
   return await Promise.all(qs.map(async (q): Promise<AiQuestion> => {
     const steps = await rubricOf(q.id);
     if (!steps) throw new Error(`سؤال ${q.n} بدون خطوات`);
