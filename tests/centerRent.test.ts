@@ -69,6 +69,12 @@ test("الشهر: التقرير يوصل إلك وللمدير، والدفع �
   const docs = calls.filter((c) => c.method === "sendDocument");
   assert.deepEqual(docs.map((d) => Number(d.p.chat_id)).sort(), [1, 500, 501]);
   assert.match(docs[0].p.caption, /2 طالب \(بنين 1 · بنات 1\) × 4,000 = 8,000 دينار/);
+  // بالقائمة: كم امتحان حضر من اللي إله بالجدول هذا الشهر
+  await insert("sched_items", { user_id: 60, exam_id: ex, at: `${today} 23:59`, status: "missed" });
+  await r(1, "report", { center, month });
+  const html = fs.readdirSync(tmp).filter((f) => f.endsWith(".html")).map((f) => fs.readFileSync(path.join(tmp, f), "utf8")).join("");
+  assert.match(html, /الامتحانات اللي حضرها/);
+  assert.match(html, /1 من 2/);
   calls.length = 0;
   const p = await r(1, "pay", { center, month });
   assert.match(p.notice, /8,000 دينار/);

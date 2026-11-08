@@ -83,8 +83,14 @@ async function monthOf(cid: number, month: string, preloaded?: Items) {
 async function sendMonthly(cid: number, month: string, to: number[]) {
   const m = await monthOf(cid, month), cfg = await rentCfg(cid), name = await centerName(cid);
   const title = `حضور ${name} لشهر ${month}: ${m.list.length} طالب (بنين ${m.boys} · بنات ${m.girls}) × ${money(cfg.price)} = ${money(m.list.length * cfg.price)} دينار`;
-  const rows = m.list.map((s) => [s.name, s.id, s.gender || "-", s.times, s.days.join("، ")]);
-  for (const chat of new Set(to)) await listPdf(chat, title, ["الطالب", "الرقم", "الجنس", "مرات الحضور", "الأيام"], rows, `attendance_${cid}_${month}`);
+  // كم امتحان إله بالجدول بهذا الشهر، حتى المركز يشوف «حضر 6 من 8»
+  const planned = new Map<number, number>();
+  for (const i of await inPersonItems((x) => String(x.at ?? "").startsWith(month))) {
+    if (Number(i.st.center_id) !== cid) continue;
+    planned.set(i.user_id, (planned.get(i.user_id) ?? 0) + 1);
+  }
+  const rows = m.list.map((s) => [s.name, s.id, s.gender || "-", `${s.times} من ${Math.max(s.times, planned.get(s.id) ?? 0)}`, s.days.join("، ")]);
+  for (const chat of new Set(to)) await listPdf(chat, title, ["الطالب", "الرقم", "الجنس", "الامتحانات اللي حضرها", "الأيام"], rows, `attendance_${cid}_${month}`);
 }
 
 async function pageData(month: string) {
