@@ -16,6 +16,7 @@ type Trial = { n: number; score: number; max: number; review: boolean; reason: s
 type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
 type Data = {
+  calib: { n: number; topics: { exam: number; title: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] };
   on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string; retry: boolean }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
   fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; trial?: { id: number; result: Trial }; notice?: string;
 };
@@ -46,6 +47,7 @@ export default function AiGradeClient() {
               {data.on && <div className="fdok">🤖 شغال: كل دقيقة ياخذ أوراق المواضيع المأشرة ويصححها.</div>}
             </div>
             <Money data={data} />
+            <Calib key={data.calib.n} calib={data.calib} busy={busy} call={call} />
             <div className="card expad">
               <div className="exlabel">📋 أوراق مواضيعه اللي بعدها ما انصححت</div>
               {!data.pending.length && <div className="exhint">ماكو ورقة تنتظر بالمواضيع المأشرة.</div>}
@@ -292,6 +294,36 @@ function TryBox({ q, busy, call, trial, linked }: { q: Q; busy: boolean; call: C
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** أول أوراق كل موضوع: الأستاذ يصححها بإيده، ونظام التصحيح يصححها بالسر ويتعلم من الفرق */
+function Calib({ calib, busy, call }: { calib: Data["calib"]; busy: boolean; call: Call }) {
+  const [n, setN] = useState(String(calib.n));
+  return (
+    <div className="card expad">
+      <div className="exlabel">🎓 أول أوراق كل موضوع تصححها إنت</div>
+      <div className="exhint">أول الأوراق بكل موضوع ما ياخذها نظام التصحيح: تصححها إنت، أو مساعد تنطيه صلاحية «🎓 يصحح أول أوراق المواضيع» من صفحة الموظفين. وبنفس الوقت هو يصححها بالسر (ما توصل للطالب)، فتشوف هنا درجتك جنب درجته. بعدها يصحح الباقي وحده، ويتعلم من درجاتك. أوراق التجربة ما تنحسب.</div>
+      <div className="exline">
+        <input type="number" min={0} max={50} value={n} onChange={(e) => setN(e.target.value)} style={{ maxWidth: 90 }} />
+        <button type="button" className="exbtn" disabled={busy || n === String(calib.n)} onClick={() => void call({ action: "calib", n: Number(n) })}>💾 احفظ العدد</button>
+      </div>
+      <div className="exhint">0 يعني يبدي يصحح من أول ورقة.</div>
+      {calib.n > 0 && !calib.topics.length && <div className="exhint">ماكو موضوع مأشر بعد.</div>}
+      {calib.n > 0 && calib.topics.map((t) => (
+        <details key={t.exam} className="cpch">
+          <summary><b>{t.title}</b> <small className="pdmode">{t.done >= t.of ? "✅ خلصت، هسه يصحح وحده" : `صححت ${t.done} من ${t.of}`}</small></summary>
+          <div className="expad">
+            {!t.papers.length && <div className="exhint">بعد ما وصلت ورقة.</div>}
+            {t.papers.map((p, i) => (
+              <div key={i} className="aig-logrow">
+                <div><b>{p.name}</b><br /><small>درجتك: {p.teacher ?? "بعدك ما صححتها"} · درجته: {p.ai ?? "بعده"}{p.teacher !== null && p.ai !== null ? (p.teacher === p.ai ? " ✅ نفس الشي" : ` · الفرق ${Math.abs(p.teacher - p.ai)}`) : ""}</small></div>
+              </div>
+            ))}
+          </div>
+        </details>
+      ))}
     </div>
   );
 }

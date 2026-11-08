@@ -84,8 +84,8 @@ const joinCtx = (list: { kind: QaKind; l: Lecture }[], max: number) => {
   }
   return s;
 };
-async function call(mode: "find" | "solve", context: string, q: QaAsk) {
-  const r = await svc("/bot/qa", { mode, context, question: q.text ?? "", image: q.image?.toString("base64") }, 180_000);
+async function call(mode: "find" | "solve", context: string, q: QaAsk, lang: "ar" | "en") {
+  const r = await svc("/bot/qa", { mode, context, question: q.text ?? "", image: q.image?.toString("base64"), lang }, 180_000);
   const cfg = await qaCfg();
   for (const u of r.usage ?? []) { cfg.inTok += Number(u.input) || 0; cfg.outTok += Number(u.output) || 0; }
   await saveCfg(cfg);
@@ -93,24 +93,31 @@ async function call(mode: "find" | "solve", context: string, q: QaAsk) {
 }
 
 /** جواب سؤال الطالب: من المحاضرة، أو من الموضوع، أو حل على طريقة الأستاذ. null إذا ماكو ملازم لهذا الموضوع */
-export async function qaAnswer(q: QaAsk, chapter: number, topicName: string, lecture: number, lang: "ar" | "en"): Promise<QaResult | null> {
+/** topicName: اسم الموضوع، أو أسماءه بالعربي والإنگليزي (الملزمة الإنگليزية عناوينها إنگليزي) */
+export async function qaAnswer(q: QaAsk, chapter: number, topicName: string | string[], lecture: number, lang: "ar" | "en"): Promise<QaResult | null> {
+  const names = (Array.isArray(topicName) ? topicName : [topicName]).filter(Boolean);
   const all = (await qaBooks()).filter((b) => b.chapter === chapter);
-  const books = all.some((b) => b.lang === lang) ? all.filter((b) => b.lang === lang) : all;
-  const mine: { kind: QaKind; l: Lecture }[] = [];
-  for (const b of books) for (const l of await lecturesOf(b)) if (sameTopic(topicName, l.topic)) mine.push({ kind: b.kind, l });
+  // ملازم منهج الطالب أول. إذا الموضوع ما بيها، ملازم المنهج الثاني، والحل ينكتب بلغة الطالب
+  const pick = async (books: QaBook[]) => {
+    const out: { kind: QaKind; l: Lecture }[] = [];
+    for (const b of books) for (const l of await lecturesOf(b)) if (names.some((n) => sameTopic(n, l.topic))) out.push({ kind: b.kind, l });
+    return out;
+  };
+  let mine = await pick(all.filter((b) => b.lang === lang));
+  if (!mine.length) mine = await pick(all.filter((b) => b.lang !== lang));
   if (!mine.length) return null;
   const cfg = await qaCfg(); cfg.asked++; await saveCfg(cfg);
   const inLecture = lecture ? mine.filter((x) => x.l.lecture === lecture) : [];
   if (inLecture.length) {
-    const r = await call("find", joinCtx(inLecture, LECTURE_MAX), q);
+    const r = await call("find", joinCtx(inLecture, LECTURE_MAX), q, lang);
     if (r.found && r.solution) return done("lecture", r.solution);
   }
   const rest = mine.filter((x) => !inLecture.includes(x));
   if (rest.length || !inLecture.length) {
-    const r = await call("find", joinCtx(rest.length ? rest : mine, TOPIC_MAX), q);
+    const r = await call("find", joinCtx(rest.length ? rest : mine, TOPIC_MAX), q, lang);
     if (r.found && r.solution) return done("topic", r.solution);
   }
-  const s = await call("solve", joinCtx([...inLecture, ...rest], TOPIC_MAX), q);
+  const s = await call("solve", joinCtx([...inLecture, ...rest], TOPIC_MAX), q, lang);
   return s.solution ? done("ai", s.solution) : null;
 }
 async function done(source: QaResult["source"], solution: string): Promise<QaResult> {
@@ -121,9 +128,9 @@ async function done(source: QaResult["source"], solution: string): Promise<QaRes
 }
 
 // ---------- الجواب المحفوظ للطالب (صفحة الحل)
-export async function saveAnswer(uid: number, question: string, r: QaResult, where: string) {
+export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar") {
   const id = randomUUID().replace(/-/g, "").slice(0, 16);
-  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, at: new Date().toISOString() }));
+  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, lang, at: new Date().toISOString() }));
   return id;
 }
 export async function answerView(body: Row) {
@@ -133,7 +140,7 @@ export async function answerView(body: Row) {
   need(/^[a-f0-9]{16}$/.test(id), "الحل غير موجود", 404);
   const a = JSON.parse((await kvGet(`qa_ans_${id}`)) ?? "null");
   need(a && (a.uid === uid || await isAdmin(uid!)), "الحل غير موجود", 404);
-  return { question: a.question, where: a.where, source: a.source, solution: a.solution };
+  return { question: a.question, where: a.where, source: a.source, solution: a.solution, lang: a.lang === "en" ? "en" : "ar" };
 }
 
 // ---------- صفحة صاحب البوت

@@ -4,7 +4,7 @@ import { runCheckpoints } from "./checkpoints.ts";
 import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
-import { AI_GRADER, examLabel, isAdmin, staffName, student } from "./data.ts";
+import { AI_GRADER, examLabel, isAdmin, staffName, staffRow, student } from "./data.ts";
 import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, openObjections, testObjection } from "./objections.ts";
@@ -12,7 +12,7 @@ import { balanceOf, gradeScope, payAction, payData } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
-import { aiHeld, aiJudgeObjection, aiPartialOf, aiQuestions, aiResultOf } from "./aiGrade.ts";
+import { CALIB_PERM, aiCalibIds, aiHeld, aiJudgeObjection, aiPartialOf, aiQuestions, aiResultOf } from "./aiGrade.ts";
 import { guardianSent, seenButton } from "./guardianWatch.ts";
 import { stamp, todayStr } from "./util.ts";
 import { gradeCardPng } from "./documents.ts";
@@ -42,7 +42,10 @@ async function waitingFor(uid: number, papers: Row[]) {
   const scope = await gradeScope(uid);
   // أوراق ينتظرها نظام التصحيح AI ما تطلع. والورقة اللي حولها لهذا المصحح تطلعله حتى لو مو من فصوله
   const held = await aiHeld(papers);
-  return papers.filter((p) => !p.graded_at && !held.has(p.id) && (p.grader_id === uid || (!p.grader_id && scope.can(p))));
+  // أول أوراق المواضيع اللي يصححها نظام التصحيح: بس لصاحب البوت وللمساعد اللي عنده صلاحية 🎓
+  const calib = await aiCalibIds(papers);
+  const mayCalib = ADMIN_IDS.includes(uid) || String((await staffRow(uid))?.perms ?? "").split(",").includes(CALIB_PERM);
+  return papers.filter((p) => !p.graded_at && !held.has(p.id) && (p.grader_id === uid || (!p.grader_id && scope.can(p) && (mayCalib || !calib.has(p.id)))));
 }
 /** الامتحانات اللي بيها أوراق تنتظر: المصحح يختار امتحان، مو طالب */
 async function examGroups(waiting: Row[]) {

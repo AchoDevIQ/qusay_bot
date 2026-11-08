@@ -13,14 +13,29 @@ export type RubricStep = { text: string; points: number };
 export type Usage = { model: string; calls: number; input: number; output: number };
 export type Price = { in: number; out: number };
 /** المواضيع اللي يصححها، ولكل فصل المصحح اللي توصله الأوراق اللي مو متأكد منها */
-export type AiSettings = { exams: number[]; unsure: Record<string, number> };
+/** calib: أول كم ورقة بكل موضوع يصححها الأستاذ (أو مساعد عنده صلاحية 🎓) قبل ما يبدي، ونظام التصحيح يتعلم منها */
+export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
-export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed" | "objection"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
+export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed" | "objection" | "calib"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
 
 const rubricKey = (qid: number) => `ai_rubric_q_${qid}`;
 const resultKey = (itemId: number) => `ai_result_${itemId}`;
 const triesKey = (itemId: number) => `ai_try_${itemId}`;
 const errKey = (itemId: number) => `ai_err_${itemId}`;
+// أول أوراق الموضوع: الأستاذ يصححها بإيده، ونظام التصحيح يصححها بالسر حتى نقارن ويتعلم من درجات الأستاذ
+const calibKey = (examId: number) => `ai_calib_${examId}`;
+const shadowKey = (itemId: number) => `ai_shadow_${itemId}`;
+const shadowTryKey = (itemId: number) => `ai_shadow_try_${itemId}`;
+export const CALIB_PERM = "aicalib";
+export const CALIB_DEFAULT = 10;
+export async function calibList(examId: number): Promise<number[]> {
+  const j = await readJson<number[]>(calibKey(examId), []);
+  return Array.isArray(j) ? j.map(Number) : [];
+}
+export async function shadowOf(itemId: number): Promise<AiQuestion[] | null> {
+  const j = await readJson<AiQuestion[] | null>(shadowKey(itemId), null);
+  return Array.isArray(j) ? j : null;
+}
 // الأسئلة اللي حوّلها للمصحح: الباقي صححه هو، والمصحح يصحح بس هذني وياخذ أجره على قدها
 const partialKey = (itemId: number) => `ai_partial_${itemId}`;
 export async function aiPartialOf(itemId: number): Promise<number[] | null> {
@@ -58,7 +73,13 @@ export const setAiOn = (on: boolean) => kvSet(ON_KEY, on ? "1" : "0");
 const readJson = async <T>(k: string, def: T): Promise<T> => { try { return JSON.parse((await kvGet(k)) ?? "null") ?? def; } catch { return def; } };
 export async function aiSettings(): Promise<AiSettings> {
   const s = await readJson<Partial<AiSettings>>(SET_KEY, {});
-  return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {} };
+  const calib = Number(s.calib);
+  return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {}, calib: Number.isInteger(calib) && calib >= 0 ? calib : CALIB_DEFAULT };
+}
+export async function setCalib(n: number) {
+  const s = await aiSettings();
+  s.calib = Math.max(0, Math.min(50, Math.round(n)));
+  await kvSet(SET_KEY, JSON.stringify(s));
 }
 /** مواضيع فصل وحد: اللي يصححها، ومنو توصله أوراقه اللي مو متأكد منها */
 export async function setChapterScope(slug: string, examIds: number[], grader: number) {
@@ -276,7 +297,7 @@ export async function aiResultOf(itemId: number): Promise<AiQuestion[] | null> {
 }
 
 /** يصحح ورقة وحدة: يرجع درجة كل سؤال، أو يرمي خطأ إذا ما يگدر */
-async function gradePaper(it: Row): Promise<AiQuestion[]> {
+async function gradePaper(it: Row, withExamples = true): Promise<AiQuestion[]> {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   if (!qs.length) throw new Error("ماكو أسئلة");
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
@@ -293,16 +314,32 @@ async function gradePaper(it: Row): Promise<AiQuestion[]> {
     if (!mine.length) return { n: q.n, score: 0, max, review: false, reason: "ما جاوب", lines: [], steps: [], usage: [] };
     const imgs = await Promise.all(mine.map((a) => readRef(a.file)));
     if (imgs.some((b) => !b)) throw new Error(`صورة جواب سؤال ${q.n} مفقودة`);
-    return await gradeQuestion(q, steps, imgs as Buffer[]);
+    return await gradeQuestion(q, steps, imgs as Buffer[], withExamples ? await examplesFor(it.exam_id, it.version_id, q.n) : []);
   }));
 }
+type Example = { student: string; ai: number; teacher: number };
+/** أمثلة من أول أوراق الموضوع اللي صححها الأستاذ بإيده: شنو قرا نظام التصحيح، شگد كان يعطي، وشگد عطى الأستاذ.
+ *  اللي اختلف بيها أول، لأن منها يتعلم */
+export async function examplesFor(examId: number, versionId: number, n: number): Promise<Example[]> {
+  const out: Example[] = [];
+  for (const id of await calibList(examId)) {
+    const it = await one("sched_items", { id });
+    if (!it?.graded_at || it.version_id !== versionId) continue;
+    const ai = (await shadowOf(id))?.find((x) => x.n === n);
+    const mark = await one("question_marks", { item_id: id, q: n });
+    if (!ai || !mark || !ai.lines?.length) continue;
+    out.push({ student: ai.lines.join(" ; ").slice(0, 400), ai: ai.score, teacher: Number(mark.mark) || 0 });
+  }
+  return out.sort((a, b) => Math.abs(b.teacher - b.ai) - Math.abs(a.teacher - a.ai)).slice(0, 6);
+}
 /** يرسل جواب سؤال واحد (صوره) للخدمة ويا خطوات حله */
-async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[]): Promise<AiQuestion> {
+async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], examples: Example[] = []): Promise<AiQuestion> {
   const max = Number(q.max_mark);
   const r = await svc("/bot/grade", {
     max_points: max,
     steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
     images: imgs.map((b) => b.toString("base64")),
+    examples,
   });
   const score = Math.max(0, Math.min(max, Math.round(Number(r.score) || 0)));
   return { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), note: String(r.note ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
@@ -315,7 +352,8 @@ export async function tryGrade(qid: number, imgs: Buffer[]): Promise<AiQuestion>
   const steps = await rubricOf(q.id);
   if (!steps) throw new Error("احفظ خطوات حل هذا السؤال أول");
   if (!imgs.length) throw new Error("اختار صورة الجواب");
-  const res = await gradeQuestion(q, steps, imgs);
+  const v = await one("bank_versions", { id: q.version_id });
+  const res = await gradeQuestion(q, steps, imgs, v ? await examplesFor(v.exam_id, q.version_id, q.n) : []);
   await addLog({ at: stamp(), kind: "try", q: qid, usage: sumUsage([res.usage ?? []]) });
   return { ...res, usage: undefined };
 }
@@ -377,9 +415,11 @@ export async function aiPending(nameOf: (it: Row) => Promise<string>, staffName:
   const items = (await find("sched_items", { status: "done" })).filter((it) => !it.graded_at && scope.has(it.exam_id)).slice(0, 40);
   const titles = new Map((await find("bank_exams")).map((e) => [e.id, e.title]));
   const why = new Map<number, string | null>();
+  const calib = await aiCalibIds(items);
   return await Promise.all(items.map(async (it) => {
     let state: string;
-    if (it.grader_id === AI_GRADER) state = "🤖 يصححها هسه";
+    if (calib.has(it.id) && !it.grader_id) state = "🎓 من أول أوراق الموضوع: تنتظر تصحيحك إنت (أو مساعد عنده صلاحية 🎓)";
+    else if (it.grader_id === AI_GRADER) state = "🤖 يصححها هسه";
     else if (it.grader_id) state = `✍️ بيد ${await staffName(it.grader_id)}`;
     else if ((Number(await kvGet(triesKey(it.id))) || 0) >= MAX_TRIES) state = `❌ ما گدر يصححها، فرجعت للمصححين${(await kvGet(errKey(it.id))) ? `: ${await kvGet(errKey(it.id))}` : ""}`;
     else {
@@ -397,6 +437,7 @@ async function makeTaker() {
   const s = await aiSettings();
   const scope = new Set(s.exams);
   const verReady = new Map<number, boolean>();
+  const calib = new Map<number, number[]>();
   return async (it: Row) => {
     if (!active || !scope.has(it.exam_id) || it.graded_at || it.grader_id || !it.version_id) return false;
     if ((Number(await kvGet(triesKey(it.id))) || 0) >= MAX_TRIES) return false;
@@ -406,8 +447,72 @@ async function makeTaker() {
       for (const q of qs) if (ok && !await rubricOf(q.id)) ok = false;
       verReady.set(it.version_id, ok);
     }
-    return verReady.get(it.version_id)!;
+    if (!verReady.get(it.version_id)) return false;
+    // أول أوراق الموضوع (مو أوراق التجربة) تبقى للأستاذ: يصححها بإيده، ونظام التصحيح يتعلم منها
+    if (s.calib > 0 && it.user_id > 0) {
+      if (!calib.has(it.exam_id)) calib.set(it.exam_id, await calibList(it.exam_id));
+      const list = calib.get(it.exam_id)!;
+      if (list.includes(it.id)) return false;
+      if (list.length < s.calib) { list.push(it.id); await kvSet(calibKey(it.exam_id), JSON.stringify(list)); return false; }
+    }
+    return true;
   };
+}
+/** أوراق «أول الأوراق» اللي بعدها ما انصححت: تطلع بس لصاحب البوت وللمساعد اللي عنده صلاحية 🎓 */
+export async function aiCalibIds(papers: Row[]): Promise<Set<number>> {
+  const s = await aiSettings();
+  const out = new Set<number>();
+  if (!aiLinked() || !await aiOn() || s.calib <= 0) return out;
+  const lists = new Map<number, Set<number>>();
+  for (const p of papers) {
+    if (p.graded_at || !s.exams.includes(p.exam_id)) continue;
+    if (!lists.has(p.exam_id)) lists.set(p.exam_id, new Set(await calibList(p.exam_id)));
+    if (lists.get(p.exam_id)!.has(p.id)) out.add(p.id);
+  }
+  return out;
+}
+/** صفحة صاحب البوت: لكل موضوع مأشر، كم ورقة صحح هو، ودرجته جنب درجة نظام التصحيح */
+export async function calibState(nameOf: (it: Row) => Promise<string>) {
+  const s = await aiSettings();
+  const titles = new Map((await find("bank_exams")).map((e) => [e.id as number, String(e.title ?? "")]));
+  const out: { exam: number; title: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] = [];
+  for (const examId of s.exams) {
+    const ids = await calibList(examId);
+    const papers = [];
+    let done = 0;
+    for (const id of ids) {
+      const it = await one("sched_items", { id });
+      if (!it) continue;
+      if (it.graded_at) done++;
+      const sh = await shadowOf(id);
+      papers.push({ name: await nameOf(it), teacher: it.graded_at ? Number(it.total ?? 0) : null, ai: sh ? sh.reduce((t, q) => t + q.score, 0) : null });
+    }
+    out.push({ exam: examId, title: titles.get(examId) ?? "", done, of: s.calib, papers });
+  }
+  return out;
+}
+/** نظام التصحيح يصحح أول الأوراق بالسر (ما تنحفظ درجة، وما يوصل شي للطالب)، حتى نقارنه بالأستاذ */
+async function shadowTick(limit: number) {
+  const s = await aiSettings();
+  let n = 0;
+  for (const examId of s.exams) {
+    for (const id of await calibList(examId)) {
+      if (n >= limit) return n;
+      if (await shadowOf(id)) continue;
+      const tries = Number(await kvGet(shadowTryKey(id))) || 0;
+      if (tries >= MAX_TRIES) continue;
+      const it = await one("sched_items", { id });
+      if (!it || it.status !== "done") continue;
+      n++;
+      await kvSet(shadowTryKey(id), String(tries + 1));
+      try {
+        const res = await gradePaper(it, false);
+        await kvSet(shadowKey(id), JSON.stringify(res));
+        await addLog({ at: stamp(), kind: "calib", item: id, sid: it.user_id, exam: (await one("bank_exams", { id: it.exam_id }))?.title ?? "", total: res.reduce((t, q) => t + q.score, 0), usage: sumUsage(res.map((q) => q.usage ?? [])) });
+      } catch (e) { console.error("ai shadow", id, e); }
+    }
+  }
+  return n;
 }
 /** أوراق ينتظرها نظام التصحيح: ما تطلع للمصححين لحد ما يجربها، حتى ما ياخذها مصحح قبله */
 export async function aiHeld(papers: Row[]): Promise<Set<number>> {
@@ -448,6 +553,7 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
     if ((await one("sched_items", { id: it.id }))?.grader_id !== AI_GRADER) continue;
     picked.push(it);
   }
+  const shadow = await shadowTick(Math.max(2, limit - picked.length));
   let graded = 0, unsure = 0, failed = 0;
   await Promise.all(picked.map(async (it) => {
     try {
@@ -476,5 +582,5 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
       }
     }
   }));
-  return { graded, unsure, failed };
+  return { graded, unsure, failed, ...(shadow ? { shadow } : {}) };
 }

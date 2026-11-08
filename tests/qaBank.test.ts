@@ -85,6 +85,13 @@ test("رفع الملزمة لصاحب البوت بس، والبحث: المح�
   assert.equal(a3!.source, "ai");
   assert.equal(ai.at(-1)!.body.mode, "solve");
   assert.ok(!ai.at(-1)!.body.context.includes("اوسع مجال"));
+  // طالب المنهج الإنگليزي: ماكو ملزمة إنگليزية، فتنقرا العربية والحل ينطلب بالإنگليزي، والصفحة تعرف لغته
+  ai.length = 0;
+  const en = await qa.qaAnswer({ text: "roots of 3-4i" }, 1, ["الجذور التربيعية", "Square roots"], 1, "en");
+  assert.equal(en!.source, "ai");
+  assert.ok(ai.every((x) => x.body.lang === "en"));
+  const enId = await qa.saveAnswer(70, "roots", en!, "Square roots — Lecture 1", "en");
+  assert.equal(((await qa.answerView({ token: homeToken(70), id: enId })) as any).lang, "en");
   // موضوع ما بالملزمة: يرجع null والسؤال يروح للأستاذ
   assert.equal(await qa.qaAnswer({ text: "x" }, 1, "ديموافر", 1, "ar"), null);
   // الحل يفتح لصاحبه بس
@@ -93,8 +100,8 @@ test("رفع الملزمة لصاحب البوت بس، والبحث: المح�
   assert.equal(v.solution, "$x+yi=\\sqrt{8i}$");
   await assert.rejects(qa.answerView({ token: homeToken(71), id }), (e: any) => e.status === 404);
   const page: any = await qa.qaAction({ initData: sign(1), action: "list" });
-  assert.equal(page.qa.asked, 3);   // الموضوع اللي ما بالملزمة ما ينحسب
+  assert.equal(page.qa.asked, 4);   // الموضوع اللي ما بالملزمة ما ينحسب
   assert.equal(page.qa.fromBook, 2);
-  assert.equal(page.qa.solved, 1);
+  assert.equal(page.qa.solved, 2);
   assert.ok(page.qa.cost > 0);
 });

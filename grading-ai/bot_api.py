@@ -40,11 +40,20 @@ class Step(BaseModel):
     objective: str = ""
 
 
+class Example(BaseModel):
+    """A paper of the same question the teacher graded himself (the first papers of a topic)."""
+    student: str = ""  # what the student wrote, as the page reading saw it
+    ai: float = 0  # the mark the AI would have given
+    teacher: float = 0  # the teacher's mark
+
+
 class GradeReq(BaseModel):
     max_points: float = Field(gt=0)
     steps: List[Step] = Field(min_length=1)
     images: List[str] = Field(default_factory=list)  # base64 pages of the student's answer
     strictness: str = "standard"
+    examples: List[Example] = Field(default_factory=list, max_length=8)
+    review: bool = True  # second look at the steps that lost marks
 
 
 class RubricReq(BaseModel):
@@ -132,6 +141,132 @@ EQUIV_NOTE = (" [Grade this step by its RESULT, not by its exact wording: any ma
               "do not deduct for a doubtful reading of this line.]")
 
 
+class FinalsOut(BaseModel):
+    teacher_final: str = Field(description="The final answer of the teacher's solution, plain math (e.g. x = 1/2 or a^2 = 1/4); empty if none")
+    student_final: str = Field(description="The final answer the student wrote on the page, plain math, read carefully from the photo; empty if none")
+
+
+class ReviewStep(BaseModel):
+    index: int = Field(description="The step number from the list (1-based)")
+    give_back: float = Field(ge=0, description="Marks to give back for this step (0 keeps the deduction)")
+    reason: str = Field(description="One short English sentence: why the deduction stays or is removed")
+
+
+class ReviewOut(BaseModel):
+    steps: List[ReviewStep]
+
+
+FINALS_PROMPT = """The teacher's solution steps of one math question:
+{rubric}
+
+The photos are the student's answer to this question. Read the student's FINAL answer from the photo carefully (signs, fractions, powers).
+Write both final answers as plain math with ^ for powers and / for fractions (e.g. x = 1/2 , y = -3/(2x) , a^2 = 1/4). If a final answer has two cases write them as x = 2 or x = -2."""
+
+REVIEW_PROMPT = """You are the second grader. A first grader graded one student's answer to a math question by reading the photo as text; page reading
+often drops a minus sign, misreads digits or symbols, and the first grader sometimes compares the student's lines word by word with the teacher's
+solution instead of checking the mathematics. Look at the PHOTOS yourself.
+
+Teacher's solution steps and their marks:
+{rubric}
+
+First grading, only the steps that lost marks (number, marks given/possible, the first grader's reason, what it read from the student):
+{lost}
+
+{final_fact}
+{examples}
+For each listed step decide from the photos:
+- Give the marks back when the student's work for that step is mathematically right: an equivalent form (sides swapped, multiplied by -1,
+  reordered, simplified), the same result reached by a different valid route, or a deduction that came only from a wrong reading of the page.
+- Keep the deduction when the student really made a mistake there, skipped the step, or wrote nothing for it. A correct final answer does NOT
+  by itself earn a step: a wrong or missing step keeps its deduction even if the final answer is right.
+- When unsure, keep the deduction. give_back never exceeds the marks that step lost."""
+
+
+def rubric_text(steps: List[Step]) -> str:
+    return "\n".join(f"{i + 1}. ({s.points:g} marks) {s.text or s.objective}" for i, s in enumerate(steps))
+
+
+def finals_equal(t: str, st: str, verify) -> Optional[bool]:
+    """True/False when SymPy is sure, None when it cannot tell. Several cases (x = 2 or x = -2) match in any order."""
+    import re
+    split = lambda s: [p.strip() for p in re.split(r"\bor\b|,|;|\bو\b", s) if p.strip()]
+    a, b = split(t), split(st)
+    if not a or not b:
+        return None
+    def same(x: str, y: str) -> Optional[bool]:
+        v = verify(x, y)
+        return bool(v.equivalent) if v.status == "certain" and v.equivalent is not None else None
+    if len(a) == 1 and len(b) == 1:
+        return same(a[0], b[0])
+    if len(a) != len(b):
+        return None  # e.g. the student wrote only one case: the second grader decides from the photo
+    left = list(b)
+    for x in a:
+        hit = next((y for y in left if same(x, y) is True), None)
+        if hit is None:
+            return None
+        left.remove(hit)
+    return True
+
+
+async def final_check(req: "GradeReq", imgs: list) -> tuple:
+    """Reads both final answers and checks them with SymPy. Returns (True/False/None, teacher, student)."""
+    from math_engine.verifier import verify_equivalence
+    try:
+        f = await complete_vision_json("grading", FINALS_PROMPT.replace("{rubric}", rubric_text(req.steps)), schema=FinalsOut, detail="high", images=imgs)
+        t, st = str(f.get("teacher_final") or "").strip(), str(f.get("student_final") or "").strip()
+        if not t or not st:
+            return None, t, st
+        return finals_equal(t, st, verify_equivalence), t, st
+    except Exception:
+        return None, "", ""
+
+
+async def second_look(req: "GradeReq", pages: List[bytes], steps: list) -> dict:
+    """Second grader with the photos, only for the steps that lost marks. It may give marks back, never take more."""
+    lost = [(i, st) for i, st in enumerate(steps) if float(st["awarded"]) < float(st["possible"]) - 1e-6]
+    if not lost or not pages:
+        return {"changed": 0, "final": None}
+    imgs = [(b, page_media(b), f"Student's answer, page {k + 1}") for k, b in enumerate(pages)]
+    final, t_final, s_final = await final_check(req, imgs)
+    if final is True:
+        fact = f"Checked by a computer algebra system: the student's final answer ({s_final}) IS equivalent to the teacher's ({t_final})."
+    elif final is False:
+        fact = f"Checked by a computer algebra system: the student's final answer ({s_final}) is NOT equivalent to the teacher's ({t_final}), so the last step is not right."
+    else:
+        fact = "The final answers could not be compared automatically; judge from the photos."
+    ex = ""
+    if req.examples:
+        rows = "\n".join(f"- student wrote: {e.student[:400]} | AI mark {e.ai:g}, teacher's mark {e.teacher:g} of {req.max_points:g}" for e in req.examples)
+        ex = ("How the TEACHER himself graded earlier papers of this same question (follow his way of giving marks; where his mark is higher than the AI's, "
+              "the AI was too strict in that kind of case):\n" + rows + "\n")
+    lost_txt = "\n".join(f"{i + 1}. {st['awarded']:g}/{st['possible']:g} | reason: {st['reason']} | read from student: {st['student']}" for i, st in lost)
+    prompt = (REVIEW_PROMPT.replace("{rubric}", rubric_text(req.steps)).replace("{lost}", lost_txt)
+              .replace("{final_fact}", fact).replace("{examples}", ex))
+    try:
+        out = ReviewOut(**await complete_vision_json("grading", prompt, schema=ReviewOut, detail="high", images=imgs))
+    except Exception:
+        return {"changed": 0, "final": final}
+    changed = 0
+    for r in out.steps:
+        k = r.index - 1
+        if not (0 <= k < len(steps)) or r.give_back <= 0:
+            continue
+        st = steps[k]
+        # The last step's result is wrong by algebra: its marks are not given back
+        if final is False and k == len(steps) - 1:
+            continue
+        room = float(st["possible"]) - float(st["awarded"])
+        add = min(room, float(r.give_back))
+        if add <= 0:
+            continue
+        st["awarded"] = round(float(st["awarded"]) + add, 2)
+        st["status"] = "correct" if st["awarded"] >= float(st["possible"]) - 1e-6 else "partial"
+        st["reason"] = f"(second look) {r.reason}"
+        changed += 1
+    return {"changed": changed, "final": final}
+
+
 @app.post("/bot/grade", dependencies=[Depends(check_key)])
 async def bot_grade(req: GradeReq):
     bucket = start_usage()
@@ -181,6 +316,12 @@ async def bot_grade(req: GradeReq):
         }
         for s in res.get("steps", [])
     ]
+    # Second look with the photos at the steps that lost marks: fixes page-reading slips and other valid routes
+    look = {"changed": 0, "final": None}
+    if req.review and not ocr_failed and res.get("success", False) and score < float(req.max_points):
+        look = await second_look(req, pages, steps)
+        if look["changed"]:
+            score = max(0.0, min(sum(float(st["awarded"]) for st in steps), float(req.max_points)))
     # The student reads the marking: each step's reason, and one short note, in plain Arabic
     note = ""
     try:
@@ -205,6 +346,8 @@ async def bot_grade(req: GradeReq):
         "review_reason": doubt,
         "student_lines": texts,
         "note": note,
+        "second_look": look["changed"],
+        "final_ok": look["final"],
         "usage": usage_report(bucket),
         "steps": steps,
     }
@@ -380,6 +523,7 @@ class QaReq(BaseModel):
     context: str = Field(min_length=1)  # booklet text of the chosen lecture or topic (math in $...$)
     question: str = ""  # the student's question as typed
     image: Optional[str] = None  # or a photo of it (base64)
+    lang: str = Field(default="ar", pattern="^(ar|en)$")  # the student's track: the answer is written in this language
 
 
 class QaFind(BaseModel):
@@ -433,6 +577,9 @@ async def bot_qa(req: QaReq):
         raise HTTPException(status_code=400, detail="empty question")
     template = QA_FIND_PROMPT if req.mode == "find" else QA_SOLVE_PROMPT
     prompt = template.replace("{context}", context).replace("{how}", how)
+    if req.lang == "en":
+        prompt += ("\nThe student studies the ENGLISH track: write the whole solution in English (steps, words and explanations), "
+                   "translating the teacher's Arabic words if the booklet is in Arabic. Keep his method and his order of steps.")
     schema = QaFind if req.mode == "find" else QaSolve
     if req.image:
         img = decode_images([req.image])[0]

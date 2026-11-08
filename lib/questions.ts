@@ -106,20 +106,24 @@ async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean)
   const text = String(m.text ?? m.caption ?? "").trim();
   const image = m.photo ? await photoOf(m) : null;
   if (!image && !text) return false;
-  const wait: any = await send(chat, "⏳ لحظة، دا أدور على حل سؤالك بملازم الأستاذ...");
+  // ما تطلع رسالة «لحظة»: الطالب يوصله الحل بس
+  await api("sendChatAction", { chat_id: chat, action: "typing" });
   let r = null;
-  try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined }, n, String(t.ar ?? ""), Number(data.l) || 0, en ? "en" : "ar"); }
+  try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined }, n, [String(t.ar ?? ""), String(t.en ?? "")], Number(data.l) || 0, en ? "en" : "ar"); }
   catch (e) { console.error("qa", e); }
-  if (wait?.message_id) await api("deleteMessage", { chat_id: chat, message_id: wait.message_id });
   if (!r) return false;
   // حل نظام الذكاء (مو من الملزمة): إذا صاحب البوت يريد يشوفه أول، السؤال يروح للأستاذ مثل العادة
   if (r.source === "ai" && !(await qaCfg()).direct) return false;
   const where = `${t.ar}${data.l ? ` — المحاضرة ${data.l}` : ""}`;
-  const id = await saveAnswer(uid, text, r, where);
+  const shown = en ? `${t.en || t.ar}${data.l ? ` — Lecture ${data.l}` : ""}` : where;
+  const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar");
   await kvSet(`qauto_${uid}`, JSON.stringify({ mid: m.message_id, t: data.t, l: data.l || 0 }));
   await setSession(uid, "", {});
-  const kb: Kb = [[{ text: "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }], [btn("❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]];
-  await send(chat, r.source === "ai" ? "🤖 <b>حليت سؤالك على طريقة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة." : "📘 <b>سؤالك محلول بملزمة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة.", { kb });
+  const kb: Kb = [[{ text: en ? "📘 Open the solution" : "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }], [btn(en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]];
+  const msg = en
+    ? (r.source === "ai" ? "🤖 <b>Your question is solved the teacher's way</b>\nTap the button to see the solution step by step." : "📘 <b>Your question is solved in the teacher's booklet</b>\nTap the button to see the solution step by step.")
+    : (r.source === "ai" ? "🤖 <b>حليت سؤالك على طريقة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة." : "📘 <b>سؤالك محلول بملزمة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة.");
+  await send(chat, msg, { kb });
   await send(chat, "👆", { replyKb: await mainKb(uid) });
   await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : `📘 وصله حل سؤاله من الملزمة (${where})`);
   return true;

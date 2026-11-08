@@ -39,6 +39,8 @@ const { AI_GRADER, staffName } = await import("../lib/data.ts");
 const { initDb, insert, one, find, put } = await import("../lib/db.ts");
 const { stamp, todayStr } = await import("../lib/util.ts");
 await initDb();
+// الفحوصات القديمة: يبدي يصحح من أول ورقة. «أول الأوراق للأستاذ» إله فحص بروحه بالأخير
+await (await import("../lib/aiGrade.ts")).setCalib(0);
 const sign = (uid: number) => {
   const params = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: uid }) });
   const check = [...params.entries()].map(([k, v]) => `${k}=${v}`).sort().join("\n");
@@ -437,4 +439,57 @@ test("اعتراض على سؤال صححه نظام التصحيح AI: هو ي�
   assert.equal((await find("question_marks", { item_id: p })).find((m) => m.q === 1)!.mark, 55);
   const msg = tg.find((c) => String(c.p.chat_id) === "90");
   assert.match(msg!.p.text, /رد نظام التصحيح AI على اعتراضك[\s\S]*طريقتك صحيحة/);
+});
+
+test("🎓 أول أوراق الموضوع للأستاذ: نظام التصحيح ما ياخذها، يصححها بالسر، ويتعلم من درجات الأستاذ", async () => {
+  const { setCalib, shadowOf, calibList } = await import("../lib/aiGrade.ts");
+  const { update: upd } = await import("../lib/db.ts");
+  await setAiOn(true);
+  const ex2 = await insert("bank_exams", { slug: "c6", chapter: "الفصل التاسع", ord: 1, title: "موضوع المعايرة", minutes: 60, pos: 9 });
+  const v2 = await insert("bank_versions", { exam_id: ex2, model: "A", kind: "mandatory", ok: 1 });
+  const qa = await insert("bank_questions", { version_id: v2, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  await saveRubric(qa, [{ text: "a^2 = 1/4", points: 10 }], 1);
+  await setChapterScope("c6", [ex2], 0);
+  await setCalib(2);
+  await put("staff", { user_id: 42, name: "مساعد المعايرة", perms: "grade,aicalib" });
+  const mk = async (uid: number) => {
+    const id = await insert("sched_items", { user_id: uid, exam_id: ex2, at: `${todayStr()} 10:00`, status: "done", version_id: v2, started_at: stamp(), submitted_at: stamp() });
+    await insert("exam_answers", { item_id: id, q: 1, file: "ans/a.jpg", created: stamp() });
+    return id;
+  };
+  const [p1, p2, p3] = [await mk(95), await mk(96), await mk(97)];
+  const test = await mk(-7);   // ورقة تجربة: ما تنحسب
+  const seen: any[] = [];
+  aiReply = (route, body) => { if (route === "/bot/grade") seen.push(body); return Response.json({ score: 6, requires_review: false, review_reason: "", student_lines: ["a^2=1/4"], steps: [{ status: "partial", awarded: 6, possible: 10, reason: "x", expected: "", student: "a^2=1/4" }], usage: [] }); };
+  await tick();
+  assert.deepEqual(await calibList(ex2), [p1, p2]);
+  // الأولى والثانية ما أخذها، بس صححها بالسر بدون أمثلة
+  for (const p of [p1, p2]) {
+    const row = (await one("sched_items", { id: p }))!;
+    assert.deepEqual([row.grader_id, row.graded_at], [null, null]);
+    assert.equal((await shadowOf(p))![0].score, 6);
+  }
+  assert.ok((await one("sched_items", { id: p3 }))!.graded_at);
+  assert.ok((await one("sched_items", { id: test }))!.graded_at);
+  // تطلع لصاحب البوت وللمساعد اللي عنده الصلاحية، والمصحح العادي ما يشوفها
+  const ids = async (uid: number) => ((await gradeAction({ initData: sign(uid), action: "list" })) as any).waiting.map((w: any) => w.id);
+  assert.ok(!(await ids(41)).includes(p1));
+  assert.ok((await ids(42)).includes(p1));
+  assert.ok((await ids(1)).includes(p2));
+  // الأستاذ يصحح الأولى 10 من 10: الورقة الجاية تروح ويا مثال إن الأستاذ عطى أكثر
+  await put("question_marks", { item_id: p1, q: 1, mark: 10 });
+  await upd("sched_items", { id: p1 }, { graded_at: stamp(), total: 10, grader_id: 1 });
+  seen.length = 0;
+  const p4 = await mk(98);
+  await tick();
+  assert.ok((await one("sched_items", { id: p4 }))!.graded_at);
+  const sent = seen.find((b) => b.max_points === 10)!;
+  assert.deepEqual(sent.examples, [{ student: "a^2=1/4", ai: 6, teacher: 10 }]);
+  // صفحة صاحب البوت: كم صحح، ودرجته جنب درجة نظام التصحيح
+  const page = await aiGradeAction({ initData: sign(1), action: "list" }) as any;
+  const t = page.calib.topics.find((x: any) => x.exam === ex2);
+  assert.deepEqual([page.calib.n, t.done, t.of], [2, 1, 2]);
+  assert.deepEqual(t.papers.map((p: any) => [p.teacher, p.ai]), [[10, 6], [null, 6]]);
+  await aiGradeAction({ initData: sign(1), action: "calib", n: 0 });
+  assert.equal(((await aiGradeAction({ initData: sign(1), action: "list" })) as any).calib.n, 0);
 });
