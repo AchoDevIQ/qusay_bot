@@ -16,11 +16,13 @@ type Trial = { n: number; score: number; max: number; review: boolean; reason: s
 type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
 type Data = {
+  aiStudents: { minAvg: number; minPapers: number; chosen: StuRow[]; candidates: StuRow[] };
   calib: { n: number; topics: { exam: number; title: string; done: number; of: number; versions: { model: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] }[] };
   on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string; retry: boolean }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
   fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; trial?: { id: number; result: Trial }; notice?: string;
 };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
+type StuRow = { id: number; name: string; papers: number; avg: number | null };
 const usd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
 
 export default function AiGradeClient() {
@@ -48,6 +50,7 @@ export default function AiGradeClient() {
             </div>
             <Money data={data} />
             <Calib key={data.calib.n} calib={data.calib} busy={busy} call={call} />
+            <AiStudents st={data.aiStudents} busy={busy} call={call} />
             <div className="card expad">
               <div className="exlabel">📋 أوراق مواضيعه اللي بعدها ما انصححت</div>
               {!data.pending.length && <div className="exhint">ماكو ورقة تنتظر بالمواضيع المأشرة.</div>}
@@ -328,6 +331,28 @@ function Calib({ calib, busy, call }: { calib: Data["calib"]; busy: boolean; cal
             ))}
           </div>
         </details>
+      ))}
+    </div>
+  );
+}
+
+/** طلاب يصححهم نظام التصحيح: صاحب البوت يختارهم بإيده، والبوت يرشحله اللي درجاتهم زينة */
+function AiStudents({ st, busy, call }: { st: Data["aiStudents"]; busy: boolean; call: Call }) {
+  const line = (r: StuRow) => `${r.papers} ورقة${r.avg !== null ? ` · المعدل ${r.avg}` : ""}`;
+  return (
+    <div className="card expad">
+      <div className="exlabel">👤 طلاب يصححهم نظام التصحيح AI</div>
+      <div className="exhint">غير المواضيع، تگدر تختار طلاب بعينهم: كل أوراقهم الجاية يصححها نظام التصحيح، بأي موضوع خطواته محفوظة، حتى لو الموضوع مو مأشر. ما ينحول أي طالب إلا لمن إنت تدوس الزر.</div>
+      {st.chosen.length > 0 && <div className="exlabel">المختارين ({st.chosen.length})</div>}
+      {st.chosen.map((r) => (
+        <div key={r.id} className="aig-logrow"><div><b>{r.name}</b><br /><small>{line(r)}</small></div>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "aiStudent", sid: r.id, on: false })}>↩️ شيله</button></div>
+      ))}
+      <div className="exlabel">⭐ مرشحين: معدلهم {st.minAvg} أو أكثر بـ {st.minPapers} أوراق أو أكثر</div>
+      {!st.candidates.length && <div className="exhint">بعد ماكو طالب يطابق.</div>}
+      {st.candidates.map((r) => (
+        <div key={r.id} className="aig-logrow"><div><b>{r.name}</b><br /><small>{line(r)}</small></div>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "aiStudent", sid: r.id, on: true })}>🤖 حوّله للذكاء</button></div>
       ))}
     </div>
   );

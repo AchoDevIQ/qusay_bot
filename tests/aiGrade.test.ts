@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-ai-"));
-Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CONTENT_DIR: tmp, CHROME_PATH: path.join(tmp, "none"), ASSETS_DIR: path.join(tmp, "none"), SETTINGS_FILE: path.join(tmp, "none"), GRADING_AI_URL: "https://ai.test/", GRADING_AI_KEY: "secret-k" });
+Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CONTENT_DIR: tmp, CHROME_PATH: path.join(tmp, "none"), ASSETS_DIR: path.join(tmp, "none"), SETTINGS_FILE: path.join(tmp, "none"), GRADING_AI_URL: "https://ai.test/", GRADING_AI_KEY: "secret-k", AI_CACHE: "0" });
 delete process.env.FIREBASE_STORAGE_BUCKET;
 fs.mkdirSync(path.join(tmp, "ans"), { recursive: true });
 fs.writeFileSync(path.join(tmp, "ans", "a.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]));
@@ -502,4 +502,53 @@ test("🎓 أول أوراق الموضوع للأستاذ: نظام التصح�
   assert.equal((await one("sched_items", { id: pb }))!.graded_at, null);
   await aiGradeAction({ initData: sign(1), action: "calib", n: 0 });
   assert.equal(((await aiGradeAction({ initData: sign(1), action: "list" })) as any).calib.n, 0);
+});
+
+test("نفس الصور ونفس الخطوات: النتيجة المحفوظة ترجع، بدون تصحيح جديد", async () => {
+  process.env.AI_CACHE = "1";
+  const { tryGrade } = await import("../lib/aiGrade.ts");
+  let n = 0;
+  aiReply = (route, body) => { if (route === "/bot/grade") n++; return Response.json({ score: 40 + n, requires_review: false, review_reason: "", student_lines: [], steps: [], usage: [] }); };
+  const img = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9]);
+  const a = await tryGrade(q1, [img]);
+  const b = await tryGrade(q1, [img]);
+  assert.equal(n, 1);
+  assert.equal(a.score, b.score);
+  // صورة ثانية: تنصحح
+  await tryGrade(q1, [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 7])]);
+  assert.equal(n, 2);
+  process.env.AI_CACHE = "0";
+});
+
+test("👤 طالب يختاره صاحب البوت: أوراقه يصححها نظام التصحيح حتى لو الموضوع مو مأشر، والمرشحين حسب معدلهم", async () => {
+  const { update: upd } = await import("../lib/db.ts");
+  await setAiOn(true);
+  const ex3 = await insert("bank_exams", { slug: "c5", chapter: "فصل الطلاب", ord: 1, title: "موضوع مو مأشر", minutes: 60, pos: 5 });
+  const v3 = await insert("bank_versions", { exam_id: ex3, model: "A", kind: "mandatory", ok: 1 });
+  const q3 = await insert("bank_questions", { version_id: v3, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  await saveRubric(q3, [{ text: "x = 1", points: 10 }], 1);
+  await put("students", { user_id: 300, name: "طالب ممتاز", exam: "إلكتروني", created: "2026-01-01 00:00" });
+  // ثلاث أوراق قديمة مصححة بمعدل 90: يطلع مرشح
+  for (const t of [88, 90, 92]) await insert("sched_items", { user_id: 300, exam_id: ex, at: stamp(), status: "done", version_id: ver, submitted_at: stamp(), graded_at: stamp(), total: t });
+  let page = await aiGradeAction({ initData: sign(1), action: "list" }) as any;
+  assert.ok(page.aiStudents.candidates.some((c: any) => c.id === 300 && c.avg === 90 && c.papers === 3));
+  const mk = async () => {
+    const id = await insert("sched_items", { user_id: 300, exam_id: ex3, at: stamp(), status: "done", version_id: v3, started_at: stamp(), submitted_at: stamp() });
+    await insert("exam_answers", { item_id: id, q: 1, file: "ans/a.jpg", created: stamp() });
+    return id;
+  };
+  aiReply = () => Response.json({ score: 9, requires_review: false, review_reason: "", student_lines: [], steps: [], usage: [] });
+  // قبل ما يختاره: الموضوع مو مأشر، فما ياخذها
+  const p1 = await mk();
+  await tick();
+  assert.equal((await one("sched_items", { id: p1 }))!.graded_at, null);
+  await upd("sched_items", { id: p1 }, { status: "cancelled" });
+  page = await aiGradeAction({ initData: sign(1), action: "aiStudent", sid: 300, on: true }) as any;
+  assert.ok(page.aiStudents.chosen.some((c: any) => c.id === 300));
+  assert.ok(!page.aiStudents.candidates.some((c: any) => c.id === 300));
+  const p2 = await mk();
+  await tick();
+  assert.ok((await one("sched_items", { id: p2 }))!.graded_at);
+  await aiGradeAction({ initData: sign(1), action: "aiStudent", sid: 300, on: false });
+  await assert.rejects(aiGradeAction({ initData: sign(41), action: "aiStudent", sid: 300, on: true }));
 });

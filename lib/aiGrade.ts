@@ -2,6 +2,7 @@
 // صاحب البوت يختار المواضيع اللي يصححها، وكل سؤال يحتاج «خطوات الحل ودرجة كل خطوة».
 // الورقة اللي هو مو متأكد منها تروح للمصحح اللي صاحب البوت اختاره لفصلها، بدون ما توصل للطالب.
 // الورقة اللي ما يگدر عليها (سؤال بدون خطوات، جواب ملف كامل، الخدمة عطلانة) تبقى للمصححين مثل قبل.
+import { createHash } from "node:crypto";
 import { find, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { AI_GRADER } from "./data.ts";
 import { files } from "./files.ts";
@@ -14,7 +15,8 @@ export type Usage = { model: string; calls: number; input: number; output: numbe
 export type Price = { in: number; out: number };
 /** المواضيع اللي يصححها، ولكل فصل المصحح اللي توصله الأوراق اللي مو متأكد منها */
 /** calib: أول كم ورقة بكل نموذج (A، B، C...) يصححها الأستاذ (أو مساعد عنده صلاحية 🎓) قبل ما يبدي، ونظام التصحيح يتعلم منها */
-export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number };
+/** students: طلاب يختارهم صاحب البوت، نظام التصحيح يصحح كل أوراقهم بأي موضوع خطواته جاهزة، حتى لو الموضوع مو مأشر */
+export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number; students: number[] };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
 export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed" | "objection" | "calib"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
 
@@ -77,7 +79,36 @@ const readJson = async <T>(k: string, def: T): Promise<T> => { try { return JSON
 export async function aiSettings(): Promise<AiSettings> {
   const s = await readJson<Partial<AiSettings>>(SET_KEY, {});
   const calib = Number(s.calib);
-  return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {}, calib: Number.isInteger(calib) && calib >= 0 ? calib : CALIB_DEFAULT };
+  return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {}, calib: Number.isInteger(calib) && calib >= 0 ? calib : CALIB_DEFAULT, students: Array.isArray(s.students) ? s.students.map(Number) : [] };
+}
+/** يضيف طالب لقائمة الذكاء أو يشيله */
+export async function setAiStudent(uid: number, on: boolean) {
+  const s = await aiSettings();
+  s.students = on ? [...new Set([...s.students, uid])] : s.students.filter((x) => x !== uid);
+  await kvSet(SET_KEY, JSON.stringify(s));
+}
+/** الطلاب المرشحين: عندهم 3 أوراق مصححة أو أكثر ومعدلهم 85 أو أكثر (أوراقهم نظيفة وقريبة من الحل، فالذكاء يصححها بدقة).
+ *  ما يتحولون إلا لمن صاحب البوت يدوس الزر */
+export async function aiStudentsState(nameOf: (uid: number) => Promise<string>, minAvg = 85, minPapers = 3) {
+  const s = await aiSettings();
+  const by = new Map<number, number[]>();
+  for (const it of await find("sched_items", { status: "done" })) {
+    if (!it.graded_at || it.user_id <= 0 || it.total === null || it.total === undefined) continue;
+    by.set(it.user_id, [...(by.get(it.user_id) ?? []), Number(it.total)]);
+  }
+  const row = async (uid: number) => {
+    const t = by.get(uid) ?? [];
+    return { id: uid, name: await nameOf(uid), papers: t.length, avg: t.length ? Math.round(t.reduce((a, b) => a + b, 0) / t.length) : null };
+  };
+  const chosen = await Promise.all(s.students.map(row));
+  const cands = [];
+  for (const [uid, t] of by) {
+    if (s.students.includes(uid) || t.length < minPapers) continue;
+    const r = await row(uid);
+    if ((r.avg ?? 0) >= minAvg) cands.push(r);
+  }
+  cands.sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0) || b.papers - a.papers);
+  return { minAvg, minPapers, chosen, candidates: cands.slice(0, 50) };
 }
 export async function setCalib(n: number) {
   const s = await aiSettings();
@@ -335,18 +366,34 @@ export async function examplesFor(_examId: number, versionId: number, n: number)
   }
   return out.sort((a, b) => Math.abs(b.teacher - b.ai) - Math.abs(a.teacher - a.ai)).slice(0, 6);
 }
+// نفس الصور ونفس الخطوات = نفس النتيجة: تنحفظ أول مرة، والمرة الثانية ترجع المحفوظة بدون تصحيح جديد ولا كلفة
+const ENGINE = "rubric-1";
+const cacheKey = (steps: RubricStep[], imgs: Buffer[]) => {
+  const h = createHash("sha256").update(ENGINE).update(JSON.stringify(steps));
+  for (const b of imgs) h.update(b);
+  return `ai_cache_${h.digest("hex").slice(0, 40)}`;
+};
 /** يرسل جواب سؤال واحد (صوره) للخدمة ويا خطوات حله */
 async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], examples: Example[] = []): Promise<AiQuestion> {
   const max = Number(q.max_mark);
+  const useCache = process.env.AI_CACHE !== "0";
+  const key = cacheKey(steps, imgs);
+  if (useCache) {
+    const hit = await readJson<AiQuestion | null>(key, null);
+    if (hit && typeof hit.score === "number") return { ...hit, n: q.n, usage: [] };
+  }
   const r = await svc("/bot/grade", {
     max_points: max,
     steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
     images: imgs.map((b) => b.toString("base64")),
     examples,
-  // المراجعة الثانية للأسئلة اللي نقصت تاخذ وقت فوق التصحيح: نصبر لحد 4 دقايق قبل ما نعيدها بالدكة الجاية
+  // نصبر لحد 4 دقايق قبل ما نعيدها بالدكة الجاية
   }, 230_000);
   const score = Math.max(0, Math.min(max, Math.round(Number(r.score) || 0)));
-  return { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), note: String(r.note ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
+  const res: AiQuestion = { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), note: String(r.note ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
+  // ما نحفظ نتيجة ما متأكد منها: المرة الجاية تنصحح من جديد
+  if (useCache && !res.review) await kvSet(key, JSON.stringify({ ...res, usage: [] }));
+  return res;
 }
 /** «🧪 جرّب على جواب حقيقي»: صاحب البوت يرفع صور جواب سؤال، ونظام التصحيح يصححها ويرجع النتيجة بس.
  *  ما تنحفظ درجة لأحد وما توصل رسالة لأحد، بس الكلفة تنحسب بالسجل */
@@ -415,8 +462,8 @@ export async function aiRetry(itemId: number) {
 /** أوراق المواضيع المأشرة اللي بعدها ما انصححت، ووين واقفة كل وحدة */
 export async function aiPending(nameOf: (it: Row) => Promise<string>, staffName: (id: number) => Promise<string>) {
   const s = await aiSettings();
-  const scope = new Set(s.exams);
-  const items = (await find("sched_items", { status: "done" })).filter((it) => !it.graded_at && scope.has(it.exam_id)).slice(0, 40);
+  const scope = new Set(s.exams), picked = new Set(s.students);
+  const items = (await find("sched_items", { status: "done" })).filter((it) => !it.graded_at && (scope.has(it.exam_id) || picked.has(it.user_id))).slice(0, 40);
   const titles = new Map((await find("bank_exams")).map((e) => [e.id, e.title]));
   const why = new Map<number, string | null>();
   const calib = await aiCalibIds(items);
@@ -439,11 +486,11 @@ export async function aiPending(nameOf: (it: Row) => Promise<string>, staffName:
 async function makeTaker() {
   const active = aiLinked() && await aiOn();
   const s = await aiSettings();
-  const scope = new Set(s.exams);
+  const scope = new Set(s.exams), picked = new Set(s.students);
   const verReady = new Map<number, boolean>();
   const calib = new Map<number, number[]>();
   return async (it: Row) => {
-    if (!active || !scope.has(it.exam_id) || it.graded_at || it.grader_id || !it.version_id) return false;
+    if (!active || !(scope.has(it.exam_id) || picked.has(it.user_id)) || it.graded_at || it.grader_id || !it.version_id) return false;
     if ((Number(await kvGet(triesKey(it.id))) || 0) >= MAX_TRIES) return false;
     if (!verReady.has(it.version_id)) {
       const qs = await find("bank_questions", { version_id: it.version_id });
@@ -452,8 +499,9 @@ async function makeTaker() {
       verReady.set(it.version_id, ok);
     }
     if (!verReady.get(it.version_id)) return false;
-    // أول أوراق الموضوع (مو أوراق التجربة) تبقى للأستاذ: يصححها بإيده، ونظام التصحيح يتعلم منها
-    if (s.calib > 0 && it.user_id > 0) {
+    // أول أوراق الموضوع (مو أوراق التجربة) تبقى للأستاذ: يصححها بإيده، ونظام التصحيح يتعلم منها.
+    // الطالب اللي اختاره صاحب البوت للذكاء ما تنحجز أوراقه
+    if (s.calib > 0 && it.user_id > 0 && scope.has(it.exam_id) && !picked.has(it.user_id)) {
       if (!calib.has(it.version_id)) calib.set(it.version_id, await calibList(it.version_id));
       const list = calib.get(it.version_id)!;
       if (list.includes(it.id)) return false;

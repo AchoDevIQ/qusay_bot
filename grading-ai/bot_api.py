@@ -20,6 +20,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from grading_service import extract_student_steps_from_pages, grade_single_question
+from rubric_engine import judge
 from llm.router import USAGE_COLLECTOR, any_credentials, complete_structured, complete_vision_json
 
 MAX_IMAGES = 12
@@ -53,7 +54,8 @@ class GradeReq(BaseModel):
     images: List[str] = Field(default_factory=list)  # base64 pages of the student's answer
     strictness: str = "standard"
     examples: List[Example] = Field(default_factory=list, max_length=8)
-    review: bool = True  # second look at the steps that lost marks
+    review: bool = True  # classic engine only: second look at the steps that lost marks
+    engine: str = Field(default="rubric", pattern="^(rubric|classic)$")  # rubric: same paper, same mark
 
 
 class RubricReq(BaseModel):
@@ -271,6 +273,17 @@ async def second_look(req: "GradeReq", pages: List[bytes], steps: list) -> dict:
 async def bot_grade(req: GradeReq):
     bucket = start_usage()
     pages = decode_images(req.images)
+    if req.engine == "rubric" and pages:
+        # Rubric engine: the model gives one verdict per step from the photo, the code gives the marks
+        r = None
+        try:
+            r = await judge(req.steps, pages, page_media, examples_text(req))
+        except Exception:
+            r = None
+        if r is not None:
+            score = max(0.0, min(float(r["score"]), float(req.max_points)))
+            doubt = f"{r['unreadable']} خطوة ما انقرت من الصورة" if r["unreadable"] else ""
+            return await finish(req, bucket, r["steps"], score, 0.5 if doubt else 1.0, doubt, r["lines"], {"changed": 0, "final": r["final"]}, "rubric")
     lines = await extract_student_steps_from_pages(pages) if pages else []
     texts = [l.get("text", "") for l in lines if (l.get("text") or "").strip()]
     ocr_failed = any(l.get("ocr_error") for l in lines)
@@ -322,6 +335,18 @@ async def bot_grade(req: GradeReq):
         look = await second_look(req, pages, steps)
         if look["changed"]:
             score = max(0.0, min(sum(float(st["awarded"]) for st in steps), float(req.max_points)))
+    return await finish(req, bucket, steps, score, confidence, doubt, texts, look, "classic")
+
+
+def examples_text(req: "GradeReq") -> str:
+    if not req.examples:
+        return ""
+    rows = "\n".join(f"- student wrote: {e.student[:400]} | AI mark {e.ai:g}, teacher's mark {e.teacher:g} of {req.max_points:g}" for e in req.examples)
+    return ("How the TEACHER himself graded earlier papers of this same question (where his mark is higher than the AI's, "
+            "the AI was too strict in that kind of case; follow his way):\n" + rows)
+
+
+async def finish(req: "GradeReq", bucket: list, steps: list, score: float, confidence: float, doubt: str, texts: list, look: dict, engine: str) -> dict:
     # The student reads the marking: each step's reason, and one short note, in plain Arabic
     note = ""
     try:
@@ -348,6 +373,7 @@ async def bot_grade(req: GradeReq):
         "note": note,
         "second_look": look["changed"],
         "final_ok": look["final"],
+        "engine": engine,
         "usage": usage_report(bucket),
         "steps": steps,
     }

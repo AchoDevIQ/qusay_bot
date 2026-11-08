@@ -3,7 +3,7 @@
 import { ADMIN_IDS } from "./config.ts";
 import { count, find, one, type Row } from "./db.ts";
 import { AI_GRADER, isAdmin, staffIds, staffName } from "./data.ts";
-import { aiLinked, calibState, setCalib, aiLog, aiOn, aiPending, aiRetry, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
+import { aiLinked, aiStudentsState, calibState, setAiStudent, setCalib, aiLog, aiOn, aiPending, aiRetry, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -45,6 +45,7 @@ async function listData(uid: number) {
   return {
     on: await aiOn(), linked: aiLinked(), draftQueue: await draftQueueState(), pending: await aiPending(async (it) => (await one("students", { user_id: it.user_id }))?.name ?? `طالب ${it.user_id}`, staffName), ready, total: await count("bank_questions"), chapters, graders, fileToken: fileToken(uid),
     graded: (await find("sched_items", { grader_id: AI_GRADER })).filter((x) => x.graded_at).length,
+    aiStudents: await aiStudentsState(async (id) => (await one("students", { user_id: id }))?.name ?? `طالب ${id}`),
     calib: { n: s.calib, topics: await calibState(async (it) => (await one("students", { user_id: it.user_id }))?.name ?? `طالب ${it.user_id}`) },
     money: { today: sum(log.filter((r) => r.at.startsWith(today))), month: sum(log.filter((r) => r.at.startsWith(month))), all: sum(log) },
     prices: models.map((m) => ({ model: m, in: p[m]?.in ?? 0, out: p[m]?.out ?? 0, missing: !p[m] })),
@@ -74,6 +75,12 @@ export async function aiGradeAction(body: Row) {
     const turnedOn = exams.length > 0 && aiLinked() && !await aiOn();
     if (turnedOn) await setAiOn(true);
     return { ...await listData(uid), notice: turnedOn ? "✅ انحفظ، ونظام التصحيح AI اشتغل" : "✅ انحفظ" };
+  }
+  if (a === "aiStudent") {
+    const sid = Number(body.sid);
+    need(Number.isInteger(sid) && sid > 0 && await one("students", { user_id: sid }), "الطالب غير موجود");
+    await setAiStudent(sid, body.on === true);
+    return { ...await listData(uid), notice: body.on === true ? "🤖 انحوّل: نظام التصحيح يصحح أوراقه الجاية" : "انشال: أوراقه ترجع للمصححين" };
   }
   if (a === "calib") {
     const n = Number(body.n);
