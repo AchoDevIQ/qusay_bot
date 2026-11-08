@@ -341,7 +341,8 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], exampl
     steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
     images: imgs.map((b) => b.toString("base64")),
     examples,
-  });
+  // المراجعة الثانية للأسئلة اللي نقصت تاخذ وقت فوق التصحيح: نصبر لحد 4 دقايق قبل ما نعيدها بالدكة الجاية
+  }, 230_000);
   const score = Math.max(0, Math.min(max, Math.round(Number(r.score) || 0)));
   return { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), note: String(r.note ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
 }

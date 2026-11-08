@@ -230,6 +230,13 @@ function AttendCode({ code }: { code: string }) {
 }
 
 function List({ info, busy, enter, paper, ask, file }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown> }) {
+  // وين وصل الطالب: الامتحان المفتوح هسه، وإذا ماكو فالجاي. الصفحة تنزل له مباشرة (ويا محاضراته اللي قبله)
+  const now = info.items.find((i) => i.state === "open") ?? info.items.find((i) => i.state === "locked" || i.state === "center");
+  useEffect(() => {
+    if (!now) return;
+    const el = document.getElementById("mx-now");
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+  }, [now?.id]);
   return (
     <div className="card">
       <h2>🗓 جدول امتحاناتك</h2>
@@ -237,17 +244,17 @@ function List({ info, busy, enter, paper, ask, file }: { info: Info; busy: boole
       <table className="extable"><tbody>
         {info.items.map((i) => (
           <Fragment key={i.id}>
-          {(i.lectures ?? []).map((l) => (
-            <tr key={l} className="lcrow">
-              <td>📺 {l}<small className="pdmode">{info.appLink ? "شوفها بالتطبيق قبل الامتحان" : "ادرسها قبل الامتحان"}</small></td>
+          {(i.lectures ?? []).map((l, k) => (
+            <tr key={l} className="lcrow" id={i.id === now?.id && k === 0 ? "mx-now" : undefined}>
+              <td>{i.id === now?.id && k === 0 && <span className="adentag">📍 وصلت هنا</span>}📺 {l}<small className="pdmode">{info.appLink ? "شوفها بالتطبيق قبل الامتحان" : "ادرسها قبل الامتحان"}</small></td>
               <td className="p">
                 {info.appLink && !info.inExam && <button type="button" className="exbtn" onClick={() => openOutside(info.appLink)}>▶️ افتح</button>}
                 {info.lectureFiles?.includes(l) && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void file(l)}>📄 الملف</button>}
               </td>
             </tr>
           ))}
-          <tr className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}>
-            <td><b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
+          <tr className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""} id={i.id === now?.id && !(i.lectures ?? []).length ? "mx-now" : undefined}>
+            <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.state === "missed" && <Excuse item={i} busy={busy} ask={ask} />}
               {i.state === "done" && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => paper(i.id)}>📂 ورقتي وتصحيحها</button>}
