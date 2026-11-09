@@ -72,6 +72,7 @@ async function homeData(uid: number) {
     people.push({ page: "rent", icon: "🏢", title: "المراكز: الحضور والإيجار", note: "المدراء والتقرير الشهري والدفع" });
     people.push({ page: "checkpoints", icon: "🚦", title: "السيطرة", note: stopped ? `${stopped} طالب موقوف` : "ماكو موقوفين", hot: stopped > 0 });
   }
+  if (await isAdmin(uid)) setup.unshift({ page: "guide", icon: "📖", title: "دليل البوت", note: "شرح كل قسم، وترسله للمساعدين" });
   if (shop.length) groups.push({ title: "المتجر", tiles: shop });
   if (people.length) groups.push({ title: "الطلاب والامتحانات", tiles: people });
   if (setup.length) groups.push({ title: "الإدارة", tiles: setup });
