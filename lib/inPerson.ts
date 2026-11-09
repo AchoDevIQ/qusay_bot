@@ -8,7 +8,7 @@ import { find, insert, kvGet, kvSet, one, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { TOKEN } from "./config.ts";
 import { can, centerName, isAdmin, student } from "./data.ts";
-import { labelTspl } from "./labelTspl.ts";
+import { labelTspl, type LabelInfo } from "./labelTspl.ts";
 import { versionOf } from "./examRoom.ts";
 import { files } from "./files.ts";
 import { notifyGraders } from "./graderPay.ts";
@@ -90,12 +90,28 @@ export async function stationAction(body: Row) {
     await kvSet(queueKey(uid!), JSON.stringify(q.filter((x) => x !== Number(body.id))));
     return { ok: true };
   }
+  const shift = (v: unknown) => Math.max(-80, Math.min(80, Math.round(Number(v) || 0)));
+  const jobOf = async (c: LabelInfo) => ({ id: c.item, name: c.name, b64: (await labelTspl(c, shift(body.dx), shift(body.dy))).toString("base64") });
+  if (body.action === "scan") {
+    const raw = String(body.code ?? "").trim();
+    let sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
+    if (sid && sid > 0 && await isAdmin(uid!) && !await student(sid) && await student(-sid)) sid = -sid;
+    need(sid, "هذا مو كود طالب");
+    const card = await markAttendance(sid!, uid!);
+    return { card, job: card.print === "label" && !card.already ? await jobOf(card) : null };
+  }
+  if (body.action === "reprint") {
+    const it = await one("sched_items", { id: Number(body.item) });
+    need(it, "الامتحان غير موجود", 404);
+    return { job: await jobOf(await itemCard(it!)) };
+  }
+  if (body.action === "test") return { job: await jobOf({ item: 0, uid: 0, name: "ليبل تجربة الطباعة", exam: "القطع المكافئ", center: "معهد قصي العميري", at: stamp() }) };
   need(body.action === "next", "أمر غير معروف");
   for (const id of q) {
     const it = await one("sched_items", { id });
     if (!it) { await kvSet(queueKey(uid!), JSON.stringify(q.filter((x) => x !== id))); continue; }
     const c = await itemCard(it);
-    return { job: { id, name: c.name, b64: (await labelTspl(c)).toString("base64") } };
+    return { job: await jobOf(c) };
   }
   return { job: null };
 }

@@ -85,12 +85,12 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
 /** طابعة الليبل بالبلوتوث: رابط المحطة ينفتح بمتصفح Bluefy ويبقى مفتوح */
 function Station({ station }: { station: { active: boolean; token: string } }) {
   const [copied, setCopied] = useState(false);
-  const link = `${location.origin}/print/station?k=${encodeURIComponent(station.token)}`;
+  const link = `${location.origin}/store/station?k=${encodeURIComponent(station.token)}`;
   async function copy() { try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); alert(link); } }
   return (
     <div className="card expad">
       <div className="exlabel">🖨 طابعة الليبل بالبلوتوث</div>
-      <div className="exhint">{station.active ? "✅ المحطة شغالة: الليبلات تروح للطابعة وحدها." : "انسخ الرابط، وافتحه بمتصفح Bluefy، ودوس «اتصل بالطابعة». خليه مفتوح وقت الامتحان. الرابط يشتغل أسبوع."}</div>
+      <div className="exhint">{station.active ? "✅ المحطة شغالة: الليبلات تروح للطابعة وحدها." : "انسخ الرابط، وافتحه بمتصفح Bluefy، ودوس «اتصل بالطابعة». بعدها الكاميرا تنفتح، وكل كود طالب تشوفه ينسجل حضوره وينطبع ليبله. الرابط يشتغل أسبوع."}</div>
       <button type="button" className="btn agbtn adtop" onClick={() => void copy()}>{copied ? "✅ انتسخ الرابط" : "📋 انسخ رابط المحطة"}</button>
     </div>
   );

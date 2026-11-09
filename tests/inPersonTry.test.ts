@@ -61,3 +61,25 @@ test("محطة طباعة البلوتوث: الليبل ينرسل بعد ال�
   await attendAction({ station, action: "done", id: job.id });
   assert.equal(((await attendAction({ station, action: "next" })) as any).job, null);
 });
+
+test("المحطة: قراءة الكود تسجل الحضور وترجع الليبل مباشرة، ومرة ثانية بدون طباعة، والضبط يحرك الليبل", async () => {
+  const { attendAction, stationToken, studentCode } = await import("../lib/inPerson.ts");
+  const station = stationToken(1);
+  const area = await insert("areas", { gov: "بغداد", name: "منطقة 3" });
+  const center = await insert("centers", { area_id: area, name: "مركز الكاميرا", gender: "بنين" });
+  const exam = await insert("bank_exams", { slug: "t3", chapter: "الفصل الثالث", ord: 1, title: "امتحان الكاميرا", minutes: 60 });
+  const vid = await insert("bank_versions", { exam_id: exam, model: "A", kind: "mandatory", ok: 1 });
+  const k = await startInPersonTest(center, vid);
+  const code = studentCode(-k);
+  const first: any = await attendAction({ station, action: "scan", code, dx: 16, dy: -8 });
+  assert.equal(first.card.already, false);
+  const text = Buffer.from(first.job.b64, "base64").toString("latin1");
+  assert.match(text, /BITMAP 192,4,35,288,0,/);
+  assert.match(text, /QRCODE 30,72,M,7,A,0,/);
+  const again: any = await attendAction({ station, action: "scan", code });
+  assert.equal(again.card.already, true);
+  assert.equal(again.job, null);
+  assert.equal(((await attendAction({ station, action: "reprint", item: first.card.item })) as any).job.id, first.card.item);
+  assert.ok(((await attendAction({ station, action: "test" })) as any).job.b64.length > 1000);
+  await assert.rejects(attendAction({ station, action: "scan", code: "QS:5.abc" }), /مو كود طالب/);
+});

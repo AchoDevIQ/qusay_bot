@@ -9,7 +9,8 @@ const W = 280, H = 288;
 const X = 176, Y = 12;
 let fontReady = false;
 
-export async function labelTspl(c: LabelInfo): Promise<Buffer> {
+/** dx وdy: تحريك الطباعة بالنقاط (8 نقاط بالملم) إذا الليبل طالع زاحف */
+export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
   const { createCanvas, GlobalFonts } = await import("@napi-rs/canvas");
   if (!fontReady) {
     const p = path.join(process.cwd(), "assets", "fonts", "NotoSansArabic-Bold.ttf");
@@ -50,8 +51,8 @@ export async function labelTspl(c: LabelInfo): Promise<Buffer> {
     if (px[i] < 128) bits[yy * rowBytes + (xx >> 3)] &= ~(0x80 >> (xx & 7));
   }
   return Buffer.concat([
-    Buffer.from(`SIZE 58 mm,39 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nBITMAP ${X},${Y},${rowBytes},${H},0,`, "latin1"),
+    Buffer.from(`SIZE 58 mm,39 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nBITMAP ${Math.max(0, X + dx)},${Math.max(0, Y + dy)},${rowBytes},${H},0,`, "latin1"),
     bits,
-    Buffer.from(`\r\nQRCODE 14,80,M,7,A,0,"QI:${c.item}"\r\nPRINT 1\r\n`, "latin1"),
+    Buffer.from(`\r\nQRCODE ${Math.max(0, 14 + dx)},${Math.max(0, 80 + dy)},M,7,A,0,"QI:${c.item}"\r\nPRINT 1\r\n`, "latin1"),
   ]);
 }
