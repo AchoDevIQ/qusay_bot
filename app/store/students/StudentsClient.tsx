@@ -11,7 +11,8 @@ type Area = { id: number; gov: string; name: string; centers: { id: number; name
 type TestStudent = { id: number; name: string; papers: number; graded: number; link: string };
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
-type Data = { papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
+type StudentFile = { id: number; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
+type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -23,6 +24,8 @@ export default function StudentsClient() {
   const [q, setQ] = useState("");       // المكتوب بالمربع
   const [shown, setShown] = useState(""); // البحث اللي نتيجته طالعة
   const [open, setOpen] = useState<number | null>(null);
+  const [fileOf, setFileOf] = useState<S | null>(null);
+  const [fileData, setFileData] = useState<StudentFile | null>(null);
   const [filters, setFilters] = useState({ curr: "", grade: "", exam: "", gov: "" });
   const [picked, setPicked] = useState<number[]>([]);
   const [printing, setPrinting] = useState(false);
@@ -34,6 +37,24 @@ export default function StudentsClient() {
     void call({ action: "list", q: shown, filters: next });
   }
   const s = data?.stats;
+  async function openFile(x: S) {
+    setFileOf(x); setFileData(null);
+    window.scrollTo(0, 0);
+    const r = await act({ action: "file", id: x.id });
+    if (r?.file) setFileData(r.file);
+  }
+  if (fileOf && data) {
+    return (
+      <>
+        <AdminHeader title="📂 ملف الطالب" />
+        <div className="wrap">
+          <button type="button" className="exbtn" style={{ marginBottom: 10 }} onClick={() => { setFileOf(null); setFileData(null); }}>⬅️ رجوع لقائمة الطلاب</button>
+          <FileView s={data.results.find((x) => x.id === fileOf.id) ?? fileOf} file={fileData} data={data} busy={busy} call={act} close={() => { setFileOf(null); setFileData(null); }} />
+        </div>
+        <StatusBar busy={busy} error={error} notice={data.notice} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -80,7 +101,7 @@ export default function StudentsClient() {
               {data.results.length ? (
                 <table className="extable"><tbody>
                   {data.results.map((x) => (
-                    <Rows key={x.id} s={x} data={data} picked={picked.includes(x.id)} pick={() => setPicked(picked.includes(x.id) ? picked.filter((i) => i !== x.id) : [...picked, x.id])} open={open === x.id} toggle={() => setOpen(open === x.id ? null : x.id)} close={() => setOpen(null)} busy={busy} call={act} />
+                    <Rows key={x.id} s={x} data={data} picked={picked.includes(x.id)} pick={() => setPicked(picked.includes(x.id) ? picked.filter((i) => i !== x.id) : [...picked, x.id])} open={open === x.id} toggle={() => void openFile(x)} close={() => setOpen(null)} busy={busy} call={act} />
                   ))}
                 </tbody></table>
               ) : <div className="empty">ما لگيت طالب.</div>}
@@ -107,7 +128,106 @@ function Rows({ s, data, picked, pick, open, toggle, close, busy, call }: { s: S
   );
 }
 
-function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => void; busy: boolean; call: Call }) {
+type Tab = "grades" | "papers" | "money" | "absent" | "sched" | "info" | "log";
+const TABS: [Tab, string][] = [["grades", "📊 درجاته"], ["papers", "📝 أوراقه"], ["money", "💰 مشترياته"], ["absent", "⛔ غياباته"], ["sched", "🗓 جدوله"], ["info", "👤 معلوماته"], ["log", "📜 سجله"]];
+
+/** ملف الطالب: كل شي يخصه بمكان واحد */
+function FileView({ s, file, data, busy, call, close }: { s: S; file: StudentFile | null; data: Data; busy: boolean; call: Call; close: () => void }) {
+  const [tab, setTab] = useState<Tab>("grades");
+  const [chapter, setChapter] = useState("");
+  const [topic, setTopic] = useState("");
+  const papers = file?.papers ?? [];
+  const chapters = [...new Set(papers.map((p) => p.chapter).filter(Boolean))];
+  const inChapter = chapter ? papers.filter((p) => p.chapter === chapter) : papers;
+  const topics = [...new Set(inChapter.map((p) => p.title))];
+  const shownPapers = topic ? inChapter.filter((p) => p.title === topic) : inChapter;
+  const graded = inChapter.filter((p) => p.total !== null);
+  const avg = graded.length ? Math.round(graded.reduce((t, p) => t + Number(p.total), 0) / graded.length) : null;
+  function pick(t: Tab) {
+    setTab(t);
+    if (t === "sched") void call({ action: "sched", id: s.id });
+  }
+  const chapterBox = (
+    <select className="exinput" aria-label="الفصل" value={chapter} onChange={(e) => { setChapter(e.target.value); setTopic(""); }}>
+      <option value="">كل الفصول</option>
+      {chapters.map((c) => <option key={c} value={c}>{c}</option>)}
+    </select>
+  );
+  return (
+    <>
+      <div className="card expad">
+        <h2 style={{ margin: 0 }}>{s.name}</h2>
+        <div className="exhint">{s.grade} · {s.curr} · {s.exam || "بدون امتحان"}{s.center ? ` · ${s.center}` : ""}</div>
+        <div className="exhint" dir="ltr" style={{ textAlign: "right" }}>{s.phone1}</div>
+        {file && (
+          <div className="adstats adstats2 adtop">
+            <div><b>{file.average ?? "—"}</b>المعدل</div>
+            <div><b>{file.papers.length}</b>ورقة</div>
+            <div><b>{file.absences.length}</b>غياب</div>
+            <div><b>{file.spent.toLocaleString("en-US")}</b>مشترياته</div>
+          </div>
+        )}
+      </div>
+      <div className="seg wrap2" style={{ flexWrap: "wrap", marginBottom: 10 }}>
+        {TABS.map(([k, label]) => <button type="button" key={k} className={tab === k ? "on" : ""} style={{ flex: "1 1 30%" }} onClick={() => pick(k)}>{label}</button>)}
+      </div>
+      {!file && <div className="empty">جاري تحميل ملفه...</div>}
+      {file && tab === "grades" && (
+        <div className="card expad">
+          {chapterBox}
+          <div className="exhint adtop">{graded.length} درجة{avg !== null ? ` · معدل ${avg}` : ""}</div>
+          {inChapter.length ? inChapter.map((p) => (
+            <div key={p.id} className="adsale">{p.title}{p.optional ? " (اختياري)" : ""}<small>{p.chapter}</small><small>{(p.graded || p.submitted).slice(0, 10)}</small><b>{p.total !== null ? `${p.total} من 100` : "بعده ما انصحح"}</b></div>
+          )) : <div className="exhint">ماكو درجات.</div>}
+        </div>
+      )}
+      {file && tab === "papers" && (
+        <div className="card expad">
+          {chapterBox}
+          <select className="exinput adtop" aria-label="الموضوع" value={topic} onChange={(e) => setTopic(e.target.value)}>
+            <option value="">كل المواضيع</option>
+            {topics.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <PapersPanel papers={{ id: s.id, list: shownPapers, fileToken: file.fileToken }} />
+        </div>
+      )}
+      {file && tab === "money" && (
+        <div className="card expad">
+          <div className="exhint">المجموع بدون الملغي: <b>{file.spent.toLocaleString("en-US")}</b> دينار</div>
+          {file.orders.length ? file.orders.map((o) => (
+            <div key={o.id} className="adsale">
+              <b>#{o.id}</b> {o.items.join("، ")}
+              <small>{o.created.slice(0, 16)}</small>
+              <small className={o.cancelled ? "exbad" : ""}>{o.state}</small>
+              <b>{o.total.toLocaleString("en-US")}</b>
+            </div>
+          )) : <div className="exhint">ماكو مشتريات.</div>}
+        </div>
+      )}
+      {file && tab === "absent" && (
+        <div className="card expad">
+          <div className="exlabel">⛔ غياباته ({file.absences.length})</div>
+          {file.absences.length ? file.absences.map((a) => <div key={a.id} className="adsale">{a.title}<small>{a.chapter}</small><small dir="ltr">{a.at}</small></div>) : <div className="exhint">ماكو غيابات.</div>}
+          <div className="exlabel adtop">🎫 حضوره بالمركز ({file.attended.length})</div>
+          {file.attended.map((a) => <div key={a.id} className="adsale">{a.title}<small dir="ltr">{a.at}</small></div>)}
+          <div className="exlabel adtop">🚦 إيقافات السيطرة ({file.stops.length})</div>
+          {file.stops.length ? file.stops.map((x) => <div key={x.id} className="adsale">{x.chapter}: {x.score} من {x.max}، غياب {x.absent}<small>{x.reason}</small><small>{x.created.slice(0, 10)}{x.lifted ? ` · انفك ${x.lifted.slice(0, 10)}` : " · بعده موقوف"}</small></div>) : <div className="exhint">ماكو إيقافات.</div>}
+        </div>
+      )}
+      {file && tab === "sched" && (data.sched?.id === s.id ? <SchedPanel key={data.sched.perDay} sched={data.sched} id={s.id} busy={busy} call={call} /> : <div className="empty">جاري تحميل جدوله...</div>)}
+      {tab === "info" && <div className="card expad"><Form key={s.updated + s.id} s={s} data={data} close={close} busy={busy} call={call} inFile /></div>}
+      {file && tab === "log" && (
+        <div className="card expad">
+          <div className="exlabel">❓ أسئلته العلمية: {file.questions.length}</div>
+          <div className="exlabel adtop">📜 عملياته</div>
+          {file.log.length ? file.log.map((r, i) => <div key={i} className="adsale">{r.what}<small>{r.created}</small></div>) : <div className="exhint">ما أكو عمليات مسجلة.</div>}
+        </div>
+      )}
+    </>
+  );
+}
+
+function Form({ s, data, close, busy, call, inFile }: { s: S; data: Data; close: () => void; busy: boolean; call: Call; inFile?: boolean }) {
   const startArea = data.areas.find((a) => a.centers.some((c) => c.id === s.centerId));
   const [name, setName] = useState(s.name);
   const [curr, setCurr] = useState(s.curr);
@@ -131,9 +251,9 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
     <div>
       <div className="exhint">مسجل من: {s.created}{s.username ? ` · @${s.username}` : ""}</div>
       <div className="exline">
-        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "log", id: s.id })}>📜 عمليات الطالب</button>
-        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "sched", id: s.id })}>🗓 جدوله</button>
-        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "papers", id: s.id })}>📝 أوراقه</button>
+        {!inFile && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "log", id: s.id })}>📜 عمليات الطالب</button>}
+        {!inFile && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "sched", id: s.id })}>🗓 جدوله</button>}
+        {!inFile && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "papers", id: s.id })}>📝 أوراقه</button>}
         {s.stop && (
           <>
             <span className="exhint exbad">⛔ موقوفة عليه {s.stop.what} من {s.stop.at.slice(0, 10)}: {s.stop.reason} ({s.stop.chapter}: {s.stop.score} من {s.stop.max}، غياب {s.stop.absent})</span>
@@ -151,8 +271,8 @@ function Form({ s, data, close, busy, call }: { s: S; data: Data; close: () => v
         {s.gw && !s.gw.blockedAt && <span className={s.gw.unseen >= 3 ? "exhint exbad" : "exhint"}>✅ آخر مرة استلم درجة: {s.gw.lastSeen ? s.gw.lastSeen.slice(0, 16) : "بعده ما داس استلمت"}{s.gw.unseen ? ` · ${s.gw.unseen} درجة ما فتحها` : ""}</span>}
         {s.wa && <a className="exbtn" href={s.wa} target="_blank" rel="noreferrer">💬 واتساب ولي الأمر</a>}
       </div>
-      {data.papers?.id === s.id && <PapersPanel papers={data.papers} />}
-      {data.sched?.id === s.id && <SchedPanel key={data.sched.perDay} sched={data.sched} id={s.id} busy={busy} call={call} />}
+      {!inFile && data.papers?.id === s.id && <PapersPanel papers={data.papers} />}
+      {!inFile && data.sched?.id === s.id && <SchedPanel key={data.sched.perDay} sched={data.sched} id={s.id} busy={busy} call={call} />}
       {data.log?.id === s.id && (
         <div className="adlog">
           {data.log.rows.length ? data.log.rows.map((r, i) => <div key={i} className="adsale">{r.what}<small>{r.created}</small></div>) : <div className="exhint">ما أكو عمليات مسجلة بعد.</div>}

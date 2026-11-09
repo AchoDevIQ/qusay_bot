@@ -14,6 +14,7 @@ import { openException, startNowForTest } from "./examRoom.ts";
 import { TEST_STUDENTS, addTestPaper, addTestStudent, deleteTests, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
 import { fileToken, homeToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
+import { studentFile } from "./studentFile.ts";
 import { aiWhyNot } from "./aiGrade.ts";
 import { guardianState, whatsappOf } from "./guardianWatch.ts";
 import { moveExam, retakeExam } from "./examMoves.ts";
@@ -162,6 +163,9 @@ export async function studentAction(body: Row) {
   } else if (a === "log") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, log: { id, rows: await activityOf(id) } };
+  } else if (a === "file") {
+    need(await one("students", { user_id: id }), "الطالب غير موجود");
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, file: { id, fileToken: fileToken(uid), ...await studentFile(id) } };
   } else if (a === "papers") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, papers: { id, list: await studentPapers(id), fileToken: fileToken(uid) } };
