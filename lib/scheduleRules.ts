@@ -98,6 +98,15 @@ export function labelChapters(label: string) {
 
 // ---------- أوقات المجموعة بالأسبوع
 export type Slot = { d: number; t: string };
+export type DaySlots = { d: number; times: string[] };
+/** المواعيد مرتبة: كل يوم بترتيب الأسبوع، وتحته أوقاته من الأبكر */
+export function groupSlots(slots: Slot[], week: number[]): DaySlots[] {
+  return week.filter((d) => slots.some((x) => x.d === d)).map((d) => ({ d, times: [...new Set(slots.filter((x) => x.d === d).map((x) => x.t))].sort() }));
+}
+/** ترجع مواعيد للحفظ. الوقت الفاضي والمكرر ينشال */
+export function flattenDays(days: DaySlots[]): Slot[] {
+  return days.flatMap((x) => [...new Set(x.times.filter(Boolean))].sort().map((t) => ({ d: x.d, t })));
+}
 /** أيام الامتحان المتتالية من تاريخ البداية: كل يوم إله أوقات بالمكان ينحسب امتحان واحد، بدون العطلة */
 export function slotDays(slots: Slot[], start: string, count: number, s: SchedSettings) {
   const out: string[] = [];

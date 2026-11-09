@@ -2,6 +2,7 @@
 // إعدادات جدول الامتحانات: كل المدد بيد الإدارة
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
+import { flattenDays, groupSlots } from "../../../lib/scheduleRules.ts";
 
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; versions: Record<string, number>; models: { id: number; model: string }[] };
@@ -109,20 +110,44 @@ function Place({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
 }
 
 function Slots({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
-  const [slots, setSlots] = useState(d.slots);
+  const [days, setDays] = useState(() => groupSlots(d.slots, d.week.map((w) => w.i)));
+  const nameOf = (i: number) => d.week.find((w) => w.i === i)?.name ?? "";
+  const free = d.week.filter((w) => !days.some((x) => x.d === w.i));
+  const setTimes = (day: number, times: string[]) => setDays(days.map((x) => (x.d === day ? { ...x, times } : x)));
+  // اليوم الجديد ياخذ نفس أوقات آخر يوم، وتگدر تغيرها
+  const addDay = (day: number) => {
+    const order = d.week.map((w) => w.i);
+    const times = days.at(-1)?.times ?? ["16:00"];
+    setDays([...days, { d: day, times: [...times] }].sort((x, y) => order.indexOf(x.d) - order.indexOf(y.d)));
+  };
   return (
     <div className="exfoot">
       <div className="exlabel">⏰ الأيام وأوقاتها</div>
-      {slots.map((x, i) => (
-        <div className="exadd" key={i}>
-          <select aria-label="اليوم" value={x.d} onChange={(e) => setSlots(slots.map((y, j) => (j === i ? { ...y, d: Number(e.target.value) } : y)))}>{d.week.map((w) => <option key={w.i} value={w.i}>{w.name}</option>)}</select>
-          <input type="time" className="ltr" aria-label="الوقت" value={x.t} onChange={(e) => setSlots(slots.map((y, j) => (j === i ? { ...y, t: e.target.value } : y)))} />
-          <button type="button" className="exbtn" onClick={() => setSlots(slots.filter((_, j) => j !== i))}>🗑</button>
+      <div className="exhint">كل هذا جدول واحد لهذا المكان. ضيف الأيام، وتحت كل يوم ضيف أوقاته. الطالب يختار وقت واحد لكل يوم.</div>
+      {days.map((x) => (
+        <div className="adsale" key={x.d}>
+          <div className="exline">
+            <b style={{ flex: 1 }}>📅 {nameOf(x.d)}</b>
+            <button type="button" className="exbtn" aria-label={`احذف ${nameOf(x.d)}`} onClick={() => setDays(days.filter((y) => y.d !== x.d))}>🗑 احذف اليوم</button>
+          </div>
+          {x.times.map((t, i) => (
+            <div className="exadd" key={i} style={{ flexWrap: "nowrap", alignItems: "center" }}>
+              <input type="time" className="ltr" style={{ flex: 1, minWidth: 0 }} aria-label={`وقت ${nameOf(x.d)}`} value={t} onChange={(e) => setTimes(x.d, x.times.map((y, j) => (j === i ? e.target.value : y)))} />
+              <button type="button" className="exbtn" aria-label="احذف الوقت" style={{ flex: "none", width: "auto" }} onClick={() => setTimes(x.d, x.times.filter((_, j) => j !== i))}>🗑</button>
+            </div>
+          ))}
+          <button type="button" className="exbtn" onClick={() => setTimes(x.d, [...x.times, x.times.at(-1) ?? "16:00"])}>➕ وقت لهذا اليوم</button>
         </div>
       ))}
-      <div className="exline">
-        <button type="button" className="exbtn" onClick={() => setSlots([...slots, { d: slots.at(-1)?.d ?? d.week[0].i, t: slots.at(-1)?.t ?? "16:00" }])}>➕ وقت</button>
-        <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "saveSlots", slots })}>حفظ الأوقات</button>
+      {!days.length && <div className="exhint">بعد ما مضيف أي يوم.</div>}
+      <div className="exline adtop">
+        {!!free.length && (
+          <select aria-label="ضيف يوم" value="" onChange={(e) => { if (e.target.value) addDay(Number(e.target.value)); }}>
+            <option value="">➕ ضيف يوم</option>
+            {free.map((w) => <option key={w.i} value={w.i}>{w.name}</option>)}
+          </select>
+        )}
+        <button type="button" className="btn" style={{ width: "auto" }} disabled={busy} onClick={() => void act({ action: "saveSlots", slots: flattenDays(days) })}>💾 حفظ الأوقات</button>
       </div>
     </div>
   );
