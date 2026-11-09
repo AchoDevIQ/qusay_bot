@@ -32,6 +32,9 @@ const ZOOMS = [0.85, 1, 1.15, 1.3, 1.5, 1.75];
 // الحجم الافتراضي أكبر من الأصل، والمفتاح جديد حتى الكل يبدي بيه
 const DEFAULT_ZOOM = 1.15;
 const ZOOM_KEY = "pageZoom2";
+// الصفحة داخل «فتح أكثر من صفحة»: الصفحة الكبيرة مكبرة أصلاً، فما تتكبر مرة ثانية وتضيق على مكانها
+const FRAME_ZOOM_KEY = "pageZoomFrame";
+const inFrame = () => { try { return window.self !== window.top; } catch { return true; } };
 type FullApp = { isFullscreen?: boolean; isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; onEvent?(n: string, f: () => void): void; offEvent?(n: string, f: () => void): void };
 export function PageTools() {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
@@ -39,9 +42,10 @@ export function PageTools() {
   const [full, setFull] = useState(false);
   useEffect(() => {
     try {
-      const saved = Number(localStorage.getItem(ZOOM_KEY));
+      const saved = Number(localStorage.getItem(inFrame() ? FRAME_ZOOM_KEY : ZOOM_KEY));
       if (ZOOMS.includes(saved)) setZoom(saved);
-    } catch { /* المتصفح مانع الحفظ */ }
+      else if (inFrame()) setZoom(1);
+    } catch { if (inFrame()) setZoom(1); }
     let off = () => {};
     let tries = 0;
     const t = setInterval(() => {
@@ -62,7 +66,7 @@ export function PageTools() {
   function step(d: number) {
     const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, ZOOMS.indexOf(zoom) + d))];
     setZoom(next);
-    try { localStorage.setItem(ZOOM_KEY, String(next)); } catch { /* المتصفح مانع الحفظ */ }
+    try { localStorage.setItem(inFrame() ? FRAME_ZOOM_KEY : ZOOM_KEY, String(next)); } catch { /* المتصفح مانع الحفظ */ }
   }
   const w = () => tg() as unknown as FullApp | undefined;
   return (

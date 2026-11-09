@@ -1,4 +1,4 @@
-// تست التطبيق: الصح يبقى، وتغيير الخطوة يشيله، وللصاحب البوت بس
+// تست التطبيق: الصح ما يرجع، والمشكلة ترجع لمن تنصلح، وللصاحب البوت بس
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -29,10 +29,11 @@ test("كل خطوة مكتوب بيها وين تروح، وكل قسم إله �
     for (const x of s.steps) assert.ok(x.how.trim().length >= 10, stepKey(s.id, x.id));
   }
 });
-test("الخطوة تتغير: الصح يروح، والحالات صحيحة", () => {
+test("الصح يبقى صح حتى لو الخطوة تغيرت، والمشكلة ترجع بس لمن تنصلح", () => {
   assert.equal(stepState({ id: "a", text: "x" }), "todo");
   assert.equal(stepState({ id: "a", text: "x" }, { state: "ok", rev: 1, at: "" }), "ok");
-  assert.equal(stepState({ id: "a", text: "x", rev: 2 }, { state: "ok", rev: 1, at: "" }), "changed");
+  assert.equal(stepState({ id: "a", text: "x", rev: 2 }, { state: "ok", rev: 1, at: "" }), "ok");
+  assert.equal(stepState({ id: "a", text: "x", rev: 2 }, { state: "bad", rev: 1, note: "n", at: "" }), "changed");
   assert.equal(stepState({ id: "a", text: "x" }, { state: "bad", rev: 1, note: "n", at: "" }), "bad");
 });
 test("صاحب البوت يأشر ويشيل، والمشكلة تحتاج كتابة، والمساعد ما يدخل", async () => {

@@ -5,6 +5,11 @@ export const isStacked = (width: number) => width < 640;
 /** كم صفحة تنعرض سوا. كل صفحة تحتاج عرض 320 حتى تنقرا */
 export const maxPanes = (width: number) => (isStacked(width) ? 2 : Math.min(4, Math.max(2, Math.floor(width / 320))));
 
+/** أقل عرض تنعرض بيه الصفحة بدون ما تحتاج تحركها يمين ويسار: عرض موبايل */
+export const PANE_MIN = 360;
+/** كم تتصغر الصفحة بمكانها حتى تدخل كلها. width عرض الصفحة بالبكسل، وzoom تكبير الصفحة الكبيرة */
+export const paneFit = (width: number, zoom: number) => Math.min(1, width / (PANE_MIN * zoom));
+
 /** بكم قسم تنقسم المساحة إذا هذا التبويب ينحط */
 export function slotCount(panes: number[], key: number, max: number) {
   return Math.min(panes.filter((k) => k !== key).length + 1, max);

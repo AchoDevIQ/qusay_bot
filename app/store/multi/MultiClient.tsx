@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { useAdminApi } from "../adminPage";
-import { closePane, isStacked, maxPanes, placePane, showTab, slotAt, slotCount, togglePane } from "./panes";
+import { closePane, isStacked, maxPanes, paneFit, placePane, showTab, slotAt, slotCount, togglePane } from "./panes";
 
 type Tile = { page: string; icon: string; title: string };
 type Data = { groups: { title: string; tiles: Tile[] }[] };
@@ -34,20 +34,25 @@ export default function MultiClient() {
   const [picking, setPicking] = useState(true);
   const [next, setNext] = useState(1);
   const [width, setWidth] = useState(1000);
+  const [zoom, setZoom] = useState(1);
   const [ghost, setGhost] = useState<Ghost>(null);
   const area = useRef<HTMLDivElement>(null);
   const press = useRef<{ tab: Tab; x: number; y: number; moved: boolean } | null>(null);
   const dragged = useRef(false);
 
   useEffect(() => {
-    const size = () => setWidth(window.innerWidth);
+    const size = () => { setWidth(window.innerWidth); setZoom(pageZoom()); };
     size();
     window.addEventListener("resize", size);
-    return () => { window.removeEventListener("resize", size); swipes(true); };
+    // أزرار A+ وA− تغير تكبير الصفحة
+    const watch = new MutationObserver(size);
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    return () => { window.removeEventListener("resize", size); watch.disconnect(); swipes(true); };
   }, []);
 
   const stacked = isStacked(width), max = maxPanes(width);
   const shown = panes.slice(0, max);
+  const fit = paneFit(stacked ? width : width / Math.max(1, shown.length), zoom);
 
   function open(t: Tile) {
     const key = next;
@@ -133,7 +138,7 @@ export default function MultiClient() {
           const i = shown.indexOf(t.key);
           const seen = !picking && i >= 0;
           const edge = seen && i > 0 ? (stacked ? { borderTop: "2px solid var(--gold, #F9C445)" } : { borderRight: "2px solid var(--gold, #F9C445)" }) : {};
-          return <iframe key={t.key} title={t.title} src={src(t.page)} style={{ position: "absolute", boxSizing: "border-box", border: 0, background: "#fff", display: seen ? "block" : "none", ...(seen ? box(i, shown.length, stacked) : {}), ...edge }} />;
+          return <iframe key={t.key} title={t.title} src={src(t.page)} style={{ position: "absolute", boxSizing: "border-box", border: 0, background: "#fff", display: seen ? "block" : "none", ...(seen ? { ...box(i, shown.length, stacked), zoom: fit } : {}), ...edge }} />;
         })}
         {picking && (
           <div style={{ position: "absolute", inset: 0, overflow: "auto" }}>

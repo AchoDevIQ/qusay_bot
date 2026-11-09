@@ -1,7 +1,7 @@
 // صفحات جنب بعض: وين ينحط التبويب لمن تسحبه، وكم صفحة تنعرض سوا
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { closePane, isStacked, maxPanes, placePane, showTab, slotAt, slotCount, togglePane } from "../app/store/multi/panes.ts";
+import { closePane, isStacked, maxPanes, paneFit, placePane, showTab, slotAt, slotCount, togglePane } from "../app/store/multi/panes.ts";
 
 test("الموبايل صفحتين فوك بعض، والحاسبة لحد 4 جنب بعض", () => {
   assert.equal(isStacked(390), true);
@@ -10,6 +10,12 @@ test("الموبايل صفحتين فوك بعض، والحاسبة لحد 4 ج
   assert.equal(maxPanes(700), 2);
   assert.equal(maxPanes(1000), 3);
   assert.equal(maxPanes(2500), 4);
+});
+
+test("الصفحة الضيقة تتصغر حتى تدخل كلها، والعريضة تبقى مثل ما هي", () => {
+  assert.equal(paneFit(1000, 1), 1);
+  assert.equal(paneFit(414, 1.15), 1);
+  assert.equal(Math.round(paneFit(333, 1.15) * 1.15 * 360), 333);
 });
 
 test("السحب: ينحط جنب الصفحة بالجهة اللي تركته بيها", () => {
