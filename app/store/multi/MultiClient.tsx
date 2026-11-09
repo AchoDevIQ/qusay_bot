@@ -34,6 +34,13 @@ export default function MultiClient() {
   const [touch, setTouch] = useState(false);
   const [ghost, setGhost] = useState<Ghost>(null);
   const area = useRef<HTMLDivElement>(null);
+  const frames = useRef(new Map<number, HTMLIFrameElement>());
+  const [fresh, setFresh] = useState<Record<number, number>>({});
+  /** 🔄 يحدث الصفحة بمكانها: نفس الصفحة اللي وصلتلها جواها. إذا ما گدر، يفتحها من جديد */
+  function reload(key: number) {
+    try { frames.current.get(key)!.contentWindow!.location.reload(); }
+    catch { setFresh({ ...fresh, [key]: (fresh[key] ?? 0) + 1 }); }
+  }
   const press = useRef<{ tab: Tab; x: number; y: number; moved: boolean; mouse: boolean } | null>(null);
   const dragged = useRef(false);
 
@@ -127,6 +134,7 @@ export default function MultiClient() {
             <button type="button" className={!picking && shown.includes(t.key) ? "btn" : "exbtn"} style={{ width: "auto", touchAction: "pan-x", userSelect: "none", WebkitUserSelect: "none" }}
               onPointerDown={(e) => down(e, t)} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onClick={() => tap(t.key)}>{t.icon} {t.title}</button>
             {tabs.length > 1 && <button type="button" className={shown.includes(t.key) && shown.length > 1 ? "btn" : "exbtn"} aria-label={`حط ${t.title} جنب الصفحة`} title="جنب الصفحة" style={{ width: "auto" }} onClick={() => side(t.key)}>◫</button>}
+            <button type="button" className="exbtn" aria-label={`حدّث ${t.title}`} title="حدّث الصفحة" style={{ width: "auto" }} onClick={() => reload(t.key)}>🔄</button>
             <button type="button" className="exbtn" aria-label={`سكر ${t.title}`} style={{ width: "auto" }} onClick={() => close(t.key)}>✕</button>
           </span>
         ))}
@@ -139,7 +147,7 @@ export default function MultiClient() {
           // عرض 1 ويا minWidth: الآيباد يوسع الإطار على قد محتواه إذا عرضه بس 100%
           return (
             <div key={t.key} style={{ position: "absolute", boxSizing: "border-box", overflow: "hidden", display: seen ? "block" : "none", ...(seen ? box(i, shown.length, stacked) : {}), ...edge }}>
-              <iframe title={t.title} src={src(t.page)} style={{ position: "absolute", top: 0, right: 0, border: 0, background: "#fff", width: 1, minWidth: "100%", height: "100%" }} />
+              <iframe key={fresh[t.key] ?? 0} ref={(el) => { if (el) frames.current.set(t.key, el); else frames.current.delete(t.key); }} title={t.title} src={src(t.page)} style={{ position: "absolute", top: 0, right: 0, border: 0, background: "#fff", width: 1, minWidth: "100%", height: "100%" }} />
             </div>
           );
         })}
