@@ -19,7 +19,7 @@ type Info = {
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
-type Hol = { id: number; from: string; to: string; title: string; reason: string; cancel: boolean };
+type Hol = { id: number; ids: number[]; from: string; to: string; title: string; reason: string; cancel: boolean };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Paper = { ai: AiQ[]; solutions: string | null; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
@@ -93,7 +93,7 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} />}
-        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} off={(id) => call({ action: "holidayOff", holiday: id })} />}
+        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} off={(ids) => call({ action: "holidayOff", holidays: ids })} />}
         {info?.comp && <CompCard c={info.comp} busy={busy} call={call} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
@@ -251,7 +251,7 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
 }
 
 /** عطلة بالجدول. الطالب الخاص يگدر يلغيها فيتقدم جدوله */
-function HolRow({ h, busy, off }: { h: Hol; busy: boolean; off: (id: number) => Promise<unknown> }) {
+function HolRow({ h, busy, off }: { h: Hol; busy: boolean; off: (ids: number[]) => Promise<unknown> }) {
   const [ask, setAsk] = useState(false);
   return (
     <tr className="lcrow">
@@ -261,7 +261,7 @@ function HolRow({ h, busy, off }: { h: Hol; busy: boolean; off: (id: number) => 
       <td className="p">
         {h.cancel && !ask && <button type="button" className="exbtn" disabled={busy} onClick={() => setAsk(true)}>❌ ما أريد العطلة</button>}
         {h.cancel && ask && <>
-          <button type="button" className="exbtn" disabled={busy} onClick={() => void off(h.id)}>✅ إي، قدّمه</button>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void off(h.ids)}>✅ إي، قدّمه</button>
           <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setAsk(false)}>لا</button>
         </>}
       </td>
@@ -284,7 +284,7 @@ function AttendCode({ code }: { code: string }) {
   );
 }
 
-function List({ info, busy, enter, paper, ask, file, off }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown>; off: (id: number) => Promise<unknown> }) {
+function List({ info, busy, enter, paper, ask, file, off }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown>; off: (ids: number[]) => Promise<unknown> }) {
   // العطلة تطلع قبل أول امتحان بعدها
   const holAt = (i: number) => info.holidays.filter((h) => info.items.findIndex((x) => String(x.at).slice(0, 10) >= h.from) === i);
   const holLast = info.holidays.filter((h) => !info.items.some((x) => String(x.at).slice(0, 10) >= h.from));

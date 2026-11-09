@@ -647,7 +647,7 @@ test("🏖 عطلة قبل امتحان: هو واللي بعده يزحفون،
   const info = await act(96, "info");
   assert.deepEqual(info.holidays.map((h: any) => [h.from, h.cancel, h.reason]), [[tue, true, "راحة"]]);
   await assert.rejects(act(97, "holidayOff", { holiday: done.holidays[0].id }), /سجل/);
-  const off = await act(96, "holidayOff", { holiday: done.holidays[0].id });
+  const off = await act(96, "holidayOff", { holidays: [done.holidays[0].id] });
   assert.match(off.notice, /لغيت العطلة/);
   assert.equal(off.holidays.length, 0);
   assert.equal((await one("sched_items", { id: ib }))!.at, `${tue} 21:00`);
@@ -673,4 +673,33 @@ test("الطالب الخاص الإلكتروني يمتحن من الساعة 
   assert.deepEqual([info.hours[0], info.hours.at(-1)], [14, 18]);
   await assert.rejects(act(98, "preview", form({ times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["20:00"]])) })), /من الساعة/);
   assert.ok((await act(98, "preview", form({ times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["15:00"]])) }))).preview);
+});
+
+test("🏖 عطلة فوك عطلة: الامتحان يزحف مرتين، الطالب يشوفها وحدة ويلغيها كلها، وشيل الأولى يشيل الثانية", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "الأعظمية" });
+  const c = await insert("centers", { area_id: area, name: "مركز العطلتين", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }, { d: 2, t: "16:00" }], initData: admin });   // أحد وأربعاء
+  const [, b] = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => x.ord - y.ord);
+  const sun = nextWeekday(6), wed = addDays(sun, 3), sun2 = addDays(sun, 7);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: b.id, date: sun }], initData: admin });
+  await student(99, "حضوري");
+  await put("students", { ...(await find("students", { user_id: 99 }))[0], center_id: c });
+  await put("schedules", { user_id: 99, mode: "private", picks: JSON.stringify({ "6": ["16:00"], "2": ["16:00"] }), start_day: sun, end_day: addDays(sun, 60), weekdays: JSON.stringify([6, 2]), hour: 16, created: stamp() });
+  const it = await insert("sched_items", { user_id: 99, exam_id: b.id, at: `${sun} 16:00`, status: "waiting" });
+  const add = () => schedAdminAction({ action: "holidayAdd", center: c, exam: b.id, days: 1, scope: "place", initData: admin }) as Promise<any>;
+  await add();
+  const second = await add();
+  assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, sun2);   // الأحد ← الأربعاء ← الأحد الجاي
+  assert.equal((await one("sched_items", { id: it }))!.at, `${sun2} 16:00`);
+  assert.match(second.rows.find((r: any) => r.exam === b.id).hol, /إلى/);
+  const info = await act(99, "info");
+  assert.equal(info.holidays.length, 1);
+  assert.deepEqual([info.holidays[0].from, info.holidays[0].to, info.holidays[0].ids.length], [sun, wed, 2]);
+  await act(99, "holidayOff", { holidays: info.holidays[0].ids });
+  assert.equal((await one("sched_items", { id: it }))!.at, `${sun} 16:00`);
+  const first = second.holidays.filter((h: any) => h.title === b.title).sort((x: any, y: any) => x.id - y.id)[0];
+  const undo: any = await schedAdminAction({ action: "holidayDel", center: c, id: first.id, initData: admin });
+  assert.match(undo.notice, /انشالت 2 عطل/);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, sun);
 });

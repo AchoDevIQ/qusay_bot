@@ -193,9 +193,22 @@ async function undoHoliday(h: Holiday) {
 /** العطل اللي يشوفها الطالب بجدوله: عطل مكانه إذا ويا الطلاب، وعطله إذا جدول خاص (ويگدر يلغيها) */
 async function myHolidays(uid: number, sc: Row | null) {
   const today = todayStr();
-  return (await holidays()).flatMap((h) => (sc?.mode === "general"
-    ? h.places.filter((p) => p.center === sc.center_id).map((p) => ({ id: h.id, from: p.from, to: p.to, title: h.title, reason: h.reason, cancel: false }))
-    : h.students.filter((x) => x.uid === uid && x.on).map((x) => ({ id: h.id, from: x.from, to: x.to, title: h.title, reason: h.reason, cancel: true })))).filter((x) => x.to >= today);
+  const rows = (await holidays()).flatMap((h) => (sc?.mode === "general"
+    ? h.places.filter((p) => p.center === sc.center_id).map((p) => ({ id: h.id, exam: h.exam, from: p.from, to: p.to, title: h.title, reason: h.reason, cancel: false }))
+    : h.students.filter((x) => x.uid === uid && x.on).map((x) => ({ id: h.id, exam: h.exam, from: x.from, to: x.to, title: h.title, reason: h.reason, cancel: true }))));
+  return mergeHolidays(rows).filter((x) => x.to >= today);
+}
+/** عطلة فوك عطلة قبل نفس الامتحان: تطلع عطلة وحدة من أول يوم لآخر يوم */
+function mergeHolidays<T extends { id: number; exam: number; from: string; to: string; reason: string }>(rows: T[]) {
+  const out: (T & { ids: number[] })[] = [];
+  for (const r of [...rows].sort((a, b) => a.from.localeCompare(b.from))) {
+    const same = out.find((x) => x.exam === r.exam);
+    if (!same) { out.push({ ...r, ids: [r.id] }); continue; }
+    same.ids.push(r.id);
+    if (r.to > same.to) same.to = r.to;
+    if (r.reason) same.reason = r.reason;
+  }
+  return out;
 }
 /** أوقات كل يوم من أيام المكان، حتى يختار الطالب وقت لكل يوم */
 function daysView(slots: Slot[]) {
@@ -446,13 +459,14 @@ export async function myExamAction(body: Row) {
   }
   if (a === "holidayOff") {
     const list = await holidays();
-    const h = list.find((x) => x.id === Number(body.holiday));
-    const st = h?.students.find((x) => x.uid === id && x.on);
-    need(st, "هذي العطلة مو بجدولك");
-    await tx(() => restoreStudent(st!));
-    st!.on = false;
+    // العطلة الطويلة جاية من أكثر من دسة: تنلغي كلها، من الأخيرة للأولى
+    const ids = new Set((Array.isArray(body.holidays) ? body.holidays : [body.holiday]).map(Number));
+    const mine = list.filter((h) => ids.has(h.id) && h.students.some((x) => x.uid === id && x.on)).sort((a, b) => b.id - a.id);
+    need(mine.length, "هذي العطلة مو بجدولك");
+    await tx(async () => { for (const h of mine) await restoreStudent(h.students.find((x) => x.uid === id && x.on)!); });
+    for (const h of mine) h.students.find((x) => x.uid === id && x.on)!.on = false;
     await saveHolidays(list);
-    await logActivity(id, `🏖 لغى العطلة قبل ${h!.title}، فتقدم جدوله`);
+    await logActivity(id, `🏖 لغى العطلة قبل ${mine[0].title}، فتقدم جدوله`);
     return { ...await studentInfo(id), notice: "✅ لغيت العطلة، وجدولك تقدم" };
   }
   if (a === "lectureFile") { await sendLectureFile(id, body.name); return { ...await studentInfo(id), notice: "📄 وصلك ملف المحاضرة بالبوت" }; }
@@ -634,9 +648,12 @@ export async function schedAdminAction(body: Row) {
     const list = await holidays();
     const h = list.find((x) => x.id === Number(body.id));
     need(h, "العطلة غير موجودة");
-    await undoHoliday(h!);
-    await saveHolidays(list.filter((x) => x.id !== h!.id));
-    notice = "↩️ انشالت العطلة، ورجعت المواعيد";
+    // العطل اللي انحطت بعدها لنفس الامتحان تنشال وياها، من الأخيرة للأولى، حتى المواعيد ترجع صح
+    const chain = list.filter((x) => x.exam === h!.exam && x.id >= h!.id).sort((a, b) => b.id - a.id);
+    for (const x of chain) await undoHoliday(x);
+    const gone = new Set(chain.map((x) => x.id));
+    await saveHolidays(list.filter((x) => !gone.has(x.id)));
+    notice = chain.length > 1 ? `↩️ انشالت ${chain.length} عطل قبل ${h!.title}، ورجعت المواعيد` : "↩️ انشالت العطلة، ورجعت المواعيد";
   } else need(a === "list", "أمر غير معروف");
   const holidayList = (await holidays()).map((h) => ({ id: h.id, title: h.title, days: h.days, reason: h.reason, places: h.places.map((p) => `${p.name}: ${prettyDay(p.from)}`), students: h.students.filter((x) => x.on).length }));
   return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice, holidays: holidayList, holidayPreview: preview };
@@ -659,6 +676,7 @@ async function tellPlace(center: number) {
 }
 /** الأماكن، وأوقات المكان المفتوح ويوم كل امتحان ونسخة كل وقت */
 async function placesPage(center: number) {
+  const hols = await holidays();
   const areas = new Map((await find("areas")).map((a) => [a.id, a.name]));
   const places = [{ id: 0, name: "💻 الإلكتروني" }, ...(await find("centers", { active: 1 }, { order: ["id"] })).map((c) => ({ id: c.id as number, name: `🏫 ${c.name} (${areas.get(c.area_id) ?? ""})` }))];
   const dates = new Map((await find("place_dates", { center_id: center })).map((d) => [d.exam_id, d]));
@@ -669,7 +687,9 @@ async function placesPage(center: number) {
     slots: await placeSlots(center), students: (await find("schedules", { mode: "general", center_id: center })).length,
     rows: exams.map((e) => {
       const d = dates.get(e.id);
-      return { exam: e.id, chapter: e.chapter, title: e.title, date: d?.day ?? "", versions: JSON.parse(d?.versions || "{}"), models: versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id, model: v.model })) };
+      const hol = mergeHolidays(hols.filter((h) => h.exam === e.id).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ id: h.id, exam: h.exam, from: p.from, to: p.to, reason: h.reason }))))[0];
+      return { exam: e.id, chapter: e.chapter, title: e.title, date: d?.day ?? "", versions: JSON.parse(d?.versions || "{}"), models: versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id, model: v.model })),
+        hol: hol ? (hol.from === hol.to ? prettyDay(hol.from) : `${prettyDay(hol.from)} إلى ${prettyDay(hol.to)}`) : "" };
     }),
   };
 }

@@ -11,7 +11,7 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 type Slot = { d: number; t: string };
-type Row = { exam: number; chapter: string; title: string; date: string; versions: Record<string, number>; models: { id: number; model: string }[] };
+type Row = { exam: number; chapter: string; title: string; date: string; hol?: string; versions: Record<string, number>; models: { id: number; model: string }[] };
 type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holidayPreview: HolPreview | null };
 type Hol = { id: number; title: string; days: number; reason: string; places: string[]; students: number };
 type HolPreview = { exam: number; days: number; reason: string; scope: "place" | "all"; students: number; places: { name: string; from: string; to: string; rows: { title: string; from: string; to: string }[] }[] };
@@ -209,7 +209,8 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
                   ))}
                 </div>
                 {!r.date && <small className="exhint">حط تاريخه حتى تطلع أوقاته وتختار نسخها.</small>}
-                {r.date && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setHol(hol === r.exam ? 0 : r.exam)}>🏖 عطلة قبله</button>}
+                {r.hol && <small className="exhint">🏖 قبله عطلة: {r.hol}</small>}
+                {r.date && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setHol(hol === r.exam ? 0 : r.exam)}>🏖 {r.hol ? "زيد العطلة يوم امتحان ثاني" : "عطلة قبله"}</button>}
                 {hol === r.exam && <HolidayPanel d={d} exam={r.exam} title={r.title} busy={busy} act={act} />}
                 {r.date && !times.length && <small className="exbad">هذا اليوم ما إله أوقات بـ ⏰ الأيام وأوقاتها.</small>}
               </div>
@@ -264,6 +265,7 @@ function Holidays({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   return (
     <div className="exfoot">
       <div className="exlabel">🏖 العطل</div>
+      <div className="exhint">إذا شلت عطلة، العطل اللي زدتها بعدها لنفس الامتحان تنشال وياها.</div>
       {d.holidays.map((h) => (
         <div key={h.id} className="adsale">
           <div><b>قبل {h.title}</b>{h.reason ? ` · ${h.reason}` : ""}</div>
