@@ -1,78 +1,91 @@
 """
-Final-answer check for the rubric engine: the teacher's final values against the student's,
-compared as numbers (complex allowed) with SymPy. Same input, same verdict, every time.
+Final-answer check for the QMath rubric engine: the teacher's final values against the
+student's, compared as numbers (complex allowed). Same input, same verdict, every time.
 
-    teacher_values("sqrt(4-3i) = 3/sqrt(2) - 1/sqrt(2) i or -3/sqrt(2) + 1/sqrt(2) i")
-    -> two complex numbers
+Parsing runs in the SymPy sandbox (math_engine/sandbox.py: killable worker processes with
+no API keys, through the safe parser), so text read from a student's page can neither run
+code nor stall the server. The calls block: async code uses `amatch`.
+
+What it understands (math_engine/finals.py):
+- "sqrt(3 + 4i) = 2 + i or -2 - i (or +-(2 + i))": two values; the bracketed restatement is ignored.
+- "c = +- sqrt(17)i", "c = ±√17 i": ± and ∓ give both values.
+- "x = 2 , y = 1 or x = -2 , y = -1": pairs, so x = 3, y = 2 does not match x = 2, y = 3.
+- Arabic digits, «أو», and the unknowns س ص ع.
+- Rounded decimals: "0.707 + 0.707i" matches 1/sqrt(2) + i/sqrt(2) (within its last digit).
+- The same root written twice counts once; labels such as "(Equation 1)" are ignored.
+- An equation such as "x^2 - y^2 = 7" is not a final value: no verdict (None).
 """
-import re
-from typing import List, Optional
+import asyncio
+from typing import Dict, List, Optional
 
-from sympy import I, N, sqrt, pi, E
-from sympy.parsing.sympy_parser import (
-    convert_xor, implicit_multiplication_application, parse_expr, standard_transformations,
-)
+from math_engine.sandbox import final_values
 
-_T = standard_transformations + (implicit_multiplication_application, convert_xor)
-_LOCAL = {"i": I, "I": I, "sqrt": sqrt, "pi": pi, "e": E}
+TOLERANCE = 1e-6
 
 
-def _clean(s: str) -> str:
-    s = s.replace("√", "sqrt").replace("−", "-").replace("–", "-").replace("·", "*").replace("×", "*")
-    for _ in range(4):  # roots first (they sit inside fractions), then fractions, a few levels deep
-        s = re.sub(r"\\sqrt\{([^{}]*)\}", r"sqrt(\1)", s)
-        s = re.sub(r"\\frac\{([^{}]*)\}\{([^{}]*)\}", r"((\1)/(\2))", s)
-    s = s.replace("\\pm", "±").replace("\\mp", "∓").replace("\\cdot", "*").replace("{", "(").replace("}", ")").replace("\\", "")
-    return s.strip().strip(".")
+def _close(a: List[float], b: List[float], rounding: float = 0.0) -> bool:
+    """Equal values; a value written with decimals may be off by its rounding (0.707 for 1/sqrt(2))."""
+    za, zb = complex(*a), complex(*b)
+    return abs(za - zb) <= max(TOLERANCE * max(1.0, abs(za)), rounding)
 
 
-def _one(s: str) -> List[complex]:
-    """One written value; ± or ∓ gives both signs."""
-    s = _clean(s)
-    if not s:
-        return []
-    if "±" in s or "∓" in s:
-        return _one(s.replace("±", "+", 1).replace("∓", "-", 1)) + _one(s.replace("±", "-", 1).replace("∓", "+", 1))
-    try:
-        v = complex(N(parse_expr(s, local_dict=_LOCAL, transformations=_T, evaluate=True)))
-        return [v]
-    except Exception:
-        return []
+def _same(a: Dict, b: Dict) -> bool:
+    """a: the reference value, b: the student's. Only the student's decimals count as rounded;
+    a teacher who writes 3.5 means exactly 3.5."""
+    rounding = float(b.get("tol") or 0.0)
+    if "value" in a and "value" in b:
+        return _close(a["value"], b["value"], rounding)
+    if "vars" in a and "vars" in b:
+        return set(a["vars"]) == set(b["vars"]) and all(_close(a["vars"][k], b["vars"][k], rounding) for k in a["vars"])
+    return False
 
 
-def values(text: str) -> Optional[List[complex]]:
-    """All values in a final line: «… = A or B», «A , B», «C1 = A ; C2 = B». None if any part can't be read."""
-    out: List[complex] = []
-    parts = [p for p in re.split(r"\bor\b|\bأو\b|\bاو\b|;|,|،|\band\b", text) if p.strip()]
-    for p in parts:
-        rhs = p.split("=")[-1]
-        v = _one(rhs)
-        if not v:
-            return None
-        out += v
-    return out or None
+def _distinct(solutions: List[Dict]) -> List[Dict]:
+    """The same root written twice ("x = ±2" and then "x = 2") is one answer, not a guess."""
+    out: List[Dict] = []
+    for sol in solutions:
+        if not any(_same(sol, kept) for kept in out):
+            out.append(sol)
+    return out
+
+
+def values(text: str) -> Optional[List[Dict]]:
+    """The solutions one final line states, or None (not values, unreadable, or timed out)."""
+    return final_values(text or "")
 
 
 def match(teacher: str, student: List[str]) -> Optional[float]:
-    """Share of the teacher's final values the student got (0..1), minus wrong extra values. None if unreadable."""
+    """
+    Share of the teacher's final values the student got (0..1), minus wrong extra values,
+    or None when either side cannot be read as values (the model's verdict then stands).
+    One right and one wrong: half. Writing more values than the answer has costs the extras.
+    """
     t = values(teacher)
     if not t:
         return None
-    s: List[complex] = []
-    for x in student:
-        v = values(x)
+    s: List[Dict] = []
+    for item in student or []:
+        if not (item or "").strip():
+            continue
+        v = values(item)
         if v is None:
             return None
         s += v
     if not s:
         return 0.0
+    s = _distinct(s)
+    if {("vars" in x) for x in t} != {("vars" in x) for x in s}:
+        return None  # pairs on one side, single values on the other: not comparable
     left = list(s)
     hit = 0
     for a in t:
-        j = next((k for k, b in enumerate(left) if abs(a - b) < 1e-6 * max(1.0, abs(a))), None)
+        j = next((k for k, b in enumerate(left) if _same(a, b)), None)
         if j is not None:
             hit += 1
             left.pop(j)
-    # one right and one wrong: half. Writing more values than the answer has (guessing) costs the extra ones
     extra = max(0, len(s) - len(t))
     return max(0.0, (hit - extra) / len(t))
+
+
+async def amatch(teacher: str, student: List[str]) -> Optional[float]:
+    return await asyncio.to_thread(match, teacher, student)

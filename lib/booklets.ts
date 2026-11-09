@@ -19,7 +19,8 @@ const CFG = "booklet_cfg";
 const PDF_MAX = 40 * 1024 * 1024;
 const PAGE_TEXT = 1400;
 export const KIND_LABEL: Record<Booklet["kind"], string> = { main: "الملزمة", extra: "الاثرائيات", exams: "الوزاريات" };
-export const MODEL = "claude-opus-5-5";
+// كل عمليات الذكاء الاصطناعي بالمستودع على Claude Haiku 5.5
+export const MODEL = "claude-haiku-5-5";
 export const DEFAULT_REPLY = "📘 <b>هاك حل سؤالك</b> 👆\n\nإذا بعدك ما فهمت، دوس الزر جوة ويوصل سؤالك للأستاذ.";
 export const REPLY_TAGS: string[] = [];
 
@@ -133,8 +134,10 @@ const askContent = (q: Ask) => [
 ];
 /** طلب لـ Claude يرجع JSON بالشكل المطلوب */
 async function ask(cfg: Cfg, system: Anthropic.Beta.BetaTextBlockParam[], content: Anthropic.Beta.BetaContentBlockParam[], schema: Record<string, unknown>) {
+  // Haiku 5.5 ما عنده بديل من جهة الخادم (server-side fallback): إذا رفض، السؤال يروح للأستاذ مثل قبل.
+  // max_tokens فيه مجال للتفكير، لأن Haiku 5.5 يفكر بشكل افتراضي والتفكير ينحسب منه
   const res = await api().beta.messages.create({
-    model: MODEL, max_tokens: 2000, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", system,
+    model: MODEL, max_tokens: 4000, system,
     output_config: { effort: "low", format: { type: "json_schema", schema } },
     messages: [{ role: "user", content }],
   });
@@ -265,10 +268,11 @@ export const replyText = (template: string) => esc(template).replace(/&lt;(\/?b)
 // ---------- صفحة صاحب البوت
 async function pageData() {
   const cfg = await bookletCfg();
-  // سعر Claude Opus 5.5: الإدخال 4$ والإخراج 20$ للمليون، والمخزن (cache) 0.20$
-  const cost = (cfg.inTok * 4 + cfg.outTok * 20 + cfg.cacheTok * 0.2) / 1_000_000;
+  // سعر Claude Haiku 5.5: الإدخال 0.10$ والإخراج 0.50$ للمليون، والمخزن (cache) 0.01$
+  // (للطلبات لحد 100 ألف توكن؛ الأطول سعرها 0.50$ و2.50$)
+  const cost = (cfg.inTok * 0.1 + cfg.outTok * 0.5 + cfg.cacheTok * 0.01) / 1_000_000;
   const list = (await booklets()).sort((a, b) => a.chapter - b.chapter || a.lang.localeCompare(b.lang) || a.kind.localeCompare(b.kind));
-  return { list, on: cfg.on, key: hasKey(), reply: cfg.reply, tags: REPLY_TAGS, used: cfg.used, matched: cfg.matched, cost: Math.round(cost * 100) / 100, model: MODEL, notice: "" };
+  return { list, on: cfg.on, key: hasKey(), reply: cfg.reply, tags: REPLY_TAGS, used: cfg.used, matched: cfg.matched, cost: Math.round(cost * 10000) / 10000, model: MODEL, notice: "" };
 }
 export async function bookletAction(raw: Row | FormData) {
   const body: Row = raw instanceof FormData ? Object.fromEntries([...raw.entries()]) : raw;

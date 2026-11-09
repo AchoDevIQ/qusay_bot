@@ -19,6 +19,82 @@ OCR_CONFUSION_PAIRS = [
     ('S.S', '5.5'), ('5.5', 'S.S'),
 ]
 
+_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+_AR_LETTER = "\u0621-\u063A\u0641-\u064A\u066E-\u06D3"
+_AR_MARK = "\u0640\u064B-\u065F\u0670"
+# Letters Iraqi textbooks use as unknowns
+_ARABIC_VARIABLES = {"س": "x", "ص": "y", "ع": "z"}
+
+
+def strip_arabic_text(s: str) -> str:
+    """
+    Keeps the math in mixed Arabic/Latin text. Arabic digits and decimal marks become
+    ASCII, the variable letters س ص ع become x y z, and words (annotations such as يهمل)
+    are removed. Any other lone Arabic letter is left in place, so the text fails to
+    parse instead of silently meaning something else.
+    """
+    if not s:
+        return s
+    s = s.translate(_ARABIC_DIGITS)
+    # Arabic decimal separator, or an Arabic comma between digits, is a decimal point
+    s = re.sub(r"(\d)\s*[\u066B\u060C]\s*(\d)", r"\1.\2", s)
+    s = s.replace("\u066C", "").replace("\u060C", ",").replace("\u061B", ";").replace("\u061F", " ")
+    s = re.sub(rf"\\text\{{[^}}]*[{_AR_LETTER}][^}}]*\}}", " ", s)
+    s = re.sub(rf"[\[(][^\[\]()]*[{_AR_LETTER}]{{2,}}[^\[\]()]*[\])]", " ", s)
+    s = re.sub(rf"[{_AR_LETTER}{_AR_MARK}]{{2,}}", " ", s)
+    s = re.sub(rf"(?<![{_AR_LETTER}])([سصع])(?![{_AR_LETTER}])", lambda m: _ARABIC_VARIABLES[m.group(1)], s)
+    return s
+
+
+# Words that only ever appear in explanations, never in the math of these exams
+_LABEL_WORDS = {
+    "eq", "eqn", "equation", "let", "be", "the", "since", "where", "because", "as", "discard",
+    "discarded", "neglect", "ignore", "reject", "rejected", "root", "roots", "square", "answer",
+    "from", "by", "sub", "substitute", "substituting", "substitution", "given", "step", "case",
+    "note", "check", "real", "imaginary", "both", "sides", "side", "is", "are", "not", "of",
+    "and", "then", "we", "get", "has", "no", "solution", "solutions", "taking", "take",
+}
+# Names that can appear inside real math brackets
+_MATH_NAMES = {
+    "sqrt", "sin", "cos", "tan", "cot", "sec", "csc", "log", "ln", "exp", "abs", "asin", "acos",
+    "atan", "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh", "pi", "inf", "alpha", "beta",
+    "gamma", "delta", "theta", "lambda", "mu", "sigma", "phi", "omega", "epsilon", "frac",
+}
+_INNER_BRACKET = re.compile(r"\(([^()]*)\)")
+# An equation number written after the line: "x^2 - y^2 = 3 ____ (1)", "y = 3/x ---(2)", "... ①"
+_TRAILING_NUMBER = re.compile(r"(?:\s*[-_.—–…]{2,}\s*|\s{2,})\(\s*\d{1,2}\s*\)\s*$")
+_CIRCLED_DIGITS = re.compile(r"[①-⑳⓵-⓾❶-❿]")
+
+
+def _is_annotation(inner: str) -> bool:
+    words = [w.lower() for w in re.findall(r"[A-Za-z]+", inner)]
+    if not words:
+        return False
+    if any(w in _LABEL_WORDS and len(w) >= 2 for w in words) and any(len(w) >= 3 for w in words):
+        return True
+    # Prose: two or more words, at least one of them a long non-math word ("(see above)")
+    long_words = [w for w in words if len(w) >= 4 and w not in _MATH_NAMES]
+    return len(words) >= 2 and bool(long_words) and " " in inner.strip()
+
+
+def strip_annotations(s: str) -> str:
+    """
+    Removes explanations written next to the math, so they are not read as variables:
+    "(Equation 1)", "(let c be the square root)", "(discard x^2 = -1 since x in R)", and
+    equation numbers after a line ("____ (1)", "①"). Math in brackets, such as "(x + yi)"
+    or "(2xyi)", is kept.
+    """
+    if not s:
+        return s
+    previous = None
+    while previous != s:
+        previous = s
+        s = _INNER_BRACKET.sub(lambda m: " " if _is_annotation(m.group(1)) else m.group(0), s)
+    s = _CIRCLED_DIGITS.sub(" ", s)
+    s = _TRAILING_NUMBER.sub("", s)
+    return re.sub(r"\s{2,}", " ", s).strip()
+
+
 def generate_confusion_alternatives(raw: str) -> list[str]:
     """Generate alternate strings by substituting known OCR confusion pairs."""
     alternatives = set()
@@ -70,7 +146,8 @@ def normalize_expr(raw: str) -> str:
     s = re.sub(r'\(يهمل[^)]*\)', '', s)
     s = re.sub(r'\\text\{\s*\[?\s*يهمل[^}]*\]?\s*\}', '', s)
     s = re.sub(r'\b(?:discard|neglect|ignore)\b', '', s, flags=re.IGNORECASE)
-    s = re.sub(r'[\u0600-\u06FF]+', ' ', s)
+    s = strip_annotations(s)
+    s = strip_arabic_text(s)
     
     # ── Step 2: Unicode symbol replacement ─────────────────────────────────
     # These come directly from the math keypad and OCR output
@@ -79,7 +156,10 @@ def normalize_expr(raw: str) -> str:
         '×': '*',       # U+00D7 MULTIPLICATION SIGN
         '÷': '/',       # U+00F7 DIVISION SIGN
         '·': '*',       # U+00B7 MIDDLE DOT (dot product / multiplication)
-        '±': '+',       # U+00B1 PLUS-MINUS (take positive branch for comparison)
+        # verify_equivalence expands ± into both signs before it gets here (clauses.py);
+        # anything left only needs to parse, e.g. when checking whether OCR text is readable
+        '±': '+',       # U+00B1 PLUS-MINUS
+        '∓': '-',       # U+2213 MINUS-PLUS
         '≈': '=',       # U+2248 ALMOST EQUAL (treat as equal for equivalence)
         '≡': '=',       # U+2261 IDENTICAL TO
         '≠': '!=',      # U+2260 NOT EQUAL
@@ -95,8 +175,14 @@ def normalize_expr(raw: str) -> str:
     for uni, repl in unicode_map.items():
         s = s.replace(uni, repl)
 
-    # Arabic and regional decimal comma normalization (e.g. 2,5 or 2،5 -> 2.5)
-    s = re.sub(r'(\d+)[\u060C,](\d+)', r'\1.\2', s)
+    # Radical sign from handwriting OCR and keypads: √(3+4i) → sqrt(3+4i), √17 i → sqrt(17) i.
+    # Without a bracket it covers one number or one letter, as written.
+    s = re.sub(r'√\s*\(', 'sqrt(', s)
+    s = re.sub(r'√\s*\{([^{}]*)\}', r'sqrt(\1)', s)
+    s = re.sub(r'√\s*(\d+(?:\.\d+)?|[A-Za-z])', r'sqrt(\1)', s)
+
+    # An ASCII comma separates values ("x = 2,3" is two roots, "(1,2)" a point) and is never
+    # a decimal mark; Arabic decimal marks were converted by strip_arabic_text above.
     
     # Superscript digits: ⁰¹²³⁴⁵⁶⁷⁸⁹
     superscript_map = {
@@ -111,7 +197,9 @@ def normalize_expr(raw: str) -> str:
     s = s.replace('\\dfrac', '\\frac')
 
     # Strip styling commands like \mathbf{x} -> x, \mathrm{x} -> x, \text{x} -> x
-    s = re.sub(r'\\(?:mathbf|mathrm|mathit|textbf|textit|text)\{([^}]*)\}', r'\1', s)
+    s = re.sub(r'\\(?:mathbf|mathrm|mathit|mathsf|textbf|textit|text|boxed|operatorname)\{([^}]*)\}', r'\1', s)
+    # Pure layout commands with an argument that carries no math
+    s = re.sub(r'\\(?:hspace|vspace|tag|label|color)\*?\{[^}]*\}', ' ', s)
 
     # Remove spacing and environment tags: \quad, \qquad, \begin{cases}, \end{cases}
     s = re.sub(r'\\(?:quad|qquad)\b', ' ', s)
@@ -145,8 +233,9 @@ def normalize_expr(raw: str) -> str:
     # \div → /
     s = s.replace('\\div', '/')
     
-    # \pm → + (take positive branch)
+    # \pm / \mp: see the note on '±' above
     s = s.replace('\\pm', '+')
+    s = s.replace('\\mp', '-')
     
     # \pi → pi
     s = s.replace('\\pi', 'pi')
@@ -171,8 +260,15 @@ def normalize_expr(raw: str) -> str:
     for cmd in known_latex:
         s = re.sub(rf'\\{cmd}\b', cmd, s)
 
-    # Remove any remaining formatting/spacing backslash commands
-    s = re.sub(r'\\[a-zA-Z]+\s*', '', s)
+    # Remove layout-only commands. Every other command is kept, so text such as \bar{z},
+    # \overline, \in or an unbraced \sqrt23 fails to parse (uncertain) instead of having
+    # its meaning silently dropped.
+    s = re.sub(
+        r'\\(?:displaystyle|textstyle|scriptstyle|scriptscriptstyle|limits|nolimits|middle|mathstrut'
+        r'|big|Big|bigg|Bigg|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr)(?![A-Za-z])\s*',
+        '', s,
+    )
+    s = s.replace('\\ ', ' ')
     
     # ── Step 4: Caret → Python exponent ────────────────────────────────────
     # Normalize pix2tex asterisk exponents: x^{*}2 or x^{*2} -> x**2
@@ -227,31 +323,44 @@ def normalize_expr(raw: str) -> str:
     return s
 
 
+def _latex_argument(s: str, i: int):
+    """
+    One LaTeX argument starting at s[i]: a braced group, or a single character as TeX
+    reads it ("\\frac12" is 1/2). Returns (text, next_index), or None when absent.
+    """
+    while i < len(s) and s[i] == ' ':
+        i += 1
+    if i < len(s) and s[i] == '{':
+        return _extract_braced(s, i + 1)
+    if i < len(s) and s[i].isalnum():
+        return s[i], i + 1
+    return None
+
+
 def _convert_latex_frac(s: str) -> str:
-    """Convert \\frac{num}{den} → ((num)/(den)), handling nested braces."""
+    """Convert \\frac{num}{den} (and TeX's unbraced \\frac12) → ((num)/(den)), handling nested braces."""
     result = []
     i = 0
     while i < len(s):
-        if s[i:].startswith('\\frac{'):
-            i += 6  # skip \frac{
-            num, i = _extract_braced(s, i)
-            # Skip optional whitespace
-            while i < len(s) and s[i] == ' ':
-                i += 1
-            if i < len(s) and s[i] == '{':
-                i += 1  # skip {
-                den, i = _extract_braced(s, i)
-                result.append(f'(({num})/({den}))')
-            else:
-                result.append(f'({num})')
-        else:
-            result.append(s[i])
-            i += 1
+        if s.startswith('\\frac', i) and not (i + 5 < len(s) and s[i + 5].isalpha()):
+            num = _latex_argument(s, i + 5)
+            den = _latex_argument(s, num[1]) if num else None
+            # "\\frac123" reads as 1/2 then 3 in TeX but was almost certainly meant otherwise
+            ambiguous = (
+                den is not None and len(den[0]) == 1 and s[num[1]:num[1] + 1] != '{'
+                and den[1] < len(s) and s[den[1]].isdigit()
+            )
+            if num and den and not ambiguous:
+                result.append(f'(({_convert_latex_frac(num[0])})/({_convert_latex_frac(den[0])}))')
+                i = den[1]
+                continue
+        result.append(s[i])
+        i += 1
     return ''.join(result)
 
 
 def _convert_latex_sqrt(s: str) -> str:
-    """Convert \\sqrt{x} → sqrt(x) and \\sqrt[n]{x} → ((x)**(1/(n))), handling nested braces."""
+    """Convert \\sqrt{x} → sqrt(x), \\sqrt[n]{x} → ((x)**(1/(n))), and TeX's unbraced \\sqrt2."""
     result = []
     i = 0
     while i < len(s):
@@ -263,13 +372,14 @@ def _convert_latex_sqrt(s: str) -> str:
                 if close != -1:
                     index = s[j + 1:close].strip()
                     j = close + 1
-            while j < len(s) and s[j] == ' ':
-                j += 1
-            if j < len(s) and s[j] == '{':
-                body, j = _extract_braced(s, j + 1)
-                body = _convert_latex_sqrt(body)
+            arg = _latex_argument(s, j)
+            braced = arg is not None and s[j:].lstrip(' ').startswith('{')
+            # "\\sqrt17" is sqrt(1)*7 to TeX and sqrt(17) to most writers: leave it unparseable
+            ambiguous = arg is not None and not braced and arg[1] < len(s) and s[arg[1]].isalnum()
+            if arg is not None and not ambiguous:
+                body = _convert_latex_sqrt(arg[0])
                 result.append(f'(({body})**(1/({index})))' if index else f'sqrt({body})')
-                i = j
+                i = arg[1]
                 continue
         result.append(s[i])
         i += 1
@@ -389,7 +499,7 @@ def extract_equation_sides(expr_str: str) -> list:
     s_clean = re.sub(r'\(يهمل[^)]*\)', '', s_clean)
     s_clean = re.sub(r'\\text\{\s*\[?\s*يهمل[^}]*\]?\s*\}', '', s_clean)
     s_clean = re.sub(r'\b(?:discard|neglect|ignore)\b', '', s_clean, flags=re.IGNORECASE)
-    s_clean = re.sub(r'[\u0600-\u06FF]+', ' ', s_clean).strip()
+    s_clean = strip_arabic_text(s_clean).strip()
 
     # Protect comparison operators from splitting
     protected = s_clean

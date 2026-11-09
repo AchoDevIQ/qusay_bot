@@ -63,25 +63,25 @@ class GradingResult(BaseModel, collections.abc.Coroutine):
         return self
 
 
-from math_engine.verifier import verify_equivalence
+from math_engine.sandbox import verify_equivalence, follows_from
+from math_engine.clauses import split_math_clauses
+from math_engine.normalizer import extract_equation_sides
+
+# Wall-clock cap on the deterministic pass; past it the paper simply goes to the LLM tier
+DETERMINISTIC_BUDGET_SECONDS = 20.0
 
 def _split_math_clauses(text: str) -> List[str]:
-    """Splits a math text into logical/equation clauses (implications, arrows, semicolons, commas between equations, newlines)."""
-    if not text:
-        return []
-    parts = re.split(r'\s*(?:\\(?:implies|Longrightarrow|rightarrow|to)|=>)\s*|[;\n]+', text)
-    clauses = []
-    for p in parts:
-        p = p.strip()
-        if not p:
-            continue
-        if ',' in p:
-            sub = [s.strip() for s in p.split(',') if s.strip()]
-            if len(sub) > 1 and any('=' in s for s in sub):
-                clauses.extend(sub)
-                continue
-        clauses.append(p)
-    return clauses
+    """Statements in one line of work; see math_engine/clauses.py."""
+    return split_math_clauses(text)
+
+
+def _lhs_name(text: str) -> Optional[str]:
+    """The variable a line solves for ('y' in 'y = 7'), or None when it is not that shape."""
+    sides = extract_equation_sides(text or "")
+    if len(sides) < 2:
+        return None
+    lhs = re.sub(r"\s+", "", sides[0]).lower()
+    return lhs if re.fullmatch(r"[a-z](?:_\w+)?", lhs) else None
 
 
 def _attempt_deterministic_grading(
@@ -110,8 +110,11 @@ def _attempt_deterministic_grading(
     try:
         matched_results: List[StepResult] = []
         used_student_indices = set()
+        deadline = time.monotonic() + DETERMINISTIC_BUDGET_SECONDS
 
         for idx, obj in enumerate(rubric.objectives):
+            if time.monotonic() > deadline:
+                return None
             exp_candidates = []
             if idx < len(ref_steps):
                 exp_candidates.append(ref_steps[idx])
@@ -119,73 +122,32 @@ def _attempt_deterministic_grading(
             if "=" in obj.objective:
                 exp_candidates.append(obj.objective)
 
+            # Each milestone takes the first unused student line that is certainly equivalent.
+            # verify_equivalence handles chains, root sets and ± itself, so a line that only
+            # partly matches (one root of two, one clause of a system) is never a match here.
             found_match = False
             for exp in exp_candidates:
                 for s_idx, s_text in enumerate(stu_steps):
                     if s_idx in used_student_indices:
                         continue
                     try:
-                        # 1. Direct equivalence check
                         verdict = verify_equivalence(exp, s_text)
-                        if verdict.equivalent is True and verdict.status == "certain":
-                            s_clauses = _split_math_clauses(s_text) or [s_text]
-                            matched_results.append(StepResult(
-                                section=obj.id,
-                                status="correct",
-                                points_awarded=obj.points,
-                                points_possible=obj.points,
-                                reason="Deterministically verified via SymPy algebraic equivalence.",
-                                expected=exp,
-                                student=s_text,
-                                student_lines=s_clauses
-                            ))
-                            used_student_indices.add(s_idx)
-                            found_match = True
-                            break
-
-                        # 2. Multi-line / compound clause equivalence check (only when either has >1 clause)
-                        exp_clauses = _split_math_clauses(exp)
-                        s_clauses = _split_math_clauses(s_text)
-                        if exp_clauses and s_clauses and (len(exp_clauses) > 1 or len(s_clauses) > 1):
-                            # Check if target derived clause matches
-                            v_target = verify_equivalence(exp_clauses[-1], s_clauses[-1])
-                            if v_target.equivalent is True and v_target.status == "certain":
-                                matched_results.append(StepResult(
-                                    section=obj.id,
-                                    status="correct",
-                                    points_awarded=obj.points,
-                                    points_possible=obj.points,
-                                    reason="Deterministically verified via SymPy algebraic equivalence on derived clause.",
-                                    expected=exp,
-                                    student=s_text,
-                                    student_lines=s_clauses
-                                ))
-                                used_student_indices.add(s_idx)
-                                found_match = True
-                                break
-
-                            # Check if any student clause matches any expected clause
-                            for sc in s_clauses:
-                                for ec in exp_clauses:
-                                    v_sub = verify_equivalence(ec, sc)
-                                    if v_sub.equivalent is True and v_sub.status == "certain":
-                                        matched_results.append(StepResult(
-                                            section=obj.id,
-                                            status="correct",
-                                            points_awarded=obj.points,
-                                            points_possible=obj.points,
-                                            reason="Deterministically verified via SymPy algebraic equivalence.",
-                                            expected=exp,
-                                            student=s_text,
-                                            student_lines=s_clauses
-                                        ))
-                                        used_student_indices.add(s_idx)
-                                        found_match = True
-                                        break
-                                if found_match:
-                                    break
                     except Exception:
-                        pass
+                        continue
+                    if verdict.equivalent is True and verdict.status == "certain":
+                        matched_results.append(StepResult(
+                            section=obj.id,
+                            status="correct",
+                            points_awarded=obj.points,
+                            points_possible=obj.points,
+                            reason="Deterministically verified via SymPy algebraic equivalence.",
+                            expected=exp,
+                            student=s_text,
+                            student_lines=_split_math_clauses(s_text) or [s_text],
+                        ))
+                        used_student_indices.add(s_idx)
+                        found_match = True
+                        break
                 if found_match:
                     break
 
@@ -212,7 +174,7 @@ def _recover_propagated_errors(result: GradingResult, student: List[dict]) -> No
     """
     Deterministic Propagated Error Recovery Pass.
     
-    When using gpt-4o-mini (a smaller model), it sometimes misclassifies propagated
+    A small grading model sometimes misclassifies propagated
     errors as 'incorrect' or 'not_attempted' when the student's isolated value differs
     from the teacher's expected answer.
     
@@ -229,10 +191,6 @@ def _recover_propagated_errors(result: GradingResult, student: List[dict]) -> No
     if len(result.steps) < 2:
         return
 
-    from math_engine.normalizer import extract_equation_sides
-    from sympy import solve, Symbol, simplify
-    from math_engine.verifier import safe_parse
-
     # Extract all clean student lines
     stu_lines = [s.get("raw_text", "").strip() for s in (student or []) if s.get("raw_text", "").strip()]
     used_student_lines = {s.student.strip() for s in result.steps if s.student and s.student.strip()}
@@ -240,8 +198,11 @@ def _recover_propagated_errors(result: GradingResult, student: List[dict]) -> No
 
     for idx in range(1, len(result.steps)):
         step = result.steps[idx]
-        if step.status == "correct":
+        # Only wrong or missing steps can become carried-forward errors. Partial credit and
+        # "uncertain" (which sends the paper to a teacher) are left as the grader set them.
+        if step.status not in ("incorrect", "not_attempted"):
             continue
+        step_variable = _lhs_name(step.expected)
 
         for prior_idx in range(0, idx):
             prior_step = result.steps[prior_idx]
@@ -249,55 +210,32 @@ def _recover_propagated_errors(result: GradingResult, student: List[dict]) -> No
                 continue
 
             prior_student_expr = prior_step.student
-            prior_sides = extract_equation_sides(prior_student_expr)
-            if len(prior_sides) < 2:
-                continue
-
-            prior_lhs = safe_parse(prior_sides[0])
-            prior_rhs = safe_parse(prior_sides[1])
-            if prior_lhs is None or prior_rhs is None:
-                continue
-
-            prior_eq = prior_lhs - prior_rhs
 
             # Candidate student expressions: either currently bound to step, or unused student lines
             candidates = []
             if step.student:
                 candidates.append((step.student, False))
+            # A spare line only fills a milestone that solves for the same variable; otherwise
+            # "x = -11/5" could be credited to an unrelated "y = 7" step
             for ul in unused_lines:
-                candidates.append((ul, True))
+                if step_variable and _lhs_name(ul) == step_variable:
+                    candidates.append((ul, True))
 
             reclassified = False
             for cand_expr, from_unused in candidates:
-                cand_sides = extract_equation_sides(cand_expr)
-                if len(cand_sides) < 2:
-                    continue
-
-                cand_lhs = safe_parse(cand_sides[0])
-                cand_rhs = safe_parse(cand_sides[1])
-                if cand_lhs is None or cand_rhs is None:
-                    continue
-
-                if hasattr(cand_lhs, 'free_symbols') and len(cand_lhs.free_symbols) == 1:
-                    var = list(cand_lhs.free_symbols)[0]
-                    try:
-                        solutions = solve(prior_eq, var)
-                        for sol in solutions:
-                            if simplify(sol - cand_rhs) == 0:
-                                step.student = cand_expr
-                                step.status = "propagated_error"
-                                step.reason = (
-                                    f"Reclassified: student's answer '{step.student}' correctly follows "
-                                    f"from their own prior error '{prior_step.student}' "
-                                    f"(deterministic SymPy verification)."
-                                )
-                                if from_unused and cand_expr in unused_lines:
-                                    unused_lines.remove(cand_expr)
-                                reclassified = True
-                                break
-                    except Exception:
-                        pass
-                if reclassified:
+                if follows_from(prior_student_expr, cand_expr):
+                    step.student = cand_expr
+                    step.student_lines = _split_math_clauses(cand_expr) or [cand_expr]
+                    step.lines_detected = len(step.student_lines)
+                    step.status = "propagated_error"
+                    step.reason = (
+                        f"Reclassified: student's answer '{step.student}' correctly follows "
+                        f"from their own prior error '{prior_step.student}' "
+                        f"(deterministic SymPy verification)."
+                    )
+                    if from_unused and cand_expr in unused_lines:
+                        unused_lines.remove(cand_expr)
+                    reclassified = True
                     break
 
             if reclassified:
@@ -316,9 +254,11 @@ async def _async_calculate_grade(
     Internal asynchronous grader:
     1. Deterministic SymPy Symbolic Verifier (unless already run by caller).
     2. If any step is ambiguous or contains mistakes, falls back to LLM with low reasoning effort.
+    With `images` ((bytes, media_type, caption) tuples of the student's pages) the LLM
+    also sees the photos and reads them itself where the page reading is doubtful.
     """
     max_total = sum(obj.points for obj in rubric.objectives)
-    
+
     has_student_work = any(bool(s.get("raw_text", "").strip()) for s in student) if student else False
     if not has_student_work and not images:
         # Fast path for empty student solutions
@@ -338,7 +278,7 @@ async def _async_calculate_grade(
         return GradingResult(score=0.0, max_score=max_total, confidence=1.0, steps=steps)
 
     # ── Tier 1: Deterministic SymPy Pre-Pass (offloaded to thread pool so event loop stays responsive) ──
-    if not _skip_deterministic:
+    if not _skip_deterministic and has_student_work:
         deterministic_result = await asyncio.to_thread(_attempt_deterministic_grading, reference, student, rubric)
         if deterministic_result is not None:
             return deterministic_result
@@ -642,6 +582,7 @@ def calculate_grade(
     """
     Grades student solution against teacher reference and rubric.
     Supports both synchronous callers and asynchronous (await / asyncio.run) callers.
+    `images` (optional) lets the LLM tier read the student's photos; unchanged without it.
     """
     max_total = sum(obj.points for obj in rubric.objectives)
     # Blank lines carry no work; treat an all-blank submission as empty
@@ -679,7 +620,8 @@ def calculate_grade(
         return _async_calculate_grade(reference, student, rubric, config, _skip_deterministic=False, images=images)
 
     # Synchronous caller: run Tier 1 directly on the current thread
-    deterministic_result = _attempt_deterministic_grading(reference, student, rubric)
-    if deterministic_result is not None:
-        return deterministic_result
+    if has_student_work:
+        deterministic_result = _attempt_deterministic_grading(reference, student, rubric)
+        if deterministic_result is not None:
+            return deterministic_result
     return asyncio.run(_async_calculate_grade(reference, student, rubric, config, _skip_deterministic=True, images=images))

@@ -13,6 +13,7 @@ load_dotenv()
 
 from preprocessing.pipeline import deskew_and_enhance_page
 from llm.router import complete_vision_json
+from math_engine.clauses import ARROW_PATTERN
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,8 @@ class ExtractedStep(BaseModel):
 class GptResponse(BaseModel):
     reasoning: str = ""
     steps: List[ExtractedStep] = Field(default_factory=list)
+    # Crossed-out work, kept apart so it never counts against (or for) the student
+    discarded: List[str] = Field(default_factory=list)
 
 BASE_PROMPT = r"""You are a STRICT optical character recognition (OCR) engine for handwritten mathematics.
 Your ONLY responsibility is to transcribe the EXACT visual mathematical expressions physically written on the paper into LaTeX format.
@@ -108,17 +111,19 @@ CRITICAL TRANSCRIPTION DIRECTIVES (ZERO ASSUMPTIONS, ZERO AUTO-CORRECTION):
 10. **NEVER AUTO-COMPLETE UNFINISHED WORK**:
    - If an expression ends abruptly or was left incomplete, transcribe only the visual ink present.
 11. **CROSSED-OUT & SCRATCH WORK**:
-   - Isolate strikethrough, crossed-out, or scribbled work and place it in the "discarded_attempts" array. Do NOT include it in the main steps.
-12. **MULTILINGUAL ANNOTATIONS**:
-    - Non-math text (e.g. Arabic words like "الحل", "الجذور", "بما أن", "إذن", "بالجذر", "بجذر الطرفين", "يهمل") must be placed into the "annotations" array if needed. Do not force them into math strings.
+   - Isolate strikethrough, crossed-out, or scribbled work and put it in the top-level "discarded" array. Do NOT include it in "steps".
+12. **ARABIC ANNOTATIONS, DIGITS AND VARIABLES**:
+    - Copy an Arabic annotation written beside a step (e.g. "يهمل", "بجذر الطرفين", "بالتربيع", "نعوض 2 في 1") at the end of that step in square brackets, e.g. `x^2 + 1 = 0 [يهمل]`. Never drop it: graders award marks for it.
+    - Keep Arabic digits (٠١٢٣٤٥٦٧٨٩) and Arabic variable letters (س, ص) exactly as written; do not translate them.
 
 Output format (COMPACT JSON):
-CRITICAL: Do NOT output any "reasoning" key, visual observations, explanations, or redundant metadata. Output ONLY the extracted steps:
+CRITICAL: Do NOT output any "reasoning" key, visual observations, explanations, or redundant metadata. Output ONLY the extracted steps, plus "discarded" when something is crossed out:
 {
   "steps": [
     "Exact literal LaTeX string for step 1",
     "Exact literal LaTeX string for step 2"
-  ]
+  ],
+  "discarded": []
 }
 """
 
@@ -137,6 +142,7 @@ def _detect_media_type(image_bytes: bytes, fallback: str = "image/jpeg") -> str:
 class LeanOcrResponse(BaseModel):
     """Compact OCR schema (changes/12): one literal LaTeX string per step."""
     steps: List[str] = Field(default_factory=list)
+    discarded: List[str] = Field(default_factory=list)
 
 
 class LocatedStep(BaseModel):
@@ -147,6 +153,7 @@ class LocatedStep(BaseModel):
 class LocatedOcrResponse(BaseModel):
     """Compact OCR schema with step locations for the graded overlay."""
     steps: List[LocatedStep] = Field(default_factory=list)
+    discarded: List[str] = Field(default_factory=list)
 
 
 # Appended only when step locations are requested. Short keys keep the extra
@@ -161,7 +168,14 @@ Locations only place grading marks; never change a transcription to fit a locati
 
 
 def step_locations_enabled() -> bool:
-    """OCR_STEP_LOCATIONS=true asks OCR for per-step boxes (used by grading/overlay.py)."""
+    """
+    Per-step boxes for the graded overlay (grading/overlay.py): the Settings page choice
+    when saved, otherwise OCR_STEP_LOCATIONS.
+    """
+    from llm.router import saved_settings
+    saved = saved_settings().get("ocr_step_locations")
+    if isinstance(saved, bool):
+        return saved
     return os.getenv("OCR_STEP_LOCATIONS", "false").strip().lower() in ("1", "true", "yes", "on")
 
 
@@ -226,7 +240,9 @@ async def _call_gpt(image_bytes: bytes, prompt: str, detail: Optional[str] = Non
             bbox=data.get("bbox", [])
         ))
 
-    return GptResponse(reasoning="", steps=steps)
+    discarded = data.get("discarded") or data.get("discarded_attempts") or []
+    discarded = [str(d).strip() for d in discarded if str(d).strip()] if isinstance(discarded, list) else []
+    return GptResponse(reasoning="", steps=steps, discarded=discarded)
 
 async def run_gpt_batch_verification(image_bytes: bytes, steps: List[ExtractedStep], detail: Optional[str] = None) -> List[ExtractedStep]:
     """Single batch verification pass: inspects all flagged steps in ONE single API call."""
@@ -370,86 +386,118 @@ def _split_bbox_horizontally(bbox: List[float], parts: List[str]) -> List[List[f
         cursor = nxt
     return boxes
 
+_AR_WORD = (
+    r"[\u0621-\u063A\u0641-\u064A\u066E-\u06D3]"
+    r"[\u0621-\u063A\u0641-\u064A\u066E-\u06D3\u0640\u064B-\u065F\u0670]+"
+)
+_AR_RUN = re.compile(rf"{_AR_WORD}(?:\s+{_AR_WORD})*")
+
+
+def _bracket_arabic_annotations(text: str):
+    """
+    Arabic words in a step are annotations (يهمل, نعوض ...). They stay in the step inside
+    square brackets so the grader sees them, and are also listed as annotations. Single
+    Arabic letters (س, ص) are variables and Arabic digits are numbers, so both stay as math.
+    """
+    text = re.sub(
+        r"\\text\{\s*([^{}]*?)\s*\}",
+        lambda m: f"[{m.group(1)}]" if _AR_RUN.search(m.group(1)) else m.group(0),
+        text,
+    )
+    bracket_spans = [m.span() for m in re.finditer(r"\[[^\[\]]*\]", text)]
+    annotations, pieces, last = [], [], 0
+    for m in _AR_RUN.finditer(text):
+        annotations.append(m.group(0))
+        inside = any(a <= m.start() and m.end() <= b for a, b in bracket_spans)
+        pieces.append(text[last:m.start()])
+        pieces.append(m.group(0) if inside else f"[{m.group(0)}]")
+        last = m.end()
+    pieces.append(text[last:])
+    return re.sub(r"\s+", " ", "".join(pieces)).strip(), annotations
+
+
 def split_compound_steps(steps: List[ExtractedStep]) -> List[ExtractedStep]:
     r"""
     Post-processes extracted steps to enforce atomic segmentation.
     If the vision model combined multiple steps connected by arrows (\to, \implies, =>),
     semicolons, or wide spaces into a single step, this splits them into clean atomic steps.
-    Also extracts any inline Arabic procedural text into annotations.
+    Arabic annotations stay in the step in brackets (see _bracket_arabic_annotations).
     """
     split_steps: List[ExtractedStep] = []
-    arrow_pattern = re.compile(r'\s*(?:\\longrightarrow|\\to|\\implies|\\Rightarrow|=>|\\rightarrow|-->|->|;)\s*')
-    arabic_pattern = re.compile(r'[\u0600-\u06FF]+')
-    
+    arrow_pattern = re.compile(rf"\s*(?:{ARROW_PATTERN}|-->|->|;)\s*")
+
     for step in steps:
         raw = sanitize_ocr_math_text(step.content)
         if not raw:
             continue
-            
-        parts = arrow_pattern.split(raw)
+
         sub_parts = []
-        for p in parts:
-            p_str = p.strip()
+        for p in arrow_pattern.split(raw):
+            p_str = (p or "").strip()
             if not p_str:
                 continue
             if ('\\quad' in p_str or '\\qquad' in p_str or '   ' in p_str) and p_str.count('=') >= 2:
                 space_splits = re.split(r'\s*(?:\\qquad|\\quad|\s{3,})\s*', p_str)
                 if len(space_splits) > 1 and all('=' in s or len(s) > 2 for s in space_splits):
                     sub_parts.extend([s.strip() for s in space_splits if s.strip()])
-                else:
-                    sub_parts.append(p_str)
-            else:
-                sub_parts.append(p_str)
-                
-        if len(sub_parts) <= 1:
-            clean_content = raw
-            extracted_ann = list(step.annotations or [])
-            if arabic_pattern.search(clean_content):
-                arabic_matches = re.findall(r'[\u0600-\u06FF\s]+', clean_content)
-                for am in arabic_matches:
-                    w = am.strip()
-                    if w and w not in extracted_ann:
-                        extracted_ann.append(w)
-                clean_content = re.sub(r'\\text\{\s*[\u0600-\u06FF\s]+\s*\}', '', clean_content)
-                clean_content = arabic_pattern.sub('', clean_content).strip()
-            
-            new_step = step.model_copy()
-            new_step.content = clean_content
-            new_step.annotations = extracted_ann
-            split_steps.append(new_step)
-        else:
-            part_boxes = _split_bbox_horizontally(step.bbox, sub_parts)
-            for idx, part in enumerate(sub_parts):
-                clean_part = part.strip()
-                extracted_ann = list(step.annotations or [])
-                if arabic_pattern.search(clean_part):
-                    arabic_matches = re.findall(r'[\u0600-\u06FF\s]+', clean_part)
-                    for am in arabic_matches:
-                        w = am.strip()
-                        if w and w not in extracted_ann:
-                            extracted_ann.append(w)
-                    clean_part = re.sub(r'\\text\{\s*[\u0600-\u06FF\s]+\s*\}', '', clean_part)
-                    clean_part = arabic_pattern.sub('', clean_part).strip()
-                    
-                if not clean_part:
                     continue
-                    
-                atomic_step = ExtractedStep(
-                    region_id=step.region_id,
-                    content=clean_part,
-                    ocr_confidence=step.ocr_confidence,
-                    ambiguous_alternatives=step.ambiguous_alternatives if idx == 0 else [],
-                    type=step.type,
-                    annotations=extracted_ann,
-                    discarded_attempts=step.discarded_attempts if idx == 0 else [],
-                    bbox=part_boxes[idx]
-                )
-                split_steps.append(atomic_step)
-                
+            sub_parts.append(p_str)
+        if len(sub_parts) <= 1:
+            sub_parts = [raw]
+
+        part_boxes = _split_bbox_horizontally(step.bbox, sub_parts)
+        for idx, part in enumerate(sub_parts):
+            content, found = _bracket_arabic_annotations(part.strip())
+            if not content:
+                continue
+            annotations = list(step.annotations or [])
+            annotations += [a for a in found if a not in annotations]
+            split_steps.append(ExtractedStep(
+                region_id=step.region_id,
+                content=content,
+                ocr_confidence=step.ocr_confidence,
+                ambiguous_alternatives=step.ambiguous_alternatives if idx == 0 else [],
+                type=step.type,
+                annotations=annotations,
+                discarded_attempts=step.discarded_attempts if idx == 0 else [],
+                bbox=part_boxes[idx],
+            ))
+
     for i, s in enumerate(split_steps):
         s.region_id = f"r_{i+1:02d}"
-        
+
     return split_steps
+
+
+def _readability(content: str) -> float:
+    """
+    Lean OCR returns no confidence of its own, so readability stands in for it: a step
+    SymPy cannot parse is often a misread glyph (i/1, z/2, a broken radical).
+    """
+    if not re.search(r"[0-9A-Za-z]", content or ""):
+        return 1.0
+    try:
+        from math_engine.verifier import safe_parse_with_fallback
+        return 1.0 if safe_parse_with_fallback(content) is not None else 0.5
+    except Exception:
+        return 1.0
+
+
+def _build_regions(final_segmented: List[ExtractedStep], discarded: List[str]) -> "MathRegionList":
+    regions = MathRegionList()
+    for i, step in enumerate(final_segmented):
+        content = sanitize_ocr_math_text(step.content)
+        regions.append(MathRegion(
+            region_id=step.region_id or f"r_{i+1:02d}",
+            content=content,
+            ocr_confidence=min(map_confidence(step.ocr_confidence), _readability(content)),
+            type=step.type or "solution_step",
+            annotations=step.annotations or [],
+            discarded_attempts=(step.discarded_attempts or []) + (discarded if i == 0 else []),
+            bbox=step.bbox or [],
+        ))
+    return regions
+
 
 async def _async_extract_regions_from_image(
     image_bytes: bytes, 
@@ -458,25 +506,25 @@ async def _async_extract_regions_from_image(
     detail: Optional[str] = None
 ) -> MathRegionList:
     """
-    Internal asynchronous region extractor using gpt-4o-mini vision.
+    Internal asynchronous region extractor using the OCR vision model (Claude Haiku 5.5).
 
-    Architecture (Pure gpt-4o-mini Vision):
+    Architecture (single vision model):
     1. Preprocess & Deskew Page (OpenCV deskewing, padding protection, contrast optimization).
-    2. Primary Vision Extraction with gpt-4o-mini with atomic step splitting.
+    2. Primary Vision Extraction with atomic step splitting.
        Detail defaults to 'low' (~2.8k tokens, $0.00045), and supports 'auto' for high fidelity.
-    3. Targeted Double-Check: On low confidence (or 'always'), gpt-4o-mini performs
+    3. Targeted Double-Check: On low confidence (or 'always'), the model performs
        a secondary focused inspection on ambiguous glyphs (i/1, z/2, ±, missing/added signs).
     4. Deterministic Atomic Step Splitting to separate chained arrow expressions.
 
     Ensemble Modes:
-    - "on_low_confidence": Runs single pass, triggers gpt-4o-mini double-check only on low confidence steps.
-    - "always": Triggers gpt-4o-mini double-check verification on every step.
+    - "on_low_confidence": Runs single pass, triggers a double-check only on low confidence steps.
+    - "always": Triggers double-check verification on every step.
     - "fast_single_pass" (Recommended Default): Runs single pass with zero verification overhead.
     """
     # 1. Preprocess & Deskew Page (offloaded to thread pool so OpenCV does not block the async event loop)
     enhanced_bytes = await asyncio.to_thread(deskew_and_enhance_page, image_bytes)
     
-    # 2. Primary Page Vision OCR Extraction with gpt-4o-mini
+    # 2. Primary Page Vision OCR Extraction
     # Boxes are only meaningful on the preprocessed frame the overlay rebuilds, so the
     # raw-bytes fallbacks below never request them.
     with_locations = step_locations_enabled()
@@ -492,7 +540,8 @@ async def _async_extract_regions_from_image(
         gpt_resp = await _call_gpt(image_bytes, BASE_PROMPT, detail=detail)
         
     if not gpt_resp.steps:
-        return [MathRegion(region_id="r_01", content="", ocr_confidence=0.0, type="solution_step")]
+        return MathRegionList([MathRegion(region_id="r_01", content="", ocr_confidence=0.0, type="solution_step",
+                                          discarded_attempts=gpt_resp.discarded)])
         
     # Enforce atomic segmentation on primary extraction steps
     initial_steps = split_compound_steps(gpt_resp.steps)
@@ -535,15 +584,8 @@ async def _async_extract_regions_from_image(
     # Final pass: guarantee atomic segmentation across all resolved steps
     final_segmented = split_compound_steps(resolved_steps)
     
-    return MathRegionList([MathRegion(
-        region_id=step.region_id or f"r_{i+1:02d}",
-        content=sanitize_ocr_math_text(step.content),
-        ocr_confidence=map_confidence(step.ocr_confidence),
-        type=step.type or "solution_step",
-        annotations=step.annotations or [],
-        discarded_attempts=step.discarded_attempts or [],
-        bbox=step.bbox or [],
-    ) for i, step in enumerate(final_segmented)])
+    # Parsing for the readability score blocks, so it stays off the event loop
+    return await asyncio.to_thread(_build_regions, final_segmented, gpt_resp.discarded)
 
 
 def extract_regions_from_image(
@@ -553,7 +595,7 @@ def extract_regions_from_image(
     detail: Optional[str] = None
 ):
     """
-    Extracts mathematical regions from a full page image using gpt-4o-mini vision.
+    Extracts mathematical regions from a full page image using the OCR vision model (Claude Haiku 5.5).
     Supports both synchronous callers and asynchronous (await / asyncio.run) callers.
     Detail defaults to 'low' (~2.8k tokens, $0.00045) unless 'auto'/'high' is explicitly requested.
     """

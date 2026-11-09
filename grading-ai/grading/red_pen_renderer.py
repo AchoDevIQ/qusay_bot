@@ -160,10 +160,19 @@ def shape_arabic_text(text: str) -> str:
         return _fallback_shape_and_bidi(text)
 
 
-def format_math_for_overlay(text: str, strip_checkmarks: bool = False) -> str:
+_LATEX_SYMBOLS = (
+    ("pm", "±"), ("mp", "∓"), ("times", "×"), ("cdot", "·"), ("div", "÷"),
+    ("neq", "≠"), ("ne", "≠"), ("leq", "≤"), ("le", "≤"), ("geq", "≥"), ("ge", "≥"),
+    ("notin", "∉"), ("in", "∈"), ("Rightarrow", "⇒"), ("implies", "⇒"),
+    ("rightarrow", "→"), ("to", "→"), ("infty", "∞"), ("pi", "π"),
+)
+_SUPERSCRIPTS = {"2": "²", "3": "³", "4": "⁴"}
+
+
+def latex_to_unicode(text: str, strip_checkmarks: bool = False) -> str:
     """
-    Converts raw LaTeX expressions and redundant checkmark/cross prefixes into
-    clean, readable mathematical notation suitable for direct image rendering.
+    Raw LaTeX to readable Unicode math, for text people read (feedback, notes). Commands
+    are matched whole, so \\infty is ∞ rather than "∈fty".
     """
     if not text:
         return ""
@@ -178,44 +187,28 @@ def format_math_for_overlay(text: str, strip_checkmarks: bool = False) -> str:
     s = re.sub(r"\\(?:left|right|displaystyle|textstyle)\b", "", s)
 
     # Fractions and roots
-    for _ in range(2):
+    for _ in range(3):
         s = re.sub(r"\\(?:d?frac)\s*\{([^{}]*)\}\s*\{([^{}]*)\}", r"(\1)/(\2)", s)
         s = re.sub(r"\\sqrt\s*\{([^{}]*)\}", r"√(\1)", s)
 
-    # Common LaTeX math operators -> clean Unicode
-    replacements = [
-        (r"\pm", "±"),
-        (r"\mp", "∓"),
-        (r"\times", "×"),
-        (r"\cdot", "·"),
-        (r"\div", "÷"),
-        (r"\neq", "≠"),
-        (r"\ne", "≠"),
-        (r"\leq", "≤"),
-        (r"\le", "≤"),
-        (r"\geq", "≥"),
-        (r"\ge", "≥"),
-        (r"\notin", "∉"),
-        (r"\in", "∈"),
-        (r"\Rightarrow", "⇒"),
-        (r"\implies", "⇒"),
-        (r"\rightarrow", "→"),
-        (r"\to", "→"),
-        ("^2", "²"),
-        ("^3", "³"),
-        ("^4", "⁴"),
-    ]
-    for old, new in replacements:
-        s = s.replace(old, new)
+    for command, symbol in _LATEX_SYMBOLS:
+        s = re.sub(rf"\\{command}(?![A-Za-z])", symbol, s)
+    # x^2 → x², but x^23 stays x^23 and x^{2} → x²
+    s = re.sub(r"\^\{?([234])\}?(?![\d}])", lambda m: _SUPERSCRIPTS[m.group(1)], s)
 
     # Strip remaining backslashes before command names and redundant braces
     s = re.sub(r"\\([a-zA-Z]+)", r"\1", s)
     s = s.replace("{", "").replace("}", "")
-    s = re.sub(r"\s+", " ", s).strip()
+    return re.sub(r"\s+", " ", s).strip()
 
-    if has_arabic(s):
-        return shape_arabic_text(s)
-    return s
+
+def format_math_for_overlay(text: str, strip_checkmarks: bool = False) -> str:
+    """
+    latex_to_unicode() plus Arabic shaping for drawing with PIL. The result is in visual
+    order, so it is only for images: never store or display it as text.
+    """
+    s = latex_to_unicode(text, strip_checkmarks=strip_checkmarks)
+    return shape_arabic_text(s) if has_arabic(s) else s
 
 
 def _get_font(font_size: int, is_handwriting: bool = True, text: str = "") -> ImageFont.FreeTypeFont:
@@ -228,6 +221,8 @@ def _get_font(font_size: int, is_handwriting: bool = True, text: str = "") -> Im
     needs_unicode = has_arabic(text) or bool(_SPECIAL_MATH_RE.search(text or ""))
 
     candidates: List[str] = []
+    if os.getenv("OVERLAY_FONT_PATH"):
+        candidates.append(os.getenv("OVERLAY_FONT_PATH"))
     if needs_unicode or not is_handwriting:
         candidates.extend([
             "C:/Windows/Fonts/tahoma.ttf",
@@ -236,7 +231,16 @@ def _get_font(font_size: int, is_handwriting: bool = True, text: str = "") -> Im
             "C:/Windows/Fonts/arialbd.ttf",
             "C:/Windows/Fonts/segoeui.ttf",
             "C:/Windows/Fonts/calibri.ttf",
+            # Linux: Noto and DejaVu both cover Arabic and math symbols
+            "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansArabic-Regular.ttf",
+            "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+            # macOS
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/Library/Fonts/Arial Unicode.ttf",
+            "/System/Library/Fonts/GeezaPro.ttc",
         ])
     else:
         candidates.extend([
@@ -253,7 +257,24 @@ def _get_font(font_size: int, is_handwriting: bool = True, text: str = "") -> Im
                 return ImageFont.truetype(c, font_size)
             except Exception:
                 continue
-    return ImageFont.load_default()
+    if not _FONT_WARNING_SHOWN:
+        _warn_missing_font()
+    try:
+        return ImageFont.load_default(size=font_size)  # Pillow >= 10.1: scalable fallback
+    except TypeError:
+        return ImageFont.load_default()
+
+
+_FONT_WARNING_SHOWN = False
+
+
+def _warn_missing_font() -> None:
+    global _FONT_WARNING_SHOWN
+    _FONT_WARNING_SHOWN = True
+    import logging
+    logging.getLogger(__name__).warning(
+        "No Arabic-capable font found; install fonts-noto or fonts-dejavu, or set OVERLAY_FONT_PATH."
+    )
 
 
 def _draw_organic_line(
@@ -353,8 +374,9 @@ def _draw_circle_error(
     pts = []
     total_angle = 2.20 * math.pi
 
-    random.seed(int(cx * 10 + cy))
-    wobble_offsets = [random.uniform(-1.2, 1.2) for _ in range(num_pts + 1)]
+    # Local generator: reseeding the global one changed every other random draw in the process
+    rng = random.Random(int(cx * 10 + cy))
+    wobble_offsets = [rng.uniform(-1.2, 1.2) for _ in range(num_pts + 1)]
 
     for i in range(num_pts + 1):
         angle = (i / num_pts) * total_angle

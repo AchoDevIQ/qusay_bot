@@ -15,6 +15,7 @@ Pipeline (CPU only, zero tokens):
 import difflib
 import re
 import textwrap
+import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import cv2
@@ -44,6 +45,7 @@ PANEL_WIDTH = 440
 HEADER_HEIGHT = 68
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 MATCH_THRESHOLD = 0.55
+SYMBOLIC_MATCH_BUDGET_SECONDS = 10.0
 
 Box = Tuple[int, int, int, int]  # x0, y0, x1, y1 in page pixels
 
@@ -228,7 +230,7 @@ def _text_similarity(step_text: str, region_text: str) -> float:
 def _symbolic_similarity(step_text: str, region_text: str) -> float:
     """Equivalent-but-rewritten lines; SymPy is cached via lru_cache."""
     try:
-        from math_engine.verifier import verify_equivalence
+        from math_engine.sandbox import verify_equivalence
         verdict = verify_equivalence(step_text, region_text)
         if verdict.equivalent is True and verdict.status == "certain":
             return 0.9
@@ -245,6 +247,7 @@ def _similarity(step_text: str, region_text: str) -> float:
 def match_steps_to_regions(steps: List[Dict[str, Any]], regions: List[Dict[str, Any]]) -> Dict[int, List[int]]:
     """step index -> region indices it was graded from (greedy, best score first)."""
     candidates = []
+    deadline = time.monotonic() + SYMBOLIC_MATCH_BUDGET_SECONDS
     for si, step in enumerate(steps):
         texts = [t for t in [step["student"], *step["student_lines"]] if t and t.strip()]
         if step["status"] == "not_attempted" or not texts:
@@ -255,7 +258,7 @@ def match_steps_to_regions(steps: List[Dict[str, Any]], regions: List[Dict[str, 
             if score >= MATCH_THRESHOLD:
                 candidates.append((score, si, ri))
                 found = True
-        if not found:
+        if not found and time.monotonic() < deadline:
             for ri, region in enumerate(regions):
                 score = max((_symbolic_similarity(t, region["content"]) for t in texts), default=0.0)
                 if score >= MATCH_THRESHOLD:

@@ -6,8 +6,11 @@ to the LLM grader. When SymPy can verify equivalence, its result is
 authoritative (confidence=1.0). When it can't parse an expression,
 we gracefully fall back to the LLM.
 """
+import cmath
+import random
+import re
 from functools import lru_cache
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel
 from sympy import (
     sympify, simplify, expand, factor, Eq, solve, oo, pi, E, I,
@@ -15,12 +18,13 @@ from sympy import (
     sin, cos, tan, log, exp, sqrt, Abs,
 )
 from sympy.parsing.sympy_parser import (
-    parse_expr,
     standard_transformations,
     implicit_multiplication_application,
     convert_xor,
 )
-from math_engine.normalizer import normalize_expr, extract_equation_sides, generate_confusion_alternatives
+from math_engine.normalizer import normalize_expr, extract_equation_sides, generate_confusion_alternatives, strip_annotations
+from math_engine.safe_expr import safe_parse_expr
+from math_engine.clauses import clause_set, has_inequality
 
 
 class VerificationResult(BaseModel):
@@ -79,26 +83,14 @@ def safe_parse(expr_str: str) -> Optional[object]:
         return None
     
     try:
-        result = parse_expr(
-            normalized,
-            transformations=TRANSFORMATIONS,
-            local_dict=LOCAL_DICT,
-            evaluate=True
-        )
-        return result
+        return safe_parse_expr(normalized, TRANSFORMATIONS, LOCAL_DICT)
     except Exception:
         # Try a second pass: sometimes extra cleanup helps
         try:
             # Remove any remaining non-math characters
             cleaned = normalized.replace(' ', '')
             if cleaned:
-                result = parse_expr(
-                    cleaned,
-                    transformations=TRANSFORMATIONS,
-                    local_dict=LOCAL_DICT,
-                    evaluate=True
-                )
-                return result
+                return safe_parse_expr(cleaned, TRANSFORMATIONS, LOCAL_DICT)
         except Exception:
             pass
     
@@ -177,6 +169,9 @@ def verify_equivalence(expr_a: str, expr_b: str) -> VerificationResult:
     Returns:
         VerificationResult with equivalence verdict and confidence.
     """
+    # Explanations next to the math ("(Equation 1)", "(discard ... since x in R)") are not
+    # statements; removed before the line is split, as they can contain "=" themselves
+    expr_a, expr_b = strip_annotations(expr_a or ""), strip_annotations(expr_b or "")
     if not expr_a or not expr_b:
         return VerificationResult(
             equivalent=None,
@@ -186,56 +181,60 @@ def verify_equivalence(expr_a: str, expr_b: str) -> VerificationResult:
             detail="One or both expressions are empty."
         )
     
-    # Check if either expression contains compound clauses, implication arrows, or chained equations
-    import re
-    def _split_clauses_internal(text: str) -> list[str]:
-        if not text:
-            return []
-        parts = re.split(r'\s*(?:\\(?:implies|Longrightarrow|Rightarrow|rightarrow|to)\b|=>|;)\s*', text)
-        clauses = []
-        for p in parts:
-            p = p.strip()
-            if not p:
-                continue
-            if ',' in p:
-                sub = [s.strip() for s in p.split(',') if s.strip()]
-                if len(sub) > 1 and any('=' in s for s in sub):
-                    clauses.extend(sub)
-                    continue
-            clauses.append(p)
-        return clauses
+    if has_inequality(expr_a) or has_inequality(expr_b):
+        if re.sub(r"\s+", "", expr_a) == re.sub(r"\s+", "", expr_b):
+            return VerificationResult(equivalent=True, confidence=1.0, method="identical_text",
+                                      status="certain", detail="Identical relation.")
+        return VerificationResult(equivalent=None, confidence=0.0, method="relation_unsupported",
+                                  status="uncertain",
+                                  detail="Inequalities and other relations are not compared symbolically.")
 
-    clauses_a = _split_clauses_internal(expr_a)
-    clauses_b = _split_clauses_internal(expr_b)
+    clauses_a = clause_set(expr_a) or [expr_a]
+    clauses_b = clause_set(expr_b) or [expr_b]
+    if len(clauses_a) == 1 and len(clauses_b) == 1:
+        return _verify_single(clauses_a[0], clauses_b[0])
+    return _verify_clause_sets(clauses_a, clauses_b)
 
-    def _certain(a: str, b: str) -> Optional[VerificationResult]:
+
+def _verify_clause_sets(clauses_a: List[str], clauses_b: List[str]) -> VerificationResult:
+    """
+    Compares lines that make several statements (root sets, systems, derivation chains).
+    Direction matters: expr_a is the reference milestone, expr_b the student's answer.
+    """
+    def _certain(a: str, b: str) -> bool:
         res = verify_equivalence(a, b)
-        return res if res.equivalent is True and res.status == "certain" else None
+        return res.equivalent is True and res.status == "certain"
 
     if len(clauses_a) > 1 and len(clauses_b) > 1:
-        # Both compound (e.g. root sets "x = 2, 3" or systems "x = 2, y = 3"): every clause
-        # on each side must be matched. Matching any single pair gave full credit to
-        # "x = 2, y = 5" against "x = 2, y = 3".
-        a_matched = all(any(_certain(ca, cb) for cb in clauses_b) for ca in clauses_a)
-        b_matched = a_matched and all(any(_certain(ca, cb) for ca in clauses_a) for cb in clauses_b)
-        if a_matched and b_matched:
-            return VerificationResult(
-                equivalent=True, confidence=1.0, method="clause_set_equality", status="certain",
-                detail=f"All clauses match: {clauses_a} vs {clauses_b}"
-            )
-    elif len(clauses_a) > 1 or len(clauses_b) > 1:
-        # One single milestone vs a derivation chain: the chain demonstrates the milestone
-        # if any of its clauses (normally the final one) is equivalent to it.
-        single, chain = (clauses_a[0], clauses_b) if len(clauses_a) == 1 else (clauses_b[0], clauses_a)
-        for clause in reversed(chain):
-            hit = _certain(clause, single) if single is clauses_b[0] else _certain(single, clause)
-            if hit:
-                return hit
+        # Every statement on each side needs a partner: "x = 2, y = 5" is not "x = 2, y = 3"
+        if (all(any(_certain(a, b) for b in clauses_b) for a in clauses_a)
+                and all(any(_certain(a, b) for a in clauses_a) for b in clauses_b)):
+            return VerificationResult(equivalent=True, confidence=1.0, method="clause_set_equality",
+                                      status="certain", detail=f"All statements match: {clauses_a} vs {clauses_b}")
+        return VerificationResult(equivalent=None, confidence=0.0, method="clause_sets_differ",
+                                  status="uncertain", detail=f"Statements differ: {clauses_a} vs {clauses_b}")
 
+    if len(clauses_a) == 1:
+        # One milestone against a derivation chain: the chain shows the milestone if it contains it
+        for clause in reversed(clauses_b):
+            if _certain(clauses_a[0], clause):
+                return VerificationResult(equivalent=True, confidence=1.0, method="chain_contains_milestone",
+                                          status="certain", detail=f"'{clause}' matches '{clauses_a[0]}'")
+        return VerificationResult(equivalent=None, confidence=0.0, method="milestone_not_in_chain",
+                                  status="uncertain", detail="No statement in the answer matches the milestone.")
+
+    # The reference makes several statements and the answer only one: at most partial work
+    # ("x = 2" against "x = ±2"), which is for the grader to weigh, never full equivalence
+    return VerificationResult(equivalent=None, confidence=0.0, method="partial_answer", status="uncertain",
+                              detail=f"The reference makes {len(clauses_a)} statements; the answer makes one.")
+
+
+def _verify_single(expr_a: str, expr_b: str) -> VerificationResult:
+    """Compares two single statements (an expression or one equation each)."""
     # Extract equation sides
     sides_a = extract_equation_sides(expr_a)
     sides_b = extract_equation_sides(expr_b)
-    
+
     if not sides_a or not sides_b:
         return VerificationResult(
             equivalent=None,
@@ -244,14 +243,14 @@ def verify_equivalence(expr_a: str, expr_b: str) -> VerificationResult:
             status="parse_failed",
             detail="Could not extract equation sides."
         )
-    
+
     # Case 1: Both are equations (have = sign) — compare as equations
-    is_equation_a = '=' in expr_a and '<=' not in expr_a and '>=' not in expr_a
-    is_equation_b = '=' in expr_b and '<=' not in expr_b and '>=' not in expr_b
-    
+    is_equation_a = '=' in expr_a
+    is_equation_b = '=' in expr_b
+
     if is_equation_a and is_equation_b and len(sides_a) >= 2 and len(sides_b) >= 2:
         return _verify_equations(sides_a, sides_b)
-    
+
     # Case 2: Both are plain expressions — compare directly.
     # Mixed case (one equation, one bare expression such as 'x = 2' vs '2'):
     # compare the equation's value side, never its LHS — otherwise 'x = 2'
@@ -347,20 +346,18 @@ def _verify_expressions(norm_a: str, norm_b: str) -> VerificationResult:
         except Exception:
             pass
         
-        # Method 4: Numeric evaluation with random values
-        result = _numeric_equivalence(parsed_a, parsed_b)
-        if result is not None:
-            return result
-        
-        # If we get here, they're definitely not equivalent
-        return VerificationResult(
-            equivalent=False,
-            confidence=0.9,
-            method="simplification",
-            status="certain",
-            detail=f"simplify(a - b) = {diff}"
-        )
-        
+        # Method 4: numeric evaluation at fixed sample points
+        verdict = _numeric_compare(parsed_a, parsed_b)
+        if verdict is True:
+            return VerificationResult(equivalent=True, confidence=0.9, method="numeric_sampling",
+                                      status="certain", detail="Equal at every sample point.")
+        if verdict is False:
+            return VerificationResult(equivalent=False, confidence=0.95, method="numeric_counterexample",
+                                      status="certain", detail=f"Values differ at a sample point; simplify(a - b) = {diff}")
+        # Simplification failed and sampling could not decide: that proves nothing either way
+        return VerificationResult(equivalent=None, confidence=0.0, method="unproven", status="uncertain",
+                                  detail=f"Could not decide; simplify(a - b) = {diff}")
+
     except Exception as e:
         return VerificationResult(
             equivalent=None,
@@ -392,71 +389,23 @@ def _verify_equations(sides_a: list, sides_b: list) -> VerificationResult:
             detail="Could not parse one or more equation sides."
         )
     
-    # Handle tuple expressions (e.g., x = 2, 3 or (x, y) = (1, 2))
+    # Coordinate tuples such as (x, y) = (1, 2): order matters and every component must match.
+    # Root lists like "x = 2, 3" never reach here: clauses.py splits them into statements.
     def _is_tuple(obj):
         return isinstance(obj, (tuple, list))
-    
+
     if any(_is_tuple(s) for s in parsed_sides_a + parsed_sides_b):
-        if _is_tuple(parsed_sides_a[-1]) and _is_tuple(parsed_sides_b[-1]):
-            t_a = parsed_sides_a[-1]
-            t_b = parsed_sides_b[-1]
-            if len(t_a) == len(t_b):
-                all_match = True
-                for elem_a, elem_b in zip(t_a, t_b):
-                    sub_res = _verify_expressions(str(elem_a), str(elem_b))
-                    if not sub_res.equivalent:
-                        all_match = False
-                        break
-                if all_match:
-                    return VerificationResult(
-                        equivalent=True,
-                        confidence=1.0,
-                        method="tuple_comparison",
-                        status="certain",
-                        detail=f"Coordinate tuples match: {t_a} == {t_b}"
-                    )
-        if parsed_sides_a[0] == parsed_sides_b[0]:
-            val_a = parsed_sides_a[-1]
-            val_b = parsed_sides_b[-1]
-            items_a = set(val_a) if _is_tuple(val_a) else {val_a}
-            items_b = set(val_b) if _is_tuple(val_b) else {val_b}
-            matched_a = 0
-            for ia in items_a:
-                if any(simplify(ia - ib) == 0 for ib in items_b):
-                    matched_a += 1
-            if matched_a == len(items_a) and len(items_a) == len(items_b):
-                return VerificationResult(
-                    equivalent=True,
-                    confidence=1.0,
-                    method="tuple_set_equality",
-                    status="certain",
-                    detail=f"Root sets match: {items_a} == {items_b}"
-                )
-            elif matched_a > 0:
-                # Only some roots agree (missing or extra roots): this is partial
-                # work, not equivalence. Leave the verdict to the LLM grader.
-                return VerificationResult(
-                    equivalent=None,
-                    confidence=0.5,
-                    method="tuple_subset",
-                    status="uncertain",
-                    detail=f"Root sets only partially overlap: {items_a} vs {items_b}"
-                )
-            else:
-                return VerificationResult(
-                    equivalent=False,
-                    confidence=0.9,
-                    method="tuple_mismatch",
-                    status="certain",
-                    detail=f"Root sets differ: {items_a} vs {items_b}"
-                )
-        return VerificationResult(
-            equivalent=False,
-            confidence=0.8,
-            method="tuple_mismatch",
-            status="certain",
-            detail="Tuple structures differ."
-        )
+        t_a, t_b = parsed_sides_a[-1], parsed_sides_b[-1]
+        if _is_tuple(t_a) and _is_tuple(t_b) and len(t_a) == len(t_b):
+            verdicts = [_verify_expressions(str(a), str(b)) for a, b in zip(t_a, t_b)]
+            if all(v.equivalent is True for v in verdicts):
+                return VerificationResult(equivalent=True, confidence=1.0, method="tuple_comparison",
+                                          status="certain", detail=f"Coordinate tuples match: {t_a} == {t_b}")
+            if any(v.equivalent is False and v.status == "certain" for v in verdicts):
+                return VerificationResult(equivalent=False, confidence=0.95, method="tuple_mismatch",
+                                          status="certain", detail=f"Coordinates differ: {t_a} vs {t_b}")
+        return VerificationResult(equivalent=None, confidence=0.0, method="tuple_structure", status="uncertain",
+                                  detail="Tuple structures could not be compared.")
 
     try:
         # Build canonical form: LHS - RHS = 0
@@ -535,8 +484,16 @@ def _verify_equations(sides_a: list, sides_b: list) -> VerificationResult:
         except Exception:
             pass
         
-        # Fallback: solve both equations and compare solution sets
-        return _compare_solutions(canonical_a, canonical_b)
+        # A final answer ("x = 2") has the same roots as the equation it came from
+        # ("x^2 - 4x + 4 = 0") but does not show that step, so root sets only decide
+        # between two equations of the same kind
+        verdict = _compare_solutions(canonical_a, canonical_b)
+        if verdict.equivalent is True and _is_solved_form(parsed_sides_a) != _is_solved_form(parsed_sides_b):
+            return VerificationResult(
+                equivalent=None, confidence=0.0, method="solved_form_vs_equation", status="uncertain",
+                detail="Same roots, but one side is a final value and the other an equation to solve.",
+            )
+        return verdict
         
     except Exception as e:
         return VerificationResult(
@@ -679,62 +636,107 @@ def _compare_solutions(eq_a, eq_b) -> VerificationResult:
         )
 
 
-def _numeric_equivalence(expr_a, expr_b, num_tests: int = 5) -> Optional[VerificationResult]:
+def _is_solved_form(sides: list) -> bool:
+    """True for 'x = value' (or 'value = x') where the value does not contain x."""
+    lhs, rhs = sides[0], sides[-1]
+    for var, value in ((lhs, rhs), (rhs, lhs)):
+        if getattr(var, "is_Symbol", False) and var not in getattr(value, "free_symbols", set()):
+            return True
+    return False
+
+
+# Negative and fractional points too: positive-only sampling called sqrt(x^2) and x equal
+_SAMPLE_VALUES = (Rational(-7, 3), Rational(-2), Rational(-1, 2), Rational(1, 3),
+                  Rational(3, 2), Rational(5, 2), Rational(7), Rational(-5, 4))
+
+
+def _numeric_compare(expr_a, expr_b, num_tests: int = 6) -> Optional[bool]:
     """
-    Test equivalence by evaluating both expressions at random numeric points.
-    
-    This catches cases where symbolic simplification fails but the expressions
-    are actually equivalent (e.g., trigonometric identities).
+    True when the expressions agree at every sample point tried (at least 3 for
+    expressions with variables), False at the first point where both are finite and
+    differ, None when it could not tell. The seed is fixed, so a verdict never changes.
     """
     try:
-        free_vars = list(expr_a.free_symbols | expr_b.free_symbols)
-        
-        if not free_vars:
-            # Both are constants — direct comparison
-            val_a = complex(expr_a.evalf())
-            val_b = complex(expr_b.evalf())
-            if abs(val_a - val_b) < 1e-10:
-                return VerificationResult(
-                    equivalent=True, confidence=1.0,
-                    method="numeric_constant", status="certain",
-                    detail=f"Constants equal: {val_a}"
-                )
-            return None
-        
-        # Test at several random points
-        import random
-        test_points = [
-            {v: Rational(random.randint(1, 10), random.randint(1, 5)) for v in free_vars}
-            for _ in range(num_tests)
-        ]
-        
-        all_equal = True
-        evaluated = 0
-        for point in test_points:
-            try:
-                val_a = complex(expr_a.subs(point).evalf())
-                val_b = complex(expr_b.subs(point).evalf())
-            except Exception:
-                continue
-            evaluated += 1
-            if abs(val_a - val_b) > 1e-8:
-                all_equal = False
-                break
-        
-        # Require at least one successful evaluation; otherwise nothing was tested
-        if all_equal and evaluated > 0:
-            return VerificationResult(
-                equivalent=True,
-                confidence=0.9,
-                method="numeric_sampling",
-                status="certain",
-                detail=f"Equal at {num_tests} random test points."
-            )
-        
-        return None  # Let the caller handle non-equivalence
-        
+        free_vars = sorted(expr_a.free_symbols | expr_b.free_symbols, key=str)
     except Exception:
         return None
+    rng = random.Random(1729)
+    points = [{v: rng.choice(_SAMPLE_VALUES) for v in free_vars} for _ in range(num_tests)] if free_vars else [{}]
+    agreed = 0
+    for point in points:
+        try:
+            val_a = complex(expr_a.subs(point).evalf())
+            val_b = complex(expr_b.subs(point).evalf())
+        except Exception:
+            continue
+        if not (cmath.isfinite(val_a) and cmath.isfinite(val_b)):
+            continue
+        if abs(val_a - val_b) > 1e-8 * max(1.0, abs(val_a), abs(val_b)):
+            return False
+        agreed += 1
+    return True if agreed >= (3 if free_vars else 1) else None
+
+
+def _numeric_equivalence(expr_a, expr_b, num_tests: int = 6) -> Optional[VerificationResult]:
+    """A VerificationResult when the expressions agree numerically, otherwise None."""
+    if _numeric_compare(expr_a, expr_b, num_tests) is True:
+        return VerificationResult(equivalent=True, confidence=0.9, method="numeric_sampling",
+                                  status="certain", detail="Equal at every sample point.")
+    return None
+
+
+def follows_from(prior_expr: str, candidate_expr: str) -> bool:
+    """
+    True when candidate_expr ("x = value") is a solution of the equation prior_expr,
+    which is how an answer carried forward from an earlier wrong line is recognised.
+    """
+    prior_sides = extract_equation_sides(prior_expr)
+    cand_sides = extract_equation_sides(candidate_expr)
+    if len(prior_sides) < 2 or len(cand_sides) < 2:
+        return False
+
+    prior_lhs, prior_rhs = safe_parse(prior_sides[0]), safe_parse(prior_sides[1])
+    cand_lhs, cand_rhs = safe_parse(cand_sides[0]), safe_parse(cand_sides[1])
+    if prior_lhs is None or prior_rhs is None or cand_lhs is None or cand_rhs is None:
+        return False
+    if len(getattr(cand_lhs, "free_symbols", ())) != 1:
+        return False
+
+    var = next(iter(cand_lhs.free_symbols))
+    try:
+        return any(simplify(sol - cand_rhs) == 0 for sol in solve(prior_lhs - prior_rhs, var))
+    except Exception:
+        return False
+
+
+def assignments_satisfy(prior_expr: str, assignment_exprs: List[str]) -> bool:
+    """
+    True when two or more assignments ("x = 1", "y = -3") satisfy the equation prior_expr,
+    i.e. a substitution step that correctly follows from the student's own earlier line.
+    """
+    prior_sides = extract_equation_sides(prior_expr)
+    if len(prior_sides) < 2:
+        return False
+    lhs, rhs = safe_parse(prior_sides[0]), safe_parse(prior_sides[-1])
+    if lhs is None or rhs is None:
+        return False
+    values = {}
+    for text in assignment_exprs:
+        sides = extract_equation_sides(text)
+        if len(sides) < 2:
+            continue
+        var, value = safe_parse(sides[0]), safe_parse(sides[-1])
+        if (var is not None and value is not None and getattr(var, "is_Symbol", False)
+                and var not in getattr(value, "free_symbols", set())):
+            values[var] = value
+    try:
+        equation = lhs - rhs
+        if len(values) < 2 or not equation.free_symbols or not equation.free_symbols <= set(values):
+            return False
+        return simplify(equation.subs(values)) == 0
+    except Exception:
+        return False
+
 
 def check_step_derivability(expr_prev: str, expr_curr: str) -> VerificationResult:
     """

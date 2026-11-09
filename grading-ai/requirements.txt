@@ -1,13 +1,18 @@
-pydantic>=2
-fastapi
-uvicorn[standard]
-openai
-anthropic
-python-dotenv
-sympy
-opencv-python-headless
-numpy
-pillow
-pymupdf
-python-bidi
-arabic-reshaper
+# QMath bot service (bot_api.py), pinned to the versions the test suite passes with
+# (same pins as requirements.txt; headless OpenCV because the container has no display).
+anthropic==1.7.0
+fastapi==0.142.2
+httpx==0.28.1
+numpy==2.5.3
+openai==3.17.0
+opencv-python-headless==5.0.0.93
+pillow==12.3.0
+pydantic==2.13.5
+python-bidi==0.6.12
+arabic-reshaper==3.0.1
+python-dotenv==1.2.3
+python-multipart==0.0.32
+sympy==1.14.0
+uvicorn[standard]==0.53.0
+# Renders the teacher's solution PDF (/bot/rubric, /bot/extract)
+pymupdf>=1.26,<2

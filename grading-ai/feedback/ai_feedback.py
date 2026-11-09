@@ -1,9 +1,30 @@
 import os
+import re
 import asyncio
 import collections.abc
-from typing import List, Optional
+from typing import Iterable, List, Optional
 from llm.router import complete_text, any_credentials
 from grading.grader import GradingResult
+
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def feedback_enabled() -> bool:
+    """ENABLE_FEEDBACK=false turns feedback off everywhere (no model calls at all)."""
+    return _env_flag("ENABLE_FEEDBACK", True)
+
+
+def feedback_by_default() -> bool:
+    """
+    REQUEST_FEEDBACK=false means feedback is generated only when a request explicitly asks
+    for it; true (the default) also generates it during grading.
+    """
+    return feedback_enabled() and _env_flag("REQUEST_FEEDBACK", True)
+
 
 class FeedbackStr(str, collections.abc.Coroutine):
     def send(self, val):
@@ -39,7 +60,7 @@ MISCONCEPTION_TEMPLATES_AR = [
     },
     {
         "id": "quadratic_formula",
-        "keywords": ["دستور", "quadratic", "discriminant", "مميز", "2a", "b^2-4ac"],
+        "keywords": ["دستور", "quadratic", "discriminant", "مميز", "b^2-4ac", "b^2 - 4ac"],
         "advice": (
             "توجيه تربوي: بطل بترتيب المعادلة بالصورة القياسية. بس تذكر دائماً تطبق قانون الدستور بدقة: "
             "x = (-b ± √(b² - 4ac)) / (2a) وانتبه كلش زين لإشارة الحد (-b) ومضاعف المقام (2a)."
@@ -55,7 +76,7 @@ MISCONCEPTION_TEMPLATES_AR = [
     },
     {
         "id": "pure_imaginary_radical",
-        "keywords": ["-17", "sqrt{-17}", "±", "تخيلي"],
+        "keywords": ["sqrt{-17}", "sqrt(-17)", "√-17", "تخيلي"],
         "advice": (
             "توجيه تربوي: دير بالك عيني، تذكر دائماً أن الجذر التربيعي للعدد السالب يطلع منه وحدة تخيلية i "
             "(يعني √( -a ) = ±√a i). ولا تنسى تكتب إشارتي الموجب والسالب للجذرين."
@@ -63,19 +84,31 @@ MISCONCEPTION_TEMPLATES_AR = [
     }
 ]
 
-def match_arabic_misconception_cache(mistakes: List[str]) -> Optional[str]:
+def _keyword_in(keyword: str, text: str) -> bool:
+    """Whole-token match for Latin keywords ("2a" must not match "12a"); substring for Arabic."""
+    kw = keyword.lower()
+    if re.search(r"[a-z0-9]", kw):
+        return re.search(rf"(?<![a-z0-9]){re.escape(kw)}(?![a-z0-9])", text) is not None
+    return kw in text
+
+
+def match_arabic_misconception_cache(evidence: Iterable[str]) -> Optional[str]:
     """
     RAG / Misconception Cache (Solution 6):
     Matches recurring Iraqi curriculum math mistakes against pre-approved,
     pedagogically certified Arabic guidance cards in Iraqi educational dialect.
     Delivers 0.00s latency and $0.00 token cost for standard errors.
+
+    Pass what the STUDENT wrote and why it lost marks. The expected answer must not be
+    included, or every question whose model answer contains "x^2 + 1" gets the same card.
     """
-    combined_text = " ".join(mistakes).lower()
+    combined_text = " ".join(str(e) for e in evidence if e).lower()
     for item in MISCONCEPTION_TEMPLATES_AR:
         for kw in item["keywords"]:
-            if kw.lower() in combined_text:
+            if _keyword_in(kw, combined_text):
                 return item["advice"]
     return None
+
 
 async def _async_generate_feedback(grading_result: GradingResult, language: str = "ar", user_requested: bool = True) -> FeedbackStr:
     """
@@ -85,20 +118,21 @@ async def _async_generate_feedback(grading_result: GradingResult, language: str 
     
     Feedback is optional and only generates when user_requested is True (or requested via user action).
     """
-    # Check if user requested feedback or if globally disabled
+    if not feedback_enabled():
+        return FeedbackStr("")
     if not user_requested:
         return "لم يُطلب التوجيه التربوي (اختياري بحسب رغبة المستخدم)." if language == "ar" else "Pedagogical feedback was not requested by user (optional mode)."
 
-    enable_fb_env = os.getenv("ENABLE_FEEDBACK", "true").lower()
-    if enable_fb_env in ("false", "0", "no") and not user_requested:
-        return "لم يُطلب التوجيه التربوي (اختياري بحسب رغبة المستخدم)." if language == "ar" else "Pedagogical feedback was not requested by user (optional mode)."
     cached_advice = None  # Only the Arabic path has a template cache
     if language == "ar":
         mistakes = []
+        student_evidence = []
         for step in grading_result.steps:
             status = step.status
             pts_awarded = float(step.points_awarded)
             pts_possible = float(step.points_possible)
+            if status != "correct":
+                student_evidence.extend([step.student, step.reason])
             if status == "incorrect":
                 mistakes.append(
                     f"- الخطوة '{step.section}': النتيجة المتوقعة هي '{step.expected}'، بينما كتب الطالب '{step.student}'. "
@@ -139,7 +173,7 @@ async def _async_generate_feedback(grading_result: GradingResult, language: str 
             return "عفية عليك وأحسنت بطل! حلك ممتاز وكل خطوات الحل صحيحة ومضبوطة 100% رياضياً، عاشت إيدك."
 
         # ── Step 1: Check Pre-Certified Arabic Misconception Cache (0 Tokens, 0ms) ──
-        cached_advice = match_arabic_misconception_cache(mistakes)
+        cached_advice = match_arabic_misconception_cache(student_evidence)
         if cached_advice and len(mistakes) <= 2:
             return cached_advice
             
@@ -190,7 +224,7 @@ Keep it brief and student-friendly.
 
     try:
         # Routed by FEEDBACK_MODEL (GPT or Claude) with FEEDBACK_FALLBACK_MODEL failover
-        result = await complete_text("feedback", prompt, max_tokens=3000)
+        result = await complete_text("feedback", prompt)
         return FeedbackStr(result.text)
     except Exception as e:
         # Fallback to cached pedagogical advice if API fails or exhausts tokens
@@ -211,12 +245,9 @@ def generate_feedback(grading_result: GradingResult, language: str = "ar", user_
     Supports both synchronous callers and asynchronous (await / asyncio.run) callers.
     """
     # Fast non-LLM paths:
+    if not feedback_enabled():
+        return FeedbackStr("")
     if not user_requested:
-        msg = "لم يُطلب التوجيه التربوي (اختياري بحسب رغبة المستخدم)." if language == "ar" else "Pedagogical feedback was not requested by user (optional mode)."
-        return FeedbackStr(msg)
-
-    enable_fb_env = os.getenv("ENABLE_FEEDBACK", "true").lower()
-    if enable_fb_env in ("false", "0", "no") and not user_requested:
         msg = "لم يُطلب التوجيه التربوي (اختياري بحسب رغبة المستخدم)." if language == "ar" else "Pedagogical feedback was not requested by user (optional mode)."
         return FeedbackStr(msg)
 

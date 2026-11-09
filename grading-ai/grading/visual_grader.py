@@ -11,11 +11,12 @@ and uses high-resolution 2x supersampled red-pen overlay rendering to produce hu
   - Strict 1-to-1 teacher rubric reconciliation, deterministic SymPy contradiction/equivalence verification,
     and rich Iraqi Arabic pedagogical feedback.
 
-Model: VISUAL_MODEL via llm/router.py (default gpt-5, effort "medium"), with optional
+Model: VISUAL_MODEL via llm/router.py (Claude Haiku 5.5, effort "medium"), with optional
 VISUAL_FALLBACK_MODEL / MODEL_FALLBACK failover. Scores are reconciled against the
 question's rubric in Python; the model's own totals are never trusted as-is.
 """
 
+import asyncio
 import io
 import os
 import re
@@ -33,10 +34,13 @@ from grading.red_pen_renderer import (
     render_red_pen_overlay,
     has_arabic,
     format_math_for_overlay,
+    latex_to_unicode,
 )
+from grading.strictness import GradingConfig
+from math_engine.clauses import split_math_clauses
 from feedback.ai_feedback import match_arabic_misconception_cache
-from math_engine.verifier import verify_equivalence
-from llm.router import complete_vision_json, model_for
+from math_engine.sandbox import verify_equivalence, follows_from, assignments_satisfy
+from llm.router import complete_vision_json, model_for, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +92,7 @@ class VisualGradingResult(BaseModel):
     teacher_note: str = ""
     annotations: List[VisualAnnotation] = Field(default_factory=list)
     steps: List[VisualStepResult] = Field(default_factory=list)
-    model_used: str = "gpt-5"
+    model_used: str = "claude-haiku-5-5"
     is_beta: bool = True
     graded_image_path: Optional[str] = None
     original_image_path: Optional[str] = None
@@ -147,7 +151,7 @@ CRITICAL GRADING RULES (ZERO TOLERANCE FOR FALSE GRADES):
    - "comment": short teacher note in the margin (e.g. "إشارة سالبة خاطئة", "خطوة ناقصة", "خطوة سليمة").
 
 5. SCORING & ARABIC PEDAGOGICAL FEEDBACK:
-   - Grade each rubric step strictly: `points_awarded = points_possible` when `status == "correct"`; `points_awarded = 0.5 * points_possible` when `status` is `"propagated_error"` or `"partially_correct"`; `points_awarded = 0` when `status` is `"incorrect"` or `"not_attempted"`.
+   - Classify every rubric step carefully: the server computes each step's points from its `status` and the school's partial-credit policy. Still fill `points_awarded` (`points_possible` for "correct", about half for "propagated_error" or "partially_correct", 0 for "incorrect" or "not_attempted").
    - "score" is the exact sum of `points_awarded` across all rubric steps.
    - When Feedback Language is Arabic ('ar'):
      * "teacher_note" MUST be a short remark in authentic Iraqi Arabic teacher dialect reflecting the true grade (e.g. "عاشت إيدك يا بطل!" for full marks, "حلك للبداية صحيح بس ما مكمل خطوات الجذور" for unfinished work, "انتبه للإشارات السالبة والتعويض" for errors).
@@ -290,7 +294,9 @@ def _normalize_for_sympy(expr: str) -> str:
         s,
         flags=re.IGNORECASE,
     )
-    s = re.sub(r"\(\s*[1234]\s*\)", "", s)
+    # Equation labels "(1)".."(4)" only at the start or end of a line: "(1)(3)" inside is math
+    s = re.sub(r"^\s*\(\s*[1-4]\s*\)\s+", "", s)
+    s = re.sub(r"\s+\(\s*[1-4]\s*\)\s*$", "", s)
     # Strip bracketed or inline Arabic procedural commentary and set membership notes
     s = re.sub(r"\[[^\]]*(?:يهمل|نعوض|بالتربيع|بجذر)[^\]]*\]", "", s)
     s = re.sub(r"(?:يهمل|بجذر الطرفين|بالتربيع|نعوض[^\n,;]*)", "", s)
@@ -330,9 +336,10 @@ def _split_clauses(expr: str) -> List[str]:
     cleaned = _normalize_for_sympy(expr)
     if not cleaned:
         return []
-    raw_parts = re.split(r"(?:=>|\\Rightarrow|\\implies|\\rightarrow|\\to|;|,|\n|\bor\b|أو)", cleaned)
+    # Same statement splitting as the verifier and grader (top-level commas only, so a
+    # coordinate pair "(1, 2)" stays whole)
     out: List[str] = []
-    for p in raw_parts:
+    for p in split_math_clauses(cleaned):
         p_str = p.strip()
         if not p_str or not any(ch.isalnum() for ch in p_str):
             continue
@@ -540,6 +547,7 @@ def _parse_steps(
     raw: Any,
     teacher_solution: Optional[Union[str, bytes, List[Dict[str, Any]]]] = None,
     language: str = "ar",
+    config: Optional[GradingConfig] = None,
 ) -> List[VisualStepResult]:
     """
     Parses model steps and, when `teacher_solution` is a list of rubric step dicts,
@@ -547,6 +555,7 @@ def _parse_steps(
     zero points for unfinished (`not_attempted`) or `incorrect` steps, and SymPy verification.
     """
     raw_list = [s for s in (raw if isinstance(raw, list) else []) if isinstance(s, dict)]
+    config = config or GradingConfig()
 
     # Path A: Free-form string/bytes reference (no structured rubric step list)
     if not isinstance(teacher_solution, list) or not teacher_solution:
@@ -584,6 +593,14 @@ def _parse_steps(
 
     used_indices = set()
     reconciled: List[VisualStepResult] = []
+    step_count = len(teacher_solution)
+
+    def _named_step(s: Dict[str, Any]) -> Optional[int]:
+        num = _to_int(s.get("step_number"), 0) or _step_num(s.get("section"))
+        return num if num and 1 <= num <= step_count else None
+
+    def claimed_elsewhere(target_num: int) -> set:
+        return {i for i, s in enumerate(raw_list) if _named_step(s) not in (None, target_num)}
 
     for obj_idx, t_step in enumerate(teacher_solution):
         if not isinstance(t_step, dict):
@@ -617,8 +634,10 @@ def _parse_steps(
                     matched_idx = r_idx
                     break
 
-        # 3. Positional fallback
-        if matched_raw is None and obj_idx < len(raw_list) and obj_idx not in used_indices:
+        # 3. Positional fallback, never taking an entry that names another rubric step
+        #    (with steps 2-4 missing, "step_5" must not be graded as step 2)
+        if (matched_raw is None and obj_idx < len(raw_list) and obj_idx not in used_indices
+                and obj_idx not in claimed_elsewhere(target_num)):
             matched_raw = raw_list[obj_idx]
             matched_idx = obj_idx
 
@@ -668,18 +687,13 @@ def _parse_steps(
         if sym_reason:
             raw_reason = sym_reason
 
-        # Compute authoritative points_awarded from verified_status and rubric pts_possible
+        # Points come from the status and the strictness setting, never from the model
         if verified_status == "correct":
             awarded = pts_possible
-        elif verified_status in ("incorrect", "not_attempted"):
-            awarded = 0.0
         elif verified_status == "partially_correct":
-            if 0.0 < raw_awarded < pts_possible:
-                awarded = round(raw_awarded, 2)
-            else:
-                awarded = round(pts_possible * 0.5, 2)
+            awarded = round(pts_possible * config.partial_credit_multiplier, 2)
         elif verified_status == "propagated_error":
-            awarded = round(pts_possible * 0.5, 2)
+            awarded = round(pts_possible * config.propagated_error_multiplier, 2)
         else:
             awarded = 0.0
 
@@ -693,24 +707,6 @@ def _parse_steps(
             points_possible=pts_possible,
             reason=raw_reason or ("تم التقييم عبر الفحص البصري المباشر." if language == "ar" else "Evaluated via visual inspection."),
         ))
-
-    # Guard: If the final step (e.g. step_9 stating final complex roots) was marked attempted,
-    # but BOTH preceding substitution steps (step_7 and step_8 finding y) are 'not_attempted',
-    # then the student stopped at finding x (step_6) and never computed y or the final root.
-    if (
-        len(reconciled) >= 4
-        and reconciled[-1].status != "not_attempted"
-        and reconciled[-2].status == "not_attempted"
-        and reconciled[-3].status == "not_attempted"
-    ):
-        reconciled[-1].status = "not_attempted"
-        reconciled[-1].student_work = ""
-        reconciled[-1].points_awarded = 0.0
-        reconciled[-1].reason = (
-            "لم يكمل الطالب إيجاد قيم المتغير الثاني والجذور النهائية."
-            if language == "ar"
-            else "Student stopped before computing the second variable and final roots."
-        )
 
     # Post-pass 1: Recover combined introductory/intermediate steps ONLY when subsequent steps were attempted
     for idx, step in enumerate(reconciled):
@@ -779,75 +775,30 @@ def _parse_steps(
                 else "Implicit setup step embodied in subsequent operation."
             )
 
-    # Post-pass 2: Deterministic SymPy propagated-error recovery (parity with grading/grader.py)
-    try:
-        from math_engine.sympy_parser import safe_parse, extract_equation_sides
-        from sympy import solve, simplify
-        for idx, step in enumerate(reconciled):
-            if idx == 0 or step.status != "incorrect" or not step.student_work:
+    # Post-pass 2: carried-forward errors. A wrong step whose value follows from the
+    # student's own earlier wrong line, or whose substituted values satisfy it, gets the
+    # propagated-error credit instead of zero (parity with grading/grader.py)
+    for idx, step in enumerate(reconciled):
+        if idx == 0 or step.status != "incorrect" or not step.student_work:
+            continue
+        stu_clauses = _split_clauses(step.student_work)
+        for prior_step in reconciled[:idx]:
+            if prior_step.status not in ("incorrect", "propagated_error") or not prior_step.student_work:
                 continue
-            reclassified = False
-            stu_clauses = _split_clauses(step.student_work)
-            for prior_idx in range(0, idx):
-                prior_step = reconciled[prior_idx]
-                if prior_step.status not in ("incorrect", "propagated_error") or not prior_step.student_work:
-                    continue
-                for p_clause in _split_clauses(prior_step.student_work):
-                    p_sides = extract_equation_sides(p_clause)
-                    if len(p_sides) < 2:
-                        continue
-                    p_lhs, p_rhs = safe_parse(p_sides[0]), safe_parse(p_sides[-1])
-                    if p_lhs is None or p_rhs is None:
-                        continue
-                    p_eq = p_lhs - p_rhs
-                    # Build variable assignment map from current step clauses (e.g. {x: 1, y: -3})
-                    stu_assignments = {}
-                    for s_clause in stu_clauses:
-                        s_sides = extract_equation_sides(s_clause)
-                        if len(s_sides) < 2:
-                            continue
-                        s_lhs, s_rhs = safe_parse(s_sides[0]), safe_parse(s_sides[-1])
-                        if s_lhs is None or s_rhs is None:
-                            continue
-                        if hasattr(s_lhs, "free_symbols") and len(s_lhs.free_symbols) == 1 and str(s_lhs) == str(list(s_lhs.free_symbols)[0]):
-                            var = list(s_lhs.free_symbols)[0]
-                            stu_assignments[var] = s_rhs
-                        if hasattr(s_lhs, "free_symbols") and len(s_lhs.free_symbols) == 1:
-                            var = list(s_lhs.free_symbols)[0]
-                            try:
-                                sols = solve(p_eq, var)
-                                if any(simplify(sol - s_rhs) == 0 for sol in sols):
-                                    step.status = "propagated_error"
-                                    step.points_awarded = round(step.points_possible * 0.5, 2)
-                                    step.reason = (
-                                        f"خطأ مترتب: النتيجة ({s_clause}) تتبع منطقياً من معادلة الطالب السابقة."
-                                        if language == "ar"
-                                        else f"Propagated error: ({s_clause}) follows from student's earlier equation."
-                                    )
-                                    reclassified = True
-                                    break
-                            except Exception:
-                                pass
-                    # Check if multi-variable assignments (e.g. x=1, y=-3) satisfy prior step's equation (e.g. y = -3/x)
-                    if not reclassified and len(stu_assignments) >= 2 and hasattr(p_eq, "free_symbols") and p_eq.free_symbols.issubset(set(stu_assignments.keys())):
-                        try:
-                            if simplify(p_eq.subs(stu_assignments)) == 0:
-                                step.status = "propagated_error"
-                                step.points_awarded = round(step.points_possible * 0.5, 2)
-                                step.reason = (
-                                    "خطأ مترتب: التعويض يتبع منطقياً من معادلة الطالب السابقة."
-                                    if language == "ar"
-                                    else "Propagated error: substitution follows from student's earlier equation."
-                                )
-                                reclassified = True
-                        except Exception:
-                            pass
-                    if reclassified:
-                        break
-                if reclassified:
-                    break
-    except Exception:
-        pass
+            prior_clauses = [c for c in _split_clauses(prior_step.student_work) if "=" in c]
+            follows = any(follows_from(pc, sc) for pc in prior_clauses for sc in stu_clauses)
+            satisfies = not follows and any(
+                assignments_satisfy(pc, tuple(stu_clauses)) for pc in prior_clauses
+            )
+            if follows or satisfies:
+                step.status = "propagated_error"
+                step.points_awarded = round(step.points_possible * config.propagated_error_multiplier, 2)
+                step.reason = (
+                    "خطأ مترتب: النتيجة تتبع منطقياً من معادلة الطالب السابقة."
+                    if language == "ar"
+                    else "Propagated error: follows from the student's earlier equation."
+                )
+                break
 
     return reconciled
 
@@ -855,24 +806,28 @@ def _parse_steps(
 def _sanitize_annotations_against_steps(
     annotations: List[VisualAnnotation],
     steps: List[VisualStepResult],
+    withdrawn_work: Optional[List[str]] = None,
 ) -> List[VisualAnnotation]:
     """
-    Ensures red-pen visual annotations never contradict the verified rubric step statuses:
-    - Converts any 'checkmark' placed on an 'incorrect' step into a 'cross' (-pts).
-    - Removes any hallucinated 'checkmark' whose target_text is empty when steps are unattempted.
+    Keeps red-pen marks consistent with the verified step statuses:
+    - A checkmark on a step that ended up incorrect becomes a cross with the step's deduction.
+    - A checkmark on work the server withdrew (steps reset to not_attempted, listed in
+      withdrawn_work) is removed.
     """
-    if not annotations or not steps:
+    if not annotations:
         return annotations
 
-    incorrect_works = {
-        re.sub(r"\s+", "", s.student_work.lower()): s
-        for s in steps
-        if s.status == "incorrect" and s.student_work.strip()
-    }
+    def _norm(text: str) -> str:
+        return re.sub(r"\s+", "", (text or "").lower())
+
+    incorrect_works = {_norm(s.student_work): s for s in steps if s.status == "incorrect" and s.student_work.strip()}
+    withdrawn = {_norm(w) for w in (withdrawn_work or []) if w and w.strip()}
 
     sanitized: List[VisualAnnotation] = []
     for ann in annotations:
-        t_norm = re.sub(r"\s+", "", (ann.target_text or "").lower())
+        t_norm = _norm(ann.target_text)
+        if ann.type == "checkmark" and t_norm and t_norm in withdrawn:
+            continue
         if ann.type == "checkmark" and ann.points_delta < 0:
             ann.type = "cross"
         elif ann.type == "checkmark" and t_norm and t_norm in incorrect_works:
@@ -954,7 +909,7 @@ def _build_visual_pedagogical_feedback(
     # Check Arabic RAG misconception cache for any faulty or unattempted step
     rag_hints: List[str] = []
     for s in error_steps + unattempted_steps:
-        hint = match_arabic_misconception_cache([s.expected, s.student_work, s.reason])
+        hint = match_arabic_misconception_cache([s.student_work, s.reason])
         if hint and hint not in rag_hints:
             rag_hints.append(hint)
 
@@ -969,8 +924,9 @@ def _build_visual_pedagogical_feedback(
             if correct_steps:
                 arabic_parts.append(f"• أحسنت في إنجاز {len(correct_steps)} خطوة من سلم التصحيح بشكل صحيح.")
             for s in error_steps[:3]:
-                exp_clean = format_math_for_overlay(s.expected)
-                stu_clean = format_math_for_overlay(s.student_work)
+                # Stored text, not an image: no Arabic reshaping
+                exp_clean = latex_to_unicode(s.expected)
+                stu_clean = latex_to_unicode(s.student_work)
                 if has_arabic(s.reason):
                     arabic_parts.append(f"• في الخطوة ({s.step_number}): {s.reason} (الدرجة: {s.points_awarded:g}/{s.points_possible:g})")
                 elif stu_clean and exp_clean:
@@ -1007,7 +963,9 @@ async def grade_paper_visually(
     teacher_solution_text: str = "",
     model: Optional[str] = None,
     detail: str = "auto",
-    language: str = "ar"
+    language: str = "ar",
+    strictness: str = "standard",
+    save_dir: Optional[str] = None,
 ) -> VisualGradingResult:
     """
     Directly grades a student paper image using a multimodal vision model against both
@@ -1021,19 +979,22 @@ async def grade_paper_visually(
       - teacher_image_bytes: Optional image bytes of teacher's handwritten/printed solution.
       - question_statement: Text of the problem / question.
       - teacher_solution_text: Optional full derivation text of the teacher's solution.
-      - model: Override for VISUAL_MODEL (default gpt-5). Failover per llm/router.py.
+      - model: Override for VISUAL_MODEL (Haiku 5.5 only unless ALLOW_NON_HAIKU_MODELS=1). See llm/router.py.
       - detail: Vision resolution mode ('auto' or 'low').
       - language: Language for teacher notes ('ar' for Arabic, 'en' for English).
+      - strictness: 'strict', 'standard' or 'lenient' partial-credit policy.
+      - save_dir: When given, the original and marked images are written there and their
+        paths returned; otherwise nothing touches the disk (the result carries base64).
 
-    Raises llm.router.LLMUnavailableError when no model could grade the paper; a failed
-    call never turns into a 0-point grade.
+    Raises llm.router.LLMUnavailableError when no model could grade the paper, or when it
+    returned no per-step results for a rubric; a failed call never turns into a grade.
     """
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    config = GradingConfig(strictness=strictness if strictness in ("strict", "standard", "lenient") else "standard")
     max_points = max(0.0, _to_float(max_points, 10.0))
     lang = (language or "ar").lower().strip()
 
     # One normalized copy is sent to the model AND drawn on
-    student_bytes, student_mime = _normalize_image(student_image_bytes)
+    student_bytes, student_mime = await asyncio.to_thread(_normalize_image, student_image_bytes)
 
     if isinstance(teacher_solution, bytes) and not teacher_image_bytes:
         teacher_image_bytes = teacher_solution
@@ -1065,7 +1026,7 @@ async def grade_paper_visually(
 
     images = []
     if teacher_image_bytes:
-        t_bytes, t_mime = _normalize_image(teacher_image_bytes)
+        t_bytes, t_mime = await asyncio.to_thread(_normalize_image, teacher_image_bytes)
         images.append((
             t_bytes,
             t_mime,
@@ -1089,11 +1050,23 @@ async def grade_paper_visually(
 
     summary = str(parsed_data.get("summary") or "")
     annotations_list = _parse_annotations(parsed_data.get("annotations"))
-    steps_list = _parse_steps(parsed_data.get("steps"), teacher_solution=teacher_solution, language=lang)
-    annotations_list = _sanitize_annotations_against_steps(annotations_list, steps_list)
+    raw_steps = [s for s in (parsed_data.get("steps") or []) if isinstance(s, dict)]
+    if isinstance(teacher_solution, list) and teacher_solution and not raw_steps:
+        # Its overall score cannot be checked against anything, so it is not used
+        raise LLMUnavailableError("The vision model returned no per-step results for this rubric.")
+
+    # Symbolic verification blocks, so it stays off the event loop
+    steps_list = await asyncio.to_thread(
+        _parse_steps, raw_steps, teacher_solution=teacher_solution, language=lang, config=config
+    )
+    raw_work = {str(s.get("section") or ""): str(s.get("student_work") or "") for s in raw_steps}
+    withdrawn = [raw_work.get(s.section, "") for s in steps_list if s.status == "not_attempted"]
+    annotations_list = _sanitize_annotations_against_steps(annotations_list, steps_list, withdrawn)
 
     model_score = _to_float(parsed_data.get("score"))
     score, warning = _reconcile_score(model_score, steps_list, max_points)
+    if not steps_list:
+        warning = "; ".join(w for w in (warning, "no per-step breakdown from the model") if w)
     if warning:
         logger.warning(f"Visual grading score reconciled: {warning}")
 
@@ -1125,21 +1098,29 @@ async def grade_paper_visually(
         summary = full_feedback
 
     # Generate the human-like red pen overlay on the same normalized image the model saw
-    rendered_bytes = render_red_pen_overlay_bytes(
+    rendered_bytes = await asyncio.to_thread(
+        render_red_pen_overlay_bytes,
         image_input=student_bytes,
         annotations=[a.model_dump() for a in annotations_list],
         overall_score_badge=overall_badge,
         teacher_note=teacher_note
     )
 
-    run_id = uuid.uuid4().hex[:10]
-    graded_path = os.path.join(UPLOADS_DIR, f"graded_visual_{run_id}.png")
-    original_ext = ".png" if student_mime == "image/png" else ".jpg"
-    original_path = os.path.join(UPLOADS_DIR, f"original_stu_{run_id}{original_ext}")
-    with open(graded_path, "wb") as f_out:
-        f_out.write(rendered_bytes)
-    with open(original_path, "wb") as f_orig:
-        f_orig.write(student_bytes)
+    graded_path = original_path = None
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        run_id = uuid.uuid4().hex[:10]
+        graded_path = os.path.join(save_dir, f"graded_visual_{run_id}.png")
+        original_ext = ".png" if student_mime == "image/png" else ".jpg"
+        original_path = os.path.join(save_dir, f"original_stu_{run_id}{original_ext}")
+
+        def _write_images() -> None:
+            with open(graded_path, "wb") as f_out:
+                f_out.write(rendered_bytes)
+            with open(original_path, "wb") as f_orig:
+                f_orig.write(student_bytes)
+
+        await asyncio.to_thread(_write_images)
 
     return VisualGradingResult(
         score=round(score, 2),
