@@ -103,6 +103,13 @@ export type DaySlots = { d: number; times: string[] };
 export function groupSlots(slots: Slot[], week: number[]): DaySlots[] {
   return week.filter((d) => slots.some((x) => x.d === d)).map((d) => ({ d, times: [...new Set(slots.filter((x) => x.d === d).map((x) => x.t))].sort() }));
 }
+/** نسخة غير لكل وقت بنفس اليوم: تبدي من start وتمشي بالترتيب، فما يتكرر نفس الحرف بوقتين إذا النسخ تكفي */
+export function spreadVersions(times: string[], ids: number[], start: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!ids.length) return out;
+  times.forEach((t, k) => { out[t] = ids[(start + k) % ids.length]; });
+  return out;
+}
 /** ترجع مواعيد للحفظ. الوقت الفاضي والمكرر ينشال */
 export function flattenDays(days: DaySlots[]): Slot[] {
   return days.flatMap((x) => [...new Set(x.times.filter(Boolean))].sort().map((t) => ({ d: x.d, t })));

@@ -5,7 +5,7 @@ import { createHmac } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_SETTINGS, addDays, availableDays, buildPlan, flattenDays, groupSlots, itemState, ampm, labelChapters, pickMandatory, answersClose, pickedAt, prettyAt, slotDays, pickOptional, weekdayOf } from "../lib/scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, availableDays, buildPlan, flattenDays, groupSlots, spreadVersions, itemState, ampm, labelChapters, pickMandatory, answersClose, pickedAt, prettyAt, slotDays, pickOptional, weekdayOf } from "../lib/scheduleRules.ts";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-sched-"));
 Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CHROME_PATH: path.join(tmp, "none"), ASSETS_DIR: path.join(tmp, "none"), SETTINGS_FILE: path.join(tmp, "none") });
@@ -545,6 +545,11 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.ok(await upload(92, it2, 1));
   // صورة وحدة لكل سؤال: الثانية تبدل الأولى
   assert.equal((await upload(92, it2, 1)).questions[0].answers.length, 1);
+});
+test("🎲 نسخة غير بكل وقت، وإذا النسخ أقل من الأوقات تنعاد بالترتيب", () => {
+  assert.deepEqual(spreadVersions(["16:00", "20:30", "22:00"], [7, 8, 9], 1), { "16:00": 8, "20:30": 9, "22:00": 7 });
+  assert.deepEqual(spreadVersions(["16:00", "20:30", "22:00"], [7, 8], 0), { "16:00": 7, "20:30": 8, "22:00": 7 });
+  assert.deepEqual(spreadVersions(["16:00"], [], 0), {});
 });
 test("الأيام وأوقاتها: كل يوم تحته أوقاته، والفاضي والمكرر ما ينحفظ", () => {
   const week = [5, 6, 0, 1, 2, 3, 4];

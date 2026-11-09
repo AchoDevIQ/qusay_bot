@@ -2,7 +2,7 @@
 // إعدادات جدول الامتحانات: كل المدد بيد الإدارة
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
-import { flattenDays, groupSlots } from "../../../lib/scheduleRules.ts";
+import { ampm, flattenDays, groupSlots, spreadVersions } from "../../../lib/scheduleRules.ts";
 
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; versions: Record<string, number>; models: { id: number; model: string }[] };
@@ -159,14 +159,11 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   const chapters = [...new Set(rows.map((r) => r.chapter))];
   const set = (exam: number, o: Partial<Row>) => setRows(rows.map((r) => (r.exam === exam ? { ...r, ...o } : r)));
   const timesOf = (date: string) => { if (!date) return []; const w = (new Date(date + "T00:00:00Z").getUTCDay() + 6) % 7; return d.slots.filter((x) => x.d === w).map((x) => x.t).sort(); };
-  const allTimes = [...new Set(d.slots.map((x) => x.t))].sort();
-  // نسخة وحدة لكل الفصل بهذا الوقت، وتتبدل بأي وقت
-  const fill = (chapter: string, time: string, model: string) => setRows(rows.map((r) => {
-    if (r.chapter !== chapter) return r;
-    const id = r.models.find((m) => m.model === model)?.id;
-    const versions = { ...r.versions };
-    if (id) versions[time] = id; else delete versions[time];
-    return { ...r, versions };
+  // كل امتحان بالفصل ياخذ نسخة غير بكل وقت، ويبدي من نسخة عشوائية حتى ما يتعلمون إن أول وقت دائماً A
+  const spread = (chapter: string) => setRows(rows.map((r) => {
+    if (r.chapter !== chapter || !r.models.length) return r;
+    const ids = r.models.map((m) => m.id);
+    return { ...r, versions: { ...r.versions, ...spreadVersions(timesOf(r.date), ids, Math.floor(Math.random() * ids.length)) } };
   }));
   return (
     <div className="exfoot">
@@ -175,45 +172,37 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
         <input type="date" className="ltr" aria-label="تاريخ البداية" value={start} onChange={(e) => setStart(e.target.value)} />
         <Confirm label="🗓 وزعها" disabled={busy || !start} onYes={() => void act({ action: "fillDates", start })} />
       </div>
-      <div className="exhint">كل يوم من أيام المكان ياخذ امتحان، وتتخطى العطلة. بعدها تگدر تغير أي تاريخ أو نسخة.</div>
+      <div className="exhint">كل يوم من أيام المكان ياخذ امتحان، وتتخطى العطلة. بعدها تگدر تغير أي تاريخ.</div>
+      <div className="exlabel adtop">📄 النسخة بكل وقت</div>
+      <div className="exhint">جنب كل امتحان تطلع أوقات يومه، وتختار لكل وقت نسخته. الاختيار يخص هذا الامتحان بس، فطلاب الوقت الأول ما يگدرون يوصلون الأسئلة للي بعدهم. ما ينحفظ إلا تدوس «حفظ المواعيد والنسخ».</div>
       {chapters.map((c) => (
         <div key={c}>
           <div className="adgroup">{c}</div>
-          <ChapterFill chapter={c} times={allTimes} models={[...new Set(rows.filter((r) => r.chapter === c).flatMap((r) => r.models.map((m) => m.model)))].sort()} fill={fill} />
-          {rows.filter((r) => r.chapter === c).map((r) => (
-            <div className="adexamrow" key={r.exam}>
-              <b>{r.title}</b>
-              <div className="adexamcells">
-                <input type="date" className="ltr" aria-label={`تاريخ ${r.title}`} value={r.date} onChange={(e) => set(r.exam, { date: e.target.value })} />
-                {timesOf(r.date).map((t) => (
-                  <label className="adtimev" key={t}><small>{t}</small>
-                    <select aria-label={`نسخة ${r.title} الساعة ${t}`} value={r.versions[t] ?? 0} onChange={(e) => set(r.exam, { versions: { ...r.versions, [t]: Number(e.target.value) } })}>
-                      <option value={0}>أول نسخة جاهزة</option>
-                      {r.models.map((m) => <option key={m.id} value={m.id}>نسخة {m.model}</option>)}
-                    </select>
-                  </label>
-                ))}
+          <button type="button" className="exbtn" disabled={busy} onClick={() => spread(c)}>🎲 نسخة غير بكل وقت لكل امتحانات {c}</button>
+          {rows.filter((r) => r.chapter === c).map((r) => {
+            const times = timesOf(r.date);
+            return (
+              <div className="adexamrow" key={r.exam}>
+                <b>{r.title}</b>
+                <div className="adexamcells">
+                  <input type="date" className="ltr" aria-label={`تاريخ ${r.title}`} value={r.date} onChange={(e) => set(r.exam, { date: e.target.value })} />
+                  {times.map((t) => (
+                    <label className="adtimev" key={t}><small>⏰ {ampm(t)}</small>
+                      <select aria-label={`نسخة ${r.title} الساعة ${t}`} value={r.versions[t] ?? 0} onChange={(e) => set(r.exam, { versions: { ...r.versions, [t]: Number(e.target.value) } })}>
+                        <option value={0}>أول نسخة جاهزة</option>
+                        {r.models.map((m) => <option key={m.id} value={m.id}>نسخة {m.model}</option>)}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                {!r.date && <small className="exhint">حط تاريخه حتى تطلع أوقاته وتختار نسخها.</small>}
+                {r.date && !times.length && <small className="exbad">هذا اليوم ما إله أوقات بـ ⏰ الأيام وأوقاتها.</small>}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ))}
       <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void act({ action: "saveDates", rows: rows.map((r) => ({ exam: r.exam, date: r.date, versions: r.versions })) })}>حفظ المواعيد والنسخ</button>
-    </div>
-  );
-}
-
-function ChapterFill({ chapter, times, models, fill }: { chapter: string; times: string[]; models: string[]; fill: (c: string, t: string, m: string) => void }) {
-  const [time, setTime] = useState(times[0] ?? "");
-  if (!times.length || !models.length) return null;
-  return (
-    <div className="exline">
-      <span className="exhint">نسخة لكل الفصل:</span>
-      <select className="exnum" aria-label={`وقت ${chapter}`} value={time} onChange={(e) => setTime(e.target.value)}>{times.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-      <select className="exnum" aria-label={`نسخة ${chapter}`} value="" onChange={(e) => { if (e.target.value) fill(chapter, time, e.target.value === "-" ? "" : e.target.value); }}>
-        <option value="">اختار</option><option value="-">أول جاهزة</option>
-        {models.map((m) => <option key={m} value={m}>{m}</option>)}
-      </select>
     </div>
   );
 }
