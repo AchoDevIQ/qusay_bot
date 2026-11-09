@@ -7,13 +7,14 @@ import QRCode from "qrcode";
 import { find, insert, kvGet, kvSet, one, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { TOKEN } from "./config.ts";
-import { centerName, isAdmin, student } from "./data.ts";
+import { can, centerName, isAdmin, student } from "./data.ts";
+import { labelTspl } from "./labelTspl.ts";
 import { versionOf } from "./examRoom.ts";
 import { files } from "./files.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { recordUploader, rescanDone, rescanFor, rescanItemOf } from "./rescan.ts";
 import { esc, stamp, todayStr } from "./util.ts";
-import { authed, need } from "./webApi.ts";
+import { authed, ensure, need } from "./webApi.ts";
 
 export const ATTEND_PERM = "attend";
 export const CAM_PERM = "camup";
@@ -53,6 +54,50 @@ export function verifyPrintToken(raw: unknown, now = Date.now() / 1000): { kind:
   if (!m || Number(m[3]) < now) return null;
   if (!same(m[4], hmac("QMathPrint", `${m[1]}${m[2]}.${m[3]}`).slice(0, 32))) return null;
   return { kind: m[1] as "i" | "l" | "v", id: Number(m[2]) };
+}
+
+// ---------- محطة طباعة البلوتوث: صفحة مفتوحة بمتصفح Bluefy تطبع الليبلات اللي تنرسلها من صفحة الحضوري.
+// رمزها يفتح المحطة بس، مو لوحة التحكم، وعمره أسبوع
+const STATION_TTL_S = 7 * 24 * 3600;
+const ACTIVE_MS = 12 * 3600 * 1000;
+const queueKey = (uid: number) => `print_q_${uid}`;
+const seenKey = (uid: number) => `print_seen_${uid}`;
+export function stationToken(uid: number, now = Date.now() / 1000) {
+  const exp = Math.floor(now) + STATION_TTL_S;
+  return `${uid}.${exp}.${hmac("QMathStation", `${uid}.${exp}`).slice(0, 32)}`;
+}
+function verifyStationToken(raw: unknown, now = Date.now() / 1000): number | null {
+  const m = /^(\d+)\.(\d+)\.([0-9a-f]{32})$/.exec(String(raw ?? ""));
+  if (!m || Number(m[2]) < now) return null;
+  return same(m[3], hmac("QMathStation", `${m[1]}.${m[2]}`).slice(0, 32)) ? Number(m[1]) : null;
+}
+async function readQueue(uid: number): Promise<number[]> {
+  try { const j = JSON.parse(await kvGet(queueKey(uid)) ?? "[]"); return Array.isArray(j) ? j.map(Number) : []; } catch { return []; }
+}
+const stationActive = async (uid: number) => Date.now() - (Number(await kvGet(seenKey(uid))) || 0) < ACTIVE_MS;
+async function enqueue(uid: number, item: number) {
+  const q = await readQueue(uid);
+  if (!q.includes(item)) await kvSet(queueKey(uid), JSON.stringify([...q, item]));
+}
+export async function stationAction(body: Row) {
+  const uid = verifyStationToken(body.station);
+  need(uid !== null, "الرابط انتهى. انسخ رابط المحطة من صفحة الحضوري مرة ثانية", 401);
+  need(await can(uid!, ATTEND_PERM), "ما عندك صلاحية", 403);
+  // الوقت ينكتب كل 5 دقايق بس، مو كل طلب
+  if (Date.now() - (Number(await kvGet(seenKey(uid!))) || 0) > 300_000) await kvSet(seenKey(uid!), String(Date.now()));
+  const q = await readQueue(uid!);
+  if (body.action === "done") {
+    await kvSet(queueKey(uid!), JSON.stringify(q.filter((x) => x !== Number(body.id))));
+    return { ok: true };
+  }
+  need(body.action === "next", "أمر غير معروف");
+  for (const id of q) {
+    const it = await one("sched_items", { id });
+    if (!it) { await kvSet(queueKey(uid!), JSON.stringify(q.filter((x) => x !== id))); continue; }
+    const c = await itemCard(it);
+    return { job: { id, name: c.name, b64: (await labelTspl(c)).toString("base64") } };
+  }
+  return { job: null };
 }
 
 // ---------- إعدادات كل مركز: ليبل لو ورقة كاملة، والتصوير من التلفون
@@ -191,10 +236,11 @@ async function pageData(uid: number, full = true) {
   const exams = (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => versions.some((v) => v.exam_id === e.id))
     .map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ model: v.model as string, token: printToken("v", v.id) })) }));
   const today = (await find("sched_items")).filter((i) => String(i.attended_at ?? "").startsWith(todayStr())).length;
-  return { owner, full, centers, exams, today, rescan: await rescanFor(uid), notice: "" };
+  return { owner, full, centers, exams, today, rescan: await rescanFor(uid), station: full ? { active: await stationActive(uid), token: stationToken(uid) } : null, notice: "" };
 }
 
 export async function attendAction(body: Row) {
+  if (body?.station !== undefined) { await ensure(); return await stationAction(body); }
   const { uid, full } = await staffIn(body?.initData);
   const a = String(body.action ?? "");
   // اللي عنده تصوير الأوراق بس: يلگى الطالب ويصور ورقته ويدزها للتصحيح
@@ -221,7 +267,15 @@ export async function attendAction(body: Row) {
     if (sid && sid > 0 && await isAdmin(uid) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid);
-    return { ...await pageData(uid), card };
+    const queued = card.print === "label" && !card.already && await stationActive(uid);
+    if (queued) await enqueue(uid, card.item);
+    return { ...await pageData(uid), card: { ...card, queued } };
+  }
+  if (a === "queue") {
+    const it = await one("sched_items", { id: Number(body.item) });
+    need(it, "الامتحان غير موجود", 404);
+    await enqueue(uid, it!.id);
+    return { ...await pageData(uid), card: { ...await itemCard(it!), already: true, queued: true }, notice: "🖨 انرسل للطابعة" };
   }
   if (a === "items") {
     // الصفحة تسأل عن أوراق قرتها: اسم كل طالب وأسئلة نسخته

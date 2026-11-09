@@ -6,11 +6,11 @@ import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import { openOutside, scanQr } from "../shared";
 import RescanList, { type Rescan } from "./RescanList";
 
-type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean };
+type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
 type Exam = { id: number; title: string; chapter: string; versions: { model: string; token: string }[] };
 type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
-type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; notice: string };
+type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; station?: { active: boolean; token: string } | null; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const printUrl = (kind: "label" | "paper", k: string) => `${location.origin}/print/${kind}?k=${encodeURIComponent(k)}`;
@@ -27,6 +27,7 @@ export default function AttendClient() {
           <>
             <RescanList list={data.rescan} />
             {data.full && <Attend data={data} busy={busy} call={call} />}
+            {data.station && <Station station={data.station} />}
             <CamUp data={data} busy={busy} call={call} />
             {data.full && <div className="card expad">
               <div className="exlabel">📤 أوراق السكانر</div>
@@ -49,7 +50,7 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
   async function go(code: string) {
     const r = await call({ action: "scan", code });
     // الطباعة تنفتح وحدها حسب المركز، حتى المساعد ما يدوس شي
-    if (r?.card && !r.card.already) openOutside(printUrl(r.card.print, r.card.print === "label" ? r.card.label : r.card.paper));
+    if (r?.card && !r.card.already && !r.card.queued) openOutside(printUrl(r.card.print, r.card.print === "label" ? r.card.label : r.card.paper));
     if (r) setNum("");
   }
   function camera() {
@@ -70,12 +71,27 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
           <b>{c.name}</b> <span dir="ltr">#{c.uid}</span>
           <div className={c.already ? "exhint" : "exhint atok"}>{c.already ? `⚠️ كان مسجل حضوره من ${c.attendedAt.slice(11, 16)}` : "✅ انسجل حضوره"}</div>
           <div className="exhint">{c.exam} · {c.center} · {c.at.slice(11, 16)}</div>
+          {c.queued && <div className="exhint atok">🖨 الليبل انرسل لمحطة الطباعة</div>}
           <div className="atrow">
-            <button type="button" className={c.print === "label" ? "btn" : "exbtn"} onClick={() => openOutside(printUrl("label", c.label))}>🏷 اطبع الليبل</button>
+            <button type="button" className={c.print === "label" ? "btn" : "exbtn"} disabled={busy} onClick={() => { if (data.station?.active) void call({ action: "queue", item: c.item }); else openOutside(printUrl("label", c.label)); }}>🏷 اطبع الليبل</button>
             <button type="button" className={c.print === "paper" ? "btn" : "exbtn"} onClick={() => openOutside(printUrl("paper", c.paper))}>📄 اطبع ورقته كاملة</button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** طابعة الليبل بالبلوتوث: رابط المحطة ينفتح بمتصفح Bluefy ويبقى مفتوح */
+function Station({ station }: { station: { active: boolean; token: string } }) {
+  const [copied, setCopied] = useState(false);
+  const link = `${location.origin}/print/station?k=${encodeURIComponent(station.token)}`;
+  async function copy() { try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); alert(link); } }
+  return (
+    <div className="card expad">
+      <div className="exlabel">🖨 طابعة الليبل بالبلوتوث</div>
+      <div className="exhint">{station.active ? "✅ المحطة شغالة: الليبلات تروح للطابعة وحدها." : "انسخ الرابط، وافتحه بمتصفح Bluefy، ودوس «اتصل بالطابعة». خليه مفتوح وقت الامتحان. الرابط يشتغل أسبوع."}</div>
+      <button type="button" className="btn agbtn adtop" onClick={() => void copy()}>{copied ? "✅ انتسخ الرابط" : "📋 انسخ رابط المحطة"}</button>
     </div>
   );
 }
