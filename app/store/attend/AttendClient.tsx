@@ -8,7 +8,7 @@ import RescanList, { type Rescan } from "./RescanList";
 
 type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean; late?: boolean; printed?: boolean };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
-type Exam = { id: number; title: string; chapter: string; pageMap: number[][] | null; versions: { model: string; token: string }[] };
+type Exam = { id: number; title: string; chapter: string; versions: { id: number; pageMap: number[][] | null; model: string; token: string }[] };
 type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
 type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; station?: { active: boolean; token: string } | null; canCam: boolean; early: number; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -188,23 +188,47 @@ function CamUp({ data, busy, call }: { data: Data; busy: boolean; call: Call }) 
   );
 }
 
-/** ورقة A3 أو أي ورقة بيها أكثر من سؤال: أي أسئلة بكل صفحة، حتى السكانر يوزع والمصحح يقلب بينها */
+/** ورقة A3 أو أي ورقة بيها أكثر من سؤال: أي أسئلة بكل صفحة لكل نسخة، حتى السكانر يوزع والمصحح يقلب بينها */
 function PageMap({ exams, busy, call }: { exams: Exam[]; busy: boolean; call: Call }) {
   const [id, setId] = useState(0);
-  const [rows, setRows] = useState<string[]>([]);
-  const parse = () => rows.map((r) => r.split(/[^\d]+/).filter(Boolean).map(Number));
-  function pick(n: number) { setId(n); const e = exams.find((x) => x.id === n); setRows(e?.pageMap ? e.pageMap.map((p) => p.join(" ")) : [""]); }
+  const [picked, setPicked] = useState<number[]>([]);
+  const [rows, setRows] = useState<string[]>([""]);
   const e = exams.find((x) => x.id === id);
+  const all = e ? e.versions.map((v) => v.id) : [];
+  const parse = () => rows.map((r) => r.split(/[^\d]+/).filter(Boolean).map(Number));
+  const fill = (ids: number[], ex = e) => {
+    const m = ex?.versions.find((v) => ids.includes(v.id) && v.pageMap)?.pageMap;
+    setRows(m ? m.map((p) => p.join(" ")) : [""]);
+  };
+  function pick(n: number) {
+    setId(n);
+    const ex = exams.find((x) => x.id === n);
+    const ids = ex ? ex.versions.map((v) => v.id) : [];
+    setPicked(ids);
+    fill(ids, ex);
+  }
+  function toggle(v: number) {
+    const next = picked.includes(v) ? picked.filter((x) => x !== v) : [...picked, v];
+    setPicked(next);
+    if (next.length === 1) fill(next);
+  }
+  const text = (m: number[][] | null) => (m ? m.map((p) => p.join("،")).join(" | ") : "كل سؤال بصفحة");
   return (
     <div className="card expad">
       <div className="exlabel">📑 توزيع صفحات الورقة</div>
-      <div className="exhint">إذا الامتحان ورقة A3 أو الصفحة بيها أكثر من سؤال: اكتب أسئلة كل صفحة، مثلاً الصفحة 2: 2 3. الليبل على أول صفحة، والسكانر يوزع حسب ترتيب الصفحات. إذا فارغ: كل سؤال بصفحة وعليها كود.</div>
+      <div className="exhint">إذا الورقة A3 أو الصفحة بيها أكثر من سؤال: اكتب أسئلة كل صفحة، مثلاً الصفحة 2: 2 3. أشّر النسخ اللي يشملها هذا التوزيع، والنسخة المختلفة شيل صحها وسوي إلها توزيع بروحها. إذا فارغ: كل سؤال بصفحة وعليها كود.</div>
       <select className="exinput adtop" aria-label="الامتحان" value={id} onChange={(x) => pick(Number(x.target.value))}>
         <option value={0}>اختار الامتحان</option>
-        {exams.map((x) => <option key={x.id} value={x.id}>{x.chapter} · {x.title}{x.pageMap ? " 📑" : ""}</option>)}
+        {exams.map((x) => <option key={x.id} value={x.id}>{x.chapter} · {x.title}{x.versions.some((v) => v.pageMap) ? " 📑" : ""}</option>)}
       </select>
       {e && (
         <>
+          <div className="adtop">
+            <label className="adcheck adflat"><input type="checkbox" checked={picked.length === all.length} onChange={(x) => { const ids = x.target.checked ? all : []; setPicked(ids); if (ids.length) fill(ids); }} /><span><b>الكل</b></span></label>
+            {e.versions.map((v) => (
+              <label key={v.id} className="adcheck adflat"><input type="checkbox" checked={picked.includes(v.id)} onChange={() => toggle(v.id)} /><span>نسخة <b>{v.model}</b> <small className="pdmode" dir="ltr">{text(v.pageMap)}</small></span></label>
+            ))}
+          </div>
           {rows.map((r, i) => (
             <div key={i} className="atrow adtop">
               <span>الصفحة {i + 1}</span>
@@ -216,8 +240,8 @@ function PageMap({ exams, busy, call }: { exams: Exam[]; busy: boolean; call: Ca
             {rows.length > 1 && <button type="button" className="exbtn" onClick={() => setRows(rows.slice(0, -1))}>➖ صفحة</button>}
           </div>
           <div className="atrow adtop">
-            <button type="button" className="btn" disabled={busy || parse().some((p) => !p.length)} onClick={() => void call({ action: "pageMap", exam: id, map: parse() })}>💾 حفظ التوزيع</button>
-            {e.pageMap && <button type="button" className="exbtn" disabled={busy} onClick={() => { setRows([""]); void call({ action: "pageMap", exam: id, map: [] }); }}>↩️ كل سؤال بصفحة</button>}
+            <button type="button" className="btn" disabled={busy || !picked.length || parse().some((p) => !p.length)} onClick={() => void call({ action: "pageMap", versions: picked, map: parse() })}>💾 حفظ للنسخ المأشرة ({picked.length})</button>
+            <button type="button" className="exbtn" disabled={busy || !picked.length || !e.versions.some((v) => picked.includes(v.id) && v.pageMap)} onClick={() => void call({ action: "pageMap", versions: picked, map: [] })}>↩️ كل سؤال بصفحة</button>
           </div>
         </>
       )}

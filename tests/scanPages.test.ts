@@ -41,9 +41,15 @@ test("صاحب البوت يحفظ التوزيع، والصفحة تنرفع م
   for (const n of [1, 2, 3]) await insert("bank_questions", { version_id: vid, n, max_mark: 10 });
   await put("students", { user_id: 70, name: "حضوري", exam: "حضوري", created: "2026-01-01 00:00" });
   const it = await insert("sched_items", { user_id: 70, exam_id: exam, at: stamp(), status: "attended", version_id: vid });
-  await assert.rejects(attendAction({ initData: init, action: "pageMap", exam, map: [[]] }), /أسئلة/);
-  const saved: any = await attendAction({ initData: init, action: "pageMap", exam, map: [[1], [2, 3]] });
-  assert.deepEqual(saved.exams.find((e: any) => e.id === exam).pageMap, [[1], [2, 3]]);
+  const vB = await insert("bank_versions", { exam_id: exam, model: "B", kind: "mandatory", ok: 1 });
+  await assert.rejects(attendAction({ initData: init, action: "pageMap", versions: [vid], map: [[]] }), /أسئلة/);
+  await assert.rejects(attendAction({ initData: init, action: "pageMap", versions: [], map: [[1]] }), /نسخة/);
+  // A بتوزيع وB بتوزيع غيره
+  await attendAction({ initData: init, action: "pageMap", versions: [vid, vB], map: [[1], [2, 3]] });
+  const saved: any = await attendAction({ initData: init, action: "pageMap", versions: [vB], map: [[1, 2], [3]] });
+  const row = (d: any, v: number) => d.exams.find((e: any) => e.id === exam).versions.find((x: any) => x.id === v).pageMap;
+  assert.deepEqual(row(saved, vid), [[1], [2, 3]]);
+  assert.deepEqual(row(saved, vB), [[1, 2], [3]]);
   assert.deepEqual(((await attendAction({ initData: init, action: "items", items: [it] })) as any).items[0].map, [[1], [2, 3]]);
   const fd = new FormData();
   fd.set("initData", init); fd.set("item", String(it)); fd.set("q", "2"); fd.set("qs", "2,3");
@@ -52,6 +58,7 @@ test("صاحب البوت يحفظ التوزيع، والصفحة تنرفع م
   const rows = await find("exam_answers", { item_id: it });
   assert.deepEqual(rows.map((r) => r.q).sort(), [2, 3]);
   assert.equal(rows[0].file, rows[1].file);
-  const back: any = await attendAction({ initData: init, action: "pageMap", exam, map: [] });
-  assert.equal(back.exams.find((e: any) => e.id === exam).pageMap, null);
+  const back: any = await attendAction({ initData: init, action: "pageMap", versions: [vid], map: [] });
+  assert.equal(row(back, vid), null);
+  assert.deepEqual(row(back, vB), [[1, 2], [3]]);
 });

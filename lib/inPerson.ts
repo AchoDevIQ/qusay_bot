@@ -285,12 +285,12 @@ header{display:flex;gap:4mm;align-items:center;border-bottom:.4mm solid #000;pad
 }
 
 // ---------- رفع أوراق السكانر: الصفحة تقرا الأكواد وتدز كل صفحة لطالبها وسؤالها
-/** توزيع صفحات الورقة على الأسئلة لهذا الامتحان، أو null إذا كل سؤال بصفحة */
+/** توزيع صفحات الورقة على الأسئلة لكل نسخة (A وB تختلف)، أو null إذا كل سؤال بصفحة */
 const PAGE_MAPS = "page_maps";
 async function allPageMaps(): Promise<Record<string, number[][]>> {
   try { return JSON.parse(await kvGet(PAGE_MAPS) || "{}"); } catch { return {}; }
 }
-export const pageMapOf = async (exam: number): Promise<number[][] | null> => (await allPageMaps())[String(exam)] ?? null;
+export const pageMapOf = async (version: number): Promise<number[][] | null> => (await allPageMaps())[`v${version}`] ?? null;
 /** ورقة طالب حضوري: الامتحان ونسخته */
 async function paperItem(raw: unknown) {
   const it = await one("sched_items", { id: Number(raw) });
@@ -325,7 +325,7 @@ async function pageData(uid: number, full = true) {
   const versions = await find("bank_versions", { kind: "mandatory" });
   const allMaps = await allPageMaps();
   const exams = (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => versions.some((v) => v.exam_id === e.id))
-    .map((e) => ({ pageMap: allMaps[String(e.id)] ?? null, id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ model: v.model as string, token: printToken("v", v.id) })) }));
+    .map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id as number, pageMap: allMaps[`v${v.id}`] ?? null, model: v.model as string, token: printToken("v", v.id) })) }));
   const today = (await find("sched_items")).filter((i) => String(i.attended_at ?? "").startsWith(todayStr())).length;
   return { owner, full, centers, exams, today, rescan: await rescanFor(uid), station: await can(uid, STATION_PERM) ? { active: await stationActive(uid), token: stationToken(uid) } : null, canCam: full || await can(uid, CAM_PERM), early: await attendEarly(), notice: "" };
 }
@@ -386,13 +386,14 @@ export async function attendAction(body: Row) {
     return { ...await pageData(uid), card: { ...await itemCard(it!), already: true, queued: true }, notice: "🖨 انرسل للطابعة" };
   }
   if (a === "pageMap") {
-    // توزيع صفحات الورقة على الأسئلة لهذا الامتحان. فارغ: كل سؤال بصفحة وعليها كود
-    const exam = Number(body.exam);
-    need(await one("bank_exams", { id: exam }), "اختار الامتحان");
+    // توزيع صفحات الورقة على الأسئلة للنسخ المأشرة. فارغ: كل سؤال بصفحة وعليها كود
+    const ids = (Array.isArray(body.versions) ? body.versions : []).map(Number);
+    need(ids.length, "أشّر نسخة وحدة على الأقل");
+    for (const id of ids) need(await one("bank_versions", { id }), "النسخة غير موجودة");
     const map = Array.isArray(body.map) ? (body.map as unknown[][]).map((p) => (Array.isArray(p) ? p.map(Number) : [])) : [];
     need(map.length <= 30 && map.every((p) => p.length && p.every((n) => Number.isInteger(n) && n >= 1 && n <= 50)), "اكتب أرقام الأسئلة لكل صفحة");
     const maps = await allPageMaps();
-    if (map.length) maps[String(exam)] = map; else delete maps[String(exam)];
+    for (const id of ids) { if (map.length) maps[`v${id}`] = map; else delete maps[`v${id}`]; }
     await kvSet(PAGE_MAPS, JSON.stringify(maps));
     return { ...await pageData(uid, full), notice: map.length ? "✅ انحفظ توزيع الصفحات" : "✅ رجع: كل سؤال بصفحة" };
   }
@@ -404,7 +405,7 @@ export async function attendAction(body: Row) {
       const it = await one("sched_items", { id });
       if (!it?.version_id) { out.push({ id, ok: false, name: "", qs: [] }); continue; }
       const st = await student(it.user_id);
-      out.push({ id, ok: st?.exam === "حضوري" && !it.graded_at, name: st?.name ?? "", graded: !!it.graded_at, map: await pageMapOf(it.exam_id), qs: (await find("bank_questions", { version_id: it.version_id })).map((q) => q.n as number) });
+      out.push({ id, ok: st?.exam === "حضوري" && !it.graded_at, name: st?.name ?? "", graded: !!it.graded_at, map: await pageMapOf(it.version_id), qs: (await find("bank_questions", { version_id: it.version_id })).map((q) => q.n as number) });
     }
     return { items: out };
   }
