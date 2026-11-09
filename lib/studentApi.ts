@@ -61,7 +61,7 @@ async function testStudents() {
   const items = await find("sched_items");
   return (await find("students")).filter((x) => x.user_id < 0).sort((a, b) => b.user_id - a.user_id).map((x) => {
     const mine = items.filter((i) => i.user_id === x.user_id);
-    return { id: x.user_id as number, name: x.name as string, papers: mine.length, graded: mine.filter((i) => i.graded_at).length, link: `/store/myexams?t=${homeToken(x.user_id)}` };
+    return { id: x.user_id as number, name: x.name as string, papers: mine.length, graded: mine.filter((i) => i.graded_at).length, link: `/store/myexams?t=${homeToken(x.user_id)}&owner=1` };
   });
 }
 async function pageData(q: string, f: Filters, uid = 0) {

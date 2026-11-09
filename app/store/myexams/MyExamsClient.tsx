@@ -26,6 +26,9 @@ const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد �
 const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 export default function MyExamsClient() {
+  // صاحب البوت فتح صفحة طالب تجربة من صفحة الطلاب: زر يرجعه إلها
+  const [fromOwner, setFromOwner] = useState(false);
+  useEffect(() => { setFromOwner(new URLSearchParams(location.search).has("owner")); }, []);
   const [info, setInfo] = useState<Info | null>(null);
   const [error, setError] = useState("");
   const [stopPic, setStopPic] = useState("");
@@ -68,6 +71,7 @@ export default function MyExamsClient() {
         <p>📝 امتحاناتي</p>
       </header>
       <div className="wrap">
+        {fromOwner && <button type="button" className="exbtn" style={{ marginBottom: 10 }} onClick={() => history.back()}>⬅️ رجوع للطلاب</button>}
         {error && stopPic ? (
           <div className="card cpflash stop">
             {stopPic !== "none" && <div className="cpbubw"><img src={stopPic} alt="سيطرة" />{stopWords && <div className="cpbub">{stopWords}</div>}</div>}
