@@ -10,6 +10,7 @@ Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", S
 delete process.env.FIREBASE_STORAGE_BUCKET;
 const { initDb, put } = await import("../lib/db.ts");
 const { TEST_PLAN, stepKey, stepState } = await import("../lib/testPlan.ts");
+const { guideSection } = await import("../lib/guide.ts");
 const { testPlanAction } = await import("../lib/testPlanApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 await initDb();
@@ -20,6 +21,13 @@ test("كل خطوة معرفها فريد ومكتوب شنو تحتاج", () =>
   assert.equal(new Set(keys).size, keys.length);
   assert.ok(keys.length > 80);
   for (const s of TEST_PLAN) assert.ok(s.needs.length && s.steps.length, s.id);
+});
+test("كل خطوة مكتوب بيها وين تروح، وكل قسم إله شرح من الدليل", () => {
+  for (const s of TEST_PLAN) {
+    assert.ok(s.guide.length, s.id);
+    for (const g of s.guide) assert.ok(guideSection(g), `${s.id}: ${g}`);
+    for (const x of s.steps) assert.ok(x.how.trim().length >= 10, stepKey(s.id, x.id));
+  }
 });
 test("الخطوة تتغير: الصح يروح، والحالات صحيحة", () => {
   assert.equal(stepState({ id: "a", text: "x" }), "todo");

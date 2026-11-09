@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { GUIDE, type GuideSection } from "../../../lib/guide.ts";
 import { AdminHeader } from "../adminPage";
+import GuideBody from "./GuideBody";
 import { openOutside } from "../shared";
 
 const linkOf = (id: string) => `${location.origin}/guide/${id}`;
@@ -40,15 +41,8 @@ export default function GuideClient() {
           <details key={s.id} className="card cpch" open={!!t}>
             <summary><b>{s.icon} {s.title}</b> <small className="pdmode">{s.who}</small></summary>
             <div className="expad">
-              <div className="exhint">{s.intro}</div>
-              {s.blocks.map((b, i) => (
-                <div key={i}>
-                  {b.h && <div className="exlabel adtop">{b.h}</div>}
-                  {b.steps && <ol style={{ paddingInlineStart: 22, margin: "6px 0" }}>{b.steps.map((x, j) => <li key={j} style={{ margin: "5px 0" }}>{x}</li>)}</ol>}
-                  {b.notes?.map((x, j) => <div key={j} className="exhint">💡 {x}</div>)}
-                </div>
-              ))}
-              <Send id={s.id} title={s.title} />
+              <GuideBody s={s} />
+              {!s.ownerOnly && <Send id={s.id} title={s.title} />}
             </div>
           </details>
         ))}

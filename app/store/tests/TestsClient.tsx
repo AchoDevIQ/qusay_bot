@@ -2,7 +2,9 @@
 // تست التطبيق: كل خطوة صح أو مشكلة. الخطوة اللي تتغير بعد ما تأشرت يروح منها الصح وتطلع «تغيرت»
 import { useState } from "react";
 import { TEST_PLAN, stepKey, stepState, type TestMark, type TestMarks, type TestSection, type TestStep } from "../../../lib/testPlan.ts";
+import { guideSection } from "../../../lib/guide.ts";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
+import GuideBody from "../guide/GuideBody";
 
 type Data = { marks: TestMarks };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -17,6 +19,7 @@ function Step({ sec, st, mark, busy, call }: { sec: TestSection; st: TestStep; m
   return (
     <div className="adsale">
       <div>{icon} {st.text}</div>
+      <div className="tshow">📍 {st.how}</div>
       {state === "changed" && <small className="exbad">🔄 تغيرت بعد ما أشرت عليها، جربها مرة ثانية</small>}
       {state === "bad" && mark?.note && <small className="exbad">{mark.note}</small>}
       <div className="exline adtop">
@@ -74,6 +77,10 @@ export default function TestsClient() {
                   <div className="expad">
                     <div className="exlabel">قبل لا تبدي</div>
                     <ul style={{ margin: "4px 0 10px", paddingInlineStart: 20 }}>{s.needs.map((n) => <li key={n}>{n}</li>)}</ul>
+                    <details className="adtop tsguide">
+                      <summary><b>📖 الشرح الكامل</b></summary>
+                      {s.guide.map((id) => { const g = guideSection(id); return g && <div key={id} className="adtop"><div className="exlabel">{g.icon} {g.title}</div><GuideBody s={g} /></div>; })}
+                    </details>
                     {shown.map((x) => <Step key={x.id} sec={s} st={x} mark={marks[stepKey(s.id, x.id)]} busy={busy} call={call} />)}
                   </div>
                 </details>
