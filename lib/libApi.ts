@@ -2,6 +2,7 @@
 import { find, insert, one, put, remove, sumOf, tx, update, type Row } from "./db.ts";
 import { BTN_OFFICE, toLatinDigits } from "./config.ts";
 import { officeUnsettled, orderItems, partsOf, savedParts } from "./data.ts";
+import { priceReport } from "./orderRules.ts";
 import { mainKb } from "./keyboards.ts";
 import { createInvite, notifySettled, officeDayRows, officeOpenRows, officePdf, parseAmount, settleDetail, settleOffice } from "./office.ts";
 import { send } from "./telegram.ts";
@@ -32,8 +33,9 @@ const liveOffice = async (raw: unknown) => {
   need(o, "المكتبة غير موجودة");
   return o!;
 };
-const saleRow = (r: Row) => ({ id: r.id, time: String(r.created).slice(11), name: r.name, total: r.total, items: orderItems(r).map((i) => `${i.name} ×${i.qty}`).join("، ") });
+const saleRow = (r: Row, withDate: boolean) => ({ id: r.id, time: String(r.created).slice(withDate ? 0 : 11), name: r.name, total: r.total, items: orderItems(r).map((i) => `${i.name} ×${i.qty}`).join("، ") });
 const rowsFor = async (id: number, kind: unknown) => {
+  if (kind === "all") return { title: "كل المبيعات", fname: `office${id}_all`, rows: await find("orders", { printed: 3, office_id: id }, { order: ["id"] }) };
   if (kind === "open") return { title: "غير المحاسب عليها", fname: `office${id}_open`, rows: await officeOpenRows(id) };
   const day = todayStr(kind === "yesterday" ? 1 : 0);
   return { title: day, fname: `office${id}_${day}`, rows: await officeDayRows(id, day) };
@@ -64,7 +66,7 @@ export async function libAction(body: Row) {
   } else if (a === "sales") {
     const o = await liveOffice(body.id);
     const { title, rows } = await rowsFor(o.id, body.kind);
-    extra = { sales: { officeId: o.id, title, rows: rows.map(saleRow), parts: await partsOf(rows) } };
+    extra = { sales: { officeId: o.id, title, rows: rows.map((r) => saleRow(r, body.kind === "all")), parts: await partsOf(rows), prices: priceReport(rows.map(orderItems) as Parameters<typeof priceReport>[0]) } };
   } else if (a === "pdf") {
     const o = await liveOffice(body.id);
     const { title, rows, fname } = await rowsFor(o.id, body.kind);

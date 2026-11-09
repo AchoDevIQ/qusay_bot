@@ -5,10 +5,12 @@ import { markPrinted } from "./admin.ts";
 import { can, cats, isAdmin, myOffice, officeUnsettled, lecturePrices, orderItems, orderParts, partsOf, placeOf, products, savedParts, searchStudents, staffName } from "./data.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
 import { posSale, settleDetail } from "./office.ts";
+import { priceReport, type PriceLine } from "./orderRules.ts";
 import { num, shiftDay, stamp, todayStr } from "./util.ts";
 import { ensure, need } from "./webApi.ts";
 import { verifyInitData } from "./webAuth.ts";
 
+type PriceItems = Parameters<typeof priceReport>[0][number];
 const NEW_LIMIT = 60, PRINTED_LIMIT = 100;
 const orderView = async (o: Row) => ({
   id: o.id, created: o.created, name: o.name, curr: o.curr ?? "", place: placeOf(o), area: o.area, phone1: o.phone1, phone2: o.phone2, username: o.username ?? "", userId: o.user_id,
@@ -22,7 +24,7 @@ async function companyData() {
   const open = await find("orders", { printed: 1, settle_id: null }, { order: ["id"] });
   const lectures = await lecturePrices();
   return {
-    open: open.map((o) => ({ id: o.id, total: o.total, fee: o.fee, parts: orderParts(o, lectures) })),
+    open: open.map((o) => ({ id: o.id, total: o.total, fee: o.fee, parts: orderParts(o, lectures), items: orderItems(o).map((i) => ({ name: i.name, qty: i.qty, price: i.price })) })),
     archive: (await find("company_settlements", {}, { order: ["-id"], limit: 20 })).map((s) => ({ id: s.id, from: s.from_id, to: s.to_id, n: s.n, gross: s.gross, fees: s.fees, net: s.net, created: s.created, parts: savedParts(s) })),
   };
 }
@@ -66,9 +68,10 @@ export async function orderAction(body: Row) {
   const uid = await pageUser(body);
   const a = String(body.action ?? "");
   const company = await can(uid, "company");
-  if (a === "settle") need(company, "ما عندك صلاحية", 403);
+  if (a === "settle" || a === "allPrices") need(company, "ما عندك صلاحية", 403);
   else need(await can(uid, "orders") || (company && a === "list"), "ما عندك صلاحية", 403);
   let notice = "";
+  let allPrices: PriceLine[] | null = null;
   if (a === "settle") notice = await settleCompany(body.from, body.to, body.net);
   else if (a === "pdf") {
     const live = new Set((await find("orders", {}, { where: (o) => !o.printed })).map((o) => o.id));
@@ -98,8 +101,11 @@ export async function orderAction(body: Row) {
     need(!o!.settle_id, "هذا الطلب انحسب ويا الشركة، ما يرجع");
     await update("orders", { id: Number(body.id) }, { printed: 0, printed_by: null, printed_at: null });
     notice = "↩️ رجع للطلبات الجديدة";
+  } else if (a === "allPrices") {
+    // يقرا كل الطلبات، فما يشتغل إلا لمن تطلبه
+    allPrices = priceReport((await find("orders", { printed: 1 }, { order: ["id"] })).map(orderItems) as PriceItems[]);
   } else need(a === "list", "أمر غير معروف");
-  return { ...await ordersData(uid), notice };
+  return { ...await ordersData(uid), notice, allPrices };
 }
 
 // ---------- مبيعات المكتب والمكتبات
@@ -143,7 +149,7 @@ async function salesData(uid: number, off: Row | null, rawDay: unknown, q: unkno
   }
   return {
     today, day, prev: shiftDay(day, -1), next: day < today ? shiftDay(day, 1) : null, shop,
-    total: rows.reduce((t, r) => t + r.total, 0), parts: await partsOf(rows),
+    total: rows.reduce((t, r) => t + r.total, 0), parts: await partsOf(rows), prices: priceReport(all.map(orderItems) as PriceItems[]),
     sales: await Promise.all(rows.map(async (r) => ({ id: r.id, time: String(r.created).slice(11), name: r.name, total: r.total, seller: await staffName(r.seller), items: itemsText(r) }))),
     sellers: await Promise.all([...by].map(async ([k, total]) => ({ name: await staffName(k), total }))),
     team: await isAdmin(uid) ? await teamReport(day, rows) : [],

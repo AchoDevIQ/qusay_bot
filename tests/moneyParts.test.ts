@@ -1,7 +1,7 @@
 // الفلوس مقسمة: الملازم والامتحانات والمحاضرات، والمجموع يطابق المبلغ دائماً
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addParts, lectureChapterPrices, moneyKind, moneyParts, partRows, sumParts } from "../lib/orderRules.ts";
+import { addParts, lectureChapterPrices, moneyKind, moneyParts, partRows, priceReport, sumParts } from "../lib/orderRules.ts";
 
 test("كل نوع من أسماء المنتجات الفعلية يروح لمكانه", () => {
   for (const n of ["دفتر محاضرات الفصل الأول", "دفتر امتحانات الفصل الثالث", "ملزمة الفصل الأول", "ملازم الوزاريات"]) assert.equal(moneyKind(n), "booklets", n);
@@ -43,6 +43,18 @@ test("المشترك يبقى سطر وحده إذا ماكو سعر محاضر�
   assert.equal(moneyParts([{ name, price: 125000, qty: 1 }], 125000, new Map()).both, 125000);
   assert.equal(moneyParts([{ name, price: 125000, qty: 1 }], 125000).both, 125000);
   assert.equal(moneyParts([{ name, price: 50000, qty: 1 }], 50000, new Map([["الفصل الثالث", 65000]])).both, 50000);
+});
+
+test("تقرير الأسعار: 50 بسعر 40,000، وبعد تغيير السعر 25 بسعر 30,000", () => {
+  const name = "فقط محاضرات الفصل الثالث";
+  const sales = [...Array.from({ length: 50 }, () => [{ name, price: 40000, qty: 1 }]), ...Array.from({ length: 25 }, () => [{ name, price: 30000, qty: 1 }])];
+  assert.deepEqual(priceReport(sales), [{ name, qty: 75, total: 2750000, prices: [{ price: 40000, qty: 50 }, { price: 30000, qty: 25 }] }]);
+  assert.deepEqual(priceReport([]), []);
+});
+
+test("تقرير الأسعار: الكمية تنحسب، وكل منتج بسطره", () => {
+  const r = priceReport([[{ name: "ب", price: 10, qty: 3 }, { name: "أ", price: 5, qty: 1 }], [{ name: "ب", price: 10, qty: 1 }]]);
+  assert.deepEqual(r.map((l) => [l.name, l.qty, l.total]), [["أ", 1, 5], ["ب", 4, 40]]);
 });
 
 test("الجمع يطابق، والأسطر الفارغة ما تطلع", () => {

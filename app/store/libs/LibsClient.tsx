@@ -1,8 +1,8 @@
 "use client";
 // المكتبات: المبيعات، المحاسبة، الأرشيف، والحسابات
 import { useState } from "react";
-import { partsLine, type MoneyParts } from "../../../lib/orderRules.ts";
-import { AdminHeader, Confirm, MoneyBreakdown, StatusBar, useAdminApi } from "../adminPage";
+import { partsLine, type MoneyParts, type PriceLine } from "../../../lib/orderRules.ts";
+import { AdminHeader, Confirm, MoneyBreakdown, PriceReport, StatusBar, useAdminApi } from "../adminPage";
 
 type Tot = { n: number; total: number };
 type Office = {
@@ -12,7 +12,7 @@ type Office = {
 type Sale = { id: number; time: string; name: string; total: number; items: string };
 type Data = {
   today: string; offices: Office[]; notice: string; openId?: number;
-  sales?: { officeId: number; title: string; rows: Sale[]; parts: MoneyParts }; invite?: { officeId: number; code: string; link: string };
+  sales?: { officeId: number; title: string; rows: Sale[]; parts: MoneyParts; prices: PriceLine[] }; invite?: { officeId: number; code: string; link: string };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -78,11 +78,13 @@ function Panel({ o, data, busy, call }: { o: Office; data: Data; busy: boolean; 
           <button type="button" className="exbtn" disabled={busy} onClick={() => show("today")}>اليوم</button>
           <button type="button" className="exbtn" disabled={busy} onClick={() => show("yesterday")}>البارحة</button>
           <button type="button" className="exbtn" disabled={busy} onClick={() => show("open")}>غير المحاسب عليها</button>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => show("all")}>كل المبيعات</button>
         </div>
         {sales && (
           <>
             <div className="exhint">{sales.title} · {sales.rows.length} بيعة</div>
             <MoneyBreakdown parts={sales.parts} />
+            <PriceReport key={kind} lines={sales.prices} title="حسب السعر" open={kind === "all"} />
             {sales.rows.map((r) => <div key={r.id} className="adsale"><b>#{r.id} · {fmt(r.total)}</b> {r.name}<small>{r.time} · {r.items}</small></div>)}
             {!!sales.rows.length && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "pdf", id: o.id, kind })}>📄 PDF</button>}
           </>

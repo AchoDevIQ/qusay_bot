@@ -1,15 +1,15 @@
 "use client";
 // بيع بالمكتب أو المكتبة، وسجل المبيعات. صاحب المكتبة يشوف بيعها بس، وهاي صفحته الرئيسية
 import { useState } from "react";
-import { partsLine, type MoneyParts } from "../../../lib/orderRules.ts";
-import { AdminHeader, MoneyBreakdown, StatusBar, useAdminApi } from "../adminPage";
+import { partsLine, type MoneyParts, type PriceLine } from "../../../lib/orderRules.ts";
+import { AdminHeader, MoneyBreakdown, PriceReport, StatusBar, useAdminApi } from "../adminPage";
 
 type Sale = { id: number; time: string; name: string; total: number; seller: string; items: string };
 type St = { id: number; name: string; phone: string; gov: string };
 type Shop = { name: string; open: number; openN: number; openParts: MoneyParts; left: number | null; archive: { id: number; amount: number; n: number; created: string; parts: MoneyParts | null }[] };
 type Team = { id: number; name: string; sold: number; total: number; printed: number; pdfs: number };
 type Data = {
-  today: string; day: string; prev: string; next: string | null; total: number; parts: MoneyParts; sales: Sale[]; sellers: { name: string; total: number }[]; shop: Shop | null; team: Team[];
+  today: string; day: string; prev: string; next: string | null; total: number; parts: MoneyParts; prices: PriceLine[]; sales: Sale[]; sellers: { name: string; total: number }[]; shop: Shop | null; team: Team[];
   days: { day: string; n: number; total: number }[]; results: St[]; catalog: { name: string; items: { id: number; name: string; price: number }[] }[]; notice: string; soldId?: number;
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -28,7 +28,7 @@ function Receipts({ id, busy, call, big }: { id: number; busy: boolean; call: Ca
 
 export default function SalesClient() {
   const { data, error, busy, call } = useAdminApi<Data>("/api/sales", "🏪 البيع");
-  const [tab, setTab] = useState<"sell" | "log" | "archive">("sell");
+  const [tab, setTab] = useState<"sell" | "log" | "prices" | "archive">("sell");
   const day = data?.day;
   const act: Call = (b) => call({ day, ...b });
   const shop = data?.shop;
@@ -51,10 +51,14 @@ export default function SalesClient() {
             <div className="chips adtabs">
               <button type="button" className={tab === "sell" ? "on" : ""} onClick={() => setTab("sell")}>🏪 بيع جديد</button>
               <button type="button" className={tab === "log" ? "on" : ""} onClick={() => setTab("log")}>📊 المبيعات</button>
+              <button type="button" className={tab === "prices" ? "on" : ""} onClick={() => setTab("prices")}>💵 الأسعار</button>
               {shop && <button type="button" className={tab === "archive" ? "on" : ""} onClick={() => setTab("archive")}>🗂 المحاسبات</button>}
             </div>
             {tab === "sell" && <Sell data={data} busy={busy} call={act} />}
             {tab === "log" && <Log data={data} busy={busy} call={act} />}
+            {tab === "prices" && (data.prices.length
+              ? <div className="card expad"><PriceReport lines={data.prices} title={shop ? "كل مبيعات المكتبة حسب السعر" : "كل بيع المكتب والمكتبات حسب السعر"} open /></div>
+              : <div className="empty">ما أكو مبيعات بعد.</div>)}
             {tab === "archive" && shop && (
               <div className="card">
                 <h2>🗂 المحاسبات السابقة</h2>

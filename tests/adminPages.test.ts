@@ -183,6 +183,9 @@ test("بيع بالمكتب وسجله", async () => {
   assert.ok(sent.some((x) => x.p?.chat_id === 100));                                   // الوصل وصل الطالب
   assert.ok(await one("exam_access", { user_id: 100, chapter: "الفصل الأول" }));       // وانفتحت امتحاناته
   assert.ok(r.sales.some((s: any) => s.id === r.soldId));
+  const line = r.prices.find((l: any) => l.name === r.catalog[0].items[0].name);        // تقرير الأسعار يعد البيعة بسعرها
+  assert.ok(line.prices.some((p: any) => p.price === 5000 && p.qty >= 2));
+  assert.ok(Array.isArray((await orders({ action: "allPrices" })).allPrices));
   assert.equal(r.day, r.today);
   assert.equal(r.next, null);
   assert.ok((await sales({ action: "list", day: r.prev })).next);
@@ -222,6 +225,9 @@ test("المكتبات: حساب برمز، مبيعات، محاسبة، أرش
   const s = await lib({ action: "settle", id: oid, amount: 7000 });
   const after = s.offices.find((o: any) => o.id === oid);
   assert.deepEqual([after.open.n, after.settled, after.archive.length], [0, 7000, 1]);
+  const allSales = (await lib({ action: "sales", id: oid, kind: "all" })).sales;
+  assert.equal(allSales.title, "كل المبيعات");
+  assert.ok(allSales.prices.length && allSales.rows[0].time.length > 10);
   assert.ok(sent.some((x) => x.p?.chat_id === 777777 && /تمت المحاسبة/.test(x.p.text)));
   await assert.rejects(lib({ action: "settle", id: oid, amount: 0 }), /ما أكو/);
   sent.length = 0;

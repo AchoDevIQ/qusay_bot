@@ -2,7 +2,7 @@
 // المشترك بين صفحات لوحة التحكم
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { partRows, sumParts, type MoneyParts } from "../../lib/orderRules.ts";
+import { partRows, sumParts, type MoneyParts, type PriceLine } from "../../lib/orderRules.ts";
 
 type Tg = { Telegram?: { WebApp?: {
   initData?: string; expand?: () => void;
@@ -84,6 +84,25 @@ export function MoneyBreakdown({ parts, title, inset }: { parts: MoneyParts; tit
       {rows.map(([l, v]) => <div key={l} className="adpart"><span>{l}</span><b>{v.toLocaleString("en-US")}</b></div>)}
       <div className="adpart adpartsum"><span>المجموع</span><b>{sumParts(parts).toLocaleString("en-US")}</b></div>
     </div>
+  );
+}
+
+/** كل منتج، وكم انباع بكل سعر */
+export function PriceReport({ lines, title, open }: { lines: PriceLine[]; title: string; open?: boolean }) {
+  if (!lines.length) return null;
+  const n = (v: number) => v.toLocaleString("en-US");
+  return (
+    <details className="adparts" open={open}>
+      <summary className="adpartt">💵 {title}</summary>
+      {lines.map((l) => (
+        <div key={l.name} className="adprice">
+          <b>{l.name}</b>
+          {l.prices.map((p) => <div key={p.price} className="adpart"><span>العدد {n(p.qty)} · السعر {n(p.price)}</span><b>{n(p.qty * p.price)}</b></div>)}
+          <div className="adpart adpartsum"><span>المجموع · العدد {n(l.qty)}</span><b>{n(l.total)}</b></div>
+        </div>
+      ))}
+      <div className="adpart adpartsum"><span>مجموع كل المنتجات</span><b>{n(lines.reduce((t, l) => t + l.total, 0))}</b></div>
+    </details>
   );
 }
 

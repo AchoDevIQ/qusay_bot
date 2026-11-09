@@ -65,6 +65,20 @@ export function addParts(list: MoneyParts[]) {
 /** الأسطر اللي بيها فلوس فقط */
 export const partRows = (p: MoneyParts) => PART_LABELS.filter(([k]) => p[k] !== 0).map(([k, label]) => [label, p[k]] as [string, number]);
 export const partsLine = (p: MoneyParts) => partRows(p).map(([l, v]) => `${l} ${v.toLocaleString("en-US")}`).join(" · ");
+export type PriceLine = { name: string; qty: number; total: number; prices: { price: number; qty: number }[] };
+/** كل منتج، وكم انباع بكل سعر. السعر مأخوذ من البيعة نفسها، فتغيير سعر المنتج ما يغير القديم */
+export function priceReport(orders: { name?: string | null; price: number; qty: number }[][]): PriceLine[] {
+  const byName = new Map<string, Map<number, number>>();
+  for (const items of orders) for (const i of items) {
+    const name = i.name ?? "", prices = byName.get(name) ?? new Map<number, number>();
+    prices.set(i.price, (prices.get(i.price) ?? 0) + i.qty);
+    byName.set(name, prices);
+  }
+  return [...byName].map(([name, m]) => {
+    const prices = [...m].map(([price, qty]) => ({ price, qty }));
+    return { name, prices, qty: prices.reduce((t, p) => t + p.qty, 0), total: prices.reduce((t, p) => t + p.price * p.qty, 0) };
+  }).sort((a, b) => a.name.localeCompare(b.name, "ar"));
+}
 /** فصول المحاضرات والامتحانات بالطلب. «الفصل الرابع والخامس» يبقى فصل واحد لأنه ينباع سوية */
 export function chaptersInOrder(names: (string | null | undefined)[]) {
   const labels = names.filter(firstRoundOnly).map(chapterKey);

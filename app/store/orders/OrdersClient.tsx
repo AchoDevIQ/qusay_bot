@@ -1,15 +1,15 @@
 "use client";
 // الطلبات: حساب شركة التوصيل، الجديدة للطباعة، والمطبوعة
 import { useState } from "react";
-import { addParts, partsLine, type MoneyParts } from "../../../lib/orderRules.ts";
-import { AdminHeader, Confirm, MoneyBreakdown, StatusBar, useAdminApi } from "../adminPage";
+import { addParts, partsLine, priceReport, type MoneyParts, type PriceLine } from "../../../lib/orderRules.ts";
+import { AdminHeader, Confirm, MoneyBreakdown, PriceReport, StatusBar, useAdminApi } from "../adminPage";
 
 type Order = {
   id: number; created: string; name: string; curr: string; place: string; area: string; phone1: string; phone2: string; username: string; userId: number;
   items: { name: string; qty: number; price: number }[]; subtotal: number; fee: number; total: number; printedBy: string; settled: boolean;
 };
-type Company = { open: { id: number; total: number; fee: number; parts: MoneyParts }[]; archive: { id: number; from: number; to: number; n: number; gross: number; fees: number; net: number; created: string; parts: MoneyParts | null }[] };
-type Data = { fresh: Order[]; printed: Order[]; owner: boolean; company: Company | null; notice: string };
+type Company = { open: { id: number; total: number; fee: number; parts: MoneyParts; items: { name: string; qty: number; price: number }[] }[]; archive: { id: number; from: number; to: number; n: number; gross: number; fees: number; net: number; created: string; parts: MoneyParts | null }[] };
+type Data = { fresh: Order[]; printed: Order[]; owner: boolean; company: Company | null; notice: string; allPrices?: PriceLine[] | null };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -35,7 +35,7 @@ export default function OrdersClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && (
           <>
-            {data.company && <CompanyCard c={data.company} busy={busy} call={call} />}
+            {data.company && <CompanyCard c={data.company} all={data.allPrices ?? null} busy={busy} call={call} />}
             <div className="chips adtabs">
               <button type="button" className={tab === "fresh" ? "on" : ""} onClick={() => pickTab("fresh")}>🖨 الجديدة ({fresh.length})</button>
               <button type="button" className={tab === "printed" ? "on" : ""} onClick={() => pickTab("printed")}>🗂 {data.owner ? "المطبوعة" : "اللي طبعتها"}</button>
@@ -69,7 +69,7 @@ export default function OrdersClient() {
   );
 }
 
-function CompanyCard({ c, busy, call }: { c: Company; busy: boolean; call: Call }) {
+function CompanyCard({ c, all, busy, call }: { c: Company; all: PriceLine[] | null; busy: boolean; call: Call }) {
   const first = c.open[0]?.id, last = c.open.at(-1)?.id;
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -93,9 +93,14 @@ function CompanyCard({ c, busy, call }: { c: Company; busy: boolean; call: Call 
             <div className="adnet"><b>{fmt(net)}</b>لازم يعطوك</div>
           </div>
           <MoneyBreakdown parts={addParts(rows.map((o) => o.parts))} title="اللي لازم يعطوك مقسم (بدون التوصيل)" />
+          <PriceReport lines={priceReport(rows.map((o) => o.items))} title="هذا المدى حسب السعر" />
           <Confirm label={`✅ تم الحساب، استلمت ${fmt(net)}`} disabled={busy || !rows.length} onYes={async () => { if (await call({ action: "settle", from: a, to: b, net })) { setFrom(""); setTo(""); } }} />
         </div>
       ) : <div className="empty">✅ ماكو طلبات غير محاسب عليها ويا الشركة.</div>}
+      <div className="expad">
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "allPrices" })}>💵 كل طلبات التوصيل حسب السعر</button>
+        {all && (all.length ? <div className="adtop"><PriceReport lines={all} title="كل الطلبات اللي انسلمت للشركة" open /></div> : <div className="exhint adtop">ماكو طلبات مطبوعة بعد.</div>)}
+      </div>
       {!!c.archive.length && (
         <div className="expad">
           <button type="button" className="exbtn" onClick={() => setShow(!show)}>🗂 الحسابات السابقة ({c.archive.length})</button>
