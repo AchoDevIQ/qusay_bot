@@ -58,6 +58,8 @@ export async function graderShare(it: Row): Promise<number> {
 const ON_KEY = "ai_grade_on", SET_KEY = "ai_settings", LOG_KEY = "ai_log", PRICE_KEY = "ai_prices";
 // مشكلة تقنية (الخدمة ما ردت) تنعاد بالدكة الجاية، لحد 3 مرات
 const MAX_TRIES = 3;
+/** حدود خدمة التصحيح (bot_api.py): النص الأطول ينرفض بخطأ */
+const OBJECTION_MAX = 2000;
 // كم ورقة بالدكة، كلها سوا (مو وحدة ورا وحدة)، وكل أسئلة الورقة سوا. 1000 طالب يخلصون بحدود ساعة.
 // الحد الحقيقي: كم طلب بالدقيقة تسمح شركة الذكاء الاصطناعي لحسابنا، وكم نسخة من خدمة التصحيح (10)
 const PER_TICK = 20;
@@ -452,7 +454,7 @@ export async function aiJudgeObjection(it: Row, qn: number, text: string, oldMar
   if (!imgs.length) throw new Error("ماكو صورة جواب لهذا السؤال");
   const old = (await aiResultOf(it.id))?.find((x) => x.n === qn);
   const r = await svc("/bot/objection", {
-    max_points: Number(q.max_mark), old_score: oldMark, objection: text || "الطالب يشوف درجته مو صحيحة",
+    max_points: Number(q.max_mark), old_score: oldMark, objection: text.slice(0, OBJECTION_MAX) || "الطالب يشوف درجته مو صحيحة",
     steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
     old_steps: old ? JSON.stringify(old.steps.map((s) => ({ status: s.status, awarded: s.awarded, possible: s.possible, reason: s.reason_ar || s.reason, expected: s.expected }))) : "",
     images: imgs.map((b) => b.toString("base64")),

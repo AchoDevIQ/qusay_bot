@@ -24,6 +24,7 @@ globalThis.fetch = (async (url: string, init: any) => {
     const body = JSON.parse(init.body);
     assert.equal(body.model, "claude-haiku-5-5");
     assert.equal(body.fallbacks, undefined);   // Haiku 5.5 has no server-side fallback
+    assert.ok(body.max_tokens >= 16000);       // structured calls leave room for thinking (agent-docs/models-haiku.md)
     const isCrop = "top" in body.output_config.format.schema.properties;
     return new Response(JSON.stringify({ id: "m1", type: "message", role: "assistant", model: "claude-haiku-5-5", stop_reason: "end_turn", stop_sequence: null,
       content: [{ type: "text", text: JSON.stringify(isCrop ? crop : found) }], usage: { input_tokens: 1000, output_tokens: 50, cache_read_input_tokens: 20000, cache_creation_input_tokens: 0 } }), { headers: { "content-type": "application/json" } });

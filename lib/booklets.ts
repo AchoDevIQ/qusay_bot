@@ -137,7 +137,7 @@ async function ask(cfg: Cfg, system: Anthropic.Beta.BetaTextBlockParam[], conten
   // Haiku 5.5 ما عنده بديل من جهة الخادم (server-side fallback): إذا رفض، السؤال يروح للأستاذ مثل قبل.
   // max_tokens فيه مجال للتفكير، لأن Haiku 5.5 يفكر بشكل افتراضي والتفكير ينحسب منه
   const res = await api().beta.messages.create({
-    model: MODEL, max_tokens: 4000, system,
+    model: MODEL, max_tokens: 16000, system,
     output_config: { effort: "low", format: { type: "json_schema", schema } },
     messages: [{ role: "user", content }],
   });

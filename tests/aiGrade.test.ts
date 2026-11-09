@@ -434,6 +434,8 @@ test("اعتراض على سؤال صححه نظام التصحيح AI: هو ي�
   await aiObjectionsTick();
   assert.equal(ai[0].route, "/bot/objection");
   assert.equal(ai[0].body.objection, "حليتها بطريقة ثانية");
+  await (await import("../lib/aiGrade.ts")).aiJudgeObjection((await one("sched_items", { id: p }))!, 1, "س".repeat(2500), 48);
+  assert.equal(ai.at(-1)!.body.objection.length, 2000);   // خدمة التصحيح ترفض الأطول
   const o = (await one("objections", { id: o1 }))!;
   assert.deepEqual([o.status, o.new_mark, o.decided_by], ["accepted", 55, AI_GRADER]);
   assert.equal((await find("question_marks", { item_id: p })).find((m) => m.q === 1)!.mark, 55);

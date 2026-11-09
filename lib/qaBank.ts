@@ -181,7 +181,7 @@ async function readExamQuestion(qid: number): Promise<{ tid: number | null; row:
   if (!qImg) throw new Error("صورة السؤال مفقودة");
   const body: Row = { question_images: [qImg.toString("base64")] };
   const steps = await rubricOf(qid);
-  if (steps) body.solution_text = steps.map((s) => s.text).join("\n");
+  if (steps) body.solution_text = steps.map((s) => s.text).join("\n").slice(0, 20_000);
   else {
     const sol = (await Promise.all((JSON.parse(q.a_files || "[]") as string[]).filter(isImage).map(readRef))).filter((b): b is Buffer => !!b);
     if (sol.length) body.solution_images = sol.map((b) => b.toString("base64"));
@@ -249,7 +249,7 @@ const joinCtx = (list: Part[], max: number) => {
   return s;
 };
 async function call(mode: "find" | "solve", context: string, q: QaAsk, lang: "ar" | "en") {
-  const r = await svc("/bot/qa", { mode, context, question: q.text ?? "", image: q.image?.toString("base64"), lang }, 180_000);
+  const r = await svc("/bot/qa", { mode, context, question: (q.text ?? "").slice(0, 4000), image: q.image?.toString("base64"), lang }, 180_000);
   const cfg = await qaCfg();
   for (const u of r.usage ?? []) { cfg.inTok += Number(u.input) || 0; cfg.outTok += Number(u.output) || 0; }
   await saveCfg(cfg);
