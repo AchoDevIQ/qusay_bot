@@ -2,6 +2,7 @@
 import { count, find, kvGet, kvSet, one, sumOf, update, type Row } from "./db.ts";
 import { ADMIN_IDS, DEFAULT_FEE, DAYS, DAY_ORDER, ORD_AR, toLatinDigits } from "./config.ts";
 import { esc, nowIQ, stamp } from "./util.ts";
+import { addParts, moneyParts, type MoneyParts } from "./orderRules.ts";
 
 // ---------- المتجر
 /** الأقسام اللي بيها منتجات */
@@ -27,6 +28,10 @@ export async function ordersByIds(ids: number[]) {
   return rows.filter((r): r is Row => !!r).sort((a, b) => a.id - b.id);
 }
 export const orderItems = (o: Row): Row[] => JSON.parse(o.items);
+/** فلوس الطلب مقسمة، بدون أجرة التوصيل */
+export const orderParts = (o: Row) => moneyParts(orderItems(o) as { name: string; price: number; qty: number }[], o.total - (o.fee ?? 0));
+export const partsOf = (rows: Row[]) => addParts(rows.map(orderParts));
+export const savedParts = (s: Row): MoneyParts | null => (s.parts ? JSON.parse(s.parts) : null);
 
 // ---------- الصلاحيات
 // «شوف كطالب»: المدير أو المساعد يجرب البوت مثل طالب عادي، بدون صلاحياته لحد ما يرجع
@@ -189,7 +194,7 @@ export async function myOffice(uid: number) {
 export const office = async (oid: number) => await one("offices", { id: oid });
 export async function officeUnsettled(oid: number) {
   const rows = await find("orders", { printed: 3, office_id: oid, settle_id: null });
-  return { n: rows.length, total: sumOf(rows, "total") };
+  return { n: rows.length, total: sumOf(rows, "total"), parts: partsOf(rows) };
 }
 /** رقم المصحح الآلي بالأوراق اللي صححها (مو حساب تليجرام) */
 export const AI_GRADER = -7;

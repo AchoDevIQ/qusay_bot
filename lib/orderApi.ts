@@ -2,7 +2,7 @@
 import { find, insert, one, tx, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { markPrinted } from "./admin.ts";
-import { can, cats, isAdmin, myOffice, officeUnsettled, orderItems, placeOf, products, searchStudents, staffName } from "./data.ts";
+import { can, cats, isAdmin, myOffice, officeUnsettled, orderItems, orderParts, partsOf, placeOf, products, savedParts, searchStudents, staffName } from "./data.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
 import { posSale, settleDetail } from "./office.ts";
 import { num, shiftDay, stamp, todayStr } from "./util.ts";
@@ -21,8 +21,8 @@ const list = async (rows: Row[]) => await Promise.all(rows.map(orderView));
 async function companyData() {
   const open = await find("orders", { printed: 1, settle_id: null }, { order: ["id"] });
   return {
-    open: open.map((o) => ({ id: o.id, total: o.total, fee: o.fee })),
-    archive: (await find("company_settlements", {}, { order: ["-id"], limit: 20 })).map((s) => ({ id: s.id, from: s.from_id, to: s.to_id, n: s.n, gross: s.gross, fees: s.fees, net: s.net, created: s.created })),
+    open: open.map((o) => ({ id: o.id, total: o.total, fee: o.fee, parts: orderParts(o) })),
+    archive: (await find("company_settlements", {}, { order: ["-id"], limit: 20 })).map((s) => ({ id: s.id, from: s.from_id, to: s.to_id, n: s.n, gross: s.gross, fees: s.fees, net: s.net, created: s.created, parts: savedParts(s) })),
   };
 }
 async function settleCompany(fromRaw: unknown, toRaw: unknown, expect: unknown) {
@@ -33,7 +33,7 @@ async function settleCompany(fromRaw: unknown, toRaw: unknown, expect: unknown) 
   const gross = rows.reduce((s, o) => s + o.total, 0), fees = rows.reduce((s, o) => s + o.fee, 0), net = gross - fees;
   need(net === Number(expect), "الأرقام تغيرت. راجع المبلغ واضغط مرة ثانية");
   await tx(async () => {
-    const id = await insert("company_settlements", { from_id: from, to_id: to, n: rows.length, gross, fees, net, created: stamp() });
+    const id = await insert("company_settlements", { from_id: from, to_id: to, n: rows.length, gross, fees, net, created: stamp(), parts: JSON.stringify(partsOf(rows)) });
     for (const o of rows) await update("orders", { id: o.id }, { settle_id: id });
   });
   return `✅ انسجل الحساب: ${rows.length} طلب، استلمت ${num(net)}`;
@@ -135,13 +135,13 @@ async function salesData(uid: number, off: Row | null, rawDay: unknown, q: unkno
   if (off) {
     const un = await officeUnsettled(off.id);
     shop = {
-      name: off.name, open: un.total, openN: un.n, left: off.lim ? Math.max(off.lim - un.total, 0) : null,
-      archive: (await find("settlements", { office_id: off.id }, { order: ["-id"], limit: 30 })).map((x) => ({ id: x.id, amount: x.amount, n: x.n, created: x.created })),
+      name: off.name, open: un.total, openN: un.n, openParts: un.parts, left: off.lim ? Math.max(off.lim - un.total, 0) : null,
+      archive: (await find("settlements", { office_id: off.id }, { order: ["-id"], limit: 30 })).map((x) => ({ id: x.id, amount: x.amount, n: x.n, created: x.created, parts: savedParts(x) })),
     };
   }
   return {
     today, day, prev: shiftDay(day, -1), next: day < today ? shiftDay(day, 1) : null, shop,
-    total: rows.reduce((t, r) => t + r.total, 0),
+    total: rows.reduce((t, r) => t + r.total, 0), parts: partsOf(rows),
     sales: await Promise.all(rows.map(async (r) => ({ id: r.id, time: String(r.created).slice(11), name: r.name, total: r.total, seller: await staffName(r.seller), items: itemsText(r) }))),
     sellers: await Promise.all([...by].map(async ([k, total]) => ({ name: await staffName(k), total }))),
     team: await isAdmin(uid) ? await teamReport(day, rows) : [],

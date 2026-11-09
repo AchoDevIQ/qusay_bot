@@ -23,7 +23,7 @@ export const SCHEMA: Record<string, Table> = {
   staff: { key: "user_id", cols: nulls("name", "perms") },
   offices: { key: "id", auto: true, cols: { name: null, lim: 0, active: 1 } },
   office_users: { key: "user_id", cols: nulls("office_id", "name") },
-  settlements: { key: "id", auto: true, cols: nulls("office_id", "amount", "n", "created") },
+  settlements: { key: "id", auto: true, cols: nulls("office_id", "amount", "n", "created", "parts") },
   staff_pay: { key: "id", auto: true, cols: nulls("staff_id", "amount", "created") },
   qmsgs: { key: "id", auto: true, cols: nulls("qid", "kind", "chat_id", "msg_id") },
   bank_exams: { key: "id", auto: true, cols: { ...nulls("slug", "chapter", "ord", "title", "info", "minutes", "pos", "group_versions"), manual: 0 } },
@@ -55,7 +55,7 @@ export const SCHEMA: Record<string, Table> = {
   note_ink: { key: ["user_id", "book_id", "page"], cols: { ink: null } },
   activity: { key: "id", auto: true, cols: nulls("user_id", "what", "created") },
   guardians: { key: ["guardian_id", "student_id"], cols: { created: null } },
-  company_settlements: { key: "id", auto: true, cols: nulls("from_id", "to_id", "n", "gross", "fees", "net", "created") },
+  company_settlements: { key: "id", auto: true, cols: nulls("from_id", "to_id", "n", "gross", "fees", "net", "created", "parts") },
 };
 
 export const keyCols = (table: string) => [SCHEMA[table].key].flat();

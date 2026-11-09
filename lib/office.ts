@@ -3,9 +3,10 @@ import { randomInt } from "node:crypto";
 import { find, insert, kvGet, kvSet, one, put, remove, setSession, sumOf, tx, update, type Row } from "./db.ts";
 import { ADMIN_IDS, BTN_OFFICE, toLatinDigits } from "./config.ts";
 import {
-  can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, product, sellerLabel, staffAccount, staffName, student, tooManyFails, viewingAsStudent,
+  can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, partsOf, product, sellerLabel, staffAccount, staffName, student, tooManyFails, viewingAsStudent,
 } from "./data.ts";
 import { logActivity } from "./access.ts";
+import { partRows, type MoneyParts } from "./orderRules.ts";
 import { flowKb, mainKb, posKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendPaperReceipt, sendReceiptImage } from "./documents.ts";
 import { unlockFromSale } from "./exams.ts";
@@ -133,6 +134,8 @@ export function officePdf(chat: number, title: string, rows: Row[], fname: strin
   return listPdf(chat, `${title} — المجموع ${money(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ"], data, fname);
 }
 const dayTotal = (rows: Row[]) => money(rows.reduce((s, r) => s + r.total, 0));
+/** أسطر تقسيم المبلغ برسائل البوت */
+const partsText = (p: MoneyParts) => partRows(p).map(([l, v]) => `\n   ${l}: <b>${money(v)}</b>`).join("");
 
 // ---------- واجهة حساب المكتبة
 export async function officeMenu(chat: number, uid: number) {
@@ -140,7 +143,7 @@ export async function officeMenu(chat: number, uid: number) {
   if (!off) return;
   const un = await officeUnsettled(off.id);
   const td = await officeDayRows(off.id, todayStr());
-  const t = `<b>🏪 ${esc(off.name)}</b>\n\n📊 مبيعات اليوم: <b>${dayTotal(td)}</b> (${td.length})\n🔴 غير محاسب عليه: <b>${money(un.total)}</b> (${un.n} بيعة)` +
+  const t = `<b>🏪 ${esc(off.name)}</b>\n\n📊 مبيعات اليوم: <b>${dayTotal(td)}</b> (${td.length})${partsText(partsOf(td))}\n🔴 غير محاسب عليه: <b>${money(un.total)}</b> (${un.n} بيعة)${partsText(un.parts)}` +
     (off.lim ? `\n🟢 الباقي من الرصيد: <b>${money(Math.max(off.lim - un.total, 0))}</b>` : "");
   await send(chat, t, { kb: [[btn("🏪 بيع جديد", "of:pos")], [btn("📊 مبيعات اليوم", "of:d:0"), btn("📅 مبيعات البارحة", "of:d:1")],
     [btn("🔴 غير المحاسب عليها", "of:u")], [btn("🗂 المحاسبات السابقة (الأرشيف)", "of:a")]] });
@@ -221,7 +224,7 @@ async function libView(oid: number): Promise<[string, Kb]> {
   const us = await find("office_users", { office_id: oid });
   const st = sumOf(await find("settlements", { office_id: oid }), "amount");
   const t = [`<b>🏪 ${esc(o.name)}</b>`, "", `📊 اليوم: <b>${dayTotal(td)}</b> (${td.length})`, `📅 البارحة: <b>${dayTotal(yd)}</b> (${yd.length})`,
-    `🔴 غير محاسب عليه: <b>${money(un.total)}</b> (${un.n} بيعة)`, `✅ كل اللي تحاسبتوا عليه: <b>${money(st)}</b>`,
+    `🔴 غير محاسب عليه: <b>${money(un.total)}</b> (${un.n} بيعة)${partsText(un.parts)}`, `✅ كل اللي تحاسبتوا عليه: <b>${money(st)}</b>`,
     `🎯 الرصيد المسموح: <b>${o.lim ? money(o.lim) : "بدون حد"}</b>`, "", "<b>👥 الحسابات:</b>",
     ...(us.length ? us.map((u) => `• ${esc(u.name || String(u.user_id))}`) : ["(ما أكو حساب، ضيف حساب حتى يبيع)"])];
   const kb: Kb = [[btn("📊 اليوم", `a:libd:${oid}:0`), btn("📅 البارحة", `a:libd:${oid}:1`)], [btn("🔴 غير المحاسب عليها (تفصيل)", `a:libu:${oid}`)],
@@ -231,16 +234,16 @@ async function libView(oid: number): Promise<[string, Kb]> {
   return [t.join("\n"), kb];
 }
 const sendView = (chat: number, [t, kb]: [string, Kb]) => send(chat, t, { kb });
-type Unsettled = { n: number; total: number };
+type Unsettled = { n: number; total: number; parts: MoneyParts };
 /** المبيعات غير المحاسب عليها تنتقل للأرشيف */
 export async function settleOffice(oid: number, un: Unsettled) {
   await tx(async () => {
-    const id = await insert("settlements", { office_id: oid, amount: un.total, n: un.n, created: stamp() });
+    const id = await insert("settlements", { office_id: oid, amount: un.total, n: un.n, created: stamp(), parts: JSON.stringify(un.parts) });
     await update("orders", { printed: 3, office_id: oid, settle_id: null }, { settle_id: id });
   });
 }
 export async function notifySettled(oid: number, un: Unsettled) {
-  for (const u of await find("office_users", { office_id: oid })) await send(u.user_id, `✅ <b>تمت المحاسبة</b> ويا قصي العميري\n💰 ${money(un.total)} (${un.n} بيعة)\nالمبيعات انتقلت للأرشيف «🗂 المحاسبات السابقة».`);
+  for (const u of await find("office_users", { office_id: oid })) await send(u.user_id, `✅ <b>تمت المحاسبة</b> ويا قصي العميري\n💰 ${money(un.total)} (${un.n} بيعة)${partsText(un.parts)}\nالمبيعات انتقلت للأرشيف «🗂 المحاسبات السابقة».`);
 }
 /** رمز ورابط انضمام للمكتبة، يشتغلون مرة وحدة */
 export async function createInvite(oid: number) {

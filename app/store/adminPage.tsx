@@ -2,6 +2,7 @@
 // المشترك بين صفحات لوحة التحكم
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import { partRows, sumParts, type MoneyParts } from "../../lib/orderRules.ts";
 
 type Tg = { Telegram?: { WebApp?: {
   initData?: string; expand?: () => void;
@@ -73,6 +74,19 @@ export function AdminHeader({ title, home }: { title: string; home?: boolean }) 
   );
 }
 /** شريط أسفل الشاشة: جاري الحفظ، الخطأ، أو تم */
+/** المبلغ مقسم: الملازم والامتحانات والمحاضرات، وتحتها المجموع */
+export function MoneyBreakdown({ parts, title, inset }: { parts: MoneyParts; title?: string; inset?: boolean }) {
+  const rows = partRows(parts);
+  if (!rows.length) return null;
+  return (
+    <div className={inset ? "adparts adpartsin" : "adparts"}>
+      {title && <div className="adpartt">{title}</div>}
+      {rows.map(([l, v]) => <div key={l} className="adpart"><span>{l}</span><b>{v.toLocaleString("en-US")}</b></div>)}
+      <div className="adpart adpartsum"><span>المجموع</span><b>{sumParts(parts).toLocaleString("en-US")}</b></div>
+    </div>
+  );
+}
+
 export function StatusBar({ busy, error, notice, children }: { busy: boolean; error?: string; notice?: string; children?: ReactNode }) {
   if (!busy && !error && !notice && !children) return null;
   return (

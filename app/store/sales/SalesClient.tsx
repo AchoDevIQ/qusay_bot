@@ -1,14 +1,15 @@
 "use client";
 // بيع بالمكتب أو المكتبة، وسجل المبيعات. صاحب المكتبة يشوف بيعها بس، وهاي صفحته الرئيسية
 import { useState } from "react";
-import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
+import { partsLine, type MoneyParts } from "../../../lib/orderRules.ts";
+import { AdminHeader, MoneyBreakdown, StatusBar, useAdminApi } from "../adminPage";
 
 type Sale = { id: number; time: string; name: string; total: number; seller: string; items: string };
 type St = { id: number; name: string; phone: string; gov: string };
-type Shop = { name: string; open: number; openN: number; left: number | null; archive: { id: number; amount: number; n: number; created: string }[] };
+type Shop = { name: string; open: number; openN: number; openParts: MoneyParts; left: number | null; archive: { id: number; amount: number; n: number; created: string; parts: MoneyParts | null }[] };
 type Team = { id: number; name: string; sold: number; total: number; printed: number; pdfs: number };
 type Data = {
-  today: string; day: string; prev: string; next: string | null; total: number; sales: Sale[]; sellers: { name: string; total: number }[]; shop: Shop | null; team: Team[];
+  today: string; day: string; prev: string; next: string | null; total: number; parts: MoneyParts; sales: Sale[]; sellers: { name: string; total: number }[]; shop: Shop | null; team: Team[];
   days: { day: string; n: number; total: number }[]; results: St[]; catalog: { name: string; items: { id: number; name: string; price: number }[] }[]; notice: string; soldId?: number;
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -46,6 +47,7 @@ export default function SalesClient() {
                 {shop.left !== null && <div><b>{fmt(shop.left)}</b>الباقي من الرصيد</div>}
               </div>
             )}
+            {shop && <MoneyBreakdown parts={shop.openParts} title="غير المحاسب مقسم" />}
             <div className="chips adtabs">
               <button type="button" className={tab === "sell" ? "on" : ""} onClick={() => setTab("sell")}>🏪 بيع جديد</button>
               <button type="button" className={tab === "log" ? "on" : ""} onClick={() => setTab("log")}>📊 المبيعات</button>
@@ -57,7 +59,7 @@ export default function SalesClient() {
               <div className="card">
                 <h2>🗂 المحاسبات السابقة</h2>
                 {shop.archive.length ? shop.archive.map((s) => (
-                  <button type="button" key={s.id} className="adfield" disabled={busy} onClick={() => void act({ action: "settlePdf", id: s.id })}><small>{s.n} بيعة</small><span>{s.created}</span><i>{fmt(s.amount)} 📄</i></button>
+                  <button type="button" key={s.id} className="adfield" disabled={busy} onClick={() => void act({ action: "settlePdf", id: s.id })}><small>{s.n} بيعة{s.parts ? ` · ${partsLine(s.parts)}` : ""}</small><span>{s.created}</span><i>{fmt(s.amount)} 📄</i></button>
                 )) : <div className="empty">ما أكو محاسبات بعد.</div>}
               </div>
             )}
@@ -166,6 +168,7 @@ function Log({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
         <div className="adstats adstats2 adnopadtop">
           <div><b>{data.sales.length}</b>عدد المبيعات</div><div><b>{fmt(data.total)}</b>المجموع</div>
         </div>
+        <MoneyBreakdown parts={data.parts} inset />
         {data.sellers.length > 1 && (
           <div className="chips">
             <button type="button" className={!seller ? "on" : ""} onClick={() => setSeller("")}>الكل</button>

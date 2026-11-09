@@ -1,7 +1,7 @@
 // صفحة المكتبات: الحسابات، الرصيد، المبيعات، المحاسبة، والأرشيف. للمدير بس
 import { find, insert, one, put, remove, sumOf, tx, update, type Row } from "./db.ts";
 import { BTN_OFFICE, toLatinDigits } from "./config.ts";
-import { officeUnsettled, orderItems } from "./data.ts";
+import { officeUnsettled, orderItems, partsOf, savedParts } from "./data.ts";
 import { mainKb } from "./keyboards.ts";
 import { createInvite, notifySettled, officeDayRows, officeOpenRows, officePdf, parseAmount, settleDetail, settleOffice } from "./office.ts";
 import { send } from "./telegram.ts";
@@ -23,7 +23,7 @@ async function pageData() {
       today: totalOf(await officeDayRows(o.id, todayStr())), yesterday: totalOf(await officeDayRows(o.id, todayStr(1))),
       open: await officeUnsettled(o.id), settled: sumOf(await find("settlements", { office_id: o.id }), "amount"),
       users: (await find("office_users", { office_id: o.id })).map((u) => ({ id: u.user_id, name: u.name || String(u.user_id) })),
-      archive: (await find("settlements", { office_id: o.id }, { order: ["-id"], limit: 30 })).map((s) => ({ id: s.id, amount: s.amount, n: s.n, created: s.created })),
+      archive: (await find("settlements", { office_id: o.id }, { order: ["-id"], limit: 30 })).map((s) => ({ id: s.id, amount: s.amount, n: s.n, created: s.created, parts: savedParts(s) })),
     }))),
   };
 }
@@ -64,7 +64,7 @@ export async function libAction(body: Row) {
   } else if (a === "sales") {
     const o = await liveOffice(body.id);
     const { title, rows } = await rowsFor(o.id, body.kind);
-    extra = { sales: { officeId: o.id, title, rows: rows.map(saleRow) } };
+    extra = { sales: { officeId: o.id, title, rows: rows.map(saleRow), parts: partsOf(rows) } };
   } else if (a === "pdf") {
     const o = await liveOffice(body.id);
     const { title, rows, fname } = await rowsFor(o.id, body.kind);

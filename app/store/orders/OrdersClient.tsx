@@ -1,13 +1,14 @@
 "use client";
 // الطلبات: حساب شركة التوصيل، الجديدة للطباعة، والمطبوعة
 import { useState } from "react";
-import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
+import { addParts, partsLine, type MoneyParts } from "../../../lib/orderRules.ts";
+import { AdminHeader, Confirm, MoneyBreakdown, StatusBar, useAdminApi } from "../adminPage";
 
 type Order = {
   id: number; created: string; name: string; curr: string; place: string; area: string; phone1: string; phone2: string; username: string; userId: number;
   items: { name: string; qty: number; price: number }[]; subtotal: number; fee: number; total: number; printedBy: string; settled: boolean;
 };
-type Company = { open: { id: number; total: number; fee: number }[]; archive: { id: number; from: number; to: number; n: number; gross: number; fees: number; net: number; created: string }[] };
+type Company = { open: { id: number; total: number; fee: number; parts: MoneyParts }[]; archive: { id: number; from: number; to: number; n: number; gross: number; fees: number; net: number; created: string; parts: MoneyParts | null }[] };
 type Data = { fresh: Order[]; printed: Order[]; owner: boolean; company: Company | null; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -91,13 +92,14 @@ function CompanyCard({ c, busy, call }: { c: Company; busy: boolean; call: Call 
             <div><b>{fmt(fees)}</b>توصيل (للشركة)</div>
             <div className="adnet"><b>{fmt(net)}</b>لازم يعطوك</div>
           </div>
+          <MoneyBreakdown parts={addParts(rows.map((o) => o.parts))} title="اللي لازم يعطوك مقسم (بدون التوصيل)" />
           <Confirm label={`✅ تم الحساب، استلمت ${fmt(net)}`} disabled={busy || !rows.length} onYes={async () => { if (await call({ action: "settle", from: a, to: b, net })) { setFrom(""); setTo(""); } }} />
         </div>
       ) : <div className="empty">✅ ماكو طلبات غير محاسب عليها ويا الشركة.</div>}
       {!!c.archive.length && (
         <div className="expad">
           <button type="button" className="exbtn" onClick={() => setShow(!show)}>🗂 الحسابات السابقة ({c.archive.length})</button>
-          {show && c.archive.map((s) => <div key={s.id} className="adsale"><b>#{s.from} إلى #{s.to}</b> — استلمت {fmt(s.net)}<small>{s.created} · {s.n} طلب · الكلي {fmt(s.gross)} · التوصيل {fmt(s.fees)}</small></div>)}
+          {show && c.archive.map((s) => <div key={s.id} className="adsale"><b>#{s.from} إلى #{s.to}</b> — استلمت {fmt(s.net)}<small>{s.created} · {s.n} طلب · الكلي {fmt(s.gross)} · التوصيل {fmt(s.fees)}{s.parts ? ` · ${partsLine(s.parts)}` : ""}</small></div>)}
         </div>
       )}
     </div>

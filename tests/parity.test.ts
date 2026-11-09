@@ -65,6 +65,15 @@ function dropProtect(e: any) {
   return e;
 }
 // كود الملازم بطلب المحاضرات ميزة جديدة: رسالة «تم تجهيز طلبك» كانت بدونه
+// تقسيم الفلوس (ملازم وامتحانات ومحاضرات) إضافة جديدة، فأسطرها وحقلها ما ينقارنون بالبوت القديم
+function dropMoneyParts(e: any) {
+  if (typeof e.p?.text === "string") e.p.text = e.p.text.replace(/\n   (?:📚|📝|🎬|🎓|📦) [^\n]*: <b>[^\n]*<\/b>/gu, "");
+  return e;
+}
+const noPartsColumn = (db: Record<string, any[]>) => {
+  for (const t of ["settlements", "company_settlements"]) for (const r of db[t] ?? []) delete r.parts;
+  return db;
+};
 function dropNotesCode(e: any) {
   if (typeof e.p?.text === "string" && e.p.text.includes("وتنفتح ملازمك")) { e.p.text = e.p.text.slice(0, e.p.text.indexOf("\n\n📘")); delete e.p.reply_markup; }
   return e;
@@ -113,8 +122,9 @@ for (const driver of ["sqlite", "firestore"]) for (const file of fs.readdirSync(
       // طلب من صاحب البوت: صورة نجاح الطلب تطلع لوحدها، لأن نفس الكلام مكتوب داخلها
       const photoOnly = (e: any) => { if (e.m === "sendPhoto" && /تم استلام طلبك/.test(e.p.caption ?? "")) { delete e.p.caption; delete e.p.parse_mode; } return e; };
       const dropPhotoMode = (e: any) => { if (e.m === "sendPhoto" && !e.p.caption) delete e.p.parse_mode; return e; };
-      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode).map(dropMenuButtons).map(dropProtect).map(dropNotesCode)), b = normal(py.trace.map(photoOnly).map(dropMenuButtons));
+      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode).map(dropMenuButtons).map(dropProtect).map(dropNotesCode).map(dropMoneyParts)), b = normal(py.trace.map(photoOnly).map(dropMenuButtons));
       for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
+      noPartsColumn(ts.db);
       if (driver === "firestore") assert.deepEqual(sorted(normalDb(ts.db)), sorted(normalDb(py.db)));
       else assert.deepEqual(normalDb(ts.db), normalDb(py.db));
       assert.deepEqual(scrubFiles(ts.files), scrubFiles(py.files));
