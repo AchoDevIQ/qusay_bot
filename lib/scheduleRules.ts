@@ -175,4 +175,8 @@ export function ampm(t: string) {
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "صباحاً" : "مساءً"}`;
 }
-export const prettyAt = (at: string) => `${at.slice(0, 10)} · ${ampm(at.slice(11))}`;
+/** أسماء الأيام بنفس ترتيب weekdayOf: 0 = الاثنين */
+export const DAY_NAMES = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
+/** 2027-02-02 تصير «الثلاثاء 2/2/2027»: اسم اليوم ويا التاريخ */
+export const prettyDay = (d: string) => (validDay(d) ? `${DAY_NAMES[weekdayOf(d)]} ${Number(d.slice(8, 10))}/${Number(d.slice(5, 7))}/${d.slice(0, 4)}` : d);
+export const prettyAt = (at: string) => `${prettyDay(at.slice(0, 10))} · ${ampm(at.slice(11))}`;

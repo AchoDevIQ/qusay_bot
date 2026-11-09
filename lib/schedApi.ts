@@ -16,7 +16,7 @@ import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
 import { send } from "./telegram.ts";
-import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { esc, stamp, todayStr } from "./util.ts";
 import { authed, ensure, intOf, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
@@ -159,7 +159,7 @@ async function restoreStudent(st: HolStudent) {
     if (it?.status === "waiting" && it.at === m.to) await update("sched_items", { id: m.id }, { at: m.at });
   }
 }
-const holidayText = (h: Holiday, r: Range) => `قبل امتحان ${esc(h.title)}${h.reason ? ` (${esc(h.reason)})` : ""}، ${r.from === r.to ? `يوم ${r.from}` : `من ${r.from} لـ ${r.to}`}`;
+const holidayText = (h: Holiday, r: Range) => `قبل امتحان ${esc(h.title)}${h.reason ? ` (${esc(h.reason)})` : ""}، ${r.from === r.to ? `يوم ${prettyDay(r.from)}` : `من ${prettyDay(r.from)} لـ ${prettyDay(r.to)}`}`;
 async function applyHoliday(h: Holiday) {
   await tx(async () => {
     for (const p of h.places) for (const m of p.moved) await put("place_dates", { center_id: p.center, exam_id: m.exam, day: m.to, versions: m.toVersions });
@@ -564,7 +564,7 @@ export async function schedAdminAction(body: Row) {
       for (const [i, e] of exams.entries()) if (days[i]) await put("place_dates", { center_id: center, exam_id: e.id, day: days[i], versions: old.get(e.id) ?? "{}" });
     });
     const told = await tellPlace(center);
-    notice = `✅ توزع ${days.length} امتحان، آخرها ${days.at(-1) ?? ""}${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
+    notice = `✅ توزع ${days.length} امتحان، آخرها ${days.length ? prettyDay(days.at(-1)!) : ""}${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
   } else if (a === "loadPlaces") {
     const centers = await find("centers", { active: 1 });
     const missing: string[] = [];
@@ -638,7 +638,7 @@ export async function schedAdminAction(body: Row) {
     await saveHolidays(list.filter((x) => x.id !== h!.id));
     notice = "↩️ انشالت العطلة، ورجعت المواعيد";
   } else need(a === "list", "أمر غير معروف");
-  const holidayList = (await holidays()).map((h) => ({ id: h.id, title: h.title, days: h.days, reason: h.reason, places: h.places.map((p) => `${p.name}: ${p.from}`), students: h.students.filter((x) => x.on).length }));
+  const holidayList = (await holidays()).map((h) => ({ id: h.id, title: h.title, days: h.days, reason: h.reason, places: h.places.map((p) => `${p.name}: ${prettyDay(p.from)}`), students: h.students.filter((x) => x.on).length }));
   return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice, holidays: holidayList, holidayPreview: preview };
 }
 const cronUrl = () => `${siteBase()}/api/cron?key=${cronKey()}`;

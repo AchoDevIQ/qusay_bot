@@ -2,7 +2,10 @@
 // إعدادات جدول الامتحانات: كل المدد بيد الإدارة
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
-import { ampm, flattenDays, groupSlots, spreadVersions } from "../../../lib/scheduleRules.ts";
+import { ampm, flattenDays, groupSlots, prettyDay, spreadVersions } from "../../../lib/scheduleRules.ts";
+
+/** اسم اليوم تحت خانة التاريخ، لأن الخانة تبين الأرقام بس */
+const DayName = ({ d }: { d: string }) => (d ? <small className="exhint">📅 {prettyDay(d)}</small> : null);
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
@@ -63,6 +66,7 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <input className="ltr" inputMode="numeric" value={gap} onChange={(e) => setGap(e.target.value)} />
         <label>بداية عطلة نصف السنة</label>
         <input type="date" className="ltr" value={holidayStart} onChange={(e) => setHolidayStart(e.target.value)} />
+        <DayName d={holidayStart} />
         <label>عدد أيام العطلة</label>
         <input className="ltr" inputMode="numeric" value={holidayDays} onChange={(e) => setHolidayDays(e.target.value)} />
         <label>أيام مستثناة من كل الجداول (كل يوم بسطر، مثل 2027-03-21)</label>
@@ -180,6 +184,7 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
         <input type="date" className="ltr" aria-label="تاريخ البداية" value={start} onChange={(e) => setStart(e.target.value)} />
         <Confirm label="🗓 وزعها" disabled={busy || !start} onYes={() => void act({ action: "fillDates", start })} />
       </div>
+      <DayName d={start} />
       <div className="exhint">كل يوم من أيام المكان ياخذ امتحان، وتتخطى العطلة. بعدها تگدر تغير أي تاريخ.</div>
       <div className="exlabel adtop">📄 النسخة بكل وقت</div>
       <div className="exhint">جنب كل امتحان تطلع أوقات يومه، وتختار لكل وقت نسخته. الاختيار يخص هذا الامتحان بس، فطلاب الوقت الأول ما يگدرون يوصلون الأسئلة للي بعدهم. ما ينحفظ إلا تدوس «حفظ المواعيد والنسخ».</div>
@@ -193,7 +198,7 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
               <div className="adexamrow" key={r.exam}>
                 <b>{r.title}</b>
                 <div className="adexamcells">
-                  <input type="date" className="ltr" aria-label={`تاريخ ${r.title}`} value={r.date} onChange={(e) => set(r.exam, { date: e.target.value })} />
+                  <div><input type="date" className="ltr" aria-label={`تاريخ ${r.title}`} value={r.date} onChange={(e) => set(r.exam, { date: e.target.value })} /><DayName d={r.date} /></div>
                   {times.map((t) => (
                     <label className="adtimev" key={t}><small>⏰ {ampm(t)}</small>
                       <select aria-label={`نسخة ${r.title} الساعة ${t}`} value={r.versions[t] ?? 0} onChange={(e) => set(r.exam, { versions: { ...r.versions, [t]: Number(e.target.value) } })}>
@@ -219,18 +224,16 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
 
 /** عطلة قبل امتحان: تختار كم يوم ووين، تشوف الزحف، وبعدها تثبته */
 function HolidayPanel({ d, exam, title, busy, act }: { d: Data; exam: number; title: string; busy: boolean; act: Act }) {
-  const [days, setDays] = useState("1");
   const [reason, setReason] = useState("");
   const [scope, setScope] = useState<"place" | "all">("place");
-  const body = { exam, days, reason, scope };
+  // يوم الامتحان نفسه يصير عطلة، والامتحان يزحف ليوم الامتحان الجاي
+  const body = { exam, days: 1, reason, scope };
   const pv = d.holidayPreview;
-  const fresh = pv && pv.exam === exam && String(pv.days) === days && pv.reason === reason.trim() && pv.scope === scope;
+  const fresh = pv && pv.exam === exam && pv.reason === reason.trim() && pv.scope === scope;
   return (
     <div className="adsale adtop">
       <div className="exlabel">🏖 عطلة قبل {title}</div>
-      <div className="exhint">الامتحان هذا وكل اللي بعده يزحفون لأيام الامتحان الجاية، بنفس الترتيب، والنسخ تمشي وياهم. الطلاب يوصلهم خبر.</div>
-      <label>كم يوم</label>
-      <input className="ltr" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} />
+      <div className="exhint">يوم هذا الامتحان يصير عطلة، وهو يروح ليوم الامتحان الجاي من أيام الجدول، وكل اللي بعده يزحفون وياه بنفس الترتيب، والنسخ تمشي وياهم. الطلاب يوصلهم خبر.</div>
       <label>السبب (يطلع للطلاب)</label>
       <input value={reason} placeholder="مثلاً: راحة قبل الفاينل" onChange={(e) => setReason(e.target.value)} />
       <div className="seg wrap2 adtop">
@@ -243,8 +246,8 @@ function HolidayPanel({ d, exam, title, busy, act }: { d: Data; exam: number; ti
         <>
           {pv!.places.map((p) => (
             <div key={p.name} className="adtop">
-              <b>{p.name}</b> <small className="pdmode">العطلة {p.from === p.to ? p.from : `${p.from} إلى ${p.to}`}</small>
-              <table className="extable"><tbody>{p.rows.map((x) => <tr key={x.title}><td>{x.title}</td><td className="adphone">{x.from} ← {x.to}</td></tr>)}</tbody></table>
+              <b>{p.name}</b> <small className="pdmode">العطلة {p.from === p.to ? prettyDay(p.from) : `${prettyDay(p.from)} إلى ${prettyDay(p.to)}`}</small>
+              <table className="extable"><tbody>{p.rows.map((x) => <tr key={x.title}><td>{x.title}</td><td className="adphone">{prettyDay(x.from)} ← {prettyDay(x.to)}</td></tr>)}</tbody></table>
             </div>
           ))}
           {pv!.students > 0 && <div className="exhint adtop">و{pv!.students} طالب جدول خاص: تنحطلهم العطلة ويزحف جدولهم، ويگدرون يلغونها من امتحاناتي فيتقدم.</div>}
@@ -263,7 +266,7 @@ function Holidays({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
       <div className="exlabel">🏖 العطل</div>
       {d.holidays.map((h) => (
         <div key={h.id} className="adsale">
-          <div><b>قبل {h.title}</b> · {h.days} يوم{h.reason ? ` · ${h.reason}` : ""}</div>
+          <div><b>قبل {h.title}</b>{h.reason ? ` · ${h.reason}` : ""}</div>
           <small className="pdmode">{h.places.join("، ")}{h.students ? ` · ${h.students} جدول خاص` : ""}</small>
           <Confirm label="↩️ شيل العطلة" disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id })} />
         </div>

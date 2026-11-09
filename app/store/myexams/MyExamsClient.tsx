@@ -5,7 +5,7 @@ import PhotoPick from "../PhotoPick";
 import AiCompare, { type AiQ } from "./AiCompare";
 import PdfPages from "../PdfPages";
 import { Fragment, useEffect, useState } from "react";
-import { ampm, prettyAt } from "../../../lib/scheduleRules.ts";
+import { ampm, prettyAt, prettyDay } from "../../../lib/scheduleRules.ts";
 import { deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
@@ -214,11 +214,13 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
       <h2>🗓 {old ? "رتب جدولك من جديد" : "رتب جدول امتحاناتك"}</h2>
       <div className="form">
         <div className="warn locked">عندك <b>{info.remaining}</b> امتحان. {old ? "اشتريت فصل جديد، فانعاد توزيع الامتحانات الباقية." : "اختار المدة والأيام ووقت امتحانك، والبوت يوزعها."} وأكثر شي <b>{info.perDay}</b> باليوم.</div>
-        {info.holiday && <div className="hint">🏖 العطلة من {info.holiday.start} لمدة {info.holiday.days} يوم، ما بيها امتحانات.</div>}
+        {info.holiday && <div className="hint">🏖 العطلة من {prettyDay(info.holiday.start)} لمدة {info.holiday.days} يوم، ما بيها امتحانات.</div>}
         <label>تبدي من تاريخ</label>
         <input type="date" className="ltr" min={info.minStart} value={start} onChange={(e) => change(setStart)(e.target.value)} />
+        {start && <small className="hint">📅 {prettyDay(start)}</small>}
         <label>تخلص بتاريخ{old ? " (تگدر تبقيه أو تغيره)" : ""}</label>
         <input type="date" className="ltr" min={start} value={end} onChange={(e) => change(setEnd)(e.target.value)} />
+        {end && <small className="hint">📅 {prettyDay(end)}</small>}
         <label>أيام الامتحان بالأسبوع{center ? " (أيام مركزك)" : ""}</label>
         <div className="seg wrap2">
           {allowed.map((d) => (
@@ -253,7 +255,7 @@ function HolRow({ h, busy, off }: { h: Hol; busy: boolean; off: (id: number) => 
   const [ask, setAsk] = useState(false);
   return (
     <tr className="lcrow">
-      <td>🏖 <b>عطلة{h.reason ? `: ${h.reason}` : ""}</b><small className="pdmode">{h.from === h.to ? h.from : `${h.from} إلى ${h.to}`} · قبل {h.title}</small>
+      <td>🏖 <b>عطلة{h.reason ? `: ${h.reason}` : ""}</b><small className="pdmode">{h.from === h.to ? prettyDay(h.from) : `${prettyDay(h.from)} إلى ${prettyDay(h.to)}`} · قبل {h.title}</small>
         {ask && <div className="hint">جدولك يتقدم: {h.title} واللي بعده يرجعون لمواعيدهم بدون عطلة. متأكد؟</div>}
       </td>
       <td className="p">
