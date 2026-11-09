@@ -28,6 +28,7 @@ export default function StationClient() {
   const dev = useRef<any>(null);
   const ch = useRef<any>(null);
   const busy = useRef(false);
+  const attaching = useRef(false);
   const chunk = useRef(180);
   const seen = useRef({ code: "", at: 0 });
 
@@ -45,13 +46,30 @@ export default function StationClient() {
     if (!res.ok) throw new Error(j.error ?? "صار خطأ بالسيرفر");
     return j;
   }
+  /** اتصال واحد بالوكت، ويعيد المحاولة: الأندرويد أحياناً يفصل بأول لحظة بعد الاتصال */
   async function attach() {
-    const gatt = await dev.current.gatt.connect();
-    const s = await gatt.getPrimaryService(SERVICES[0]);
-    ch.current = (await s.getCharacteristics()).find((c: any) => c.properties.write) ?? null;
-    if (!ch.current) throw new Error("الطابعة ما تقبل الكتابة");
-    setReady(true);
-    setStatus("✅ متصلة بالطابعة");
+    if (attaching.current) return;
+    attaching.current = true;
+    try {
+      for (let n = 1; ; n++) {
+        try {
+          const gatt = await dev.current.gatt.connect();
+          await sleep(700);
+          const s = await gatt.getPrimaryService(SERVICES[0]);
+          ch.current = (await s.getCharacteristics()).find((c: any) => c.properties.write) ?? null;
+          if (!ch.current) throw new Error("الطابعة ما تقبل الكتابة");
+          break;
+        } catch (e) {
+          ch.current = null;
+          if (n >= 4) throw e;
+          setStatus(`⏳ دا أحاول أتصل (${n + 1} من 4)...`);
+          try { dev.current.gatt.disconnect(); } catch { /* مو متصلة */ }
+          await sleep(1000 * n);
+        }
+      }
+      setReady(true);
+      setStatus("✅ متصلة بالطابعة");
+    } finally { attaching.current = false; }
   }
   async function connect() {
     const bt = (navigator as any).bluetooth;
@@ -128,7 +146,7 @@ export default function StationClient() {
   // الليبلات اللي تنرسل من صفحة الحضوري بتليگرام
   useEffect(() => {
     const t = setInterval(() => void once(async () => {
-      if (!ch.current && dev.current) await attach();
+      if (!ch.current && dev.current && !attaching.current) await attach();
       if (!ch.current) return;
       const r = await api({ action: "next" });
       if (!r.job) return;
