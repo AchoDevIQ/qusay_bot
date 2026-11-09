@@ -12,7 +12,8 @@ button:disabled{opacity:.4}pre{white-space:pre-wrap;word-break:break-all;directi
 <button id="b" disabled>٣. تجربة B</button>
 <pre id="o"></pre>
 <script>
-const SERVICES = [0x18f0, "e7810a71-73ae-499d-8c15-faa9aef0c3f2"];
+const SERVICES = ["000018f0-0000-1000-8000-00805f9b34fb", "e7810a71-73ae-499d-8c15-faa9aef0c3f2"];
+const why = (e) => "name=" + (e && e.name) + " message=" + (e && e.message) + " raw=" + e;
 const out = document.getElementById("o");
 const log = (t) => { out.textContent += t + "\\n"; };
 let ch = null;
@@ -20,14 +21,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function connect() {
   out.textContent = "";
   if (!navigator.bluetooth) { log("NO WEB BLUETOOTH: open this page in Bluefy"); return; }
+  let step = "requestDevice";
   try {
-    const dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "Thermal" }, { services: [SERVICES[0]] }, { services: [SERVICES[1]] }], optionalServices: SERVICES });
+    log("step 1: choose printer");
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "Thermal" }], optionalServices: SERVICES });
     log("device: " + dev.name);
+    step = "gatt.connect";
+    log("step 2: connect");
     const gatt = await dev.gatt.connect();
+    log("connected: " + gatt.connected);
     ch = null;
-    for (const s of await gatt.getPrimaryServices()) {
-      log("service " + s.uuid);
-      for (const c of await s.getCharacteristics()) {
+    for (const id of SERVICES) {
+      step = "service " + id;
+      log("step 3: " + step);
+      let s;
+      try { s = await gatt.getPrimaryService(id); } catch (e) { log("  not available " + why(e)); continue; }
+      step = "characteristics " + id;
+      const list = await s.getCharacteristics();
+      for (const c of list) {
         const p = c.properties;
         log("  char " + c.uuid + (p.write ? " W" : "") + (p.writeWithoutResponse ? " WNR" : "") + (p.notify ? " N" : "") + (p.read ? " R" : ""));
         if (!ch && (p.write || p.writeWithoutResponse)) ch = c;
@@ -36,7 +47,7 @@ async function connect() {
     if (!ch) { log("NO WRITABLE CHARACTERISTIC"); return; }
     log("using " + ch.uuid);
     document.getElementById("a").disabled = document.getElementById("b").disabled = false;
-  } catch (e) { log("ERROR " + e); }
+  } catch (e) { log("FAILED AT " + step + " " + why(e)); }
 }
 async function send(bytes) {
   try {
@@ -47,7 +58,7 @@ async function send(bytes) {
       await sleep(25);
     }
     log("sent " + bytes.length + " bytes");
-  } catch (e) { log("ERROR " + e); }
+  } catch (e) { log("SEND FAILED " + why(e)); }
 }
 const ascii = (s) => new TextEncoder().encode(s);
 document.getElementById("c").onclick = connect;
