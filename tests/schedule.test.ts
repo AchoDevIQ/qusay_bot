@@ -5,7 +5,7 @@ import { createHmac } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_SETTINGS, addDays, availableDays, buildPlan, flattenDays, groupSlots, spreadVersions, itemState, ampm, labelChapters, pickMandatory, answersClose, pickedAt, prettyAt, slotDays, pickOptional, weekdayOf } from "../lib/scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, advanceDays, availableDays, buildPlan, daysLost, flattenDays, remapByOrder, groupSlots, spreadVersions, itemState, ampm, labelChapters, pickMandatory, answersClose, pickedAt, prettyAt, slotDays, pickOptional, weekdayOf } from "../lib/scheduleRules.ts";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-sched-"));
 Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CHROME_PATH: path.join(tmp, "none"), ASSETS_DIR: path.join(tmp, "none"), SETTINGS_FILE: path.join(tmp, "none") });
@@ -26,7 +26,7 @@ const { files } = await import("../lib/files.ts");
 const { schedSettings } = await import("../lib/schedApi.ts");
 const { run: sqlRun } = await import("../lib/sqliteDriver.ts");
 const { stamp } = await import("../lib/util.ts");
-const { initDb, find, insert, kvSet, put, update } = await import("../lib/db.ts");
+const { initDb, find, insert, kvSet, one, put, update } = await import("../lib/db.ts");
 const { todayStr } = await import("../lib/util.ts");
 await initDb();
 
@@ -290,9 +290,15 @@ test("الحضوري: أوقات مركزه بس، وفصوله من الطلب�
   assert.equal(j.late.length, 1);
   const k = await act(83, "lateKeep");
   assert.deepEqual(k.items.map((i: any) => i.state), ["past", "center"]);
+  // الحضوري الخاص: أيام مركزه وأوقاته بس
   await student(84, "حضوري");
+  await put("students", { ...(await find("students", { user_id: 84 }))[0], center_id: c1 });
   await put("exam_access", { user_id: 84, chapter: "الفصل الأول", order_id: 1, created: "1" });
-  assert.ok((await act(84, "preview", form())).preview);
+  await assert.rejects(act(84, "preview", form()), /أوقات مركزك/);
+  await assert.rejects(act(84, "preview", form({ weekdays: [0], times: { "0": ["08:00"] } })), /أيام مركزك/);
+  await assert.rejects(act(84, "preview", form({ weekdays: [4], times: { "4": ["16:00"] } })), /أوقات مركزك/);
+  const pv = await act(84, "preview", form({ weekdays: [4], times: { "4": ["08:00", "09:30"] } }));
+  assert.ok(pv.preview.items.every((i: any) => weekdayOf(i.at.slice(0, 10)) === 4 && ["08:00", "09:30"].includes(i.at.slice(11))));
 });
 
 test("الفصل غير المشترى مقفول، واللي اشترى متأخر يگدر يتحول خاص، ونسخة الخاص لفصل كامل", async () => {
@@ -573,4 +579,98 @@ test("النسخة تدخل اختياري إذا الملف محددها هيچ
   const e = (await find("bank_exams", { slug: "chk" }))[0];
   const vs = await find("bank_versions", { exam_id: e.id }, { order: ["model"] });
   assert.deepEqual(vs.map((v) => v.kind), ["mandatory", "optional"]);
+});
+
+test("الجدول الخاص: الطالب يختار وقت كل امتحان، والثاني بعد نهاية الأول والفاصل", () => {
+  const one = { ...base, end: "2027-02-01", weekdays: [0], settings: { ...S, gap: 30 } };
+  const ok = buildPlan(exams(2, 60), { ...one, times: { "0": ["16:00", "19:00"] } });
+  assert.ok(ok.ok);
+  if (ok.ok) assert.deepEqual(ok.items.map((i) => i.at), ["2027-02-01 16:00", "2027-02-01 19:00"]);
+  const close = buildPlan(exams(2, 60), { ...one, times: { "0": ["16:00", "17:00"] } });
+  assert.equal(close.ok, false);
+  if (!close.ok) assert.match(close.error, /5:30 مساءً/);
+  // اختار وقت امتحان واحد: ما ينحطله امتحانين باليوم
+  const single = buildPlan(exams(2, 60), { ...one, times: { "0": ["16:00"] } });
+  assert.equal(single.ok, false);
+  if (!single.ok) assert.match(single.error, /امتحان ثاني/);
+  // ساعات الإدارة ما تمنع وقت اختاره الطالب من القائمة
+  assert.ok(buildPlan(exams(1), { ...one, times: { "0": ["16:00"] }, settings: { ...S, blockedHours: [16] } }).ok);
+});
+
+test("العطلة: كم يوم امتحان راح، ووين يوصل كل امتحان، والنسخ تمشي بترتيب الوقت", () => {
+  const sat = "2027-02-06", tue = "2027-02-09";   // سبت وثلاثاء
+  const ok = (d: string) => [5, 1].includes(weekdayOf(d)) && d !== tue;
+  assert.equal(daysLost(tue, tue, (d) => [5, 1].includes(weekdayOf(d))), 1);
+  assert.equal(daysLost("2027-02-10", "2027-02-11", ok), 1);   // ماكو يوم امتحان، بس يوم الامتحان نفسه ينحسب
+  assert.equal(advanceDays(tue, 1, ok), "2027-02-13");
+  assert.equal(advanceDays(sat, 1, ok), "2027-02-13");
+  assert.deepEqual(remapByOrder({ "17:00": 1, "21:00": 2 }, ["17:00", "21:00"], ["16:00", "20:00"]), { "16:00": 1, "20:00": 2 });
+});
+
+test("🏖 عطلة قبل امتحان: هو واللي بعده يزحفون، والخاص يلغيها، والإدارة تشيلها", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "الكرادة" });
+  const c = await insert("centers", { area_id: area, name: "مركز العطلة", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "16:00" }, { d: 5, t: "20:00" }, { d: 1, t: "17:00" }, { d: 1, t: "21:00" }], initData: admin });
+  const ex = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((a, b) => a.ord - b.ord);
+  const [a, b, cc] = ex;
+  const vb = (await find("bank_versions", { exam_id: b.id }))[0].id;
+  const sat = nextWeekday(5), tue = addDays(sat, 3), sat2 = addDays(sat, 7), tue2 = addDays(sat, 10);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: a.id, date: sat }, { exam: b.id, date: tue, versions: { "21:00": vb } }, { exam: cc.id, date: sat2 }], initData: admin });
+  // طالب خاص حضوري بهذا المركز، يمتحن السبت والثلاثاء
+  await student(96, "حضوري");
+  await put("students", { ...(await find("students", { user_id: 96 }))[0], center_id: c });
+  await put("schedules", { user_id: 96, mode: "private", picks: JSON.stringify({ "5": ["16:00", "20:00"], "1": ["17:00", "21:00"] }), start_day: sat, end_day: addDays(sat, 60), weekdays: JSON.stringify([5, 1]), hour: 16, created: stamp() });
+  const ib = await insert("sched_items", { user_id: 96, exam_id: b.id, at: `${tue} 21:00`, status: "waiting" });
+  const ic = await insert("sched_items", { user_id: 96, exam_id: cc.id, at: `${sat2} 20:00`, status: "waiting" });
+
+  await assert.rejects(schedAdminAction({ action: "holidayPreview", center: c, exam: b.id, days: 0, initData: admin }), /أيام العطلة/);
+  const pv: any = await schedAdminAction({ action: "holidayPreview", center: c, exam: b.id, days: 1, reason: "راحة", scope: "place", initData: admin });
+  assert.deepEqual(pv.holidayPreview.places[0].rows.map((r: any) => [r.from, r.to]), [[tue, sat2], [sat2, tue2]]);
+  assert.equal(pv.holidayPreview.students, 1);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, tue);   // المعاينة ما تغير شي
+
+  calls.length = 0;
+  const done: any = await schedAdminAction({ action: "holidayAdd", center: c, exam: b.id, days: 1, reason: "راحة", scope: "place", initData: admin });
+  assert.match(done.notice, /انحطت العطلة/);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: a.id }))[0].day, sat);   // اللي قبل العطلة ما يتحرك
+  const pb = (await find("place_dates", { center_id: c, exam_id: b.id }))[0];
+  assert.equal(pb.day, sat2);
+  assert.deepEqual(JSON.parse(pb.versions), { "20:00": vb });   // نسخة ثاني وقت تبقى لثاني وقت
+  assert.equal((await find("place_dates", { center_id: c, exam_id: cc.id }))[0].day, tue2);
+  assert.equal((await one("sched_items", { id: ib }))!.at, `${sat2} 20:00`);
+  assert.equal((await one("sched_items", { id: ic }))!.at, `${tue2} 21:00`);
+  assert.ok(calls.some((x) => x.p.chat_id === 96 && /ما أريد العطلة/.test(x.p.text)));
+  assert.equal(done.holidays.length, 1);
+
+  // الطالب الخاص يشوف العطلة ويلغيها، فيتقدم جدوله
+  const info = await act(96, "info");
+  assert.deepEqual(info.holidays.map((h: any) => [h.from, h.cancel, h.reason]), [[tue, true, "راحة"]]);
+  await assert.rejects(act(97, "holidayOff", { holiday: done.holidays[0].id }), /سجل/);
+  const off = await act(96, "holidayOff", { holiday: done.holidays[0].id });
+  assert.match(off.notice, /لغيت العطلة/);
+  assert.equal(off.holidays.length, 0);
+  assert.equal((await one("sched_items", { id: ib }))!.at, `${tue} 21:00`);
+  assert.equal((await one("sched_items", { id: ic }))!.at, `${sat2} 20:00`);
+
+  // الإدارة تشيل العطلة: مواعيد المكان ترجع
+  const undo: any = await schedAdminAction({ action: "holidayDel", center: c, id: done.holidays[0].id, initData: admin });
+  assert.equal(undo.holidays.length, 0);
+  const back = (await find("place_dates", { center_id: c, exam_id: b.id }))[0];
+  assert.equal(back.day, tue);
+  assert.deepEqual(JSON.parse(back.versions), { "21:00": vb });
+  assert.equal((await find("place_dates", { center_id: c, exam_id: cc.id }))[0].day, sat2);
+});
+
+test("الطالب الخاص الإلكتروني يمتحن من الساعة إلى الساعة اللي تحددها الإدارة", async () => {
+  const admin = sign(1);
+  const old: any = await schedAdminAction({ action: "list", initData: admin });
+  await assert.rejects(schedAdminAction({ action: "save", initData: admin, window: 15, extra: 15, perDay: 2, gap: 30, holidayDays: 0, excluded: "", fromHour: 20, toHour: 9 }), /آخر ساعة/);
+  await schedAdminAction({ action: "save", initData: admin, window: old.window, extra: old.extra, perDay: old.perDay, gap: old.gap, holidayStart: old.holidayStart, holidayDays: old.holidayDays, excluded: old.excluded.join("\n"), fromHour: 14, toHour: 18 });
+  await student(98);
+  await put("exam_access", { user_id: 98, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  const info = await act(98, "info");
+  assert.deepEqual([info.hours[0], info.hours.at(-1)], [14, 18]);
+  await assert.rejects(act(98, "preview", form({ times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["20:00"]])) })), /من الساعة/);
+  assert.ok((await act(98, "preview", form({ times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["15:00"]])) }))).preview);
 });

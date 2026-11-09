@@ -1,6 +1,6 @@
 // حساب جدول الامتحانات: بدون قاعدة بيانات حتى ينفحص لوحده. الأيام: 0 = الاثنين، مثل DAYS بالإعدادات
-export type SchedSettings = { window: number; extra: number; excWindow: number; optionalOpen: boolean; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; gallery: boolean };
-export const DEFAULT_SETTINGS: SchedSettings = { window: 15, extra: 15, excWindow: 60, optionalOpen: true, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, blockedHours: [], excluded: [], gallery: false };
+export type SchedSettings = { window: number; extra: number; excWindow: number; optionalOpen: boolean; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; gallery: boolean; fromHour: number; toHour: number };
+export const DEFAULT_SETTINGS: SchedSettings = { window: 15, extra: 15, excWindow: 60, optionalOpen: true, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, blockedHours: [], excluded: [], gallery: false, fromHour: 8, toHour: 22 };
 export type PlanExam = { id: number; minutes: number };
 export type PlanItem = { examId: number; at: string };
 export type Plan = { ok: true; items: PlanItem[]; days: number; maxPerDay: number; perWeek: number } | { ok: false; error: string; minWeekdays?: number };
@@ -33,18 +33,23 @@ function neededWeekdays(n: number, start: string, end: string, s: SchedSettings,
   return null;
 }
 /** يوزع الامتحانات بالتساوي على الأيام المتاحة. الامتحان الثاني بنفس اليوم يبدي بعد نهاية اللي قبله */
-export function buildPlan(exams: PlanExam[], o: { start: string; end: string; weekdays: number[]; hour: number; perDay: number; settings: SchedSettings }): Plan {
-  const { start, end, weekdays, hour, perDay, settings: s } = o;
+/** times: وقت كل امتحان باليوم (الأول، الثاني...) لكل يوم من الأسبوع، يختاره الطالب. بدونه كل الامتحانات تبدي من hour */
+export function buildPlan(exams: PlanExam[], o: { start: string; end: string; weekdays: number[]; hour: number; perDay: number; settings: SchedSettings; times?: Record<string, string[]> }): Plan {
+  const { start, end, weekdays, hour, settings: s, times } = o;
+  // الطالب اللي اختار وقت امتحان واحد باليوم ما ينحطله امتحانين
+  const perDay = times ? Math.min(o.perDay, ...weekdays.map((w) => (times[String(w)] ?? []).length)) : o.perDay;
   if (!exams.length) return { ok: false, error: "ماكو امتحانات تنحسب بالجدول." };
   if (end < start) return { ok: false, error: "تاريخ النهاية لازم يكون بعد البداية." };
   if (!weekdays.length) return { ok: false, error: "اختار أيام الامتحان." };
-  if (s.blockedHours.includes(hour)) return { ok: false, error: "هذي الساعة موقوفة من الإدارة، اختار غيرها." };
+  if (times && perDay < 1) return { ok: false, error: "اختار وقت الامتحان لكل يوم." };
+  if (!times && s.blockedHours.includes(hour)) return { ok: false, error: "هذي الساعة موقوفة من الإدارة، اختار غيرها." };
   const days = availableDays(start, end, weekdays, s);
   const n = exams.length;
   if (days.length * perDay < n) {
     const k = neededWeekdays(n, start, end, s, perDay);
-    if (k === null) return { ok: false, error: `عندك ${n} امتحان، والمدة ما تكفي حتى لو اخترت كل الأيام. مدد تاريخ النهاية.` };
-    return { ok: false, minWeekdays: k, error: `عندك ${n} امتحان، وهالأيام تكفي لـ ${days.length * perDay} بس. اختار ${k} أيام بالأسبوع على الأقل، أو مدد تاريخ النهاية.` };
+    const second = times && perDay < o.perDay ? "، أو اختار وقت امتحان ثاني باليوم" : "";
+    if (k === null) return { ok: false, error: `عندك ${n} امتحان، والمدة ما تكفي حتى لو اخترت كل الأيام. مدد تاريخ النهاية${second}.` };
+    return { ok: false, minWeekdays: k, error: `عندك ${n} امتحان، وهالأيام تكفي لـ ${days.length * perDay} بس. اختار ${k} أيام بالأسبوع على الأقل، أو مدد تاريخ النهاية${second}.` };
   }
   const perDayIdx = new Map<number, PlanExam[]>();
   exams.forEach((e, i) => {
@@ -55,6 +60,19 @@ export function buildPlan(exams: PlanExam[], o: { start: string; end: string; we
   let maxPerDay = 0;
   for (const [di, list] of [...perDayIdx].sort((a, b) => a[0] - b[0])) {
     maxPerDay = Math.max(maxPerDay, list.length);
+    if (times) {
+      // الوقت اللي اختاره الطالب، بس لازم يكون بعد نهاية اللي قبله والفاصل
+      const own = times[String(weekdayOf(days[di]))] ?? [];
+      let free = -1;
+      for (const [k, e] of list.entries()) {
+        const m = toMinutes(own[k] ?? "");
+        if (m < 0) return { ok: false, error: "اختار وقت الامتحان الثاني باليوم." };
+        if (free >= 0 && m < free) return { ok: false, error: `وقت الامتحان ${ORDINAL[k] ?? k + 1} لازم يكون ${ampm(`${p2(Math.floor(free / 60))}:${p2(free % 60)}`)} أو بعد، حتى يكون بعد نهاية اللي قبله بـ ${s.gap} دقيقة.` };
+        items.push({ examId: e.id, at: `${days[di]} ${own[k]}` });
+        free = m + e.minutes + s.gap;
+      }
+      continue;
+    }
     let minute = hour * 60;
     for (const e of list) {
       while (s.blockedHours.includes(Math.floor(minute / 60))) minute = (Math.floor(minute / 60) + 1) * 60;
@@ -66,6 +84,30 @@ export function buildPlan(exams: PlanExam[], o: { start: string; end: string; we
   const weeks = Math.max(1, Math.ceil((parse(end).getTime() - parse(start).getTime() + DAY_MS) / (7 * DAY_MS)));
   return { ok: true, items, days: days.length, maxPerDay, perWeek: Math.ceil(n / weeks) };
 }
+const ORDINAL = ["الأول", "الثاني", "الثالث", "الرابع"];
+/** 16:30 تصير 990 دقيقة. الوقت الغلط -1 */
+const toMinutes = (t: string) => (/^\d{2}:\d{2}$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3)) : -1);
+
+// ---------- العطلة قبل امتحان: الامتحان واللي بعده يزحفون
+/** اليوم اللي بعد day بـ m أيام تنفع (ok يگول إذا اليوم ينفع للامتحان) */
+export function advanceDays(day: string, m: number, ok: (d: string) => boolean) {
+  let d = day;
+  for (let left = m, guard = 0; left > 0 && guard < 3000; guard++) { d = addDays(d, 1); if (ok(d)) left--; }
+  return d;
+}
+/** كم يوم امتحان راح بالعطلة. أقلها واحد: يوم الامتحان نفسه */
+export function daysLost(from: string, to: string, ok: (d: string) => boolean) {
+  let n = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)) if (ok(d)) n++;
+  return Math.max(1, n);
+}
+/** النسخ تمشي ويا ترتيب الوقت: نسخة أول وقت باليوم القديم تصير لأول وقت باليوم الجديد */
+export function remapByOrder<T>(map: Record<string, T>, oldTimes: string[], newTimes: string[]): Record<string, T> {
+  const out: Record<string, T> = {};
+  oldTimes.forEach((t, i) => { if (map[t] !== undefined && newTimes[i]) out[newTimes[i]] = map[t]; });
+  return out;
+}
+
 /** وقت بعد الدقايق، بنفس صيغة at */
 export function addMinutes(at: string, m: number) {
   const d = new Date(at.replace(" ", "T") + ":00Z");

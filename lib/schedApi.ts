@@ -16,8 +16,8 @@ import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
 import { send } from "./telegram.ts";
-import { DEFAULT_SETTINGS, addDays, buildPlan, itemState, labelChapters, pickOptional, pickedAt, slotDays, ampm, validDay, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
-import { stamp, todayStr } from "./util.ts";
+import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
+import { esc, stamp, todayStr } from "./util.ts";
 import { authed, ensure, intOf, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
@@ -32,8 +32,8 @@ async function placeFor(uid: number) {
   const centerId = inPerson ? st?.center_id ?? -1 : 0;
   return { inPerson, centerId, label: inPerson ? await centerName(st?.center_id) || "مركزك" : "الامتحان الإلكتروني" };
 }
-/** ساعات الجدول الخاص */
-const allowedHours = (s: SchedSettings) => Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= 6 && !s.blockedHours.includes(h));
+/** ساعات الطالب الخاص الإلكتروني: من الساعة اللي تحددها الإدارة إلى الساعة */
+const allowedHours = (s: SchedSettings) => Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= s.fromHour && h <= s.toHour);
 /** حد الامتحانات باليوم: الخاص بالطالب إذا موجود، وإلا العام */
 export async function perDayFor(uid: number, s: SchedSettings) { return Number(await kvGet(`sched_perday_${uid}`)) || s.perDay; }
 
@@ -80,6 +80,123 @@ const toPlanExams = (rows: Row[]): PlanExam[] => rows.map((e) => ({ id: e.id, mi
 const placeSlots = async (center: number): Promise<Slot[]> => JSON.parse((await one("place_slots", { center_id: center }))?.slots || "[]");
 const picksOf = (sc: Row): Record<string, string> => JSON.parse(sc.picks || "{}");
 const placeDays = async (center: number) => new Map((await find("place_dates", { center_id: center })).map((d) => [d.exam_id as number, d.day as string]));
+
+// ---------- عطلة قبل امتحان: الامتحان واللي بعده يزحفون، بالمكان وبجداول الطلاب الخاصة
+type Range = { from: string; to: string };
+type HolPlace = Range & { center: number; name: string; moved: { exam: number; title: string; day: string; versions: string; to: string; toVersions: string }[] };
+type HolStudent = Range & { uid: number; on: boolean; moves: { id: number; at: string; to: string }[] };
+type Holiday = { id: number; exam: number; title: string; days: number; reason: string; places: HolPlace[]; students: HolStudent[]; at: string };
+const HOL_KEY = "exam_holidays";
+async function holidays(): Promise<Holiday[]> {
+  try { const j = JSON.parse(await kvGet(HOL_KEY) ?? "[]"); return Array.isArray(j) ? j : []; } catch { return []; }
+}
+const saveHolidays = (list: Holiday[]) => kvSet(HOL_KEY, JSON.stringify(list));
+const inRange = (d: string, r: Range) => d >= r.from && d <= r.to;
+const daysOf = (r: Range) => { const out: string[] = []; for (let d = r.from; d <= r.to; d = addDays(d, 1)) out.push(d); return out; };
+/** أيام عطل المكان: ما ينحط بيها امتحان إذا انعاد التوزيع */
+const placeHolidayDays = async (center: number) => (await holidays()).flatMap((h) => h.places.filter((p) => p.center === center).flatMap(daysOf));
+/** أيام عطل الطالب الخاص اللي ما لغاها: ما ينحط بيها امتحان إذا انعاد جدوله */
+const studentHolidayDays = async (uid: number) => (await holidays()).flatMap((h) => h.students.filter((x) => x.uid === uid && x.on).flatMap(daysOf));
+/** يوم ينفع للامتحان: من أيامه، مو عطلة ولا مستثنى ولا داخل عطلة امتحان ثانية */
+const dayOk = (weekdays: Set<number>, s: SchedSettings, ranges: Range[]) => (d: string) =>
+  weekdays.has(weekdayOf(d)) && !inHoliday(d, s) && !s.excluded.includes(d) && !ranges.some((r) => inRange(d, r));
+async function placeNames() {
+  return new Map<number, string>([[0, "💻 الإلكتروني"], ...(await find("centers")).map((c) => [c.id as number, `🏫 ${c.name}`] as [number, string])]);
+}
+/** شنو يصير إذا انحطت عطلة days يوم قبل الامتحان exam بهذي الأماكن: مواعيد المكان، وجداول الطلاب الخاصة */
+async function planHoliday(exam: number, days: number, centers: number[]) {
+  const s = await schedSettings();
+  const hols = await holidays();
+  const tomorrow = addDays(todayStr(), 1);
+  const titles = new Map((await find("bank_exams")).map((e) => [e.id as number, String(e.title ?? "")]));
+  const names = await placeNames();
+  const places: HolPlace[] = [];
+  for (const center of centers) {
+    const rows = await find("place_dates", { center_id: center });
+    const x = rows.find((r) => r.exam_id === exam);
+    if (!x?.day || x.day < tomorrow) continue;
+    const slots = await placeSlots(center);
+    const r = { from: x.day as string, to: addDays(x.day, days - 1) };
+    const base = dayOk(new Set(slots.map((t) => t.d)), s, hols.flatMap((h) => h.places.filter((p) => p.center === center)));
+    const lost = daysLost(r.from, r.to, base);
+    const ok = (d: string) => base(d) && !inRange(d, r);
+    const timesOf = (d: string) => slots.filter((t) => t.d === weekdayOf(d)).map((t) => t.t).sort();
+    const moved = rows.filter((row) => row.day >= r.from).sort((a, b) => String(a.day).localeCompare(String(b.day))).map((row) => {
+      const to = advanceDays(row.day, lost, ok);
+      return { exam: row.exam_id as number, title: titles.get(row.exam_id) ?? "", day: row.day as string, versions: String(row.versions || "{}"), to, toVersions: JSON.stringify(remapByOrder(JSON.parse(row.versions || "{}"), timesOf(row.day), timesOf(to))) };
+    });
+    places.push({ ...r, center, name: names.get(center) ?? "", moved });
+  }
+  const students: HolStudent[] = [];
+  for (const sc of await find("schedules")) {
+    if (sc.mode === "general") continue;
+    const uid = sc.user_id as number;
+    if (!centers.includes((await placeFor(uid)).centerId)) continue;
+    const items = (await find("sched_items", { user_id: uid, status: "waiting" }, { order: ["at"] })).filter((i) => !i.fixed && i.notified !== "test");
+    const x = items.find((i) => i.exam_id === exam);
+    const d0 = String(x?.at ?? "").slice(0, 10);
+    if (!x || d0 < tomorrow) continue;
+    const r = { from: d0, to: addDays(d0, days - 1) };
+    const base = dayOk(new Set(JSON.parse(sc.weekdays || "[]") as number[]), s, hols.flatMap((h) => h.students.filter((y) => y.uid === uid && y.on)));
+    const lost = daysLost(r.from, r.to, base);
+    const ok = (d: string) => base(d) && !inRange(d, r);
+    const times: Record<string, string[]> | null = sc.picks ? JSON.parse(sc.picks) : null;
+    const moves = items.filter((i) => String(i.at).slice(0, 10) >= d0).map((i) => {
+      const day = String(i.at).slice(0, 10), t = String(i.at).slice(11);
+      const to = advanceDays(day, lost, ok);
+      // الامتحان الثاني باليوم يبقى ثاني باليوم الجديد، بوقته اللي اختاره الطالب لذاك اليوم
+      const k = times?.[String(weekdayOf(day))]?.indexOf(t) ?? -1;
+      return { id: i.id as number, at: i.at as string, to: `${to} ${(k >= 0 && times?.[String(weekdayOf(to))]?.[k]) || t}` };
+    });
+    students.push({ ...r, uid, on: true, moves });
+  }
+  return { places, students };
+}
+/** الطالب الخاص لغى العطلة، أو الإدارة شالتها: امتحاناته ترجع لمواعيدها، إذا محد غيرها بعدين */
+async function restoreStudent(st: HolStudent) {
+  for (const m of st.moves) {
+    const it = await one("sched_items", { id: m.id });
+    if (it?.status === "waiting" && it.at === m.to) await update("sched_items", { id: m.id }, { at: m.at });
+  }
+}
+const holidayText = (h: Holiday, r: Range) => `قبل امتحان ${esc(h.title)}${h.reason ? ` (${esc(h.reason)})` : ""}، ${r.from === r.to ? `يوم ${r.from}` : `من ${r.from} لـ ${r.to}`}`;
+async function applyHoliday(h: Holiday) {
+  await tx(async () => {
+    for (const p of h.places) for (const m of p.moved) await put("place_dates", { center_id: p.center, exam_id: m.exam, day: m.to, versions: m.toVersions });
+    for (const st of h.students) for (const m of st.moves) await update("sched_items", { id: m.id }, { at: m.to });
+  });
+  let told = 0;
+  for (const p of h.places) told += await tellPlace(p.center);
+  for (const st of h.students) {
+    await send(st.uid, `🏖 <b>عطلة ${holidayText(h, st)}</b>\nوامتحاناتك من بعدها تأخرت. افتح امتحاناتي وشوف المواعيد.\n\nإذا ما تريد العطلة: بامتحاناتي دوس «❌ ما أريد العطلة»، فجدولك يرجع يتقدم.`);
+    await logActivity(st.uid, `🏖 انحطتله عطلة قبل ${h.title}، وزحف جدوله`);
+  }
+  return told + h.students.length;
+}
+async function undoHoliday(h: Holiday) {
+  await tx(async () => {
+    for (const p of h.places) {
+      const slots = await placeSlots(p.center);
+      const timesOf = (d: string) => slots.filter((t) => t.d === weekdayOf(d)).map((t) => t.t).sort();
+      for (const m of p.moved) {
+        const cur = await one("place_dates", { center_id: p.center, exam_id: m.exam });
+        if (cur?.day !== m.to) continue;   // الإدارة غيرته بعد العطلة: يبقى مثل ما هو
+        const versions = cur.versions === m.toVersions ? m.versions : JSON.stringify(remapByOrder(JSON.parse(cur.versions || "{}"), timesOf(m.to), timesOf(m.day)));
+        await put("place_dates", { center_id: p.center, exam_id: m.exam, day: m.day, versions });
+      }
+    }
+    for (const st of h.students) if (st.on) await restoreStudent(st);
+  });
+  for (const p of h.places) await tellPlace(p.center);
+  for (const st of h.students) if (st.on) await send(st.uid, `🗓 <b>انشالت العطلة</b> ${holidayText(h, st)}، ورجعت مواعيد امتحاناتك. افتح امتحاناتي وشوفها.`);
+}
+/** العطل اللي يشوفها الطالب بجدوله: عطل مكانه إذا ويا الطلاب، وعطله إذا جدول خاص (ويگدر يلغيها) */
+async function myHolidays(uid: number, sc: Row | null) {
+  const today = todayStr();
+  return (await holidays()).flatMap((h) => (sc?.mode === "general"
+    ? h.places.filter((p) => p.center === sc.center_id).map((p) => ({ id: h.id, from: p.from, to: p.to, title: h.title, reason: h.reason, cancel: false }))
+    : h.students.filter((x) => x.uid === uid && x.on).map((x) => ({ id: h.id, from: x.from, to: x.to, title: h.title, reason: h.reason, cancel: true })))).filter((x) => x.to >= today);
+}
 /** أوقات كل يوم من أيام المكان، حتى يختار الطالب وقت لكل يوم */
 function daysView(slots: Slot[]) {
   return DAY_ORDER.filter((d) => slots.some((x) => x.d === d)).map((d) => ({ d, name: DAYS[d], times: slots.filter((x) => x.d === d).map((x) => x.t).sort().map((t) => ({ t, label: ampm(t) })) }));
@@ -178,7 +295,8 @@ async function studentInfo(uid: number) {
     // الإدارة غيرت الأوقات واللي اختاره راح: يختار من جديد
     repick: general && !picksFit(slots, picksOf(sched!)),
     picks: general ? picksOf(sched!) : null,
-    schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour } : null,
+    schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour, times: sched.picks ? JSON.parse(sched.picks) : null } : null,
+    holidays: await myHolidays(uid, sched), gap: s.gap,
     days: daysView(slots),
     optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
     // آخر سيطرة عبرها: تومض ويا شخصيتها لحد ما يشوفها
@@ -199,18 +317,43 @@ function formOf(body: Row, minStart: string) {
   need(validDay(start) && validDay(end), "اختار تاريخ البداية والنهاية");
   need(start >= minStart, "تاريخ البداية لازم يكون من باجر فصاعداً");
   const weekdays = [...new Set((Array.isArray(body.weekdays) ? body.weekdays : []).map(Number))].filter((d) => DAY_ORDER.includes(d)) as number[];
-  return { start: start as string, end: end as string, weekdays, hour: intOf(body.hour, 0, 23, "اختار الساعة") };
+  // وقت كل امتحان باليوم (الأول والثاني...) لكل يوم من أيامه، يختاره الطالب
+  let times: Record<string, string[]> | undefined;
+  if (body.times && typeof body.times === "object") {
+    need(weekdays.length, "اختار أيام الامتحان");
+    times = {};
+    for (const d of weekdays) {
+      const raw = (body.times as Row)[String(d)];
+      const list = (Array.isArray(raw) ? raw : []).map(String).filter(Boolean);
+      need(list.length, "اختار وقت الامتحان لكل يوم");
+      need(list.every((t) => /^\d{2}:\d{2}$/.test(t)), "وقت غير صحيح");
+      need(list.every((t, i) => !i || t > list[i - 1]), "وقت الامتحان الثاني لازم يكون بعد الأول");
+      times[String(d)] = list;
+    }
+  }
+  const hour = times ? Number(times[String(weekdays[0])][0].slice(0, 2)) : intOf(body.hour, 0, 23, "اختار الساعة");
+  return { start: start as string, end: end as string, weekdays, hour, times };
 }
 async function planFor(uid: number, body: Row) {
   const s = await schedSettings();
   await closeMissed(uid, s);
   const f = formOf(body, addDays(todayStr(), 1));
-    const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
-  return { f, left, plan: buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: s }) };
+  const place = await placeFor(uid);
+  if (place.inPerson) {
+    // الحضوري الخاص: نفس أيام مركزه وأوقاته، مو بكيفه
+    const slots = await placeSlots(place.centerId);
+    need(slots.length, "مركزك ما بيه أوقات بعد");
+    need(f.times, "اختار وقت الامتحان من أوقات مركزك");
+    need(f.weekdays.every((d) => slots.some((x) => x.d === d)), "اختار من أيام مركزك بس");
+    need(f.weekdays.every((d) => f.times![String(d)].every((t) => slots.some((x) => x.d === d && x.t === t))), "اختار من أوقات مركزك بس");
+  } else if (f.times) need(Object.values(f.times).flat().every((t) => { const h = Number(t.slice(0, 2)); return h >= s.fromHour && h <= s.toHour; }), `الامتحان يبدي من الساعة ${ampm(`${String(s.fromHour).padStart(2, "0")}:00`)} إلى ${ampm(`${String(s.toHour).padStart(2, "0")}:00`)} بس`);
+  const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
+  const settings = { ...s, excluded: [...s.excluded, ...await studentHolidayDays(uid)] };
+  return { f, left, plan: buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings }) };
 }
-async function saveItems(uid: number, f: Row, items: { examId: number; at: string }[]) {
+async function saveItems(uid: number, f: Row & { times?: Record<string, string[]> }, items: { examId: number; at: string }[]) {
   await tx(async () => {
-    await put("schedules", { user_id: uid, mode: "private", center_id: null, picks: null, start_day: f.start, end_day: f.end, weekdays: JSON.stringify(f.weekdays), hour: f.hour, created: stamp() });
+    await put("schedules", { user_id: uid, mode: "private", center_id: null, picks: f.times ? JSON.stringify(f.times) : null, start_day: f.start, end_day: f.end, weekdays: JSON.stringify(f.weekdays), hour: f.hour, created: stamp() });
     await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });
     for (const it of items) await insert("sched_items", { user_id: uid, exam_id: it.examId, at: it.at, status: "waiting" });
   });
@@ -301,6 +444,17 @@ export async function myExamAction(body: Row) {
     else await leaveGroup(id);
     return { ...await studentInfo(id), notice: a === "compCreate" ? "✅ انسوت المجموعة. دز الرابط لأصدقائك" : a === "compJoin" ? "✅ فتت للمجموعة" : "🚪 طلعت من المجموعة" };
   }
+  if (a === "holidayOff") {
+    const list = await holidays();
+    const h = list.find((x) => x.id === Number(body.holiday));
+    const st = h?.students.find((x) => x.uid === id && x.on);
+    need(st, "هذي العطلة مو بجدولك");
+    await tx(() => restoreStudent(st!));
+    st!.on = false;
+    await saveHolidays(list);
+    await logActivity(id, `🏖 لغى العطلة قبل ${h!.title}، فتقدم جدوله`);
+    return { ...await studentInfo(id), notice: "✅ لغيت العطلة، وجدولك تقدم" };
+  }
   if (a === "lectureFile") { await sendLectureFile(id, body.name); return { ...await studentInfo(id), notice: "📄 وصلك ملف المحاضرة بالبوت" }; }
   if (a === "cpSeen") { await seeCheckpoint(id, body.key); return await studentInfo(id); }
   if (a === "askException") {
@@ -333,8 +487,8 @@ async function rebuildAll(s: SchedSettings) {
     await closeMissed(uid, s);
     const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
     if (!left.length) continue;
-    const f = { start, end: sc.end_day, weekdays: JSON.parse(sc.weekdays), hour: sc.hour };
-    const plan = buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: s });
+    const f = { start, end: sc.end_day, weekdays: JSON.parse(sc.weekdays), hour: sc.hour, times: sc.picks ? JSON.parse(sc.picks) as Record<string, string[]> : undefined };
+    const plan = buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: { ...s, excluded: [...s.excluded, ...await studentHolidayDays(uid)] } });
     if (plan.ok) {
       await saveItems(uid, f, plan.items);
       await send(uid, "🗓 <b>تغير جدول امتحاناتك</b> بسبب تغيير العطلة. افتح امتحاناتي وشوف المواعيد الجديدة.");
@@ -352,14 +506,17 @@ export async function schedAdminAction(body: Row) {
   const uid = await authed(body?.initData, SCHED_PERM);
   const a = String(body.action ?? "");
   let notice = "";
+  let preview: Row | null = null;
   if (a === "save") {
     const old = await schedSettings();
     const holidayStart = String(body.holidayStart ?? "");
     need(!holidayStart || validDay(holidayStart), "تاريخ بداية العطلة غير صحيح");
-    const hours = [...new Set((Array.isArray(body.blockedHours) ? body.blockedHours : []).map(Number))].filter((h) => Number.isInteger(h) && h >= 0 && h < 24).sort((x, y) => x - y) as number[];
+    const fromHour = body.fromHour === undefined ? old.fromHour : intOf(body.fromHour, 0, 23, "اختار أول ساعة");
+    const toHour = body.toHour === undefined ? old.toHour : intOf(body.toHour, 0, 23, "اختار آخر ساعة");
+    need(fromHour <= toHour, "آخر ساعة لازم تكون بعد أول ساعة");
     const next: SchedSettings = {
       window: intOf(body.window, 1, 600, "وقت الدخول بالدقائق، من 1 إلى 600"), extra: intOf(body.extra, 0, 600, "الوقت الإضافي بالدقائق، من 0 إلى 600"), excWindow: body.excWindow === undefined ? old.excWindow : intOf(body.excWindow, 1, 10000, "وقت الاستثناء بالدقائق"), optionalOpen: body.optionalOpen === undefined ? old.optionalOpen : !!body.optionalOpen, perDay: intOf(body.perDay, 1, 10, "امتحانات اليوم من 1 إلى 10"), gap: intOf(body.gap, 0, 600, "الفاصل بالدقائق، من 0 إلى 600"),
-      holidayStart, holidayDays: intOf(body.holidayDays, 0, 120, "أيام العطلة من 0 إلى 120"), blockedHours: hours, excluded: dayList(body.excluded),
+      holidayStart, holidayDays: intOf(body.holidayDays, 0, 120, "أيام العطلة من 0 إلى 120"), blockedHours: [], excluded: dayList(body.excluded), fromHour, toHour,
       // الطالب يگدر يختار صورة جوابه من الاستوديو، لو الكاميرا بس
       gallery: body.gallery === undefined ? old.gallery : !!body.gallery,
     };
@@ -399,7 +556,8 @@ export async function schedAdminAction(body: Row) {
     const versions = await find("bank_versions");
     const exams = (await find("bank_exams")).filter((e) => { const vs = versions.filter((v) => v.exam_id === e.id); return !vs.length || vs.some((v) => v.kind === "mandatory"); })
       .sort((x, y) => String(x.slug).localeCompare(String(y.slug)) || (x.pos ?? x.ord) - (y.pos ?? y.ord));
-    const days = slotDays(slots, String(body.start), exams.length, await schedSettings());
+    const ss = await schedSettings();
+    const days = slotDays(slots, String(body.start), exams.length, { ...ss, excluded: [...ss.excluded, ...await placeHolidayDays(center)] });
     const old = new Map((await find("place_dates", { center_id: center })).map((d) => [d.exam_id, d.versions]));
     await tx(async () => {
       await remove("place_dates", { center_id: center });
@@ -453,8 +611,35 @@ export async function schedAdminAction(body: Row) {
     }
     await kvSet("old_dates_loaded_v2", "1");
     notice = `✅ انضاف ${added} موعد${missing.length ? `. ما لگيت هاي المراكز: ${missing.join("، ")}` : ""}`;
+  } else if (a === "holidayPreview" || a === "holidayAdd") {
+    const exam = Number(body.exam);
+    const days = intOf(body.days, 1, 60, "أيام العطلة من 1 إلى 60");
+    const reason = String(body.reason ?? "").trim().slice(0, 80);
+    const all = body.scope === "all";
+    const centers = all ? [0, ...(await find("centers", { active: 1 })).map((c) => c.id as number)] : [Number(body.center ?? 0)];
+    const plan = await planHoliday(exam, days, centers);
+    need(plan.places.length || plan.students.length, all ? "هذا الامتحان ما إله موعد جاي بأي مكان" : "هذا الامتحان ما إله موعد جاي بهذا المكان");
+    if (a === "holidayPreview") {
+      preview = { exam, days, reason, scope: all ? "all" : "place", students: plan.students.length,
+        places: plan.places.map((p) => ({ name: p.name, from: p.from, to: p.to, rows: p.moved.map((m) => ({ title: m.title, from: m.day, to: m.to })) })) };
+    } else {
+      const list = await holidays();
+      const title = String((await one("bank_exams", { id: exam }))?.title ?? "");
+      const h: Holiday = { id: Date.now(), exam, title, days, reason, places: plan.places, students: plan.students, at: stamp() };
+      await saveHolidays([...list, h]);
+      const told = await applyHoliday(h);
+      notice = `🏖 انحطت العطلة، وزحفت مواعيد ${plan.places.length} مكان${plan.students.length ? ` و${plan.students.length} جدول خاص` : ""}${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
+    }
+  } else if (a === "holidayDel") {
+    const list = await holidays();
+    const h = list.find((x) => x.id === Number(body.id));
+    need(h, "العطلة غير موجودة");
+    await undoHoliday(h!);
+    await saveHolidays(list.filter((x) => x.id !== h!.id));
+    notice = "↩️ انشالت العطلة، ورجعت المواعيد";
   } else need(a === "list", "أمر غير معروف");
-  return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice };
+  const holidayList = (await holidays()).map((h) => ({ id: h.id, title: h.title, days: h.days, reason: h.reason, places: h.places.map((p) => `${p.name}: ${p.from}`), students: h.students.filter((x) => x.on).length }));
+  return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice, holidays: holidayList, holidayPreview: preview };
 }
 const cronUrl = () => `${siteBase()}/api/cron?key=${cronKey()}`;
 /** كل طالب بهذا المكان يوصله خبر واحد إذا تغيرت مواعيده */

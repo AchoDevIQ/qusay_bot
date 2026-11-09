@@ -4,9 +4,14 @@ import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 import { ampm, flattenDays, groupSlots, spreadVersions } from "../../../lib/scheduleRules.ts";
 
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
+
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; versions: Record<string, number>; models: { id: number; model: string }[] };
-type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; blockedHours: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string };
+type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holidayPreview: HolPreview | null };
+type Hol = { id: number; title: string; days: number; reason: string; places: string[]; students: number };
+type HolPreview = { exam: number; days: number; reason: string; scope: "place" | "all"; students: number; places: { name: string; from: string; to: string; rows: { title: string; from: string; to: string }[] }[] };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
 export default function ScheduleClient() {
@@ -19,7 +24,7 @@ export default function ScheduleClient() {
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && <Place d={data} busy={busy} act={act} />}
-        {data && <Form key={JSON.stringify([data.optionalOpen, data.gallery, data.window, data.extra, data.excWindow, data.perDay, data.gap, data.holidayStart, data.holidayDays, data.blockedHours, data.excluded])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
+        {data && <Form key={JSON.stringify([data.optionalOpen, data.gallery, data.window, data.extra, data.excWindow, data.perDay, data.gap, data.holidayStart, data.holidayDays, data.fromHour, data.toHour, data.excluded])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
@@ -37,7 +42,8 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
   const [holidayStart, setHolidayStart] = useState(d.holidayStart);
   const [holidayDays, setHolidayDays] = useState(String(d.holidayDays));
   const [excluded, setExcluded] = useState(d.excluded.join("\n"));
-  const [blocked, setBlocked] = useState(d.blockedHours);
+  const [fromHour, setFromHour] = useState(d.fromHour);
+  const [toHour, setToHour] = useState(d.toHour);
   return (
     <div className="card">
       <h2>🗓 الجداول المثبتة: {d.schedules}</h2>
@@ -52,7 +58,8 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <label className="adcheck adflat"><input type="checkbox" checked={gallery} onChange={(e) => setGallery(e.target.checked)} /><span>🖼 الطالب يگدر يختار صورة جوابه من الاستوديو (إذا مطفي: الكاميرا بس)</span></label>
         <label>أكثر عدد امتحانات باليوم بالجدول الخاص</label>
         <input className="ltr" inputMode="numeric" value={perDay} onChange={(e) => setPerDay(e.target.value)} />
-        <label>الفاصل بين امتحانين بنفس اليوم (دقيقة)</label>
+        <label>أقل فاصل بين امتحانين بنفس اليوم بالجدول الخاص (دقيقة)</label>
+        <div className="exhint">الطالب الخاص يختار وقت الامتحان الثاني بنفسه، بس ما يگدر يحطه أقرب من نهاية الأول وهذا الفاصل.</div>
         <input className="ltr" inputMode="numeric" value={gap} onChange={(e) => setGap(e.target.value)} />
         <label>بداية عطلة نصف السنة</label>
         <input type="date" className="ltr" value={holidayStart} onChange={(e) => setHolidayStart(e.target.value)} />
@@ -60,15 +67,14 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <input className="ltr" inputMode="numeric" value={holidayDays} onChange={(e) => setHolidayDays(e.target.value)} />
         <label>أيام مستثناة من كل الجداول (كل يوم بسطر، مثل 2027-03-21)</label>
         <textarea className="pdtext ltr" rows={3} value={excluded} onChange={(e) => setExcluded(e.target.value)} />
-        <label>ساعات ممنوعة</label>
-        <div className="chips adflat">
-          {Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= 6).map((h) => (
-            <button type="button" key={h} className={blocked.includes(h) ? "on" : ""} onClick={() => setBlocked(blocked.includes(h) ? blocked.filter((x) => x !== h) : [...blocked, h])}>{String(h).padStart(2, "0")}:00</button>
-          ))}
-        </div>
+        <label>الطالب الخاص الإلكتروني يمتحن من الساعة</label>
+        <select aria-label="أول ساعة" value={fromHour} onChange={(e) => setFromHour(Number(e.target.value))}>{HOURS.map((h) => <option key={h} value={h}>{ampm(hh(h))}</option>)}</select>
+        <label>إلى الساعة</label>
+        <select aria-label="آخر ساعة" value={toHour} onChange={(e) => setToHour(Number(e.target.value))}>{HOURS.filter((h) => h >= fromHour).map((h) => <option key={h} value={h}>{ampm(hh(h))}</option>)}</select>
+        <div className="exhint">هاي الساعات بس تطلعله يختار منها وقت امتحانه. الطالب الخاص الحضوري يختار من أوقات مركزه، وطلاب «ويا الطلاب» من أوقات مكانهم.</div>
         <div className="exhint">⚠️ إذا غيرت العطلة أو الأيام المستثناة، جداول الطلاب تنعاد من باجر، وكل طالب يوصله الخبر.</div>
         {d.cronUrl && <CronBox url={d.cronUrl} />}
-        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, excWindow, optionalOpen, gallery, perDay, gap, holidayStart, holidayDays, excluded, blockedHours: blocked })}>حفظ</button>
+        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, excWindow, optionalOpen, gallery, perDay, gap, holidayStart, holidayDays, excluded, fromHour, toHour: Math.max(fromHour, toHour) })}>حفظ</button>
       </div>
     </div>
   );
@@ -104,6 +110,7 @@ function Place({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
         <div className="exhint">{d.students} طالب ويا الطلاب بهذا المكان. كل طالب يختار وقت لكل يوم بكيفه.</div>
         <Slots key={`${d.center}|${JSON.stringify(d.slots)}`} d={d} busy={busy} act={act} />
         <Dates key={`${d.center}|${JSON.stringify(d.rows)}|${JSON.stringify(d.slots)}`} d={d} busy={busy} act={act} />
+        <Holidays d={d} busy={busy} act={act} />
       </div>
     </div>
   );
@@ -156,6 +163,7 @@ function Slots({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
 function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   const [rows, setRows] = useState(d.rows);
   const [start, setStart] = useState("");
+  const [hol, setHol] = useState(0);
   const chapters = [...new Set(rows.map((r) => r.chapter))];
   const set = (exam: number, o: Partial<Row>) => setRows(rows.map((r) => (r.exam === exam ? { ...r, ...o } : r)));
   const timesOf = (date: string) => { if (!date) return []; const w = (new Date(date + "T00:00:00Z").getUTCDay() + 6) % 7; return d.slots.filter((x) => x.d === w).map((x) => x.t).sort(); };
@@ -196,6 +204,8 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
                   ))}
                 </div>
                 {!r.date && <small className="exhint">حط تاريخه حتى تطلع أوقاته وتختار نسخها.</small>}
+                {r.date && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setHol(hol === r.exam ? 0 : r.exam)}>🏖 عطلة قبله</button>}
+                {hol === r.exam && <HolidayPanel d={d} exam={r.exam} title={r.title} busy={busy} act={act} />}
                 {r.date && !times.length && <small className="exbad">هذا اليوم ما إله أوقات بـ ⏰ الأيام وأوقاتها.</small>}
               </div>
             );
@@ -203,6 +213,61 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
         </div>
       ))}
       <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void act({ action: "saveDates", rows: rows.map((r) => ({ exam: r.exam, date: r.date, versions: r.versions })) })}>حفظ المواعيد والنسخ</button>
+    </div>
+  );
+}
+
+/** عطلة قبل امتحان: تختار كم يوم ووين، تشوف الزحف، وبعدها تثبته */
+function HolidayPanel({ d, exam, title, busy, act }: { d: Data; exam: number; title: string; busy: boolean; act: Act }) {
+  const [days, setDays] = useState("1");
+  const [reason, setReason] = useState("");
+  const [scope, setScope] = useState<"place" | "all">("place");
+  const body = { exam, days, reason, scope };
+  const pv = d.holidayPreview;
+  const fresh = pv && pv.exam === exam && String(pv.days) === days && pv.reason === reason.trim() && pv.scope === scope;
+  return (
+    <div className="adsale adtop">
+      <div className="exlabel">🏖 عطلة قبل {title}</div>
+      <div className="exhint">الامتحان هذا وكل اللي بعده يزحفون لأيام الامتحان الجاية، بنفس الترتيب، والنسخ تمشي وياهم. الطلاب يوصلهم خبر.</div>
+      <label>كم يوم</label>
+      <input className="ltr" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} />
+      <label>السبب (يطلع للطلاب)</label>
+      <input value={reason} placeholder="مثلاً: راحة قبل الفاينل" onChange={(e) => setReason(e.target.value)} />
+      <div className="seg wrap2 adtop">
+        <button type="button" className={scope === "place" ? "on" : ""} onClick={() => setScope("place")}>📍 هذا المكان بس</button>
+        <button type="button" className={scope === "all" ? "on" : ""} onClick={() => setScope("all")}>🌍 كل الأماكن</button>
+      </div>
+      {scope === "all" && <div className="exhint">بكل مكان العطلة تصير قبل نفس الامتحان، حسب تاريخه بذاك المكان.</div>}
+      <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void act({ action: "holidayPreview", ...body })}>👀 شوف الزحف</button>
+      {fresh && (
+        <>
+          {pv!.places.map((p) => (
+            <div key={p.name} className="adtop">
+              <b>{p.name}</b> <small className="pdmode">العطلة {p.from === p.to ? p.from : `${p.from} إلى ${p.to}`}</small>
+              <table className="extable"><tbody>{p.rows.map((x) => <tr key={x.title}><td>{x.title}</td><td className="adphone">{x.from} ← {x.to}</td></tr>)}</tbody></table>
+            </div>
+          ))}
+          {pv!.students > 0 && <div className="exhint adtop">و{pv!.students} طالب جدول خاص: تنحطلهم العطلة ويزحف جدولهم، ويگدرون يلغونها من امتحاناتي فيتقدم.</div>}
+          <Confirm label="✅ ازحف" disabled={busy} onYes={() => void act({ action: "holidayAdd", ...body })} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** العطل اللي انحطت، وتگدر تشيلها فترجع المواعيد */
+function Holidays({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
+  if (!d.holidays.length) return null;
+  return (
+    <div className="exfoot">
+      <div className="exlabel">🏖 العطل</div>
+      {d.holidays.map((h) => (
+        <div key={h.id} className="adsale">
+          <div><b>قبل {h.title}</b> · {h.days} يوم{h.reason ? ` · ${h.reason}` : ""}</div>
+          <small className="pdmode">{h.places.join("، ")}{h.students ? ` · ${h.students} جدول خاص` : ""}</small>
+          <Confirm label="↩️ شيل العطلة" disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id })} />
+        </div>
+      ))}
     </div>
   );
 }
