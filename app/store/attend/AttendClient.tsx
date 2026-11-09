@@ -8,7 +8,7 @@ import RescanList, { type Rescan } from "./RescanList";
 
 type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean; late?: boolean; printed?: boolean };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
-type Exam = { id: number; title: string; chapter: string; versions: { model: string; token: string }[] };
+type Exam = { id: number; title: string; chapter: string; pageMap: number[][] | null; versions: { model: string; token: string }[] };
 type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
 type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; station?: { active: boolean; token: string } | null; canCam: boolean; early: number; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -35,6 +35,7 @@ export default function AttendClient() {
               <a className="btn agbtn adtop" style={{ textDecoration: "none", display: "block", textAlign: "center" }} href={`/store/scanup${location.search}`}>📤 رفع أوراق السكانر</a>
             </div>}
             {data.full && <Copies exams={data.exams} />}
+            {data.full && <PageMap exams={data.exams} busy={busy} call={call} />}
             {data.owner && <Early key={data.early} early={data.early} busy={busy} call={call} />}
             {data.owner && <Centers centers={data.centers} busy={busy} call={call} />}
           </>
@@ -182,6 +183,43 @@ function CamUp({ data, busy, call }: { data: Data; busy: boolean; call: Call }) 
           {err && <div className="err">⚠️ {err}</div>}
           <button type="button" className="btn agbtn adtop" disabled={busy || up || !have.length || !!draft} onClick={() => void call({ action: "finish", items: [c.item] })}>📨 دز للتصحيح ({have.length} صورة)</button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** ورقة A3 أو أي ورقة بيها أكثر من سؤال: أي أسئلة بكل صفحة، حتى السكانر يوزع والمصحح يقلب بينها */
+function PageMap({ exams, busy, call }: { exams: Exam[]; busy: boolean; call: Call }) {
+  const [id, setId] = useState(0);
+  const [rows, setRows] = useState<string[]>([]);
+  const parse = () => rows.map((r) => r.split(/[^\d]+/).filter(Boolean).map(Number));
+  function pick(n: number) { setId(n); const e = exams.find((x) => x.id === n); setRows(e?.pageMap ? e.pageMap.map((p) => p.join(" ")) : [""]); }
+  const e = exams.find((x) => x.id === id);
+  return (
+    <div className="card expad">
+      <div className="exlabel">📑 توزيع صفحات الورقة</div>
+      <div className="exhint">إذا الامتحان ورقة A3 أو الصفحة بيها أكثر من سؤال: اكتب أسئلة كل صفحة، مثلاً الصفحة 2: 2 3. الليبل على أول صفحة، والسكانر يوزع حسب ترتيب الصفحات. إذا فارغ: كل سؤال بصفحة وعليها كود.</div>
+      <select className="exinput adtop" aria-label="الامتحان" value={id} onChange={(x) => pick(Number(x.target.value))}>
+        <option value={0}>اختار الامتحان</option>
+        {exams.map((x) => <option key={x.id} value={x.id}>{x.chapter} · {x.title}{x.pageMap ? " 📑" : ""}</option>)}
+      </select>
+      {e && (
+        <>
+          {rows.map((r, i) => (
+            <div key={i} className="atrow adtop">
+              <span>الصفحة {i + 1}</span>
+              <input className="exinput" inputMode="numeric" dir="ltr" aria-label={`أسئلة الصفحة ${i + 1}`} placeholder="مثلاً 2 3" value={r} onChange={(x) => setRows(rows.map((v, j) => (j === i ? x.target.value : v)))} />
+            </div>
+          ))}
+          <div className="atrow adtop">
+            <button type="button" className="exbtn" onClick={() => setRows([...rows, ""])}>➕ صفحة</button>
+            {rows.length > 1 && <button type="button" className="exbtn" onClick={() => setRows(rows.slice(0, -1))}>➖ صفحة</button>}
+          </div>
+          <div className="atrow adtop">
+            <button type="button" className="btn" disabled={busy || parse().some((p) => !p.length)} onClick={() => void call({ action: "pageMap", exam: id, map: parse() })}>💾 حفظ التوزيع</button>
+            {e.pageMap && <button type="button" className="exbtn" disabled={busy} onClick={() => { setRows([""]); void call({ action: "pageMap", exam: id, map: [] }); }}>↩️ كل سؤال بصفحة</button>}
+          </div>
+        </>
       )}
     </div>
   );

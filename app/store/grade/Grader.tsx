@@ -19,7 +19,7 @@ export type Prepared = { total: number; comment: string; sticker: number; sent: 
 type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "w"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
 export type Sticker = { id: number; name: string; lo: number; hi: number };
 type Ink = { rot: number; items: Item[] };
-type Page = { src: string | null; q: number | null };
+type Page = { src: string | null; q: number | null; qs?: number[] };   // qs: صفحة وحدة بيها أكثر من سؤال
 type Tool = "hand" | "pen" | "eraser" | "text" | "stamp" | "wrong" | "sticker";
 
 const COLORS = ["#111111", "#555555", "#9e9e9e", "#ffffff", "#e53935", "#c62828", "#ff5252", "#ff7043", "#fb8c00", "#ffb300", "#fdd835", "#c0ca33",
@@ -29,11 +29,13 @@ const ZOOMS = [0.75, 1, 1.25, 1.5, 2, 2.5];
 const GREEN = "#1f9d55";
 const RED = "#e53935";
 const isPdf = (f: string) => /\.pdf$/i.test(f);
+const holds = (p: Page, n: number) => p.q === n || !!p.qs?.includes(n);
 const parseInk = (s: string | undefined): Ink => { try { const j = JSON.parse(s || ""); return { rot: Number(j.rot) || 0, items: Array.isArray(j.items) ? j.items : [] }; } catch { return { rot: 0, items: [] }; } };
 
 /** صفحات الورقة بالترتيب: الورقة الكاملة أول، بعدها جواب كل سؤال. السؤال اللي ما بي جواب يبقى صفحة فارغة حتى تنطي درجته */
 async function buildPages(paper: Paper, url: (r: string) => string): Promise<Page[]> {
   const out: Page[] = [];
+  const shared = new Map<string, Page>();
   const add = async (f: string, q: number | null) => {
     if (isPdf(f) && q === null) {
       // ورقة كاملة (مثل أوراق التجربة): تنقسم صفحة لكل سؤال، حتى الدرجة تقلب للسؤال اللي بعده
@@ -50,7 +52,14 @@ async function buildPages(paper: Paper, url: (r: string) => string): Promise<Pag
       }
     }
     if (isPdf(f)) for (const src of await pdfToImages(url(f))) out.push({ src, q });
-    else out.push({ src: url(f), q });
+    else {
+      // نفس الصورة لأكثر من سؤال (ورقة A3): صفحة وحدة، والمصحح يقلب بين أسئلتها
+      const had = q !== null ? shared.get(f) : undefined;
+      if (had && q !== null) { had.qs = [...(had.qs ?? [had.q!]), q]; had.q = null; return; }
+      const pg: Page = { src: url(f), q };
+      out.push(pg);
+      if (q !== null) shared.set(f, pg);
+    }
   };
   for (const f of paper.whole) await add(f, null);
   if (paper.questions.some((q) => q.answers.length) || !paper.whole.length) {
@@ -364,7 +373,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     buildPages(paper, url).then((p) => {
       if (stop) return;
       setPages(p);
-      const first = objMode ? p.findIndex((x) => x.q === objs[0].q) : p.findIndex((x) => x.q !== null && marks[x.q] === null);
+      const first = objMode ? p.findIndex((x) => holds(x, objs[0].q)) : p.findIndex((x) => (x.q !== null && marks[x.q] === null) || !!x.qs?.some((n) => marks[n] === null));
       if (first > 0) setAt(first);
     }).catch(() => { if (!stop) setPages([]); });
     return () => { stop = true; };
@@ -411,6 +420,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   function go(i: number) {
     if (!pages || i < 0 || i >= pages.length) return;
     void flush(); setAt(i); setPenBox(false);
+    const on = pages[i].qs;
+    if (on && !on.includes(qSel)) setQSel(on.find((n) => marks[n] === null || marks[n] === undefined) ?? on[0]);
     stage.current?.scrollTo({ top: 0 });
   }
   const page = pages?.[at];
@@ -421,7 +432,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const changedObj = (o: Objection) => marks[o.q] !== null && marks[o.q] !== undefined && marks[o.q] !== o.old;
   const undecided = objs.filter((o) => !changedObj(o) && rejects[o.q] === undefined);
   const accepted = objs.filter(changedObj).length;
-  function goQ(n: number) { const i = pages?.findIndex((p) => p.q === n) ?? -1; if (i >= 0) go(i); else setQSel(n); }
+  function goQ(n: number) { const i = pages?.findIndex((p) => holds(p, n)) ?? -1; if (i >= 0) go(i); setQSel(n); }
   async function press(m: number) {
     if (!q || locked) return;
     if (objMode && !objOf(q.n)) return;
@@ -439,7 +450,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     await new Promise((r) => setTimeout(r, 450));
     const nextQ = paper.questions[paper.questions.findIndex((x) => x.n === n) + 1];
     if (!nextQ || (q && q.n !== n)) return;
-    if (page?.q !== null && pages) { const i = pages.findIndex((p) => p.q === nextQ.n); if (i >= 0) go(i); }
+    if (page && holds(page, nextQ.n)) setQSel(nextQ.n);
+    else if ((page?.q !== null || page?.qs) && pages) { const i = pages.findIndex((p) => holds(p, nextQ.n)); if (i >= 0) { go(i); setQSel(nextQ.n); } }
     else setQSel(nextQ.n);
   }
   function pickTool(t: Tool) {
@@ -480,8 +492,9 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     const miss = paper.questions.find((x) => marks[x.n] === null || marks[x.n] === undefined);
     if (miss) {
       setSaveErr(`باقي درجة السؤال ${miss.n}`);
-      const i = pages?.findIndex((p) => p.q === miss.n) ?? -1;
-      if (i >= 0) go(i); else setQSel(miss.n);
+      const i = pages?.findIndex((p) => holds(p, miss.n)) ?? -1;
+      if (i >= 0) go(i);
+      setQSel(miss.n);
       return;
     }
     onSave(Promise.all([flush(), ...pendingMarks.current]).then(() => undefined), composeAll);
@@ -539,7 +552,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       </div>
       {q && (
         <div className="gk-row gk-marks">
-          {page?.q === null && <div className="gk-qs">{paper.questions.map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
+          {page?.q === null && <div className="gk-qs">{paper.questions.filter((x) => !page.qs || page.qs.includes(x.n)).map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
           <span className="gk-q">س{q.n}<small> من {q.max}</small>{q.byAi && <small className="gk-byai"> · 🤖 صححه AI</small>}</span>
           <div className="gk-nums" style={{ ["--cols" as string]: q.max + 1 <= 16 ? q.max + 1 : Math.ceil((q.max + 1) / 2) }}>
             {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (

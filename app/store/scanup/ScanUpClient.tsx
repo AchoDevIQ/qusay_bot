@@ -6,10 +6,11 @@ import jsQR from "jsqr";
 import { useEffect, useState } from "react";
 import RescanList, { type Rescan } from "../attend/RescanList";
 import { AdminHeader, pageAuth } from "../adminPage";
+import { assignPages, type PageItem } from "./assign";
 
 type Src = { file: File; page: number };           // page = رقم صفحة الـ PDF، أو 0 للصورة
-type Hit = { src: Src; flip: boolean; item: number; q: number; label: string };
-type Item = { id: number; ok: boolean; name: string; graded?: boolean; qs: number[] };
+type Hit = { src: Src; flip: boolean; item: number; q: number; seq: number; qs?: number[]; label: string };
+type Item = PageItem;
 type Plan = { hits: Hit[]; items: Map<number, Item>; problems: string[]; blank: number };
 
 const DETECT_W = 1300, UPLOAD_W = 1600;
@@ -101,6 +102,8 @@ export default function ScanUpClient() {
     setStep("read"); setError("");
     const hits: Hit[] = [], problems: string[] = [];
     let cur = 0, lastQ = 0, blank = 0;
+    const seq = new Map<number, number>();   // رقم صفحة كل طالب بعد ليبله
+    const add = (src: Src, flip: boolean, label: string) => { const n = (seq.get(cur) ?? 0) + 1; seq.set(cur, n); hits.push({ src, flip, item: cur, q: lastQ, seq: n, label }); };
     for (let i = 0; i < srcs.length; i++) {
       setProg([i + 1, srcs.length]);
       const src = srcs[i], label = src.page ? `${src.file.name} ص${src.page}` : src.file.name;
@@ -111,7 +114,7 @@ export default function ScanUpClient() {
         if (!codes.length) {
           if (empty) { blank++; continue; }
           // صفحة بيها كتابة بدون كود: تكملة جواب الصفحة اللي قبلها
-          if (cur && lastQ) hits.push({ src, flip, item: cur, q: lastQ, label });
+          if (cur) add(src, flip, label);
           else problems.push(`${label}: ما بيها كود، وما معروف لمن`);
           continue;
         }
@@ -120,25 +123,20 @@ export default function ScanUpClient() {
         const qv = codes.map((t) => /^QV:(\d+):(\d+)$/.exec(t)).find(Boolean);
         if (qp) { cur = Number(qp[1]); lastQ = Number(qp[2]); }
         else {
-          if (qi) cur = Number(qi[1]);
+          if (qi) { cur = Number(qi[1]); lastQ = 0; }
           else if (qv && Number(qv[2]) === 1) { cur = 0; problems.push(`${label}: أول صفحة بدون ليبل`); }
           if (qv) lastQ = Number(qv[2]);
         }
         if (!cur) { problems.push(`${label}: ما معروف لمن`); continue; }
-        if (!lastQ) { problems.push(`${label}: ما معروف أي سؤال`); continue; }
-        hits.push({ src, flip, item: cur, q: lastQ, label });
+        add(src, flip, label);
       } catch { problems.push(`${label}: ما انقرت`); }
     }
     try {
       const ids = [...new Set(hits.map((h) => h.item))];
       const r = await post({ action: "items", items: ids });
       const items = new Map<number, Item>((r.items as Item[]).map((x) => [x.id, x]));
-      const good = hits.filter((h) => { const it = items.get(h.item); if (!it?.ok) return false; if (!it.qs.includes(h.q)) { problems.push(`${h.label}: السؤال ${h.q} مو من نسخة ${it.name}`); return false; } return true; });
-      for (const it of items.values()) {
-        if (!it.ok) problems.push(it.graded ? `ورقة ${it.name} انصححت قبل، ما تنرفع مرة ثانية` : `ورقة رقم ${it.id} مو معروفة`);
-        else { const got = new Set(good.filter((h) => h.item === it.id).map((h) => h.q)); const miss = it.qs.filter((q) => !got.has(q)); if (miss.length) problems.push(`${it.name}: ناقصة صفحة السؤال ${miss.join("، ")}`); }
-      }
-      setPlan({ hits: good, items, problems, blank }); setStep("check");
+      const r2 = assignPages(hits, items);
+      setPlan({ hits: r2.good, items, problems: [...problems, ...r2.problems], blank }); setStep("check");
     } catch (e) { setError(e instanceof Error ? e.message : "صار خطأ"); setStep("pick"); }
   }
 
@@ -153,7 +151,7 @@ export default function ScanUpClient() {
         const c = await draw(h.src, UPLOAD_W, h.flip);
         const blob = await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("jpg"))), "image/jpeg", 0.82));
         const fd = new FormData();
-        fd.set("initData", pageAuth()); fd.set("item", String(h.item)); fd.set("q", String(h.q)); fd.set("file", blob, "page.jpg");
+        fd.set("initData", pageAuth()); fd.set("item", String(h.item)); fd.set("q", String(h.q)); if (h.qs) fd.set("qs", h.qs.join(",")); fd.set("file", blob, "page.jpg");
         const res = await fetch("/api/attend/scan", { method: "POST", body: fd });
         if (!res.ok) fails.push(`${h.label}: ${(await res.json()).error ?? "ما انرفعت"}`);
       } catch { fails.push(`${h.label}: ما انرفعت`); }

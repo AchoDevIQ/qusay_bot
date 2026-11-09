@@ -285,6 +285,12 @@ header{display:flex;gap:4mm;align-items:center;border-bottom:.4mm solid #000;pad
 }
 
 // ---------- رفع أوراق السكانر: الصفحة تقرا الأكواد وتدز كل صفحة لطالبها وسؤالها
+/** توزيع صفحات الورقة على الأسئلة لهذا الامتحان، أو null إذا كل سؤال بصفحة */
+const PAGE_MAPS = "page_maps";
+async function allPageMaps(): Promise<Record<string, number[][]>> {
+  try { return JSON.parse(await kvGet(PAGE_MAPS) || "{}"); } catch { return {}; }
+}
+export const pageMapOf = async (exam: number): Promise<number[][] | null> => (await allPageMaps())[String(exam)] ?? null;
 /** ورقة طالب حضوري: الامتحان ونسخته */
 async function paperItem(raw: unknown) {
   const it = await one("sched_items", { id: Number(raw) });
@@ -296,15 +302,17 @@ async function paperItem(raw: unknown) {
 export async function scanUpload(form: FormData) {
   const { uid: by } = await staffIn(form.get("initData"));
   const it = await paperItem(form.get("item"));
-  const q = Number(form.get("q"));
-  need(await one("bank_questions", { version_id: it.version_id, n: q }), `السؤال ${q} مو موجود بهذي النسخة`);
+  const more = String(form.get("qs") ?? form.get("q") ?? "").split(",").map(Number);
+  const q = more[0];
+  for (const n of more) need(await one("bank_questions", { version_id: it.version_id, n }), `السؤال ${n} مو موجود بهذي النسخة`);
   const f = form.get("file");
   need(f instanceof Blob && f.size > 0 && f.size <= MAX_PAGE, "الصفحة لازم أصغر من 8 ميگا");
   const buf = Buffer.from(await (f as Blob).arrayBuffer());
   need(buf[0] === 0xff && buf[1] === 0xd8, "لازم صورة JPG");
   const ref = path.posix.join("student_answers", String(it.user_id), String(it.id), `q${q}_${randomUUID()}.jpg`);
   await files().write(ref, buf, "image/jpeg");
-  await insert("exam_answers", { item_id: it.id, q, file: ref, created: stamp() });
+  // صفحة بيها أكثر من سؤال: ملف واحد ينحسب جواب لكل أسئلتها
+  for (const n of more) await insert("exam_answers", { item_id: it.id, q: n, file: ref, created: stamp() });
   await recordUploader(it.id, by);
   if (it.status !== "attended" && it.status !== "done") await update("sched_items", { id: it.id }, { status: "attended", attended_at: it.attended_at ?? stamp(), attended_by: it.attended_by ?? by });
   return { ok: true };
@@ -315,8 +323,9 @@ async function pageData(uid: number, full = true) {
   const cfg = await allCfg();
   const centers = owner ? (await find("centers", { active: 1 })).map((c) => ({ id: c.id as number, name: c.name as string, ...DEFAULT_CFG, ...cfg[String(c.id)] })) : [];
   const versions = await find("bank_versions", { kind: "mandatory" });
+  const allMaps = await allPageMaps();
   const exams = (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => versions.some((v) => v.exam_id === e.id))
-    .map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ model: v.model as string, token: printToken("v", v.id) })) }));
+    .map((e) => ({ pageMap: allMaps[String(e.id)] ?? null, id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ model: v.model as string, token: printToken("v", v.id) })) }));
   const today = (await find("sched_items")).filter((i) => String(i.attended_at ?? "").startsWith(todayStr())).length;
   return { owner, full, centers, exams, today, rescan: await rescanFor(uid), station: await can(uid, STATION_PERM) ? { active: await stationActive(uid), token: stationToken(uid) } : null, canCam: full || await can(uid, CAM_PERM), early: await attendEarly(), notice: "" };
 }
@@ -376,6 +385,17 @@ export async function attendAction(body: Row) {
     await enqueue(uid, it!.id);
     return { ...await pageData(uid), card: { ...await itemCard(it!), already: true, queued: true }, notice: "🖨 انرسل للطابعة" };
   }
+  if (a === "pageMap") {
+    // توزيع صفحات الورقة على الأسئلة لهذا الامتحان. فارغ: كل سؤال بصفحة وعليها كود
+    const exam = Number(body.exam);
+    need(await one("bank_exams", { id: exam }), "اختار الامتحان");
+    const map = Array.isArray(body.map) ? (body.map as unknown[][]).map((p) => (Array.isArray(p) ? p.map(Number) : [])) : [];
+    need(map.length <= 30 && map.every((p) => p.length && p.every((n) => Number.isInteger(n) && n >= 1 && n <= 50)), "اكتب أرقام الأسئلة لكل صفحة");
+    const maps = await allPageMaps();
+    if (map.length) maps[String(exam)] = map; else delete maps[String(exam)];
+    await kvSet(PAGE_MAPS, JSON.stringify(maps));
+    return { ...await pageData(uid, full), notice: map.length ? "✅ انحفظ توزيع الصفحات" : "✅ رجع: كل سؤال بصفحة" };
+  }
   if (a === "items") {
     // الصفحة تسأل عن أوراق قرتها: اسم كل طالب وأسئلة نسخته
     const ids = (Array.isArray(body.items) ? body.items : []).map(Number).slice(0, 2000);
@@ -384,7 +404,7 @@ export async function attendAction(body: Row) {
       const it = await one("sched_items", { id });
       if (!it?.version_id) { out.push({ id, ok: false, name: "", qs: [] }); continue; }
       const st = await student(it.user_id);
-      out.push({ id, ok: st?.exam === "حضوري" && !it.graded_at, name: st?.name ?? "", graded: !!it.graded_at, qs: (await find("bank_questions", { version_id: it.version_id })).map((q) => q.n as number) });
+      out.push({ id, ok: st?.exam === "حضوري" && !it.graded_at, name: st?.name ?? "", graded: !!it.graded_at, map: await pageMapOf(it.exam_id), qs: (await find("bank_questions", { version_id: it.version_id })).map((q) => q.n as number) });
     }
     return { items: out };
   }
