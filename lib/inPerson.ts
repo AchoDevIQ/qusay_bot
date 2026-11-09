@@ -225,23 +225,26 @@ const qrSvg = (text: string) => QRCode.toString(text, { type: "svg", margin: 0, 
 const PRINT_JS = `<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),400))</script>`;
 const fmtAt = (at: string) => `${at.slice(0, 10)} · ${at.slice(11, 16)}`;
 
-/** ليبل 58×39 ملم بنفس ترتيب ليبل البلوتوث: الاسم فوك، الكود والرقم والمركز والوقت بالنص، والامتحان جوة */
-export async function labelPage(c: LabelInfo) {
-  const size = (t: string, big: number, mid: number, small: number) => (t.length <= 22 ? big : t.length <= 34 ? mid : small);
+/** ليبل 58×39 ملم بنفس ترتيب ليبل البلوتوث: الاسم فوك، الكود والرقم والمركز والوقت بالنص، والامتحان جوة.
+ *  fit: يملأ عرض الورقة مهما كان قياسها، لأن طابعة جهاز الـ POS (الأندرويد) تعتبر الصفحة أعرض وتصغر الليبل */
+export async function labelPage(c: LabelInfo, fit = false) {
+  const mm = (n: number) => (fit ? `calc(100vw*${n}/58)` : `${n}mm`);
+  const pt = (n: number) => mm(+(n * 0.3528).toFixed(2));
+  const size = (t: string, big: number, mid: number, small: number) => pt(t.length <= 22 ? big : t.length <= 34 ? mid : small);
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ليبل ${esc(c.name)}</title>
-<style>@page{size:58mm 39mm;margin:0}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#000;font-family:Tahoma,Arial,sans-serif}
-.l{width:58mm;height:39mm;padding:1.5mm 2mm;display:flex;flex-direction:column;gap:1mm;overflow:hidden}
-.nm{font-weight:700;font-size:${size(c.name, 13, 10.5, 8.5)}pt;line-height:1.2;white-space:nowrap;overflow:hidden}
-.mid{flex:1;min-height:0;display:flex;gap:2mm;align-items:center}.q{width:19mm;height:19mm;flex:none}.q svg{width:100%;height:100%}
-.t{flex:1;min-width:0;font-size:8.5pt;line-height:1.35;font-weight:700}.n{font-size:10pt;direction:ltr;text-align:right}.d{direction:ltr;text-align:right}
-.ex{font-weight:700;font-size:${size(c.exam, 11, 9.5, 8)}pt;line-height:1.2;max-height:2.5em;overflow:hidden}
-@media screen{body{background:#ddd;padding:10px}.l{background:#fff;box-shadow:0 1px 4px #0004}}</style></head>
+<style>@page{${fit ? "" : "size:58mm 39mm;"}margin:0}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#000;font-family:Tahoma,Arial,sans-serif}
+.l{width:${mm(58)};height:${mm(39)};padding:${mm(1.5)} ${mm(2)};display:flex;flex-direction:column;gap:${mm(1)};overflow:hidden}
+.nm{font-weight:700;font-size:${size(c.name, 13, 10.5, 8.5)};line-height:1.2;white-space:nowrap;overflow:hidden}
+.mid{flex:1;min-height:0;display:flex;gap:${mm(2)};align-items:center}.q{width:${mm(19)};height:${mm(19)};flex:none}.q svg{width:100%;height:100%}
+.t{flex:1;min-width:0;font-size:${pt(8.5)};line-height:1.35;font-weight:700}.n{font-size:${pt(10)};direction:ltr;text-align:right}.d{direction:ltr;text-align:right}
+.ex{font-weight:700;font-size:${size(c.exam, 11, 9.5, 8)};line-height:1.2;max-height:2.5em;overflow:hidden}
+${fit ? "" : "@media screen{body{background:#ddd;padding:10px}.l{background:#fff;box-shadow:0 1px 4px #0004}}"}</style></head>
 <body><div class="l"><div class="nm">${esc(c.name)}</div><div class="mid"><div class="q">${await qrSvg(`QI:${c.item}`)}</div><div class="t"><div class="n">#${c.uid}</div><div>${esc(c.center)}</div><div class="d">${fmtAt(c.at)}</div></div></div><div class="ex">${esc(c.exam)}</div></div>${PRINT_JS}</body></html>`;
 }
-export async function labelHtml(itemId: number) {
+export async function labelHtml(itemId: number, fit = false) {
   const it = await one("sched_items", { id: itemId });
   need(it, "الامتحان غير موجود", 404);
-  return await labelPage(await itemCard(it!));
+  return await labelPage(await itemCard(it!), fit);
 }
 
 /** ورقة الامتحان: كل سؤال بصفحة، وبزاوية كل صفحة كود. ورقة الطالب عليها اسمه، وورقة الاستنساخ فراغ للليبل */
