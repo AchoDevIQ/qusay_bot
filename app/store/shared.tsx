@@ -29,10 +29,12 @@ export function TelegramInit() {
 
 // الصفحة تكبر وتصغر كلها وياها الأيقونات، والحجم يبقى محفوظ على نفس الجهاز
 const ZOOMS = [0.85, 1, 1.15, 1.3, 1.5, 1.75];
-const ZOOM_KEY = "pageZoom";
+// الحجم الافتراضي أكبر من الأصل، والمفتاح جديد حتى الكل يبدي بيه
+const DEFAULT_ZOOM = 1.15;
+const ZOOM_KEY = "pageZoom2";
 type FullApp = { isFullscreen?: boolean; isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; onEvent?(n: string, f: () => void): void; offEvent?(n: string, f: () => void): void };
 export function PageTools() {
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [canFull, setCanFull] = useState(false);
   const [full, setFull] = useState(false);
   useEffect(() => {
