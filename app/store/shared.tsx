@@ -1,7 +1,9 @@
 "use client";
 // المشترك بين صفحات المتجر: قراءة البيانات من الرابط، والإرسال للبوت عن طريق Telegram WebApp
 import Script from "next/script";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { frameZoom } from "./multi/panes";
 
 type TgWebApp = {
   ready(): void; expand(): void; setHeaderColor(c: string): void; setBackgroundColor(c: string): void;
@@ -32,7 +34,7 @@ const ZOOMS = [0.85, 1, 1.15, 1.3, 1.5, 1.75];
 // الحجم الافتراضي أكبر من الأصل، والمفتاح جديد حتى الكل يبدي بيه
 const DEFAULT_ZOOM = 1.15;
 const ZOOM_KEY = "pageZoom2";
-// الصفحة داخل «فتح أكثر من صفحة»: الصفحة الكبيرة مكبرة أصلاً، فما تتكبر مرة ثانية وتضيق على مكانها
+// الصفحات داخل «فتح أكثر من صفحة»: كل وحدة إلها حجمها، وتتصغر حتى تدخل بمكانها
 const FRAME_ZOOM_KEY = "pageZoomFrame";
 const inFrame = () => { try { return window.self !== window.top; } catch { return true; } };
 type FullApp = { isFullscreen?: boolean; isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; onEvent?(n: string, f: () => void): void; offEvent?(n: string, f: () => void): void };
@@ -40,12 +42,12 @@ export function PageTools() {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [canFull, setCanFull] = useState(false);
   const [full, setFull] = useState(false);
+  const multi = (usePathname() ?? "").startsWith("/store/multi");
   useEffect(() => {
     try {
       const saved = Number(localStorage.getItem(inFrame() ? FRAME_ZOOM_KEY : ZOOM_KEY));
       if (ZOOMS.includes(saved)) setZoom(saved);
-      else if (inFrame()) setZoom(1);
-    } catch { if (inFrame()) setZoom(1); }
+    } catch { /* المتصفح مانع الحفظ */ }
     let off = () => {};
     let tries = 0;
     const t = setInterval(() => {
@@ -62,7 +64,17 @@ export function PageTools() {
     }, 200);
     return () => { clearInterval(t); off(); };
   }, []);
-  useEffect(() => { (document.documentElement.style as unknown as { zoom: string }).zoom = String(zoom); }, [zoom]);
+  // صفحة التبويبات نفسها ما تتكبر أبداً: كل صفحة جواها تتكبر لحالها، حتى ما ينحسب التكبير مرتين
+  useEffect(() => {
+    const root = document.documentElement;
+    const apply = () => { (root.style as unknown as { zoom: string }).zoom = String(multi ? 1 : inFrame() ? frameZoom(zoom, window.innerWidth) : zoom); };
+    apply();
+    if (!inFrame()) return;
+    root.style.overflowX = "hidden";
+    document.body.style.overflowX = "clip";
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [zoom, multi]);
   function step(d: number) {
     const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, ZOOMS.indexOf(zoom) + d))];
     setZoom(next);
@@ -71,8 +83,8 @@ export function PageTools() {
   const w = () => tg() as unknown as FullApp | undefined;
   return (
     <div className="ptools" role="group" aria-label="حجم الصفحة">
-      <button type="button" aria-label="تكبير" disabled={zoom === ZOOMS.at(-1)} onClick={() => step(1)}>A+</button>
-      <button type="button" aria-label="تصغير" disabled={zoom === ZOOMS[0]} onClick={() => step(-1)}>A−</button>
+      {!multi && <button type="button" aria-label="تكبير" disabled={zoom === ZOOMS.at(-1)} onClick={() => step(1)}>A+</button>}
+      {!multi && <button type="button" aria-label="تصغير" disabled={zoom === ZOOMS[0]} onClick={() => step(-1)}>A−</button>}
       {canFull && <button type="button" aria-label={full ? "تصغير الشاشة" : "ملء الشاشة"} onClick={() => (full ? w()?.exitFullscreen?.() : w()?.requestFullscreen?.())}>{full ? "↙️" : "⛶"}</button>}
     </div>
   );

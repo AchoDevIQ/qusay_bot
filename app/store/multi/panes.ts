@@ -1,14 +1,14 @@
 // ترتيب الصفحات الظاهرة سوا: panes أرقام التبويبات الظاهرة بالترتيب، والأول يطلع بأقصى اليمين (أو فوك بالموبايل)
 
-/** الشاشة الضيقة (موبايل): الصفحات وحدة فوك وحدة */
-export const isStacked = (width: number) => width < 640;
+/** الموبايل بس: الصفحات وحدة فوك وحدة. بالحاسبة تبقى جنب بعض حتى لو النافذة صغيرة */
+export const isStacked = (width: number, touch: boolean) => touch && width < 640;
 /** كم صفحة تنعرض سوا. كل صفحة تحتاج عرض 320 حتى تنقرا */
-export const maxPanes = (width: number) => (isStacked(width) ? 2 : Math.min(4, Math.max(2, Math.floor(width / 320))));
+export const maxPanes = (width: number, stacked: boolean) => (stacked ? 2 : Math.min(4, Math.max(2, Math.floor(width / 320))));
 
 /** أقل عرض تنعرض بيه الصفحة بدون ما تحتاج تحركها يمين ويسار: عرض موبايل */
 export const PANE_MIN = 360;
-/** كم تتصغر الصفحة بمكانها حتى تدخل كلها. width عرض الصفحة بالبكسل، وzoom تكبير الصفحة الكبيرة */
-export const paneFit = (width: number, zoom: number) => Math.min(1, width / (PANE_MIN * zoom));
+/** تكبير الصفحة داخل مكانها: اللي يختاره صاحبها، إلا إذا مكانها ضيق فتتصغر حتى تدخل كلها */
+export const frameZoom = (zoom: number, width: number) => (width > 0 ? Math.min(zoom, width / PANE_MIN) : zoom);
 
 /** بكم قسم تنقسم المساحة إذا هذا التبويب ينحط */
 export function slotCount(panes: number[], key: number, max: number) {

@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { useAdminApi } from "../adminPage";
-import { closePane, isStacked, maxPanes, paneFit, placePane, showTab, slotAt, slotCount, togglePane } from "./panes";
+import { closePane, isStacked, maxPanes, placePane, showTab, slotAt, slotCount, togglePane } from "./panes";
 
 type Tile = { page: string; icon: string; title: string };
 type Data = { groups: { title: string; tiles: Tile[] }[] };
@@ -16,9 +16,6 @@ const tgSwipes = () => (window as unknown as { Telegram?: { WebApp?: TgSwipes } 
 const swipes = (on: boolean) => {
   try { const w = tgSwipes(); if (w?.isVersionAtLeast?.("7.7")) { if (on) w.enableVerticalSwipes?.(); else w.disableVerticalSwipes?.(); } } catch { /* نسخة تليجرام قديمة */ }
 };
-
-// أزرار A+ وA− تكبر الصفحة كلها، ومكان الإصبع يجي بدون هذا التكبير
-const pageZoom = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("zoom")) || 1;
 
 /** مكان القسم رقم i من n بالمساحة */
 function box(i: number, n: number, stacked: boolean): CSSProperties {
@@ -34,25 +31,26 @@ export default function MultiClient() {
   const [picking, setPicking] = useState(true);
   const [next, setNext] = useState(1);
   const [width, setWidth] = useState(1000);
-  const [zoom, setZoom] = useState(1);
+  const [touch, setTouch] = useState(false);
   const [ghost, setGhost] = useState<Ghost>(null);
   const area = useRef<HTMLDivElement>(null);
-  const press = useRef<{ tab: Tab; x: number; y: number; moved: boolean } | null>(null);
+  const press = useRef<{ tab: Tab; x: number; y: number; moved: boolean; mouse: boolean } | null>(null);
   const dragged = useRef(false);
 
   useEffect(() => {
-    const size = () => { setWidth(window.innerWidth); setZoom(pageZoom()); };
+    const size = () => { setWidth(window.innerWidth); setTouch(window.matchMedia("(pointer: coarse)").matches); };
     size();
     window.addEventListener("resize", size);
-    // أزرار A+ وA− تغير تكبير الصفحة
-    const watch = new MutationObserver(size);
-    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
-    return () => { window.removeEventListener("resize", size); watch.disconnect(); swipes(true); };
+    // الشاشة نفسها ما تتحرك، بس الصفحات اللي جواها
+    const root = document.documentElement, body = document.body;
+    const before = [root.style.overflow, body.style.overflow];
+    root.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => { window.removeEventListener("resize", size); root.style.overflow = before[0]; body.style.overflow = before[1]; swipes(true); };
   }, []);
 
-  const stacked = isStacked(width), max = maxPanes(width);
+  const stacked = isStacked(width, touch), max = maxPanes(width, stacked);
   const shown = panes.slice(0, max);
-  const fit = paneFit(stacked ? width : width / Math.max(1, shown.length), zoom);
 
   function open(t: Tile) {
     const key = next;
@@ -90,7 +88,7 @@ export default function MultiClient() {
     return { slot: slotAt(stacked ? (y - r.top) / r.height : (r.right - x) / r.width, count), count };
   }
   function down(e: ReactPointerEvent<HTMLButtonElement>, tab: Tab) {
-    press.current = { tab, x: e.clientX, y: e.clientY, moved: false };
+    press.current = { tab, x: e.clientX, y: e.clientY, moved: false, mouse: e.pointerType === "mouse" };
     dragged.current = false;
     swipes(false);
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* المتصفح ما يدعمها */ }
@@ -99,8 +97,8 @@ export default function MultiClient() {
     const p = press.current;
     if (!p) return;
     const dy = e.clientY - p.y, dx = e.clientX - p.x;
-    // السحب لليمين واليسار يبقى يحرك الشريط، والسحب لتحت هو اللي ياخذ التبويب
-    if (!p.moved) { if (dy > 12 && dy > Math.abs(dx)) p.moved = true; else return; }
+    // باللمس، السحب لليمين واليسار يبقى يحرك الشريط، والسحب لتحت هو اللي ياخذ التبويب. بالماوس أي اتجاه
+    if (!p.moved) { if (p.mouse ? Math.hypot(dx, dy) > 8 : dy > 12 && dy > Math.abs(dx)) p.moved = true; else return; }
     const t = target(p.tab.key, e.clientX, e.clientY);
     setGhost({ tab: p.tab, x: e.clientX, y: e.clientY, slot: t?.slot ?? -1, count: t?.count ?? 0 });
   }
@@ -138,7 +136,12 @@ export default function MultiClient() {
           const i = shown.indexOf(t.key);
           const seen = !picking && i >= 0;
           const edge = seen && i > 0 ? (stacked ? { borderTop: "2px solid var(--gold, #F9C445)" } : { borderRight: "2px solid var(--gold, #F9C445)" }) : {};
-          return <iframe key={t.key} title={t.title} src={src(t.page)} style={{ position: "absolute", boxSizing: "border-box", border: 0, background: "#fff", display: seen ? "block" : "none", ...(seen ? { ...box(i, shown.length, stacked), zoom: fit } : {}), ...edge }} />;
+          // عرض 1 ويا minWidth: الآيباد يوسع الإطار على قد محتواه إذا عرضه بس 100%
+          return (
+            <div key={t.key} style={{ position: "absolute", boxSizing: "border-box", overflow: "hidden", display: seen ? "block" : "none", ...(seen ? box(i, shown.length, stacked) : {}), ...edge }}>
+              <iframe title={t.title} src={src(t.page)} style={{ position: "absolute", top: 0, right: 0, border: 0, background: "#fff", width: 1, minWidth: "100%", height: "100%" }} />
+            </div>
+          );
         })}
         {picking && (
           <div style={{ position: "absolute", inset: 0, overflow: "auto" }}>
@@ -158,7 +161,7 @@ export default function MultiClient() {
         {ghost && <div style={{ position: "absolute", inset: 0, background: "rgba(16,25,41,.35)", pointerEvents: "none" }} />}
         {ghost && ghost.slot >= 0 && <div style={{ position: "absolute", boxSizing: "border-box", border: "3px dashed var(--gold, #F9C445)", background: "rgba(249,196,69,.18)", pointerEvents: "none", ...box(ghost.slot, ghost.count, stacked) }} />}
       </div>
-      {ghost && <div className="btn" style={{ position: "fixed", left: ghost.x / pageZoom(), top: ghost.y / pageZoom(), transform: "translate(-50%,-50%)", width: "auto", pointerEvents: "none", zIndex: 10, whiteSpace: "nowrap" }}>{ghost.tab.icon} {ghost.tab.title}</div>}
+      {ghost && <div className="btn" style={{ position: "fixed", left: ghost.x, top: ghost.y, transform: "translate(-50%,-50%)", width: "auto", pointerEvents: "none", zIndex: 10, whiteSpace: "nowrap" }}>{ghost.tab.icon} {ghost.tab.title}</div>}
     </div>
   );
 }
