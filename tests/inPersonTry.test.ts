@@ -62,7 +62,7 @@ test("محطة طباعة البلوتوث: الليبل ينرسل بعد ال�
   assert.equal(((await attendAction({ station, action: "next" })) as any).job, null);
 });
 
-test("المحطة: قراءة الكود تسجل الحضور وترجع الليبل مباشرة، ومرة ثانية بدون طباعة، والضبط يحرك الليبل", async () => {
+test("المحطة: قراءة الكود تسجل الحضور وترجع الليبل مباشرة، حتى لو مسجل قبل، والضبط يحرك الليبل", async () => {
   const { attendAction, stationToken, studentCode } = await import("../lib/inPerson.ts");
   const station = stationToken(1);
   const area = await insert("areas", { gov: "بغداد", name: "منطقة 3" });
@@ -78,7 +78,7 @@ test("المحطة: قراءة الكود تسجل الحضور وترجع ال�
   assert.match(text, /QRCODE 30,72,M,7,A,0,/);
   const again: any = await attendAction({ station, action: "scan", code });
   assert.equal(again.card.already, true);
-  assert.equal(again.job, null);
+  assert.ok(again.job.b64.length > 1000);
   assert.equal(((await attendAction({ station, action: "reprint", item: first.card.item })) as any).job.id, first.card.item);
   assert.ok(((await attendAction({ station, action: "test" })) as any).job.b64.length > 1000);
   await assert.rejects(attendAction({ station, action: "scan", code: "QS:5.abc" }), /مو كود طالب/);

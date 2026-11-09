@@ -95,7 +95,7 @@ export default function StationClient() {
     if (r.job) {
       setStatus(`🖨 دا يطبع: ${c.name}`);
       await write(r.job);
-      setStatus(`✅ انطبع: ${c.name}`);
+      setStatus(c.already ? `✅ انطبع: ${c.name} (كان مسجل حضوره)` : `✅ انطبع: ${c.name}`);
     } else setStatus(c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
   });
   /** قرار الجاي بغير وقته: بعدها الكاميرا ترجع تقرا */
@@ -141,11 +141,11 @@ export default function StationClient() {
     return () => clearInterval(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** كود صحيح لطالب: نفس الكود ما ينعاد خلال 8 ثواني */
+  /** كود صحيح لطالب: ينطبع فوراً، حتى لو مسجل قبل. نفس الكود ما ينطبع مرة ثانية خلال دقيقة، حتى ما يطبع طول ما التلفون قدام الكاميرا */
   function found(raw: string) {
     if (!raw.startsWith("QS:") || waiting.current) return;
     const now = Date.now();
-    if (seen.current.code === raw && now - seen.current.at < 8000) return;
+    if (seen.current.code === raw && now - seen.current.at < 60000) return;
     seen.current = { code: raw, at: now };
     void handle(raw);
   }

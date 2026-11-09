@@ -100,7 +100,7 @@ export async function stationAction(body: Row) {
     if (sid && sid > 0 && await isAdmin(uid!) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid!);
-    return { card, job: card.print === "label" && !card.already && !card.late ? await jobOf(card) : null };
+    return { card, job: card.print === "label" && !card.late ? await jobOf(card) : null };
   }
   if (body.action === "except") {
     const card = (await decideLate(uid!, body.item, true))!;
@@ -318,7 +318,7 @@ export async function attendAction(body: Row) {
     if (sid && sid > 0 && await isAdmin(uid) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid);
-    const queued = card.print === "label" && !card.already && !card.late && await stationActive(uid);
+    const queued = card.print === "label" && !card.late && await stationActive(uid);
     if (queued) await enqueue(uid, card.item);
     return { ...await pageData(uid), card: { ...card, queued } };
   }
