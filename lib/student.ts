@@ -378,7 +378,7 @@ export async function startReg(chat: number, uid: number, nxt: string | null, ed
   if (!STORE_URL) return await startRegChat(chat, uid, nxt, editMode);
   await setSession(uid, "r:form", { next: nxt, edit: !!old });
   if (HOME_PAGE) { await send(chat, "📝 اضغط الزر جوة 👇", { replyKb: await regKb(uid) }); return; }
-  await send(chat, "📝 <b>التسجيل</b> (مرة وحدة بس، وبعدها معلوماتك تطلع تلقائياً بالمتجر والأسئلة)" +
+  await send(chat, "📝 <b>التسجيل</b>" +
     "\n⚠️ بعد الحفظ ما تگدر تغير معلوماتك إلا عن طريق الإدارة، فاكتبها صح." +
     `\n\n👇 اضغط زر «${BTN_REG}» اللي جوة، واملأ الفورمة، وبعدين اضغط «حفظ معلوماتي».`, { replyKb: await regKb(uid) });
 }
@@ -470,7 +470,7 @@ export async function saveStudent(uid: number, username: string, r: Row, old: Ro
 async function startRegChat(chat: number, uid: number, nxt: string | null, editMode = false) {
   const old = editMode ? await student(uid) : null;
   await setSession(uid, "r:name", { next: nxt, reg: {}, edit: !!old });
-  const head = old ? "✏️ <b>تعديل معلوماتك</b>" : "📝 <b>التسجيل</b> (مرة وحدة بس، وبعدها معلوماتك تطلع تلقائياً بالمتجر والأسئلة)";
+  const head = old ? "✏️ <b>تعديل معلوماتك</b>" : "📝 <b>التسجيل</b>";
   await send(chat, head + "\n\n✍️ اكتب اسمك <b>الرباعي بالعربي</b>:", { replyKb: flowKb() });
 }
 async function regAskExam(chat: number, uid: number, data: Row) {

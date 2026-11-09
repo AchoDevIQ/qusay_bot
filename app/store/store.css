@@ -103,61 +103,57 @@ input.ltr{direction:ltr;text-align:left;letter-spacing:1px}
 /* شروط التسجيل بلوحة التحكم */
 .tmhint{margin:14px 2px 0;line-height:1.7}
 .tmtext{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--ink);color:var(--txt);font-family:inherit;font-size:15px;line-height:1.8;outline:none;resize:vertical}
-/* تسجيل الطالب الجديد: صفحات فاتحة بشريط كحلي وزر ذهبي */
-html:has(.rg),html:has(.rg) body{background:#f4f6fb;padding-bottom:0}
-.rg{min-height:100vh;background:#f4f6fb;color:#16233b;padding-bottom:170px}
-.rgtop{background:#16233b;color:#d7dde8;padding:14px 18px 16px}
-.rgtopline{display:flex;justify-content:flex-start;gap:10px;align-items:center;font-size:15px;margin-bottom:10px}
+/* تسجيل الطالب الجديد: نفس ألوان البوت، كحلي وذهبي */
+html:has(.rg),html:has(.rg) body{background:var(--ink);padding-bottom:0}
+.rg{min-height:100vh;background:var(--ink);color:var(--txt);padding-bottom:170px}
+.rgtop{max-width:640px;margin:0 auto;padding:12px 16px 0}
+.rgtopline{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:15px;margin-bottom:8px}
 .rgtopline b{font-weight:600}
-.rgtopline span{color:#8d99ad;font-size:13px}
-.rgtrack{height:5px;border-radius:9px;background:#3a475d;overflow:hidden}
+.rgtopline span{color:var(--mut);font-size:13px}
+.rgtrack{height:5px;border-radius:9px;background:var(--line);overflow:hidden}
 .rgfill{height:100%;border-radius:9px;background:var(--gold);transition:width .25s}
 .rgbody{max-width:640px;margin:0 auto;padding:18px 16px}
-.rgcard{background:#fff;border:1px solid #e6eaf2;border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(22,35,59,.05)}
+.rgcard{background:var(--ink2);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:0 10px 24px rgba(0,0,0,.25)}
 .rgterm{white-space:pre-line;font-size:16px;line-height:1.9}
 .rgask{font-size:14px;font-weight:700;margin-bottom:10px}
-.rgbuilt{display:flex;flex-wrap:wrap;gap:6px;min-height:58px;padding:10px;border:1.5px dashed #c6cedb;border-radius:12px;background:#f8f9fc}
+.rgbuilt{display:flex;flex-wrap:wrap;gap:6px;min-height:58px;padding:10px;border:1.5px dashed var(--line);border-radius:12px;background:var(--ink)}
 .rgbuilt.full{border-color:var(--gold2);border-style:solid}
-.rgempty{color:#8d99ad;font-size:14px;align-self:center}
+.rgempty{color:var(--mut);font-size:14px;align-self:center}
 .rgpool{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
-.rgword{border:1px solid #d5dbe6;border-radius:10px;background:#fff;color:#16233b;padding:8px 11px;font-family:inherit;font-size:15px;cursor:pointer}
-.rgword.on{background:#16233b;color:#fff;border-color:#16233b}
-.rgwrong{margin-top:10px;padding:9px 12px;border-radius:10px;background:#fdecea;color:#b3261e;font-size:14px;font-weight:600}
-.rgfoot{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(244,246,251,0),#f4f6fb 18%);padding:18px 16px calc(14px + env(safe-area-inset-bottom))}
+.rgword{border:1px solid var(--line);border-radius:10px;background:var(--ink);color:var(--txt);padding:8px 11px;font-family:inherit;font-size:15px;cursor:pointer}
+.rgword.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.rgwrong{margin-top:10px;padding:9px 12px;border-radius:10px;background:rgba(255,122,107,.12);color:var(--red);font-size:14px;font-weight:600}
+.rgfoot{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,transparent,var(--ink) 18%);padding:18px 16px calc(14px + env(safe-area-inset-bottom))}
 .rgfootin{max-width:640px;margin:0 auto;display:grid;gap:9px}
 .rgbtn,.rgback{width:100%;border-radius:14px;padding:14px;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer}
-.rgbtn{border:0;background:linear-gradient(90deg,#fdd97f,var(--gold));color:#16233b}
+.rgbtn{border:0;background:linear-gradient(90deg,var(--gold),var(--gold2));color:var(--ink)}
 .rgbtn:disabled{opacity:.55;cursor:default}
-.rgback{border:1.5px solid #e0e5ee;background:#fff;color:#5d6a7f;font-size:15px;font-weight:600;padding:11px}
+.rgback{border:1px solid var(--line);background:var(--ink2);color:var(--mut);font-size:15px;font-weight:600;padding:11px}
 .rgh{margin:0 0 4px;font-size:20px;font-weight:800}
-.rgsub{margin:0 0 12px;color:#7b889c;font-size:13px;line-height:1.6}
-.rg label{color:#16233b;font-weight:700;margin:14px 0 6px}
+.rgsub{margin:0 0 12px;color:var(--mut);font-size:13px;line-height:1.6}
+.rg label{color:var(--mut);font-weight:700;margin:14px 0 6px}
 .rg label:first-child,.rgrow:first-child label{margin-top:0}
-.rg label i{color:#d93025;font-style:normal}
-.rgrow+.rgrow{margin-top:14px;padding-top:14px;border-top:1px solid #edf0f5}
-.rg input,.rg select{background:#fff;color:#16233b;border:1.5px solid #dfe4ed}
-.rg input::placeholder{color:#9aa5b5}
-.rg .seg button{background:#fff;color:#16233b;border:1.5px solid #dfe4ed}
-.rg .seg button.on{background:var(--gold);border-color:var(--gold)}
-.rg .err{color:#c5221f}
-.rgnote{padding:12px 14px;border-radius:12px;background:#fff8e1;border:1px solid #f4dc99;color:#7a5a07;font-size:14px;line-height:1.7}
-.rgbad{color:#b3261e;font-weight:600}
+.rg label i{color:var(--red);font-style:normal}
+.rgrow+.rgrow{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.rg input::placeholder{color:var(--mut)}
+.rg .err{color:var(--red)}
+.rgnote{padding:12px 14px;border-radius:12px;background:rgba(249,196,69,.1);border:1px solid var(--gold2);color:var(--txt);font-size:14px;line-height:1.7}
+.rgbad{color:var(--red);font-weight:600}
 .rgcenter{text-align:center}
-.rgspin{width:48px;height:48px;margin:18px auto 14px;border:5px solid #d5dbe6;border-top-color:#16233b;border-radius:50%;animation:rgspin 1s linear infinite}
+.rgspin{width:48px;height:48px;margin:18px auto 14px;border:5px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:rgspin 1s linear infinite}
 @keyframes rgspin{to{transform:rotate(360deg)}}
-.rgcheck{width:84px;height:84px;margin:12px auto 18px;border-radius:50%;background:#16233b;color:var(--gold);display:grid;place-items:center}
+.rgcheck{width:84px;height:84px;margin:12px auto 18px;border-radius:50%;background:var(--ink3);color:var(--gold);display:grid;place-items:center}
 .rgcheck svg{width:44px;height:44px}
 .rgdone{margin:0 0 20px;font-size:23px;font-weight:800}
-.rgpass small{display:block;color:#8d99ad;font-size:13px}
+.rgpass small{display:block;color:var(--mut);font-size:13px}
 .rgpass b{display:block;margin:8px 0 12px;font-size:30px;letter-spacing:3px;user-select:all}
-.rgcopy{border:0;background:none;color:#16233b;font-family:inherit;font-size:15px;cursor:pointer}
-.rgalert{text-align:right;padding:13px 15px;border-radius:14px;background:#fff4cf;border:1px solid #f4d36f;color:#8a4b08;font-size:14px;line-height:1.7}
+.rgcopy{border:0;background:none;color:var(--gold);font-family:inherit;font-size:15px;cursor:pointer}
+.rgalert{text-align:right;padding:13px 15px;border-radius:14px;background:rgba(249,196,69,.1);border:1px solid var(--gold2);color:var(--txt);font-size:14px;line-height:1.7}
 /* أدوات حجم الصفحة: تطلع بكل الصفحات */
 .ptools{position:absolute;z-index:6;top:calc(10px + var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));left:8px;display:flex;gap:4px}
 .ptools button{min-width:34px;height:30px;padding:0 6px;border:1px solid var(--gold2);border-radius:9px;background:var(--ink2);color:var(--gold);font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
 .ptools button:disabled{opacity:.4}
 /* التسجيل */
-.rglogo{height:96px}.rgintro{margin:6px 0 0;font-size:17px;font-weight:600;line-height:1.9}
 /* جملة الفصل الواحد: لازم الطالب يشوفها */
 .agflash{display:inline-block;padding:4px 10px;border-radius:10px;color:#101929;font-weight:800;background:linear-gradient(100deg,#F9C445 30%,#fff6d6 50%,#F9C445 70%);background-size:220% 100%;animation:agflash 1.6s linear infinite alternate}
 @keyframes agflash{from{background-position:100% 0}to{background-position:0 0}}

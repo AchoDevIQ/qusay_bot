@@ -14,8 +14,8 @@ test("كل قسم إله معرف فريد وخطوات", () => {
   assert.equal(guideSection("attend")?.icon, "🎫");
   assert.equal(guideSection("nothing"), null);
 });
-test("الدليل ما بيه روابط أو رموز", () => {
-  const text = JSON.stringify(GUIDE);
+test("الدليل ما بيه روابط أو رموز، عدا رابط البوت العام اللي ينطى للطالب", () => {
+  const text = JSON.stringify(GUIDE).replaceAll("https://t.me/Qusay_Alomairi_Bot", "");
   assert.doesNotMatch(text, /https?:\/\//);
   assert.doesNotMatch(text, /[A-Za-z0-9_-]{32,}/);
 });

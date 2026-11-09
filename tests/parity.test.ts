@@ -120,9 +120,11 @@ for (const driver of ["sqlite", "firestore"]) for (const file of fs.readdirSync(
       assert.equal(r.status, 0, r.stderr);
       const ts = JSON.parse(r.stdout), py = golden[sc.name];
       // طلب من صاحب البوت: صورة نجاح الطلب تطلع لوحدها، لأن نفس الكلام مكتوب داخلها
+      // جملة «مرة وحدة بس» انشالت من التسجيل بطلب صاحب البوت
+      const noOnceNote = (e: any) => { if (typeof e.p?.text === "string") e.p.text = e.p.text.replace(" (مرة وحدة بس، وبعدها معلوماتك تطلع تلقائياً بالمتجر والأسئلة)", ""); return e; };
       const photoOnly = (e: any) => { if (e.m === "sendPhoto" && /تم استلام طلبك/.test(e.p.caption ?? "")) { delete e.p.caption; delete e.p.parse_mode; } return e; };
       const dropPhotoMode = (e: any) => { if (e.m === "sendPhoto" && !e.p.caption) delete e.p.parse_mode; return e; };
-      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode).map(dropMenuButtons).map(dropProtect).map(dropNotesCode).map(dropMoneyParts)), b = normal(py.trace.map(photoOnly).map(dropMenuButtons));
+      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode).map(dropMenuButtons).map(dropProtect).map(dropNotesCode).map(dropMoneyParts)), b = normal(py.trace.map(photoOnly).map(dropMenuButtons).map(noOnceNote));
       for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
       noPartsColumn(ts.db);
       if (driver === "firestore") assert.deepEqual(sorted(normalDb(ts.db)), sorted(normalDb(py.db)));

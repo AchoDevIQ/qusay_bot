@@ -35,10 +35,17 @@ async function homeCall<T>(token: string, body: Record<string, unknown>): Promis
 
 function Top({ title, step, total }: { title: string; step: number; total: number }) {
   return (
-    <div className="rgtop">
-      <div className="rgtopline"><b>{title}</b><span dir="ltr">{step} / {total}</span></div>
-      <div className="rgtrack"><div className="rgfill" style={{ width: `${(step / total) * 100}%` }} /></div>
-    </div>
+    <>
+      <header>
+        <img src="/logo.png" alt="" />
+        <h1>قصي العميري</h1>
+        <p>التسجيل</p>
+      </header>
+      <div className="rgtop">
+        <div className="rgtopline"><b>{title}</b><span dir="ltr">{step} / {total}</span></div>
+        <div className="rgtrack"><div className="rgfill" style={{ width: `${(step / total) * 100}%` }} /></div>
+      </div>
+    </>
   );
 }
 function Foot({ children }: { children: ReactNode }) {
@@ -94,11 +101,6 @@ export default function RegFlow({ D }: { D: RegData }) {
       <div className="rg">
         <Top title="التسجيل" step={1} total={1} />
         <div className="rgbody">
-          <div className="rgcard rgcenter">
-            <img className="rglogo" src="/logo.png" alt="" />
-            <h2 className="rgh">📝 التسجيل</h2>
-            <p className="rgintro">التسجيل مرة وحدة بس، وبعدها معلوماتك تطلع تلقائياً بالمتجر والأسئلة.</p>
-          </div>
           <div className="rgalert">⚠️ بعد الحفظ ما تگدر تغير معلوماتك إلا عن طريق الإدارة، فاكتبها صح.</div>
         </div>
         <Foot><button type="button" className="rgbtn" onClick={() => page(0)}>ابدأ التسجيل</button></Foot>
