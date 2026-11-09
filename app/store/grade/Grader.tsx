@@ -12,7 +12,7 @@ export type Q = { n: number; max: number; image: string; answers: string[]; mark
 export type GVoice = { id?: string; name: string; ref: string };
 /** شلون صحح المصحح الآلي كل سؤال: درجة كل خطوة وسببها */
 export type AiQ = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { awarded: number; possible: number; reason: string; expected: string; student: string }[] };
-export type Paper = { ai?: AiQ[] | null; errors?: string[]; voices?: GVoice[]; myVoices?: GVoice[]; inPerson?: boolean; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
+export type Paper = { editing?: boolean; ai?: AiQ[] | null; errors?: string[]; voices?: GVoice[]; myVoices?: GVoice[]; inPerson?: boolean; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
 /** اعتراض الطالب على سؤال: نصه، وتسجيله إذا موجود، ودرجته قبل الاعتراض */
 export type Objection = { q: number; text: string; voice: string | null; old: number };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
@@ -355,7 +355,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const pendingMarks = useRef(new Set<Promise<void>>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inksRef = useRef(inks); inksRef.current = inks;
-  const locked = !!paper.graded && !objMode;
+  const locked = !!paper.graded && !objMode && !paper.editing;
   const stage = useRef<HTMLDivElement>(null);
   const qtop = useRef<HTMLDivElement>(null);
   const [fitH, setFitH] = useState(0);
@@ -515,7 +515,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         <button type="button" className="gk-skip" onClick={async () => { await flush(); onClose(); }}>⬅️ القائمة</button>
         <span>الامتحان: {paper.title} · النسخة: {paper.model}</span>
         <span>صححت: <b>{today}</b> | متبقي: <b>{papersLeft}</b>{saveErr && <span className="gk-err"> · ⚠️ {saveErr}</span>}</span>
-        {!locked && !objMode && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(); onSkip(); }}>⏭ تخطي الورقة</button>}
+        {!locked && !objMode && !paper.editing && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(); onSkip(); }}>⏭ تخطي الورقة</button>}
         {objMode && <b className="gk-objtag">✋ اعتراض</b>}
       </div>
       <div className="gk-row gk-bar">
@@ -530,7 +530,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           <span className="gk-pg">{at + 1}{pages ? ` / ${pages.length}` : ""}</span>
           <button type="button" className="gk-ic" disabled={!pages || at >= pages.length - 1} onClick={() => go(at + 1)}>‹</button>
         </div>
-        {!locked && !objMode && (rescanAsk
+        {paper.editing && <b className="gk-objtag">✏️ تعديل</b>}
+        {!locked && !objMode && !paper.editing && (rescanAsk
           ? <button type="button" className="gk-clear gk-rescan on" disabled={busy} onClick={async () => { setRescanAsk(false); await flush(); onRescan(); }}>⚠️ متأكد؟ اضغط مرة ثانية</button>
           : <button type="button" className="gk-clear gk-rescan" title={paper.inPerson ? "السكنر ما انقرا زين أو الصفحات فارغة: تنمسح كل صفحات الطالب بهذا الامتحان، وتوصل رسالة للي رفعها بالسكنر حتى يعيد رفعها" : "الصور ما واضحة أو فارغة: تنمسح كل صفحات الطالب بهذا الامتحان، وينفتح إله الامتحان حتى يعيد رفعها"} onClick={() => setRescanAsk(true)}>🗑 امسح أوراق الطالب كاملة</button>)}
         {!locked && <div className="gk-tools gk-pens">

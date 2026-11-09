@@ -13,7 +13,8 @@ type Rate = { mandatory: number; optional: number; deduct: number };
 type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
 type Only = { exams: { id: number; slug: string; chapter: string; title: string }[]; graders: { id: number; name: string }[]; rules: { exam: number; title: string; until: string; names: string[] }[] };
-type Data = { only?: Only; groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
+type FoundPaper = { id: number; name: string; title: string; chapter: string; model: string; total: number; graded: string };
+type Data = { canEdit?: boolean; found?: FoundPaper[]; only?: Only; groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -44,6 +45,14 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
   const [savingLeft, setSavingLeft] = useState(0);
   useWide(!!paper || allDone);
   const act: Call = async (b) => { const r = await call(b); if (r?.paper) setPaper(r.paper); return r; };
+  // جاي من ملف الطالب: تنفتح الورقة للتعديل مباشرة
+  const editOpened = useRef(false);
+  useEffect(() => {
+    if (!data || editOpened.current) return;
+    editOpened.current = true;
+    const id = Number(new URLSearchParams(location.search).get("edit"));
+    if (id) void act({ action: "openEdit", id });
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
   const url = (ref: string) => `/api/grade/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
   /** الحفظ بالخلفية: المصحح ما ينتظر، تنفتح الورقة الجاية والدرجة توصل للطالب وراها */
   function saveInBackground(p: Paper, inkSaved: Promise<void>, compose: (x: Prepared) => Promise<Blob[]>, decide?: { rejects: Record<number, string>; accepted: number }) {
@@ -94,6 +103,8 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
       if (nextObj) void act({ action: "openObj", id: nextObj.id });
       return;
     }
+    // تعديل ورقة مصححة: يرجع للقائمة، ما تنفتح ورقة ثانية
+    if (p.editing) { setPaper(null); setTimeout(() => void call({ action: "list" }), 1500); return; }
     const nextPaper = data?.waiting.find((x) => x.id !== p.id && inGroup(x) && !skipped.current.has(x.id) && !saving.current.has(x.id));
     setPaper(null);
     if (nextPaper) void act({ action: "open", id: nextPaper.id });
@@ -141,6 +152,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
               <button type="button" className={tab === "history" ? "on" : ""} onClick={() => { setTab("history"); void call({ action: "history" }); }}>📜 السجل</button>
               {!data.owner && <button type="button" className={tab === "pay" ? "on" : ""} onClick={() => { setTab("pay"); void call({ action: "pay" }); }}>💰 حسابي</button>}
             </div>
+            {tab === "papers" && data.canEdit && <EditFind found={data.found ?? null} busy={busy} act={act} />}
             {tab === "papers" && <List data={data} busy={busy} act={act} openGroup={(g) => {
               group.current = `${g.exam}|${g.general}`; skipped.current.clear();
               const p = data.waiting.find(inGroup);
@@ -333,6 +345,28 @@ function PayCardView({ g, all, chapters, busy, act }: { g: PayCard; all: boolean
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** البحث عن طالب حتى تتعدل ورقته المصححة */
+function EditFind({ found, busy, act }: { found: FoundPaper[] | null; busy: boolean; act: (b: Record<string, unknown>) => unknown }) {
+  const [q, setQ] = useState("");
+  return (
+    <div className="card expad">
+      <div className="exlabel">✏️ تعديل ورقة مصححة</div>
+      <form className="atrow adtop" onSubmit={(e) => { e.preventDefault(); void act({ action: "find", q }); }}>
+        <input className="exinput" placeholder="🔍 اسم الطالب أو تلفونه" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button type="submit" className="exbtn" disabled={busy || q.trim().length < 2}>بحث</button>
+      </form>
+      {found?.map((p) => (
+        <div key={p.id} className="adsale">
+          <b>{p.name}</b> · {p.title} ({p.model})
+          <small>{p.chapter} · {p.graded.slice(0, 10)}</small>
+          <b>{p.total} من 100</b>
+          <button type="button" className="exbtn adsmall" disabled={busy} onClick={() => void act({ action: "openEdit", id: p.id })}>✏️ عدل</button>
+        </div>
+      ))}
     </div>
   );
 }

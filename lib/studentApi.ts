@@ -4,7 +4,7 @@ import { deviceOf, unlockDevice } from "./deviceLock.ts";
 import { find, one, remove, setSession, type Row } from "./db.ts";
 import { activityOf, guardianOf, logActivity } from "./access.ts";
 import { GOVS, GRADES, toLatinDigits } from "./config.ts";
-import { areasWithCenters, centerName, isAdmin, placeOf, student } from "./data.ts";
+import { areasWithCenters, can, centerName, isAdmin, placeOf, student } from "./data.ts";
 import { listPdf } from "./documents.ts";
 import { deliverPassword } from "./password.ts";
 import { saveStudent, studentFromForm } from "./student.ts";
@@ -165,7 +165,7 @@ export async function studentAction(body: Row) {
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, log: { id, rows: await activityOf(id) } };
   } else if (a === "file") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, file: { id, fileToken: fileToken(uid), ...await studentFile(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, file: { id, fileToken: fileToken(uid), canEdit: await can(uid, "editgrade") && await can(uid, "grade"), ...await studentFile(id) } };
   } else if (a === "papers") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, papers: { id, list: await studentPapers(id), fileToken: fileToken(uid) } };

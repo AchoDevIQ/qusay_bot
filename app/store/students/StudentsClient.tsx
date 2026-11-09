@@ -11,7 +11,7 @@ type Area = { id: number; gov: string; name: string; centers: { id: number; name
 type TestStudent = { id: number; name: string; papers: number; graded: number; link: string };
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
-type StudentFile = { id: number; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
+type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
 type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
@@ -188,7 +188,7 @@ function FileView({ s, file, data, busy, call, close }: { s: S; file: StudentFil
             <option value="">كل المواضيع</option>
             {topics.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <PapersPanel papers={{ id: s.id, list: shownPapers, fileToken: file.fileToken }} />
+          <PapersPanel papers={{ id: s.id, list: shownPapers, fileToken: file.fileToken }} canEdit={file.canEdit} />
         </div>
       )}
       {file && tab === "money" && (
@@ -546,7 +546,7 @@ function TestPaper({ tests, versions, busy, upload }: { tests: TestStudent[]; ve
 }
 
 /** أوراق الطالب: كل امتحان سلمه، درجته وصور ورقته المصححة، محفوظة يم صاحب البوت */
-function PapersPanel({ papers }: { papers: NonNullable<Data["papers"]> }) {
+function PapersPanel({ papers, canEdit }: { papers: NonNullable<Data["papers"]>; canEdit?: boolean }) {
   const url = (ref: string) => `/api/students/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(papers.fileToken)}`;
   if (!papers.list.length) return <div className="adlog"><div className="exhint">بعده ما سلم أي امتحان.</div></div>;
   return (
@@ -561,6 +561,7 @@ function PapersPanel({ papers }: { papers: NonNullable<Data["papers"]> }) {
             {p.chapter} · النموذج {p.model} · سلّم {p.submitted.slice(0, 16)}
             {p.graded && <> · صححه {p.ai ? "🤖 " : ""}{p.grader || "مصحح"} {p.graded.slice(0, 16)}</>}
           </div>
+          {canEdit && p.graded && <a className="exbtn" style={{ textDecoration: "none", display: "inline-block", margin: "6px 0" }} href={`/store/grade?edit=${p.id}`}>✏️ عدل التصحيح والدرجة</a>}
           <div className="stp-marks">{p.marks.map((m) => <span key={m.n}>س{m.n}: <b>{m.mark ?? "-"}</b>/{m.max}</span>)}</div>
           {(p.objections.open + p.objections.ok + p.objections.no > 0) && <div className="exhint">✋ اعتراضات: {p.objections.open} تنتظر · {p.objections.ok} انقبل · {p.objections.no} انرفض</div>}
           {!p.gradedPages && p.pages.length > 0 && <div className="exhint">{p.graded ? "صور جوابه مثل ما رفعها (هذي الورقة انصححت بدون صور مصححة)" : "صور جوابه مثل ما رفعها"}</div>}

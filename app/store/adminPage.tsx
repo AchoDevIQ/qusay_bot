@@ -6,7 +6,12 @@ import { useEffect, useState, type ReactNode } from "react";
 type Tg = { Telegram?: { WebApp?: {
   initData?: string; expand?: () => void;
 } } };
-const webApp = () => (window as unknown as Tg).Telegram?.WebApp;
+// الصفحة ممكن تكون داخل تبويب بصفحة «أكثر من صفحة»: توقيع تليجرام يبقى بالصفحة الأم
+const webApp = () => {
+  const own = (window as unknown as Tg).Telegram?.WebApp;
+  if (own?.initData) return own;
+  try { return (window.parent as unknown as Tg).Telegram?.WebApp ?? own; } catch { return own; }
+};
 
 // زر أسفل المحادثة ما يعطي توقيع تليجرام، فرابطه يحمل رمز موقع. يبقى محفوظ لما ينتقل بين الصفحات
 const TOKEN_KEY = "qmathPageToken";

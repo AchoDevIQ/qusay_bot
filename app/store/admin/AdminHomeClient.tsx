@@ -25,6 +25,7 @@ export default function AdminHomeClient() {
     setSize(next);
     try { localStorage.setItem(SIZE_KEY, next); } catch { /* المتصفح مانع الحفظ */ }
   }
+  const search = typeof location === "undefined" ? "" : location.search;
   async function asStudent() {
     if (await call({ action: "asStudent" })) (window as unknown as { Telegram?: { WebApp?: { close?: () => void } } }).Telegram?.WebApp?.close?.();
   }
@@ -47,6 +48,7 @@ export default function AdminHomeClient() {
             ))}
           </div>
         )}
+        {data && !data.closed && <Link className="exbtn" href={`/store/multi${search}`} style={{ textDecoration: "none", display: "block", textAlign: "center", marginBottom: 10 }}>🗂 فتح أكثر من صفحة</Link>}
         {data?.groups.map((g) => (
           <section key={g.title}>
             <div className="adgroup">{g.title}</div>

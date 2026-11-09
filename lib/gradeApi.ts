@@ -1,3 +1,4 @@
+import { toLatinDigits } from "./config.ts";
 // صفحة التصحيح: أول مصحح يفتح الورقة تصير إله، يضغط درجة كل سؤال، والبوت يجمع ويبلغ الطالب وولي أمره
 import { ADMIN_IDS } from "./config.ts";
 import { runCheckpoints } from "./checkpoints.ts";
@@ -5,7 +6,7 @@ import path from "node:path";
 import { addMinutes } from "./scheduleRules.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
-import { AI_GRADER, examLabel, isAdmin, staffIds, staffName, staffRow, student } from "./data.ts";
+import { can, AI_GRADER, examLabel, isAdmin, staffIds, staffName, staffRow, student } from "./data.ts";
 import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, openObjections, testObjection } from "./objections.ts";
@@ -75,6 +76,7 @@ async function listData(uid: number) {
   const waiting = await waitingFor(uid, papers);
   const mine = papers.filter((p) => p.graded_at && (p.grader_id === uid)).slice(-30).reverse();
   return {
+    canEdit: await can(uid, EDIT_PERM),
     only: await isAdmin(uid) ? await onlyData() : undefined,
     objections: await objectionPapers(uid),
     groups: await examGroups(waiting),
@@ -164,7 +166,7 @@ async function headerInfo(it: Row) {
   const st = await student(it.user_id);
   return { slug: e?.slug ?? "", info: e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar", sid: it.user_id };
 }
-async function paperView(it: Row, withObj = false) {
+async function paperView(it: Row, withObj = false, editing = false) {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
@@ -181,7 +183,7 @@ async function paperView(it: Row, withObj = false) {
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
     // byAi: صححه نظام التصحيح AI، فالمصحح ما يغيره (يصحح بس الأسئلة اللي حوّلها)
-    questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null, byAi: !!part && !part.includes(q.n) })),
+    questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null, byAi: !editing && !!part && !part.includes(q.n) })), editing,
   };
 }
 const voicesOf = async (it: Row) => ({ voices: (await examVoices(it.exam_id)).map(({ id, name, ref }) => ({ id, name, ref })), myVoices: (await paperVoices(it.id)).map((v) => ({ name: v.name, ref: v.ref })) });
@@ -192,11 +194,16 @@ async function myPaper(uid: number, raw: unknown) {
   need(it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
   return it!;
 }
+// تعديل ورقة مصححة: صاحب الصلاحية يفتحها، وتبقى مفتوحة إله لحد ما يحفظها
+const EDIT_PERM = "editgrade";
+const editKey = (item: number) => `grade_edit_${item}`;
+const isEditing = async (uid: number, item: number) => Number(await kvGet(editKey(item))) === uid && await can(uid, EDIT_PERM);
 /** ورقة يشتغل عليها: قبل الدرجة لازم تكون لهذا المصحح، وبعدها بس إذا عليها اعتراض ينتظر وهو يگدر يرد عليه */
 async function workPaper(uid: number, raw: unknown) {
   const it = await one("sched_items", { id: Number(raw) });
   need(it?.status === "done", "الورقة غير موجودة");
   if (it!.graded_at) {
+    if (await isEditing(uid, it!.id)) return { it: it!, obj: false };
     need((await humanObjections(it!)).length, "الورقة مخلصة");
     need(await canHandle(uid, it!), "ما عندك صلاحية على هذي الورقة", 403);
     return { it: it!, obj: true };
@@ -351,6 +358,27 @@ export async function gradeAction(body: Row) {
     if (!it!.graded_at) need((await waitingFor(uid, [it!])).length, "هذا الموضوع مو من مواضيعك", 403);
     if (!it!.grader_id) await update("sched_items", { id: it!.id }, { grader_id: uid });
     paper = await paperView((await one("sched_items", { id: it!.id }))!);
+  } else if (a === "find") {
+    // البحث عن طالب حتى تتعدل ورقته المصححة
+    need(await can(uid, EDIT_PERM), "ما عندك صلاحية تعديل التصحيح", 403);
+    const q = toLatinDigits(String(body.q ?? "").trim()).toLowerCase();
+    need(q.length >= 2, "اكتب حرفين على الأقل");
+    const has = (v: unknown) => v !== null && String(v).toLowerCase().includes(q);
+    const students = (await find("students")).filter((s) => has(s.name) || has(s.phone1) || has(s.phone2)).slice(0, 30);
+    const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
+    const models = new Map((await find("bank_versions")).map((v) => [v.id, v.model]));
+    const found = [];
+    for (const s of students) for (const it of (await find("sched_items", { user_id: s.user_id })).filter((i) => i.graded_at)) {
+      const e = exams.get(it.exam_id);
+      found.push({ id: it.id as number, name: s.name as string, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: models.get(it.version_id) ?? "", total: it.total as number, graded: String(it.graded_at) });
+    }
+    return { ...await listData(uid), paper: null, notice: found.length ? "" : "ما لگيت أوراق مصححة", found };
+  } else if (a === "openEdit") {
+    need(await can(uid, EDIT_PERM), "ما عندك صلاحية تعديل التصحيح", 403);
+    const it = await one("sched_items", { id: Number(body.id) });
+    need(it?.status === "done" && it.graded_at, "هذي الورقة بعدها ما انصححت");
+    await kvSet(editKey(it!.id), String(uid));
+    paper = await paperView(it!, false, true);
   } else if (a === "openObj") {
     const { it, obj } = await workPaper(uid, body.id);
     need(obj, "ماكو اعتراض على هذي الورقة");
@@ -361,7 +389,7 @@ export async function gradeAction(body: Row) {
     need(q, "السؤال غير موجود");
     const mark = Number(body.mark);
     need(Number.isInteger(mark) && mark >= 0 && mark <= q!.max_mark, `الدرجة من 0 إلى ${q!.max_mark}، رقم كامل`);
-    const part = obj ? null : await aiPartialOf(it.id);
+    const part = obj || await isEditing(uid, it.id) ? null : await aiPartialOf(it.id);
     need(!part || part.includes(q!.n) || await isAdmin(uid), "هذا السؤال صححه نظام التصحيح AI، إنت صحح بس الأسئلة اللي حوّلها إلك");
     if (obj) {
       // بالاعتراض تتغير بس درجة السؤال المعترض عليه
@@ -459,7 +487,28 @@ async function stickerData(s: Row | null | undefined) {
   } catch { return ""; }
 }
 /** حفظ الورقة: المجموع، وتوصل للطالب وولي أمره صور ورقته المصححة ويا المقولة. أوراق التجربة توصل للمصحح نفسه */
+/** حفظ ورقة مصححة بعد تعديلها: الدرجة والصور تتبدل، وإذا الدرجة تغيرت يوصل خبر للطالب وولي أمره */
+async function finishEdit(uid: number, it: Row, photos: Buffer[]) {
+  const view = await paperView(it);
+  const left = view.questions.filter((q) => q.mark === null).map((q) => q.n);
+  need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
+  const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
+  const old = Number(it.total);
+  await update("sched_items", { id: it.id }, { total });
+  await keepPages(it.id, photos);
+  await kvSet(editKey(it.id), "");
+  await logActivity(it.user_id, `✏️ ${await staffName(uid)} عدل تصحيح امتحان ${view.title}: ${old} ← ${total}`);
+  if (total === old) return `✅ انحفظ التعديل، والدرجة بقت ${total} من 100`;
+  const text = `✏️ <b>تعديل درجة</b>\nامتحان: <b>${esc(view.title)}</b>\nدرجتك صارت <b>${total}</b> من 100 (كانت ${old}).`;
+  await send(it.user_id, text);
+  const g = await guardianOf(it.user_id);
+  if (g) await send(g.guardian_id, `✏️ <b>تعديل درجة</b>\nدرجة الطالب <b>${esc(String(view.name))}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`);
+  try { await runCheckpoints(it.user_id); } catch (e) { console.error(e); }
+  return `✅ انحفظ التعديل: ${old} ← ${total}، ووصل الخبر للطالب`;
+}
 async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentId: number) {
+  const row = await one("sched_items", { id: Number(raw) });
+  if (row?.graded_at && await isEditing(uid, row.id)) return await finishEdit(uid, row, photos);
   const it = await myPaper(uid, raw);
   need(!it.graded_at, "الورقة مخلصة");
   const view = await paperView(it);
