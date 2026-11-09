@@ -9,6 +9,8 @@ import GuideBody from "../guide/GuideBody";
 type Data = { marks: TestMarks };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const all = TEST_PLAN.flatMap((s) => s.steps.map((st) => ({ s, st })));
+type View = "left" | "ok" | "bad" | "all";
+const EMPTY: Record<View, string> = { left: "🎉 ماكو خطوات باقية.", ok: "ما أشرت صح على أي خطوة بعد.", bad: "ماكو خطوات بيها مشكلة.", all: "" };
 
 function Step({ sec, st, mark, busy, call }: { sec: TestSection; st: TestStep; mark?: TestMark; busy: boolean; call: Call }) {
   const key = stepKey(sec.id, st.id);
@@ -39,11 +41,17 @@ function Step({ sec, st, mark, busy, call }: { sec: TestSection; st: TestStep; m
 
 export default function TestsClient() {
   const { data, error, busy, call } = useAdminApi<Data>("/api/testplan", "✅ تست التطبيق");
-  const [onlyLeft, setOnlyLeft] = useState(true);
+  const [view, setView] = useState<View>("left");
   const marks = data?.marks ?? {};
   const st = (s: TestSection, x: TestStep) => stepState(x, marks[stepKey(s.id, x.id)]);
   const count = (k: string) => all.filter(({ s, st: x }) => st(s, x) === k).length;
   const pct = Math.round((count("ok") / all.length) * 100);
+  const inView = (s: TestSection, x: TestStep) => {
+    const v = st(s, x);
+    return view === "all" || (view === "left" ? v === "todo" || v === "changed" : v === view);
+  };
+  const tabs: [View, string, number][] = [["left", "⬜️ الباقي", count("todo") + count("changed")], ["ok", "✅ الصح", count("ok")], ["bad", "❌ الغلط", count("bad")], ["all", "الكل", all.length]];
+  const nothing = !all.some(({ s, st: x }) => inView(s, x));
   return (
     <>
       <AdminHeader title="✅ تست التطبيق" />
@@ -62,13 +70,12 @@ export default function TestsClient() {
                 <div><b>{count("ok")}</b>صح</div>
               </div>
               <div className="exhint adtop">الصح تأشره إنت. إذا تعدل شي، الصح يروح وحده من الخطوات اللي تأثرت.</div>
-              <div className="seg adtop">
-                <button type="button" className={onlyLeft ? "on" : ""} onClick={() => setOnlyLeft(true)}>بس الباقي</button>
-                <button type="button" className={!onlyLeft ? "on" : ""} onClick={() => setOnlyLeft(false)}>الكل</button>
+              <div className="chips adtabs adtop">
+                {tabs.map(([v, label, n]) => <button type="button" key={v} className={view === v ? "on" : ""} onClick={() => setView(v)}>{label} ({n})</button>)}
               </div>
             </div>
             {TEST_PLAN.map((s) => {
-              const shown = s.steps.filter((x) => !onlyLeft || st(s, x) !== "ok");
+              const shown = s.steps.filter((x) => inView(s, x));
               if (!shown.length) return null;
               const done = s.steps.filter((x) => st(s, x) === "ok").length;
               return (
@@ -86,7 +93,7 @@ export default function TestsClient() {
                 </details>
               );
             })}
-            {onlyLeft && !count("todo") && !count("changed") && !count("bad") && <div className="empty">🎉 كل الخطوات عليها صح.</div>}
+            {nothing && <div className="empty">{EMPTY[view]}</div>}
           </>
         )}
       </div>
