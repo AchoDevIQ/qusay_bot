@@ -11,7 +11,7 @@ import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
-import { TEST_STUDENTS, addTestPaper, addTestStudent, deleteTests, makeTests, startTestExam } from "./gradeApi.ts";
+import { TEST_STUDENTS, addTestPaper, addTestStudent, deleteTests, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
 import { fileToken, homeToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { aiWhyNot } from "./aiGrade.ts";
@@ -184,6 +184,10 @@ export async function studentAction(body: Row) {
   } else if (a === "addTest") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     notice = `➕ انضاف طالب تجربة ${await addTestStudent()}`;
+  } else if (a === "tryInPerson") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const k = await startInPersonTest(Number(body.center), Number(body.vid));
+    notice = `🎫 طالب حضوري تجريبي ${k} جاهز. بصفحة 🎫 الحضوري اكتب الرقم ${k}`;
   } else if (a === "tryExam") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     await startTestExam(Number(body.sid), Number(body.vid));

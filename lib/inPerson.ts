@@ -36,7 +36,7 @@ const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(
 export const studentCode = (uid: number) => `QS:${uid}.${hmac("QMathAttend", String(uid)).slice(0, 12)}`;
 export function verifyStudentCode(raw: unknown): number | null {
   const t = String(raw ?? "").trim();
-  const m = /^QS:(\d+)\.([0-9a-f]{12})$/.exec(t);
+  const m = /^QS:(-?\d+)\.([0-9a-f]{12})$/.exec(t);
   if (!m) return null;
   const uid = Number(m[1]);
   return Number.isSafeInteger(uid) && same(m[2], hmac("QMathAttend", String(uid)).slice(0, 12)) ? uid : null;
@@ -216,7 +216,9 @@ export async function attendAction(body: Row) {
   }
   if (a === "scan") {
     const raw = String(body.code ?? "").trim();
-    const sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
+    let sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
+    // طالب التجربة رقمه سالب، وصاحب البوت يكتبه بدون ناقص
+    if (sid && sid > 0 && await isAdmin(uid) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid);
     return { ...await pageData(uid), card };

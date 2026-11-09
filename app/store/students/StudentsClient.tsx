@@ -44,6 +44,7 @@ export default function StudentsClient() {
         {data && s && (
           <>
             {data.tests && <TestStudents tests={data.tests} busy={busy} act={act} />}
+            {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} />}
             {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions} busy={busy} act={act} />}
             {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
             <div className="card">
@@ -272,6 +273,42 @@ async function shrink(f: File): Promise<Blob> {
     c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
     return await new Promise<Blob>((ok) => c.toBlob((b) => ok(b ?? f), "image/jpeg", 0.88));
   } catch { return f; }
+}
+
+/** طالب حضوري تجريبي بمركز، وامتحانه اليوم، حتى تنجرب قراءة الحضور وطباعة الليبل بدون حساب ثاني */
+function InPersonTry({ areas, versions, busy, act }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown }) {
+  const centers = areas.flatMap((a) => a.centers.map((c) => ({ id: c.id, name: `${c.name} (${a.name})` })));
+  const [center, setCenter] = useState(0);
+  const [slug, setSlug] = useState("");
+  const [exam, setExam] = useState(0);
+  const [vid, setVid] = useState(0);
+  const chapters = versions.filter((x, i) => versions.findIndex((y) => y.slug === x.slug) === i);
+  const topics = versions.filter((x, i) => x.slug === slug && versions.findIndex((y) => y.exam === x.exam) === i);
+  const models = versions.filter((x) => x.exam === exam);
+  return (
+    <div className="card">
+      <h2>🎫 طالب حضوري تجريبي</h2>
+      <div className="form">
+        <div className="exhint">يسوي طالب حضوري بالمركز اللي تختاره، وامتحانه اليوم. بعدها روح لـ 🎫 الحضوري واكتب رقمه حتى ينسجل حضوره ويطلع ليبله. إذا عدتها لنفس المركز ينستعمل نفس الطالب.</div>
+        <label>المركز</label>
+        <select value={center} onChange={(e) => setCenter(Number(e.target.value))}>
+          <option value={0}>اختار المركز...</option>
+          {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <label>الفصل</label>
+        <select value={slug} onChange={(e) => { setSlug(e.target.value); setExam(0); setVid(0); }}>
+          <option value="">اختار الفصل...</option>
+          {chapters.map((x) => <option key={x.slug} value={x.slug}>{x.chapter || x.slug}</option>)}
+        </select>
+        {slug && <select value={exam} onChange={(e) => { const id = Number(e.target.value); setExam(id); const m = versions.filter((x) => x.exam === id); setVid(m.length === 1 ? m[0].id : 0); }}>
+          <option value={0}>اختار الموضوع...</option>
+          {topics.map((x) => <option key={x.exam} value={x.exam}>{x.title}</option>)}
+        </select>}
+        {exam > 0 && models.length > 1 && <div className="seg">{models.map((x) => <button key={x.id} type="button" className={vid === x.id ? "on" : ""} onClick={() => setVid(x.id)}>{x.model}</button>)}</div>}
+        <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPerson", center, vid })}>🎫 سوي الطالب وامتحان اليوم</button>
+      </div>
+    </div>
+  );
 }
 
 /** صاحب البوت يمتحن بنفسه باسم طالب تجربة: امتحان حي يبدي هسه، بالأسئلة والقسم والكاميرا والتسليم */

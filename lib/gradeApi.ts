@@ -266,6 +266,22 @@ export async function addTestStudent() {
   await put("students", { user_id: -k, name: `طالب تجربة ${k}`, curr: "عربي", grade: "السادس العلمي", gov: "بغداد", area: "تجربة", phone1: "", phone2: "", exam: "إلكتروني", created: stamp() });
   return k;
 }
+/** «🎫 طالب حضوري تجريبي»: طالب حضوري بالمركز المختار، وامتحان اليوم ينتظر حضوره، حتى تنجرب قراءة الحضور والليبل.
+ *  نفس الطالب للمركز يرجع ينستعمل، وورقته القديمة بنفس الامتحان تنشال. يرجع رقمه اللي ينكتب بصفحة الحضوري */
+export async function startInPersonTest(centerId: number, vid: number) {
+  need(await one("centers", { id: centerId }), "اختار المركز");
+  const v = await one("bank_versions", { id: vid });
+  need(v, "اختار الامتحان");
+  const had = (await find("students")).find((x) => x.user_id < 0 && x.exam === "حضوري" && x.center_id === centerId);
+  const k = had ? -had.user_id as number : await addTestStudent();
+  if (!had) await update("students", { user_id: -k }, { exam: "حضوري", center_id: centerId, name: `طالب حضوري تجريبي ${k}` });
+  for (const old of await find("sched_items", { user_id: -k, exam_id: v!.exam_id })) {
+    for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: old.id });
+    await remove("sched_items", { id: old.id });
+  }
+  await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: stamp(), status: "waiting", version_id: vid, notified: "test" });
+  return k;
+}
 /** «📝 امتحن بنفسك»: صاحب البوت يدخل امتحان حي باسم طالب تجربة: الأسئلة، القسم، الكاميرا، التسليم، مثل الطالب بالضبط.
  *  ورقة نفس الطالب القديمة بنفس الامتحان تنشال، فيگدر يعيد التجربة */
 export async function startTestExam(sid: number, vid: number) {
