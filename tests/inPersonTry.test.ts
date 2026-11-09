@@ -83,3 +83,36 @@ test("المحطة: قراءة الكود تسجل الحضور وترجع ال�
   assert.ok(((await attendAction({ station, action: "test" })) as any).job.b64.length > 1000);
   await assert.rejects(attendAction({ station, action: "scan", code: "QS:5.abc" }), /مو كود طالب/);
 });
+
+test("الجاي بغير وقته: ما ينسجل، واستثناء يدخله ويطبع، ورفض ما يغير شي، والاستثناء يحتاج صلاحية", async () => {
+  const { attendAction, stationToken, studentCode } = await import("../lib/inPerson.ts");
+  const { put } = await import("../lib/db.ts");
+  const { homeToken } = await import("../lib/webAuth.ts");
+  const station = stationToken(1);
+  const area = await insert("areas", { gov: "بغداد", name: "منطقة 4" });
+  const center = await insert("centers", { area_id: area, name: "مركز الاستثناء", gender: "بنين" });
+  const exam = await insert("bank_exams", { slug: "t4", chapter: "الفصل الرابع", ord: 1, title: "امتحان الاستثناء", minutes: 60 });
+  const vid = await insert("bank_versions", { exam_id: exam, model: "A", kind: "mandatory", ok: 1 });
+  const k = await startInPersonTest(center, vid, true);
+  const code = studentCode(-k);
+  const first: any = await attendAction({ station, action: "scan", code });
+  assert.equal(first.card.late, true);
+  assert.equal(first.job, null);
+  const item = first.card.item;
+  assert.equal((await one("sched_items", { id: item }))!.status, "waiting");
+  await attendAction({ station, action: "rejectLate", item });
+  assert.equal((await one("sched_items", { id: item }))!.status, "waiting");
+  // مساعد عنده الحضور بس: يگدر يرفض، وما يگدر يستثني
+  await put("staff", { user_id: 55, name: "مساعد", perms: "attend" });
+  const init = `tk:${homeToken(55)}`;
+  assert.equal((await attendAction({ initData: init, action: "scan", code }) as any).card.late, true);
+  await assert.rejects(attendAction({ initData: init, action: "except", item }), (e: any) => e.status === 403);
+  const yes: any = await attendAction({ station, action: "except", item });
+  assert.equal(yes.card.late, false);
+  assert.ok(yes.job.b64.length > 1000);
+  assert.equal((await one("sched_items", { id: item }))!.status, "attended");
+  // بوقته: يدخل بدون سؤال
+  const on = await startInPersonTest(center, vid, false);
+  assert.equal(on, k);
+  assert.equal(((await attendAction({ station, action: "scan", code })) as any).card.late, false);
+});

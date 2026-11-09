@@ -186,8 +186,8 @@ export async function studentAction(body: Row) {
     notice = `➕ انضاف طالب تجربة ${await addTestStudent()}`;
   } else if (a === "tryInPerson") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
-    const k = await startInPersonTest(Number(body.center), Number(body.vid));
-    notice = `🎫 طالب حضوري تجريبي ${k} جاهز. بصفحة 🎫 الحضوري اكتب الرقم ${k}`;
+    const k = await startInPersonTest(Number(body.center), Number(body.vid), !!body.late);
+    notice = `🎫 طالب حضوري تجريبي ${k} جاهز${body.late ? "، وموعده بعد 3 ساعات" : ""}. اكتب الرقم ${k} بالمحطة أو بصفحة 🎫 الحضوري`;
   } else if (a === "tryExam") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     await startTestExam(Number(body.sid), Number(body.vid));

@@ -10,6 +10,7 @@ import { TOKEN } from "./config.ts";
 import { can, centerName, isAdmin, student } from "./data.ts";
 import { labelTspl, type LabelInfo } from "./labelTspl.ts";
 import { versionOf } from "./examRoom.ts";
+import { addMinutes } from "./scheduleRules.ts";
 import { files } from "./files.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { recordUploader, rescanDone, rescanFor, rescanItemOf } from "./rescan.ts";
@@ -18,6 +19,7 @@ import { authed, ensure, need } from "./webApi.ts";
 
 export const ATTEND_PERM = "attend";
 export const CAM_PERM = "camup";
+const EXC_PERM = "exception";
 /** المساعد اللي عنده الحضور أو تصوير الأوراق. يرجع رقمه وإذا عنده الحضور كامل */
 async function staffIn(initData: unknown) {
   try { return { uid: await authed(initData, ATTEND_PERM), full: true }; } catch (e) {
@@ -98,8 +100,13 @@ export async function stationAction(body: Row) {
     if (sid && sid > 0 && await isAdmin(uid!) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid!);
-    return { card, job: card.print === "label" && !card.already ? await jobOf(card) : null };
+    return { card, job: card.print === "label" && !card.already && !card.late ? await jobOf(card) : null };
   }
+  if (body.action === "except") {
+    const card = (await decideLate(uid!, body.item, true))!;
+    return { card, job: card.print === "label" ? await jobOf(card) : null };
+  }
+  if (body.action === "rejectLate") { await decideLate(uid!, body.item, false); return { ok: true }; }
   if (body.action === "reprint") {
     const it = await one("sched_items", { id: Number(body.item) });
     need(it, "الامتحان غير موجود", 404);
@@ -131,10 +138,23 @@ export async function photosAllowed(uid: number) {
 
 // ---------- الحضور
 const LIVE = new Set(["waiting", "missed", "attended"]);
-/** امتحان الطالب اليوم: الأقرب لهسه إذا عنده أكثر من واحد */
+/** كم دقيقة قبل الموعد يعتبر الطالب جاي بوقته (بعد الموعد: وقت الدخول من إعدادات الجدول) */
+const EARLY_KEY = "attend_early";
+export async function attendEarly() {
+  const v = await kvGet(EARLY_KEY);
+  return v === null || v === undefined || v === "" ? 30 : Number(v) || 0;
+}
+async function onTime(it: Row) {
+  const { schedSettings } = await import("./schedApi.ts");
+  const s = await schedSettings(), now = stamp();
+  return now >= addMinutes(it.at, -await attendEarly()) && now <= addMinutes(it.at, s.window);
+}
+/** امتحان الطالب: الأقرب لهسه من امتحانات اليوم. وإذا ماكو اليوم، الأقرب من باقي امتحاناته (جاي بغير يومه) */
 async function todayItem(uid: number) {
   const today = todayStr(), now = stamp();
-  const list = (await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional" && String(i.at).startsWith(today) && LIVE.has(i.status));
+  const all = (await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional" && LIVE.has(i.status));
+  const todays = all.filter((i) => String(i.at).startsWith(today));
+  const list = todays.length ? todays : all.filter((i) => i.status !== "attended");
   const gap = (at: string) => Math.abs(new Date(at.replace(" ", "T")).getTime() - new Date(now.replace(" ", "T")).getTime());
   return list.sort((a, b) => gap(a.at) - gap(b.at))[0] ?? null;
 }
@@ -148,22 +168,37 @@ async function itemCard(it: Row) {
     label: printToken("l", it.id), paper: printToken("i", it.id),
   };
 }
-/** يسجل حضور الطالب بامتحان اليوم، وتنحدد نسخته حتى تنطبع */
-export async function markAttendance(uid: number, by: number) {
+/** يسجل الحضور فعلاً، وتنحدد نسخته حتى تنطبع */
+async function enterItem(it: Row, by: number) {
+  const already = it.status === "attended";
+  if (!already) {
+    const e = await one("bank_exams", { id: it.exam_id });
+    const version = it.version_id || (e ? await versionOf(it, e) : null);
+    need(version, "أسئلة هذا الامتحان لسه ما جاهزة");
+    await update("sched_items", { id: it.id }, { status: "attended", version_id: version, attended_at: stamp(), attended_by: by });
+    await logActivity(it.user_id, `🎫 حضر امتحان ${e?.title ?? ""}`);
+  }
+  return { ...await itemCard((await one("sched_items", { id: it.id }))!), already, late: false };
+}
+/** حضور الطالب. الجاي بغير وقته ما ينسجل: يرجع late حتى المساعد يختار استثناء لو رفض. force: بدون سؤال */
+export async function markAttendance(uid: number, by: number, force = false) {
   const st = await student(uid);
   need(st, "هذا مو طالب مسجل");
   need(st!.exam === "حضوري", `${st!.name} طالب إلكتروني، مو حضوري`);
   const it = await todayItem(uid);
-  need(it, `${st!.name} ما عنده امتحان اليوم`);
-  const already = it!.status === "attended";
-  if (!already) {
-    const e = await one("bank_exams", { id: it!.exam_id });
-    const version = it!.version_id || (e ? await versionOf(it!, e) : null);
-    need(version, "أسئلة هذا الامتحان لسه ما جاهزة");
-    await update("sched_items", { id: it!.id }, { status: "attended", version_id: version, attended_at: stamp(), attended_by: by });
-    await logActivity(uid, `🎫 حضر امتحان ${e?.title ?? ""}`);
-  }
-  return { ...await itemCard((await one("sched_items", { id: it!.id }))!), already };
+  need(it, `${st!.name} ما عنده امتحان`);
+  if (!force && it!.status !== "attended" && !await onTime(it!)) return { ...await itemCard(it!), already: false, late: true };
+  return await enterItem(it!, by);
+}
+/** قرار المساعد على طالب جاي بغير وقته: استثناء يدخله، ورفض ما يغير شي وينسجل بسجله */
+async function decideLate(uid: number, item: unknown, allow: boolean) {
+  const it = await one("sched_items", { id: Number(item) });
+  need(it && LIVE.has(it.status), "الامتحان غير موجود", 404);
+  const e = await one("bank_exams", { id: it!.exam_id });
+  if (!allow) { await logActivity(it!.user_id, `⛔ جا لامتحان ${e?.title ?? ""} بغير وقته وانرفض`); return null; }
+  need(await can(uid, EXC_PERM), "ما عندك صلاحية الاستثناء", 403);
+  await logActivity(it!.user_id, `🔓 دخل امتحان ${e?.title ?? ""} باستثناء، جا بغير وقته`);
+  return await enterItem(it!, uid);
 }
 
 // ---------- الطباعة: صفحات HTML تنفتح بالمتصفح وتطبع وحدها
@@ -252,7 +287,7 @@ async function pageData(uid: number, full = true) {
   const exams = (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => versions.some((v) => v.exam_id === e.id))
     .map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ model: v.model as string, token: printToken("v", v.id) })) }));
   const today = (await find("sched_items")).filter((i) => String(i.attended_at ?? "").startsWith(todayStr())).length;
-  return { owner, full, centers, exams, today, rescan: await rescanFor(uid), station: full ? { active: await stationActive(uid), token: stationToken(uid) } : null, notice: "" };
+  return { owner, full, centers, exams, today, rescan: await rescanFor(uid), station: full ? { active: await stationActive(uid), token: stationToken(uid) } : null, early: await attendEarly(), notice: "" };
 }
 
 export async function attendAction(body: Row) {
@@ -270,7 +305,7 @@ export async function attendAction(body: Row) {
     const sent = (await find("sched_items", { user_id: sid! })).find((i) => i.status === "done" && !i.graded_at && i.version_id && String(i.at).startsWith(todayStr()));
     // ورقته انمسحت حتى تنرفع من جديد (حتى لو مو اليوم): تنفتح نفس الورقة
     const again = sent ? 0 : await rescanItemOf(sid!);
-    const card = sent ? await itemCard(sent) : again ? await itemCard((await one("sched_items", { id: again }))!) : await markAttendance(sid!, uid);
+    const card = sent ? await itemCard(sent) : again ? await itemCard((await one("sched_items", { id: again }))!) : await markAttendance(sid!, uid, true);
     const it = (await one("sched_items", { id: card.item }))!;
     const qs = (await find("bank_questions", { version_id: it.version_id }, { order: ["n"] })).map((q) => q.n as number);
     const have = (await find("exam_answers", { item_id: it.id })).map((x) => x.q as number);
@@ -283,9 +318,26 @@ export async function attendAction(body: Row) {
     if (sid && sid > 0 && await isAdmin(uid) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid);
-    const queued = card.print === "label" && !card.already && await stationActive(uid);
+    const queued = card.print === "label" && !card.already && !card.late && await stationActive(uid);
     if (queued) await enqueue(uid, card.item);
     return { ...await pageData(uid), card: { ...card, queued } };
+  }
+  if (a === "except") {
+    const card = (await decideLate(uid, body.item, true))!;
+    const queued = card.print === "label" && await stationActive(uid);
+    if (queued) await enqueue(uid, card.item);
+    return { ...await pageData(uid), card: { ...card, queued } };
+  }
+  if (a === "rejectLate") {
+    await decideLate(uid, body.item, false);
+    return { ...await pageData(uid), notice: "❌ انرفض دخوله" };
+  }
+  if (a === "saveEarly") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const n = Number(body.minutes);
+    need(Number.isInteger(n) && n >= 0 && n <= 600, "اكتب عدد الدقايق");
+    await kvSet(EARLY_KEY, String(n));
+    return { ...await pageData(uid), notice: "✅ انحفظ" };
   }
   if (a === "queue") {
     const it = await one("sched_items", { id: Number(body.item) });

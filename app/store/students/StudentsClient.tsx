@@ -279,6 +279,7 @@ async function shrink(f: File): Promise<Blob> {
 function InPersonTry({ areas, versions, busy, act }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown }) {
   const centers = areas.flatMap((a) => a.centers.map((c) => ({ id: c.id, name: `${c.name} (${a.name})` })));
   const [center, setCenter] = useState(0);
+  const [late, setLate] = useState(false);
   const [slug, setSlug] = useState("");
   const [exam, setExam] = useState(0);
   const [vid, setVid] = useState(0);
@@ -305,7 +306,12 @@ function InPersonTry({ areas, versions, busy, act }: { areas: Data["areas"]; ver
           {topics.map((x) => <option key={x.exam} value={x.exam}>{x.title}</option>)}
         </select>}
         {exam > 0 && models.length > 1 && <div className="seg">{models.map((x) => <button key={x.id} type="button" className={vid === x.id ? "on" : ""} onClick={() => setVid(x.id)}>{x.model}</button>)}</div>}
-        <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPerson", center, vid })}>🎫 سوي الطالب وامتحان اليوم</button>
+        <label>موعده</label>
+        <div className="seg">
+          <button type="button" className={!late ? "on" : ""} onClick={() => setLate(false)}>✅ هسه (بوقته)</button>
+          <button type="button" className={late ? "on" : ""} onClick={() => setLate(true)}>⏰ بغير وقته</button>
+        </div>
+        <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPerson", center, vid, late })}>🎫 سوي الطالب وامتحان اليوم</button>
       </div>
     </div>
   );

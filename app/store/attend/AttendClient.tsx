@@ -6,11 +6,11 @@ import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import { openOutside, scanQr } from "../shared";
 import RescanList, { type Rescan } from "./RescanList";
 
-type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean };
+type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean; late?: boolean };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
 type Exam = { id: number; title: string; chapter: string; versions: { model: string; token: string }[] };
 type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
-type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; station?: { active: boolean; token: string } | null; notice: string };
+type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; station?: { active: boolean; token: string } | null; early: number; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const printUrl = (kind: "label" | "paper", k: string) => `${location.origin}/print/${kind}?k=${encodeURIComponent(k)}`;
@@ -35,6 +35,7 @@ export default function AttendClient() {
               <a className="btn agbtn adtop" style={{ textDecoration: "none", display: "block", textAlign: "center" }} href={`/store/scanup${location.search}`}>📤 رفع أوراق السكانر</a>
             </div>}
             {data.full && <Copies exams={data.exams} />}
+            {data.owner && <Early key={data.early} early={data.early} busy={busy} call={call} />}
             {data.owner && <Centers centers={data.centers} busy={busy} call={call} />}
           </>
         )}
@@ -49,9 +50,12 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
   const c = data.card;
   async function go(code: string) {
     const r = await call({ action: "scan", code });
-    // الطباعة تنفتح وحدها حسب المركز، حتى المساعد ما يدوس شي
-    if (r?.card && !r.card.already && !r.card.queued) openOutside(printUrl(r.card.print, r.card.print === "label" ? r.card.label : r.card.paper));
+    afterAttend(r);
     if (r) setNum("");
+  }
+  // الطباعة تنفتح وحدها حسب المركز، حتى المساعد ما يدوس شي
+  function afterAttend(r: Data | null) {
+    if (r?.card && !r.card.already && !r.card.queued && !r.card.late) openOutside(printUrl(r.card.print, r.card.print === "label" ? r.card.label : r.card.paper));
   }
   function camera() {
     const ok = scanQr("وجه الكاميرا على كود الطالب", (t) => { void go(t); return true; });
@@ -66,7 +70,18 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
         <input className="exinput" inputMode="numeric" dir="ltr" aria-label="رقم الطالب" placeholder="رقم الطالب" value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ""))} />
         <button type="button" className="exbtn" disabled={busy || !num} onClick={() => void go(num)}>سجل</button>
       </div>
-      {c && (
+      {c?.late && (
+        <div className="atcard">
+          <b>{c.name}</b> <span dir="ltr">#{c.uid}</span>
+          <div className="exhint exbad">⏰ جاي بغير وقته. موعده: <span dir="ltr">{c.at}</span></div>
+          <div className="exhint">{c.exam} · {c.center}</div>
+          <div className="atrow">
+            <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "except", item: c.item }).then(afterAttend)}>🔓 استثناء</button>
+            <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "rejectLate", item: c.item })}>❌ رفض</button>
+          </div>
+        </div>
+      )}
+      {c && !c.late && (
         <div className="atcard">
           <b>{c.name}</b> <span dir="ltr">#{c.uid}</span>
           <div className={c.already ? "exhint" : "exhint atok"}>{c.already ? `⚠️ كان مسجل حضوره من ${c.attendedAt.slice(11, 16)}` : "✅ انسجل حضوره"}</div>
@@ -184,6 +199,21 @@ function Copies({ exams }: { exams: Exam[] }) {
         {exams.map((x) => <option key={x.id} value={x.id}>{x.chapter} · {x.title}</option>)}
       </select>
       {e && <div className="atrow">{e.versions.map((v) => <button type="button" key={v.model} className="exbtn" onClick={() => openOutside(printUrl("paper", v.token))}>📄 نسخة {v.model}</button>)}</div>}
+    </div>
+  );
+}
+
+/** الطالب يعتبر جاي بوقته من كم دقيقة قبل موعده */
+function Early({ early, busy, call }: { early: number; busy: boolean; call: Call }) {
+  const [n, setN] = useState(String(early));
+  return (
+    <div className="card expad">
+      <div className="exlabel">⏰ وقت حضور الطالب</div>
+      <div className="exhint">الطالب يعتبر جاي بوقته من هذا العدد من الدقايق قبل موعده، لحد انتهاء وقت الدخول بإعدادات الجدول. غير هذا يطلع زر استثناء أو رفض.</div>
+      <div className="atrow adtop">
+        <input className="exinput" type="number" min={0} max={600} aria-label="الدقايق قبل الموعد" value={n} onChange={(e) => setN(e.target.value)} />
+        <button type="button" className="exbtn" disabled={busy || n === String(early)} onClick={() => void call({ action: "saveEarly", minutes: Number(n) })}>💾 حفظ</button>
+      </div>
     </div>
   );
 }

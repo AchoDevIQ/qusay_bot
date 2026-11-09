@@ -19,7 +19,7 @@ const ip = await import("../lib/inPerson.ts");
 const { myExamAction } = await import("../lib/schedApi.ts");
 const { initDb, insert, one, find, put } = await import("../lib/db.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
-const { todayStr } = await import("../lib/util.ts");
+const { stamp, todayStr } = await import("../lib/util.ts");
 await initDb();
 const sign = (uid: number) => {
   const params = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: uid }) });
@@ -41,7 +41,7 @@ await put("students", { user_id: 80, name: "حضوري أول", exam: "حضور�
 await put("students", { user_id: 81, name: "إلكتروني", exam: "إلكتروني", created: "2026-01-01 00:00" });
 await put("staff", { user_id: 40, name: "مساعد الحضور", perms: "attend" });
 await put("staff", { user_id: 41, name: "مصحح", perms: "grade" });
-const item = await insert("sched_items", { user_id: 80, exam_id: ex, at: `${todayStr()} 10:00`, status: "waiting" });
+const item = await insert("sched_items", { user_id: 80, exam_id: ex, at: stamp(), status: "waiting" });
 
 test("كود الطالب موقع، وكود مزور مرفوض", () => {
   const c = ip.studentCode(80);
@@ -107,7 +107,7 @@ test("أوراق السكانر: كل صفحة لسؤالها، وبعدها ت�
 test("تصوير الورقة بكاميرا المساعد: اللي عنده تصوير بس يلگى الطالب ويرفع ويدز، وما يگدر يطبع أو يغير المراكز", async () => {
   await put("staff", { user_id: 42, name: "مساعد الكاميرا", perms: "camup" });
   await put("students", { user_id: 82, name: "حضوري ثاني", exam: "حضوري", center_id: center, created: "2026-01-01 00:00" });
-  const it2 = await insert("sched_items", { user_id: 82, exam_id: ex, at: `${todayStr()} 10:00`, status: "waiting" });
+  const it2 = await insert("sched_items", { user_id: 82, exam_id: ex, at: stamp(), status: "waiting" });
   await assert.rejects(at(41, "cam", { code: "82" }), (e: any) => e.status === 403);
   await assert.rejects(at(42, "scan", { code: "82" }), (e: any) => e.status === 403);
   await assert.rejects(at(42, "saveCenter", { center, print: "paper" }), (e: any) => e.status === 403);

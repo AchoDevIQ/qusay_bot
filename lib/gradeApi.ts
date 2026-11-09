@@ -2,6 +2,7 @@
 import { ADMIN_IDS } from "./config.ts";
 import { runCheckpoints } from "./checkpoints.ts";
 import path from "node:path";
+import { addMinutes } from "./scheduleRules.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
 import { AI_GRADER, examLabel, isAdmin, staffIds, staffName, staffRow, student } from "./data.ts";
@@ -268,7 +269,7 @@ export async function addTestStudent() {
 }
 /** «🎫 طالب حضوري تجريبي»: طالب حضوري بالمركز المختار، وامتحان اليوم ينتظر حضوره، حتى تنجرب قراءة الحضور والليبل.
  *  نفس الطالب للمركز يرجع ينستعمل، وورقته القديمة بنفس الامتحان تنشال. يرجع رقمه اللي ينكتب بصفحة الحضوري */
-export async function startInPersonTest(centerId: number, vid: number) {
+export async function startInPersonTest(centerId: number, vid: number, late = false) {
   need(await one("centers", { id: centerId }), "اختار المركز");
   const v = await one("bank_versions", { id: vid });
   need(v, "اختار الامتحان");
@@ -279,7 +280,7 @@ export async function startInPersonTest(centerId: number, vid: number) {
     for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: old.id });
     await remove("sched_items", { id: old.id });
   }
-  await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: stamp(), status: "waiting", version_id: vid, notified: "test" });
+  await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: late ? addMinutes(stamp(), 180) : stamp(), status: "waiting", version_id: vid, notified: "test" });
   return k;
 }
 /** «📝 امتحن بنفسك»: صاحب البوت يدخل امتحان حي باسم طالب تجربة: الأسئلة، القسم، الكاميرا، التسليم، مثل الطالب بالضبط.

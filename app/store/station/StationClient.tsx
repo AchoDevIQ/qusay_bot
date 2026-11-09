@@ -8,7 +8,7 @@ const SERVICES = ["000018f0-0000-1000-8000-00805f9b34fb", "e7810a71-73ae-499d-8c
 const POS_KEY = "stationOffset";
 const MM = 8;   // 8 نقاط بالملم
 type Job = { id: number; name: string; b64: string };
-type Card = { item: number; name: string; exam: string; print: string; already: boolean };
+type Card = { item: number; name: string; exam: string; print: string; at: string; already: boolean; late?: boolean };
 type Reply = { job?: Job | null; card?: Card; ok?: boolean };
 
 const why = (e: unknown) => (e as Error)?.message || String(e);
@@ -21,6 +21,8 @@ export default function StationClient() {
   const [camErr, setCamErr] = useState("");
   const [count, setCount] = useState(0);
   const [last, setLast] = useState<Card | null>(null);
+  const [pending, setPending] = useState<Card | null>(null);
+  const waiting = useRef(false);
   const [num, setNum] = useState("");
   const [pos, setPos] = useState({ dx: 0, dy: 0 });
   const video = useRef<HTMLVideoElement>(null);
@@ -88,12 +90,30 @@ export default function StationClient() {
     setStatus("⏳ دا يسجل الحضور...");
     const r = await api({ action: "scan", code });
     const c = r.card!;
+    if (c.late) { setPending(c); waiting.current = true; setStatus(`⏰ ${c.name}: جاي بغير وقته`); return; }
     setLast(c);
     if (r.job) {
       setStatus(`🖨 دا يطبع: ${c.name}`);
       await write(r.job);
       setStatus(`✅ انطبع: ${c.name}`);
     } else setStatus(c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
+  });
+  /** قرار الجاي بغير وقته: بعدها الكاميرا ترجع تقرا */
+  const decide = (allow: boolean) => once(async () => {
+    const c = pending;
+    if (!c) return;
+    if (!allow) {
+      await api({ action: "rejectLate", item: c.item });
+      setPending(null); waiting.current = false;
+      setStatus(`❌ انرفض: ${c.name}`);
+      return;
+    }
+    if (!ch.current) { setStatus("⚠️ اتصل بالطابعة أول"); return; }
+    const r = await api({ action: "except", item: c.item });
+    setPending(null); waiting.current = false;
+    setLast(r.card!);
+    if (r.job) { setStatus(`🖨 دا يطبع: ${c.name}`); await write(r.job); setStatus(`✅ انطبع: ${c.name}`); }
+    else setStatus(`✅ انسجل ${c.name} باستثناء`);
   });
   const reprint = (item: number) => once(async () => {
     if (!ch.current) { setStatus("⚠️ اتصل بالطابعة أول"); return; }
@@ -123,7 +143,7 @@ export default function StationClient() {
 
   /** كود صحيح لطالب: نفس الكود ما ينعاد خلال 8 ثواني */
   function found(raw: string) {
-    if (!raw.startsWith("QS:")) return;
+    if (!raw.startsWith("QS:") || waiting.current) return;
     const now = Date.now();
     if (seen.current.code === raw && now - seen.current.at < 8000) return;
     seen.current = { code: raw, at: now };
@@ -194,7 +214,18 @@ export default function StationClient() {
             <input className="exinput" inputMode="numeric" dir="ltr" aria-label="رقم الطالب" placeholder="رقم الطالب" value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ""))} />
             <button type="button" className="exbtn" disabled={!num} onClick={() => { void handle(num); setNum(""); }}>سجل واطبع</button>
           </div>
-          {last && (
+          {pending && (
+            <div className="atcard">
+              <b>{pending.name}</b>
+              <div className="exhint exbad">⏰ جاي بغير وقته. موعده: <span dir="ltr">{pending.at}</span></div>
+              <div className="exhint">{pending.exam}</div>
+              <div className="atrow adtop">
+                <button type="button" className="btn" onClick={() => void decide(true)}>🔓 استثناء</button>
+                <button type="button" className="exbtn" onClick={() => void decide(false)}>❌ رفض</button>
+              </div>
+            </div>
+          )}
+          {last && !pending && (
             <div className="atcard">
               <b>{last.name}</b>
               <div className="exhint">{last.exam}</div>
