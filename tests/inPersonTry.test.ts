@@ -79,7 +79,12 @@ test("المحطة: قراءة الكود تسجل الحضور وترجع ال�
   assert.match(text, /QRCODE 30,50,M,7,A,0,/);
   const again: any = await attendAction({ station, action: "scan", code });
   assert.equal(again.card.already, true);
+  // ما تأكد انطباعه بعد: يقدر يطبع. وبعد ما تأكد: يگول مطبوع له ليبل وما يطبع
   assert.ok(again.job.b64.length > 1000);
+  await attendAction({ station, action: "printed", id: first.card.item });
+  const third: any = await attendAction({ station, action: "scan", code });
+  assert.equal(third.card.printed, true);
+  assert.equal(third.job, null);
   assert.equal(((await attendAction({ station, action: "reprint", item: first.card.item })) as any).job.id, first.card.item);
   assert.ok(((await attendAction({ station, action: "test" })) as any).job.b64.length > 1000);
   // الضبط ينحفظ ويطبق على الليبلات الجاية بدون ما ينرسل كل مرة
@@ -121,4 +126,20 @@ test("الجاي بغير وقته: ما ينسجل، واستثناء يدخل�
   const on = await startInPersonTest(center, vid, false);
   assert.equal(on, k);
   assert.equal(((await attendAction({ station, action: "scan", code })) as any).card.late, false);
+});
+
+test("صلاحية 🖨: ترى رابط المحطة وتطبع بس، وبدونها المحطة مرفوضة", async () => {
+  const { attendAction, stationToken } = await import("../lib/inPerson.ts");
+  const { put } = await import("../lib/db.ts");
+  const { homeToken } = await import("../lib/webAuth.ts");
+  await put("staff", { user_id: 66, name: "مساعد الطباعة", perms: "station" });
+  await put("staff", { user_id: 67, name: "مساعد الحضور", perms: "attend" });
+  const list: any = await attendAction({ initData: `tk:${homeToken(66)}`, action: "list" });
+  assert.equal(list.full, false);
+  assert.equal(list.canCam, false);
+  assert.ok(list.station.token);
+  assert.equal(((await attendAction({ station: list.station.token, action: "next" })) as any).job, null);
+  await assert.rejects(attendAction({ initData: `tk:${homeToken(66)}`, action: "scan", code: "5" }), (e: any) => e.status === 403);
+  await assert.rejects(attendAction({ station: stationToken(67), action: "next" }), (e: any) => e.status === 403);
+  assert.equal(((await attendAction({ initData: `tk:${homeToken(67)}`, action: "list" })) as any).station, null);
 });

@@ -20,11 +20,17 @@ import { authed, ensure, need } from "./webApi.ts";
 export const ATTEND_PERM = "attend";
 export const CAM_PERM = "camup";
 const EXC_PERM = "exception";
+const STATION_PERM = "station";
+/** انطبع ليبل لهذا الامتحان؟ */
+const labelKey = (item: number) => `label_done_${item}`;
 /** المساعد اللي عنده الحضور أو تصوير الأوراق. يرجع رقمه وإذا عنده الحضور كامل */
 async function staffIn(initData: unknown) {
   try { return { uid: await authed(initData, ATTEND_PERM), full: true }; } catch (e) {
     if ((e as { status?: number }).status !== 403) throw e;
-    return { uid: await authed(initData, CAM_PERM), full: false };
+    try { return { uid: await authed(initData, CAM_PERM), full: false }; } catch (x) {
+      if ((x as { status?: number }).status !== 403) throw x;
+      return { uid: await authed(initData, STATION_PERM), full: false };
+    }
   }
 }
 const KEY = "inperson_cfg";
@@ -84,14 +90,17 @@ async function enqueue(uid: number, item: number) {
 export async function stationAction(body: Row) {
   const uid = verifyStationToken(body.station);
   need(uid !== null, "الرابط انتهى. انسخ رابط المحطة من صفحة الحضوري مرة ثانية", 401);
-  need(await can(uid!, ATTEND_PERM), "ما عندك صلاحية", 403);
+  need(await can(uid!, STATION_PERM), "ما عندك صلاحية طباعة الليبل", 403);
   // الوقت ينكتب كل 5 دقايق بس، مو كل طلب
   if (Date.now() - (Number(await kvGet(seenKey(uid!))) || 0) > 300_000) await kvSet(seenKey(uid!), String(Date.now()));
   const q = await readQueue(uid!);
   if (body.action === "done") {
     await kvSet(queueKey(uid!), JSON.stringify(q.filter((x) => x !== Number(body.id))));
+    await kvSet(labelKey(Number(body.id)), stamp());
     return { ok: true };
   }
+  // الطابعة خلصت الليبل: المرة الجاية يگول «مطبوع له ليبل» بدل ما يطبع
+  if (body.action === "printed") { await kvSet(labelKey(Number(body.id)), stamp()); return { ok: true }; }
   const shift = (v: unknown) => Math.max(-80, Math.min(80, Math.round(Number(v) || 0)));
   // ضبط مكان الطباعة ينحفظ بالسيرفر لكل مساعد: يبقى لكل الطلاب والأيام لحد ما يتغير
   const posKey = `print_pos_${uid}`;
@@ -110,7 +119,7 @@ export async function stationAction(body: Row) {
     if (sid && sid > 0 && await isAdmin(uid!) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid!);
-    return { card, job: card.print === "label" && !card.late ? await jobOf(card) : null };
+    return { card, job: card.print === "label" && !card.late && !card.printed ? await jobOf(card) : null };
   }
   if (body.action === "except") {
     const card = (await decideLate(uid!, body.item, true))!;
@@ -174,7 +183,7 @@ async function itemCard(it: Row) {
   const cfg = await centerCfg(st?.center_id);
   return {
     item: it.id as number, uid: it.user_id as number, name: st?.name ?? "طالب", exam: e?.title ?? "امتحان", at: it.at as string,
-    center: await centerName(st?.center_id) || "", print: cfg.print, attendedAt: it.attended_at ?? "",
+    center: await centerName(st?.center_id) || "", print: cfg.print, attendedAt: it.attended_at ?? "", printed: !!await kvGet(labelKey(it.id)),
     label: printToken("l", it.id), paper: printToken("i", it.id),
   };
 }
@@ -297,7 +306,7 @@ async function pageData(uid: number, full = true) {
   const exams = (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => versions.some((v) => v.exam_id === e.id))
     .map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ model: v.model as string, token: printToken("v", v.id) })) }));
   const today = (await find("sched_items")).filter((i) => String(i.attended_at ?? "").startsWith(todayStr())).length;
-  return { owner, full, centers, exams, today, rescan: await rescanFor(uid), station: full ? { active: await stationActive(uid), token: stationToken(uid) } : null, early: await attendEarly(), notice: "" };
+  return { owner, full, centers, exams, today, rescan: await rescanFor(uid), station: await can(uid, STATION_PERM) ? { active: await stationActive(uid), token: stationToken(uid) } : null, canCam: full || await can(uid, CAM_PERM), early: await attendEarly(), notice: "" };
 }
 
 export async function attendAction(body: Row) {
@@ -328,7 +337,7 @@ export async function attendAction(body: Row) {
     if (sid && sid > 0 && await isAdmin(uid) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid);
-    const queued = card.print === "label" && !card.late && await stationActive(uid);
+    const queued = card.print === "label" && !card.late && !card.printed && await stationActive(uid);
     if (queued) await enqueue(uid, card.item);
     return { ...await pageData(uid), card: { ...card, queued } };
   }

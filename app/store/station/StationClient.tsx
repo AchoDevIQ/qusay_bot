@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 const SERVICES = ["000018f0-0000-1000-8000-00805f9b34fb", "e7810a71-73ae-499d-8c15-faa9aef0c3f2"];
 const MM = 8;   // 8 نقاط بالملم
 type Job = { id: number; name: string; b64: string };
-type Card = { item: number; name: string; exam: string; print: string; at: string; already: boolean; late?: boolean };
+type Card = { item: number; name: string; exam: string; print: string; at: string; already: boolean; late?: boolean; printed?: boolean };
 type Reply = { job?: Job | null; card?: Card; ok?: boolean; pos?: { dx: number; dy: number } };
 
 const why = (e: unknown) => (e as Error)?.message || String(e);
@@ -93,8 +93,9 @@ export default function StationClient() {
     if (r.job) {
       setStatus(`🖨 دا يطبع: ${c.name}`);
       await write(r.job);
-      setStatus(c.already ? `✅ انطبع: ${c.name} (كان مسجل حضوره)` : `✅ انطبع: ${c.name}`);
-    } else setStatus(c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
+      await api({ action: "printed", id: c.item });
+      setStatus(`✅ انطبع: ${c.name}`);
+    } else setStatus(c.printed ? `⚠️ ${c.name}: مطبوع له ليبل` : c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
   });
   /** قرار الجاي بغير وقته: بعدها الكاميرا ترجع تقرا */
   const decide = (allow: boolean) => once(async () => {
@@ -110,7 +111,7 @@ export default function StationClient() {
     const r = await api({ action: "except", item: c.item });
     setPending(null); waiting.current = false;
     setLast(r.card!);
-    if (r.job) { setStatus(`🖨 دا يطبع: ${c.name}`); await write(r.job); setStatus(`✅ انطبع: ${c.name}`); }
+    if (r.job) { setStatus(`🖨 دا يطبع: ${c.name}`); await write(r.job); await api({ action: "printed", id: c.item }); setStatus(`✅ انطبع: ${c.name}`); }
     else setStatus(`✅ انسجل ${c.name} باستثناء`);
   });
   const reprint = (item: number) => once(async () => {
@@ -139,11 +140,11 @@ export default function StationClient() {
     return () => clearInterval(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** كود صحيح لطالب: ينطبع فوراً، حتى لو مسجل قبل. نفس الكود ما ينطبع مرة ثانية خلال دقيقة، حتى ما يطبع طول ما التلفون قدام الكاميرا */
+  /** كود صحيح لطالب: ينطبع فوراً أول مرة. نفس الكود ما ينقرا مرة ثانية خلال 8 ثواني */
   function found(raw: string) {
     if (!raw.startsWith("QS:") || waiting.current) return;
     const now = Date.now();
-    if (seen.current.code === raw && now - seen.current.at < 60000) return;
+    if (seen.current.code === raw && now - seen.current.at < 8000) return;
     seen.current = { code: raw, at: now };
     void handle(raw);
   }
@@ -226,8 +227,9 @@ export default function StationClient() {
           {last && !pending && (
             <div className="atcard">
               <b>{last.name}</b>
+              {last.printed && <div className="exhint exbad">⚠️ هذا الطالب مطبوع له ليبل</div>}
               <div className="exhint">{last.exam}</div>
-              <button type="button" className="exbtn adtop" onClick={() => void reprint(last.item)}>🏷 اطبع ليبله مرة ثانية</button>
+              <button type="button" className="exbtn adtop" onClick={() => void reprint(last.item)}>🏷 اطبع ليبل مرة ثانية</button>
             </div>
           )}
         </div>
