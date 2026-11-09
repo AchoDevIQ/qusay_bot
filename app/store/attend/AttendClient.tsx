@@ -106,7 +106,7 @@ function Station({ station }: { station: { active: boolean; token: string } }) {
   return (
     <div className="card expad">
       <div className="exlabel">🖨 طابعة الليبل بالبلوتوث</div>
-      <div className="exhint">{station.active ? "✅ المحطة شغالة: الليبلات تروح للطابعة وحدها." : "انسخ الرابط، وافتحه بمتصفح Bluefy، ودوس «اتصل بالطابعة». بعدها الكاميرا تنفتح، وكل كود طالب تشوفه ينسجل حضوره وينطبع ليبله. الرابط يشتغل أسبوع."}</div>
+      <div className="exhint">{station.active ? "✅ المحطة شغالة: الليبلات تروح للطابعة وحدها." : "انسخ الرابط، وافتحه بمتصفح Bluefy، ودوس «اتصل بالطابعة». بعدها الكاميرا تنفتح، وكل كود طالب تشوفه ينسجل حضوره وينطبع ليبله. الرابط ينتهي بنهاية اليوم، وكل يوم امتحان تنسخ رابط جديد."}</div>
       <button type="button" className="btn agbtn adtop" onClick={() => void copy()}>{copied ? "✅ انتسخ الرابط" : "📋 انسخ رابط المحطة"}</button>
     </div>
   );

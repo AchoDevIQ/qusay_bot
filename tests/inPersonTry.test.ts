@@ -143,3 +143,15 @@ test("صلاحية 🖨: ترى رابط المحطة وتطبع بس، وبدو
   await assert.rejects(attendAction({ station: stationToken(67), action: "next" }), (e: any) => e.status === 403);
   assert.equal(((await attendAction({ initData: `tk:${homeToken(67)}`, action: "list" })) as any).station, null);
 });
+
+test("رابط المحطة ينتهي بنهاية يوم العراق", async () => {
+  const { attendAction, stationToken } = await import("../lib/inPerson.ts");
+  const now = Date.now() / 1000;
+  assert.equal(((await attendAction({ station: stationToken(1, now), action: "next" })) as any).job, null);
+  await assert.rejects(attendAction({ station: stationToken(1, now - 86400), action: "next" }), (e: any) => e.status === 401);
+  // 23:59 بالعراق (20:59 UTC) ينتهي بعد دقيقة، و00:01 يشتغل طول اليوم الجديد
+  const at = (iso: string) => Date.parse(iso) / 1000;
+  const exp = (iso: string) => Number(stationToken(1, at(iso)).split(".")[1]);
+  assert.equal(exp("2026-11-09T20:59:00Z"), at("2026-11-09T21:00:00Z"));
+  assert.equal(exp("2026-11-09T21:01:00Z"), at("2026-11-10T21:00:00Z"));
+});

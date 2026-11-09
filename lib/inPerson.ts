@@ -65,13 +65,13 @@ export function verifyPrintToken(raw: unknown, now = Date.now() / 1000): { kind:
 }
 
 // ---------- محطة طباعة البلوتوث: صفحة مفتوحة بمتصفح Bluefy تطبع الليبلات اللي تنرسلها من صفحة الحضوري.
-// رمزها يفتح المحطة بس، مو لوحة التحكم، وعمره أسبوع
-const STATION_TTL_S = 7 * 24 * 3600;
+// رمزها يفتح المحطة بس، مو لوحة التحكم، وينتهي بنهاية اليوم (توقيت العراق)، وكل يوم امتحان إله رابط جديد
+const DAY_S = 24 * 3600, IRAQ_S = 3 * 3600;
 const ACTIVE_MS = 12 * 3600 * 1000;
 const queueKey = (uid: number) => `print_q_${uid}`;
 const seenKey = (uid: number) => `print_seen_${uid}`;
 export function stationToken(uid: number, now = Date.now() / 1000) {
-  const exp = Math.floor(now) + STATION_TTL_S;
+  const exp = (Math.floor((now + IRAQ_S) / DAY_S) + 1) * DAY_S - IRAQ_S;
   return `${uid}.${exp}.${hmac("QMathStation", `${uid}.${exp}`).slice(0, 32)}`;
 }
 function verifyStationToken(raw: unknown, now = Date.now() / 1000): number | null {
