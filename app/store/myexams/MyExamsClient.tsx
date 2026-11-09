@@ -3,6 +3,7 @@
 import { WordOrder } from "../agreeSteps";
 import PhotoPick from "../PhotoPick";
 import AiCompare, { type AiQ } from "./AiCompare";
+import PdfPages from "../PdfPages";
 import { Fragment, useEffect, useState } from "react";
 import { prettyAt } from "../../../lib/scheduleRules.ts";
 import { deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
@@ -19,7 +20,7 @@ type Info = {
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
-type Paper = { ai: AiQ[]; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
+type Paper = { ai: AiQ[]; solutions: string | null; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
 type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
@@ -375,6 +376,18 @@ function Objection({ obj, first, setObj, leave }: { obj: Obj; first: number; set
   );
 }
 
+/** ملف الحلول الكامل بتقسيم الدرجات، ينفتح داخل الصفحة لأن تليجرام ما يعرض PDF بالموبايل */
+function SolutionsFile({ url }: { url: string }) {
+  const [open, setOpen] = useState(false);
+  const [src] = useState(url);
+  return (
+    <div className="card expad">
+      <button type="button" className="btn" onClick={() => { haptic(); setOpen(!open); }}>{open ? "✖️ سد ملف الحلول" : "📄 افتح ملف الحلول كاملة مع تقسيم الدرجات"}</button>
+      {open && <PdfPages url={src} outside={false} />}
+    </div>
+  );
+}
+
 /** «📂 ورقتي وتصحيحها»: كل شي عن امتحان واحد بمكان واحد */
 function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: boolean; error: string; object: (id: number, q?: number) => void; leave: () => void }) {
   const graded = paper.total !== null;
@@ -403,6 +416,7 @@ function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: 
             {paper.pages.map((p) => <img key={p} className="eximg" src={fileUrl(paper.id, p)} alt="ورقتك" />)}
           </div>
         )}
+        {graded && paper.solutions && <SolutionsFile url={fileUrl(paper.id, paper.solutions)} />}
         {graded && !!paper.marks.length && (
           <div className="card">
             <h2>✋ درجة كل سؤال</h2>

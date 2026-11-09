@@ -175,11 +175,11 @@ export async function roomFile(token: unknown, itemId: unknown, ref: unknown, pf
   const e = (await one("bank_exams", { id: it!.exam_id }))!;
   const v = (await one("bank_versions", { id: it!.version_id }))!;
   const st = await student(uid!);
-  const allowed = [...await pagesOf(e, v, st?.curr ?? ""), ...(await find("exam_answers", { item_id: it!.id })).map((a) => a.file as string), ...await gradedPages(it!.id)];
+  const allowed = [...await pagesOf(e, v, st?.curr ?? ""), ...(await find("exam_answers", { item_id: it!.id })).map((a) => a.file as string), ...await gradedPages(it!.id), ...(it!.graded_at && v.answer_pdf ? [String(v.answer_pdf)] : [])];
   need(typeof ref === "string" && allowed.includes(ref), "ما عندك صلاحية", 403);
   const body = await files().read(ref as string);
   need(body, "الملف غير موجود", 404);
-  return { body: body!, type: /\.png$/i.test(ref as string) ? "image/png" : "image/jpeg" };
+  return { body: body!, type: /\.png$/i.test(ref as string) ? "image/png" : /\.pdf$/i.test(ref as string) ? "application/pdf" : "image/jpeg" };
 }
 
 /** «📂 ورقتي»: كل شي يخص امتحان سلمه الطالب: درجته، درجة كل سؤال، ورقته المصححة (أو جوابه إذا بعده ما انصحح)، والأسئلة */
@@ -196,6 +196,8 @@ export async function myPaper(uid: number, itemId: unknown) {
     questions: await pagesOf(e, v, (await student(uid))?.curr ?? ""),
     // صححها نظام التصحيح AI: الطالب يشوف كل خطوة صح لو غلط وليش
     ai: await aiShown(it!),
+    // ملف الحلول الكامل بتقسيم الدرجات: بعد التصحيح بس، سواء صححها نظام التصحيح AI لو مصحح
+    solutions: it!.graded_at && v.answer_pdf ? String(v.answer_pdf) : null,
   };
 }
 /** تصحيح نظام التصحيح AI اللي يشوفه الطالب: كل الورقة إذا هو صححها، أو بس أسئلته إذا حوّل الباقي لمصحح */

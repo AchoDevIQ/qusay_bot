@@ -21,7 +21,8 @@ const { homeAction } = await import("../lib/homeApi.ts");
 const { examAction } = await import("../lib/examApi.ts");
 const { studentAction } = await import("../lib/studentApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
-const { closeFinished, notifyStarted, roomFile, uploadAnswer } = await import("../lib/examRoom.ts");
+const { closeFinished, myPaper, notifyStarted, roomFile, uploadAnswer } = await import("../lib/examRoom.ts");
+const { files } = await import("../lib/files.ts");
 const { schedSettings } = await import("../lib/schedApi.ts");
 const { run: sqlRun } = await import("../lib/sqliteDriver.ts");
 const { stamp } = await import("../lib/util.ts");
@@ -508,6 +509,18 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   const done = await act(90, "submitExam", { item });
   assert.equal(done.items.find((i: any) => i.id === item).state, "done");
   await assert.rejects(upload(90, item, 1), /سلمت/);
+
+  // ملف الحلول الكامل: ما ينفتح قبل التصحيح، وبعده لصاحب الورقة بس
+  const sol = "answers/test/A.pdf", dev = (u: number) => "dev-" + String(u).padStart(14, "0");
+  await files().write(sol, Buffer.from("%PDF-1.4 fake"), "application/pdf");
+  await update("bank_versions", { id: (await find("sched_items", { id: item }))[0].version_id }, { answer_pdf: sol });
+  assert.equal((await myPaper(90, item)).solutions, null);
+  await assert.rejects(roomFile(homeToken(90), item, sol, "ios", dev(90)), (x: any) => x.status === 403);
+  await update("sched_items", { id: item }, { graded_at: stamp(), total: 80 });
+  assert.equal((await myPaper(90, item)).solutions, sol);
+  assert.equal((await roomFile(homeToken(90), item, sol, "ios", dev(90))).type, "application/pdf");
+  await assert.rejects(roomFile(homeToken(91), item, sol, "ios", dev(91)), (x: any) => x.status === 403);
+  await update("sched_items", { id: item }, { graded_at: null, total: null });
 
   // طالب ثاني: دخل وما دز لحد ما خلص الوقت، وبعدها استثناء
   await student(92);
