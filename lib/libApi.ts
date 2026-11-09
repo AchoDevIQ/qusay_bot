@@ -64,7 +64,7 @@ export async function libAction(body: Row) {
   } else if (a === "sales") {
     const o = await liveOffice(body.id);
     const { title, rows } = await rowsFor(o.id, body.kind);
-    extra = { sales: { officeId: o.id, title, rows: rows.map(saleRow), parts: partsOf(rows) } };
+    extra = { sales: { officeId: o.id, title, rows: rows.map(saleRow), parts: await partsOf(rows) } };
   } else if (a === "pdf") {
     const o = await liveOffice(body.id);
     const { title, rows, fname } = await rowsFor(o.id, body.kind);

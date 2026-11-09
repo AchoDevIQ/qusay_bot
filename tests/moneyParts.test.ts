@@ -1,7 +1,7 @@
 // الفلوس مقسمة: الملازم والامتحانات والمحاضرات، والمجموع يطابق المبلغ دائماً
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addParts, moneyKind, moneyParts, partRows, sumParts } from "../lib/orderRules.ts";
+import { addParts, lectureChapterPrices, moneyKind, moneyParts, partRows, sumParts } from "../lib/orderRules.ts";
 
 test("كل نوع من أسماء المنتجات الفعلية يروح لمكانه", () => {
   for (const n of ["دفتر محاضرات الفصل الأول", "دفتر امتحانات الفصل الثالث", "ملزمة الفصل الأول", "ملازم الوزاريات"]) assert.equal(moneyKind(n), "booklets", n);
@@ -23,6 +23,26 @@ test("إذا المبلغ يختلف عن المنتجات، الفرق يطلع
   assert.equal(p.lectures, 65000);
   assert.equal(p.other, -5000);
   assert.equal(sumParts(p), 60000);
+});
+
+test("المشترك ينقسم: المحاضرات بسعرها لوحدها والباقي امتحانات، بأسعار البوت الفعلية", () => {
+  const lec = lectureChapterPrices([
+    { name: "الفصل الأول - محاضرات فقط", price: 40000 }, { name: "فقط محاضرات الفصل الثاني", price: 40000 }, { name: "الفصل الثالث - محاضرات فقط", price: 65000 },
+    { name: "فقط محاضرات الفصل الرابع والخامس", price: 65000 }, { name: "دفتر محاضرات الفصل الأول", price: 15000 }, { name: "فقط امتحانات الفصل الثاني", price: 40000 },
+  ]);
+  const split = (name: string, price: number, qty = 1) => moneyParts([{ name, price, qty }], price * qty, lec);
+  assert.deepEqual(split("محاضرات +امتحانات الفصل الاول", 75000), { booklets: 0, exams: 35000, lectures: 40000, both: 0, other: 0 });
+  assert.deepEqual(split("الفصل الثاني - محاضرات + امتحانات إلكتروني", 75000), { booklets: 0, exams: 35000, lectures: 40000, both: 0, other: 0 });
+  assert.deepEqual(split("محاضرات +امتحانات الفصل الثالث", 125000), { booklets: 0, exams: 60000, lectures: 65000, both: 0, other: 0 });
+  assert.deepEqual(split("الفصل الرابع والخامس - محاضرات + امتحانات حضوري", 150000), { booklets: 0, exams: 85000, lectures: 65000, both: 0, other: 0 });
+  assert.deepEqual(split("محاضرات +امتحانات الفصل الرابع والخامس الكتروني", 125000, 2), { booklets: 0, exams: 120000, lectures: 130000, both: 0, other: 0 });
+});
+
+test("المشترك يبقى سطر وحده إذا ماكو سعر محاضرات لفصله، أو سعره أكبر من المشترك", () => {
+  const name = "محاضرات +امتحانات الفصل الثالث";
+  assert.equal(moneyParts([{ name, price: 125000, qty: 1 }], 125000, new Map()).both, 125000);
+  assert.equal(moneyParts([{ name, price: 125000, qty: 1 }], 125000).both, 125000);
+  assert.equal(moneyParts([{ name, price: 50000, qty: 1 }], 50000, new Map([["الفصل الثالث", 65000]])).both, 50000);
 });
 
 test("الجمع يطابق، والأسطر الفارغة ما تطلع", () => {

@@ -17,6 +17,7 @@ export function chapterLabel(name: string | null | undefined) {
   const m = (name ?? "").match(/الفصل\s+(ال\S+(?:\s+و\S+)?)/);
   return m ? "الفصل " + m[1] : null;
 }
+const chapterKey = (name: string | null | undefined) => chapterLabel(name)?.replace("الاول", "الأول") ?? null;
 /** تنبيه الدور الأول: للمحاضرات والامتحانات، مو للملازم والدفاتر الورقية */
 export function firstRoundOnly(name: string | null | undefined) {
   const n = name ?? "";
@@ -33,10 +34,25 @@ export function moneyKind(name: string | null | undefined): MoneyKind {
   return lec && exam ? "both" : exam ? "exams" : lec ? "lectures" : "other";
 }
 const noParts = (): MoneyParts => ({ booklets: 0, exams: 0, lectures: 0, both: 0, other: 0 });
-/** تقسيم مبلغ الطلب. أي فرق عن المبلغ الفعلي يروح لـ«غيرها» حتى المجموع يطابق دائماً */
-export function moneyParts(items: { name?: string | null; price: number; qty: number }[], amount: number): MoneyParts {
+/** سعر محاضرات كل فصل لوحدها، حتى المنتج المشترك ينقسم عليها */
+export function lectureChapterPrices(products: { name?: string | null; price: number }[]) {
+  const m = new Map<string, number>();
+  for (const p of products) {
+    const ch = moneyKind(p.name) === "lectures" ? chapterKey(p.name) : null;
+    if (ch && !m.has(ch)) m.set(ch, p.price);
+  }
+  return m;
+}
+/** تقسيم مبلغ الطلب. المشترك: المحاضرات بسعرها لوحدها والباقي امتحانات. أي فرق عن المبلغ الفعلي يروح لـ«غيرها» حتى المجموع يطابق دائماً */
+export function moneyParts(items: { name?: string | null; price: number; qty: number }[], amount: number, lectures?: Map<string, number>): MoneyParts {
   const p = noParts();
-  for (const i of items) p[moneyKind(i.name)] += i.price * i.qty;
+  for (const i of items) {
+    const kind = moneyKind(i.name), lec = kind === "both" ? lectures?.get(chapterKey(i.name) ?? "") : undefined;
+    if (lec !== undefined && lec <= i.price) {
+      p.lectures += lec * i.qty;
+      p.exams += (i.price - lec) * i.qty;
+    } else p[kind] += i.price * i.qty;
+  }
   p.other += amount - sumParts(p);
   return p;
 }
@@ -51,6 +67,6 @@ export const partRows = (p: MoneyParts) => PART_LABELS.filter(([k]) => p[k] !== 
 export const partsLine = (p: MoneyParts) => partRows(p).map(([l, v]) => `${l} ${v.toLocaleString("en-US")}`).join(" · ");
 /** فصول المحاضرات والامتحانات بالطلب. «الفصل الرابع والخامس» يبقى فصل واحد لأنه ينباع سوية */
 export function chaptersInOrder(names: (string | null | undefined)[]) {
-  const labels = names.filter(firstRoundOnly).map((n) => chapterLabel(n)?.replace("الاول", "الأول"));
+  const labels = names.filter(firstRoundOnly).map(chapterKey);
   return [...new Set(labels.filter((l): l is string => !!l))];
 }

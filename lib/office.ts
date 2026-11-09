@@ -143,7 +143,7 @@ export async function officeMenu(chat: number, uid: number) {
   if (!off) return;
   const un = await officeUnsettled(off.id);
   const td = await officeDayRows(off.id, todayStr());
-  const t = `<b>🏪 ${esc(off.name)}</b>\n\n📊 مبيعات اليوم: <b>${dayTotal(td)}</b> (${td.length})${partsText(partsOf(td))}\n🔴 غير محاسب عليه: <b>${money(un.total)}</b> (${un.n} بيعة)${partsText(un.parts)}` +
+  const t = `<b>🏪 ${esc(off.name)}</b>\n\n📊 مبيعات اليوم: <b>${dayTotal(td)}</b> (${td.length})${partsText(await partsOf(td))}\n🔴 غير محاسب عليه: <b>${money(un.total)}</b> (${un.n} بيعة)${partsText(un.parts)}` +
     (off.lim ? `\n🟢 الباقي من الرصيد: <b>${money(Math.max(off.lim - un.total, 0))}</b>` : "");
   await send(chat, t, { kb: [[btn("🏪 بيع جديد", "of:pos")], [btn("📊 مبيعات اليوم", "of:d:0"), btn("📅 مبيعات البارحة", "of:d:1")],
     [btn("🔴 غير المحاسب عليها", "of:u")], [btn("🗂 المحاسبات السابقة (الأرشيف)", "of:a")]] });
