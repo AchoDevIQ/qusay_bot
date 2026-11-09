@@ -93,7 +93,17 @@ export async function stationAction(body: Row) {
     return { ok: true };
   }
   const shift = (v: unknown) => Math.max(-80, Math.min(80, Math.round(Number(v) || 0)));
-  const jobOf = async (c: LabelInfo) => ({ id: c.item, name: c.name, b64: (await labelTspl(c, shift(body.dx), shift(body.dy))).toString("base64") });
+  // ضبط مكان الطباعة ينحفظ بالسيرفر لكل مساعد: يبقى لكل الطلاب والأيام لحد ما يتغير
+  const posKey = `print_pos_${uid}`;
+  const savedPos = async () => { try { const j = JSON.parse(await kvGet(posKey) ?? "{}"); return { dx: shift(j.dx), dy: shift(j.dy) }; } catch { return { dx: 0, dy: 0 }; } };
+  if (body.action === "pos") {
+    if (body.dx !== undefined) await kvSet(posKey, JSON.stringify({ dx: shift(body.dx), dy: shift(body.dy) }));
+    return { pos: await savedPos() };
+  }
+  const jobOf = async (c: LabelInfo) => {
+    const p = body.dx !== undefined ? { dx: shift(body.dx), dy: shift(body.dy) } : await savedPos();
+    return { id: c.item, name: c.name, b64: (await labelTspl(c, p.dx, p.dy)).toString("base64") };
+  };
   if (body.action === "scan") {
     const raw = String(body.code ?? "").trim();
     let sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
@@ -112,7 +122,7 @@ export async function stationAction(body: Row) {
     need(it, "الامتحان غير موجود", 404);
     return { job: await jobOf(await itemCard(it!)) };
   }
-  if (body.action === "test") return { job: await jobOf({ item: 0, uid: 0, name: "ليبل تجربة الطباعة", exam: "القطع المكافئ", center: "معهد قصي العميري", at: stamp() }) };
+  if (body.action === "test") return { job: await jobOf({ item: 0, uid: 0, name: "محمد علي حسين عمر", exam: "فقط مسائل التقريب والمعدلات الزمنية والتطبيقات على النهايات", center: "معهد قصي العميري", at: stamp() }) };
   need(body.action === "next", "أمر غير معروف");
   for (const id of q) {
     const it = await one("sched_items", { id });

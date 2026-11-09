@@ -53,11 +53,12 @@ test("محطة طباعة البلوتوث: الليبل ينرسل بعد ال�
   const b = Buffer.from(job.b64, "base64");
   const text = b.toString("latin1");
   assert.ok(text.startsWith("SIZE 58 mm,39 mm"));
-  assert.match(text, /BITMAP 176,12,35,288,0,/);
+  assert.match(text, /BITMAP 8,4,56,52,0,/);
+  assert.match(text, /BITMAP 8,208,56,92,0,/);
   assert.ok(text.includes(`"QI:${r.card.item}"`));
   assert.ok(text.endsWith("PRINT 1\r\n"));
   const start = text.indexOf(",0,") + 3;
-  assert.ok(b.subarray(start, start + 35 * 288).some((x) => x !== 0xff), "لازم بالصورة كتابة");
+  assert.ok(b.subarray(start, start + 56 * 52).some((x) => x !== 0xff), "لازم بالصورة كتابة");
   await attendAction({ station, action: "done", id: job.id });
   assert.equal(((await attendAction({ station, action: "next" })) as any).job, null);
 });
@@ -74,13 +75,18 @@ test("المحطة: قراءة الكود تسجل الحضور وترجع ال�
   const first: any = await attendAction({ station, action: "scan", code, dx: 16, dy: -8 });
   assert.equal(first.card.already, false);
   const text = Buffer.from(first.job.b64, "base64").toString("latin1");
-  assert.match(text, /BITMAP 192,4,35,288,0,/);
-  assert.match(text, /QRCODE 30,72,M,7,A,0,/);
+  assert.match(text, /BITMAP 24,0,56,52,0,/);
+  assert.match(text, /QRCODE 30,50,M,7,A,0,/);
   const again: any = await attendAction({ station, action: "scan", code });
   assert.equal(again.card.already, true);
   assert.ok(again.job.b64.length > 1000);
   assert.equal(((await attendAction({ station, action: "reprint", item: first.card.item })) as any).job.id, first.card.item);
   assert.ok(((await attendAction({ station, action: "test" })) as any).job.b64.length > 1000);
+  // الضبط ينحفظ ويطبق على الليبلات الجاية بدون ما ينرسل كل مرة
+  assert.deepEqual(((await attendAction({ station, action: "pos", dx: 8, dy: 16 })) as any).pos, { dx: 8, dy: 16 });
+  const saved = Buffer.from(((await attendAction({ station, action: "reprint", item: first.card.item })) as any).job.b64, "base64").toString("latin1");
+  assert.match(saved, /BITMAP 16,20,56,52,0,/);
+  await attendAction({ station, action: "pos", dx: 0, dy: 0 });
   await assert.rejects(attendAction({ station, action: "scan", code: "QS:5.abc" }), /مو كود طالب/);
 });
 

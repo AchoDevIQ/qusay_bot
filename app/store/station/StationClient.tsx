@@ -5,11 +5,10 @@ import jsQR from "jsqr";
 import { useEffect, useRef, useState } from "react";
 
 const SERVICES = ["000018f0-0000-1000-8000-00805f9b34fb", "e7810a71-73ae-499d-8c15-faa9aef0c3f2"];
-const POS_KEY = "stationOffset";
 const MM = 8;   // 8 نقاط بالملم
 type Job = { id: number; name: string; b64: string };
 type Card = { item: number; name: string; exam: string; print: string; at: string; already: boolean; late?: boolean };
-type Reply = { job?: Job | null; card?: Card; ok?: boolean };
+type Reply = { job?: Job | null; card?: Card; ok?: boolean; pos?: { dx: number; dy: number } };
 
 const why = (e: unknown) => (e as Error)?.message || String(e);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -30,19 +29,18 @@ export default function StationClient() {
   const ch = useRef<any>(null);
   const busy = useRef(false);
   const chunk = useRef(180);
-  const posRef = useRef(pos); posRef.current = pos;
   const seen = useRef({ code: "", at: 0 });
 
-  useEffect(() => { try { const j = JSON.parse(localStorage.getItem(POS_KEY) ?? "{}"); setPos({ dx: Number(j.dx) || 0, dy: Number(j.dy) || 0 }); } catch { /* بدون حفظ */ } }, []);
+  useEffect(() => { void api({ action: "pos" }).then((r) => { if (r.pos) setPos(r.pos); }).catch(() => undefined); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   function move(dx: number, dy: number) {
     const next = { dx: Math.max(-80, Math.min(80, pos.dx + dx)), dy: Math.max(-80, Math.min(80, pos.dy + dy)) };
     setPos(next);
-    try { localStorage.setItem(POS_KEY, JSON.stringify(next)); } catch { /* بدون حفظ */ }
+    void api({ action: "pos", ...next }).catch((e) => setStatus(`⚠️ ما انحفظ الضبط: ${why(e)}`));
   }
 
   async function api(body: Record<string, unknown>): Promise<Reply> {
     const station = new URLSearchParams(location.search).get("k") ?? "";
-    const res = await fetch("/api/attend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ station, ...posRef.current, ...body }) });
+    const res = await fetch("/api/attend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ station, ...body }) });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.error ?? "صار خطأ بالسيرفر");
     return j;
@@ -238,7 +236,7 @@ export default function StationClient() {
         <details className="card cpch">
           <summary><b>📐 ضبط مكان الطباعة</b> <small className="pdmode">يمين {mm(pos.dx)} ملم · جوة {mm(pos.dy)} ملم</small></summary>
           <div className="expad">
-            <div className="exhint">إذا الليبل زاحف، حركه بالأزرار، كل دوسة 1 ملم، وبعدها اطبع تجربة. الجهاز يحفظ الضبط.</div>
+            <div className="exhint">إذا الليبل زاحف، حركه بالأزرار، كل دوسة 1 ملم، وبعدها اطبع تجربة. الضبط ينحفظ ويبقى لكل الطلاب والأيام لحد ما تغيره.</div>
             <div className="atrow adtop">
               <button type="button" className="exbtn" onClick={() => move(-MM, 0)}>⬅️ يسار</button>
               <button type="button" className="exbtn" onClick={() => move(MM, 0)}>➡️ يمين</button>
