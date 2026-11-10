@@ -11,17 +11,15 @@ import { files } from "./files.ts";
 import { api } from "./telegram.ts";
 import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { fileToken, verifyFileToken } from "./webAuth.ts";
+import { SKIP_KEY, skippableExams } from "./skipExams.ts";
+import { autoInsertExam } from "./schedApi.ts";
 
 export { ApiError };
 
 const generalMinutes = async () => Number(await kvGet("exam_minutes")) || 75;
 // ord يحدد مكان ملفات الامتحان فما يتغير، والترتيب بالجدول من pos
 const examPos = (e: Row): number => e.pos ?? e.ord;
-/** الامتحانات اللي طالب الجدول الخاص يگدر يشيلها من جدوله. الباقي كله ما ينحذف */
-export const SKIP_KEY = "skippable_exams";
-export async function skippableExams(): Promise<number[]> {
-  try { const j = JSON.parse(await kvGet(SKIP_KEY) ?? "[]"); return Array.isArray(j) ? j.map(Number) : []; } catch { return []; }
-}
+
 const chapterExams = async (slug: string) => (await find("bank_exams", { slug })).sort((a, b) => examPos(a) - examPos(b) || a.id - b.id);
 const pageList = (v: Row, lang: "ar" | "en"): string[] => JSON.parse(v["pages_" + lang] || "[]");
 const maxPos = (list: Row[]) => list.reduce((m, e) => Math.max(m, examPos(e)), 0);
@@ -67,6 +65,7 @@ export async function examList(uid: number) {
 
 /** الأوامر اللي ما بيها ملفات. يرجع القائمة المحدثة */
 export async function examAction(body: Row) {
+  let notice = "";
   const uid = await authed(body?.initData, EXAM_PERM);
   const a = String(body.action ?? "");
   const id = Number(body.id);
@@ -139,11 +138,16 @@ export async function examAction(body: Row) {
     // قبل أو بعد امتحان بالفصل، وإلا بآخره
     const near = list.findIndex((x) => x.id === Number(body.near));
     const at = near < 0 ? list.length : body.side === "before" ? near : near + 1;
+    let added = 0;
     await tx(async () => {
       const id = await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: "", minutes: n, manual: 1, pos: maxPos(list) + 1 });
+      added = id;
       const order = [...list.slice(0, at), { id }, ...list.slice(at)];
       for (const [p, x] of order.entries()) if ((x as Row).pos !== p + 1) await update("bank_exams", { id: x.id }, { pos: p + 1 });
     });
+    // بالجدول ينحط وحده: ياخذ يوم الامتحان اللي بعده، والباقي يزحف، بكل الأماكن وبالجداول الخاصة
+    const placed = await autoInsertExam(added);
+    notice = placed ? `✅ انضاف ${title}، وانحط بجدول الامتحانات قبل ${placed.before} بـ ${placed.places} مكان${placed.students ? ` و${placed.students} جدول خاص` : ""}، والباقي زحف` : `✅ انضاف ${title}. بجدول الامتحانات بعده ما إله موعد`;
     await logEdit(uid, `امتحان جديد: ${title}${near >= 0 ? ` (${body.side === "before" ? "قبل" : "بعد"} ${list[near].title})` : ""}`);
   } else if (a === "loadBook") {
     // مرة وحدة: اللي ينحذف بعدها ما يرجع
@@ -283,7 +287,7 @@ export async function examAction(body: Row) {
     });
     await logEdit(uid, `حذف امتحان ${e!.title}`);
   } else throw new ApiError(400, "أمر غير معروف");
-  return await examList(uid);
+  return { ...await examList(uid), notice };
 }
 
 const TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".pdf": "application/pdf" };

@@ -8,7 +8,7 @@ type Question = { id: number; n: number; max: number; q: string | null; edited: 
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
 type Exam = { id: number; ord: number; title: string; info: string; minutes: number; privateVersion: number; skippable: boolean; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
-type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean; lastTwoDone: boolean };
+type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean; lastTwoDone: boolean; notice?: string };
 
 const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info)?.[0] ?? "";
 const fmtTime = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -46,6 +46,7 @@ export default function ExamsClient() {
         {data && data.chapters.length > 1 && (
           <div className="chips">{data.chapters.map((c, i) => <button type="button" key={c.slug} className={i === openChapter ? "on" : ""} onClick={() => { setOpenChapter(i); setOpenExam(null); }}>{c.chapter}</button>)}</div>
         )}
+        {data?.notice && <div className="card warn exerr">{data.notice}</div>}
         {data && <GeneralTime value={data.generalMinutes} busy={busy} call={call} />}
         {ch && (
           <div className="card">

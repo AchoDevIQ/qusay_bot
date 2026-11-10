@@ -828,3 +828,19 @@ test("أيام ما يمتحن بيها الطالب الخاص الإلكترو
   assert.ok(ok.preview.items.every((i: any) => weekdayOf(i.at.slice(0, 10)) !== 6));
   await schedAdminAction({ action: "save", initData: admin, window: old.window, extra: old.extra, perDay: old.perDay, gap: old.gap, holidayStart: old.holidayStart, holidayDays: old.holidayDays, offDays: [] });
 });
+
+test("امتحان ينضاف بالبنك قبل امتحان: ينحط وحده بالجدول بيومه، والباقي يزحف", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "البياع" });
+  const c = await insert("centers", { area_id: area, name: "مركز البنك", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }, { d: 2, t: "16:00" }], initData: admin });
+  const ch = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => (x.pos ?? x.ord) - (y.pos ?? y.ord));
+  const b = ch.at(-1)!;
+  const sun = nextWeekday(6), wed = addDays(sun, 3);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: b.id, date: sun }], initData: admin });
+  const r: any = await examAction({ action: "addExam", slug: b.slug, title: "قبل الأخير", minutes: 60, near: b.id, side: "before", initData: admin });
+  assert.match(r.notice, /وانحط بجدول الامتحانات قبل/);
+  const n = (await find("bank_exams", { title: "قبل الأخير" }))[0];
+  assert.equal((await find("place_dates", { center_id: c, exam_id: n.id }))[0].day, sun);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, wed);
+});

@@ -9,7 +9,7 @@ import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } fr
 import { boughtLectures, logActivity } from "./access.ts";
 import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
-import { skippableExams } from "./examApi.ts";
+import { skippableExams } from "./skipExams.ts";
 import { centerName, isAdmin, student } from "./data.ts";
 import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
@@ -160,6 +160,28 @@ async function planHoliday(exam: number, days: number, centers: number[], onlyFo
     students.push({ ...r, uid, on: true, moves });
   }
   return { places, students };
+}
+/** امتحان add ياخذ يوم الامتحان exam بهذي الأماكن، وهو واللي بعده يزحفون. null إذا ماكو شي يتغير */
+async function insertBefore(exam: number, add: number, centers: number[]) {
+  const e = await one("bank_exams", { id: add });
+  if (!e) return null;
+  const plan = await planHoliday(exam, 1, centers, add);
+  if (!plan.places.length && !plan.students.length) return null;
+  const list = await holidays();
+  const h: Holiday = { id: Date.now(), exam, title: String(e.title ?? ""), days: 1, reason: "", places: plan.places, students: plan.students, at: stamp(), insert: add };
+  const told = await applyHoliday(h);
+  await saveHolidays([...list, h]);
+  return { title: h.title, told, places: plan.places.length, students: plan.students.length };
+}
+/** امتحان جديد بالبنك: ينحط بالجدول وحده قبل الامتحان اللي بعده بترتيب الكتاب، بكل مكان هذا الامتحان إله موعد بيه */
+export async function autoInsertExam(add: number) {
+  const exams = (await find("bank_exams")).sort((a, b) => String(a.slug).localeCompare(String(b.slug)) || (a.pos ?? a.ord) - (b.pos ?? b.ord) || a.id - b.id);
+  const next = exams[exams.findIndex((x) => x.id === add) + 1];
+  if (!next) return null;
+  const centers: number[] = [];
+  for (const c of [0, ...(await find("centers", { active: 1 })).map((x) => x.id as number)]) if (!await one("place_dates", { center_id: c, exam_id: add })) centers.push(c);
+  const r = await insertBefore(next.id, add, centers);
+  return r ? { ...r, before: String(next.title ?? "") } : null;
 }
 /** الطالب الخاص لغى العطلة، أو الإدارة شالتها: امتحاناته ترجع لمواعيدها، إذا محد غيرها بعدين */
 async function restoreStudent(st: HolStudent) {
@@ -726,13 +748,9 @@ export async function schedAdminAction(body: Row) {
     const free = [];
     for (const c of centers) if (!await one("place_dates", { center_id: c, exam_id: add })) free.push(c);
     need(free.length, "هذا الامتحان إله موعد بالجدول. اختار امتحان ما إله موعد");
-    const plan = await planHoliday(exam, 1, free, add);
-    need(plan.places.length || plan.students.length, "هذا الامتحان ما إله موعد بهذا المكان. حط تاريخه أول.");
-    const list = await holidays();
-    const h: Holiday = { id: Date.now(), exam, title: String(e!.title ?? ""), days: 1, reason: "", places: plan.places, students: plan.students, at: stamp(), insert: add };
-    const told = await applyHoliday(h);
-    await saveHolidays([...list, h]);
-    notice = `🗓 انضاف ${h.title}، وزحف اللي بعده${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
+    const r = await insertBefore(exam, add, free);
+    need(r, "هذا الامتحان ما إله موعد بهذا المكان. حط تاريخه أول.");
+    notice = `🗓 انضاف ${r!.title}، وزحف اللي بعده${r!.told ? `، ووصل الخبر لـ ${r!.told} طالب` : ""}`;
   } else if (a === "holidayReason") {
     // سبب العطلة: يطلع للطلاب بجدولهم
     const list = await holidays();
