@@ -17,7 +17,7 @@ import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
 import { send } from "./telegram.ts";
-import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, spreadVersions, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { esc, stamp, todayStr } from "./util.ts";
 import { authed, ensure, intOf, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
@@ -875,9 +875,28 @@ export async function schedAdminAction(body: Row) {
     // يتوزع بلا عطل، وبعدها العطل قبل الامتحانات تنحط مثل باقي الأماكن، فكل مكان عطلته قبل نفس الامتحان
     const days = slotDays(slots, String(body.start), exams.length, ss);
     const old = new Map((await find("place_dates", { center_id: center })).map((d) => [d.exam_id, d.versions]));
+    // امتحان ما إله نسخ بهذا المكان: ياخذ ترتيب نسخ مكان ثاني (الإلكتروني أول)، على أوقات يومه هنا
+    const others = (await find("place_dates")).filter((d) => d.center_id !== center && d.versions && d.versions !== "{}").sort((a, b) => a.center_id - b.center_id);
+    const srcSlots = new Map<number, Slot[]>();
+    const copyVersions = async (examId: number, day: string) => {
+      const src = others.find((d) => d.exam_id === examId);
+      const ids = versions.filter((v) => v.exam_id === examId).map((v) => v.id as number);
+      if (!src || !ids.length) return "{}";
+      if (!srcSlots.has(src.center_id)) srcSlots.set(src.center_id, await placeSlots(src.center_id));
+      const sv: Record<string, number> = JSON.parse(src.versions);
+      const first = Object.keys(sv).sort().map((t) => sv[t]).find((v) => ids.includes(v));
+      if (first === undefined) return "{}";
+      const times = slots.filter((t) => t.d === weekdayOf(day)).map((t) => t.t).sort();
+      return JSON.stringify(spreadVersions(times, ids, ids.indexOf(first)));
+    };
+    const rows: { exam: number; day: string; versions: string }[] = [];
+    for (const [i, e] of exams.entries()) if (days[i]) {
+      const keep = old.get(e.id);
+      rows.push({ exam: e.id, day: days[i], versions: keep && keep !== "{}" ? keep : await copyVersions(e.id, days[i]) });
+    }
     await tx(async () => {
       await remove("place_dates", { center_id: center });
-      for (const [i, e] of exams.entries()) if (days[i]) await put("place_dates", { center_id: center, exam_id: e.id, day: days[i], versions: old.get(e.id) ?? "{}" });
+      for (const r of rows) await put("place_dates", { center_id: center, exam_id: r.exam, day: r.day, versions: r.versions });
     });
     const hols = await copyHolidays(center);
     const told = await tellPlace(center);

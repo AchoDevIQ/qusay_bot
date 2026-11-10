@@ -207,7 +207,7 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
         <DateInput label="تاريخ البداية" value={start} onChange={setStart} />
         <Confirm label="🗓 وزعها" disabled={busy || !start} onYes={() => void act({ action: "fillDates", start })} />
       </div>
-      <div className="exhint">كل يوم من أيام المكان ياخذ امتحان، وتتخطى العطلة. والعطل اللي قبل امتحانات بمكان ثاني (مثل الإلكتروني) تنحط هنا هم قبل نفس الامتحانات. بعدها تگدر تغير أي تاريخ.</div>
+      <div className="exhint">كل يوم من أيام المكان ياخذ امتحان، وتتخطى العطلة. والعطل اللي قبل امتحانات بمكان ثاني (مثل الإلكتروني) تنحط هنا هم قبل نفس الامتحانات، والنسخ تنتقل على أوقات هذا المكان. بعدها تگدر تغير أي تاريخ.</div>
       <div className="exlabel adtop">🏖 العطلة</div>
       <div className="exhint">دوس «🏖 عطلة قبله» جنب أي امتحان: يومه يصير فراغ، وهو وكل اللي بعده يزحفون ليوم الامتحان الجاي. والفراغ يطلع سطر، وجنبه «🏖 عطلة قبله» إذا تريد فراغ ثاني، و«↩️ شيل» حتى ترجع. احفظ تعديلات التواريخ قبل.</div>
       <div className="seg wrap2">

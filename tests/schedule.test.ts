@@ -968,11 +968,16 @@ test("🗓 توزيع مكان جديد: ياخذ العطل اللي قبل ن�
   // عطلة بالمكان الأول بس، قبل الامتحان الثالث
   const h: any = await schedAdminAction({ action: "holidayAdd", center: c1, exam: target, days: 1, reason: "استعداد", scope: "place", initData: admin });
   const hid = h.holidays.at(-1).id;
+  // نسخة الامتحان بالمكان الأول تنتقل للمكان الجديد
+  const vids = (await find("bank_versions", { exam_id: before })).map((v) => v.id as number);
+  const row = (await find("place_dates", { center_id: c1, exam_id: before }))[0];
+  if (vids.length) await put("place_dates", { ...row, versions: JSON.stringify({ [weekdayOf(row.day) === 5 ? "16:00" : "17:00"]: vids.at(-1) }) });
   // المكان الجديد يتوزع: نفس العطلة قبل نفس الامتحان
   const f: any = await schedAdminAction({ action: "fillDates", center: c2, start: sat, initData: admin });
   assert.match(f.notice, /انحطت \d+ عطلة/);
   assert.equal(await day(c2, before), await day(c1, before));
   assert.equal(await day(c2, target), await day(c1, target));
+  if (vids.length) assert.deepEqual(Object.values(JSON.parse((await find("place_dates", { center_id: c2, exam_id: before }))[0].versions)), [vids.at(-1)]);
   const rec = f.holidays.find((x: any) => x.id === hid);
   assert.equal(rec.places.length, 2);
   // توزيعه مرة ثانية ما يكرر العطلة
