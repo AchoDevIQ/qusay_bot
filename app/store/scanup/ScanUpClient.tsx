@@ -172,9 +172,11 @@ export default function ScanUpClient() {
       <AdminHeader title="📤 أوراق السكانر" />
       <div className="wrap">
         <RescanList list={rescan} />
-        <div className="card expad">
+        {/* تيليجرام بالحاسبة أحياناً ما يفتح نافذة اختيار الملفات: تسحب الملف من الفولدر وتذبه هنا */}
+        <div className="card expad" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (step !== "read" && step !== "send") void pick(e.dataTransfer.files); }}>
           <div className="exlabel">1. اختار صور السكانر</div>
           <div className="exhint">كل الصور مرة وحدة، أو ملف PDF. المهم أوراق كل طالب تكون ورا بعض، والليبل على أول صفحة. الترتيب بين الطلاب ما يهم.</div>
+          <div className="exhint">بالحاسبة: إذا الزر ما فتح الملفات، اسحب الملف من الفولدر وذبه على هذا المربع.</div>
           <label className="exbtn adtop">🖼 {srcs.length ? `${srcs.length} صفحة` : "اختار الصور"}
             <input type="file" hidden multiple accept="image/*,application/pdf" disabled={step === "read" || step === "send"} onChange={(e) => void pick(e.target.files)} />
           </label>
