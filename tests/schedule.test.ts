@@ -813,3 +813,18 @@ test("🗑 امتحان يمكن حذفه: الأصل ما ينحذف، وإذا
   await examAction({ action: "skippable", id: items[0].exam, on: false, initData: admin });
   await examAction({ action: "skippable", id: now[0].exam, on: false, initData: admin });
 });
+
+test("أيام ما يمتحن بيها الطالب الخاص الإلكتروني: ما تطلعله وينرفض إذا اختارها", async () => {
+  const admin = sign(1);
+  const old: any = await schedAdminAction({ action: "list", initData: admin });
+  await assert.rejects(schedAdminAction({ action: "save", initData: admin, window: old.window, extra: old.extra, perDay: old.perDay, gap: old.gap, holidayDays: 0, offDays: [0, 1, 2, 3, 4, 5, 6] }), /يوم واحد/);
+  await schedAdminAction({ action: "save", initData: admin, window: old.window, extra: old.extra, perDay: old.perDay, gap: old.gap, holidayStart: old.holidayStart, holidayDays: old.holidayDays, offDays: [6] });
+  await student(103);
+  await put("exam_access", { user_id: 103, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  assert.deepEqual((await act(103, "info")).offDays, [6]);
+  const all = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), [`${String(old.fromHour).padStart(2, "0")}:00`]]));
+  await assert.rejects(act(103, "preview", form({ times: all })), /الأحد/);
+  const ok = await act(103, "preview", form({ weekdays: [0, 1, 2, 3, 4, 5], times: all }));
+  assert.ok(ok.preview.items.every((i: any) => weekdayOf(i.at.slice(0, 10)) !== 6));
+  await schedAdminAction({ action: "save", initData: admin, window: old.window, extra: old.extra, perDay: old.perDay, gap: old.gap, holidayStart: old.holidayStart, holidayDays: old.holidayDays, offDays: [] });
+});

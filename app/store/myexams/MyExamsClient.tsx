@@ -16,7 +16,7 @@ type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay
 type Info = {
   appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null } | null; items: Item[]; holidays: Hol[]; gap: number;
-  today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
+  today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
 type Hol = { id: number; ids: number[]; from: string; to: string; title: string; reason: string; cancel: boolean; kept?: boolean };
@@ -178,7 +178,7 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
   const old = info.schedule;
   // الحضوري: أيام مركزه وأوقاته بس. الإلكتروني: أي يوم، ومن ساعات الإدارة
   const center = info.inPerson;
-  const allowed = center ? info.days.map((d) => d.d) : info.week.map((w) => w.i);
+  const allowed = center ? info.days.map((d) => d.d) : info.week.map((w) => w.i).filter((d) => !(info.offDays ?? []).includes(d));
   const nameOf = (d: number) => info.week.find((w) => w.i === d)?.name ?? "";
   const hours = info.hours.map((h) => `${String(h).padStart(2, "0")}:00`);
   const slotsOf = (d: number) => (center ? info.days.find((x) => x.d === d)?.times.map((x) => x.t) ?? [] : hours);

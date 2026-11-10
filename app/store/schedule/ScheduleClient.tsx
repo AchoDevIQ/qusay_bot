@@ -12,7 +12,7 @@ const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; inserted?: number; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
-type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[] };
+type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[] };
 type Hol = { id: number; title: string; days: number; reason: string; places: string[]; students: number };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
@@ -26,7 +26,7 @@ export default function ScheduleClient() {
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && <Place d={data} busy={busy} act={act} />}
-        {data && <Form key={JSON.stringify([data.optionalOpen, data.gallery, data.window, data.extra, data.excWindow, data.perDay, data.gap, data.holidayStart, data.holidayDays, data.fromHour, data.toHour, data.excluded])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
+        {data && <Form key={JSON.stringify([data.optionalOpen, data.gallery, data.window, data.extra, data.excWindow, data.perDay, data.gap, data.holidayStart, data.holidayDays, data.fromHour, data.toHour, data.offDays, data.excluded])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
@@ -45,7 +45,7 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
   // العطلة من تاريخ إلى تاريخ، والبوت يحسب الأيام
   const [holidayEnd, setHolidayEnd] = useState(d.holidayStart && d.holidayDays > 0 ? addDays(d.holidayStart, d.holidayDays - 1) : "");
   const holidayDays = holidayStart && holidayEnd >= holidayStart ? Math.round((Date.parse(holidayEnd) - Date.parse(holidayStart)) / 86400000) + 1 : 0;
-  const [excluded, setExcluded] = useState(d.excluded.join("\n"));
+  const [offDays, setOffDays] = useState<number[]>(d.offDays ?? []);
   const [fromHour, setFromHour] = useState(d.fromHour);
   const [toHour, setToHour] = useState(d.toHour);
   return (
@@ -73,8 +73,11 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <DayName d={holidayEnd} />
         {holidayStart && holidayEnd && holidayEnd < holidayStart && <div className="exbad">«إلى» لازم يكون بعد «من».</div>}
         {holidayDays > 0 && <div className="exhint">العطلة {holidayDays} يوم.</div>}
-        <label>أيام مستثناة من كل الجداول (كل يوم بسطر، مثل 2027-03-21)</label>
-        <textarea className="pdtext ltr" rows={3} value={excluded} onChange={(e) => setExcluded(e.target.value)} />
+        <label>أيام ما يمتحن بيها الطالب الخاص الإلكتروني</label>
+        <div className="chips adflat">
+          {d.week.map((w) => <button type="button" key={w.i} className={offDays.includes(w.i) ? "on" : ""} onClick={() => setOffDays(offDays.includes(w.i) ? offDays.filter((x) => x !== w.i) : [...offDays, w.i])}>{offDays.includes(w.i) ? "🚫 " : ""}{w.name}</button>)}
+        </div>
+        <div className="exhint">اليوم اللي تأشره ما يطلع للطالب الخاص الإلكتروني أبداً لمن يرتب جدوله. الحضوري يمشي على أيام مركزه.</div>
         <label>الطالب الخاص الإلكتروني يمتحن من الساعة</label>
         <select aria-label="أول ساعة" value={fromHour} onChange={(e) => setFromHour(Number(e.target.value))}>{HOURS.map((h) => <option key={h} value={h}>{ampm(hh(h))}</option>)}</select>
         <label>إلى الساعة</label>
@@ -82,7 +85,7 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <div className="exhint">هاي الساعات بس تطلعله يختار منها وقت امتحانه. الطالب الخاص الحضوري يختار من أوقات مركزه، وطلاب «ويا الطلاب» من أوقات مكانهم.</div>
         <div className="exhint">⚠️ إذا غيرت العطلة أو الأيام المستثناة، جداول الطلاب تنعاد من باجر، وكل طالب يوصله الخبر.</div>
         {d.cronUrl && <CronBox url={d.cronUrl} />}
-        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, excWindow, optionalOpen, gallery, perDay, gap, holidayStart, holidayDays, excluded, fromHour, toHour: Math.max(fromHour, toHour) })}>حفظ</button>
+        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, excWindow, optionalOpen, gallery, perDay, gap, holidayStart, holidayDays, offDays, fromHour, toHour: Math.max(fromHour, toHour) })}>حفظ</button>
       </div>
     </div>
   );
