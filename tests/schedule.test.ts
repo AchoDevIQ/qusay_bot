@@ -692,7 +692,7 @@ test("🏖 عطلة فوك عطلة: الامتحان يزحف مرتين، ال
   const second = await add();
   assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, sun2);   // الأحد ← الأربعاء ← الأحد الجاي
   assert.equal((await one("sched_items", { id: it }))!.at, `${sun2} 16:00`);
-  assert.match(second.rows.find((r: any) => r.exam === b.id).hol, /إلى/);
+  assert.equal(second.rows.find((r: any) => r.exam === b.id).hols.length, 2);   // سطرين «فراغ» قبل الامتحان
   const info = await act(99, "info");
   assert.equal(info.holidays.length, 1);
   assert.deepEqual([info.holidays[0].from, info.holidays[0].to, info.holidays[0].ids.length], [sun, wed, 2]);
@@ -702,4 +702,14 @@ test("🏖 عطلة فوك عطلة: الامتحان يزحف مرتين، ال
   const undo: any = await schedAdminAction({ action: "holidayDel", center: c, id: first.id, initData: admin });
   assert.match(undo.notice, /انشالت 2 عطل/);
   assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, sun);
+});
+
+test("🏖 العطلة ما تنحط قبل امتحان موعده فات، ويگلك ليش", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "الشعب" });
+  const c = await insert("centers", { area_id: area, name: "مركز الفايت", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }], initData: admin });
+  const [, b] = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => x.ord - y.ord);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: b.id, date: "2026-06-07" }], initData: admin });
+  await assert.rejects(schedAdminAction({ action: "holidayAdd", center: c, exam: b.id, days: 1, scope: "place", initData: admin }), /موعد هذا الامتحان فات/);
 });

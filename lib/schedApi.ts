@@ -632,7 +632,11 @@ export async function schedAdminAction(body: Row) {
     const all = body.scope === "all";
     const centers = all ? [0, ...(await find("centers", { active: 1 })).map((c) => c.id as number)] : [Number(body.center ?? 0)];
     const plan = await planHoliday(exam, days, centers);
-    need(plan.places.length || plan.students.length, all ? "هذا الامتحان ما إله موعد جاي بأي مكان" : "هذا الامتحان ما إله موعد جاي بهذا المكان");
+    if (!plan.places.length && !plan.students.length) {
+      const day = (await one("place_dates", { center_id: Number(body.center ?? 0), exam_id: exam }))?.day as string | undefined;
+      need(!day || day >= addDays(todayStr(), 1), `موعد هذا الامتحان فات (${day ? prettyDay(day) : ""}). العطلة تنحط قبل امتحان موعده من باجر وجاي.`);
+      need(false, all ? "هذا الامتحان ما إله موعد جاي بأي مكان" : "هذا الامتحان ما إله موعد بهذا المكان. حط تاريخه أول.");
+    }
     if (a === "holidayPreview") {
       preview = { exam, days, reason, scope: all ? "all" : "place", students: plan.students.length,
         places: plan.places.map((p) => ({ name: p.name, from: p.from, to: p.to, rows: p.moved.map((m) => ({ title: m.title, from: m.day, to: m.to })) })) };
@@ -687,9 +691,9 @@ async function placesPage(center: number) {
     slots: await placeSlots(center), students: (await find("schedules", { mode: "general", center_id: center })).length,
     rows: exams.map((e) => {
       const d = dates.get(e.id);
-      const hol = mergeHolidays(hols.filter((h) => h.exam === e.id).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ id: h.id, exam: h.exam, from: p.from, to: p.to, reason: h.reason }))))[0];
       return { exam: e.id, chapter: e.chapter, title: e.title, date: d?.day ?? "", versions: JSON.parse(d?.versions || "{}"), models: versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id, model: v.model })),
-        hol: hol ? (hol.from === hol.to ? prettyDay(hol.from) : `${prettyDay(hol.from)} إلى ${prettyDay(hol.to)}`) : "" };
+        // كل عطلة انحطت قبل هذا الامتحان بهذا المكان: سطر «فراغ» قبله
+        hols: hols.filter((h) => h.exam === e.id).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ id: h.id, from: p.from }))).sort((x, y) => x.from.localeCompare(y.from)) };
     }),
   };
 }
