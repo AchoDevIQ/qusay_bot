@@ -704,14 +704,17 @@ test("🏖 عطلة فوك عطلة: الامتحان يزحف مرتين، ال
   assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, sun);
 });
 
-test("🏖 العطلة ما تنحط قبل امتحان موعده فات، ويگلك ليش", async () => {
+test("🏖 العطلة تنحط حتى قبل امتحان موعده فات، حتى ينتقل الجدول القديم كامل", async () => {
   const admin = sign(1);
   const area = await insert("areas", { gov: "بغداد", name: "الشعب" });
   const c = await insert("centers", { area_id: area, name: "مركز الفايت", active: 1 });
   await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }], initData: admin });
   const [, b] = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => x.ord - y.ord);
   await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: b.id, date: "2026-06-07" }], initData: admin });
-  await assert.rejects(schedAdminAction({ action: "holidayAdd", center: c, exam: b.id, days: 1, scope: "place", initData: admin }), /موعد هذا الامتحان فات/);
+  await schedAdminAction({ action: "holidayAdd", center: c, exam: b.id, days: 1, scope: "place", initData: admin });
+  assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, "2026-06-14");   // الأحد ← الأحد اللي بعده
+  const other = await insert("bank_exams", { slug: "zz", chapter: "فصل بلا موعد", ord: 1, title: "بلا موعد", info: "", minutes: 60 });
+  await assert.rejects(schedAdminAction({ action: "holidayAdd", center: c, exam: other, days: 1, scope: "place", initData: admin }), /حط تاريخه/);
 });
 
 test("سبب العطلة ينكتب وينحفظ ويطلع للطالب", async () => {

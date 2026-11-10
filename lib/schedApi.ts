@@ -114,7 +114,8 @@ async function planHoliday(exam: number, days: number, centers: number[]) {
   for (const center of centers) {
     const rows = await find("place_dates", { center_id: center });
     const x = rows.find((r) => r.exam_id === exam);
-    if (!x?.day || x.day < tomorrow) continue;
+    // جدول المكان يتعدل حتى بأيام فاتت، حتى ينتقل الجدول القديم كامل. جداول الطلاب الخاصة بس من باجر
+    if (!x?.day) continue;
     const slots = await placeSlots(center);
     const r = { from: x.day as string, to: addDays(x.day, days - 1) };
     const base = dayOk(new Set(slots.map((t) => t.d)), s, hols.flatMap((h) => h.places.filter((p) => p.center === center)));
@@ -632,11 +633,7 @@ export async function schedAdminAction(body: Row) {
     const all = body.scope === "all";
     const centers = all ? [0, ...(await find("centers", { active: 1 })).map((c) => c.id as number)] : [Number(body.center ?? 0)];
     const plan = await planHoliday(exam, days, centers);
-    if (!plan.places.length && !plan.students.length) {
-      const day = (await one("place_dates", { center_id: Number(body.center ?? 0), exam_id: exam }))?.day as string | undefined;
-      need(!day || day >= addDays(todayStr(), 1), `موعد هذا الامتحان فات (${day ? prettyDay(day) : ""}). العطلة تنحط قبل امتحان موعده من باجر وجاي.`);
-      need(false, all ? "هذا الامتحان ما إله موعد جاي بأي مكان" : "هذا الامتحان ما إله موعد بهذا المكان. حط تاريخه أول.");
-    }
+    need(plan.places.length || plan.students.length, all ? "هذا الامتحان ما إله موعد بأي مكان" : "هذا الامتحان ما إله موعد بهذا المكان. حط تاريخه أول.");
     if (a === "holidayPreview") {
       preview = { exam, days, reason, scope: all ? "all" : "place", students: plan.students.length,
         places: plan.places.map((p) => ({ name: p.name, from: p.from, to: p.to, rows: p.moved.map((m) => ({ title: m.title, from: m.day, to: m.to })) })) };
