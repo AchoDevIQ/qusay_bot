@@ -11,7 +11,7 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 type Slot = { d: number; t: string };
-type Row = { exam: number; chapter: string; title: string; date: string; hols?: { id: number; from: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
+type Row = { exam: number; chapter: string; title: string; date: string; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
 type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[] };
 type Hol = { id: number; title: string; days: number; reason: string; places: string[]; students: number };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -207,6 +207,7 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
               {(r.hols ?? []).map((h) => (
                 <div className="adexamrow" key={h.id} style={{ background: "rgba(249,196,69,.08)" }}>
                   <b>🏖 فراغ · {prettyDay(h.from)}</b> <small className="pdmode">قبل {r.title}</small>
+                  <HolReason key={h.reason} id={h.id} reason={h.reason} busy={busy} act={act} />
                   <div className="exline adtop">
                     <button type="button" className="exbtn" disabled={busy} onClick={() => holiday(r.exam)}>🏖 عطلة قبله</button>
                     <Confirm label="↩️ شيل" disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id })} />
@@ -254,6 +255,17 @@ function Holidays({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
           <Confirm label="↩️ شيل العطلة" disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id })} />
         </div>
       ))}
+    </div>
+  );
+}
+
+/** ليش هاي العطلة: تكتبه وتحفظه، ويطلع للطلاب بجدولهم */
+function HolReason({ id, reason, busy, act }: { id: number; reason: string; busy: boolean; act: Act }) {
+  const [text, setText] = useState(reason);
+  return (
+    <div className="exadd adtop" style={{ flexWrap: "nowrap", alignItems: "center" }}>
+      <input aria-label="سبب العطلة" placeholder="ليش هاي العطلة؟ مثلاً راحة قبل الفاينل" value={text} style={{ flex: 1, minWidth: 0 }} onChange={(e) => setText(e.target.value)} />
+      <button type="button" className="exbtn" style={{ flex: "none", width: "auto" }} disabled={busy || text.trim() === reason} onClick={() => void act({ action: "holidayReason", id, reason: text })}>💾</button>
     </div>
   );
 }

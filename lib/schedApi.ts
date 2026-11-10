@@ -648,6 +648,14 @@ export async function schedAdminAction(body: Row) {
       const told = await applyHoliday(h);
       notice = `🏖 انحطت العطلة، وزحفت مواعيد ${plan.places.length} مكان${plan.students.length ? ` و${plan.students.length} جدول خاص` : ""}${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
     }
+  } else if (a === "holidayReason") {
+    // سبب العطلة: يطلع للطلاب بجدولهم
+    const list = await holidays();
+    const h = list.find((x) => x.id === Number(body.id));
+    need(h, "العطلة غير موجودة");
+    h!.reason = String(body.reason ?? "").trim().slice(0, 80);
+    await saveHolidays(list);
+    notice = h!.reason ? "✅ انحفظ سبب العطلة" : "انشال سبب العطلة";
   } else if (a === "holidayDel") {
     const list = await holidays();
     const h = list.find((x) => x.id === Number(body.id));
@@ -693,7 +701,7 @@ async function placesPage(center: number) {
       const d = dates.get(e.id);
       return { exam: e.id, chapter: e.chapter, title: e.title, date: d?.day ?? "", versions: JSON.parse(d?.versions || "{}"), models: versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id, model: v.model })),
         // كل عطلة انحطت قبل هذا الامتحان بهذا المكان: سطر «فراغ» قبله
-        hols: hols.filter((h) => h.exam === e.id).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ id: h.id, from: p.from }))).sort((x, y) => x.from.localeCompare(y.from)) };
+        hols: hols.filter((h) => h.exam === e.id).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ id: h.id, from: p.from, reason: h.reason }))).sort((x, y) => x.from.localeCompare(y.from)) };
     }),
   };
 }

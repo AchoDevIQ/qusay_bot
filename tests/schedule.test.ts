@@ -713,3 +713,18 @@ test("🏖 العطلة ما تنحط قبل امتحان موعده فات، و
   await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: b.id, date: "2026-06-07" }], initData: admin });
   await assert.rejects(schedAdminAction({ action: "holidayAdd", center: c, exam: b.id, days: 1, scope: "place", initData: admin }), /موعد هذا الامتحان فات/);
 });
+
+test("سبب العطلة ينكتب وينحفظ ويطلع للطالب", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "الدورة" });
+  const c = await insert("centers", { area_id: area, name: "مركز السبب", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }, { d: 2, t: "16:00" }], initData: admin });
+  const [, b] = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => x.ord - y.ord);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: b.id, date: nextWeekday(6) }], initData: admin });
+  const r: any = await schedAdminAction({ action: "holidayAdd", center: c, exam: b.id, days: 1, scope: "place", initData: admin });
+  const h = r.rows.find((x: any) => x.exam === b.id).hols[0];
+  const saved: any = await schedAdminAction({ action: "holidayReason", center: c, id: h.id, reason: "  راحة قبل الفاينل  ", initData: admin });
+  assert.equal(saved.rows.find((x: any) => x.exam === b.id).hols[0].reason, "راحة قبل الفاينل");
+  await assert.rejects(schedAdminAction({ action: "holidayReason", center: c, id: 1, reason: "x", initData: admin }), /غير موجودة/);
+  await schedAdminAction({ action: "holidayDel", center: c, id: h.id, initData: admin });
+});
