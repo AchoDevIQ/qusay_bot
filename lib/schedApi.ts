@@ -9,6 +9,7 @@ import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } fr
 import { boughtLectures, logActivity } from "./access.ts";
 import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
+import { skippableExams } from "./examApi.ts";
 import { centerName, isAdmin, student } from "./data.ts";
 import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
@@ -77,6 +78,10 @@ const remaining = (bought: Row[], items: Row[]) => {
 };
 const toPlanExams = (rows: Row[]): PlanExam[] => rows.map((e) => ({ id: e.id, minutes: e.minutes ?? 75 }));
 
+/** الامتحانات اللي الطالب داس عليها ✅ خليه */
+async function keptExams(uid: number): Promise<number[]> {
+  try { const j = JSON.parse(await kvGet(`skip_keep_${uid}`) ?? "[]"); return Array.isArray(j) ? j.map(Number) : []; } catch { return []; }
+}
 const placeSlots = async (center: number): Promise<Slot[]> => JSON.parse((await one("place_slots", { center_id: center }))?.slots || "[]");
 const picksOf = (sc: Row): Record<string, string> => JSON.parse(sc.picks || "{}");
 const placeDays = async (center: number) => new Map((await find("place_dates", { center_id: center })).map((d) => [d.exam_id as number, d.day as string]));
@@ -84,7 +89,7 @@ const placeDays = async (center: number) => new Map((await find("place_dates", {
 // ---------- عطلة قبل امتحان: الامتحان واللي بعده يزحفون، بالمكان وبجداول الطلاب الخاصة
 type Range = { from: string; to: string };
 type HolPlace = Range & { center: number; name: string; moved: { exam: number; title: string; day: string; versions: string; to: string; toVersions: string }[] };
-type HolStudent = Range & { uid: number; on: boolean; moves: { id: number; at: string; to: string }[] };
+type HolStudent = Range & { uid: number; on: boolean; kept?: boolean; moves: { id: number; at: string; to: string }[] };
 /** insert: امتحان من البنك انحط بيوم exam بدل الفراغ. added: مواعيده بجداول الطلاب الخاصة */
 type Holiday = { id: number; exam: number; title: string; days: number; reason: string; places: HolPlace[]; students: HolStudent[]; at: string; insert?: number; added?: number[] };
 const HOL_KEY = "exam_holidays";
@@ -222,7 +227,7 @@ async function myHolidays(uid: number, sc: Row | null) {
   const today = todayStr();
   const rows = (await holidays()).filter((h) => !h.insert).flatMap((h) => (sc?.mode === "general"
     ? h.places.filter((p) => p.center === sc.center_id).map((p) => ({ id: h.id, exam: h.exam, from: p.from, to: p.to, title: h.title, reason: h.reason, cancel: false }))
-    : h.students.filter((x) => x.uid === uid && x.on).map((x) => ({ id: h.id, exam: h.exam, from: x.from, to: x.to, title: h.title, reason: h.reason, cancel: true }))));
+    : h.students.filter((x) => x.uid === uid && x.on).map((x) => ({ id: h.id, exam: h.exam, from: x.from, to: x.to, title: h.title, reason: h.reason, cancel: !x.kept, kept: !!x.kept }))));
   return mergeHolidays(rows).filter((x) => x.to >= today);
 }
 /** عطلة فوك عطلة قبل نفس الامتحان: تطلع عطلة وحدة من أول يوم لآخر يوم */
@@ -286,11 +291,11 @@ async function itemsView(uid: number, s: SchedSettings) {
   // الحضوري ينقدم بالمركز، إلا إذا صاحب البوت فتحله يصور أجوبته بنفسه
   const inPerson = (await placeFor(uid)).inPerson && !await photosAllowed(uid);
   const lec = await lectureMap();
-  return (await find("sched_items", { user_id: uid }, { order: ["at"] })).map((i) => {
+  return (await find("sched_items", { user_id: uid }, { order: ["at"] })).filter((i) => i.status !== "skipped").map((i) => {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
-    return { id: i.id, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
+    return { id: i.id, exam: i.exam_id as number, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
   });
 }
 /** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
@@ -316,6 +321,7 @@ async function studentInfo(uid: number) {
   // جدول المكان كله يطلع حتى يعرف شوكت يخلص، والفصول اللي ما اشتراها مقفولة
   const lockedRows: Row[] = [];
   const lec = await lectureMap();
+  const skip = new Set(await skippableExams()), kept = new Set(await keptExams(uid));
   if (general) {
     const mine = new Set(bought.map((e) => e.id));
     const allExams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
@@ -348,7 +354,7 @@ async function studentInfo(uid: number) {
     // المنافسة: مجموعته وترتيبه بالمركز
     comp: await studentComp(uid),
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
-    items: [...await itemsView(uid, s), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
+    items: [...(await itemsView(uid, s)).map((i) => ({ ...i, skippable: !general && !!sched && i.status === "waiting" && !i.optional && i.state === "locked" && skip.has(i.exam) && !kept.has(i.exam) })), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
     week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s),
     holiday: s.holidayStart && s.holidayDays ? { start: s.holidayStart, days: s.holidayDays } : null,
   };
@@ -484,6 +490,38 @@ export async function myExamAction(body: Row) {
     else if (a === "compJoin") await joinGroup(id, body.code);
     else await leaveGroup(id);
     return { ...await studentInfo(id), notice: a === "compCreate" ? "✅ انسوت المجموعة. دز الرابط لأصدقائك" : a === "compJoin" ? "✅ فتت للمجموعة" : "🚪 طلعت من المجموعة" };
+  }
+  if (a === "holidayKeep") {
+    // ✅ خليها: العطلة تبقى، والسؤال ما يطلع بعد
+    const list = await holidays();
+    const ids = new Set((Array.isArray(body.holidays) ? body.holidays : [body.holiday]).map(Number));
+    let n = 0;
+    for (const h of list) if (ids.has(h.id)) for (const x of h.students) if (x.uid === id && x.on) { x.kept = true; n++; }
+    need(n, "هذي العطلة مو بجدولك");
+    await saveHolidays(list);
+    return { ...await studentInfo(id), notice: "✅ العطلة باقية بجدولك" };
+  }
+  if (a === "skipExam" || a === "keepExam") {
+    // امتحان أشرت عليه الإدارة «يمكن حذفه»: طالب الجدول الخاص يشيله فيصعد جدوله، لو يخليه
+    const sc = await one("schedules", { user_id: id });
+    need(sc && sc.mode !== "general", "هذا لطالب الجدول الخاص");
+    const it = await one("sched_items", { id: Number(body.item), user_id: id });
+    need(it?.status === "waiting" && !it.kind && it.at > stamp(), "هذا الامتحان ما يتغير هسه");
+    need((await skippableExams()).includes(it!.exam_id), "هذا الامتحان ما يمكن حذفه");
+    const title = String((await one("bank_exams", { id: it!.exam_id }))?.title ?? "");
+    if (a === "keepExam") {
+      await kvSet(`skip_keep_${id}`, JSON.stringify([...new Set([...await keptExams(id), it!.exam_id])]));
+      return { ...await studentInfo(id), notice: `✅ ${title} باقي بجدولك` };
+    }
+    // كل امتحان بعده ياخذ موعد اللي قبله، فيصعد الجدول
+    const later = (await find("sched_items", { user_id: id, status: "waiting" }, { order: ["at"] })).filter((x) => !x.fixed && !x.kind && x.notified !== "test" && x.at > it!.at);
+    const slots = [it!.at as string, ...later.map((x) => x.at as string)];
+    await tx(async () => {
+      await update("sched_items", { id: it!.id }, { status: "skipped" });
+      for (const [k, x] of later.entries()) await update("sched_items", { id: x.id }, { at: slots[k] });
+    });
+    await logActivity(id, `🗑 شال امتحان ${title} من جدوله، فصعد جدوله`);
+    return { ...await studentInfo(id), notice: `🗑 انشال ${title}، وصعد جدولك` };
   }
   if (a === "holidayOff") {
     const list = await holidays();

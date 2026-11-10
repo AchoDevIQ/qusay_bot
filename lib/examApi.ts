@@ -17,6 +17,11 @@ export { ApiError };
 const generalMinutes = async () => Number(await kvGet("exam_minutes")) || 75;
 // ord يحدد مكان ملفات الامتحان فما يتغير، والترتيب بالجدول من pos
 const examPos = (e: Row): number => e.pos ?? e.ord;
+/** الامتحانات اللي طالب الجدول الخاص يگدر يشيلها من جدوله. الباقي كله ما ينحذف */
+export const SKIP_KEY = "skippable_exams";
+export async function skippableExams(): Promise<number[]> {
+  try { const j = JSON.parse(await kvGet(SKIP_KEY) ?? "[]"); return Array.isArray(j) ? j.map(Number) : []; } catch { return []; }
+}
 const chapterExams = async (slug: string) => (await find("bank_exams", { slug })).sort((a, b) => examPos(a) - examPos(b) || a.id - b.id);
 const pageList = (v: Row, lang: "ar" | "en"): string[] => JSON.parse(v["pages_" + lang] || "[]");
 const maxPos = (list: Row[]) => list.reduce((m, e) => Math.max(m, examPos(e)), 0);
@@ -29,13 +34,14 @@ export async function examList(uid: number) {
   const qBy = new Map<number, Row[]>(), vBy = new Map<number, Row[]>();
   for (const q of questions) qBy.set(q.version_id, [...(qBy.get(q.version_id) ?? []), q]);
   for (const v of versions) vBy.set(v.exam_id, [...(vBy.get(v.exam_id) ?? []), v]);
+  const skip = await skippableExams();
   const chapters: Row[] = [];
   for (const e of exams) {
     let c = chapters.find((x) => x.slug === e.slug);
     if (!c) { c = { slug: e.slug, chapter: e.chapter, exams: [] }; chapters.push(c); }
     const dir = `${e.slug}/e${e.ord}`;
     c.exams.push({
-      id: e.id, ord: e.ord, title: e.title, info: e.info, minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0,
+      id: e.id, ord: e.ord, title: e.title, info: e.info, minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0, skippable: skip.includes(e.id),
       versions: (vBy.get(e.id) ?? []).map((v) => {
         const pdf = (lang: "ar" | "en") => v["pdf_" + lang] || (lang === "ar" || v.has_en ? `${dir}/${v.model}/student_${lang}.pdf` : null);
         // صور الصفحات تنعرض داخل الصفحة. إذا انرفع PDF بديل، ينفتح الملف نفسه
@@ -212,6 +218,12 @@ export async function examAction(body: Row) {
     need(await one("bank_exams", { id }), "الامتحان غير موجود");
     await update("bank_exams", { id }, { title });
     await logEdit(uid, `امتحان ${id}: العنوان ${title}`);
+  } else if (a === "skippable") {
+    // الأصل: الامتحان ما ينحذف. صاحب الصلاحية يأشر على امتحان (مثلاً مكرر) فطالب الجدول الخاص يگدر يشيله
+    need(await one("bank_exams", { id }), "الامتحان غير موجود");
+    const list = await skippableExams();
+    await kvSet(SKIP_KEY, JSON.stringify(body.on ? [...new Set([...list, id])] : list.filter((x) => x !== id)));
+    await logEdit(uid, `امتحان ${id}: ${body.on ? "يمكن حذفه" : "لا يمكن حذفه"}`);
   } else if (a === "privateVersion") {
     // نسخة الطالب اللي جدوله خاص. نسخ المجاميع من صفحة جدول الامتحانات
     const e = await one("bank_exams", { id });

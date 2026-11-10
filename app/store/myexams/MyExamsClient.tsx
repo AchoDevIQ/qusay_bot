@@ -10,7 +10,7 @@ import { deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 
-type Item = { id: number; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
+type Item = { id: number; exam?: number; skippable?: boolean; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
@@ -19,7 +19,7 @@ type Info = {
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; holiday: { start: string; days: number } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
-type Hol = { id: number; ids: number[]; from: string; to: string; title: string; reason: string; cancel: boolean };
+type Hol = { id: number; ids: number[]; from: string; to: string; title: string; reason: string; cancel: boolean; kept?: boolean };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Paper = { ai: AiQ[]; solutions: string | null; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
@@ -93,7 +93,7 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} />}
-        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} off={(ids) => call({ action: "holidayOff", holidays: ids })} />}
+        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} off={(ids) => call({ action: "holidayOff", holidays: ids })} cmd={call} />}
         {info?.comp && <CompCard c={info.comp} busy={busy} call={call} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
@@ -251,18 +251,17 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
 }
 
 /** عطلة بالجدول. الطالب الخاص يگدر يلغيها فيتقدم جدوله */
-function HolRow({ h, busy, off }: { h: Hol; busy: boolean; off: (ids: number[]) => Promise<unknown> }) {
-  const [ask, setAsk] = useState(false);
+function HolRow({ h, busy, off, keep }: { h: Hol; busy: boolean; off: (ids: number[]) => Promise<unknown>; keep: (ids: number[]) => Promise<unknown> }) {
   return (
     <tr className="lcrow">
       <td>🏖 <b>عطلة{h.reason ? `: ${h.reason}` : ""}</b><small className="pdmode">{h.from === h.to ? prettyDay(h.from) : `${prettyDay(h.from)} إلى ${prettyDay(h.to)}`} · قبل {h.title}</small>
-        {ask && <div className="hint">جدولك يتقدم: {h.title} واللي بعده يرجعون لمواعيدهم بدون عطلة. متأكد؟</div>}
+        {h.cancel && <div className="hint">تريد العطلة؟ ❌ يشيلها ويصعد جدولك.</div>}
+        {h.kept && <small className="pdmode">✅ خليتها</small>}
       </td>
       <td className="p">
-        {h.cancel && !ask && <button type="button" className="exbtn" disabled={busy} onClick={() => setAsk(true)}>❌ ما أريد العطلة</button>}
-        {h.cancel && ask && <>
-          <button type="button" className="exbtn" disabled={busy} onClick={() => void off(h.ids)}>✅ إي، قدّمه</button>
-          <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setAsk(false)}>لا</button>
+        {h.cancel && <>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void keep(h.ids)}>✅ خليها</button>
+          <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void off(h.ids)}>❌ شيلها</button>
         </>}
       </td>
     </tr>
@@ -284,7 +283,7 @@ function AttendCode({ code }: { code: string }) {
   );
 }
 
-function List({ info, busy, enter, paper, ask, file, off }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown>; off: (ids: number[]) => Promise<unknown> }) {
+function List({ info, busy, enter, paper, ask, file, off, cmd }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown>; off: (ids: number[]) => Promise<unknown>; cmd: (b: Record<string, unknown>) => Promise<unknown> }) {
   // العطلة تطلع قبل أول امتحان بعدها
   const holAt = (i: number) => info.holidays.filter((h) => info.items.findIndex((x) => String(x.at).slice(0, 10) >= h.from) === i);
   const holLast = info.holidays.filter((h) => !info.items.some((x) => String(x.at).slice(0, 10) >= h.from));
@@ -298,7 +297,7 @@ function List({ info, busy, enter, paper, ask, file, off }: { info: Info; busy: 
       <table className="extable"><tbody>
         {info.items.map((i, n) => (
           <Fragment key={i.id}>
-          {holAt(n).map((h) => <HolRow key={h.id} h={h} busy={busy} off={off} />)}
+          {holAt(n).map((h) => <HolRow key={h.id} h={h} busy={busy} off={off} keep={(ids) => cmd({ action: "holidayKeep", holidays: ids })} />)}
           {(i.lectures ?? []).map((l, k) => (
             <tr key={l} className="lcrow" id={i.id === now?.id && k === 0 ? "mx-now" : undefined}>
               <td>{i.id === now?.id && k === 0 && <span className="adentag">📍 وصلت هنا</span>}📺 {l}<small className="pdmode">{info.appLink ? "شوفها بالتطبيق قبل الامتحان" : "ادرسها قبل الامتحان"}</small></td>
@@ -311,6 +310,11 @@ function List({ info, busy, enter, paper, ask, file, off }: { info: Info; busy: 
           <tr className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""} id={i.id === now?.id && !(i.lectures ?? []).length ? "mx-now" : undefined}>
             <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
+              {i.skippable && (
+                <div className="hint adtop">تگدر تشيل هذا الامتحان من جدولك، فيصعد جدولك:
+                  <div className="exline"><button type="button" className="exbtn" disabled={busy} onClick={() => void cmd({ action: "keepExam", item: i.id })}>✅ خليه</button><button type="button" className="exbtn" disabled={busy} onClick={() => void cmd({ action: "skipExam", item: i.id })}>❌ شيله</button></div>
+                </div>
+              )}
               {i.state === "missed" && <Excuse item={i} busy={busy} ask={ask} />}
               {i.state === "done" && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => paper(i.id)}>📂 ورقتي وتصحيحها</button>}
             </td>
@@ -318,7 +322,7 @@ function List({ info, busy, enter, paper, ask, file, off }: { info: Info; busy: 
           </tr>
           </Fragment>
         ))}
-        {holLast.map((h) => <HolRow key={h.id} h={h} busy={busy} off={off} />)}
+        {holLast.map((h) => <HolRow key={h.id} h={h} busy={busy} off={off} keep={(ids) => cmd({ action: "holidayKeep", holidays: ids })} />)}
       </tbody></table>
       {!info.inPerson && <div className="expad exhint adtop">تگدر تدخل الامتحان خلال {info.window} دقيقة من موعده. الامتحان اللي يفوت وقته ما يرجع، إلا إذا عندك عذر ووافقت عليه الإدارة.</div>}
     </div>

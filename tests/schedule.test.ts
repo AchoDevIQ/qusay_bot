@@ -647,6 +647,8 @@ test("🏖 عطلة قبل امتحان: هو واللي بعده يزحفون،
   const info = await act(96, "info");
   assert.deepEqual(info.holidays.map((h: any) => [h.from, h.cancel, h.reason]), [[tue, true, "راحة"]]);
   await assert.rejects(act(97, "holidayOff", { holiday: done.holidays[0].id }), /سجل/);
+  await act(96, "holidayKeep", { holidays: [done.holidays[0].id] });
+  assert.deepEqual((await act(96, "info")).holidays.map((h: any) => [h.cancel, h.kept]), [[false, true]]);
   const off = await act(96, "holidayOff", { holidays: [done.holidays[0].id] });
   assert.match(off.notice, /لغيت العطلة/);
   assert.equal(off.holidays.length, 0);
@@ -786,4 +788,28 @@ test("➕ امتحان قبله: بالبنك بمكانه، وبالجدول ي
   assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, sun);
   assert.equal((await one("sched_items", { id: it }))!.at, `${sun} 16:00`);
   assert.equal((await find("sched_items", { user_id: 101, exam_id: add.id })).length, 0);
+});
+
+test("🗑 امتحان يمكن حذفه: الأصل ما ينحذف، وإذا أشرت عليه الطالب الخاص يشيله ويصعد جدوله، و✅ يخليه", async () => {
+  const admin = sign(1);
+  await student(102);
+  await put("exam_access", { user_id: 102, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  const done = await act(102, "confirm", form({ weekdays: [0, 1, 2, 3, 4, 5, 6], times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["15:00"]])) }));
+  const items = done.items.filter((i: any) => !i.optional);
+  assert.ok(items.length >= 3 && items.every((i: any) => !i.skippable));   // الأصل: ماكو شي ينحذف
+  await assert.rejects(act(102, "skipExam", { item: items[0].id }), /ما يمكن حذفه/);
+  await examAction({ action: "skippable", id: items[0].exam, on: true, initData: admin });
+  const info = await act(102, "info");
+  assert.deepEqual(info.items.filter((i: any) => i.skippable).map((i: any) => i.id), [items[0].id]);
+  const before = info.items.filter((i: any) => !i.optional).map((i: any) => i.at);
+  const r = await act(102, "skipExam", { item: items[0].id });
+  assert.match(r.notice, /انشال/);
+  const now = r.items.filter((i: any) => !i.optional);
+  assert.equal(now.length, items.length - 1);
+  assert.deepEqual(now.map((i: any) => i.at), before.slice(0, now.length));   // كل امتحان أخذ موعد اللي قبله
+  await examAction({ action: "skippable", id: now[0].exam, on: true, initData: admin });
+  const kept = await act(102, "keepExam", { item: now[0].id });
+  assert.equal(kept.items.find((i: any) => i.id === now[0].id).skippable, false);
+  await examAction({ action: "skippable", id: items[0].exam, on: false, initData: admin });
+  await examAction({ action: "skippable", id: now[0].exam, on: false, initData: admin });
 });

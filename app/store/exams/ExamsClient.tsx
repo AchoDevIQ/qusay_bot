@@ -6,7 +6,7 @@ import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
-type Exam = { id: number; ord: number; title: string; info: string; minutes: number; privateVersion: number; versions: Version[] };
+type Exam = { id: number; ord: number; title: string; info: string; minutes: number; privateVersion: number; skippable: boolean; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean; lastTwoDone: boolean };
 
@@ -203,6 +203,7 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
       </div>
       <MarksEditor exam={exam} busy={busy} call={call} />
       <PrivateVersion exam={exam} busy={busy} call={call} />
+      <label className="adcheck adflat exfoot"><input type="checkbox" checked={exam.skippable} disabled={busy} onChange={(e) => call({ action: "skippable", id: exam.id, on: e.target.checked })} /><span>🗑 يمكن حذفه: طالب الجدول الخاص يگدر يشيله من جدوله (مثلاً امتحان مكرر). بدون هذا ما ينحذف.</span></label>
       <div className="excols">
         {(["mandatory", "optional"] as const).map((kind) => {
           const list = exam.versions.filter((v) => v.kind === kind);
