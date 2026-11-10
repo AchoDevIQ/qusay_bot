@@ -62,7 +62,9 @@ function codesOf(c: HTMLCanvasElement) {
 /** صفحة بيضاء: الوجه الثاني من الورقة إذا السكانر صور الوجهين */
 function isBlank(c: HTMLCanvasElement) {
   const ctx = c.getContext("2d", { willReadFrequently: true })!;
-  const d = ctx.getImageData(0, 0, c.width, c.height).data;
+  // حواف الصفحة ما تنحسب: السكانر يرسم خط أسود على حافة الورقة، ونقط الغبار تبقى بالأطراف
+  const mx = Math.round(c.width * 0.05), my = Math.round(c.height * 0.05);
+  const d = ctx.getImageData(mx, my, c.width - 2 * mx, c.height - 2 * my).data;
   let dark = 0, n = 0;
   for (let i = 0; i < d.length; i += 4 * 16) { n++; if (d[i] + d[i + 1] + d[i + 2] < 300) dark++; }
   return dark / n < 0.0008;
