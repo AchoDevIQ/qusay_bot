@@ -3,6 +3,7 @@ import path from "node:path";
 import { find, one, update, type Row } from "./db.ts";
 import { alignOrds, loadCatalog } from "./examBank.ts";
 import { files } from "./files.ts";
+import { autoInsertExam } from "./schedApi.ts";
 import { authed, need } from "./webApi.ts";
 
 const PART = 3;      // كل طلب يدخل كم امتحان، حتى ما يخلص وقت الطلب
@@ -51,6 +52,8 @@ export async function uploadAction(body: Row) {
       const ref = `answers/${slug}/e${ex.ord}/${v.model}.pdf`;
       if (!v.manual && !v.answer_pdf && have.has(ref)) await update("bank_versions", { id: v.id }, { answer_pdf: ref });
     }
+    // امتحان ينضاف لفصل موجود (مثل نصف السنة): ينحط بجدول الامتحانات وحده قبل الامتحان اللي بعده، والباقي يزحف
+    if (ex.append) await autoInsertExam(e.id);
   }
   return { done: from + exams.length, total: c.exams.length };
 }

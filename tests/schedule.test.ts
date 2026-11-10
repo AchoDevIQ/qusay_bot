@@ -844,3 +844,31 @@ test("امتحان ينضاف بالبنك قبل امتحان: ينحط وحد�
   assert.equal((await find("place_dates", { center_id: c, exam_id: n.id }))[0].day, sun);
   assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, wed);
 });
+
+test("امتحانات تنرفع بآخر فصل (نصف السنة وإعادة): تنحط بالجدول قبل الفصل اللي بعده بالترتيب، والباقي يزحف", async () => {
+  const admin = sign(1);
+  const { uploadAction } = await import("../lib/uploadApi.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "الكرادة" });
+  const c = await insert("centers", { area_id: area, name: "مركز الرفع", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }, { d: 2, t: "16:00" }], initData: admin });
+  const all = (await find("bank_exams")).sort((a, b) => String(a.slug).localeCompare(String(b.slug)) || (a.pos ?? a.ord) - (b.pos ?? b.ord) || a.id - b.id);
+  const slug = String(all[0].slug);
+  const mine = all.filter((x) => x.slug === slug);
+  const next = all[all.indexOf(mine.at(-1)!) + 1];
+  assert.ok(next, "لازم فصل بعده");
+  const sun = nextWeekday(6), wed = addDays(sun, 3), sun2 = addDays(sun, 7);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: next.id, date: sun }], initData: admin });
+  const top = Math.max(...mine.map((x) => x.ord));
+  const ex = (ord: number, title: string) => ({ ord, title, info: "", minutes: 75, append: true, versions: [{ model: "A", ok: true, issues: [], has_en: true, questions: [{ n: 1, max: 100, q: "q1.png", a: [] }] }] });
+  await files().write(`${slug}/catalog.json`, Buffer.from(JSON.stringify({ chapter: mine[0].chapter, slug, exams: [ex(top + 2, "نصف السنة تجربة"), ex(top + 1, "إعادة تجربة")] })), "application/json");
+  await uploadAction({ initData: admin, action: "start", slug });
+  await uploadAction({ initData: admin, action: "part", slug, from: 0 });
+  const day = async (title: string) => (await find("place_dates", { center_id: c, exam_id: (await find("bank_exams", { title }))[0].id }))[0]?.day;
+  assert.equal(await day("إعادة تجربة"), sun);
+  assert.equal(await day("نصف السنة تجربة"), wed);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: next.id }))[0].day, sun2);
+  // مرة ثانية (انقطع النت وانعاد الرفع): ما يتكرر شي
+  await uploadAction({ initData: admin, action: "part", slug, from: 0 });
+  assert.equal(await day("إعادة تجربة"), sun);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: next.id }))[0].day, sun2);
+});
