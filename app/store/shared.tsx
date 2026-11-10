@@ -217,3 +217,17 @@ export function deviceId(): Promise<string> {
   })();
   return devicePromise;
 }
+
+/** خانة تاريخ تكتب التاريخ دايماً يوم/شهر/سنة ويا اسم اليوم (الأحد 3/1/2027)، مهما كانت لغة الجهاز.
+ *  خانة التاريخ الأصلية شفافة فوكها، فالدوسة تفتح نفس منتقي التاريخ مال الجهاز */
+export function DateInput({ value, onChange, min, label, placeholder = "اختار التاريخ" }: { value: string; onChange: (v: string) => void; min?: string; label?: string; placeholder?: string }) {
+  const days = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
+  const ok = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const text = ok ? `${days[(new Date(`${value}T12:00:00`).getDay() + 6) % 7]} ${Number(value.slice(8, 10))}/${Number(value.slice(5, 7))}/${value.slice(0, 4)}` : placeholder;
+  return (
+    <span className="dateinput">
+      <span className={ok ? "" : "dateph"}>📅 {text}</span>
+      <input type="date" aria-label={label ?? "التاريخ"} min={min} value={value} onChange={(e) => onChange(e.target.value)} />
+    </span>
+  );
+}

@@ -6,7 +6,7 @@ import AiCompare, { type AiQ } from "./AiCompare";
 import PdfPages from "../PdfPages";
 import { Fragment, useEffect, useState } from "react";
 import { addDays, ampm, prettyAt, prettyDay } from "../../../lib/scheduleRules.ts";
-import { deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
+import { DateInput, deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 
@@ -216,11 +216,9 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
         <div className="warn locked">عندك <b>{info.remaining}</b> امتحان. {old ? "اشتريت فصل جديد، فانعاد توزيع الامتحانات الباقية." : "اختار المدة والأيام ووقت امتحانك، والبوت يوزعها."} وأكثر شي <b>{info.perDay}</b> باليوم.</div>
         {info.holiday && <div className="hint">🏖 العطلة من {prettyDay(info.holiday.start)} إلى {prettyDay(addDays(info.holiday.start, info.holiday.days - 1))}، ما بيها امتحانات.</div>}
         <label>تبدي من تاريخ</label>
-        <input type="date" className="ltr" min={info.minStart} value={start} onChange={(e) => change(setStart)(e.target.value)} />
-        {start && <small className="hint">📅 {prettyDay(start)}</small>}
+        <DateInput label="تبدي من تاريخ" min={info.minStart} value={start} onChange={change(setStart)} />
         <label>تخلص بتاريخ{old ? " (تگدر تبقيه أو تغيره)" : ""}</label>
-        <input type="date" className="ltr" min={start} value={end} onChange={(e) => change(setEnd)(e.target.value)} />
-        {end && <small className="hint">📅 {prettyDay(end)}</small>}
+        <DateInput label="تخلص بتاريخ" min={start} value={end} onChange={change(setEnd)} />
         <label>أيام الامتحان بالأسبوع{center ? " (أيام مركزك)" : ""}</label>
         <div className="seg wrap2">
           {allowed.map((d) => (

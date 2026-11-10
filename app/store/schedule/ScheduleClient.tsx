@@ -2,10 +2,10 @@
 // إعدادات جدول الامتحانات: كل المدد بيد الإدارة
 import { Fragment, useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
+import { DateInput } from "../shared";
 import { addDays, ampm, flattenDays, groupSlots, prettyDay, spreadVersions } from "../../../lib/scheduleRules.ts";
 
 /** اسم اليوم تحت خانة التاريخ، لأن الخانة تبين الأرقام بس */
-const DayName = ({ d }: { d: string }) => (d ? <small className="exhint">📅 {prettyDay(d)}</small> : null);
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
@@ -66,11 +66,9 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <div className="exhint">الطالب الخاص يختار وقت الامتحان الثاني بنفسه، بس ما يگدر يحطه أقرب من نهاية الأول وهذا الفاصل.</div>
         <input className="ltr" inputMode="numeric" value={gap} onChange={(e) => setGap(e.target.value)} />
         <label>عطلة نصف السنة: من</label>
-        <input type="date" className="ltr" value={holidayStart} onChange={(e) => setHolidayStart(e.target.value)} />
-        <DayName d={holidayStart} />
+        <DateInput label="عطلة نصف السنة من" value={holidayStart} onChange={setHolidayStart} />
         <label>إلى</label>
-        <input type="date" className="ltr" min={holidayStart} value={holidayEnd} onChange={(e) => setHolidayEnd(e.target.value)} />
-        <DayName d={holidayEnd} />
+        <DateInput label="عطلة نصف السنة إلى" min={holidayStart} value={holidayEnd} onChange={setHolidayEnd} />
         {holidayStart && holidayEnd && holidayEnd < holidayStart && <div className="exbad">«إلى» لازم يكون بعد «من».</div>}
         {holidayDays > 0 && <div className="exhint">العطلة {holidayDays} يوم.</div>}
         <label>أيام ما يمتحن بيها الطالب الخاص الإلكتروني</label>
@@ -190,10 +188,9 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
     <div className="exfoot">
       <div className="exlabel">🗓 وزع امتحانات الكتاب بالترتيب من تاريخ</div>
       <div className="exadd">
-        <input type="date" className="ltr" aria-label="تاريخ البداية" value={start} onChange={(e) => setStart(e.target.value)} />
+        <DateInput label="تاريخ البداية" value={start} onChange={setStart} />
         <Confirm label="🗓 وزعها" disabled={busy || !start} onYes={() => void act({ action: "fillDates", start })} />
       </div>
-      <DayName d={start} />
       <div className="exhint">كل يوم من أيام المكان ياخذ امتحان، وتتخطى العطلة. بعدها تگدر تغير أي تاريخ.</div>
       <div className="exlabel adtop">🏖 العطلة</div>
       <div className="exhint">دوس «🏖 عطلة قبله» جنب أي امتحان: يومه يصير فراغ، وهو وكل اللي بعده يزحفون ليوم الامتحان الجاي. والفراغ يطلع سطر، وجنبه «🏖 عطلة قبله» إذا تريد فراغ ثاني، و«↩️ شيل» حتى ترجع. احفظ تعديلات التواريخ قبل.</div>
@@ -225,7 +222,7 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
               <div className="adexamrow">
                 <b>{r.title}</b>
                 <div className="adexamcells">
-                  <div><input type="date" className="ltr" aria-label={`تاريخ ${r.title}`} value={r.date} onChange={(e) => set(r.exam, { date: e.target.value })} /><DayName d={r.date} /></div>
+                  <div><DateInput label={`تاريخ ${r.title}`} value={r.date} onChange={(v) => set(r.exam, { date: v })} /></div>
                   {times.map((t) => (
                     <label className="adtimev" key={t}><small>⏰ {ampm(t)}</small>
                       <select aria-label={`نسخة ${r.title} الساعة ${t}`} value={r.versions[t] ?? 0} onChange={(e) => set(r.exam, { versions: { ...r.versions, [t]: Number(e.target.value) } })}>

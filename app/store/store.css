@@ -326,3 +326,10 @@ body.grwide .grtop{padding-left:104px}
 .ntsheet canvas{position:absolute;inset:0;display:block}
 .ntpages{justify-content:space-between}
 .ntpages select{padding:6px 10px;border-radius:8px;font-size:15px}
+
+/* خانة التاريخ: يوم/شهر/سنة دايماً، والمنتقي الأصلي شفاف فوكها */
+.dateinput{position:relative;display:flex;align-items:center;min-height:48px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--ink);color:var(--txt);font-size:16px;font-weight:700;cursor:pointer;box-sizing:border-box;width:100%}
+.dateinput:focus-within{border-color:var(--gold)}
+.dateinput .dateph{opacity:.6;font-weight:400}
+.dateinput input[type=date]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0}
+.exadd .dateinput{flex:1;width:auto}
