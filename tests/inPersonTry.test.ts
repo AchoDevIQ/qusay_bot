@@ -159,3 +159,20 @@ test("رابط المحطة ينتهي بنهاية يوم العراق", async 
   assert.equal(exp("2026-11-09T20:59:00Z"), at("2026-11-09T21:00:00Z"));
   assert.equal(exp("2026-11-09T21:01:00Z"), at("2026-11-10T21:00:00Z"));
 });
+
+test("👥 4 طلاب حضوريين: كل واحد بحالته، وكوده الثابت يقرره الحضور", async () => {
+  const { makeInPersonSet } = await import("../lib/gradeApi.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "المجموعة" });
+  const c = await insert("centers", { area_id: area, name: "مركز الأربعة", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const set = await makeInPersonSet(c, v.id);
+  assert.deepEqual(set.map((x) => x.kind), ["now", "now", "late", "none"]);
+  const again = await makeInPersonSet(c, v.id);
+  assert.deepEqual(again.map((x) => x.k), set.map((x) => x.k));   // نفس الطلاب يرجعون
+  const { attendAction } = await import("../lib/inPerson.ts");
+  const { homeToken } = await import("../lib/webAuth.ts");
+  const scan = (k: number) => attendAction({ action: "scan", code: studentCode(-k), initData: `tk:${homeToken(1)}` }) as Promise<any>;
+  assert.equal((await scan(set[0].k)).card.late, false);
+  assert.equal((await scan(set[2].k)).card.late, true);
+  await assert.rejects(scan(set[3].k), /ما عنده امتحان/);
+});

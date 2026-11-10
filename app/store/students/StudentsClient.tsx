@@ -12,7 +12,7 @@ type TestStudent = { id: number; name: string; papers: number; graded: number; l
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
-type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
+type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -65,7 +65,7 @@ export default function StudentsClient() {
         {data && s && (
           <>
             {data.tests && <TestStudents tests={data.tests} busy={busy} act={act} />}
-            {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} code={data.tryCode} />}
+            {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} code={data.tryCode} codes={data.tryCodes} />}
             {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions} busy={busy} act={act} />}
             {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
             <div className="card">
@@ -396,7 +396,7 @@ async function shrink(f: File): Promise<Blob> {
 }
 
 /** طالب حضوري تجريبي بمركز، وامتحانه اليوم، حتى تنجرب قراءة الحضور وطباعة الليبل بدون حساب ثاني */
-function InPersonTry({ areas, versions, busy, act, code }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown; code?: { k: number; img: string } }) {
+function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown; code?: { k: number; img: string }; codes?: { k: number; kind: string; img: string }[] }) {
   const centers = areas.flatMap((a) => a.centers.map((c) => ({ id: c.id, name: `${c.name} (${a.name})` })));
   const [center, setCenter] = useState(0);
   const [late, setLate] = useState(false);
@@ -432,6 +432,19 @@ function InPersonTry({ areas, versions, busy, act, code }: { areas: Data["areas"
           <button type="button" className={late ? "on" : ""} onClick={() => setLate(true)}>⏰ بغير وقته</button>
         </div>
         <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPerson", center, vid, late })}>🎫 سوي الطالب وامتحان اليوم</button>
+        <button type="button" className="btn adtop" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonSet", center, vid })}>👥 سوي 4 طلاب حضوريين بأكوادهم</button>
+        <div className="exhint">اثنين عندهم الامتحان هسه، واحد جاي بغير وقته، وواحد ما عنده امتحان اليوم. كل واحد كوده ثابت مثل الطالب الحقيقي.</div>
+        {!!codes?.length && (
+          <div className="adtop" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
+            {codes.map((x) => (
+              <div key={x.k} className="exhint" style={{ textAlign: "center", border: "1px solid #d4a63a", borderRadius: 12, padding: 8 }}>
+                <b>طالب حضوري تجريبي {x.k}</b>
+                <div>{x.kind === "now" ? "✅ عنده امتحان هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : "🚫 ما عنده امتحان اليوم"}</div>
+                <img src={x.img} alt={`كود الطالب ${x.k}`} style={{ width: "100%", maxWidth: 220, background: "#fff", borderRadius: 8, marginTop: 6 }} />
+              </div>
+            ))}
+          </div>
+        )}
         {code && (
           <div className="exhint adtop" style={{ textAlign: "center" }}>
             <b>🎫 كود حضور الطالب {code.k}</b>

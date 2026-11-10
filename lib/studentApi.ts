@@ -11,7 +11,7 @@ import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
-import { TEST_STUDENTS, addTestPaper, addTestStudent, deleteTests, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
+import { TEST_STUDENTS, addTestPaper, addTestStudent, deleteTests, makeInPersonSet, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
 import { fileToken, homeToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { studentFile } from "./studentFile.ts";
@@ -124,6 +124,7 @@ export async function studentAction(body: Row) {
   const id = Number(body.id);
   let notice = "";
   let tryCode: { k: number; img: string } | undefined;
+  let tryCodes: { k: number; kind: string; img: string }[] | undefined;
   if (a === "save") {
     const old = await student(id);
     need(old, "الطالب غير موجود");
@@ -197,6 +198,11 @@ export async function studentAction(body: Row) {
     // كود حضوره مثل كود الطالب الحقيقي: يطلع على الشاشة، وكاميرا جهاز الحضور تقراه
     tryCode = { k, img: await QRCode.toDataURL(studentCode(-k), { margin: 2, width: 320 }) };
     notice = `🎫 طالب حضوري تجريبي ${k} جاهز${body.late ? "، وموعده بعد 3 ساعات" : ""}. اكتب الرقم ${k} بالمحطة أو بصفحة 🎫 الحضوري`;
+  } else if (a === "tryInPersonSet") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const list = await makeInPersonSet(Number(body.center), Number(body.vid));
+    tryCodes = await Promise.all(list.map(async (x) => ({ ...x, img: await QRCode.toDataURL(studentCode(-x.k), { margin: 2, width: 320 }) })));
+    notice = `👥 جاهزين ${list.length} طلاب حضوريين. وجه كاميرا 🎫 الحضوري على كود كل واحد`;
   } else if (a === "tryExam") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     await startTestExam(Number(body.sid), Number(body.vid));
@@ -222,5 +228,5 @@ export async function studentAction(body: Row) {
     await logActivity(id, "👨‍👧 الإدارة فكت ربط ولي الأمر");
     notice = "✅ انفك الربط. الطالب يگدر يدز الرابط لولي أمر ثاني";
   } else need(a === "list", "أمر غير معروف");
-  return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, tryCode };
+  return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, tryCode, tryCodes };
 }

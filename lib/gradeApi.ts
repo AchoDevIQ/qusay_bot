@@ -290,6 +290,27 @@ export async function startInPersonTest(centerId: number, vid: number, late = fa
   await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: late ? addMinutes(stamp(), 180) : stamp(), status: "waiting", version_id: vid, notified: "test" });
   return k;
 }
+/** «👥 4 طلاب حضوريين»: أربع طلاب تجربة بالمركز، كل واحد بحالة: بوقته، بوقته، بغير وقته، وما عنده امتحان اليوم.
+ *  كل طالب إله كود حضور ثابت، فتقراه كاميرا الحضور وتشوف شنو يصير. نفس الطلاب يرجعون ينستعملون إذا انعاد */
+export const SET_KINDS = ["now", "now", "late", "none"] as const;
+export async function makeInPersonSet(centerId: number, vid: number) {
+  need(await one("centers", { id: centerId }), "اختار المركز");
+  const v = await one("bank_versions", { id: vid });
+  need(v, "اختار الامتحان");
+  const mine = (await find("students")).filter((x) => x.user_id < 0 && x.exam === "حضوري" && x.center_id === centerId).map((x) => -x.user_id as number).sort((a, b) => a - b);
+  const out: { k: number; kind: (typeof SET_KINDS)[number] }[] = [];
+  for (const [i, kind] of SET_KINDS.entries()) {
+    let k = mine[i];
+    if (!k) { k = await addTestStudent(); await update("students", { user_id: -k }, { exam: "حضوري", center_id: centerId, name: `طالب حضوري تجريبي ${k}` }); }
+    for (const old of await find("sched_items", { user_id: -k, exam_id: v!.exam_id })) {
+      for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: old.id });
+      await remove("sched_items", { id: old.id });
+    }
+    if (kind !== "none") await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: kind === "late" ? addMinutes(stamp(), 180) : stamp(), status: "waiting", version_id: vid, notified: "test" });
+    out.push({ k, kind });
+  }
+  return out;
+}
 /** «📝 امتحن بنفسك»: صاحب البوت يدخل امتحان حي باسم طالب تجربة: الأسئلة، القسم، الكاميرا، التسليم، مثل الطالب بالضبط.
  *  ورقة نفس الطالب القديمة بنفس الامتحان تنشال، فيگدر يعيد التجربة */
 export async function startTestExam(sid: number, vid: number) {
