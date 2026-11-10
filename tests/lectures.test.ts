@@ -59,3 +59,14 @@ test("جدول الطالب: المحاضرات قبل امتحانها، وال
   await insert("orders", { user_id: 60, items: JSON.stringify([{ name: "محاضرات الفصل الثاني" }]), created: "2026-01-02 00:00:00", printed: 0 });
   assert.equal((await info()).appLink, "https://app.example/lectures");
 });
+
+test("رقم المحاضرة يصير جزء من عنوان الامتحان، ومحاضراته تنقرا منه مثل قبل", async () => {
+  const { lectureTitle } = await import("../lib/examBank.ts");
+  assert.equal(lectureTitle("قبل x & y", "المحاضرة (1 & 2)  ·  الوقت: ساعة"), "قبل x & y المحاضرة (1 & 2)");
+  assert.equal(lectureTitle("ديموافر", "المحاضرة (3)  ·  الوقت: ساعة وربع"), "ديموافر المحاضرة (3)");
+  assert.equal(lectureTitle("قبل x & y", "الوقت: ساعة وربع"), "قبل x & y");
+  assert.equal(lectureTitle("نصف السنة", "Mid-Year Exam"), "نصف السنة");
+  assert.equal(lectureTitle("قبل x & y المحاضرة (1 & 2)", "المحاضرة (1 & 2)"), "قبل x & y المحاضرة (1 & 2)");
+  assert.deepEqual(guessLectures("قبل x & y المحاضرة (1 & 2)", ""), ["قبل x & y: المحاضرة 1", "قبل x & y: المحاضرة 2"]);
+  assert.deepEqual(guessLectures("قبل x & y المحاضرة (1 & 2)", ""), guessLectures("قبل x & y", "المحاضرة (1 & 2)"));
+});

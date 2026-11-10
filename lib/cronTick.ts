@@ -13,6 +13,7 @@ import { examQueueTick } from "./qaBank.ts";
 import { ADMIN_IDS } from "./config.ts";
 import { finishByAi, paperName, aiObjectionsTick } from "./gradeApi.ts";
 import { schedSettings } from "./schedApi.ts";
+import { fixLectureTitles } from "./examBank.ts";
 import { ApiError, ensure } from "./webApi.ts";
 import { cronKey } from "./webAuth.ts";
 
@@ -37,6 +38,7 @@ export async function cronTick(key: unknown) {
     await step("sessions", () => sweepSessions());
     await step("signups", () => sweepSignups());
     await step("birthdays", () => sweepBirthdays());
+    await step("lectureTitles", () => fixLectureTitles());
   } finally {
     await kvSet(LOCK, "0");
   }

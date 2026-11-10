@@ -1,7 +1,7 @@
 // بنك الامتحانات: كل امتحان بنسخه وأسئلته وأجوبته المقصوصة، وتعديلها من الإدارة
 // الملفات داخل data/content (ما تنرفع على GitHub)، وتنضاف بـ npm run load-exams
 import path from "node:path";
-import { count, find, insert, maxOf, one, remove, setSession, tx, update, type Row } from "./db.ts";
+import { count, find, insert, kvGet, kvSet, maxOf, one, remove, setSession, tx, update, type Row } from "./db.ts";
 import { can } from "./data.ts";
 import { files } from "./files.ts";
 import { flowKb } from "./keyboards.ts";
@@ -51,7 +51,7 @@ export async function loadCatalog(catalog: Row) {
       if (!old.manual && !keepOrds.includes(old.ord) && !await one("bank_versions", { exam_id: old.id })) await remove("bank_exams", { id: old.id });
     }
     for (const ex of catalog.exams) {
-      const examFields = { chapter: catalog.chapter, title: ex.title, info: ex.info ?? "" };
+      const examFields = { chapter: catalog.chapter, title: lectureTitle(ex.title, ex.info), info: ex.info ?? "" };
       const oldExam = await one("bank_exams", { slug: catalog.slug, ord: ex.ord });
       if (oldExam) await update("bank_exams", { id: oldExam.id }, examFields);
       const examId: number = oldExam ? oldExam.id : await insert("bank_exams", { slug: catalog.slug, ord: ex.ord, minutes: ex.minutes, ...examFields });
@@ -115,12 +115,31 @@ async function chapterView(i: number): Promise<[string, Kb]> {
   const versions = await find("bank_versions");
   const kb: Kb = (await find("bank_exams", { slug: c.slug })).sort((a, b) => (a.pos ?? a.ord) - (b.pos ?? b.ord)).map((e) => {
     const vs = versions.filter((v) => v.exam_id === e.id);
-    return [btn(`${vs.some((v) => !v.ok) ? "⚠️ " : ""}${e.ord}) ${cut(`${e.title} ${lectureOf(e.info)}`, 40)} · ${vs.length} نسخ`, `a:exe:${e.id}`)];
+    return [btn(`${vs.some((v) => !v.ok) ? "⚠️ " : ""}${e.ord}) ${cut(`${e.title} ${lectureOf(e.info, e.title)}`, 40)} · ${vs.length} نسخ`, `a:exe:${e.id}`)];
   });
   kb.push([btn("➕ امتحان جديد", `a:exna:${i}`)], [btn("⬅️ رجوع", "a:ex")]);
   return [`<b>📚 ${esc(c.chapter)}</b>\n⚠️ يعني بيها نسخة ناقصة، وما تنعطى للطلاب لحد ما تتصلح.`, kb];
 }
-const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info ?? "")?.[0] ?? "";
+const lectureOf = (info: string, title = "") => (/المحاضرة|محاضرة/.test(title) ? "" : /\(([\d\s&]+)\)/.exec(info ?? "")?.[0] ?? "");
+/** امتحانات نفس الموضوع إلها نفس العنوان («قبل x & y»)، ورقم المحاضرة بالمعلومات. يصير جزء من العنوان حتى يبين بكل مكان:
+ *  «قبل x & y المحاضرة (1 & 2)» */
+export function lectureTitle(title: string, info?: string) {
+  const t = String(title ?? "").trim();
+  const n = /\(([\d\s&]+)\)/.exec(String(info ?? ""))?.[1]?.trim();
+  if (!n || /المحاضرة|محاضرة/.test(t) || /\(\s*\d/.test(t)) return t;
+  return `${t} المحاضرة (${n})`;
+}
+/** مرة وحدة: الامتحانات الموجودة تاخذ رقم محاضرتها بعنوانها */
+export async function fixLectureTitles() {
+  if (await kvGet("lecture_titles_v1")) return 0;
+  let n = 0;
+  for (const e of await find("bank_exams")) {
+    const t = lectureTitle(String(e.title ?? ""), e.info);
+    if (t !== e.title) { await update("bank_exams", { id: e.id }, { title: t }); n++; }
+  }
+  await kvSet("lecture_titles_v1", "1");
+  return n;
+}
 async function examView(id: number): Promise<[string, Kb]> {
   const e = await one("bank_exams", { id });
   if (!e) return await homeView();
@@ -132,7 +151,7 @@ async function examView(id: number): Promise<[string, Kb]> {
   kb.push([btn("🗑 حذف الامتحان كله", `a:exde:${id}`)]);
   const ci = (await chaptersList()).findIndex((c) => c.slug === e.slug);
   kb.push([btn("⬅️ رجوع", `a:exh:${ci}`)]);
-  return [`<b>${esc(e.title)} ${esc(lectureOf(e.info))}</b>\n🕓 وقت الحل: <b>${fmtMinutes(e.minutes)}</b>\n📌 إجباري: ${count("mandatory")} · 🎯 اختياري: ${count("optional")}\n\nاضغط النسخة حتى تشوفها أو تعدلها.`, kb];
+  return [`<b>${esc(e.title)} ${esc(lectureOf(e.info, e.title))}</b>\n🕓 وقت الحل: <b>${fmtMinutes(e.minutes)}</b>\n📌 إجباري: ${count("mandatory")} · 🎯 اختياري: ${count("optional")}\n\nاضغط النسخة حتى تشوفها أو تعدلها.`, kb];
 }
 async function versionView(id: number): Promise<[string, Kb]> {
   const v = await one("bank_versions", { id });
@@ -141,7 +160,7 @@ async function versionView(id: number): Promise<[string, Kb]> {
   const qs = await find("bank_questions", { version_id: id }, { order: ["n"] });
   const total = qs.reduce((s, q) => s + q.max_mark, 0);
   const issues: string[] = JSON.parse(v.issues || "[]");
-  const lines = [`<b>${esc(e.title)} ${esc(lectureOf(e.info))} · نسخة ${esc(v.model)}</b>`, `النوع: ${KIND_LABEL[v.kind]}`, `مجموع الدرجات: <b>${total}</b>`];
+  const lines = [`<b>${esc(e.title)} ${esc(lectureOf(e.info, e.title))} · نسخة ${esc(v.model)}</b>`, `النوع: ${KIND_LABEL[v.kind]}`, `مجموع الدرجات: <b>${total}</b>`];
   if (issues.length) lines.push("", "⚠️ <b>نواقص:</b>", ...issues.map((x) => "• " + esc(x.replace(/^.*?نسخة \S+:\s*/, ""))));
   const kb: Kb = qs.map((q) => [btn(`س ${q.n} · ${q.max_mark} درجة${q.edited ? " ✏️" : ""}`, `a:exq:${q.id}`)]);
   kb.push([btn("➕ إضافة سؤال", `a:exnq:${id}`)]);
