@@ -207,7 +207,8 @@ function mergeHolidays<T extends { id: number; exam: number; from: string; to: s
     if (!same) { out.push({ ...r, ids: [r.id] }); continue; }
     same.ids.push(r.id);
     if (r.to > same.to) same.to = r.to;
-    if (r.reason) same.reason = r.reason;
+    // كل عطلة بسببها: «استعداد للفاينل، عيد»
+    if (r.reason && !same.reason.split("، ").includes(r.reason)) same.reason = same.reason ? `${same.reason}، ${r.reason}` : r.reason;
   }
   return out;
 }

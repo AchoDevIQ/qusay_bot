@@ -228,7 +228,7 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
                   ))}
                 </div>
                 {!r.date && <small className="exhint">حط تاريخه حتى تطلع أوقاته وتختار نسخها.</small>}
-                {r.date && !(r.hols ?? []).length && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => holiday(r.exam)}>🏖 عطلة قبله</button>}
+                {r.date && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => holiday(r.exam)}>🏖 عطلة قبله</button>}
                 {r.date && !times.length && <small className="exbad">هذا اليوم ما إله أوقات بـ ⏰ الأيام وأوقاتها.</small>}
               </div>
               </Fragment>
