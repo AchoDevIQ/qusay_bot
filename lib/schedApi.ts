@@ -663,6 +663,96 @@ const dayList = (raw: unknown) => {
   need(list.every(validDay), "اكتب الأيام المستثناة بهذا الشكل: 2027-01-25");
   return [...new Set(list)].sort();
 };
+// ---------- عطلة نصف السنة بالجدول العام: الامتحانات اللي داخلها تطلع لبعدها، واللي بعدها تزحف وياها بنفس الترتيب والفراغات
+const MID_KEY = "midyear_shift";
+type MidPlace = { center: number; moved: { exam: number; day: string; to: string; versions: string; toVersions: string }[]; hols: HolMove[] };
+type MidShift = { from: string; to: string; places: MidPlace[] };
+async function midShift(): Promise<MidShift | null> {
+  try { const j = JSON.parse(await kvGet(MID_KEY) ?? "null"); return j && Array.isArray(j.places) ? j : null; } catch { return null; }
+}
+const midRange = (s: SchedSettings): Range | null => (s.holidayStart && s.holidayDays > 0 ? { from: s.holidayStart, to: addDays(s.holidayStart, s.holidayDays - 1) } : null);
+/** ترجع المواعيد اللي زحفتها العطلة القديمة، بس اللي بعدها بمكانها (اللي تغير باليد يبقى) */
+async function undoMidyear(m: MidShift) {
+  const list = await holidays();
+  for (const p of m.places) {
+    const slots = await placeSlots(p.center);
+    const timesOf = (d: string) => slots.filter((t) => t.d === weekdayOf(d)).map((t) => t.t).sort();
+    for (const x of p.moved) {
+      const cur = await one("place_dates", { center_id: p.center, exam_id: x.exam });
+      if (cur?.day !== x.to) continue;
+      const versions = cur.versions === x.toVersions ? x.versions : JSON.stringify(remapByOrder(JSON.parse(cur.versions || "{}"), timesOf(x.to), timesOf(x.day)));
+      await put("place_dates", { center_id: p.center, exam_id: x.exam, day: x.day, versions });
+    }
+    for (const m2 of p.hols) {
+      const r = list.find((h) => h.id === m2.id)?.places.find((y) => y.center === p.center);
+      if (r && r.from === m2.toFrom && r.to === m2.toTo) { r.from = m2.from; r.to = m2.to; }
+    }
+  }
+  await saveHolidays(list);
+}
+/** كل مكان: من أول امتحان داخل العطلة، كل يوم امتحان ياخذ يوم الامتحان الصالح اللي بنفس ترتيبه بس برا العطلة.
+ *  يعني اللي داخل العطلة يطلع لأول أيام بعدها، واللي بعدها يزحف بعدد أيام الامتحان اللي راحت، والفراغات تبقى مثل ما هي */
+async function applyMidyear(range: Range, s: SchedSettings): Promise<MidPlace[]> {
+  const list = await holidays();
+  const out: MidPlace[] = [];
+  const centers = [...new Set((await find("place_dates")).map((r) => r.center_id as number))];
+  for (const center of centers) {
+    const rows = await find("place_dates", { center_id: center });
+    const first = rows.map((r) => String(r.day)).filter((d) => inRange(d, range)).sort()[0];
+    if (!first) continue;
+    const slots = await placeSlots(center);
+    const weekdays = new Set(slots.map((t) => t.d));
+    const mine = list.filter((h) => !h.insert).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ h, p })));
+    // اليوم الصالح للامتحان: من أيام المكان، مو مستثنى، ومو بعطلة ثابتة قبل أول امتحان داخل العطلة
+    const valid = (d: string) => weekdays.has(weekdayOf(d)) && !s.excluded.includes(d) && !mine.some(({ p }) => p.from < first && inRange(d, p));
+    const lastDay = [...rows.map((r) => String(r.day)), ...mine.map(({ p }) => p.to)].sort().at(-1) ?? first;
+    const inside: string[] = [], outside: string[] = [];
+    const pos = new Map<string, number>();
+    for (let d = first, guard = 0; guard < 5000 && (d <= lastDay || outside.length < inside.length + 1); d = addDays(d, 1), guard++) {
+      if (valid(d)) { inside.push(d); if (!inRange(d, range)) outside.push(d); }
+      pos.set(d, inside.length);
+    }
+    // يكمل أيام برا العطلة لحد ما يكفي لآخر يوم
+    for (let d = addDays(outside.at(-1) ?? lastDay, 1), guard = 0; outside.length < inside.length && guard < 5000; d = addDays(d, 1), guard++) if (valid(d) && !inRange(d, range)) outside.push(d);
+    const target = (d: string) => { const n = Math.max(1, pos.get(d) ?? inside.length); return outside[n - 1] ?? d; };
+    const timesOf = (d: string) => slots.filter((t) => t.d === weekdayOf(d)).map((t) => t.t).sort();
+    const moved: MidPlace["moved"] = [];
+    for (const r of rows.filter((x) => String(x.day) >= first).sort((a, b) => String(a.day).localeCompare(String(b.day)))) {
+      const to = target(String(r.day));
+      if (to === r.day) continue;
+      const toVersions = JSON.stringify(remapByOrder(JSON.parse(r.versions || "{}"), timesOf(r.day), timesOf(to)));
+      moved.push({ exam: r.exam_id as number, day: r.day as string, to, versions: String(r.versions || "{}"), toVersions });
+    }
+    const hols: HolMove[] = mine.filter(({ p }) => p.from >= first).map(({ h, p }) => ({ id: h.id, from: p.from, to: p.to, toFrom: target(p.from), toTo: target(p.to) })).filter((m) => m.toFrom !== m.from || m.toTo !== m.to);
+    await tx(async () => { for (const m of moved) await put("place_dates", { center_id: center, exam_id: m.exam, day: m.to, versions: m.toVersions }); });
+    for (const m of hols) {
+      const r = list.find((h) => h.id === m.id)?.places.find((y) => y.center === center);
+      if (r) { r.from = m.toFrom; r.to = m.toTo; }
+    }
+    if (moved.length || hols.length) out.push({ center, moved, hols });
+  }
+  await saveHolidays(list);
+  return out;
+}
+/** انحفظت عطلة نصف السنة: العطلة القديمة ترجع مواعيدها، والجديدة تطلع الامتحانات منها. يرجع عدد الأماكن اللي تغيرت */
+async function syncMidyear(s: SchedSettings) {
+  const range = midRange(s);
+  const old = await midShift();
+  const changed = new Set<number>();
+  if (old && (!range || old.from !== range.from || old.to !== range.to)) {
+    await undoMidyear(old);
+    old.places.forEach((p) => changed.add(p.center));
+    await kvSet(MID_KEY, JSON.stringify(null));
+  }
+  if (range) {
+    const keep = old && old.from === range.from && old.to === range.to ? old.places : [];
+    const places = await applyMidyear(range, s);
+    places.forEach((p) => changed.add(p.center));
+    await kvSet(MID_KEY, JSON.stringify({ ...range, places: [...keep, ...places] }));
+  }
+  for (const c of changed) await tellPlace(c);
+  return changed.size;
+}
 /** تغيرت العطلة: كل الجداول تنعاد من باجر، وكل طالب يوصله الخبر */
 async function rebuildAll(s: SchedSettings) {
   let moved = 0, stuck = 0;
@@ -711,6 +801,9 @@ export async function schedAdminAction(body: Row) {
     };
     await kvSet("sched_settings", JSON.stringify(next));
     notice = "✅ انحفظت الإعدادات";
+    // الجدول العام: امتحانات المكان اللي داخل عطلة نصف السنة تطلع لبعدها، والباقي يزحف
+    const places = await syncMidyear(next);
+    if (places) notice += `. زحفت مواعيد ${places} مكان بسبب عطلة نصف السنة`;
     const days = (x: SchedSettings) => JSON.stringify([x.holidayStart, x.holidayDays, x.excluded]);
     if (days(old) !== days(next)) {
       const r = await rebuildAll(next);

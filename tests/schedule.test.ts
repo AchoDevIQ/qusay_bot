@@ -924,3 +924,32 @@ test("🏖 عطلة الطالب الخاص: يختارها وهو يرتب، و
   await schedAdminAction({ action: "holReqNo", uid: 141, initData: admin });
   assert.equal((await act(141, "info")).schedule.hol.from, h1);
 });
+
+test("🏖 عطلة نصف السنة بالجدول العام: اللي داخلها يطلع لبعدها، واللي بعده يزحف ويا الفراغ، وتغييرها أو شيلها يرجعها", async () => {
+  const admin = sign(1);
+  const { kvGet } = await import("../lib/db.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "نصف السنة" });
+  const c = await insert("centers", { area_id: area, name: "مركز نصف السنة", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }, { d: 2, t: "16:00" }], initData: admin });   // أحد وأربعاء
+  const [a, b, cc, d] = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => x.ord - y.ord);
+  const sun1 = addDays(nextWeekday(6), 21), wed1 = addDays(sun1, 3), sun2 = addDays(sun1, 7), wed2 = addDays(sun1, 10), sun3 = addDays(sun1, 14), wed3 = addDays(sun1, 17), sun4 = addDays(sun1, 21);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: a.id, date: sun1 }, { exam: b.id, date: wed1 }, { exam: cc.id, date: sun2 }, { exam: d.id, date: wed2 }], initData: admin });
+  await schedAdminAction({ action: "holidayAdd", center: c, exam: d.id, days: 1, scope: "place", initData: admin });   // فراغ بالأربعاء الثاني، والامتحان d للأحد الثالث
+  const day = async (e: number) => (await find("place_dates", { center_id: c, exam_id: e }))[0].day;
+  const hol = async () => (JSON.parse(await kvGet("exam_holidays") ?? "[]") as any[]).filter((h) => h.exam === d.id).map((h) => h.places.find((p: any) => p.center === c)?.from).filter(Boolean);
+  const save = (holidayStart: string, holidayDays: number) => schedAdminAction({ action: "save", initData: admin, window: 15, extra: 15, perDay: 2, gap: 30, holidayStart, holidayDays, excluded: "" }) as Promise<any>;
+  assert.deepEqual([await day(a.id), await day(b.id), await day(cc.id), await hol(), await day(d.id)], [sun1, wed1, sun2, [wed2], sun3]);
+  // العطلة من الأربعاء الأول للأحد الثاني (5 أيام): الاثنين داخلها يطلعون، والفراغ والامتحان d يزحفون وراهم
+  const r = await save(wed1, 5);
+  assert.match(r.notice, /بسبب عطلة نصف السنة/);
+  assert.deepEqual([await day(a.id), await day(b.id), await day(cc.id), await hol(), await day(d.id)], [sun1, wed2, sun3, [wed3], sun4]);
+  // حفظ مرة ثانية بنفس العطلة: ما يزحف شي بعد
+  await save(wed1, 5);
+  assert.deepEqual([await day(b.id), await day(d.id)], [wed2, sun4]);
+  // العطلة تصير يوم واحد: ترجع القديمة، وتنطبق الجديدة
+  await save(wed1, 1);
+  assert.deepEqual([await day(a.id), await day(b.id), await day(cc.id), await hol(), await day(d.id)], [sun1, sun2, wed2, [sun3], wed3]);
+  // شيل العطلة: كلشي يرجع
+  await save("", 0);
+  assert.deepEqual([await day(a.id), await day(b.id), await day(cc.id), await hol(), await day(d.id)], [sun1, wed1, sun2, [wed2], sun3]);
+});
