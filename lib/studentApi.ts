@@ -19,6 +19,8 @@ import { aiWhyNot } from "./aiGrade.ts";
 import { guardianState, whatsappOf } from "./guardianWatch.ts";
 import { moveExam, retakeExam } from "./examMoves.ts";
 import { prettyAt } from "./scheduleRules.ts";
+import { studentCode } from "./inPerson.ts";
+import QRCode from "qrcode";
 import { resetSchedule, setPerDay, studentSchedule } from "./schedApi.ts";
 import { authed, intOf, need } from "./webApi.ts";
 
@@ -121,6 +123,7 @@ export async function studentAction(body: Row) {
   const a = String(body.action ?? "");
   const id = Number(body.id);
   let notice = "";
+  let tryCode: { k: number; img: string } | undefined;
   if (a === "save") {
     const old = await student(id);
     need(old, "الطالب غير موجود");
@@ -191,6 +194,8 @@ export async function studentAction(body: Row) {
   } else if (a === "tryInPerson") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     const k = await startInPersonTest(Number(body.center), Number(body.vid), !!body.late);
+    // كود حضوره مثل كود الطالب الحقيقي: يطلع على الشاشة، وكاميرا جهاز الحضور تقراه
+    tryCode = { k, img: await QRCode.toDataURL(studentCode(-k), { margin: 2, width: 320 }) };
     notice = `🎫 طالب حضوري تجريبي ${k} جاهز${body.late ? "، وموعده بعد 3 ساعات" : ""}. اكتب الرقم ${k} بالمحطة أو بصفحة 🎫 الحضوري`;
   } else if (a === "tryExam") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
@@ -217,5 +222,5 @@ export async function studentAction(body: Row) {
     await logActivity(id, "👨‍👧 الإدارة فكت ربط ولي الأمر");
     notice = "✅ انفك الربط. الطالب يگدر يدز الرابط لولي أمر ثاني";
   } else need(a === "list", "أمر غير معروف");
-  return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice };
+  return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, tryCode };
 }

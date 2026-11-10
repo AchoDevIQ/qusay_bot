@@ -12,7 +12,7 @@ type TestStudent = { id: number; name: string; papers: number; graded: number; l
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
-type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
+type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -65,7 +65,7 @@ export default function StudentsClient() {
         {data && s && (
           <>
             {data.tests && <TestStudents tests={data.tests} busy={busy} act={act} />}
-            {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} />}
+            {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} code={data.tryCode} />}
             {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions} busy={busy} act={act} />}
             {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
             <div className="card">
@@ -396,7 +396,7 @@ async function shrink(f: File): Promise<Blob> {
 }
 
 /** طالب حضوري تجريبي بمركز، وامتحانه اليوم، حتى تنجرب قراءة الحضور وطباعة الليبل بدون حساب ثاني */
-function InPersonTry({ areas, versions, busy, act }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown }) {
+function InPersonTry({ areas, versions, busy, act, code }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown; code?: { k: number; img: string } }) {
   const centers = areas.flatMap((a) => a.centers.map((c) => ({ id: c.id, name: `${c.name} (${a.name})` })));
   const [center, setCenter] = useState(0);
   const [late, setLate] = useState(false);
@@ -432,6 +432,13 @@ function InPersonTry({ areas, versions, busy, act }: { areas: Data["areas"]; ver
           <button type="button" className={late ? "on" : ""} onClick={() => setLate(true)}>⏰ بغير وقته</button>
         </div>
         <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPerson", center, vid, late })}>🎫 سوي الطالب وامتحان اليوم</button>
+        {code && (
+          <div className="exhint adtop" style={{ textAlign: "center" }}>
+            <b>🎫 كود حضور الطالب {code.k}</b>
+            <div>وجه كاميرا جهاز الحضور على هذا الكود، مثل ما يطلّع الطالب كوده من تلفونه.</div>
+            <img src={code.img} alt="كود الحضور" style={{ width: 240, maxWidth: "100%", background: "#fff", borderRadius: 12, marginTop: 8 }} />
+          </div>
+        )}
       </div>
     </div>
   );
