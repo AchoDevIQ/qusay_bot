@@ -12,7 +12,7 @@ const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; inserted?: number; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
-type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[] };
+type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holReqs?: { uid: number; name: string; want: string; now: string; at: string }[] };
 type Hol = { id: number; title: string; days: number; reason: string; places: string[]; students: number };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
@@ -119,6 +119,22 @@ function Place({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
         <div className="exhint">{d.students} طالب ويا الطلاب بهذا المكان. كل طالب يختار وقت لكل يوم بكيفه.</div>
         <Slots key={`${d.center}|${JSON.stringify(d.slots)}`} d={d} busy={busy} act={act} />
         <Dates key={`${d.center}|${JSON.stringify(d.rows)}|${JSON.stringify(d.slots)}`} d={d} busy={busy} act={act} />
+        {!!d.holReqs?.length && (
+          <div className="card expad">
+            <div className="exlabel">🏖 طلبات تغيير العطلة ({d.holReqs.length})</div>
+            <div className="exhint">طلاب الجدول الخاص يطلبون يغيرون عطلتهم. إذا وافقت، جدول الطالب ينعاد من باجر.</div>
+            {d.holReqs.map((r) => (
+              <div key={r.uid} className="cpexam">
+                <b>{r.name}</b>
+                <div className="exhint">هسه: {r.now}<br />يريد: <b>{r.want}</b></div>
+                <div className="atrow">
+                  <button type="button" className="btn" disabled={busy} onClick={() => void act({ action: "holReqOk", uid: r.uid })}>✅ وافق</button>
+                  <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "holReqNo", uid: r.uid })}>❌ ارفض</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <Holidays d={d} busy={busy} act={act} />
       </div>
     </div>

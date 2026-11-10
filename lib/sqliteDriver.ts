@@ -93,6 +93,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS company_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, from_id INTEGER, to_id INTEGER, n INTEGER, gross INTEGER, fees INTEGER, net INTEGER, created TEXT);
   `);
   await addColumn("orders", "curr", "TEXT");
+  await addColumn("schedules", "hol", "TEXT");
   await addColumn("settlements", "parts", "TEXT");
   await addColumn("company_settlements", "parts", "TEXT");
   await addColumn("grader_settlements", "forgiven", "INTEGER");

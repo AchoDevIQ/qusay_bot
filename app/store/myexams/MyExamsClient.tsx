@@ -15,8 +15,8 @@ type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; w
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
   appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
-  name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null } | null; items: Item[]; holidays: Hol[]; gap: number;
-  today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null;
+  name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; gap: number;
+  today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
 type Hol = { id: number; ids: number[]; from: string; to: string; title: string; reason: string; cancel: boolean; kept?: boolean };
@@ -90,6 +90,7 @@ export default function MyExamsClient() {
         {info && info.late.length > 0 && <LateAsk info={info} busy={busy} call={call} />}
         {info?.needsChoice && <Choice info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
+        {info && info.mode !== "general" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} />}
@@ -174,6 +175,46 @@ function Choice({ info, busy, call }: { info: Info; busy: boolean; call: (b: Rec
   );
 }
 
+/** عطلة الطالب الخاص: يشوفها، ويطلب يغيرها، والإدارة توافق */
+function MyHoliday({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+  const cur = info.schedule?.hol ?? (info.holiday ? { from: info.holiday.start, to: addDays(info.holiday.start, info.holiday.days - 1) } : { from: "", to: "" });
+  const [edit, setEdit] = useState(false);
+  const [from, setFrom] = useState(cur.from);
+  const [to, setTo] = useState(cur.to);
+  const show = (h: { from: string; to: string }) => (h.from && h.to ? `من ${prettyDay(h.from)} إلى ${prettyDay(h.to)}` : "بدون عطلة");
+  const ok = (!from && !to) || (!!from && !!to && to >= from);
+  return (
+    <div className="card">
+      <h2>🏖 عطلتك</h2>
+      <div className="form">
+        <div className="hint">{show(cur)}</div>
+        {info.holReq ? (
+          <>
+            <div className="warn locked">⏳ طلبت تغييرها: {show(info.holReq)}. ينتظر موافقة الإدارة.</div>
+            <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void call({ action: "holRequestCancel" })}>إلغاء الطلب</button>
+          </>
+        ) : !edit ? (
+          <button type="button" className="exbtn adtop" onClick={() => setEdit(true)}>✏️ أريد أغير عطلتي</button>
+        ) : (
+          <>
+            <label>من</label>
+            <DateInput label="عطلتي من" min={info.minStart} value={from} placeholder="بدون عطلة" onChange={setFrom} />
+            <label>إلى</label>
+            <DateInput label="عطلتي إلى" min={from || info.minStart} value={to} placeholder="بدون عطلة" onChange={setTo} />
+            {!ok && <div className="hint exbad">اختار «من» و«إلى»، و«إلى» بعد «من».</div>}
+            <div className="hint">التغيير يحتاج موافقة الإدارة، وبعدها جدولك ينعاد من باجر.</div>
+            <div className="atrow">
+              <button type="button" className="btn agbtn" disabled={busy || !ok} onClick={() => void call({ action: "holRequest", holFrom: from, holTo: to }).then((r) => { if (r) setEdit(false); })}>📨 أرسل الطلب</button>
+              <button type="button" className="exbtn" onClick={() => { setFrom(""); setTo(""); }}>بدون عطلة</button>
+              <button type="button" className="exbtn" onClick={() => setEdit(false)}>رجوع</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
   const old = info.schedule;
   // الحضوري: أيام مركزه وأوقاته بس. الإلكتروني: أي يوم، ومن ساعات الإدارة
@@ -189,11 +230,16 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
   const [perDay, setPerDayTimes] = useState<Record<string, string[]>>(old?.times ?? {});
   const [same, setSame] = useState<string[]>(() => (old?.times ? Object.values(old.times)[0] ?? [] : old ? [`${String(old.hour).padStart(2, "0")}:00`] : []));
   const [shown, setShown] = useState<Preview | null>(null);
+  // عطلته: تبدي بعطلة نصف السنة مال الإدارة (أو اللي اختارها قبل)، ويغيرها أو يشيلها
+  const adminHol = info.holiday ? { from: info.holiday.start, to: addDays(info.holiday.start, info.holiday.days - 1) } : { from: "", to: "" };
+  const [holFrom, setHolFrom] = useState(old?.hol ? old.hol.from : adminHol.from);
+  const [holTo, setHolTo] = useState(old?.hol ? old.hol.to : adminHol.to);
   const timesOf = (d: number) => (center ? perDay[String(d)] ?? [] : same).filter(Boolean);
   const times = Object.fromEntries(days.map((d) => [String(d), timesOf(d)]));
-  const form = { start, end, weekdays: days, times };
+  const form = { start, end, weekdays: days, times, holFrom, holTo };
   const change = <T,>(fn: (v: T) => void) => (v: T) => { fn(v); setShown(null); };
-  const ready = !!start && !!end && days.length > 0 && days.every((d) => timesOf(d).length > 0);
+  const holOk = (!holFrom && !holTo) || (!!holFrom && !!holTo && holTo >= holFrom);
+  const ready = !!start && !!end && days.length > 0 && days.every((d) => timesOf(d).length > 0) && holOk;
   // اختيار وقت الامتحان رقم n يمسح اللي بعده إذا صار قبله
   const pick = (list: string[], n: number, t: string) => { const out = list.slice(0, n); if (t) out[n] = t; return out; };
   const Picks = ({ list, options, set }: { list: string[]; options: string[]; set: (l: string[]) => void }) => (
@@ -214,11 +260,21 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
       <h2>🗓 {old ? "رتب جدولك من جديد" : "رتب جدول امتحاناتك"}</h2>
       <div className="form">
         <div className="warn locked">عندك <b>{info.remaining}</b> امتحان. {old ? "اشتريت فصل جديد، فانعاد توزيع الامتحانات الباقية." : "اختار المدة والأيام ووقت امتحانك، والبوت يوزعها."} وأكثر شي <b>{info.perDay}</b> باليوم.</div>
-        {info.holiday && <div className="hint">🏖 العطلة من {prettyDay(info.holiday.start)} إلى {prettyDay(addDays(info.holiday.start, info.holiday.days - 1))}، ما بيها امتحانات.</div>}
         <label>تبدي من تاريخ</label>
         <DateInput label="تبدي من تاريخ" min={info.minStart} value={start} onChange={change(setStart)} />
         <label>تخلص بتاريخ{old ? " (تگدر تبقيه أو تغيره)" : ""}</label>
         <DateInput label="تخلص بتاريخ" min={start} value={end} onChange={change(setEnd)} />
+        <label>🏖 عطلتك: من</label>
+        <DateInput label="عطلتك من" value={holFrom} placeholder="بدون عطلة" onChange={change(setHolFrom)} />
+        <label>إلى</label>
+        <DateInput label="عطلتك إلى" min={holFrom} value={holTo} placeholder="بدون عطلة" onChange={change(setHolTo)} />
+        {holFrom && holTo && holTo < holFrom && <div className="hint exbad">«إلى» لازم يكون بعد «من».</div>}
+        {(!!holFrom || !!holTo) && (!holFrom || !holTo) && <div className="hint exbad">اختار «من» و«إلى» هم.</div>}
+        <div className="hint">{holFrom && holTo ? "أيام عطلتك ما بيها امتحانات. " : "ما عندك عطلة: الامتحانات تمشي بدون توقف. "}
+          {(holFrom || holTo)
+            ? <button type="button" className="exbtn" onClick={() => { change(setHolFrom)(""); setHolTo(""); }}>شيل العطلة</button>
+            : info.holiday ? <button type="button" className="exbtn" onClick={() => { change(setHolFrom)(adminHol.from); setHolTo(adminHol.to); }}>رجّع عطلة نصف السنة</button> : null}
+        </div>
         <label>أيام الامتحان بالأسبوع{center ? " (أيام مركزك)" : ""}</label>
         <div className="seg wrap2">
           {allowed.map((d) => (

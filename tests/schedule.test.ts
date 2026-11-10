@@ -894,3 +894,33 @@ test("🏖 عطلة قبل امتحان أبكر: العطلة اللي بعده
   await schedAdminAction({ action: "holidayDel", id: ha.id, initData: admin });
   assert.deepEqual([await day(a.id), await holOf(b.id), await day(b.id), await day(cc.id)], [sun, [wed], sun2, wed2]);
 });
+
+test("🏖 عطلة الطالب الخاص: يختارها وهو يرتب، ويطلب يغيرها، والإدارة توافق أو تغيرها مباشرة", async () => {
+  const admin = sign(1);
+  await student(141);
+  await put("exam_access", { user_id: 141, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  // كل يوم امتحان، والعطلة من اليوم الثالث للسابع
+  const h1 = addDays(todayStr(), 3), h2 = addDays(todayStr(), 7);
+  await assert.rejects(act(141, "preview", form({ holFrom: h2, holTo: h1 })), /بعد بدايتها/);
+  const done = await act(141, "confirm", form({ holFrom: h1, holTo: h2 }));
+  assert.equal(done.schedule.hol.from, h1);
+  const days = (await find("sched_items", { user_id: 141 })).map((i) => String(i.at).slice(0, 10));
+  assert.ok(days.every((d) => d < h1 || d > h2));
+  // يطلب بدون عطلة: ينتظر، وجدوله ما يتغير
+  const req = await act(141, "holRequest", { holFrom: "", holTo: "" });
+  assert.match(req.notice, /ينتظر موافقة/);
+  assert.ok(req.holReq);
+  const list: any = await schedAdminAction({ action: "list", initData: admin });
+  assert.ok(list.holReqs.some((r: any) => r.uid === 141 && /بدون عطلة/.test(r.want)));
+  await schedAdminAction({ action: "holReqOk", uid: 141, initData: admin });
+  assert.equal((await act(141, "info")).holReq, null);
+  assert.deepEqual((await act(141, "info")).schedule.hol, { from: "", to: "" });
+  // الإدارة تغيرها مباشرة من ملف الطالب
+  await studentAction({ action: "schedHol", id: 141, holFrom: h1, holTo: h2, initData: admin });
+  const after = (await find("sched_items", { user_id: 141, status: "waiting" })).map((i) => String(i.at).slice(0, 10));
+  assert.ok(after.every((d) => d < h1 || d > h2));
+  // طلب ينرفض: يبقى مثل ما هو
+  await act(141, "holRequest", { holFrom: "", holTo: "" });
+  await schedAdminAction({ action: "holReqNo", uid: 141, initData: admin });
+  assert.equal((await act(141, "info")).schedule.hol.from, h1);
+});

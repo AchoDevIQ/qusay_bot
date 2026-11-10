@@ -391,7 +391,7 @@ async function studentInfo(uid: number) {
     // الإدارة غيرت الأوقات واللي اختاره راح: يختار من جديد
     repick: general && !picksFit(slots, picksOf(sched!)),
     picks: general ? picksOf(sched!) : null,
-    schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour, times: sched.picks ? JSON.parse(sched.picks) : null } : null,
+    schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour, times: sched.picks ? JSON.parse(sched.picks) : null, hol: holOf(sched.hol) ?? null } : null,
     holidays: await myHolidays(uid, sched), gap: s.gap,
     days: daysView(slots),
     optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
@@ -406,7 +406,48 @@ async function studentInfo(uid: number) {
     items: [...(await itemsView(uid, s)).map((i) => ({ ...i, skippable: !general && !!sched && i.status === "waiting" && !i.optional && i.state === "locked" && skip.has(i.exam) && !kept.has(i.exam) })), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
     week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s), offDays: s.offDays,
     holiday: s.holidayStart && s.holidayDays ? { start: s.holidayStart, days: s.holidayDays } : null,
+    holReq: (await holRequests()).find((r) => r.uid === uid) ?? null,
   };
+}
+/** عطلة الطالب الخاص اللي اختارها هو (من، إلى). فاضية = بدون عطلة. ما محفوظة (جدول قديم) = عطلة نصف السنة مال الإدارة */
+type OwnHol = { from: string; to: string };
+const holOf = (raw: unknown): OwnHol | undefined => { try { const j = JSON.parse(String(raw ?? "")); return j && typeof j === "object" ? { from: String(j.from ?? ""), to: String(j.to ?? "") } : undefined; } catch { return undefined; } };
+function withOwnHol(s: SchedSettings, hol?: OwnHol): SchedSettings {
+  if (!hol) return s;
+  if (!hol.from || !hol.to) return { ...s, holidayStart: "", holidayDays: 0 };
+  let n = 0; for (let d = hol.from; d <= hol.to; d = addDays(d, 1)) n++;
+  return { ...s, holidayStart: hol.from, holidayDays: n };
+}
+/** عطلة من إلى من الصفحة. الاثنين فاضيات = بدون عطلة */
+function holFromBody(body: Row): OwnHol {
+  const from = String(body.holFrom ?? ""), to = String(body.holTo ?? "");
+  if (from || to) {
+    need(validDay(from) && validDay(to), "اختار العطلة من تاريخ إلى تاريخ، أو شيلها");
+    need(to >= from, "نهاية العطلة لازم تكون بعد بدايتها");
+    need(addDays(from, 120) >= to, "العطلة أطول من 120 يوم");
+  }
+  return { from, to };
+}
+const holText = (h?: OwnHol | null) => (h && h.from && h.to ? `من ${prettyDay(h.from)} إلى ${prettyDay(h.to)}` : "بدون عطلة");
+/** طلبات طلاب الجدول الخاص لتغيير عطلتهم: تنتظر موافقة الإدارة */
+const HOL_REQ = "hol_requests";
+type HolReq = OwnHol & { uid: number; at: string };
+async function holRequests(): Promise<HolReq[]> { try { const j = JSON.parse(await kvGet(HOL_REQ) ?? "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
+const saveHolRequests = (l: HolReq[]) => kvSet(HOL_REQ, JSON.stringify(l));
+/** جدول طالب خاص ينعاد من باجر بعطلة جديدة. اللي فات واللي ثابت باليد ما يتحرك */
+export async function setStudentHoliday(uid: number, hol: OwnHol) {
+  const s = await schedSettings();
+  const sc = await one("schedules", { user_id: uid });
+  need(sc && sc.mode !== "general", "هذا الطالب ما عنده جدول خاص");
+  await closeMissed(uid, s);
+  const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
+  const f = { start: addDays(todayStr(), 1), end: sc!.end_day, weekdays: JSON.parse(sc!.weekdays), hour: sc!.hour, times: sc!.picks ? JSON.parse(sc!.picks) as Record<string, string[]> : undefined, hol };
+  const plan = buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: { ...withOwnHol(s, hol), excluded: [...s.excluded, ...await studentHolidayDays(uid)] } });
+  need(left.length === 0 || plan.ok, plan.ok ? "" : `بهذي العطلة ما يكفي الوقت: ${plan.error}`);
+  await saveItems(uid, { ...f, start: sc!.start_day }, plan.ok ? plan.items : []);
+  await saveHolRequests((await holRequests()).filter((r) => r.uid !== uid));
+  await logActivity(uid, `🏖 تغيرت عطلته: ${holText(hol)}`);
+  return holText(hol);
 }
 function formOf(body: Row, minStart: string) {
   const start = body.start, end = body.end;
@@ -428,7 +469,9 @@ function formOf(body: Row, minStart: string) {
     }
   }
   const hour = times ? Number(times[String(weekdays[0])][0].slice(0, 2)) : intOf(body.hour, 0, 23, "اختار الساعة");
-  return { start: start as string, end: end as string, weekdays, hour, times };
+  // عطلته: يختارها هو من إلى، أو يشيلها
+  const hol = body.holFrom !== undefined || body.holTo !== undefined ? holFromBody(body) : undefined;
+  return { start: start as string, end: end as string, weekdays, hour, times, hol };
 }
 async function planFor(uid: number, body: Row) {
   const s = await schedSettings();
@@ -447,12 +490,12 @@ async function planFor(uid: number, body: Row) {
   }
   if (!place.inPerson && f.times) need(Object.values(f.times).flat().every((t) => { const h = Number(t.slice(0, 2)); return h >= s.fromHour && h <= s.toHour; }), `الامتحان يبدي من الساعة ${ampm(`${String(s.fromHour).padStart(2, "0")}:00`)} إلى ${ampm(`${String(s.toHour).padStart(2, "0")}:00`)} بس`);
   const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
-  const settings = { ...s, excluded: [...s.excluded, ...await studentHolidayDays(uid)] };
+  const settings = { ...withOwnHol(s, f.hol), excluded: [...s.excluded, ...await studentHolidayDays(uid)] };
   return { f, left, plan: buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings }) };
 }
-async function saveItems(uid: number, f: Row & { times?: Record<string, string[]> }, items: { examId: number; at: string }[]) {
+async function saveItems(uid: number, f: Row & { times?: Record<string, string[]>; hol?: OwnHol }, items: { examId: number; at: string }[]) {
   await tx(async () => {
-    await put("schedules", { user_id: uid, mode: "private", center_id: null, picks: f.times ? JSON.stringify(f.times) : null, start_day: f.start, end_day: f.end, weekdays: JSON.stringify(f.weekdays), hour: f.hour, created: stamp() });
+    await put("schedules", { user_id: uid, mode: "private", center_id: null, picks: f.times ? JSON.stringify(f.times) : null, start_day: f.start, end_day: f.end, weekdays: JSON.stringify(f.weekdays), hour: f.hour, created: stamp(), hol: f.hol ? JSON.stringify(f.hol) : null });
     await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });
     for (const it of items) await insert("sched_items", { user_id: uid, exam_id: it.examId, at: it.at, status: "waiting" });
   });
@@ -543,6 +586,17 @@ export async function myExamAction(body: Row) {
     else await leaveGroup(id);
     return { ...await studentInfo(id), notice: a === "compCreate" ? "✅ انسوت المجموعة. دز الرابط لأصدقائك" : a === "compJoin" ? "✅ فتت للمجموعة" : "🚪 طلعت من المجموعة" };
   }
+  if (a === "holRequest" || a === "holRequestCancel") {
+    // الطالب الخاص يطلب يغير عطلته بعد ما ثبت جدوله: ينتظر موافقة الإدارة
+    const sc = await one("schedules", { user_id: id });
+    need(sc && sc.mode !== "general", "هذا لطالب الجدول الخاص");
+    const rest = (await holRequests()).filter((r) => r.uid !== id);
+    if (a === "holRequestCancel") { await saveHolRequests(rest); return { ...await studentInfo(id), notice: "انلغى طلبك" }; }
+    const h = holFromBody(body);
+    await saveHolRequests([...rest, { uid: id, ...h, at: stamp() }]);
+    await logActivity(id, `🏖 طلب يغير عطلته: ${holText(h)}`);
+    return { ...await studentInfo(id), notice: "⏳ انرسل طلبك، وينتظر موافقة الإدارة" };
+  }
   if (a === "holidayKeep") {
     // ✅ خليها: العطلة تبقى، والسؤال ما يطلع بعد
     const list = await holidays();
@@ -619,8 +673,8 @@ async function rebuildAll(s: SchedSettings) {
     await closeMissed(uid, s);
     const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
     if (!left.length) continue;
-    const f = { start, end: sc.end_day, weekdays: JSON.parse(sc.weekdays), hour: sc.hour, times: sc.picks ? JSON.parse(sc.picks) as Record<string, string[]> : undefined };
-    const plan = buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: { ...s, excluded: [...s.excluded, ...await studentHolidayDays(uid)] } });
+    const f = { start, end: sc.end_day, weekdays: JSON.parse(sc.weekdays), hour: sc.hour, times: sc.picks ? JSON.parse(sc.picks) as Record<string, string[]> : undefined, hol: holOf(sc.hol) };
+    const plan = buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: { ...withOwnHol(s, f.hol), excluded: [...s.excluded, ...await studentHolidayDays(uid)] } });
     if (plan.ok) {
       await saveItems(uid, f, plan.items);
       await send(uid, "🗓 <b>تغير جدول امتحاناتك</b> بسبب تغيير العطلة. افتح امتحاناتي وشوف المواعيد الجديدة.");
@@ -786,6 +840,19 @@ export async function schedAdminAction(body: Row) {
     h!.reason = String(body.reason ?? "").trim().slice(0, 80);
     await saveHolidays(list);
     notice = h!.reason ? "✅ انحفظ سبب العطلة" : "انشال سبب العطلة";
+  } else if (a === "holReqOk" || a === "holReqNo") {
+    const r = (await holRequests()).find((x) => x.uid === Number(body.uid));
+    need(r, "الطلب غير موجود");
+    if (a === "holReqOk") {
+      const t = await setStudentHoliday(r!.uid, r!);
+      await send(r!.uid, `✅ <b>وافقت الإدارة على عطلتك</b> ${t}، وانعاد جدولك من باجر. افتح امتحاناتي وشوف المواعيد.`);
+      notice = "✅ وافقت، وانعاد جدوله";
+    } else {
+      await saveHolRequests((await holRequests()).filter((x) => x.uid !== r!.uid));
+      await send(r!.uid, "❌ <b>ما وافقت الإدارة على تغيير عطلتك</b>، وجدولك باقي مثل ما هو.");
+      await logActivity(r!.uid, "🏖 انرفض طلب تغيير عطلته");
+      notice = "❌ انرفض الطلب";
+    }
   } else if (a === "holidayDel") {
     const list = await holidays();
     const h = list.find((x) => x.id === Number(body.id));
@@ -798,7 +865,11 @@ export async function schedAdminAction(body: Row) {
     notice = chain.length > 1 ? `↩️ انشالت ${chain.length} عطل قبل ${h!.title}، ورجعت المواعيد` : "↩️ انشالت العطلة، ورجعت المواعيد";
   } else need(a === "list", "أمر غير معروف");
   const holidayList = (await holidays()).map((h) => ({ id: h.id, title: h.title, days: h.days, reason: h.reason, places: h.places.map((p) => `${p.name}: ${prettyDay(p.from)}`), students: h.students.filter((x) => x.on).length }));
-  return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice, holidays: holidayList, holidayPreview: preview };
+  const holReqs = await Promise.all((await holRequests()).map(async (r) => {
+    const sc = await one("schedules", { user_id: r.uid });
+    return { uid: r.uid, name: String((await student(r.uid))?.name ?? r.uid), want: holText(r), now: holText(holOf(sc?.hol) ?? null), at: r.at };
+  }));
+  return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice, holidays: holidayList, holidayPreview: preview, holReqs };
 }
 const cronUrl = () => `${siteBase()}/api/cron?key=${cronKey()}`;
 /** كل طالب بهذا المكان يوصله خبر واحد إذا تغيرت مواعيده */
@@ -843,7 +914,8 @@ export async function studentSchedule(uid: number) {
   const sc = await one("schedules", { user_id: uid });
   if (sc?.mode === "general") await syncGeneral(uid, sc, s);
   const way = !sc ? "" : sc.mode === "general" ? `ويا الطلاب: ${Object.entries(picksOf(sc)).map(([d, t]) => `${DAYS[Number(d)]} ${ampm(t)}`).join("، ")}` : "جدول خاص";
-  return { way, items: await itemsView(uid, s), perDay: Number(await kvGet(`sched_perday_${uid}`)) || 0, general: s.perDay };
+  const hol = sc && sc.mode !== "general" ? holOf(sc.hol) ?? (s.holidayStart && s.holidayDays ? { from: s.holidayStart, to: addDays(s.holidayStart, s.holidayDays - 1) } : { from: "", to: "" }) : null;
+  return { way, items: await itemsView(uid, s), perDay: Number(await kvGet(`sched_perday_${uid}`)) || 0, general: s.perDay, hol, holReq: (await holRequests()).find((r) => r.uid === uid) ?? null };
 }
 export async function resetSchedule(uid: number) {
   await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });

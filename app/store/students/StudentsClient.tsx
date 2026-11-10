@@ -4,7 +4,7 @@ import { useState } from "react";
 import PhotoPick from "../PhotoPick";
 import Thumbs from "../Thumbs";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
-import { CURR_OPTS, SIDE_OPTS, Seg, cleanPhone } from "../shared";
+import { CURR_OPTS, DateInput, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
@@ -12,7 +12,7 @@ type TestStudent = { id: number; name: string; papers: number; graded: number; l
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
-type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number } };
+type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -340,9 +340,25 @@ function AtPicker({ label, busy, onSave }: { label: string; busy: boolean; onSav
 const SCHED_STATE: Record<string, string> = { locked: "🔒 ينتظر", open: "🟢 بدا", missed: "⛔ فات", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده" };
 function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"]>; id: number; busy: boolean; call: Call }) {
   const [n, setN] = useState(String(sched.perDay));
+  const [hf, setHf] = useState(sched.hol?.from ?? "");
+  const [ht, setHt] = useState(sched.hol?.to ?? "");
   return (
     <div className="adlog">
       {sched.way && <div className="exlabel">{sched.way}</div>}
+      {sched.hol && (
+        <div className="cpexam">
+          <b>🏖 عطلته</b>
+          {sched.holReq && <div className="exhint exbad">⏳ طالب يغيرها لـ {sched.holReq.from ? `${sched.holReq.from} إلى ${sched.holReq.to}` : "بدون عطلة"}. توافق من 🗓 جدول الامتحانات، أو غيرها هنا.</div>}
+          <label>من</label>
+          <DateInput label="عطلته من" value={hf} placeholder="بدون عطلة" onChange={setHf} />
+          <label>إلى</label>
+          <DateInput label="عطلته إلى" min={hf} value={ht} placeholder="بدون عطلة" onChange={setHt} />
+          <div className="atrow">
+            <button type="button" className="btn" disabled={busy || (!!hf !== !!ht) || (!!hf && ht < hf)} onClick={() => void call({ action: "schedHol", id, holFrom: hf, holTo: ht })}>💾 غير عطلته</button>
+            <button type="button" className="exbtn" onClick={() => { setHf(""); setHt(""); }}>بدون عطلة</button>
+          </div>
+        </div>
+      )}
       {sched.items.length ? sched.items.map((i) => (
         <div key={i.id} className="adsale">{i.retake ? "🔁 " : ""}{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small>
           {i.state === "missed" && <Confirm label="🔓 افتحه باستثناء" disabled={busy} onYes={() => void call({ action: "examException", id, item: i.id })} />}

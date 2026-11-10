@@ -21,7 +21,7 @@ import { moveExam, retakeExam } from "./examMoves.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { studentCode } from "./inPerson.ts";
 import QRCode from "qrcode";
-import { resetSchedule, setPerDay, studentSchedule } from "./schedApi.ts";
+import { SCHED_PERM, resetSchedule, setPerDay, setStudentHoliday, studentSchedule } from "./schedApi.ts";
 import { authed, intOf, need } from "./webApi.ts";
 
 export const STUDENTS_PERM = "students";
@@ -175,6 +175,14 @@ export async function studentAction(body: Row) {
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, papers: { id, list: await studentPapers(id), fileToken: fileToken(uid) } };
   } else if (a === "sched") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
+  } else if (a === "schedHol") {
+    // الإدارة تغير عطلة طالب الجدول الخاص مباشرة، وجدوله ينعاد من باجر
+    need(await isAdmin(uid) || await can(uid, SCHED_PERM), "ما عندك صلاحية الجدول", 403);
+    const from = String(body.holFrom ?? ""), to = String(body.holTo ?? "");
+    const t = await setStudentHoliday(id, { from, to });
+    await (await import("./telegram.ts")).send(id, `🏖 <b>تغيرت عطلتك</b>: ${t}، وانعاد جدولك من باجر. افتح امتحاناتي وشوف المواعيد.`);
+    notice = `🏖 تغيرت عطلته: ${t}`;
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
   } else if (a === "examException") {
     await openException(uid, body.item);
