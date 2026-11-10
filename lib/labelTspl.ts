@@ -14,7 +14,7 @@ function fit(g: Ctx, text: string, width: number, sizes: number[], maxLines: num
   const words = String(text ?? "").split(/\s+/).filter(Boolean);
   let result = { size: sizes[sizes.length - 1], lines: [] as string[] };
   for (const size of sizes) {
-    g.font = `bold ${size}px QArabic`;
+    g.font = `bold ${size}px QArabic, QLatin`;
     const lines: string[] = [];
     let cur = "";
     for (const word of words) {
@@ -57,6 +57,9 @@ export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
   if (!fontReady) {
     const p = path.join(process.cwd(), "assets", "fonts", "NotoSansArabic-Bold.ttf");
     if (fs.existsSync(p)) GlobalFonts.registerFromPath(p, "QArabic");
+    // الخط العربي ما بي حروف إنجليزية ولا # و( ): هذا يكملها، لأن السيرفر ما بي خطوط
+    const latin = path.join(process.cwd(), "public", "boahmed.ttf");
+    if (fs.existsSync(latin)) GlobalFonts.registerFromPath(latin, "QLatin");
     fontReady = true;
   }
   const lines = (g: Ctx, list: string[], size: number, w: number, top: number) => {
@@ -67,9 +70,9 @@ export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
     { x: 8, y: 4, w: 448, h: 52, draw: (g, w) => { const f = fit(g, c.name, w - 4, [36, 32, 28, 24, 20], 1); lines(g, f.lines, f.size, w, 0); } },
     // جنب الكود: الرقم والمركز والوقت
     { x: 170, y: 60, w: 286, h: 142, draw: (g, w) => {
-      g.direction = "ltr"; g.font = "bold 26px QArabic"; g.fillText(`#${c.uid}`, w - 2, 0);
+      g.direction = "ltr"; g.font = "bold 26px QArabic, QLatin"; g.fillText(`#${c.uid}`, w - 2, 0);
       g.direction = "rtl"; const f = fit(g, c.center, w - 4, [24, 21, 18], 2); lines(g, f.lines, f.size, w, 38);
-      g.direction = "ltr"; g.font = "bold 22px QArabic"; g.fillText(`${c.at.slice(0, 10)}  ${c.at.slice(11, 16)}`, w - 2, 108);
+      g.direction = "ltr"; g.font = "bold 22px QArabic, QLatin"; g.fillText(`${c.at.slice(0, 10)}  ${c.at.slice(11, 16)}`, w - 2, 108);
     } },
     // اسم الامتحان: جوة، بعرض الليبل، ويوسع سطرين إذا طويل
     { x: 8, y: 208, w: 448, h: 92, draw: (g, w) => { const f = fit(g, c.exam, w - 4, [32, 28, 24, 21, 18], 2); lines(g, f.lines, f.size, w, 0); } },
