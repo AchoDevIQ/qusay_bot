@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import QRCode from "qrcode";
 import { kvSet, one, type Row } from "./db.ts";
 import type { RenderJob } from "./browserRender.ts";
-import { FONT, LOGO, PDF_DIR, WORD_CHECK } from "./config.ts";
+import { FONT, LATIN_FONT, LOGO, PDF_DIR, WORD_CHECK } from "./config.ts";
 import { btn, esc, fileStamp, money, num, stamp } from "./util.ts";
 import { upload, send, type Kb } from "./telegram.ts";
 import { centerName, examLabel, orderItems, ordersByIds, placeOf, profileText, sellerLabel } from "./data.ts";
@@ -17,6 +17,8 @@ const run = promisify(execFile);
 const ensureDir = () => fs.mkdirSync(PDF_DIR, { recursive: true });
 const b64 = (p: string) => fs.readFileSync(p).toString("base64");
 const logoTag = () => (fs.existsSync(LOGO) ? `<img src="data:image/png;base64,${b64(LOGO)}">` : "");
+/** الإنجليزي والأرقام بخط واضح، والعربي يبقى بخط قصي العميري */
+const latinFace = () => (fs.existsSync(LATIN_FONT) ? `@font-face{font-family:QLatin;src:url(data:font/ttf;base64,${b64(LATIN_FONT)});unicode-range:U+0000-024F,U+2000-206F,U+20AC,U+2122}` : "");
 const fontFace = () => (fs.existsSync(FONT) ? `@font-face{font-family:Boahmed;src:url(data:font/ttf;base64,${b64(FONT)})}` : "");
 
 export function findBrowser(): string | null {
@@ -233,13 +235,13 @@ export async function sendProfileCard(chat: number, s: Row, title: string, capti
 // ---------- بطاقة الدرجة: توصل للطالب وولي أمره بعد التصحيح (الأوراق نفسها بصفحة امتحاناتي)
 export type GradeCard = { name: string; exam: string; center: string; total: number; at: string; sticker?: string; quote?: string };
 /** خط «قصي العميري»، بس الأرقام والحروف الفارسية (گ چ پ...) من خط ثاني لأن خطه يرسمها فارغة أو هندية */
-const cardFont = () => (fs.existsSync(FONT) ? `@font-face{font-family:Boahmed;src:url(data:font/ttf;base64,${b64(FONT)});unicode-range:U+0000-002F,U+003A-067D,U+067F-0685,U+0687-0697,U+0699-06A3,U+06A5-06A8,U+06AA-06AE,U+06B0-06CB,U+06CD-10FFFF}` : "");
+const cardFont = () => latinFace() + (fs.existsSync(FONT) ? `@font-face{font-family:Boahmed;src:url(data:font/ttf;base64,${b64(FONT)});unicode-range:U+0000-002F,U+003A-067D,U+067F-0685,U+0687-0697,U+0699-06A3,U+06A5-06A8,U+06AA-06AE,U+06B0-06CB,U+06CD-10FFFF}` : "");
 export function gradeCardHtml(c: GradeCard) {
   const color = c.total >= 90 ? "#4ade80" : c.total >= 50 ? "#F9C445" : "#ff7a6b";
   const row = (icon: string, k: string, v: string) => `<tr><td class="k"><span>${icon}</span>${k}</td><td class="v">${esc(v)}</td></tr>`;
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
 ${cardFont()}
-*{box-sizing:border-box}html,body{margin:0;width:760px;background:#101929;color:#F4F1E8;font-family:Boahmed,'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif}
+*{box-sizing:border-box}html,body{margin:0;width:760px;background:#101929;color:#F4F1E8;font-family:QLatin,Boahmed,'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif}
 .top{padding:30px 20px 26px;text-align:center;background:radial-gradient(ellipse at 50% -10%,#3b82f6 0%,transparent 65%),linear-gradient(180deg,#1e3a8a,#0f1d40)}
 .top img{height:120px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}
 .top h1{margin:8px 0 0;font-size:52px;font-weight:400;color:#fff;text-shadow:0 2px 14px rgba(59,130,246,.75)}
@@ -292,7 +294,7 @@ export function bubbleHtml(src: string, text: string, w: number, h: number) {
 ${cardFont()}
 *{box-sizing:border-box}html,body{margin:0;width:${w}px;height:${h}px;overflow:hidden;background:#111}
 img{display:block;width:${w}px;height:${h}px}
-.b{position:absolute;top:${Math.round(w * 0.02)}px;right:${Math.round(w * 0.02)}px;width:${Math.round(w * 0.46)}px;padding:${Math.round(w * 0.04)}px ${Math.round(w * 0.035)}px;background:#fff;border:${Math.max(3, Math.round(w * 0.005))}px solid #000;border-radius:50%;color:#000;text-align:center;white-space:pre-wrap;font-family:Boahmed,'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:${size}px;line-height:1.35}
+.b{position:absolute;top:${Math.round(w * 0.02)}px;right:${Math.round(w * 0.02)}px;width:${Math.round(w * 0.46)}px;padding:${Math.round(w * 0.04)}px ${Math.round(w * 0.035)}px;background:#fff;border:${Math.max(3, Math.round(w * 0.005))}px solid #000;border-radius:50%;color:#000;text-align:center;white-space:pre-wrap;font-family:QLatin,Boahmed,'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:${size}px;line-height:1.35}
 .b:after{content:"";position:absolute;left:12%;bottom:-${Math.round(w * 0.045)}px;border-top:${Math.round(w * 0.06)}px solid #000;border-right:${Math.round(w * 0.05)}px solid transparent}
 </style></head><body><img src="${src}"><div class="b">${esc(text)}</div></body></html>`;
 }

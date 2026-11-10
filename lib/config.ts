@@ -45,6 +45,8 @@ export const BANNER = path.join(ASSETS_DIR, "banner.jpg");
 export const SUCCESS = path.join(ASSETS_DIR, "success.jpg");
 export const LOGO = path.join(PUBLIC_DIR, "logo.png");
 export const FONT = path.join(PUBLIC_DIR, "boahmed.ttf");
+/** الحروف الإنجليزية والأرقام بالصور: Nunito عريض، لأن خط قصي العميري يرسمها مزخرفة وما تنقرا */
+export const LATIN_FONT = path.join(process.cwd(), "assets", "fonts", "Nunito-Bold.ttf");
 export const PDF_DIR = process.env.PDF_DIR ?? path.join(process.cwd(), "data", "pdf");
 export const CONTENT_DIR = process.env.CONTENT_DIR ?? path.join(process.cwd(), "data", "content");
 

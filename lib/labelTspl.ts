@@ -55,8 +55,8 @@ function ensureFonts(GlobalFonts: { registerFromPath(p: string, name: string): u
   if (fontReady) return;
   const p = path.join(process.cwd(), "assets", "fonts", "NotoSansArabic-Bold.ttf");
   if (fs.existsSync(p)) GlobalFonts.registerFromPath(p, "QArabic");
-  // الخط العربي ما بي حروف إنجليزية ولا # و( ): هذا يكملها، لأن السيرفر ما بي خطوط
-  const latin = path.join(process.cwd(), "public", "boahmed.ttf");
+  // الخط العربي ما بي حروف إنجليزية ولا # و( ): Nunito يكملها بخط واضح، لأن السيرفر ما بي خطوط
+  const latin = path.join(process.cwd(), "assets", "fonts", "Nunito-Bold.ttf");
   if (fs.existsSync(latin)) GlobalFonts.registerFromPath(latin, "QLatin");
   fontReady = true;
 }

@@ -953,3 +953,35 @@ test("🏖 عطلة نصف السنة بالجدول العام: اللي داخ
   await save("", 0);
   assert.deepEqual([await day(a.id), await day(b.id), await day(cc.id), await hol(), await day(d.id)], [sun1, wed1, sun2, [wed2], sun3]);
 });
+
+test("🗓 توزيع مكان جديد: ياخذ العطل اللي قبل نفس الامتحانات بالأماكن الثانية", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "زيونة" });
+  const c1 = await insert("centers", { area_id: area, name: "مركز العطلة الأول", active: 1 });
+  const c2 = await insert("centers", { area_id: area, name: "مركز زيونة الجديد", active: 1 });
+  for (const c of [c1, c2]) await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "16:00" }, { d: 1, t: "17:00" }], initData: admin });
+  const sat = nextWeekday(5);
+  await schedAdminAction({ action: "fillDates", center: c1, start: sat, initData: admin });
+  const day = async (c: number, e: number) => (await find("place_dates", { center_id: c, exam_id: e }))[0]?.day as string;
+  const ex = (await find("place_dates", { center_id: c1 })).sort((a, b) => String(a.day).localeCompare(String(b.day)));
+  const target = ex[2].exam_id as number, before = ex[1].exam_id as number;
+  // عطلة بالمكان الأول بس، قبل الامتحان الثالث
+  const h: any = await schedAdminAction({ action: "holidayAdd", center: c1, exam: target, days: 1, reason: "استعداد", scope: "place", initData: admin });
+  const hid = h.holidays.at(-1).id;
+  // المكان الجديد يتوزع: نفس العطلة قبل نفس الامتحان
+  const f: any = await schedAdminAction({ action: "fillDates", center: c2, start: sat, initData: admin });
+  assert.match(f.notice, /انحطت \d+ عطلة/);
+  assert.equal(await day(c2, before), await day(c1, before));
+  assert.equal(await day(c2, target), await day(c1, target));
+  const rec = f.holidays.find((x: any) => x.id === hid);
+  assert.equal(rec.places.length, 2);
+  // توزيعه مرة ثانية ما يكرر العطلة
+  const f2: any = await schedAdminAction({ action: "fillDates", center: c2, start: sat, initData: admin });
+  assert.equal(f2.holidays.find((x: any) => x.id === hid).places.length, 2);
+  assert.equal(await day(c2, target), await day(c1, target));
+  // شيلها: ترجع بالمكانين
+  const was = await day(c2, target);
+  await schedAdminAction({ action: "holidayDel", center: c1, id: hid, initData: admin });
+  assert.ok(await day(c2, target) < was);
+  assert.equal(await day(c1, target), await day(c2, target));
+});

@@ -101,8 +101,6 @@ async function holidays(): Promise<Holiday[]> {
 const saveHolidays = (list: Holiday[]) => kvSet(HOL_KEY, JSON.stringify(list));
 const inRange = (d: string, r: Range) => d >= r.from && d <= r.to;
 const daysOf = (r: Range) => { const out: string[] = []; for (let d = r.from; d <= r.to; d = addDays(d, 1)) out.push(d); return out; };
-/** أيام عطل المكان: ما ينحط بيها امتحان إذا انعاد التوزيع */
-const placeHolidayDays = async (center: number) => (await holidays()).filter((h) => !h.insert).flatMap((h) => h.places.filter((p) => p.center === center).flatMap(daysOf));
 /** أيام عطل الطالب الخاص اللي ما لغاها: ما ينحط بيها امتحان إذا انعاد جدوله */
 const studentHolidayDays = async (uid: number) => (await holidays()).filter((h) => !h.insert).flatMap((h) => h.students.filter((x) => x.uid === uid && x.on).flatMap(daysOf));
 /** يوم ينفع للامتحان: من أيامه، مو عطلة ولا مستثنى ولا داخل عطلة امتحان ثانية */
@@ -178,6 +176,41 @@ async function insertBefore(exam: number, add: number, centers: number[]) {
   const told = await applyHoliday(h);
   await saveHolidays([...await holidays(), h]);
   return { title: h.title, told, places: plan.places.length, students: plan.students.length };
+}
+/** لما تتوزع مواعيد مكان من جديد: عطله قبل كل امتحان تنعاد. إذا المكان ما إله عطلة قبل امتحان،
+ *  ياخذ العطل اللي قبل نفس الامتحان من المكان الثاني اللي بيه أكثر عطل قبله (الإلكتروني أول إذا تساووا) */
+async function copyHolidays(center: number) {
+  const list = (await holidays()).filter((h) => !h.insert);
+  const pick = new Map<number, number>();   // الامتحان → المكان اللي ناخذ عطله
+  for (const exam of new Set(list.map((h) => h.exam))) {
+    const count = new Map<number, number>();
+    for (const h of list.filter((x) => x.exam === exam)) for (const p of h.places) count.set(p.center, (count.get(p.center) ?? 0) + 1);
+    if (!count.size) continue;
+    pick.set(exam, count.has(center) ? center : [...count].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0]);
+  }
+  const chosen = list.filter((h) => h.places.some((p) => p.center === pick.get(h.exam))).sort((a, b) => a.id - b.id).map((h) => h.id);
+  // عطل هذا المكان القديمة تنشال من السجل، لأن مواعيده انعادت من الصفر
+  const all = await holidays();
+  for (const h of all) if (!h.insert) h.places = h.places.filter((p) => p.center !== center);
+  await saveHolidays(all);
+  let n = 0;
+  for (const id of chosen) {
+    const h = (await holidays()).find((x) => x.id === id);
+    if (!h) continue;
+    const plan = await planHoliday(h.exam, h.days, [center]);
+    const p = plan.places[0];
+    if (!p) continue;
+    const cur = await holidays();
+    shiftHols(cur, { ...h, places: [p], students: [] }, false);
+    const rec = cur.find((x) => x.id === id)!;
+    rec.places = [...rec.places, p];
+    await saveHolidays(cur);
+    await tx(async () => { for (const m of p.moved) await put("place_dates", { center_id: center, exam_id: m.exam, day: m.to, versions: m.toVersions }); });
+    n++;
+  }
+  // عطلة ما بقى إلها مكان ولا طالب: تنشال
+  await saveHolidays((await holidays()).filter((h) => h.insert || h.places.length || h.students.length));
+  return n;
 }
 /** امتحان جديد بالبنك: ينحط بالجدول وحده قبل الامتحان اللي بعده بترتيب الكتاب، بكل مكان هذا الامتحان إله موعد بيه */
 export async function autoInsertExam(add: number) {
@@ -839,14 +872,17 @@ export async function schedAdminAction(body: Row) {
     const exams = (await find("bank_exams")).filter((e) => { const vs = versions.filter((v) => v.exam_id === e.id); return !vs.length || vs.some((v) => v.kind === "mandatory"); })
       .sort((x, y) => String(x.slug).localeCompare(String(y.slug)) || (x.pos ?? x.ord) - (y.pos ?? y.ord));
     const ss = await schedSettings();
-    const days = slotDays(slots, String(body.start), exams.length, { ...ss, excluded: [...ss.excluded, ...await placeHolidayDays(center)] });
+    // يتوزع بلا عطل، وبعدها العطل قبل الامتحانات تنحط مثل باقي الأماكن، فكل مكان عطلته قبل نفس الامتحان
+    const days = slotDays(slots, String(body.start), exams.length, ss);
     const old = new Map((await find("place_dates", { center_id: center })).map((d) => [d.exam_id, d.versions]));
     await tx(async () => {
       await remove("place_dates", { center_id: center });
       for (const [i, e] of exams.entries()) if (days[i]) await put("place_dates", { center_id: center, exam_id: e.id, day: days[i], versions: old.get(e.id) ?? "{}" });
     });
+    const hols = await copyHolidays(center);
     const told = await tellPlace(center);
-    notice = `✅ توزع ${days.length} امتحان، آخرها ${days.length ? prettyDay(days.at(-1)!) : ""}${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
+    const last = (await find("place_dates", { center_id: center })).map((d) => String(d.day)).sort().at(-1);
+    notice = `✅ توزع ${days.length} امتحان، آخرها ${last ? prettyDay(last) : ""}${hols ? `، وانحطت ${hols} عطلة قبل نفس امتحانات الأماكن الثانية` : ""}${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
   } else if (a === "loadPlaces") {
     const centers = await find("centers", { active: 1 });
     const missing: string[] = [];
