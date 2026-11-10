@@ -85,7 +85,8 @@ const placeDays = async (center: number) => new Map((await find("place_dates", {
 type Range = { from: string; to: string };
 type HolPlace = Range & { center: number; name: string; moved: { exam: number; title: string; day: string; versions: string; to: string; toVersions: string }[] };
 type HolStudent = Range & { uid: number; on: boolean; moves: { id: number; at: string; to: string }[] };
-type Holiday = { id: number; exam: number; title: string; days: number; reason: string; places: HolPlace[]; students: HolStudent[]; at: string };
+/** insert: امتحان من البنك انحط بيوم exam بدل الفراغ. added: مواعيده بجداول الطلاب الخاصة */
+type Holiday = { id: number; exam: number; title: string; days: number; reason: string; places: HolPlace[]; students: HolStudent[]; at: string; insert?: number; added?: number[] };
 const HOL_KEY = "exam_holidays";
 async function holidays(): Promise<Holiday[]> {
   try { const j = JSON.parse(await kvGet(HOL_KEY) ?? "[]"); return Array.isArray(j) ? j : []; } catch { return []; }
@@ -94,9 +95,9 @@ const saveHolidays = (list: Holiday[]) => kvSet(HOL_KEY, JSON.stringify(list));
 const inRange = (d: string, r: Range) => d >= r.from && d <= r.to;
 const daysOf = (r: Range) => { const out: string[] = []; for (let d = r.from; d <= r.to; d = addDays(d, 1)) out.push(d); return out; };
 /** أيام عطل المكان: ما ينحط بيها امتحان إذا انعاد التوزيع */
-const placeHolidayDays = async (center: number) => (await holidays()).flatMap((h) => h.places.filter((p) => p.center === center).flatMap(daysOf));
+const placeHolidayDays = async (center: number) => (await holidays()).filter((h) => !h.insert).flatMap((h) => h.places.filter((p) => p.center === center).flatMap(daysOf));
 /** أيام عطل الطالب الخاص اللي ما لغاها: ما ينحط بيها امتحان إذا انعاد جدوله */
-const studentHolidayDays = async (uid: number) => (await holidays()).flatMap((h) => h.students.filter((x) => x.uid === uid && x.on).flatMap(daysOf));
+const studentHolidayDays = async (uid: number) => (await holidays()).filter((h) => !h.insert).flatMap((h) => h.students.filter((x) => x.uid === uid && x.on).flatMap(daysOf));
 /** يوم ينفع للامتحان: من أيامه، مو عطلة ولا مستثنى ولا داخل عطلة امتحان ثانية */
 const dayOk = (weekdays: Set<number>, s: SchedSettings, ranges: Range[]) => (d: string) =>
   weekdays.has(weekdayOf(d)) && !inHoliday(d, s) && !s.excluded.includes(d) && !ranges.some((r) => inRange(d, r));
@@ -104,7 +105,7 @@ async function placeNames() {
   return new Map<number, string>([[0, "💻 الإلكتروني"], ...(await find("centers")).map((c) => [c.id as number, `🏫 ${c.name}`] as [number, string])]);
 }
 /** شنو يصير إذا انحطت عطلة days يوم قبل الامتحان exam بهذي الأماكن: مواعيد المكان، وجداول الطلاب الخاصة */
-async function planHoliday(exam: number, days: number, centers: number[]) {
+async function planHoliday(exam: number, days: number, centers: number[], onlyFor?: number) {
   const s = await schedSettings();
   const hols = await holidays();
   const tomorrow = addDays(todayStr(), 1);
@@ -118,7 +119,7 @@ async function planHoliday(exam: number, days: number, centers: number[]) {
     if (!x?.day) continue;
     const slots = await placeSlots(center);
     const r = { from: x.day as string, to: addDays(x.day, days - 1) };
-    const base = dayOk(new Set(slots.map((t) => t.d)), s, hols.flatMap((h) => h.places.filter((p) => p.center === center)));
+    const base = dayOk(new Set(slots.map((t) => t.d)), s, hols.filter((h) => !h.insert).flatMap((h) => h.places.filter((p) => p.center === center)));
     const lost = daysLost(r.from, r.to, base);
     const ok = (d: string) => base(d) && !inRange(d, r);
     const timesOf = (d: string) => slots.filter((t) => t.d === weekdayOf(d)).map((t) => t.t).sort();
@@ -133,12 +134,14 @@ async function planHoliday(exam: number, days: number, centers: number[]) {
     if (sc.mode === "general") continue;
     const uid = sc.user_id as number;
     if (!centers.includes((await placeFor(uid)).centerId)) continue;
+    // الامتحان المضاف: بس اللي مشتري فصله
+    if (onlyFor && !(await boughtExams(uid)).some((e) => e.id === onlyFor)) continue;
     const items = (await find("sched_items", { user_id: uid, status: "waiting" }, { order: ["at"] })).filter((i) => !i.fixed && i.notified !== "test");
     const x = items.find((i) => i.exam_id === exam);
     const d0 = String(x?.at ?? "").slice(0, 10);
     if (!x || d0 < tomorrow) continue;
     const r = { from: d0, to: addDays(d0, days - 1) };
-    const base = dayOk(new Set(JSON.parse(sc.weekdays || "[]") as number[]), s, hols.flatMap((h) => h.students.filter((y) => y.uid === uid && y.on)));
+    const base = dayOk(new Set(JSON.parse(sc.weekdays || "[]") as number[]), s, hols.filter((h) => !h.insert).flatMap((h) => h.students.filter((y) => y.uid === uid && y.on)));
     const lost = daysLost(r.from, r.to, base);
     const ok = (d: string) => base(d) && !inRange(d, r);
     const times: Record<string, string[]> | null = sc.picks ? JSON.parse(sc.picks) : null;
@@ -165,7 +168,25 @@ async function applyHoliday(h: Holiday) {
   await tx(async () => {
     for (const p of h.places) for (const m of p.moved) await put("place_dates", { center_id: p.center, exam_id: m.exam, day: m.to, versions: m.toVersions });
     for (const st of h.students) for (const m of st.moves) await update("sched_items", { id: m.id }, { at: m.to });
+    if (h.insert) {
+      // الامتحان المضاف ياخذ اليوم اللي فرغ، وبجدول الطالب الخاص ياخذ موعد الامتحان اللي زحف
+      for (const p of h.places) await put("place_dates", { center_id: p.center, exam_id: h.insert, day: p.from, versions: "{}" });
+      h.added = [];
+      for (const st of h.students) {
+        const first = st.moves.find((m) => m.at.slice(0, 10) === st.from);
+        if (first) h.added.push(await insert("sched_items", { user_id: st.uid, exam_id: h.insert, at: first.at, status: "waiting" }));
+      }
+    }
   });
+  if (h.insert) {
+    let told = 0;
+    for (const p of h.places) told += await tellPlace(p.center);
+    for (const st of h.students) {
+      await send(st.uid, `🗓 <b>انضاف امتحان ${esc(h.title)}</b> بجدولك يوم ${prettyDay(st.from)}، وامتحاناتك من بعده تأخرت. افتح امتحاناتي وشوف المواعيد.`);
+      await logActivity(st.uid, `🗓 انضافله امتحان ${h.title}، وزحف جدوله`);
+    }
+    return told + h.students.length;
+  }
   let told = 0;
   for (const p of h.places) told += await tellPlace(p.center);
   for (const st of h.students) {
@@ -186,15 +207,20 @@ async function undoHoliday(h: Holiday) {
         await put("place_dates", { center_id: p.center, exam_id: m.exam, day: m.day, versions });
       }
     }
+    if (h.insert) {
+      for (const p of h.places) { const cur = await one("place_dates", { center_id: p.center, exam_id: h.insert }); if (cur?.day === p.from) await remove("place_dates", { center_id: p.center, exam_id: h.insert }); }
+      for (const id of h.added ?? []) { const it = await one("sched_items", { id }); if (it?.status === "waiting") await remove("sched_items", { id }); }
+    }
     for (const st of h.students) if (st.on) await restoreStudent(st);
   });
   for (const p of h.places) await tellPlace(p.center);
+  if (h.insert) { for (const st of h.students) await send(st.uid, `🗓 <b>انشال امتحان ${esc(h.title)}</b> من جدولك، ورجعت مواعيد امتحاناتك. افتح امتحاناتي وشوفها.`); return; }
   for (const st of h.students) if (st.on) await send(st.uid, `🗓 <b>انشالت العطلة</b> ${holidayText(h, st)}، ورجعت مواعيد امتحاناتك. افتح امتحاناتي وشوفها.`);
 }
 /** العطل اللي يشوفها الطالب بجدوله: عطل مكانه إذا ويا الطلاب، وعطله إذا جدول خاص (ويگدر يلغيها) */
 async function myHolidays(uid: number, sc: Row | null) {
   const today = todayStr();
-  const rows = (await holidays()).flatMap((h) => (sc?.mode === "general"
+  const rows = (await holidays()).filter((h) => !h.insert).flatMap((h) => (sc?.mode === "general"
     ? h.places.filter((p) => p.center === sc.center_id).map((p) => ({ id: h.id, exam: h.exam, from: p.from, to: p.to, title: h.title, reason: h.reason, cancel: false }))
     : h.students.filter((x) => x.uid === uid && x.on).map((x) => ({ id: h.id, exam: h.exam, from: x.from, to: x.to, title: h.title, reason: h.reason, cancel: true }))));
   return mergeHolidays(rows).filter((x) => x.to >= today);
@@ -646,6 +672,23 @@ export async function schedAdminAction(body: Row) {
       const told = await applyHoliday(h);
       notice = `🏖 انحطت العطلة، وزحفت مواعيد ${plan.places.length} مكان${plan.students.length ? ` و${plan.students.length} جدول خاص` : ""}${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
     }
+  } else if (a === "insertExam") {
+    // امتحان من البنك ما إله موعد ياخذ يوم هذا الامتحان، وهو واللي بعده يزحفون ليوم الامتحان الجاي
+    const exam = Number(body.exam), add = Number(body.add);
+    const e = await one("bank_exams", { id: add });
+    need(e, "اختار الامتحان اللي تضيفه");
+    const all = body.scope === "all";
+    const centers = (all ? [0, ...(await find("centers", { active: 1 })).map((c) => c.id as number)] : [Number(body.center ?? 0)]);
+    const free = [];
+    for (const c of centers) if (!await one("place_dates", { center_id: c, exam_id: add })) free.push(c);
+    need(free.length, "هذا الامتحان إله موعد بالجدول. اختار امتحان ما إله موعد");
+    const plan = await planHoliday(exam, 1, free, add);
+    need(plan.places.length || plan.students.length, "هذا الامتحان ما إله موعد بهذا المكان. حط تاريخه أول.");
+    const list = await holidays();
+    const h: Holiday = { id: Date.now(), exam, title: String(e!.title ?? ""), days: 1, reason: "", places: plan.places, students: plan.students, at: stamp(), insert: add };
+    const told = await applyHoliday(h);
+    await saveHolidays([...list, h]);
+    notice = `🗓 انضاف ${h.title}، وزحف اللي بعده${told ? `، ووصل الخبر لـ ${told} طالب` : ""}`;
   } else if (a === "holidayReason") {
     // سبب العطلة: يطلع للطلاب بجدولهم
     const list = await holidays();
@@ -699,7 +742,8 @@ async function placesPage(center: number) {
       const d = dates.get(e.id);
       return { exam: e.id, chapter: e.chapter, title: e.title, date: d?.day ?? "", versions: JSON.parse(d?.versions || "{}"), models: versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id, model: v.model })),
         // كل عطلة انحطت قبل هذا الامتحان بهذا المكان: سطر «فراغ» قبله
-        hols: hols.filter((h) => h.exam === e.id).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ id: h.id, from: p.from, reason: h.reason }))).sort((x, y) => x.from.localeCompare(y.from)) };
+        inserted: hols.find((h) => h.insert === e.id && h.places.some((p) => p.center === center))?.id ?? 0,
+        hols: hols.filter((h) => h.exam === e.id && !h.insert).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ id: h.id, from: p.from, reason: h.reason }))).sort((x, y) => x.from.localeCompare(y.from)) };
     }),
   };
 }

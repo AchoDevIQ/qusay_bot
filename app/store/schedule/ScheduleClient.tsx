@@ -11,7 +11,7 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 type Slot = { d: number; t: string };
-type Row = { exam: number; chapter: string; title: string; date: string; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
+type Row = { exam: number; chapter: string; title: string; date: string; inserted?: number; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
 type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[] };
 type Hol = { id: number; title: string; days: number; reason: string; places: string[]; students: number };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -228,7 +228,13 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
                   ))}
                 </div>
                 {!r.date && <small className="exhint">حط تاريخه حتى تطلع أوقاته وتختار نسخها.</small>}
-                {r.date && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => holiday(r.exam)}>🏖 عطلة قبله</button>}
+                {r.date && (
+                  <div className="exline adtop">
+                    <button type="button" className="exbtn" disabled={busy} onClick={() => holiday(r.exam)}>🏖 عطلة قبله</button>
+                    <AddBefore exam={r.exam} free={rows.filter((x) => !x.date && x.exam !== r.exam)} busy={busy} add={(id) => void act({ action: "insertExam", exam: r.exam, add: id, scope })} />
+                    {!!r.inserted && <Confirm label="↩️ شيله من الجدول" disabled={busy} onYes={() => void act({ action: "holidayDel", id: r.inserted })} />}
+                  </div>
+                )}
                 {r.date && !times.length && <small className="exbad">هذا اليوم ما إله أوقات بـ ⏰ الأيام وأوقاتها.</small>}
               </div>
               </Fragment>
@@ -267,5 +273,18 @@ function HolReason({ id, reason, busy, act }: { id: number; reason: string; busy
       <input aria-label="سبب العطلة" placeholder="ليش هاي العطلة؟ مثلاً راحة قبل الفاينل" value={text} style={{ flex: 1, minWidth: 0 }} onChange={(e) => setText(e.target.value)} />
       <button type="button" className="exbtn" style={{ flex: "none", width: "auto" }} disabled={busy || text.trim() === reason} onClick={() => void act({ action: "holidayReason", id, reason: text })}>💾</button>
     </div>
+  );
+}
+
+/** ➕ امتحان قبله: امتحان من البنك ما إله موعد ياخذ يوم هذا الامتحان، وهو واللي بعده يزحفون */
+function AddBefore({ exam, free, busy, add }: { exam: number; free: Row[]; busy: boolean; add: (id: number) => void }) {
+  const [open, setOpen] = useState(false);
+  if (!open) return <button type="button" className="exbtn" disabled={busy} onClick={() => setOpen(true)}>➕ امتحان قبله</button>;
+  if (!free.length) return <small className="exhint">ماكو امتحان بالبنك بلا موعد. ضيفه أول من 📝 الامتحانات ← افتح امتحان ← ➕ امتحان قبله. <button type="button" className="exbtn" onClick={() => setOpen(false)}>تمام</button></small>;
+  return (
+    <select aria-label={`امتحان قبل ${exam}`} value="" disabled={busy} onChange={(e) => { if (e.target.value) { setOpen(false); add(Number(e.target.value)); } }}>
+      <option value="">اختار الامتحان اللي تضيفه</option>
+      {free.map((x) => <option key={x.exam} value={x.exam}>{x.chapter}: {x.title}</option>)}
+    </select>
   );
 }

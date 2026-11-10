@@ -130,8 +130,15 @@ export async function examAction(body: Row) {
     need(c, "الفصل غير موجود");
     const ord = maxOf(await find("bank_exams", { slug: String(body.slug) }), "ord") + 1;
     const list = await chapterExams(String(body.slug));
-    await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: "", minutes: n, manual: 1, pos: maxPos(list) + 1 });
-    await logEdit(uid, `امتحان جديد: ${title}`);
+    // قبل أو بعد امتحان بالفصل، وإلا بآخره
+    const near = list.findIndex((x) => x.id === Number(body.near));
+    const at = near < 0 ? list.length : body.side === "before" ? near : near + 1;
+    await tx(async () => {
+      const id = await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: "", minutes: n, manual: 1, pos: maxPos(list) + 1 });
+      const order = [...list.slice(0, at), { id }, ...list.slice(at)];
+      for (const [p, x] of order.entries()) if ((x as Row).pos !== p + 1) await update("bank_exams", { id: x.id }, { pos: p + 1 });
+    });
+    await logEdit(uid, `امتحان جديد: ${title}${near >= 0 ? ` (${body.side === "before" ? "قبل" : "بعد"} ${list[near].title})` : ""}`);
   } else if (a === "loadBook") {
     // مرة وحدة: اللي ينحذف بعدها ما يرجع
     let added = 0;

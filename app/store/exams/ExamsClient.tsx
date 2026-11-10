@@ -67,6 +67,10 @@ export default function ExamsClient() {
                     </tr>
                   }>
                     <ExamPanel key={e.id + ":" + e.versions.map((v) => v.questions.map((q) => q.max).join()).join("|")} exam={e} busy={busy} call={call} fileUrl={fileUrl} openVersion={openVersion} setOpenVersion={(v) => { setOpenVersion(v); setOpenQ(null); }} openQ={openQ} setOpenQ={setOpenQ} />
+                    <div className="exline">
+                      <AddExam slug={ch.slug} generalMinutes={data!.generalMinutes} busy={busy} call={call} near={e.id} side="before" label="➕ امتحان قبله" />
+                      <AddExam slug={ch.slug} generalMinutes={data!.generalMinutes} busy={busy} call={call} near={e.id} side="after" label="➕ امتحان بعده" />
+                    </div>
                   </ExamRows>
                 );
               })}
@@ -381,16 +385,17 @@ function AddQuestion({ versionId, busy, call }: { versionId: number; busy: boole
   );
 }
 
-function AddExam({ slug, generalMinutes, busy, call }: { slug: string; generalMinutes: number; busy: boolean; call: Call }) {
+/** امتحان جديد: بآخر الفصل، أو قبل أو بعد امتحان (near) */
+function AddExam({ slug, generalMinutes, busy, call, near, side, label = "➕ امتحان جديد" }: { slug: string; generalMinutes: number; busy: boolean; call: Call; near?: number; side?: "before" | "after"; label?: string }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [minutes, setMinutes] = useState("");
-  if (!open) return <div className="exline expad"><button type="button" className="exbtn" onClick={() => setOpen(true)}>➕ امتحان جديد</button></div>;
+  if (!open) return <div className="exline expad"><button type="button" className="exbtn" onClick={() => setOpen(true)}>{label}</button></div>;
   return (
     <div className="exadd expad">
       <input placeholder="عنوان الامتحان، مثل: ديموافر المحاضرة (6)" value={title} onChange={(e) => setTitle(e.target.value)} />
       <input className="exnum" inputMode="numeric" placeholder={`${generalMinutes} دقيقة`} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-      <button type="button" className="exbtn" disabled={busy || !title.trim()} onClick={async () => { if (await call({ action: "addExam", slug, title, minutes: minutes || generalMinutes })) { setOpen(false); setTitle(""); setMinutes(""); } }}>حفظ</button>
+      <button type="button" className="exbtn" disabled={busy || !title.trim()} onClick={async () => { if (await call({ action: "addExam", slug, title, minutes: minutes || generalMinutes, near, side })) { setOpen(false); setTitle(""); setMinutes(""); } }}>حفظ</button>
       <button type="button" className="exbtn" onClick={() => setOpen(false)}>إلغاء</button>
     </div>
   );

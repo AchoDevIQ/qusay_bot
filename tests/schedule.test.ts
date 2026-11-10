@@ -751,3 +751,39 @@ test("عطلتين قبل نفس الامتحان بسببين: الطالب ي�
   assert.equal(info.holidays.length, 1);
   assert.equal(info.holidays[0].reason, "استعداد للفاينل، عيد");
 });
+
+test("➕ امتحان قبله: بالبنك بمكانه، وبالجدول ياخذ يوم الامتحان والباقي يزحف، والطالب الخاص المشتري يوصله، و↩️ يرجعه", async () => {
+  const admin = sign(1);
+  const ch = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => (x.pos ?? x.ord) - (y.pos ?? y.ord));
+  const slug = ch[0].slug, b = ch[1];
+  await examAction({ action: "addExam", slug, title: "مراجعة قبل الثاني", minutes: 60, near: b.id, side: "before", initData: admin });
+  const after = (await find("bank_exams", { slug })).sort((x, y) => (x.pos ?? x.ord) - (y.pos ?? y.ord));
+  const add = after.find((x) => x.title === "مراجعة قبل الثاني")!;
+  assert.equal(after.indexOf(add), ch.indexOf(b));   // انحط قبل الامتحان الثاني بالفصل
+  const area = await insert("areas", { gov: "بغداد", name: "الشعلة" });
+  const c = await insert("centers", { area_id: area, name: "مركز الإضافة", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }, { d: 2, t: "16:00" }], initData: admin });
+  const sun = nextWeekday(6), wed = addDays(sun, 3);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: b.id, date: sun }], initData: admin });
+  await student(101, "حضوري");
+  await put("students", { ...(await find("students", { user_id: 101 }))[0], center_id: c });
+  await put("exam_access", { user_id: 101, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  await put("schedules", { user_id: 101, mode: "private", picks: JSON.stringify({ "6": ["16:00"], "2": ["16:00"] }), start_day: sun, end_day: addDays(sun, 60), weekdays: JSON.stringify([6, 2]), hour: 16, created: stamp() });
+  const it = await insert("sched_items", { user_id: 101, exam_id: b.id, at: `${sun} 16:00`, status: "waiting" });
+  const r: any = await schedAdminAction({ action: "insertExam", center: c, exam: b.id, add: add.id, scope: "place", initData: admin });
+  assert.match(r.notice, /انضاف/);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: add.id }))[0].day, sun);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, wed);
+  assert.equal((await one("sched_items", { id: it }))!.at, `${wed} 16:00`);
+  assert.equal((await find("sched_items", { user_id: 101, exam_id: add.id }))[0].at, `${sun} 16:00`);
+  assert.equal(r.rows.find((x: any) => x.exam === b.id).hols.length, 0);   // مو عطلة
+  const ins = r.rows.find((x: any) => x.exam === add.id).inserted;
+  assert.ok(ins);
+  assert.equal((await act(101, "info")).holidays.length, 0);
+  await assert.rejects(schedAdminAction({ action: "insertExam", center: c, exam: b.id, add: add.id, scope: "place", initData: admin }), /إله موعد/);
+  await schedAdminAction({ action: "holidayDel", center: c, id: ins, initData: admin });
+  assert.equal((await find("place_dates", { center_id: c, exam_id: add.id })).length, 0);
+  assert.equal((await find("place_dates", { center_id: c, exam_id: b.id }))[0].day, sun);
+  assert.equal((await one("sched_items", { id: it }))!.at, `${sun} 16:00`);
+  assert.equal((await find("sched_items", { user_id: 101, exam_id: add.id })).length, 0);
+});
