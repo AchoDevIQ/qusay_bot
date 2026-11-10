@@ -189,6 +189,8 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
   useEffect(() => setMinutes(String(exam.minutes)), [exam.minutes]);
   const [title, setTitle] = useState(exam.title);
   useEffect(() => setTitle(exam.title), [exam.title]);
+  const [en, setEn] = useState(exam.info);
+  useEffect(() => setEn(exam.info), [exam.info]);
   const version = exam.versions.find((v) => v.id === openVersion);
   return (
     <div>
@@ -199,8 +201,9 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
         <button type="button" className="exbtn" disabled={busy || minutes === String(exam.minutes)} onClick={() => call({ action: "minutes", id: exam.id, value: minutes })}>حفظ</button>
       </div>
       <div className="exadd">
-        <input aria-label="عنوان الامتحان" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <button type="button" className="exbtn" disabled={busy || !title.trim() || title.trim() === exam.title} onClick={() => call({ action: "renameExam", id: exam.id, title })}>حفظ العنوان</button>
+        <input aria-label="عنوان الامتحان" placeholder="الاسم بالعربي" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input aria-label="الاسم بالإنجليزي" dir="ltr" placeholder="🇬🇧 الاسم بالإنجليزي" value={en} onChange={(e) => setEn(e.target.value)} />
+        <button type="button" className="exbtn" disabled={busy || !title.trim() || (title.trim() === exam.title && en.trim() === exam.info)} onClick={() => call({ action: "renameExam", id: exam.id, title, en })}>حفظ العنوان</button>
       </div>
       <MarksEditor exam={exam} busy={busy} call={call} />
       <PrivateVersion exam={exam} busy={busy} call={call} />
@@ -392,12 +395,14 @@ function AddExam({ slug, generalMinutes, busy, call, near, side, label = "➕ ا
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [minutes, setMinutes] = useState("");
+  const [en, setEn] = useState("");
   if (!open) return <div className="exline expad"><button type="button" className="exbtn" onClick={() => setOpen(true)}>{label}</button></div>;
   return (
     <div className="exadd expad">
       <input placeholder="عنوان الامتحان، مثل: ديموافر المحاضرة (6)" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <input dir="ltr" placeholder="🇬🇧 الاسم بالإنجليزي، مثل: Mid-Year Exam" value={en} onChange={(e) => setEn(e.target.value)} />
       <input className="exnum" inputMode="numeric" placeholder={`${generalMinutes} دقيقة`} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-      <button type="button" className="exbtn" disabled={busy || !title.trim()} onClick={async () => { if (await call({ action: "addExam", slug, title, minutes: minutes || generalMinutes, near, side })) { setOpen(false); setTitle(""); setMinutes(""); } }}>حفظ</button>
+      <button type="button" className="exbtn" disabled={busy || !title.trim()} onClick={async () => { if (await call({ action: "addExam", slug, title, en, minutes: minutes || generalMinutes, near, side })) { setOpen(false); setTitle(""); setEn(""); setMinutes(""); } }}>حفظ</button>
       <button type="button" className="exbtn" onClick={() => setOpen(false)}>إلغاء</button>
     </div>
   );

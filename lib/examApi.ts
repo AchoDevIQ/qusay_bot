@@ -130,6 +130,7 @@ export async function examAction(body: Row) {
   } else if (a === "addExam") {
     const title = String(body.title ?? "").trim().slice(0, 80);
     need(title, "اكتب عنوان الامتحان");
+    const en = String(body.en ?? "").trim().slice(0, 80);
     const n = intOf(body.minutes, 5, 600, "الوقت لازم يكون بالدقائق، من 5 إلى 600");
     const c = await one("bank_exams", { slug: String(body.slug ?? "") });
     need(c, "الفصل غير موجود");
@@ -140,7 +141,7 @@ export async function examAction(body: Row) {
     const at = near < 0 ? list.length : body.side === "before" ? near : near + 1;
     let added = 0;
     await tx(async () => {
-      const id = await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: "", minutes: n, manual: 1, pos: maxPos(list) + 1 });
+      const id = await insert("bank_exams", { slug: String(body.slug), chapter: c!.chapter, ord, title, info: en, minutes: n, manual: 1, pos: maxPos(list) + 1 });
       added = id;
       const order = [...list.slice(0, at), { id }, ...list.slice(at)];
       for (const [p, x] of order.entries()) if ((x as Row).pos !== p + 1) await update("bank_exams", { id: x.id }, { pos: p + 1 });
@@ -220,8 +221,10 @@ export async function examAction(body: Row) {
     const title = String(body.title ?? "").trim().slice(0, 80);
     need(title, "اكتب عنوان الامتحان");
     need(await one("bank_exams", { id }), "الامتحان غير موجود");
-    await update("bank_exams", { id }, { title });
-    await logEdit(uid, `امتحان ${id}: العنوان ${title}`);
+    // الاسم الإنجليزي يطلع لطلاب الإنجليزي
+    const en = body.en === undefined ? undefined : String(body.en).trim().slice(0, 80);
+    await update("bank_exams", { id }, en === undefined ? { title } : { title, info: en });
+    await logEdit(uid, `امتحان ${id}: العنوان ${title}${en ? ` / ${en}` : ""}`);
   } else if (a === "skippable") {
     // الأصل: الامتحان ما ينحذف. صاحب الصلاحية يأشر على امتحان (مثلاً مكرر) فطالب الجدول الخاص يگدر يشيله
     need(await one("bank_exams", { id }), "الامتحان غير موجود");
