@@ -87,6 +87,10 @@ test("المحطة: قراءة الكود تسجل الحضور وترجع ال�
   assert.equal(third.job, null);
   assert.equal(((await attendAction({ station, action: "reprint", item: first.card.item })) as any).job.id, first.card.item);
   assert.ok(((await attendAction({ station, action: "test" })) as any).job.b64.length > 1000);
+  // تطبيق جهاز SUNMI: نفس الليبل صورة PNG بعرض 384
+  const png = Buffer.from(((await attendAction({ station, action: "test", format: "png", h: 39 })) as any).job.png, "base64");
+  assert.equal(png.subarray(1, 4).toString("latin1"), "PNG");
+  assert.equal(png.readUInt32BE(16), 384);
   // الضبط ينحفظ ويطبق على الليبلات الجاية بدون ما ينرسل كل مرة
   assert.deepEqual(((await attendAction({ station, action: "pos", dx: 8, dy: 16 })) as any).pos, { dx: 8, dy: 16 });
   const saved = Buffer.from(((await attendAction({ station, action: "reprint", item: first.card.item })) as any).job.b64, "base64").toString("latin1");

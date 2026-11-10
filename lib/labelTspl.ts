@@ -51,21 +51,22 @@ async function bitmap(p: Piece, dx: number, dy: number) {
   ]);
 }
 
-/** dx وdy: تحريك الطباعة بالنقاط (8 نقاط بالملم) إذا الليبل طالع زاحف */
-export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
-  const { GlobalFonts } = await import("@napi-rs/canvas");
-  if (!fontReady) {
-    const p = path.join(process.cwd(), "assets", "fonts", "NotoSansArabic-Bold.ttf");
-    if (fs.existsSync(p)) GlobalFonts.registerFromPath(p, "QArabic");
-    // الخط العربي ما بي حروف إنجليزية ولا # و( ): هذا يكملها، لأن السيرفر ما بي خطوط
-    const latin = path.join(process.cwd(), "public", "boahmed.ttf");
-    if (fs.existsSync(latin)) GlobalFonts.registerFromPath(latin, "QLatin");
-    fontReady = true;
-  }
+function ensureFonts(GlobalFonts: { registerFromPath(p: string, name: string): unknown }) {
+  if (fontReady) return;
+  const p = path.join(process.cwd(), "assets", "fonts", "NotoSansArabic-Bold.ttf");
+  if (fs.existsSync(p)) GlobalFonts.registerFromPath(p, "QArabic");
+  // الخط العربي ما بي حروف إنجليزية ولا # و( ): هذا يكملها، لأن السيرفر ما بي خطوط
+  const latin = path.join(process.cwd(), "public", "boahmed.ttf");
+  if (fs.existsSync(latin)) GlobalFonts.registerFromPath(latin, "QLatin");
+  fontReady = true;
+}
+
+/** أجزاء الليبل بنقاط ليبل 58×39 (464×312). نفس الترتيب لطابعة Vision ولجهاز SUNMI */
+function pieces(c: LabelInfo): Piece[] {
   const lines = (g: Ctx, list: string[], size: number, w: number, top: number) => {
     list.forEach((l, i) => g.fillText(l, w - 2, top + i * Math.round(size * 1.4)));
   };
-  const parts = await Promise.all(([
+  return [
     // اسم الطالب الرباعي: أول شي، بعرض الليبل، وسطر واحد
     { x: 8, y: 4, w: 448, h: 52, draw: (g, w) => { const f = fit(g, c.name, w - 4, [36, 32, 28, 24, 20], 1); lines(g, f.lines, f.size, w, 0); } },
     // جنب الكود: الرقم والمركز والوقت
@@ -76,10 +77,45 @@ export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
     } },
     // اسم الامتحان: جوة، بعرض الليبل، ويوسع سطرين إذا طويل
     { x: 8, y: 208, w: 448, h: 92, draw: (g, w) => { const f = fit(g, c.exam, w - 4, [32, 28, 24, 21, 18], 2); lines(g, f.lines, f.size, w, 0); } },
-  ] as Piece[]).map((p) => bitmap(p, dx, dy)));
+  ];
+}
+
+/** dx وdy: تحريك الطباعة بالنقاط (8 نقاط بالملم) إذا الليبل طالع زاحف */
+export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
+  const { GlobalFonts } = await import("@napi-rs/canvas");
+  ensureFonts(GlobalFonts);
+  const parts = await Promise.all(pieces(c).map((p) => bitmap(p, dx, dy)));
   return Buffer.concat([
     Buffer.from("SIZE 58 mm,39 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\n", "latin1"),
     ...parts,
     Buffer.from(`QRCODE ${Math.max(0, 14 + dx)},${Math.max(0, 58 + dy)},M,7,A,0,"QI:${c.item}"\r\nPRINT 1\r\n`, "latin1"),
   ]);
+}
+
+/** نفس الليبل صورة PNG بعرض طابعة جهاز SUNMI (384 نقطة = 48 ملم). heightMm: طول الليبلة، حتى الصورة ما تطلع منها */
+export async function labelPng(c: LabelInfo, heightMm = 39): Promise<Buffer> {
+  const { createCanvas, GlobalFonts } = await import("@napi-rs/canvas");
+  ensureFonts(GlobalFonts);
+  const W = 384, s = Math.min(W / 464, (Math.max(20, heightMm) * 8 - 16) / 312);
+  const H = Math.round(312 * s), ox = Math.round((W - 464 * s) / 2);
+  const canvas = createCanvas(W, H);
+  const g = canvas.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  for (const p of pieces(c)) {
+    g.save();
+    g.translate(ox + p.x * s, p.y * s); g.scale(s, s);
+    g.beginPath(); g.rect(0, 0, p.w, p.h); g.clip();
+    g.fillStyle = "#000"; g.textBaseline = "top"; g.textAlign = "right"; g.direction = "rtl";
+    p.draw(g as unknown as Ctx & Record<string, unknown>, p.w);
+    g.restore();
+  }
+  // الكود: مربعات كاملة بدون تنعيم، حتى ينقرا عدل
+  const { default: QRCode } = await import("qrcode");
+  const qr = QRCode.create(`QI:${c.item}`, { errorCorrectionLevel: "M" });
+  const n = qr.modules.size, cell = Math.max(3, Math.floor((152 * s) / n));
+  g.fillStyle = "#000";
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    if (qr.modules.get(x, y)) g.fillRect(Math.round(ox + 14 * s) + x * cell, Math.round(58 * s) + y * cell, cell, cell);
+  }
+  return canvas.toBuffer("image/png");
 }

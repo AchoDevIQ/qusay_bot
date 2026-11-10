@@ -8,7 +8,7 @@ import { find, insert, kvGet, kvSet, one, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { TOKEN } from "./config.ts";
 import { can, centerName, isAdmin, student } from "./data.ts";
-import { labelTspl, type LabelInfo } from "./labelTspl.ts";
+import { labelPng, labelTspl, type LabelInfo } from "./labelTspl.ts";
 import { versionOf } from "./examRoom.ts";
 import { addMinutes } from "./scheduleRules.ts";
 import { files } from "./files.ts";
@@ -110,7 +110,9 @@ export async function stationAction(body: Row) {
     return { pos: await savedPos() };
   }
   const jobOf = async (c: LabelInfo) => {
-    const p = body.dx !== undefined ? { dx: shift(body.dx), dy: shift(body.dy) } : await savedPos();
+    // تطبيق جهاز SUNMI ياخذ الليبل صورة، والطابعة نفسها تلگه مكانه
+    if (body.format === "png") return { id: c.item, name: c.name, png: (await labelPng(c, Number(body.h) || 39)).toString("base64") };
+    const p =body.dx !== undefined ? { dx: shift(body.dx), dy: shift(body.dy) } : await savedPos();
     return { id: c.item, name: c.name, b64: (await labelTspl(c, p.dx, p.dy)).toString("base64") };
   };
   if (body.action === "scan") {
