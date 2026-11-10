@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -19,6 +20,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -74,45 +76,72 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
-    // ---------- الشاشة
+    // ---------- الشاشة: نفس ألوان البوت، كحلي وذهبي، وشعار قصي العميري فوك
     private fun buildUi() {
-        val navy = Color.parseColor("#0F1A2E"); val gold = Color.parseColor("#D4A63A"); val cream = Color.parseColor("#F4F1E8")
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 60, 40, 40); setBackgroundColor(navy); layoutDirection = View.LAYOUT_DIRECTION_RTL }
-        fun text(t: String, size: Float, bold: Boolean = false) = TextView(this).apply { text = t; textSize = size; setTextColor(cream); if (bold) typeface = Typeface.DEFAULT_BOLD; setPadding(0, 16, 0, 8) }
+        val navy = Color.parseColor("#0F1A2E"); val card = Color.parseColor("#17243D"); val gold = Color.parseColor("#D4A63A"); val cream = Color.parseColor("#F4F1E8")
+        val dp = resources.displayMetrics.density
+        fun px(v: Int) = (v * dp).toInt()
+        fun round(fill: Int, stroke: Int? = null, r: Int = 14) = GradientDrawable().apply { setColor(fill); cornerRadius = px(r).toFloat(); if (stroke != null) setStroke(px(1), stroke) }
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(16), px(20), px(16), px(24)); setBackgroundColor(navy); layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        fun text(t: String, size: Float, color: Int = cream, bold: Boolean = false) = TextView(this).apply { text = t; textSize = size; setTextColor(color); if (bold) typeface = Typeface.DEFAULT_BOLD; setPadding(0, px(4), 0, px(4)); setLineSpacing(0f, 1.2f) }
         fun button(t: String, primary: Boolean, click: () -> Unit) = Button(this).apply {
-            text = t; textSize = 18f; isAllCaps = false
-            setBackgroundColor(if (primary) gold else Color.parseColor("#1D2C4A")); setTextColor(if (primary) navy else cream)
+            text = t; textSize = 17f; isAllCaps = false; typeface = Typeface.DEFAULT_BOLD; stateListAnimator = null
+            background = if (primary) round(gold) else round(card, gold)
+            setTextColor(if (primary) navy else gold)
             setOnClickListener { click() }
-            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = 20 }
+            layoutParams = LinearLayout.LayoutParams(-1, px(52)).apply { topMargin = px(10) }
         }
-        col.addView(text("🖨 ليبل QMath", 26f, true))
-        col.addView(text("1. بالبوت: 🎫 الحضوري ← 📋 انسخ رابط المحطة.\n2. هنا: 📋 الصق الرابط ← ▶️ ابدأ.\nالرابط يخلص كل يوم، فتلصق رابط جديد كل صباح.", 15f))
-        link = EditText(this).apply { hint = "رابط المحطة"; setTextColor(cream); setHintTextColor(Color.GRAY); textSize = 14f; isSingleLine = true }
-        col.addView(link)
-        col.addView(button("📋 الصق الرابط", false) { paste() })
-        col.addView(text("طول الليبلة بالملم:", 15f))
-        height = EditText(this).apply { setTextColor(cream); textSize = 16f; inputType = InputType.TYPE_CLASS_NUMBER; gravity = Gravity.CENTER }
-        col.addView(height)
-        col.addView(text("عرض الكتابة بالملم (إذا الكتابة مقصوصة من الجهتين صغّره):", 15f))
-        width = EditText(this).apply { setTextColor(cream); textSize = 16f; inputType = InputType.TYPE_CLASS_NUMBER; gravity = Gravity.CENTER }
-        col.addView(width)
-        col.addView(text("إذا الكتابة مقصوصة من جهة وحدة، حركها. كل دسة 1 ملم وتطبع ليبل تجربة:", 15f))
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
-        fun half(t: String, d: Int) = Button(this).apply {
-            text = t; textSize = 18f; isAllCaps = false; setBackgroundColor(Color.parseColor("#1D2C4A")); setTextColor(cream)
-            setOnClickListener { prefs.edit().putInt("dx", (prefs.getInt("dx", 0) + d).coerceIn(-20, 20)).apply(); showShift(); test() }
-            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(8, 20, 8, 0) }
+        fun box(title: String) = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; background = round(card, Color.parseColor("#2A3B5C"), 16); setPadding(px(14), px(12), px(14), px(14))
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(14) }
+            addView(text(title, 16f, gold, true))
         }
-        row.addView(half("⬅️ يسار", -1)); row.addView(half("يمين ➡️", 1))
-        col.addView(row)
-        shiftText = text("", 15f).apply { gravity = Gravity.CENTER }
-        col.addView(shiftText)
+        fun field(hintText: String, numeric: Boolean) = EditText(this).apply {
+            hint = hintText; setTextColor(cream); setHintTextColor(Color.parseColor("#8A94A8")); textSize = 15f; isSingleLine = true
+            background = round(navy, Color.parseColor("#2A3B5C"), 10); setPadding(px(12), px(10), px(12), px(10))
+            if (numeric) { inputType = InputType.TYPE_CLASS_NUMBER; gravity = Gravity.CENTER }
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6) }
+        }
+
+        // الرأس: الشعار والاسم
+        col.addView(ImageView(this).apply { setImageResource(R.drawable.logo); adjustViewBounds = true; layoutParams = LinearLayout.LayoutParams(-1, px(96)).apply { gravity = Gravity.CENTER } })
+        col.addView(text("قصي العميري", 24f, gold, true).apply { gravity = Gravity.CENTER })
+        col.addView(text("🖨 محطة طباعة الليبل", 15f).apply { gravity = Gravity.CENTER })
+
+        // الحالة
+        status = text("", 16f, cream, true).apply { gravity = Gravity.CENTER; background = round(card, gold, 16); setPadding(px(12), px(14), px(12), px(14)); layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(14) } }
+        col.addView(status)
         startBtn = button("▶️ ابدأ", true) { if (running) stop() else start() }
         col.addView(startBtn)
         col.addView(button("🧪 اطبع ليبل تجربة", false) { test() })
-        status = text("", 17f, true).apply { setPadding(0, 40, 0, 0) }
-        col.addView(status)
+
+        // رابط المحطة
+        val linkBox = box("🔗 رابط المحطة")
+        linkBox.addView(text("بالبوت: 🎫 الحضوري ← 📋 انسخ رابط المحطة، وبعدين الصقه هنا. الرابط يخلص كل يوم، فتلصق رابط جديد كل صباح.", 13f))
+        link = field("رابط المحطة", false)
+        linkBox.addView(link)
+        linkBox.addView(button("📋 الصق الرابط", false) { paste() })
+        col.addView(linkBox)
+
+        // ضبط الليبل
+        val fitBox = box("📐 ضبط الليبل")
+        fitBox.addView(text("طول الليبلة بالملم", 13f))
+        height = field("39", true); fitBox.addView(height)
+        fitBox.addView(text("عرض الكتابة بالملم (إذا مقصوصة من الجهتين صغّره)", 13f))
+        width = field("48", true); fitBox.addView(width)
+        fitBox.addView(text("إذا الكتابة مقصوصة من جهة وحدة حركها. كل دسة 1 ملم وتطبع ليبل تجربة:", 13f))
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
+        fun half(t: String, d: Int) = button(t, false) { prefs.edit().putInt("dx", (prefs.getInt("dx", 0) + d).coerceIn(-20, 20)).apply(); showShift(); test() }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, px(52), 1f).apply { setMargins(px(4), px(10), px(4), 0) }
+        }
+        row.addView(half("⬅️ يسار", -1)); row.addView(half("يمين ➡️", 1))
+        fitBox.addView(row)
+        shiftText = text("", 13f).apply { gravity = Gravity.CENTER }
+        fitBox.addView(shiftText)
+        col.addView(fitBox)
+
         setContentView(ScrollView(this).apply { setBackgroundColor(navy); addView(col) })
+        window.statusBarColor = navy
         say("جاري الاتصال بطابعة الجهاز...")
     }
 
