@@ -201,12 +201,33 @@ async function enterItem(it: Row, by: number) {
   }
   return { ...await itemCard((await one("sched_items", { id: it.id }))!), already, late: false };
 }
+/** امتحان الجلسة: المساعد يختار المركز والامتحان قبل ما يقرا الأكواد، وكل كود ما يطابقه ينرفض بسببه. ينتهي بنهاية اليوم */
+const lockKey = (by: number) => `attend_lock_${by}`;
+export async function attendLock(by: number): Promise<{ center: number; exam: number } | null> {
+  try {
+    const j = JSON.parse(await kvGet(lockKey(by)) ?? "null");
+    return j && j.day === todayStr() && (j.center || j.exam) ? { center: Number(j.center) || 0, exam: Number(j.exam) || 0 } : null;
+  } catch { return null; }
+}
+/** امتحان الطالب بامتحان الجلسة، أو سبب رفضه */
+async function lockedItem(st: Row, uid: number, lock: { center: number; exam: number }) {
+  if (lock.center && st.center_id !== lock.center) need(false, `⛔ ${st.name} مو من هذا المركز. مركزه: ${await centerName(st.center_id) || "ماكو"}`);
+  if (!lock.exam) return await todayItem(uid);
+  const e = await one("bank_exams", { id: lock.exam });
+  const { boughtExams } = await import("./schedApi.ts");
+  if (!(await boughtExams(uid)).some((x) => x.id === lock.exam)) need(false, `⛔ ${st.name} غير مشترك في ${e?.chapter ?? "فصل هذا الامتحان"}`);
+  const mine = (await find("sched_items", { user_id: uid, exam_id: lock.exam })).filter((i) => i.kind !== "optional");
+  const live = mine.find((i) => LIVE.has(i.status));
+  if (!live) need(false, mine.some((i) => i.status === "done") ? `⛔ ${st.name} امتحن ${e?.title ?? "هذا الامتحان"} قبل` : `⛔ ${st.name} ما إله موعد بامتحان ${e?.title ?? ""}`);
+  return live!;
+}
 /** حضور الطالب. الجاي بغير وقته ما ينسجل: يرجع late حتى المساعد يختار استثناء لو رفض. force: بدون سؤال */
 export async function markAttendance(uid: number, by: number, force = false) {
   const st = await student(uid);
   need(st, "هذا مو طالب مسجل");
   need(st!.exam === "حضوري", `${st!.name} طالب إلكتروني، مو حضوري`);
-  const it = await todayItem(uid);
+  const lock = force ? null : await attendLock(by);
+  const it = lock ? await lockedItem(st!, uid, lock) : await todayItem(uid);
   need(it, `${st!.name} ما عنده امتحان`);
   if (!force && it!.status !== "attended" && !await onTime(it!)) return { ...await itemCard(it!), already: false, late: true };
   return await enterItem(it!, by);
@@ -329,7 +350,9 @@ async function pageData(uid: number, full = true) {
   const exams = (await find("bank_exams", {}, { order: ["pos", "ord"] })).filter((e) => versions.some((v) => v.exam_id === e.id))
     .map((e) => ({ id: e.id as number, title: e.title as string, chapter: e.chapter as string, versions: versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id as number, pageMap: allMaps[`v${v.id}`] ?? null, model: v.model as string, token: printToken("v", v.id) })) }));
   const today = (await find("sched_items")).filter((i) => String(i.attended_at ?? "").startsWith(todayStr())).length;
-  return { owner, full, centers, exams, today, rescan: await rescanFor(uid), station: await can(uid, STATION_PERM) ? { active: await stationActive(uid), token: stationToken(uid) } : null, canCam: full || await can(uid, CAM_PERM), early: await attendEarly(), notice: "" };
+  const lock = await attendLock(uid);
+  const lockCenters = (await find("centers", { active: 1 })).map((c) => ({ id: c.id as number, name: c.name as string }));
+  return { owner, full, centers, exams, today, lock, lockCenters, rescan: await rescanFor(uid), station: await can(uid, STATION_PERM) ? { active: await stationActive(uid), token: stationToken(uid) } : null, canCam: full || await can(uid, CAM_PERM), early: await attendEarly(), notice: "" };
 }
 
 export async function attendAction(body: Row) {
@@ -369,6 +392,14 @@ export async function attendAction(body: Row) {
     const queued = card.print === "label" && await stationActive(uid);
     if (queued) await enqueue(uid, card.item);
     return { ...await pageData(uid), card: { ...card, queued } };
+  }
+  if (a === "lock") {
+    // امتحان الجلسة: مركز وامتحان، ولا شي = تشيله
+    const center = Number(body.center) || 0, exam = Number(body.exam) || 0;
+    if (center) need(await one("centers", { id: center }), "المركز غير موجود");
+    if (exam) need(await one("bank_exams", { id: exam }), "الامتحان غير موجود");
+    await kvSet(lockKey(uid), JSON.stringify(center || exam ? { center, exam, day: todayStr() } : null));
+    return { ...await pageData(uid), notice: center || exam ? "🔒 انحفظ امتحان الجلسة. الكود اللي ما يطابقه ينرفض" : "🔓 انشال امتحان الجلسة" };
   }
   if (a === "rejectLate") {
     await decideLate(uid, body.item, false);

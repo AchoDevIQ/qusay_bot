@@ -287,6 +287,9 @@ export async function startInPersonTest(centerId: number, vid: number, late = fa
     for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: old.id });
     await remove("sched_items", { id: old.id });
   }
+  // مشتري الفصل، حتى امتحان الجلسة يقبله
+  const e = await one("bank_exams", { id: v!.exam_id });
+  await put("exam_access", { user_id: -k, chapter: e?.chapter ?? "", order_id: null, created: stamp() });
   await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: late ? addMinutes(stamp(), 180) : stamp(), status: "waiting", version_id: vid, notified: "test" });
   return k;
 }
@@ -306,6 +309,10 @@ export async function makeInPersonSet(centerId: number, vid: number) {
       for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: old.id });
       await remove("sched_items", { id: old.id });
     }
+    // الثلاثة الأولين مشترين الفصل، والرابع غير مشترك
+    const e = await one("bank_exams", { id: v!.exam_id });
+    if (kind !== "none") await put("exam_access", { user_id: -k, chapter: e?.chapter ?? "", order_id: null, created: stamp() });
+    else await remove("exam_access", { user_id: -k, chapter: e?.chapter ?? "" });
     if (kind !== "none") await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: kind === "late" ? addMinutes(stamp(), 180) : stamp(), status: "waiting", version_id: vid, notified: "test" });
     out.push({ k, kind });
   }

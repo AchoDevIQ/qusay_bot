@@ -433,13 +433,13 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
         </div>
         <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPerson", center, vid, late })}>🎫 سوي الطالب وامتحان اليوم</button>
         <button type="button" className="btn adtop" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonSet", center, vid })}>👥 سوي 4 طلاب حضوريين بأكوادهم</button>
-        <div className="exhint">اثنين عندهم الامتحان هسه، واحد جاي بغير وقته، وواحد ما عنده امتحان اليوم. كل واحد كوده ثابت مثل الطالب الحقيقي.</div>
+        <div className="exhint">اثنين عندهم الامتحان هسه، واحد جاي بغير وقته، وواحد غير مشترك بالفصل. كل واحد كوده ثابت مثل الطالب الحقيقي.</div>
         {!!codes?.length && (
           <div className="adtop" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
             {codes.map((x) => (
               <div key={x.k} className="exhint" style={{ textAlign: "center", border: "1px solid #d4a63a", borderRadius: 12, padding: 8 }}>
                 <b>طالب حضوري تجريبي {x.k}</b>
-                <div>{x.kind === "now" ? "✅ عنده امتحان هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : "🚫 ما عنده امتحان اليوم"}</div>
+                <div>{x.kind === "now" ? "✅ عنده امتحان هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : "🚫 غير مشترك بالفصل"}</div>
                 <img src={x.img} alt={`كود الطالب ${x.k}`} style={{ width: "100%", maxWidth: 220, background: "#fff", borderRadius: 8, marginTop: 6 }} />
               </div>
             ))}

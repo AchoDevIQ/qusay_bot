@@ -51,7 +51,7 @@ export async function scheduleChapters(uid: number): Promise<string[]> {
   return out;
 }
 /** الامتحانات الإجبارية من الفصول اللي اشتراها، بترتيبها */
-async function boughtExams(uid: number) {
+export async function boughtExams(uid: number) {
   const chapters = await scheduleChapters(uid);
   // الامتحان اللي كل نسخه اختيارية ما يدخل الجدول. اللي نسخه لسه ما انضافت يدخل بمكانه
   const versions = await find("bank_versions");

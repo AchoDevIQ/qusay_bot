@@ -176,3 +176,29 @@ test("👥 4 طلاب حضوريين: كل واحد بحالته، وكوده ا
   assert.equal((await scan(set[2].k)).card.late, true);
   await assert.rejects(scan(set[3].k), /ما عنده امتحان/);
 });
+
+test("🔒 امتحان الجلسة: الكود اللي ما يطابق المركز أو الفصل أو الامتحان ينرفض بسببه", async () => {
+  const { makeInPersonSet } = await import("../lib/gradeApi.ts");
+  const { attendAction } = await import("../lib/inPerson.ts");
+  const { homeToken } = await import("../lib/webAuth.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "الجلسة" });
+  const c = await insert("centers", { area_id: area, name: "مركز الجلسة", active: 1 });
+  const other = await insert("centers", { area_id: area, name: "مركز ثاني", active: 1 });
+  const [v, v2] = (await find("bank_versions", { kind: "mandatory" })).filter((x, i, all) => all.findIndex((y) => y.exam_id === x.exam_id) === i);
+  const set = await makeInPersonSet(c, v.id);
+  const away = await makeInPersonSet(other, v.id);
+  const me = `tk:${homeToken(1)}`;
+  const scan = (k: number) => attendAction({ action: "scan", code: studentCode(-k), initData: me }) as Promise<any>;
+  const lock: any = await attendAction({ action: "lock", center: c, exam: v.exam_id, initData: me });
+  assert.deepEqual(lock.lock, { center: c, exam: v.exam_id });
+  await assert.rejects(scan(away[0].k), /مو من هذا المركز/);
+  await assert.rejects(scan(set[3].k), /غير مشترك/);
+  assert.equal((await scan(set[0].k)).card.late, false);
+  assert.equal((await scan(set[2].k)).card.late, true);
+  // امتحان ثاني بالجلسة: اللي عنده امتحان v بس ينرفض
+  await attendAction({ action: "lock", center: c, exam: v2.exam_id, initData: me });
+  await assert.rejects(scan(set[1].k), /غير مشترك|ما إله موعد/);
+  // بدون جلسة: يرجع الطبيعي
+  assert.equal(((await attendAction({ action: "lock", center: 0, exam: 0, initData: me })) as any).lock, null);
+  assert.equal((await scan(set[1].k)).card.late, false);
+});

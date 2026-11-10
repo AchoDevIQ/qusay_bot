@@ -10,7 +10,7 @@ type Card = { item: number; uid: number; name: string; exam: string; at: string;
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
 type Exam = { id: number; title: string; chapter: string; versions: { id: number; pageMap: number[][] | null; model: string; token: string }[] };
 type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
-type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; station?: { active: boolean; token: string } | null; canCam: boolean; early: number; notice: string };
+type Data = { owner: boolean; full: boolean; cam?: Cam; centers: Center[]; exams: Exam[]; today: number; card?: Card; rescan?: Rescan[]; station?: { active: boolean; token: string } | null; canCam: boolean; early: number; notice: string; lock: { center: number; exam: number } | null; lockCenters: { id: number; name: string }[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const printUrl = (kind: "label" | "paper", k: string) => `${location.origin}/print/${kind}?k=${encodeURIComponent(k)}`;
@@ -26,6 +26,7 @@ export default function AttendClient() {
         {data && (
           <>
             <RescanList list={data.rescan} />
+            {data.full && <SessionLock data={data} busy={busy} call={call} />}
             {data.full && <Attend data={data} busy={busy} call={call} />}
             {data.station && <Station station={data.station} />}
             {data.canCam && <CamUp data={data} busy={busy} call={call} />}
@@ -43,6 +44,42 @@ export default function AttendClient() {
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
+  );
+}
+
+/** امتحان الجلسة: تختار المركز والامتحان قبل ما تقرا، والكود اللي ما يطابقه ينرفض ويگول ليش */
+function SessionLock({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
+  const [center, setCenter] = useState(data.lock?.center ?? 0);
+  const [chapter, setChapter] = useState(() => data.exams.find((e) => e.id === data.lock?.exam)?.chapter ?? "");
+  const [exam, setExam] = useState(data.lock?.exam ?? 0);
+  const chapters = [...new Set(data.exams.map((e) => e.chapter))];
+  const lockedExam = data.exams.find((e) => e.id === data.lock?.exam);
+  const lockedCenter = data.lockCenters.find((c) => c.id === data.lock?.center);
+  return (
+    <div className="card expad">
+      <div className="exlabel">🔒 امتحان الجلسة (اختياري)</div>
+      {data.lock ? (
+        <div className="exhint atok">✅ هسه: {lockedCenter?.name ?? "كل المراكز"} · {lockedExam?.title ?? "أي امتحان"}. الكود اللي ما يطابقه ينرفض ويگولك ليش. ينتهي بنهاية اليوم.</div>
+      ) : (
+        <div className="exhint">بدونه: كل طالب ينطبع ليبل الامتحان اللي عنده اليوم. وياه: تختار المركز والامتحان أول، والطالب اللي مو من المركز، أو غير مشترك بالفصل، أو ما عنده هذا الامتحان، ينرفض ويطلع السبب.</div>
+      )}
+      <select className="adtop" value={center} onChange={(e) => setCenter(Number(e.target.value))}>
+        <option value={0}>كل المراكز</option>
+        {data.lockCenters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <select className="adtop" value={chapter} onChange={(e) => { setChapter(e.target.value); setExam(0); }}>
+        <option value="">اختار الفصل...</option>
+        {chapters.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+      {chapter && <select className="adtop" value={exam} onChange={(e) => setExam(Number(e.target.value))}>
+        <option value={0}>أي امتحان</option>
+        {data.exams.filter((e) => e.chapter === chapter).map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
+      </select>}
+      <div className="atrow">
+        <button type="button" className="btn" disabled={busy || (!center && !exam)} onClick={() => void call({ action: "lock", center, exam })}>🔒 ثبّت</button>
+        {data.lock && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "lock", center: 0, exam: 0 }).then(() => { setCenter(0); setChapter(""); setExam(0); })}>🔓 شيله</button>}
+      </div>
+    </div>
   );
 }
 
