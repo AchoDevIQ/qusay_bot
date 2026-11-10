@@ -111,7 +111,7 @@ export async function stationAction(body: Row) {
   }
   const jobOf = async (c: LabelInfo) => {
     // تطبيق جهاز SUNMI ياخذ الليبل صورة، والطابعة نفسها تلگه مكانه
-    if (body.format === "png") return { id: c.item, name: c.name, png: (await labelPng(c, Number(body.h) || 39)).toString("base64") };
+    if (body.format === "png") return { id: c.item, name: c.name, png: (await labelPng(c, Number(body.h) || 39, Number(body.w) || 48, Number(body.dx) || 0)).toString("base64") };
     const p =body.dx !== undefined ? { dx: shift(body.dx), dy: shift(body.dy) } : await savedPos();
     return { id: c.item, name: c.name, b64: (await labelTspl(c, p.dx, p.dy)).toString("base64") };
   };

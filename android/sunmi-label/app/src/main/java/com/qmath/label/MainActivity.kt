@@ -44,6 +44,8 @@ class MainActivity : Activity() {
 
     private lateinit var link: EditText
     private lateinit var height: EditText
+    private lateinit var width: EditText
+    private lateinit var shiftText: TextView
     private lateinit var status: TextView
     private lateinit var startBtn: Button
 
@@ -55,6 +57,8 @@ class MainActivity : Activity() {
         buildUi()
         link.setText(prefs.getString("link", ""))
         height.setText(prefs.getString("h", "39"))
+        width.setText(prefs.getString("w", "48"))
+        showShift()
         takeLink(intent)
         bindPrinter()
     }
@@ -89,6 +93,20 @@ class MainActivity : Activity() {
         col.addView(text("طول الليبلة بالملم:", 15f))
         height = EditText(this).apply { setTextColor(cream); textSize = 16f; inputType = InputType.TYPE_CLASS_NUMBER; gravity = Gravity.CENTER }
         col.addView(height)
+        col.addView(text("عرض الكتابة بالملم (إذا الكتابة مقصوصة من الجهتين صغّره):", 15f))
+        width = EditText(this).apply { setTextColor(cream); textSize = 16f; inputType = InputType.TYPE_CLASS_NUMBER; gravity = Gravity.CENTER }
+        col.addView(width)
+        col.addView(text("إذا الكتابة مقصوصة من جهة وحدة، حركها. كل دسة 1 ملم وتطبع ليبل تجربة:", 15f))
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
+        fun half(t: String, d: Int) = Button(this).apply {
+            text = t; textSize = 18f; isAllCaps = false; setBackgroundColor(Color.parseColor("#1D2C4A")); setTextColor(cream)
+            setOnClickListener { prefs.edit().putInt("dx", (prefs.getInt("dx", 0) + d).coerceIn(-20, 20)).apply(); showShift(); test() }
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(8, 20, 8, 0) }
+        }
+        row.addView(half("⬅️ يسار", -1)); row.addView(half("يمين ➡️", 1))
+        col.addView(row)
+        shiftText = text("", 15f).apply { gravity = Gravity.CENTER }
+        col.addView(shiftText)
         startBtn = button("▶️ ابدأ", true) { if (running) stop() else start() }
         col.addView(startBtn)
         col.addView(button("🧪 اطبع ليبل تجربة", false) { test() })
@@ -99,6 +117,11 @@ class MainActivity : Activity() {
     }
 
     private fun say(t: String) = main.post { status.text = t }
+
+    private fun showShift() {
+        val d = prefs.getInt("dx", 0)
+        shiftText.text = if (d == 0) "الطباعة بالنص" else if (d < 0) "متحركة لليسار ${-d} ملم" else "متحركة لليمين $d ملم"
+    }
 
     // ---------- رابط المحطة
     private fun takeLink(i: Intent?) {
@@ -119,7 +142,7 @@ class MainActivity : Activity() {
         link.setText(t); save(); say("✅ انلصق الرابط. دوس ▶️ ابدأ")
     }
 
-    private fun save() = prefs.edit().putString("link", link.text.toString().trim()).putString("h", height.text.toString().trim()).apply()
+    private fun save() = prefs.edit().putString("link", link.text.toString().trim()).putString("h", height.text.toString().trim()).putString("w", width.text.toString().trim()).apply()
 
     /** رمز المحطة من الرابط (…/store/station?k=…)، أو الرمز نفسه إذا انلصق بروحه */
     private fun token(): String? {
@@ -129,6 +152,7 @@ class MainActivity : Activity() {
     }
 
     private fun labelHeight() = height.text.toString().toIntOrNull()?.coerceIn(20, 80) ?: 39
+    private fun labelWidth() = width.text.toString().toIntOrNull()?.coerceIn(20, 48) ?: 48
 
     // ---------- طابعة الجهاز
     private val callback = object : InnerPrinterCallback() {
@@ -166,7 +190,7 @@ class MainActivity : Activity() {
         return j
     }
 
-    private fun base(action: String) = JSONObject().put("station", token()).put("action", action).put("format", "png").put("h", labelHeight())
+    private fun base(action: String) = JSONObject().put("station", token()).put("action", action).put("format", "png").put("h", labelHeight()).put("w", labelWidth()).put("dx", prefs.getInt("dx", 0))
 
     private fun start() {
         if (token() == null) { say("⚠️ الصق رابط المحطة أول"); return }

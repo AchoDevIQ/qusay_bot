@@ -92,12 +92,14 @@ export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
   ]);
 }
 
-/** نفس الليبل صورة PNG بعرض طابعة جهاز SUNMI (384 نقطة = 48 ملم). heightMm: طول الليبلة، حتى الصورة ما تطلع منها */
-export async function labelPng(c: LabelInfo, heightMm = 39): Promise<Buffer> {
+/** نفس الليبل صورة PNG بعرض طابعة جهاز SUNMI (384 نقطة = 48 ملم).
+ *  heightMm: طول الليبلة، حتى الصورة ما تطلع منها. widthMm: عرض الكتابة. dxMm: تحريك لليمين (+) أو لليسار (-) إذا الليبلة مو بنص الطابعة */
+export async function labelPng(c: LabelInfo, heightMm = 39, widthMm = 48, dxMm = 0): Promise<Buffer> {
   const { createCanvas, GlobalFonts } = await import("@napi-rs/canvas");
   ensureFonts(GlobalFonts);
-  const W = 384, s = Math.min(W / 464, (Math.max(20, heightMm) * 8 - 16) / 312);
-  const H = Math.round(312 * s), ox = Math.round((W - 464 * s) / 2);
+  const W = 384, cw = Math.max(160, Math.min(W, Math.round(widthMm * 8)));
+  const s = Math.min(cw / 464, (Math.max(20, heightMm) * 8 - 16) / 312);
+  const H = Math.round(312 * s), ox = Math.round((W - 464 * s) / 2 + Math.max(-20, Math.min(20, dxMm)) * 8);
   const canvas = createCanvas(W, H);
   const g = canvas.getContext("2d");
   g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
