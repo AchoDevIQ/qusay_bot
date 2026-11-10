@@ -5,7 +5,7 @@ import PhotoPick from "../PhotoPick";
 import AiCompare, { type AiQ } from "./AiCompare";
 import PdfPages from "../PdfPages";
 import { Fragment, useEffect, useState } from "react";
-import { ampm, prettyAt, prettyDay } from "../../../lib/scheduleRules.ts";
+import { addDays, ampm, prettyAt, prettyDay } from "../../../lib/scheduleRules.ts";
 import { deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
@@ -214,7 +214,7 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
       <h2>🗓 {old ? "رتب جدولك من جديد" : "رتب جدول امتحاناتك"}</h2>
       <div className="form">
         <div className="warn locked">عندك <b>{info.remaining}</b> امتحان. {old ? "اشتريت فصل جديد، فانعاد توزيع الامتحانات الباقية." : "اختار المدة والأيام ووقت امتحانك، والبوت يوزعها."} وأكثر شي <b>{info.perDay}</b> باليوم.</div>
-        {info.holiday && <div className="hint">🏖 العطلة من {prettyDay(info.holiday.start)} لمدة {info.holiday.days} يوم، ما بيها امتحانات.</div>}
+        {info.holiday && <div className="hint">🏖 العطلة من {prettyDay(info.holiday.start)} إلى {prettyDay(addDays(info.holiday.start, info.holiday.days - 1))}، ما بيها امتحانات.</div>}
         <label>تبدي من تاريخ</label>
         <input type="date" className="ltr" min={info.minStart} value={start} onChange={(e) => change(setStart)(e.target.value)} />
         {start && <small className="hint">📅 {prettyDay(start)}</small>}

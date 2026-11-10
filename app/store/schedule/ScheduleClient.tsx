@@ -2,7 +2,7 @@
 // إعدادات جدول الامتحانات: كل المدد بيد الإدارة
 import { Fragment, useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
-import { ampm, flattenDays, groupSlots, prettyDay, spreadVersions } from "../../../lib/scheduleRules.ts";
+import { addDays, ampm, flattenDays, groupSlots, prettyDay, spreadVersions } from "../../../lib/scheduleRules.ts";
 
 /** اسم اليوم تحت خانة التاريخ، لأن الخانة تبين الأرقام بس */
 const DayName = ({ d }: { d: string }) => (d ? <small className="exhint">📅 {prettyDay(d)}</small> : null);
@@ -42,7 +42,9 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
   const [perDay, setPerDay] = useState(String(d.perDay));
   const [gap, setGap] = useState(String(d.gap));
   const [holidayStart, setHolidayStart] = useState(d.holidayStart);
-  const [holidayDays, setHolidayDays] = useState(String(d.holidayDays));
+  // العطلة من تاريخ إلى تاريخ، والبوت يحسب الأيام
+  const [holidayEnd, setHolidayEnd] = useState(d.holidayStart && d.holidayDays > 0 ? addDays(d.holidayStart, d.holidayDays - 1) : "");
+  const holidayDays = holidayStart && holidayEnd >= holidayStart ? Math.round((Date.parse(holidayEnd) - Date.parse(holidayStart)) / 86400000) + 1 : 0;
   const [excluded, setExcluded] = useState(d.excluded.join("\n"));
   const [fromHour, setFromHour] = useState(d.fromHour);
   const [toHour, setToHour] = useState(d.toHour);
@@ -63,11 +65,14 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <label>أقل فاصل بين امتحانين بنفس اليوم بالجدول الخاص (دقيقة)</label>
         <div className="exhint">الطالب الخاص يختار وقت الامتحان الثاني بنفسه، بس ما يگدر يحطه أقرب من نهاية الأول وهذا الفاصل.</div>
         <input className="ltr" inputMode="numeric" value={gap} onChange={(e) => setGap(e.target.value)} />
-        <label>بداية عطلة نصف السنة</label>
+        <label>عطلة نصف السنة: من</label>
         <input type="date" className="ltr" value={holidayStart} onChange={(e) => setHolidayStart(e.target.value)} />
         <DayName d={holidayStart} />
-        <label>عدد أيام العطلة</label>
-        <input className="ltr" inputMode="numeric" value={holidayDays} onChange={(e) => setHolidayDays(e.target.value)} />
+        <label>إلى</label>
+        <input type="date" className="ltr" min={holidayStart} value={holidayEnd} onChange={(e) => setHolidayEnd(e.target.value)} />
+        <DayName d={holidayEnd} />
+        {holidayStart && holidayEnd && holidayEnd < holidayStart && <div className="exbad">«إلى» لازم يكون بعد «من».</div>}
+        {holidayDays > 0 && <div className="exhint">العطلة {holidayDays} يوم.</div>}
         <label>أيام مستثناة من كل الجداول (كل يوم بسطر، مثل 2027-03-21)</label>
         <textarea className="pdtext ltr" rows={3} value={excluded} onChange={(e) => setExcluded(e.target.value)} />
         <label>الطالب الخاص الإلكتروني يمتحن من الساعة</label>
