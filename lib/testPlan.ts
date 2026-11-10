@@ -177,7 +177,6 @@ export const TEST_PLAN: TestSection[] = [
       { id: "sample", text: "صفحة الليبل التجريبية تملأ عرض الورقة", how: "افتح Chrome بجهاز SUNMI ← اكتب بالعنوان: https://qusay-bot--qmath-v2.europe-west4.hosted.app/print/sample ← اختار طابعة الجهاز." },
       { id: "sunmi-print", text: "🎫 الحضوري ← 🏷 اطبع الليبل: تنفتح نافذة الطباعة، واختار طابعة الجهاز", how: "⚙️ لوحة التحكم ← 🎫 الحضوري ← 📷 اقرا كود الطالب ← سجل ← 🏷 اطبع الليبل ← اختار طابعة الجهاز." },
       { id: "label-roll", text: "على رول ليبل حقيقي: ليبل واحد بدون زحف", how: "حط رول ليبل بالجهاز، واطبع من نفس الصفحة التجريبية فوك." },
-      { id: "sunmi-tspl", text: "جهاز SUNMI V2s PLUS يطبع نفس ليبل Vision بلغة TSPL عن طريق RawBT، بمكانه وبدون ما ينزل لليبلة الجاية", how: "بالجهاز: إعدادات SunmiPrinter ← Label Study، وSelect virtual Bluetooth command ← TSPL. وRawBT متصل بـ InnerPrinter. بعدها افتح بـ Chrome: https://qusay-bot--qmath-v2.europe-west4.hosted.app/print/rawbt ← 🔤 تجربة بسيطة، وبعدها 🖨 اطبع ليبل تجربة." },
       { id: "android-vision", text: "أندرويد يتصل بطابعة VISION (مشكلة معروفة: ينقطع)", how: "ثبت Bluefy أو افتح رابط المحطة بـ Chrome بالأندرويد ← 🔌 اتصل بالطابعة. هاي المشكلة بعد ما انحلت." },
     ],
   },

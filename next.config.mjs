@@ -4,9 +4,7 @@ const nextConfig = {
   // ملفات يقراها البوت من القرص، ولازم توصل وية التطبيق للسيرفر
   outputFileTracingIncludes: { "/api/**": ["./assets/*.jpg", "./assets/fonts/*", "./public/logo.png", "./public/boahmed.ttf", "./node_modules/@sparticuz/chromium/bin/**",
     // ملف بيانات اللغة مال مكتبة الرسم: بدونه الكتابة العربية بالليبل تطلع حروف مفككة ومقلوبة
-    "./node_modules/@napi-rs/canvas-linux-*/**"],
-    // صفحة تجربة ليبل SUNMI ترسم نفس الليبل
-    "/print/**": ["./assets/fonts/*", "./public/boahmed.ttf", "./node_modules/@napi-rs/canvas-linux-*/**"] },
+    "./node_modules/@napi-rs/canvas-linux-*/**"] },
   // صفحات المتجر ما تتخزن، حتى التليجرام ما يفتح نسخة قديمة
   async headers() {
     // كل الصفحات: المتصفح ما يخمن نوع الملف، والرابط (بيه رمز الدخول) ما يطلع لمواقع ثانية
