@@ -557,19 +557,21 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   // بطاقة الطالب بيها الملصق حسب درجته، وبطاقة ولي الأمر بدون ملصق
   const sticker = await stickerData(c?.sticker);
   const card = await gradeCardPng(it.id, cardInfo);
-  const studentCard = sticker ? (await gradeCardPng(it.id, { ...cardInfo, sticker }, "_s")) ?? card : card;
-  const deliver = async (chat: number, caption: string, kb: Kb, pic = card) => {
-    if (pic && await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", protect_content: "true", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", pic, "grade.png", "image/png")) return;
-    await send(chat, caption, { kb, extra: { protect_content: true } });
+  // بطاقة الطالب: ملصقه، ومقولته مكتوبة جوة البطاقة نفسها (مو رسالة)
+  const studentCard = sticker || c?.text ? (await gradeCardPng(it.id, { ...cardInfo, sticker, quote: c?.text }, "_s")) ?? card : card;
+  /** البطاقة وحدها، وبلا كتابة جنبها لأن كلشي بيها. إذا ما انرسمت، توصل الكتابة بدالها */
+  const deliver = async (chat: number, caption: string, kb: Kb, pic: Buffer | null, fallback: string) => {
+    if (pic && await upload("sendPhoto", { chat_id: String(chat), ...(caption ? { caption, parse_mode: "HTML" } : {}), protect_content: "true", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", pic, "grade.png", "image/png")) return;
+    await send(chat, fallback, { kb, extra: { protect_content: true } });
   };
   {
     const paperBtn: Kb = [[{ text: "📂 شوف ورقتك المصححة", web_app: { url: `${adminPageLink("myexams", it.user_id)}&paper=${it.id}` } }]];
-    await deliver(it.user_id, `${text}\n\n👇 دوس الزر تشوف ورقتك المصححة ودرجة كل سؤال. وإذا تشوف درجة سؤال مو صحيحة، تعترض عليه من هناك.`, paperBtn, studentCard);
+    await deliver(it.user_id, "", paperBtn, studentCard, `${text}\n\n👇 دوس الزر تشوف ورقتك المصححة ودرجة كل سؤال. وإذا تشوف درجة سؤال مو صحيحة، تعترض عليه من هناك.`);
     await sendPaperVoices(it.user_id, it.id);
     const g = await guardianOf(it.user_id);
     if (g) {
       // ولي الأمر: البطاقة بدون مقولة، ووياها زر «استلمت» (إذا ما ينداس على ٣ درجات ورا بعض، صاحب البوت يوصله خبر)
-      await deliver(g.guardian_id, `${head}\nالطالب: <b>${esc(String(st?.name ?? view.name))}</b>\n\n👇 دوس «استلمت» حتى نعرف وصلتك.`, seenButton(it.id));
+      await deliver(g.guardian_id, "👇 دوس «استلمت» حتى نعرف وصلتك.", seenButton(it.id), card, `${head}\nالطالب: <b>${esc(String(st?.name ?? view.name))}</b>\n\n👇 دوس «استلمت» حتى نعرف وصلتك.`);
       await guardianSent(it.user_id, g.guardian_id, it.id);
     }
     await logActivity(it.user_id, `📝 تم تصحيح امتحان ${view.title}: ${total} من 100`);
