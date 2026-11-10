@@ -872,3 +872,25 @@ test("امتحانات تنرفع بآخر فصل (نصف السنة وإعاد�
   assert.equal(await day("إعادة تجربة"), sun);
   assert.equal((await find("place_dates", { center_id: c, exam_id: next.id }))[0].day, sun2);
 });
+
+test("🏖 عطلة قبل امتحان أبكر: العطلة اللي بعده تزحف ويا امتحانها، وشيلها يرجعها", async () => {
+  const admin = sign(1);
+  const { kvGet } = await import("../lib/db.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "الكاظمية" });
+  const c = await insert("centers", { area_id: area, name: "مركز العطل المتتالية", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }, { d: 2, t: "16:00" }], initData: admin });   // أحد وأربعاء
+  const [a, b, cc] = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => x.ord - y.ord);
+  const sun = nextWeekday(6), wed = addDays(sun, 3), sun2 = addDays(sun, 7), wed2 = addDays(sun, 10), sun3 = addDays(sun, 14);
+  await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: a.id, date: sun }, { exam: b.id, date: wed }, { exam: cc.id, date: sun2 }], initData: admin });
+  const day = async (e: number) => (await find("place_dates", { center_id: c, exam_id: e }))[0].day;
+  const holOf = async (e: number) => (JSON.parse(await kvGet("exam_holidays") ?? "[]") as any[]).filter((h) => h.exam === e).map((h) => h.places.find((p: any) => p.center === c)?.from).filter(Boolean);
+  await schedAdminAction({ action: "holidayAdd", center: c, exam: b.id, days: 1, scope: "place", initData: admin });
+  assert.deepEqual([await day(a.id), await holOf(b.id), await day(b.id), await day(cc.id)], [sun, [wed], sun2, wed2]);
+  // بعدين عطلة قبل الامتحان اللي قبله: كلشي يزحف، وعطلة b تبقى قبل b
+  const r: any = await schedAdminAction({ action: "holidayAdd", center: c, exam: a.id, days: 1, scope: "place", initData: admin });
+  assert.deepEqual([await holOf(a.id), await day(a.id), await holOf(b.id), await day(b.id), await day(cc.id)], [[sun], wed, [sun2], wed2, sun3]);
+  // شيل عطلة a: كلشي يرجع، وعطلة b ترجع للأربعاء
+  const ha = r.holidays.find((h: any) => h.title === a.title);
+  await schedAdminAction({ action: "holidayDel", id: ha.id, initData: admin });
+  assert.deepEqual([await day(a.id), await holOf(b.id), await day(b.id), await day(cc.id)], [sun, [wed], sun2, wed2]);
+});
