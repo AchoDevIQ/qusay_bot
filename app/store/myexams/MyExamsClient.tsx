@@ -226,7 +226,10 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
           {allowed.map((d) => (
             <button type="button" key={d} className={days.includes(d) ? "on" : ""} onClick={() => { haptic(); change(setDays)(days.includes(d) ? days.filter((x) => x !== d) : [...days, d]); }}>{nameOf(d)}</button>
           ))}
+          {/* اليوم اللي حجبته الإدارة يطلع مطفي، حتى الطالب يعرف ليش */}
+          {!center && info.week.filter((w) => (info.offDays ?? []).includes(w.i)).map((w) => <button type="button" key={w.i} disabled style={{ opacity: 0.45 }}>🚫 {w.name}</button>)}
         </div>
+        {!center && !!(info.offDays ?? []).length && <div className="hint">🚫 {info.week.filter((w) => (info.offDays ?? []).includes(w.i)).map((w) => w.name).join("، ")}: لا يوجد امتحانات في هذا اليوم.</div>}
         {center
           ? days.map((d) => (
             <div key={d} className="adsale">

@@ -394,7 +394,7 @@ async function planFor(uid: number, body: Row) {
     need(f.weekdays.every((d) => slots.some((x) => x.d === d)), "اختار من أيام مركزك بس");
     need(f.weekdays.every((d) => f.times![String(d)].every((t) => slots.some((x) => x.d === d && x.t === t))), "اختار من أوقات مركزك بس");
   } else {
-    need(!f.weekdays.some((d) => s.offDays.includes(d)), `هذا اليوم ما بيه امتحانات: ${f.weekdays.filter((d) => s.offDays.includes(d)).map((d) => DAYS[d]).join("، ")}. اختار غيره`);
+    need(!f.weekdays.some((d) => s.offDays.includes(d)), `لا يوجد امتحانات في هذا اليوم: ${f.weekdays.filter((d) => s.offDays.includes(d)).map((d) => DAYS[d]).join("، ")}. اختار غيره`);
   }
   if (!place.inPerson && f.times) need(Object.values(f.times).flat().every((t) => { const h = Number(t.slice(0, 2)); return h >= s.fromHour && h <= s.toHour; }), `الامتحان يبدي من الساعة ${ampm(`${String(s.fromHour).padStart(2, "0")}:00`)} إلى ${ampm(`${String(s.toHour).padStart(2, "0")}:00`)} بس`);
   const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
