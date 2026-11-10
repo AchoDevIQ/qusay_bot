@@ -355,7 +355,7 @@ async function studentInfo(uid: number) {
     comp: await studentComp(uid),
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
     items: [...(await itemsView(uid, s)).map((i) => ({ ...i, skippable: !general && !!sched && i.status === "waiting" && !i.optional && i.state === "locked" && skip.has(i.exam) && !kept.has(i.exam) })), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
-    week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s),
+    week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s), offDays: s.offDays,
     holiday: s.holidayStart && s.holidayDays ? { start: s.holidayStart, days: s.holidayDays } : null,
   };
 }
@@ -393,7 +393,10 @@ async function planFor(uid: number, body: Row) {
     need(f.times, "اختار وقت الامتحان من أوقات مركزك");
     need(f.weekdays.every((d) => slots.some((x) => x.d === d)), "اختار من أيام مركزك بس");
     need(f.weekdays.every((d) => f.times![String(d)].every((t) => slots.some((x) => x.d === d && x.t === t))), "اختار من أوقات مركزك بس");
-  } else if (f.times) need(Object.values(f.times).flat().every((t) => { const h = Number(t.slice(0, 2)); return h >= s.fromHour && h <= s.toHour; }), `الامتحان يبدي من الساعة ${ampm(`${String(s.fromHour).padStart(2, "0")}:00`)} إلى ${ampm(`${String(s.toHour).padStart(2, "0")}:00`)} بس`);
+  } else {
+    need(!f.weekdays.some((d) => s.offDays.includes(d)), `هذا اليوم ما بيه امتحانات: ${f.weekdays.filter((d) => s.offDays.includes(d)).map((d) => DAYS[d]).join("، ")}. اختار غيره`);
+  }
+  if (!place.inPerson && f.times) need(Object.values(f.times).flat().every((t) => { const h = Number(t.slice(0, 2)); return h >= s.fromHour && h <= s.toHour; }), `الامتحان يبدي من الساعة ${ampm(`${String(s.fromHour).padStart(2, "0")}:00`)} إلى ${ampm(`${String(s.toHour).padStart(2, "0")}:00`)} بس`);
   const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
   const settings = { ...s, excluded: [...s.excluded, ...await studentHolidayDays(uid)] };
   return { f, left, plan: buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings }) };
@@ -591,12 +594,15 @@ export async function schedAdminAction(body: Row) {
     const old = await schedSettings();
     const holidayStart = String(body.holidayStart ?? "");
     need(!holidayStart || validDay(holidayStart), "تاريخ بداية العطلة غير صحيح");
+    // أيام بالأسبوع ما يمتحن بيها الطالب الخاص الإلكتروني (مثلاً الأحد)
+    const offDays = body.offDays === undefined ? old.offDays : [...new Set((Array.isArray(body.offDays) ? body.offDays : []).map(Number))].filter((d) => DAY_ORDER.includes(d)).sort((x, y) => x - y);
+    need(offDays.length < 7, "لازم يبقى يوم واحد على الأقل يمتحن بيه");
     const fromHour = body.fromHour === undefined ? old.fromHour : intOf(body.fromHour, 0, 23, "اختار أول ساعة");
     const toHour = body.toHour === undefined ? old.toHour : intOf(body.toHour, 0, 23, "اختار آخر ساعة");
     need(fromHour <= toHour, "آخر ساعة لازم تكون بعد أول ساعة");
     const next: SchedSettings = {
       window: intOf(body.window, 1, 600, "وقت الدخول بالدقائق، من 1 إلى 600"), extra: intOf(body.extra, 0, 600, "الوقت الإضافي بالدقائق، من 0 إلى 600"), excWindow: body.excWindow === undefined ? old.excWindow : intOf(body.excWindow, 1, 10000, "وقت الاستثناء بالدقائق"), optionalOpen: body.optionalOpen === undefined ? old.optionalOpen : !!body.optionalOpen, perDay: intOf(body.perDay, 1, 10, "امتحانات اليوم من 1 إلى 10"), gap: intOf(body.gap, 0, 600, "الفاصل بالدقائق، من 0 إلى 600"),
-      holidayStart, holidayDays: intOf(body.holidayDays, 0, 120, "أيام العطلة من 0 إلى 120"), blockedHours: [], excluded: dayList(body.excluded), fromHour, toHour,
+      holidayStart, holidayDays: intOf(body.holidayDays, 0, 120, "أيام العطلة من 0 إلى 120"), blockedHours: [], excluded: body.excluded === undefined ? old.excluded : dayList(body.excluded), fromHour, toHour, offDays,
       // الطالب يگدر يختار صورة جوابه من الاستوديو، لو الكاميرا بس
       gallery: body.gallery === undefined ? old.gallery : !!body.gallery,
     };
