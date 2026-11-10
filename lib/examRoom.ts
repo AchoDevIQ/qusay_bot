@@ -215,7 +215,9 @@ async function aiShown(it: Row) {
       n: q.n, score: q.score, max: q.max, note: q.note ?? "",
       photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
       steps: q.steps.map((st, i) => ({ status: st.status, awarded: st.awarded, possible: st.possible,
-        expected: sameCount ? mine![i].text : st.expected, student: st.student_tex || st.student, reason: st.reason_ar || st.reason })),
+        expected: sameCount ? mine![i].text : st.expected, student: st.student_tex || st.student, reason: st.reason_ar || st.reason_en || st.reason,
+        // خطوة ما انقرت: الطالب يشوف رسالة «أرسل صورة ثانية» بدل كتابة ما تنقرا
+        failed: !!st.analysis_failed, message: st.student_message ?? "" })),
     };
   }));
 }

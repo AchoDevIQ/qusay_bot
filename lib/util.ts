@@ -3,6 +3,20 @@ import { CURRENCY } from "./config.ts";
 export const esc = (s: unknown) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
 
+/** رياضيات LaTeX بنص رسالة تليجرام (اللي ما يرسمها): $\frac{3}{2x}$ ← 3/(2x)، x^{2} ← x^2، بلا $ ولا \ */
+export function plainMath(s: unknown): string {
+  let t = String(s ?? "").replace(/\$+|\\\(|\\\)|\\\[|\\\]/g, "");
+  const atom = (x: string) => (/^(\d+(\.\d+)?|[A-Za-z])$/.test(x.trim()) ? x : `(${x})`);
+  for (let i = 0; i < 4; i++) {
+    t = t.replace(/\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}/g, (_, a: string, b: string) => `${atom(a)}/${atom(b)}`)
+      .replace(/\\sqrt\{([^{}]*)\}/g, (_, a: string) => `√${atom(a)}`);
+  }
+  t = t.replace(/\\pm/g, "±").replace(/\\mp/g, "∓").replace(/\\cdot/g, "·").replace(/\\times/g, "×").replace(/\\(Rightarrow|implies)/g, "⇒")
+    .replace(/\\(leq?|le)\b/g, "≤").replace(/\\(geq?|ge)\b/g, "≥").replace(/\\neq?\b/g, "≠").replace(/\\infty/g, "∞").replace(/\\pi/g, "π")
+    .replace(/\\(left|right)/g, "").replace(/\\([A-Za-z]+)/g, "$1").replace(/[{}]/g, "");
+  return t.replace(/[ \t]{2,}/g, " ").trim();
+}
+
 export const money = (n: number | string) => `${Math.trunc(Number(n)).toLocaleString("en-US")} ${CURRENCY}`;
 
 export const num = (n: number | string) => Math.trunc(Number(n)).toLocaleString("en-US");

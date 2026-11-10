@@ -16,7 +16,7 @@ import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
 import { CALIB_PERM, aiCalibIds, aiHeld, aiJudgeObjection, aiPartialOf, aiQuestions, aiResultOf } from "./aiGrade.ts";
 import { guardianSent, seenButton } from "./guardianWatch.ts";
-import { stamp, todayStr } from "./util.ts";
+import { plainMath, stamp, todayStr } from "./util.ts";
 import { gradeCardPng } from "./documents.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { adminPageLink } from "./keyboards.ts";
@@ -131,11 +131,11 @@ export async function aiObjectionsTick(limit = 4) {
         if (r.accept) {
           await put("question_marks", { item_id: it.id, q: o.q, mark: r.mark });
           await update("objections", { id: o.id }, { status: "accepted", new_mark: r.mark, reason: r.reason || null, decided_at: stamp(), decided_by: AI_GRADER });
-          lines.push(`✅ السؤال ${o.q}: انقبل اعتراضك، صارت درجته <b>${r.mark}</b> بدل ${o.old_mark}${r.reason ? `\n${esc(r.reason)}` : ""}`);
+          lines.push(`✅ السؤال ${o.q}: انقبل اعتراضك، صارت درجته <b>${r.mark}</b> بدل ${o.old_mark}${r.reason ? `\n${esc(plainMath(r.reason))}` : ""}`);
           accepted++;
         } else {
           await update("objections", { id: o.id }, { status: "rejected", new_mark: o.old_mark, reason: r.reason || null, decided_at: stamp(), decided_by: AI_GRADER });
-          lines.push(`❌ السؤال ${o.q}: انرفض اعتراضك وبقت درجته ${o.old_mark}${r.reason ? `\nالسبب: ${esc(r.reason)}` : ""}`);
+          lines.push(`❌ السؤال ${o.q}: انرفض اعتراضك وبقت درجته ${o.old_mark}${r.reason ? `\nالسبب: ${esc(plainMath(r.reason))}` : ""}`);
         }
         done++;
       } catch (e) {

@@ -13,6 +13,8 @@ What it understands (math_engine/finals.py):
 - Arabic digits, «أو», and the unknowns س ص ع.
 - Rounded decimals: "0.707 + 0.707i" matches 1/sqrt(2) + i/sqrt(2) (within its last digit).
 - The same root written twice counts once; labels such as "(Equation 1)" are ignored.
+- Rates and function values with units: "dh/dt = -0.1 m/h", "V = 144π cm³", "f(a+h) ≅ 4.963",
+  "5 سم/ثا". A reference written with ≅ / ≈ was rounded, so its own decimals count as well.
 - An equation such as "x^2 - y^2 = 7" is not a final value: no verdict (None).
 """
 import asyncio
@@ -31,8 +33,8 @@ def _close(a: List[float], b: List[float], rounding: float = 0.0) -> bool:
 
 def _same(a: Dict, b: Dict) -> bool:
     """a: the reference value, b: the student's. Only the student's decimals count as rounded;
-    a teacher who writes 3.5 means exactly 3.5."""
-    rounding = float(b.get("tol") or 0.0)
+    a teacher who writes 3.5 means exactly 3.5, but one who writes ≅ 4.963 rounded it."""
+    rounding = max(float(b.get("tol") or 0.0), float(a.get("tol") or 0.0) if a.get("approx") else 0.0)
     if "value" in a and "value" in b:
         return _close(a["value"], b["value"], rounding)
     if "vars" in a and "vars" in b:

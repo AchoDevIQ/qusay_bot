@@ -1,9 +1,9 @@
 # Grading engine
 
 Copied from https://github.com/Muammal/Math-Grading at commit
-`c68559dd95a6b82232780cdb5b467ddcda6e09dd` (main): the engine folders
+`1469ea83b0829424dc71b96c6c6c8725c610f1bf` (main): the engine folders
 (`feedback/ grading/ llm/ math_engine/ ocr/ preprocessing/ review/`), `grading_service.py`,
-and the bot service files `bot_api.py`, `rubric_engine.py`, `finals.py`.
+and the bot service files `bot_api.py`, `rubric_engine.py`, `figure_engine.py`, `finals.py`.
 `requirements.txt` is that commit's `requirements-bot.txt`.
 
 Left out on purpose: student papers (`Exams/`), graded reports (`reports/`), results

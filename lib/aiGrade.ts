@@ -329,7 +329,7 @@ export async function draftRubric(qid: number): Promise<RubricStep[]> {
   return (r.steps ?? []).map((s: any) => ({ text: String(s.text ?? ""), points: Number(s.points) || 0 }));
 }
 
-export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; note?: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; reason_ar?: string; expected: string; student: string; student_tex?: string }[]; usage?: Usage[] };
+export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; note?: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; reason_ar?: string; reason_en?: string; expected: string; student: string; student_tex?: string; analysis_failed?: boolean; student_message?: string }[]; usage?: Usage[] };
 export async function aiResultOf(itemId: number): Promise<AiQuestion[] | null> {
   const j = await readJson<AiQuestion[] | null>(resultKey(itemId), null);
   return Array.isArray(j) ? j : null;

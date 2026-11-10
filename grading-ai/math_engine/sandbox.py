@@ -201,6 +201,38 @@ def final_values(text: str) -> Optional[List[dict]]:
     return json.loads(cached) if cached is not None else None
 
 
+@lru_cache(maxsize=1024)
+def _graph_features_cached(text: str) -> Optional[str]:
+    result = _pool.run("graph_features", [text])
+    return json.dumps(result) if result is not None else None
+
+
+def graph_features(text: str) -> Optional[dict]:
+    """Time-limited math_engine.graphs.graph_features. None when it is not a function of x or cannot be worked out."""
+    try:
+        cached = _graph_features_cached(text or "")
+    except Exception as e:
+        logger.warning(f"Graph check abandoned: {e}")
+        return None
+    return json.loads(cached) if cached is not None else None
+
+
+@lru_cache(maxsize=1024)
+def _function_values_cached(text: str, xs: Tuple[float, ...]) -> Optional[str]:
+    result = _pool.run("function_values", [text, list(xs)])
+    return json.dumps(result) if result is not None else None
+
+
+def function_values(text: str, xs) -> Optional[List[Optional[float]]]:
+    """Time-limited math_engine.graphs.function_values: f at each x (None where undefined). Never raises."""
+    try:
+        cached = _function_values_cached(text or "", tuple(float(x) for x in xs))
+    except Exception as e:
+        logger.warning(f"Function values abandoned: {e}")
+        return None
+    return json.loads(cached) if cached is not None else None
+
+
 @lru_cache(maxsize=4096)
 def follows_from(prior_expr: str, candidate_expr: str) -> bool:
     """Time-limited math_engine.verifier.follows_from. False when it cannot be shown."""

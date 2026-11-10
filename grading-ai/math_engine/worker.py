@@ -25,6 +25,7 @@ def main() -> None:
 
     from math_engine.verifier import assignments_satisfy, follows_from, verify_equivalence
     from math_engine.finals import final_values
+    from math_engine.graphs import function_values, graph_features
 
     protocol_out.write('{"ready": true}\n')
     protocol_out.flush()
@@ -41,6 +42,10 @@ def main() -> None:
                 result = assignments_satisfy(request["args"][0], list(request["args"][1]))
             elif request["op"] == "final_values":
                 result = final_values(request["args"][0])
+            elif request["op"] == "graph_features":
+                result = graph_features(request["args"][0])
+            elif request["op"] == "function_values":
+                result = function_values(request["args"][0], [float(x) for x in request["args"][1]])
             else:
                 result = None
             reply = {"ok": True, "result": result}
