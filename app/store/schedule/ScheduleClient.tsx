@@ -13,7 +13,7 @@ const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; inserted?: number; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
 type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; holidayNote: string; mid: { from: string; to: string } | null; midOwn: boolean; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holReqs?: { uid: number; name: string; want: string; now: string; at: string }[] };
-type Hol = { id: number; title: string; days: number; reason: string; places: string[]; students: number };
+type Hol = { id: number; title: string; days: number; reason: string; places: { center: number; text: string }[]; students: number };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
 export default function ScheduleClient() {
@@ -276,7 +276,7 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
                   <HolReason key={h.reason} id={h.id} reason={h.reason} busy={busy} act={act} />
                   <div className="exline adtop">
                     <button type="button" className="exbtn" disabled={busy} onClick={() => holiday(r.exam)}>🏖 عطلة قبله</button>
-                    <Confirm label="↩️ شيل" disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id })} />
+                    <Confirm label="↩️ شيل من هذا المكان بس" disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id, only: d.center })} />
                   </div>
                 </div>
               ))}
@@ -319,12 +319,18 @@ function Holidays({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   return (
     <div className="exfoot">
       <div className="exlabel">🏖 العطل</div>
-      <div className="exhint">إذا شلت عطلة، العطل اللي زدتها بعدها لنفس الامتحان تنشال وياها.</div>
+      <div className="exhint">كل مكان تگدر تشيل عطلته وحده: دوس ↩️ جنب اسمه، وباقي الأماكن تبقى عطلتها. و«↩️ شيلها من كل الأماكن» يشيلها من الكل. العطل اللي زدتها بعدها لنفس الامتحان تنشال وياها.</div>
       {d.holidays.map((h) => (
         <div key={h.id} className="adsale">
           <div><b>قبل {h.title}</b>{h.reason ? ` · ${h.reason}` : ""}</div>
-          <small className="pdmode">{h.places.join("، ")}{h.students ? ` · ${h.students} جدول خاص` : ""}</small>
-          <Confirm label="↩️ شيل العطلة" disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id })} />
+          {h.students ? <small className="pdmode">{h.students} جدول خاص</small> : null}
+          {h.places.map((p) => (
+            <div className="exline" key={p.center}>
+              <small className="pdmode">📍 {p.text}</small>
+              <Confirm label="↩️ شيل من هنا بس" disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id, only: p.center })} />
+            </div>
+          ))}
+          <Confirm label={h.places.length > 1 ? "↩️ شيلها من كل الأماكن" : "↩️ شيل العطلة"} disabled={busy} onYes={() => void act({ action: "holidayDel", id: h.id })} />
         </div>
       ))}
     </div>

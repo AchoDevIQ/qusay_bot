@@ -993,6 +993,40 @@ test("🗓 توزيع مكان جديد: ياخذ العطل اللي قبل ن�
   assert.equal(await day(c1, target), await day(c2, target));
 });
 
+test("↩️ شيل العطلة من مكان واحد: مواعيده ترجع، وباقي الأماكن عطلتها باقية", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "شيل مكان" });
+  const c1 = await insert("centers", { area_id: area, name: "مركز يشيل", active: 1 });
+  const c2 = await insert("centers", { area_id: area, name: "مركز يبقي", active: 1 });
+  const sat = nextWeekday(5);
+  for (const c of [c1, c2]) {
+    await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "16:00" }, { d: 1, t: "17:00" }], initData: admin });
+    await schedAdminAction({ action: "fillDates", center: c, start: sat, initData: admin });
+  }
+  const day = async (c: number, e: number) => (await find("place_dates", { center_id: c, exam_id: e }))[0]?.day as string;
+  const ex = (await find("place_dates", { center_id: c1 })).sort((a, b) => String(a.day).localeCompare(String(b.day)));
+  const target = ex[1].exam_id as number;
+  const was = await day(c1, target), was2 = await day(c2, target);
+  // عطلة وحدة لكل الأماكن
+  const h: any = await schedAdminAction({ action: "holidayAdd", center: c1, exam: target, days: 1, scope: "all", initData: admin });
+  const hid = h.holidays.at(-1).id;
+  assert.ok(h.holidays.at(-1).places.some((p: any) => p.center === c2));
+  const moved = await day(c2, target);
+  assert.ok(moved > was2 && await day(c1, target) > was);
+  // شيلها من المكان الأول بس
+  const r: any = await schedAdminAction({ action: "holidayDel", center: c1, id: hid, only: c1, initData: admin });
+  assert.match(r.notice, /من مركز يشيل.*بس/);
+  assert.equal(await day(c1, target), was);
+  assert.equal(await day(c2, target), moved);
+  // المكان الثاني بعده يشوف عطلته، ويگدر يشيلها وحده
+  const rows: any = await schedAdminAction({ action: "list", center: c2, initData: admin });
+  assert.ok(rows.rows.find((x: any) => x.exam === target).hols.some((x: any) => x.id === hid));
+  const rec = r.holidays.find((x: any) => x.id === hid);
+  assert.ok(rec && !rec.places.some((p: any) => p.center === c1) && rec.places.some((p: any) => p.center === c2));
+  await schedAdminAction({ action: "holidayDel", center: c2, id: hid, only: c2, initData: admin });
+  assert.equal(await day(c2, target), was2);
+});
+
 test("⏰ وقت جديد ياخذ نسخة وحده، والوقت المشال تنشال نسخته، والنسخة المختارة تبقى", async () => {
   const admin = sign(1);
   const area = await insert("areas", { gov: "بغداد", name: "أوقات النسخ" });

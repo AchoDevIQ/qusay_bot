@@ -304,6 +304,15 @@ async function undoHoliday(h: Holiday) {
   if (h.insert) { for (const st of h.students) await send(st.uid, `🗓 <b>انشال امتحان ${esc(h.title)}</b> من جدولك، ورجعت مواعيد امتحاناتك. افتح امتحاناتي وشوفها.`); return; }
   for (const st of h.students) if (st.on) await send(st.uid, `🗓 <b>انشالت العطلة</b> ${holidayText(h, st)}، ورجعت مواعيد امتحاناتك. افتح امتحاناتي وشوفها.`);
 }
+/** جزء العطلة اللي يخص مكان واحد: مواعيده، وطلاب الجدول الخاص اللي بيه */
+async function holidayPart(h: Holiday, center: number): Promise<Holiday> {
+  const students: HolStudent[] = [];
+  for (const st of h.students) if ((await placeFor(st.uid)).centerId === center) students.push(st);
+  const uids = new Set(students.map((x) => x.uid));
+  const added: number[] = [];
+  for (const id of h.added ?? []) { const it = await one("sched_items", { id }); if (it && uids.has(it.user_id as number)) added.push(id); }
+  return { ...h, places: h.places.filter((p) => p.center === center), students, added };
+}
 /** العطل اللي يشوفها الطالب بجدوله: عطل مكانه إذا ويا الطلاب، وعطله إذا جدول خاص (ويگدر يلغيها) */
 async function myHolidays(uid: number, sc: Row | null) {
   const today = todayStr();
@@ -1043,13 +1052,31 @@ export async function schedAdminAction(body: Row) {
     const h = list.find((x) => x.id === Number(body.id));
     need(h, "العطلة غير موجودة");
     // العطل اللي انحطت بعدها لنفس الامتحان تنشال وياها، من الأخيرة للأولى، حتى المواعيد ترجع صح
-    const chain = list.filter((x) => x.exam === h!.exam && x.id >= h!.id).sort((a, b) => b.id - a.id);
-    for (const x of chain) await undoHoliday(x);
-    const gone = new Set(chain.map((x) => x.id));
-    await saveHolidays((await holidays()).filter((x) => !gone.has(x.id)));
-    notice = chain.length > 1 ? `↩️ انشالت ${chain.length} عطل قبل ${h!.title}، ورجعت المواعيد` : "↩️ انشالت العطلة، ورجعت المواعيد";
+    // only: تنشال من هذا المكان بس، وباقي الأماكن تبقى عطلتها مثل ما هي
+    const only = body.only === undefined || body.only === null || body.only === "" ? null : Number(body.only);
+    const chain = list.filter((x) => x.exam === h!.exam && x.id >= h!.id && (only === null || x.places.some((p) => p.center === only))).sort((a, b) => b.id - a.id);
+    if (only === null) {
+      for (const x of chain) await undoHoliday(x);
+      const gone = new Set(chain.map((x) => x.id));
+      await saveHolidays((await holidays()).filter((x) => !gone.has(x.id)));
+      notice = chain.length > 1 ? `↩️ انشالت ${chain.length} عطل قبل ${h!.title}، ورجعت المواعيد` : "↩️ انشالت العطلة، ورجعت المواعيد";
+    } else {
+      need(h!.places.some((p) => p.center === only), "هذي العطلة ما بهذا المكان");
+      const parts = new Map<number, { uids: Set<number>; added: Set<number> }>();
+      for (const x of chain) {
+        const part = await holidayPart(x, only);
+        await undoHoliday(part);
+        parts.set(x.id, { uids: new Set(part.students.map((s) => s.uid)), added: new Set(part.added ?? []) });
+      }
+      const left = (await holidays()).map((x) => parts.has(x.id)
+        ? { ...x, places: x.places.filter((p) => p.center !== only), students: x.students.filter((s) => !parts.get(x.id)!.uids.has(s.uid)), added: (x.added ?? []).filter((id) => !parts.get(x.id)!.added.has(id)) }
+        : x).filter((x) => x.places.length || x.students.length);
+      await saveHolidays(left);
+      const name = only === 0 ? "الإلكتروني" : await centerName(only) || "هذا المكان";
+      notice = `↩️ انشالت العطلة من ${name} بس${chain.length > 1 ? ` (${chain.length} عطل)` : ""}، ورجعت مواعيده. باقي الأماكن عطلتها باقية`;
+    }
   } else need(a === "list" || a === "midHoliday", "أمر غير معروف");
-  const holidayList = (await holidays()).map((h) => ({ id: h.id, title: h.title, days: h.days, reason: h.reason, places: h.places.map((p) => `${p.name}: ${prettyDay(p.from)}`), students: h.students.filter((x) => x.on).length }));
+  const holidayList = (await holidays()).map((h) => ({ id: h.id, title: h.title, days: h.days, reason: h.reason, places: h.places.map((p) => ({ center: p.center, text: `${p.name || (p.center === 0 ? "الإلكتروني" : "")}: ${prettyDay(p.from)}` })), students: h.students.filter((x) => x.on).length }));
   const holReqs = await Promise.all((await holRequests()).map(async (r) => {
     const sc = await one("schedules", { user_id: r.uid });
     return { uid: r.uid, name: String((await student(r.uid))?.name ?? r.uid), want: holText(r), now: holText(holOf(sc?.hol) ?? null), at: r.at };
