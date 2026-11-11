@@ -1,5 +1,6 @@
 // واجهة صفحة إدارة الامتحانات: كل طلب لازم صاحبه يكون عنده صلاحية الامتحانات
 import { defaultEnTitle } from "./examTitlesEn.ts";
+import { matchWord, saveWord } from "./wordImport.ts";
 import { AUDIO } from "./objections.ts";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -348,6 +349,19 @@ export async function examUpload(form: FormData) {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
     await update("bank_versions", { id }, { [a === "pdfAr" ? "pdf_ar" : "pdf_en"]: await saveUpload(form.get("file"), ["pdf"]) });
     await logEdit(uid, `نسخة ${id}: رفع نسخة الطالب ${a}`);
+  } else if (a === "wordPreview" || a === "wordSave") {
+    // «📄 أسئلة من الوورد»: ملف الفصل بالعربي والإنجليزي، المطابقة تطلع قبل، والحفظ للمطابق بس
+    const doc = async (f: FormDataEntryValue | null) => (f instanceof Blob && f.size ? Buffer.from(await f.arrayBuffer()) : null);
+    const ar = await doc(form.get("ar")), en = await doc(form.get("en"));
+    need(ar || en, "اختار ملف الوورد (العربي أو الإنجليزي أو الاثنين)");
+    for (const b of [ar, en]) need(!b || (b.length < 30_000_000 && b.subarray(0, 2).toString() === "PK"), "الملف لازم Word ‏(docx)");
+    const chapter = String(form.get("chapter") ?? ""), exam = Number(form.get("exam") || 0);
+    need(chapter || exam, "اختار الفصل");
+    const saved = a === "wordSave" ? await saveWord(ar, en, chapter, exam) : null;
+    const r = saved ?? await matchWord(ar, en, chapter, exam);
+    const word = { rows: r.rows, extraAr: r.extraAr, extraEn: r.extraEn, saved: saved ? { ar: saved.savedAr, en: saved.savedEn } : null };
+    if (saved) await logEdit(uid, `أسئلة من الوورد ${chapter || `امتحان ${exam}`}: ${saved.savedAr} نسخة عربي، ${saved.savedEn} نسخة إنجليزي`);
+    return { ...await examList(uid), word };
   } else throw new ApiError(400, "أمر غير معروف");
   return await examList(uid);
 }

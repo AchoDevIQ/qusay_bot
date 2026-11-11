@@ -437,3 +437,57 @@ export async function sendPaperReceipt(chat: number, oid: number, framed = false
   // إذا الرسم ما صار، يبقى الملف يوصل ويفتح بالمتصفح
   return !!await upload("sendDocument", { chat_id: String(chat), caption: caption + "\n\n(افتح الملف بالمتصفح واطبعه من هناك)" }, "document", hp, `receipt_${oid}.html`, "text/html");
 }
+
+// ---------- سؤال مكتوب من الوورد كصورة: لورقة «✏️ اكتب بالقلم»
+/**
+ * المعادلات ($…$) ترتسم بـ KaTeX، والكلام العربي يبقى RTL، وكل قطعة إنجليزية/رياضية بالنص العادي تنعزل LTR،
+ * حتى «(2 + 3i)(1 − i)» ما تنگلب، و«9 سنتيمتر» يبقى الرقم قبل الكلمة. ^{…} المكتوبة بالنص تصير أس صغير
+ */
+export function questionHtml(text: string, lang: "ar" | "en", css: string, katexCss: string, katexHtml: (tex: string) => string) {
+  // القطع الإنجليزية تنعزل، وكل قطعة تتنظف (esc) وحدها حتى «&amp;» ما ينقسم
+  const ISO = /[A-Za-z0-9(\[|√−-][A-Za-z0-9 +\-−×÷=()\[\]^{}²³√.\/|<>≤≥πθ∫′',`]*[A-Za-z0-9)\]|²³′'`}]/g;
+  const iso = (t: string) => { let out = "", at = 0; for (const m of t.matchAll(ISO)) { out += esc(t.slice(at, m.index)) + `<span class=lt>${esc(m[0])}</span>`; at = m.index! + m[0].length; } return out + esc(t.slice(at)); };
+  const sup = (t: string) => t.replace(/\^\{([^{}]*)\}/g, "<sup>$1</sup>").replace(/_\{([^{}]*)\}/g, "<sub>$1</sub>");
+  const line = (l: string) => l.split(/(\$[^$]+\$)/).map((p) => (p.startsWith("$") && p.endsWith("$") && p.length > 2 ? `<span class=k>${katexHtml(p.slice(1, -1))}</span>` : sup(lang === "ar" ? iso(p) : esc(p)))).join("");
+  const body = text.split(/\r?\n/).filter((l) => l.trim()).map((l) => `<div class=ln>${line(l.trim())}</div>`).join("");
+  return `<!doctype html><html lang=${lang} dir=${lang === "ar" ? "rtl" : "ltr"}><head><meta charset=utf-8><style>${css}${katexCss}
+html,body{margin:0;background:#fff}body{font-family:${FONT_STACK};font-size:34px;color:#14213d;line-height:1.9;padding:16px 24px 26px;width:952px;box-sizing:border-box}
+.ln{margin:2px 0}.lt{direction:ltr;unicode-bidi:isolate;white-space:nowrap}.k{direction:ltr;unicode-bidi:isolate;display:inline-block;margin:0 4px}.k .katex{font-size:1.05em}
+sup,sub{font-size:.62em;line-height:0}</style></head><body>${body}</body></html>`;
+}
+/** صورة السؤال المكتوب، والبياض اللي تحته ينقص. null إذا المتصفح ما اشتغل */
+export async function questionPng(text: string, lang: "ar" | "en"): Promise<Buffer | null> {
+  try {
+    ensureDir();
+    const katex = (await import("katex")).default;
+    const kdir = path.join(process.cwd(), "node_modules", "katex", "dist");
+    const fontsUrl = "file:///" + path.join(kdir, "fonts").replace(/\\/g, "/").replace(/^\/+/, "") + "/";
+    const katexCss = fs.readFileSync(path.join(kdir, "katex.min.css"), "utf8").replace(/url\(fonts\//g, `url(${fontsUrl}`);
+    const tag = `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const hp = path.join(PDF_DIR, `${tag}.html`), pp = path.join(PDF_DIR, `${tag}.png`);
+    fs.writeFileSync(hp, questionHtml(text, lang, await pageFonts(), katexCss, (tex) => katex.renderToString(tex, { throwOnError: false, output: "html" })), "utf8");
+    // طول كافي لأطول سؤال، وبعدين البياض ينقص
+    const h = Math.min(2400, 200 + text.split(/\r?\n/).length * 110 + Math.ceil(text.length / 40) * 70);
+    const ok = await htmlToPng(hp, pp, 1000, h);
+    fs.rmSync(hp, { force: true });
+    if (!ok) return null;
+    const png = fs.readFileSync(pp);
+    fs.rmSync(pp, { force: true });
+    return await trimBottom(png);
+  } catch (e) { console.error(e); return null; }
+}
+/** يقص البياض اللي تحت الصورة (يخلي شوية فراغ) */
+async function trimBottom(png: Buffer): Promise<Buffer> {
+  const { createCanvas, loadImage } = await import("@napi-rs/canvas");
+  const im = await loadImage(png);
+  const c = createCanvas(im.width, im.height);
+  const ctx = c.getContext("2d");
+  ctx.drawImage(im, 0, 0);
+  const d = ctx.getImageData(0, 0, im.width, im.height).data;
+  let last = 0;
+  for (let y = im.height - 1; y >= 0 && !last; y -= 2) for (let x = 0; x < im.width; x += 3) { const i = (y * im.width + x) * 4; if (d[i] < 235 || d[i + 1] < 235 || d[i + 2] < 235) { last = y; break; } }
+  const h = Math.min(im.height, last + 40);
+  const out = createCanvas(im.width, h);
+  out.getContext("2d").drawImage(im, 0, 0, im.width, h, 0, 0, im.width, h);
+  return Buffer.from(await out.encode("png"));
+}

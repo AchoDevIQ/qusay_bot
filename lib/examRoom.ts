@@ -4,7 +4,7 @@ import { photosAllowed } from "./inPerson.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { activeStop, checkStopped } from "./checkpoints.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
@@ -96,7 +96,8 @@ async function roomView(it: Row, s: SchedSettings) {
     pages: await kvGet(oathKey(it.id)) ? await pagesOf(e, v, st?.curr ?? "") : [],
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark ?? 0, answers: answers.filter((a) => a.q === q.n).map((a) => ({ id: a.id, file: a.file })),
       // ورقة الكتابة بالقلم: صورة السؤال (بعد القسم بس)، ونصه إذا انرفع من الوورد
-      img: sworn && q.q_file && !String(q.q_file).startsWith("tg:") ? String(q.q_file) : null, text: sworn ? q.q_text ?? null : null })),
+      // مكتوب من الوورد إذا انرفع (بلغة منهجه)، وإلا صورة السؤال
+      img: !sworn ? null : typedText(q, st?.curr) ? typedRef(q.id, st?.curr) : q.q_file && !String(q.q_file).startsWith("tg:") ? String(q.q_file) : null })),
     // هدر ورقة الكتابة بالقلم: نفس هدر الفصل بالورقة المصححة، واسمه الرباعي
     head: { slug: String(e.slug ?? ""), chapter: String(e.chapter ?? ""), title: titleFor(e, st?.curr), info: st?.curr === "إنجليزي" ? String(e.title_en || e.info || "") : String(e.info ?? ""), name: String(st?.name ?? ""), lang: st?.curr === "إنجليزي" ? "en" : "ar" },
   };
@@ -183,12 +184,37 @@ export async function roomFile(token: unknown, itemId: unknown, ref: unknown, pf
   const e = (await one("bank_exams", { id: it!.exam_id }))!;
   const v = (await one("bank_versions", { id: it!.version_id }))!;
   const st = await student(uid!);
-  const qFiles = (await find("bank_questions", { version_id: v.id })).map((q) => String(q.q_file ?? "")).filter((f) => f && !f.startsWith("tg:"));
+  const vqs = await find("bank_questions", { version_id: v.id });
+  const qFiles = [...vqs.map((q) => String(q.q_file ?? "")).filter((f) => f && !f.startsWith("tg:")), ...vqs.filter((q) => typedText(q, st?.curr)).map((q) => typedRef(q.id, st?.curr))];
   const allowed = [...await pagesOf(e, v, st?.curr ?? ""), ...qFiles, ...(await find("exam_answers", { item_id: it!.id })).map((a) => a.file as string), ...await gradedPages(it!.id), ...(it!.graded_at && v.answer_pdf ? [String(v.answer_pdf)] : [])];
   need(typeof ref === "string" && allowed.includes(ref), "ما عندك صلاحية", 403);
+  if (String(ref).startsWith("qt/")) {
+    const q = vqs.find((x) => typedRef(x.id, st?.curr) === ref)!;
+    const png = await typedPng(q, st?.curr);
+    if (png) return { body: png, type: "image/png" };
+    // ما گدر يرسمه: صورة السؤال الأصلية
+    const old = q.q_file && !String(q.q_file).startsWith("tg:") ? await files().read(String(q.q_file)) : null;
+    need(old, "الملف غير موجود", 404);
+    return { body: old!, type: /\.png$/i.test(String(q.q_file)) ? "image/png" : "image/jpeg" };
+  }
   const body = await files().read(ref as string);
   need(body, "الملف غير موجود", 404);
   return { body: body!, type: /\.png$/i.test(ref as string) ? "image/png" : /\.pdf$/i.test(ref as string) ? "application/pdf" : "image/jpeg" };
+}
+
+// ---------- السؤال مكتوب من الوورد: صورته ترتسم مرة وحدة وتنحفظ، وإذا تغير نصه ترتسم من جديد
+const typedLang = (curr: unknown) => (curr === "إنجليزي" ? "en" : "ar");
+const typedText = (q: Row, curr: unknown) => String((typedLang(curr) === "en" ? q.q_text_en : q.q_text) ?? "").trim();
+const typedRef = (qid: number, curr: unknown) => `qt/${qid}/${typedLang(curr)}`;
+async function typedPng(q: Row, curr: unknown): Promise<Buffer | null> {
+  const text = typedText(q, curr), lang = typedLang(curr);
+  const key = `qtext/${q.id}_${lang}_${createHash("sha1").update(text).digest("hex").slice(0, 12)}.png`;
+  const cached = await files().read(key);
+  if (cached) return cached;
+  const { questionPng } = await import("./documents.ts");
+  const png = await questionPng(text, lang);
+  if (png) await files().write(key, png, "image/png");
+  return png;
 }
 
 /** «📂 ورقتي»: كل شي يخص امتحان سلمه الطالب: درجته، درجة كل سؤال، ورقته المصححة (أو جوابه إذا بعده ما انصحح)، والأسئلة */

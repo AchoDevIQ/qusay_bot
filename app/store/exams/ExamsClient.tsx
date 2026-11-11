@@ -8,7 +8,10 @@ type Question = { id: number; n: number; max: number; q: string | null; edited: 
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
 type Exam = { id: number; ord: number; title: string; info: string; titleEn: string; minutes: number; privateVersion: number; skippable: boolean; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
-type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean; lastTwoDone: boolean; notice?: string };
+type WordSide = { ok: boolean; got: number[] | null; first: string } | null;
+type WordRow = { exam: number; title: string; model: string; kind: string; n: number; ar: WordSide; en: WordSide };
+type WordResult = { rows: WordRow[]; extraAr: number; extraEn: number; saved: { ar: number; en: number } | null };
+type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean; lastTwoDone: boolean; notice?: string; word?: WordResult };
 
 const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info)?.[0] ?? "";
 const fmtTime = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -48,6 +51,7 @@ export default function ExamsClient() {
         )}
         {data?.notice && <div className="card warn exerr">{data.notice}</div>}
         {data && <GeneralTime value={data.generalMinutes} busy={busy} call={call} />}
+        {data && <WordImport chapters={data.chapters} result={data.word} busy={busy} call={call} />}
         {ch && (
           <div className="card">
             <h2>📚 {ch.chapter}</h2>
@@ -404,6 +408,61 @@ function AddExam({ slug, generalMinutes, busy, call, near, side, label = "➕ ا
       <input className="exnum" inputMode="numeric" placeholder={`${generalMinutes} دقيقة`} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
       <button type="button" className="exbtn" disabled={busy || !title.trim()} onClick={async () => { if (await call({ action: "addExam", slug, title, en, minutes: minutes || generalMinutes, near, side })) { setOpen(false); setTitle(""); setEn(""); setMinutes(""); } }}>حفظ</button>
       <button type="button" className="exbtn" onClick={() => setOpen(false)}>إلغاء</button>
+    </div>
+  );
+}
+
+/** «📄 أسئلة من الوورد»: ملف الفصل بالعربي والإنجليزي، المطابقة ويا النسخ تطلع قبل، والحفظ للمطابق بس */
+function WordImport({ chapters, result, busy, call }: { chapters: Chapter[]; result?: WordResult; busy: boolean; call: (b: Record<string, unknown> | FormData) => Promise<unknown> }) {
+  const [target, setTarget] = useState("");
+  const [ar, setAr] = useState<File | null>(null);
+  const [en, setEn] = useState<File | null>(null);
+  const [all, setAll] = useState(false);
+  const send = (action: string) => {
+    const f = new FormData();
+    f.set("action", action);
+    if (target.startsWith("e:")) f.set("exam", target.slice(2)); else f.set("chapter", target);
+    if (ar) f.set("ar", ar);
+    if (en) f.set("en", en);
+    void call(f);
+  };
+  const side = (x: WordSide, n: number) => !x ? <span className="exhint">—</span> : x.ok ? <span title={x.first}>✅</span>
+    : <span className="exbad">⚠️ {x.got ? `بالوورد: ${x.got.map((k) => `س${k}`).join(" ")}، لازم ${n} أسئلة` : "ما لگيتها بالملف"}</span>;
+  const rows = result?.rows ?? [];
+  const okAr = rows.filter((r) => r.ar?.ok).length, okEn = rows.filter((r) => r.en?.ok).length;
+  const shown = all ? rows : rows.filter((r) => (r.ar && !r.ar.ok) || (r.en && !r.en.ok));
+  return (
+    <div className="card expad adform">
+      <div className="exlabel">📄 أسئلة من الوورد</div>
+      <div className="exhint">ارفع ملف الفصل بالعربي والإنجليزي سوا. البوت يقسمه لنسخ وأسئلة، ويطابقه ويا نسخ الامتحانات، ويراويك المطابقة قبل الحفظ. السؤال المحفوظ يطلع مكتوب بورقة «✏️ اكتب بالقلم» بدل صورته. النسخة اللي ما طابقت تبقى بصورتها، وتگدر تصلحها بالوورد وترفعه مرة ثانية.</div>
+      <select value={target} onChange={(e) => setTarget(e.target.value)} aria-label="الفصل أو الامتحان">
+        <option value="">اختار الفصل…</option>
+        {chapters.map((c) => <option key={c.slug} value={c.chapter}>{c.chapter} (كل امتحاناته)</option>)}
+        <optgroup label="امتحان واحد (مثل الإعادة)">
+          {chapters.flatMap((c) => c.exams.map((e) => <option key={e.id} value={`e:${e.id}`}>{c.chapter} · {e.title}</option>))}
+        </optgroup>
+      </select>
+      <label className="exfile">🇮🇶 ملف العربي (docx) <input type="file" accept=".docx" onChange={(e) => setAr(e.target.files?.[0] ?? null)} /></label>
+      <label className="exfile">🇬🇧 ملف الإنجليزي (docx) <input type="file" accept=".docx" onChange={(e) => setEn(e.target.files?.[0] ?? null)} /></label>
+      <div className="exline">
+        <button type="button" className="exbtn" disabled={busy || !target || (!ar && !en)} onClick={() => send("wordPreview")}>👁 شوف المطابقة</button>
+        <Confirm label="💾 احفظ المطابق" disabled={busy || !target || (!ar && !en) || !rows.length} onYes={() => send("wordSave")} />
+      </div>
+      {result && (
+        <>
+          {result.saved && <div className="exhint atok">✅ انحفظت أسئلة {result.saved.ar} نسخة بالعربي و{result.saved.en} نسخة بالإنجليزي.</div>}
+          <div className="exhint">من {rows.length} نسخة: {rows.some((r) => r.ar) ? `العربي طابق ${okAr}` : ""}{rows.some((r) => r.ar) && rows.some((r) => r.en) ? "، " : ""}{rows.some((r) => r.en) ? `الإنجليزي طابق ${okEn}` : ""}.{result.extraAr ? ` بالعربي ${result.extraAr} نسخة زايدة ما إلها مكان.` : ""}{result.extraEn ? ` بالإنجليزي ${result.extraEn} نسخة زايدة.` : ""}</div>
+          <label className="adcheck adflat"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /><span>راويني كل النسخ (هسه بس اللي ما طابقت)</span></label>
+          {shown.length ? (
+            <table className="extable"><tbody>
+              <tr><th>الامتحان</th><th className="p">النسخة</th><th>العربي</th><th>الإنجليزي</th></tr>
+              {shown.map((r, i) => (
+                <tr key={i}><td>{r.title}</td><td className="p">{r.model}{r.kind === "optional" ? " 🎯" : ""}</td><td>{side(r.ar, r.n)}</td><td>{side(r.en, r.n)}</td></tr>
+              ))}
+            </tbody></table>
+          ) : <div className="exhint atok">✅ كل النسخ طابقت.</div>}
+        </>
+      )}
     </div>
   );
 }

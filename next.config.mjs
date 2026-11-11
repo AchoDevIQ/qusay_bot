@@ -2,7 +2,7 @@
 const nextConfig = {
   serverExternalPackages: ["firebase-admin", "@sparticuz/chromium", "puppeteer-core", "@napi-rs/canvas"],
   // ملفات يقراها البوت من القرص، ولازم توصل وية التطبيق للسيرفر
-  outputFileTracingIncludes: { "/api/**": ["./assets/*.jpg", "./assets/fonts/*", "./public/logo.png", "./public/boahmed.ttf", "./node_modules/@sparticuz/chromium/bin/**",
+  outputFileTracingIncludes: { "/api/**": ["./assets/*.jpg", "./assets/fonts/*", "./public/logo.png", "./public/boahmed.ttf", "./node_modules/@sparticuz/chromium/bin/**", "./node_modules/katex/dist/**",
     // ملف بيانات اللغة مال مكتبة الرسم: بدونه الكتابة العربية بالليبل تطلع حروف مفككة ومقلوبة
     "./node_modules/@napi-rs/canvas-linux-*/**"] },
   // صفحات المتجر ما تتخزن، حتى التليجرام ما يفتح نسخة قديمة
