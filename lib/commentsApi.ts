@@ -29,7 +29,7 @@ async function pageData() {
     comments: (await find("grade_comments", {})).sort(byRange).map((c) => ({ id: c.id, lo: c.lo, hi: c.hi, text: c.text, sticker: c.sticker_id ?? 0 })),
     stickers: (await find("stickers", {})).sort(byRange).map((s) => ({ id: s.id, name: s.name, lo: s.lo, hi: s.hi })),
     // ✍️ خط الصور: صاحب البوت يختاره، وكل الصور تتغير وياه
-    fonts: { ...await fontChoice(), ar_list: AR_FONTS.map((f) => ({ id: f.id, name: f.name })), en_list: EN_FONTS.map((f) => ({ id: f.id, name: f.name })) },
+    fonts: { ...await fontChoice(), ar_list: AR_FONTS.map((f) => ({ id: f.id, name: f.noIraqi ? `${f.name} ⚠️ ما بيه گ چ ژ` : f.name })), en_list: EN_FONTS.map((f) => ({ id: f.id, name: f.name })) },
   };
 }
 

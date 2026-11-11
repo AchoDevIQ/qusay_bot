@@ -5,12 +5,13 @@ import path from "node:path";
 import { FONT } from "./config.ts";
 import { kvGet, kvSet } from "./db.ts";
 
-type Font = { id: string; name: string; file: string; range?: string };
+type Font = { id: string; name: string; file: string; range?: string; noIraqi?: boolean };
 const dir = (f: string) => path.join(process.cwd(), "assets", "fonts", f);
 export const AR_RANGE = "U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF";
 export const LATIN_RANGE = "U+0000-024F,U+2000-206F,U+20AC,U+2122";
 export const AR_FONTS: Font[] = [
-  { id: "tajawal", name: "Tajawal", file: dir("Tajawal-Bold.ttf") },
+  // Tajawal ما بيه گ چ ژ ک ی: تجي من خط ثاني، فالكلمة تطلع بخطين
+  { id: "tajawal", name: "Tajawal", file: dir("Tajawal-Bold.ttf"), noIraqi: true },
   { id: "almarai", name: "Almarai", file: dir("Almarai-Bold.ttf") },
   { id: "cairo", name: "Cairo", file: dir("Cairo-Bold.ttf") },
   { id: "ibmplex", name: "IBM Plex Sans Arabic", file: dir("IBMPlexSansArabic-SemiBold.ttf") },

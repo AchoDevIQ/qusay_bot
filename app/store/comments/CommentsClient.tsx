@@ -86,6 +86,7 @@ function Fonts({ d, busy, call }: { d: Data; busy: boolean; call: Call }) {
       <div className="exhint">خط كل الصور اللي يسويها البوت: بطاقة الدرجة، والفقاعة، وبطاقة المعلومات، والوصولات، والليبل، والأوراق المطبوعة. اختار وشوف البطاقة، وبعدها احفظ.</div>
       <label className="adtop"><small>الخط العربي</small>
         <select value={ar} onChange={(e) => { setAr(e.target.value); setImg(""); }}>{d.fonts.ar_list.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+        {d.fonts.ar_list.find((f) => f.id === ar)?.name.includes("⚠️") && <small className="exbad">هذا الخط ما بيه «گ چ ژ»، فبكلمات مثل «تگدر» الحرف يطلع بخط ثاني وما يتناسق ويا الكلمة. اختار خط ثاني، مثلاً Almarai.</small>}
       </label>
       <label className="adtop"><small>الخط الإنجليزي والأرقام</small>
         <select value={en} onChange={(e) => { setEn(e.target.value); setImg(""); }}>{d.fonts.en_list.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>

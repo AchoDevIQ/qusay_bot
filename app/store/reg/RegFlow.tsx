@@ -310,9 +310,17 @@ function TermStep({ term, n, total, last, agreed, onBack, onOk }: { term: Term; 
             <div className={"rgbuilt" + (left === 0 ? " full" : "")} aria-live="polite">
               {!picked.length && <span className="rgempty">اضغط أول كلمة من تحت...</span>}
               {picked.map((p, i) => (
-                <button type="button" key={p} className="rgword on" onClick={() => { setWrong(false); setPicked(picked.filter((_, x) => x !== i)); }}>{words[p]}</button>
+                <button type="button" key={p} className="rgword on" aria-label={`امسح ${words[p]}`} onClick={() => { haptic(); setWrong(false); setPicked(picked.filter((_, x) => x !== i)); }}>{words[p]} <span className="rgx">✕</span></button>
               ))}
             </div>
+            {/* كلمة غلط: يدوسها فتنمسح، أو يمسح آخر كلمة، أو يمسح الكل */}
+            {picked.length > 0 && (
+              <div className="rgfix">
+                <small>اخترت كلمة غلط؟ دوس عليها فوك (اللي بيها ✕) حتى تنمسح.</small>
+                <button type="button" className="rgfixbtn" onClick={() => { haptic(); setWrong(false); setPicked(picked.slice(0, -1)); }}>⌫ امسح آخر كلمة</button>
+                <button type="button" className="rgfixbtn" onClick={() => { haptic(); setWrong(false); setPicked([]); }}>🗑 امسح الكل</button>
+              </div>
+            )}
             {wrong && <div className="rgwrong">⚠️ الترتيب غلط. بقت الكلمات الصحيحة، وكمل من بعدها.</div>}
             {left > 0 && (
               <div className="rgpool">

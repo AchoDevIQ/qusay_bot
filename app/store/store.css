@@ -121,6 +121,8 @@ html:has(.rg),html:has(.rg) body{background:var(--ink);padding-bottom:0}
 .rgpool{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
 .rgword{border:1px solid var(--line);border-radius:10px;background:var(--ink);color:var(--txt);padding:8px 11px;font-family:inherit;font-size:15px;cursor:pointer}
 .rgword.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.rgx{display:inline-block;margin-inline-start:4px;padding:0 5px;border-radius:99px;background:rgba(16,25,41,.25);font-size:11px;color:#8a1c12;font-weight:800}
+.rgfix{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px}.rgfix small{flex-basis:100%;color:var(--mut);font-size:13px}.rgfixbtn{flex:1;border:1px solid var(--gold2);border-radius:10px;background:transparent;color:var(--gold);padding:8px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
 .rgwrong{margin-top:10px;padding:9px 12px;border-radius:10px;background:rgba(255,122,107,.12);color:var(--red);font-size:14px;font-weight:600}
 .rgfoot{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,transparent,var(--ink) 18%);padding:18px 16px calc(14px + env(safe-area-inset-bottom))}
 .rgfootin{max-width:640px;margin:0 auto;display:grid;gap:9px}
