@@ -126,6 +126,8 @@ function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; per
           <input aria-label="الاسم" value={name} onChange={(e) => setName(e.target.value)} />
           <button type="button" className="exbtn" disabled={busy || !name.trim() || name.trim() === s.name} onClick={() => void call({ action: "rename", id: s.id, name })}>حفظ الاسم</button>
         </div>
+        <button type="button" className="exbtn adtop" disabled={busy} onClick={async () => { if (await call({ action: "viewAs", id: s.id })) location.href = `/store/admin${location.search}`; }}>👁 شوف كمساعد</button>
+        <div className="exhint">تشوف لوحة التحكم والبوت مثله بالضبط، بصلاحياته. ترجع من «↩️ ارجع لحسابي».</div>
         <Confirm label="🗑 حذف المساعد" disabled={busy} onYes={() => void call({ action: "del", id: s.id })} />
       </div>
     </div>

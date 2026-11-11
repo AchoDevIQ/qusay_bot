@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 
 type Tile = { page: string; icon: string; title: string; note?: string; hot?: boolean };
-type Data = { groups: { title: string; tiles: Tile[] }[]; closed?: boolean; owner?: boolean; asGrader?: boolean };
+type Data = { groups: { title: string; tiles: Tile[] }[]; closed?: boolean; owner?: boolean; asGrader?: boolean; asStaff?: string };
 type Size = "small" | "mid" | "big";
 
 const SIZES: { key: Size; label: string }[] = [{ key: "small", label: "صغير" }, { key: "mid", label: "وسط" }, { key: "big", label: "كبير" }];
@@ -37,8 +37,8 @@ export default function AdminHomeClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data?.closed && <div className="empty">👁 صرت تشوف البوت مثل الطالب. سكر هاي الصفحة.</div>}
         {data?.asGrader && (
-          <div className="card warn exerr">✍️ هسه تشوف لوحة التحكم مثل مساعد عنده التصحيح بس.
-            <button type="button" className="exbtn adstudent" disabled={busy} onClick={() => void call({ action: "endGrader" })}>↩️ إنهاء التجربة كمصحح</button>
+          <div className="card warn exerr">{data.asStaff ? <>👁 هسه تشوف لوحة التحكم مثل <b>{data.asStaff}</b>، بصلاحياته بالضبط. افتح أي مربع وشوف شنو يطلعله.</> : "✍️ هسه تشوف لوحة التحكم مثل مساعد عنده التصحيح بس."}
+            <button type="button" className="exbtn adstudent" disabled={busy} onClick={() => void call({ action: "endGrader" })}>↩️ ارجع لحسابي</button>
           </div>
         )}
         {data && !data.closed && (

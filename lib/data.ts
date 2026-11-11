@@ -45,10 +45,18 @@ export const viewingAsStudent = async (uid: number) => await kvGet(`asstudent_${
 export const setStudentView = async (uid: number, on: boolean) => await kvSet(`asstudent_${uid}`, on ? "1" : "0");
 // «شوف كمساعد مصحح»: صاحب البوت يجرب التصحيح كامل مثل مساعد ما عنده غير ✍️ التصحيح و✋ الاعتراضات
 export const GRADER_TRY_PERMS = "grade,objections";
-export const viewingAsGrader = async (uid: number) => ADMIN_IDS.includes(uid) && await kvGet(`asgrader_${uid}`) === "1";
-export const setGraderView = async (uid: number, on: boolean) => await kvSet(`asgrader_${uid}`, on ? "1" : "0");
+// «👁 شوف كمساعد»: صاحب البوت يشوف كلشي بصلاحيات مساعد معين (القيمة s:رقمه)، وتتحدث وياه إذا غير صلاحياته
+export const viewingAsGrader = async (uid: number) => ADMIN_IDS.includes(uid) && /^(1|s:\d+)$/.test(await kvGet(`asgrader_${uid}`) ?? "");
+export const setGraderView = async (uid: number, on: boolean | number) => await kvSet(`asgrader_${uid}`, on === true ? "1" : on ? `s:${on}` : "0");
+export async function viewedStaff(uid: number): Promise<number | null> {
+  if (!ADMIN_IDS.includes(uid)) return null;
+  const v = await kvGet(`asgrader_${uid}`) ?? "";
+  return v.startsWith("s:") ? Number(v.slice(2)) : null;
+}
 export async function staffRow(uid: number) {
   if (await viewingAsStudent(uid)) return null;
+  const as = await viewedStaff(uid);
+  if (as) { const r = await realStaffRow(as); return { ...(r ?? {}), user_id: uid, name: `صاحب البوت (يشوف مثل ${String(r?.name ?? as)})`, perms: String(r?.perms ?? "") }; }
   if (await viewingAsGrader(uid)) return { user_id: uid, name: "صاحب البوت (تجربة مصحح)", perms: GRADER_TRY_PERMS };
   return await realStaffRow(uid);
 }

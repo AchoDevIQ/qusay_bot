@@ -235,3 +235,27 @@ test("صفحة الطلاب: الفلاتر، القائمة بطلب بس، و�
   const log: any = await studentAction({ action: "log", id: 16, initData: sign(1) });
   assert.ok(log.log.rows.some((r: any) => r.what.startsWith("🏪 اشترى")));
 });
+
+test("👁 شوف كمساعد: صاحب البوت يشوف اللوحة بصلاحيات المساعد بالضبط، وتتحدث وياه، و↩️ يرجعه", async () => {
+  const owner = sign(1);
+  await staffAction({ action: "add", id: 61000, name: "مساعد المعاينة", initData: owner });
+  await staffAction({ action: "perms", id: 61000, perms: ["students"], initData: owner });
+  const r: any = await staffAction({ action: "viewAs", id: 61000, initData: owner });
+  assert.equal(r.open, "admin");
+  const tiles = async () => ((await adminHomeAction({ action: "list", initData: owner })) as any);
+  let h = await tiles();
+  assert.equal(h.asStaff, "مساعد المعاينة");
+  assert.equal(h.owner, false);
+  const pages = (x: any) => x.groups.flatMap((g: any) => g.tiles.map((t: any) => t.page));
+  assert.deepEqual(pages(h), ["students"]);
+  // المساعد ياخذ صلاحية ثانية: تطلع هم
+  const { update } = await import("../lib/db.ts");
+  await update("staff", { user_id: 61000 }, { perms: "schedule,students" });
+  h = await tiles();
+  assert.deepEqual(pages(h).sort(), ["schedule", "students"]);
+  await assert.rejects(staffAction({ action: "list", initData: owner }), /صلاحية/);   // صفحة المساعدين لصاحب البوت بس
+  // ↩️ ارجع لحسابي
+  h = await adminHomeAction({ action: "endGrader", initData: owner });
+  assert.equal(h.owner, true);
+  assert.ok(pages(h).includes("staff"));
+});

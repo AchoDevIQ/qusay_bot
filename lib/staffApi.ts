@@ -1,7 +1,7 @@
 // صفحة المساعدين: الإضافة، الصلاحيات، الحساب والدفعات. للمدير بس
-import { find, insert, kvSet, one, put, remove, update, type Row } from "./db.ts";
+import { find, insert, kvSet, one, put, remove, setSession, update, type Row } from "./db.ts";
 import { ADMIN_IDS, PERMS, toLatinDigits } from "./config.ts";
-import { staffAccount } from "./data.ts";
+import { setGraderView, setStudentView, staffAccount } from "./data.ts";
 import { parseAmount } from "./office.ts";
 import { mainKb } from "./keyboards.ts";
 import { send } from "./telegram.ts";
@@ -76,6 +76,16 @@ export async function staffAction(body: Row) {
     await kvSet(`staff_since_${nid}`, stamp());
     await send(nid, "✅ تمت إضافتك مساعد بالبوت. اضغط الزر جوة 👇", { replyKb: await mainKb(nid) });
     notice = "✅ انضاف المساعد بصلاحية الأسئلة بس. لازم تضيفه هم لمجموعة الأسئلة";
+  } else if (a === "viewAs") {
+    // صاحب البوت يشوف اللوحة والبوت بصلاحيات هذا المساعد، لحد ما يدوس «↩️ ارجع لحسابي»
+    await liveStaff(id);
+    const s = await one("staff", { user_id: id });
+    await setStudentView(me, false);
+    await setGraderView(me, id);
+    await setSession(me, "", {});
+    await send(me, `👁 <b>صرت تشوف البوت مثل ${String(s?.name ?? id)}</b>، بصلاحياته بالضبط.
+إذا غيرت صلاحياته، ارجع لحسابك وغيرها، وبعدها شوف مرة ثانية. ولمن تخلص، اضغط «↩️ ارجع لحسابي».`, { replyKb: await mainKb(me) });
+    return { open: "admin" };
   } else if (a === "rename") {
     await liveStaff(id);
     await update("staff", { user_id: id }, { name: nameOf(body.name) });

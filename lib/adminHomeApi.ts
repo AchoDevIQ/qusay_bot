@@ -4,7 +4,7 @@ import { birthdaysToday } from "./birthdays.ts";
 import { pendingGroups } from "./competition.ts";
 import { count, find, setSession, sumOf, type Row } from "./db.ts";
 import { ADMIN_IDS } from "./config.ts";
-import { can, isAdmin, isStaff, newOrdersCount, setGraderView, setStudentView, viewingAsGrader } from "./data.ts";
+import { can, isAdmin, isStaff, newOrdersCount, setGraderView, setStudentView, staffRow, viewedStaff, viewingAsGrader } from "./data.ts";
 import { GRADER_TRY_TEXT, adminMenuFor } from "./admin.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { objectionsWaiting, waitingPapers } from "./gradeApi.ts";
@@ -77,7 +77,10 @@ async function homeData(uid: number) {
   if (shop.length) groups.push({ title: "المتجر", tiles: shop });
   if (people.length) groups.push({ title: "الطلاب والامتحانات", tiles: people });
   if (setup.length) groups.push({ title: "الإدارة", tiles: setup });
-  return { groups, owner: await isAdmin(uid), asGrader: await viewingAsGrader(uid) };
+  // يشوف مثل مساعد معين: اسمه يطلع بالشريط فوك
+  const as = await viewedStaff(uid);
+  const asName = as ? String((await staffRow(uid))?.name ?? "").replace(/^صاحب البوت \(يشوف مثل (.*)\)$/, "$1") : "";
+  return { groups, owner: await isAdmin(uid), asGrader: await viewingAsGrader(uid), asStaff: asName };
 }
 
 export async function adminHomeAction(body: Row) {

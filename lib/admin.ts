@@ -307,7 +307,7 @@ export async function onAdminText(chat: number, uid: number, text: string, st: s
   return false;
 }
 
-export const GRADER_TRY_TEXT = "✍️ <b>صرت تشوف البوت مثل مساعد عنده صلاحية التصحيح بس</b> (✍️ التصحيح و✋ الاعتراضات).\nتوصلك الأوراق وتنبيهات المصححين مثله بالضبط، وتصحح وتنحسب أجورك مثله. ولمن تخلص، اضغط «↩️ إنهاء التجربة كمصحح» جوة.";
+export const GRADER_TRY_TEXT = "✍️ <b>صرت تشوف البوت مثل مساعد عنده صلاحية التصحيح بس</b> (✍️ التصحيح و✋ الاعتراضات).\nتوصلك الأوراق وتنبيهات المصححين مثله بالضبط، وتصحح وتنحسب أجورك مثله. ولمن تخلص، اضغط «↩️ ارجع لحسابي» جوة.";
 
 // ---------- الأزرار a:*
 export async function onAdminCb(chat: number, uid: number, mid: number, d: string): Promise<string | null> {
