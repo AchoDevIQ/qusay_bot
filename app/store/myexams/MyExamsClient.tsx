@@ -647,14 +647,17 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
         <button type="button" className="btn agbtn" onClick={leave}>رجوع لامتحاناتي</button></div>
     );
   }
-  const penQ = pen === null ? null : room.questions.find((x) => x.n === pen) ?? null;
-  if (penQ && room.sworn) {
+  // ✏️ الكتابة بالقلم: صفحة وحدة لكل الأسئلة، تنفتح على السؤال اللي داسه
+  if (pen !== null && room.sworn) {
     return (
       <>
         {error && <div className="wrap"><div className="err">⚠️ {error}</div></div>}
-        <PenPage item={room.id} sid={room.sid} model={room.model} head={room.head} q={penQ} imgUrl={penQ.img ? fileUrl(room.id, penQ.img) : null} busy={busy}
+        <PenPage item={room.id} sid={room.sid} model={room.model} head={room.head} start={pen} busy={busy} left={left} answered={answered} need={need}
+          questions={room.questions.map((q) => ({ n: q.n, img: q.img ? fileUrl(room.id, q.img) : null, done: q.answers.length > 0 }))}
           timer={<b className={"pen-time" + (left <= 10 ? " low" : "")} role="timer">⏳ {Math.max(0, left)} دقيقة</b>}
-          onSave={async (f) => { const ok = await upload(penQ.n, f); if (ok) { setPen(null); setOpen(penQ.n); } return ok; }} onClose={() => setPen(null)} />
+          onSend={async (list) => { for (const x of list) if (!await upload(x.n, x.file)) return false; return true; }}
+          onSubmit={async () => { setBusy(true); const r = await call({ action: "submitExam", item: room.id }); setBusy(false); if (r) leave(); }}
+          onClose={() => setPen(null)} />
       </>
     );
   }
@@ -671,6 +674,10 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       {room.pages.map((p) => <div key={p} className="exidwrap"><span className="exid">🆔 {room.sid}</span><img className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" /></div>)}
       <div className="card"><h2>📷 صور جواب كل سؤال</h2>
         {!!room.answerOnly && <AnswerOnlyNote k={room.answerOnly} n={room.questions.length} done={room.questions.filter((q) => q.answers.length).length} />}
+        <div className="expad">
+          <button type="button" className="btn agbtn" disabled={busy} onClick={() => setPen(room.questions.find((q) => !q.answers.length)?.n ?? room.questions[0]?.n ?? 1)}>✏️ جاوب بالقلم على الآيباد (كل الأسئلة)</button>
+          <div className="exhint">تنفتح ورقة لكل سؤال، وفوگ أرقام الأسئلة. كل ما تخلص ورقة دوس «✅ تم» ويصير رقمها أخضر، وبالأخير «📤 أرسل الأجوبة» مرة وحدة.</div>
+        </div>
         <div className="form">
           {room.questions.map((q) => (
             <div key={q.n}>
