@@ -77,6 +77,7 @@ test("بنص الامتحان: ماكو ملفات ولا أسئلة ولا اع
   assert.match(calls[0].p.text, /عندك امتحان مفتوح هسه/);
   // سلمه: كلشي يرجع
   const { update } = await import("../lib/db.ts");
+  await put("guardians", { guardian_id: 6060, student_id: 60, created: stamp() });   // ورا أول امتحان لازم ولي أمر
   await update("sched_items", { id: live }, { status: "done", submitted_at: stamp() });
   assert.equal((await me("info")).inExam, false);
   assert.deepEqual((await me("info")).lectureFiles, [NAME]);

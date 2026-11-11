@@ -6,7 +6,7 @@ import { checkStopped, checkpointCard, seeCheckpoint } from "./checkpoints.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { objectionInfo } from "./objections.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
-import { boughtLectures, logActivity } from "./access.ts";
+import { boughtLectures, logActivity, needsGuardian } from "./access.ts";
 import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
 import { skippableExams } from "./skipExams.ts";
@@ -550,6 +550,8 @@ export async function myExamAction(body: Row) {
   await checkDevice(id, body.device);
   await checkPhone(id, body.pf);
   await checkStopped(id);
+  // سلّم أول امتحان: الحساب ينقفل لحد ما يربط ولي أمره
+  need(!await needsGuardian(id), "🔒 حسابك مقفول لحد ما تربط ولي أمرك. افتح 🏠 القائمة الرئيسية وسوي الخطوات، أو شوف الرسالة بالمحادثة.");
   if (a === "preview" || a === "confirm") {
     const info = await studentInfo(id);
     need(info.needsBuild, "جدولك مثبت. لتغييره تواصل ويا قصي العميري");

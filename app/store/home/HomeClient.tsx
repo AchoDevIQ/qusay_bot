@@ -17,28 +17,27 @@ const ICONS: Record<string, ReactNode> = {
   exams: svg(<><path d="M7 3.500h7.500L19 8v12.500H7a1.500 1.500 0 0 1-1.500-1.500V5A1.500 1.500 0 0 1 7 3.500z" /><path d="M14.500 3.500V8H19" /><path d="M9 12.500h6M9 16h6" /></>),
 };
 
-/** اشترى محاضرات أو امتحانات: يدز الرابط لولي أمره، وولي الأمر يضغطه ويضغط Start بس */
+/** ورا أول امتحان: يحول الرابط لولي أمره، وولي الأمر يدوسه ويدوس START بس */
 function GuardianGate({ link, name, recheck, busy }: { link: string; name: string; recheck: () => void; busy: boolean }) {
   const [copied, setCopied] = useState(false);
-  const text = `السلام عليكم، آني ${name}. هذا رابط متابعة درجاتي بالتليجرام: اضغط الرابط، وبعدها اضغط زر Start (ابدأ)، وبس.`;
-  const wa = `https://wa.me/?text=${encodeURIComponent(`${text}\n${link}`)}`;
+  const text = `السلام عليكم، آني ${name}.\nحتى توصلكم درجاتي بالتليجرام:\n١- دوسوا على الرابط الأزرق جوة.\n٢- يطلعلكم البوت، دوسوا الزر الأزرق «START» أو «ابدأ» اللي جوة الشاشة.\nوبس، ما تحتاجون تكتبون أي شي 🌷`;
   const tgShare = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
   async function copy() {
     try { await navigator.clipboard.writeText(`${text}\n${link}`); setCopied(true); } catch { setCopied(false); }
   }
   return (
     <div className="card">
-      <h2>👨‍👧 خطوة أخيرة: اربط ولي أمرك</h2>
+      <h2>🔒 اربط ولي أمرك حتى ينفتح حسابك</h2>
       <div className="hmlink">
-        <div>حتى تنفتح لك الأسئلة والامتحانات، لازم ولي أمرك يتابع درجاتك.</div>
+        <div>خلصت أول امتحان 👏 هسه لازم ولي أمرك يربط حتى توصله درجاتك. سهلة:</div>
         <ol className="hmsteps">
-          <li>دز الرابط لولي أمرك من الأزرار جوة.</li>
-          <li>ولي أمرك يضغط الرابط، وبعدها يضغط <b>Start</b> بس.</li>
-          <li>ارجع هنا واضغط «تأكدت».</li>
+          <li>دوس <b>📤 حوّل لولي أمرك</b>، واختار ولي أمرك من قائمة التليجرام، ودوس إرسال.</li>
+          <li>ولي أمرك يدوس الرابط الأزرق، وبعدها الزر الأزرق <b>START</b> (أو <b>ابدأ</b>) اللي يطلع جوة الشاشة. بس هذا، ما يكتب شي.</li>
+          <li>ارجع هنا ودوس «تأكدت».</li>
         </ol>
-        <button type="button" className="btn" onClick={() => openOutside(wa)}>🟢 دز الرابط بالواتساب</button>
-        <button type="button" className="btn ghost" onClick={() => openOutside(tgShare)}>✈️ دز الرابط بالتليجرام</button>
-        <button type="button" className="btn ghost" onClick={() => void copy()}>{copied ? "✅ انتسخ" : "📋 نسخ الرابط"}</button>
+        <button type="button" className="btn" onClick={() => openOutside(tgShare)}>📤 حوّل لولي أمرك</button>
+        <button type="button" className="btn ghost" onClick={() => void copy()}>{copied ? "✅ انتسخت، الصقها عند ولي أمرك" : "📋 انسخ الرسالة والرابط"}</button>
+        <div className="hint">ولي أمرك ما عنده تليجرام؟ لازم ينزله أول، لأن الدرجات توصله عليه.</div>
         <button type="button" className="btn ghost" disabled={busy} onClick={recheck}>{busy ? "جاري التأكد..." : "🔄 ولي أمري ضغط Start، تأكدت"}</button>
       </div>
     </div>

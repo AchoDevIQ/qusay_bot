@@ -137,6 +137,8 @@ export async function submitRoom(uid: number, item: unknown, s: SchedSettings) {
   const e = await one("bank_exams", { id: it.exam_id });
   await logActivity(uid, `✅ سلم امتحان ${e?.title ?? ""}`);
   try { await notifyGraders(); } catch (x) { console.error(x); }
+  // أول امتحان: لازم يربط ولي أمره، فتوصله رسالة بزر «حوّل لولي أمرك»
+  try { const { guardianOf, sendGuardianAsk } = await import("./access.ts"); if (!await guardianOf(uid)) await sendGuardianAsk(uid); } catch (x) { console.error(x); }
 }
 const kindOf = (b: Buffer) => (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff ? "jpg" : b.subarray(0, 4).toString("latin1") === "\x89PNG" ? "png" : null);
 /** صورة جواب سؤال واحد. الجواب ينحفظ باسم الطالب والامتحان والسؤال تلقائياً */

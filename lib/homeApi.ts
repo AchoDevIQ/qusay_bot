@@ -1,7 +1,7 @@
 // الصفحة الرئيسية للطالب، وإرسال طلب المتجر للسيرفر مباشرة
 import { checkDevice } from "./deviceLock.ts";
 import { getSession, one, put, setSession, type Row } from "./db.ts";
-import { boughtCourse, canAsk, childrenOf, guardianLink, guardianOf, logActivity } from "./access.ts";
+import { canAsk, childrenOf, guardianLink, guardianOf, logActivity, needsGuardian } from "./access.ts";
 import { allowUpdate } from "./bot.ts";
 import { BTN_ME } from "./config.ts";
 import { hasExamMenu, student } from "./data.ts";
@@ -53,7 +53,8 @@ export async function homeAction(body: Row) {
   need(allowUpdate(id), "ضغطت هوايا، انتظر شوية", 429);
   await checkDevice(id, body.device);
   const a = String(body.action ?? "");
-  if (a === "ask" || a === "exams" || a === "notes") need(!await boughtCourse(id) || await guardianOf(id), "اربط ولي أمرك أول، من القائمة الرئيسية");
+  // سلّم أول امتحان وبعده ما ربط ولي أمره: كلشي مقفول لحد ما يربطه
+  if (a === "ask" || a === "exams" || a === "notes") need(!await needsGuardian(id), "🔒 اربط ولي أمرك أول، من القائمة الرئيسية");
   if (a === "list") {
     const s = await student(id);
     if (!s) {
@@ -61,8 +62,8 @@ export async function homeAction(body: Row) {
       if (kids.length) return { name: "", exams: false, ask: false, myq: false, children: await Promise.all(kids.map(async (k) => (await student(k.student_id))?.name ?? "—")) };
       return { name: "", exams: false, ask: true, myq: false, fresh: true };
     }
-    // اشترى محاضرات أو امتحانات: لازم يربط ولي أمره قبل كل شي
-    const needLink = await boughtCourse(id) && !await guardianOf(id);
+    // ورا أول امتحان: لازم يربط ولي أمره قبل كل شي
+    const needLink = await needsGuardian(id);
     return {
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
       name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id),

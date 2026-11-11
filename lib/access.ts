@@ -32,6 +32,22 @@ export const boughtCourse = async (uid: number) => (await liveItems(uid)).some(f
 export const guardianOf = async (sid: number) => (await find("guardians", { student_id: sid }))[0] ?? null;
 export const childrenOf = async (gid: number) => await find("guardians", { guardian_id: gid });
 export const isGuardian = async (gid: number) => (await childrenOf(gid)).length > 0;
+/** سلّم أول امتحان (مو امتحان تجربة): من هنا لازم يربط ولي أمره */
+export const tookExam = async (uid: number) => (await find("sched_items", { user_id: uid, status: "done" })).some((i) => i.notified !== "test");
+/** حسابه مقفول: امتحن وبعده ما ربط ولي أمره */
+export const needsGuardian = async (uid: number) => await tookExam(uid) && !await guardianOf(uid);
+/** الرسالة اللي يحولها الطالب لولي أمره: خطوتين بس، بكلام بسيط لكبار السن */
+export const guardianText = (name: string) => `السلام عليكم، آني ${name}.\nحتى توصلكم درجاتي بالتليجرام:\n١- دوسوا على الرابط الأزرق جوة.\n٢- يطلعلكم البوت، دوسوا الزر الأزرق «START» أو «ابدأ» اللي جوة الشاشة.\nوبس، ما تحتاجون تكتبون أي شي 🌷`;
+/** رسالة الطالب بالمحادثة: الرسالة الجاهزة، وزرين «حوّل» و«انسخ» */
+export async function sendGuardianAsk(sid: number) {
+  const s = await one("students", { user_id: sid });
+  const link = await guardianLink(sid);
+  const text = guardianText(String(s?.name ?? "").split(" ")[0] || "ابنكم");
+  const { send } = await import("./telegram.ts");
+  await send(sid, "🔒 <b>حسابك مقفول لحد ما تربط ولي أمرك</b>\nحتى توصل درجاتك لأهلك. سهلة:\n١- دوس «📤 حوّل لولي أمرك» واختار ولي أمرك من القائمة.\n٢- ولي أمرك يدوس الرابط، وبعدها الزر الأزرق «START».\n٣- يوصلك هنا «✅ انربط ولي أمرك»، وينفتح حسابك.", {
+    kb: [[{ text: "📤 حوّل لولي أمرك", url: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}` }], [{ text: "📋 انسخ الرسالة والرابط", copy_text: { text: `${text}\n${link}`.slice(0, 256) } }]],
+  });
+}
 export async function guardianLink(sid: number) {
   return `https://t.me/${await kvGet("bot_username") || "Qusay_Alomairi_Bot"}?start=par_${guardianCode(sid)}`;
 }

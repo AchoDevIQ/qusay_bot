@@ -101,13 +101,26 @@ test("السؤال العلمي بس بعد شراء محاضرات أو امت�
   assert.equal(await canAsk(11), false);   // الطلب الملغي ما يفتح شي
 });
 
-test("بعد الشراء لازم يربط ولي الأمر: يضغط الرابط وStart بس", async () => {
+test("ورا أول امتحان لازم يربط ولي الأمر: الحساب ينقفل، يحول الرابط، وولي الأمر يضغطه وStart بس", async () => {
   await student(12);
   assert.equal((await home(12)).link, null);
   await order(12, ["امتحانات الفصل الأول"]);
+  assert.equal((await home(12)).link, null);                // الشراء وحده ما يقفل
+  await insert("sched_items", { user_id: 12, exam_id: 1, at: "2026-01-01 10:00", status: "done", notified: "test" });
+  assert.equal((await home(12)).link, null);                // امتحان التجربة ما يحسب
+  await insert("sched_items", { user_id: 12, exam_id: 1, at: "2026-01-02 10:00", status: "done" });
+  // رسالة المحادثة: زر «حوّل لولي أمرك» وزر «انسخ»، والرسالة تشرح لولي الأمر يدوس START بس
+  calls.length = 0;
+  const { sendGuardianAsk } = await import("../lib/access.ts");
+  await sendGuardianAsk(12);
+  const m = calls.find((c) => c.p.chat_id === 12)!.p;
+  const kb = JSON.stringify(m.reply_markup);
+  assert.match(m.text, /حسابك مقفول/);
+  assert.ok(kb.includes("حوّل لولي أمرك") && kb.includes("t.me/share/url") && kb.includes("copy_text") && kb.includes("START"));
   const link = (await home(12)).link as string;
   assert.ok(link.includes("?start=par_12_"));
   await assert.rejects(home(12, "ask"), /ولي أمرك/);
+  await assert.rejects(home(12, "exams"), /ولي أمرك/);
   const param = link.split("?start=")[1];
   calls.length = 0;
   await start(12, `/start ${param}`);                      // الطالب نفسه ما يصير
