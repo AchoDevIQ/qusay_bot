@@ -10,8 +10,8 @@ const dir = (f: string) => path.join(process.cwd(), "assets", "fonts", f);
 export const AR_RANGE = "U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF";
 export const LATIN_RANGE = "U+0000-024F,U+2000-206F,U+20AC,U+2122";
 export const AR_FONTS: Font[] = [
-  // Tajawal ما بيه گ چ ژ ک ی: تجي من خط ثاني، فالكلمة تطلع بخطين
-  { id: "tajawal", name: "Tajawal", file: dir("Tajawal-Bold.ttf"), noIraqi: true },
+  // Tajawal الأصلي ما بيه گ چ ژ ک ی، فانضافت إله من قطعه نفسها (tools/build_iraqi_font.py)، حتى الحرف يطلع ويا الكلمة
+  { id: "tajawal", name: "Tajawal", file: dir("TajawalIQ-Bold.ttf") },
   { id: "almarai", name: "Almarai", file: dir("Almarai-Bold.ttf") },
   { id: "cairo", name: "Cairo", file: dir("Cairo-Bold.ttf") },
   { id: "ibmplex", name: "IBM Plex Sans Arabic", file: dir("IBMPlexSansArabic-SemiBold.ttf") },
@@ -63,8 +63,10 @@ export const pageFonts = async () => fontsCss(await fontChoice());
 export async function appFontsCss() {
   const c = await fontChoice();
   const ar = arFont(c), en = enFont(c);
-  return `@font-face{font-family:QAppEn;src:url(/api/font?f=en-${en.id}) format("truetype");font-display:swap;unicode-range:${LATIN_RANGE}}`
-    + `@font-face{font-family:QAppAr;src:url(/api/font?f=ar-${ar.id}) format("truetype");font-display:swap;unicode-range:${ar.range ?? AR_RANGE}}`;
+  // v: حجم الملف، فإذا تبدل الخط الموبايل ينزله من جديد بدل النسخة المخزنة
+  const v = (f: Font) => { try { return fs.statSync(f.file).size; } catch { return 0; } };
+  return `@font-face{font-family:QAppEn;src:url(/api/font?f=en-${en.id}&v=${v(en)}) format("truetype");font-display:swap;unicode-range:${LATIN_RANGE}}`
+    + `@font-face{font-family:QAppAr;src:url(/api/font?f=ar-${ar.id}&v=${v(ar)}) format("truetype");font-display:swap;unicode-range:${ar.range ?? AR_RANGE}}`;
 }
 /** ملف الخط نفسه: «ar-tajawal» أو «en-nunito» */
 export function appFontFile(f: string) {
