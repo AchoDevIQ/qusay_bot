@@ -62,8 +62,10 @@ export function alignBlocks(bank: Sig[], word: Sig[], extra?: (i: number, j: num
   const res = Array(n).fill(-1);
   let i = n, j = m;
   while (i > 0 && j > 0) {
-    if (sc[i][j] === sc[i - 1][j - 1] + pairAt(i - 1, j - 1)) { res[i - 1] = j - 1; i--; j--; }
-    else if (sc[i][j] === sc[i - 1][j] + SKIP) i--;
+    // بالتعادل: نسخة البنك الأخيرة تبقى بلا مطابقة، حتى الملف ينطابق ويا الامتحانات اللي قبل
+    // (مثلاً الفصل الثالث بالبوت بآخره الإعادة ونصف السنة، وفاينل الملف لازم يروح لفاينل الفصل)
+    if (sc[i][j] === sc[i - 1][j] + SKIP) i--;
+    else if (sc[i][j] === sc[i - 1][j - 1] + pairAt(i - 1, j - 1)) { res[i - 1] = j - 1; i--; j--; }
     else j--;
   }
   return res;
