@@ -67,7 +67,8 @@ export function buildPlan(exams: PlanExam[], o: { start: string; end: string; we
       for (const [k, e] of list.entries()) {
         const m = toMinutes(own[k] ?? "");
         if (m < 0) return { ok: false, error: "اختار وقت الامتحان الثاني باليوم." };
-        if (free >= 0 && m < free) return { ok: false, error: `وقت الامتحان ${ORDINAL[k] ?? k + 1} لازم يكون ${ampm(`${p2(Math.floor(free / 60))}:${p2(free % 60)}`)} أو بعد، حتى يكون بعد نهاية اللي قبله بـ ${s.gap} دقيقة.` };
+        // كلام واضح للطالب: ليش ما ينقبل، ومن أي ساعة يگدر يختار
+        if (free >= 0 && m < free) return { ok: false, error: `⏰ ما يصير تختار ${ampm(own[k])} للامتحان ${ORDINAL[k] ?? k + 1}، لأن الامتحان اللي قبله بعده ما خالص. اختار وقت أبعد شوية: من الساعة ${ampm(`${p2(Math.floor(free / 60))}:${p2(free % 60)}`)} وطالع، حتى يبقى ${s.gap} دقيقة بين الامتحانين.` };
         items.push({ examId: e.id, at: `${days[di]} ${own[k]}` });
         free = m + e.minutes + s.gap;
       }

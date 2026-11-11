@@ -110,3 +110,18 @@ test("الدرجة الجديدة تنتظر لحد ما ولي الأمر يد�
   assert.equal(st.unseen, 1);
   assert.equal(await gw.unseenBefore(91), b);
 });
+
+test("صلاحية «👨‍👧 تنبيهات أولياء الأمور»: المساعد اللي عنده يوصله الخبر ويا الواتساب، والباقين لا", async () => {
+  await put("staff", { user_id: 600, name: "مساعد الأهل", perms: "guardians" });
+  await put("staff", { user_id: 601, name: "مساعد ثاني", perms: "orders" });
+  await put("students", { user_id: 92, name: "سجاد كريم", phone1: "07701111113", phone2: "07702223346", created: stamp() });
+  await put("guardians", { guardian_id: 502, student_id: 92, created: stamp() });
+  calls.length = 0;
+  for (let i = 0; i < 3; i++) await gw.guardianSent(92, 502, await insert("sched_items", { user_id: 92, exam_id: 1, status: "done", graded_at: stamp() }));
+  const to = (id: number) => calls.filter((c) => c.method === "sendMessage" && String(c.p.chat_id) === String(id));
+  assert.equal(to(1).length, 1);
+  assert.equal(to(600).length, 1);
+  assert.match(to(600)[0].p.text, /سجاد كريم/);
+  assert.equal(to(600)[0].p.reply_markup.inline_keyboard[0][0].url, "https://wa.me/9647702223346");
+  assert.equal(to(601).length, 0);
+});

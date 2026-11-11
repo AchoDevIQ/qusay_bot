@@ -25,11 +25,13 @@ export function whatsappOf(phone: unknown): string | null {
   if (/^9647\d{9}$/.test(d)) return `https://wa.me/${d}`;
   return null;
 }
-/** خبر لصاحب البوت، ووياه زر واتساب ولي الأمر */
+/** خبر لصاحب البوت، وللمساعد اللي عنده صلاحية «👨‍👧 تنبيهات أولياء الأمور»، ووياه زر واتساب ولي الأمر */
 async function tellOwner(sid: number, text: string) {
   const wa = whatsappOf((await one("students", { user_id: sid }))?.phone2);
   const kb: Kb | undefined = wa ? [[{ text: "💬 كلم ولي الأمر بالواتساب", url: wa }]] : undefined;
-  for (const a of ADMIN_IDS) await send(a, wa ? text : `${text}\n\n(ماكو رقم واتساب لولي الأمر بمعلوماته)`, kb ? { kb } : {});
+  let to: number[] = ADMIN_IDS;
+  try { const { staffIds } = await import("./data.ts"); to = await staffIds("guardians"); } catch (e) { console.error(e); }
+  for (const a of to) await send(a, wa ? text : `${text}\n\n(ماكو رقم واتساب لولي الأمر بمعلوماته)`, kb ? { kb } : {});
 }
 
 /** حالة ولي الأمر لصفحة الطلاب */
