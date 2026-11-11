@@ -12,7 +12,7 @@ type TestStudent = { id: number; name: string; papers: number; graded: number; l
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
-type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
+type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -344,6 +344,8 @@ function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"
   const [ht, setHt] = useState(sched.hol?.to ?? "");
   return (
     <div className="adlog">
+      {/* نفس صفحة «📝 امتحاناتي» اللي يشوفها الطالب، عرض بس */}
+      {sched.view && <button type="button" className="exbtn" onClick={() => { location.href = sched.view!; }}>👁 شوف جدوله مثل ما يطلعله</button>}
       {sched.way && <div className="exlabel">{sched.way}</div>}
       {sched.hol && (
         <div className="cpexam">

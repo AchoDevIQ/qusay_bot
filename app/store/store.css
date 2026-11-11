@@ -256,10 +256,9 @@ body.grwide .grtop{padding-left:104px}
 .lcrow td{background:var(--ink2);font-size:14px}
 /* جدول الطالب: المحاضرة تبين محاضرة، والامتحان يبين امتحان */
 .mxkind{display:inline-block;margin-inline-end:8px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:800;vertical-align:middle;white-space:nowrap}
-.mxlec{background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid rgba(147,197,253,.35)}
-.mxexam{background:#F9C445;color:#101929}
-.lcrow td:first-child{border-right:4px solid #3b82f6}
-.mxexamrow td:first-child{border-right:4px solid #F9C445}.lcrow td:first-child{padding-inline-start:18px}.lcline{margin:6px 0 0;padding-inline-start:22px;font-size:14px;line-height:1.7}
+.mxlec{background:var(--ink3);color:var(--mut);border:1px solid var(--line)}
+.mxexam{background:transparent;color:var(--gold);border:1px solid var(--gold2)}
+/* المحاضرة كحلي هادئ، والامتحان ذهبي: نفس ألوان التطبيق، بلا خطوط ملونة */.mxexamrow td{background:rgba(249,196,69,.05)}.lcrow td:first-child{padding-inline-start:18px}.lcline{margin:6px 0 0;padding-inline-start:22px;font-size:14px;line-height:1.7}
 /* الحضوري */
 .atcode{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}.atcode img{width:220px;max-width:70vw;background:#fff;border-radius:14px;padding:8px}
 .atcard{border:2px solid var(--gold);border-radius:14px;padding:12px;margin-top:10px}.atcard b{font-size:18px}.atok{color:var(--ok)}.atrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -341,7 +340,7 @@ body.grwide .grtop{padding-left:104px}
 .dateinput input[type=date]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0}
 .exadd .dateinput{flex:1;width:auto}
 
-.mxholrow td:first-child{border-right:4px dashed #CEA239}
+.mxholrow td{background:rgba(206,162,57,.08)}
 
 /* ترتيب الجملة: الكلمة المختارة تنمسح بالدوس عليها */
 .agchip{display:inline-flex;align-items:center;gap:4px;margin:3px;padding:4px 10px;border-radius:999px;border:1px solid var(--gold2);background:rgba(249,196,69,.12);color:var(--txt);font:inherit;cursor:pointer}

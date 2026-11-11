@@ -12,7 +12,7 @@ import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
 import { TEST_STUDENTS, addTestPaper, addTestStudent, deleteTests, makeInPersonSet, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
-import { fileToken, homeToken } from "./webAuth.ts";
+import { fileToken, homeToken, viewToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { studentFile } from "./studentFile.ts";
 import { aiWhyNot } from "./aiGrade.ts";
@@ -175,7 +175,7 @@ export async function studentAction(body: Row) {
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, papers: { id, list: await studentPapers(id), fileToken: fileToken(uid) } };
   } else if (a === "sched") {
     need(await one("students", { user_id: id }), "الطالب غير موجود");
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id), view: `/store/myexams?t=${viewToken(id)}&view=1` } };
   } else if (a === "schedHol") {
     // الإدارة تغير عطلة طالب الجدول الخاص مباشرة، وجدوله ينعاد من باجر
     need(await isAdmin(uid) || await can(uid, SCHED_PERM), "ما عندك صلاحية الجدول", 403);
@@ -183,16 +183,16 @@ export async function studentAction(body: Row) {
     const t = await setStudentHoliday(id, { from, to });
     await (await import("./telegram.ts")).send(id, `🏖 <b>تغيرت عطلتك</b>: ${t}، وانعاد جدولك من باجر. افتح امتحاناتي وشوف المواعيد.`);
     notice = `🏖 تغيرت عطلته: ${t}`;
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id), view: `/store/myexams?t=${viewToken(id)}&view=1` } };
   } else if (a === "examException") {
     await openException(uid, body.item);
     notice = "🔓 انفتح الامتحان للطالب، ووصله الخبر";
   } else if (a === "examRetake") {
     notice = `🔁 انحطت الإعادة ${prettyAt(await retakeExam(uid, body.item, body.at))}، ووصل الطالب خبر`;
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id), view: `/store/myexams?t=${viewToken(id)}&view=1` } };
   } else if (a === "examMove") {
     notice = `⏩ صار موعده ${prettyAt(await moveExam(uid, body.item, body.at))}، ووصل الطالب خبر`;
-    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id) } };
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id), view: `/store/myexams?t=${viewToken(id)}&view=1` } };
   } else if (a === "makeTests" || a === "deleteTests") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     if (a === "makeTests") { const n = await makeTests(); need(n, "ماكو نسخة إجبارية جاهزة بيها صور أسئلة"); notice = `🧪 انضافوا ${TEST_STUDENTS} طلاب تجربة، و${n} ورقة تنتظر التصحيح`; }

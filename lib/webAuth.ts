@@ -36,6 +36,21 @@ export function verifyInitData(raw: unknown, now = Date.now() / 1000): number | 
 const HOME_TTL_S = 60 * 24 * 3600;
 const PANEL_TTL_S = 7 * 24 * 3600;
 const homeSig = (uid: number, exp: number) => hmac(hmac("QMathHome", TOKEN), `${uid}.${exp}`).toString("hex");
+// «👁 شوف جدوله مثل ما يشوفه»: رابط عرض بس لصفحة امتحانات الطالب، ساعة وحدة، ما يحسب جهاز الطالب ولا يغير شي
+const VIEW_TTL_S = 3600;
+const viewSig = (uid: number, exp: number) => hmac(hmac("QMathView", TOKEN), `${uid}.${exp}`).toString("hex");
+export function viewToken(uid: number, now = Date.now() / 1000) {
+  const exp = Math.floor(now) + VIEW_TTL_S;
+  return `v${uid}.${exp}.${viewSig(uid, exp)}`;
+}
+export function verifyViewToken(t: unknown, now = Date.now() / 1000): number | null {
+  if (typeof t !== "string" || !TOKEN || !t.startsWith("v")) return null;
+  const [u, e, sig] = t.slice(1).split(".");
+  const uid = Number(u), exp = Number(e);
+  if (!Number.isSafeInteger(uid) || !Number.isFinite(exp) || exp < now || !sig) return null;
+  const want = Buffer.from(viewSig(uid, exp), "hex"), got = Buffer.from(sig, "hex");
+  return got.length === want.length && timingSafeEqual(got, want) ? uid : null;
+}
 export function homeToken(uid: number, now = Date.now() / 1000) {
   const exp = Math.floor(now) + HOME_TTL_S;
   return `${uid}.${exp}.${homeSig(uid, exp)}`;

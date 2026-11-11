@@ -15,7 +15,7 @@ type Item = { id: number; exam?: number; skippable?: boolean; optional?: boolean
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  viewOnly?: boolean; appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
@@ -30,7 +30,7 @@ const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد �
 export default function MyExamsClient() {
   // صاحب البوت فتح صفحة طالب تجربة من صفحة الطلاب: زر يرجعه إلها
   const [fromOwner, setFromOwner] = useState(false);
-  useEffect(() => { setFromOwner(new URLSearchParams(location.search).has("owner")); }, []);
+  useEffect(() => { const q = new URLSearchParams(location.search); setFromOwner(q.has("owner") || q.has("view")); }, []);
   const [info, setInfo] = useState<Info | null>(null);
   const [error, setError] = useState("");
   const [stopPic, setStopPic] = useState("");
@@ -74,6 +74,7 @@ export default function MyExamsClient() {
       </header>
       <div className="wrap">
         {fromOwner && <button type="button" className="exbtn" style={{ marginBottom: 10 }} onClick={() => history.back()}>⬅️ رجوع للطلاب</button>}
+        {info?.viewOnly && <div className="card warn exerr">👁 هذا جدول <b>{info.name}</b> مثل ما يطلعله بالضبط. عرض بس، أي زر تدوسه ما يغير شي.</div>}
         {error && stopPic ? (
           <div className="card cpflash stop">
             {stopPic !== "none" && <div className="cpbubw"><img src={stopPic} alt="سيطرة" />{stopWords && <div className="cpbub">{stopWords}</div>}</div>}

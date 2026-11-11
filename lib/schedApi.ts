@@ -20,7 +20,7 @@ import { send } from "./telegram.ts";
 import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { esc, stamp, todayStr } from "./util.ts";
 import { authed, ensure, intOf, need } from "./webApi.ts";
-import { cronKey, verifyHomeToken } from "./webAuth.ts";
+import { cronKey, verifyHomeToken, verifyViewToken } from "./webAuth.ts";
 
 export const SCHED_PERM = "schedule";
 export async function schedSettings(): Promise<SchedSettings> {
@@ -551,6 +551,13 @@ async function saveItems(uid: number, f: Row & { times?: Record<string, string[]
 
 export async function myExamAction(body: Row) {
   await ensure();
+  // صاحب البوت يشوف جدول الطالب مثل ما يطلعله: عرض بس، بلا قفل جهاز، وما يتغير شي
+  const viewed = verifyViewToken(body?.token);
+  if (viewed !== null) {
+    need(String(body.action ?? "") === "info", "👁 هذا عرض بس لجدول الطالب، ما تگدر تغير شي منه");
+    need(await student(viewed), "الطالب غير موجود");
+    return { ...await studentInfo(viewed), viewOnly: true };
+  }
   const uid = verifyHomeToken(body?.token);
   need(uid !== null, "هذا الرابط قديم. اكتب /start بالبوت وافتح القائمة من جديد", 401);
   const id = uid!;

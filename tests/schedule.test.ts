@@ -1111,3 +1111,17 @@ test("🏖 عطلة نصف السنة لمكان وحده: تقدم أو تأخ�
   await schedAdminAction({ action: "midHoliday", center: c1, holidayStart: before.holidayStart, holidayDays: before.holidayDays, holidayNote: before.holidayNote, initData: admin });
   assert.deepEqual(await days(c1), [sun1, wed1, sun2, wed2]);
 });
+
+test("👁 شوف جدوله مثل ما يطلعله: رابط عرض بس، ما يقفل جهاز الطالب، وما يغير شي", async () => {
+  const { viewToken } = await import("../lib/webAuth.ts");
+  const { one: one1 } = await import("../lib/db.ts");
+  await student(970, "إلكتروني");
+  const r = await myExamAction({ token: viewToken(970), action: "info", device: "owner-device-00000001", pf: "tdesktop" }) as any;
+  assert.equal(r.viewOnly, true);
+  assert.ok(Array.isArray(r.items));
+  // جهاز صاحب البوت ما ينحسب جهاز الطالب
+  assert.equal(await one1("student_devices", { user_id: 970 }), null);
+  await assert.rejects(myExamAction({ token: viewToken(970), action: "confirm" }), /عرض بس/);
+  // رابط الطالب العادي ما يصير رابط عرض
+  await assert.rejects(myExamAction({ token: "v970.1.abc", action: "info" }), (e: any) => e.status === 401);
+});
