@@ -8,22 +8,32 @@ export type WordBlock = { head: string[]; model: string | null; qs: { n: number;
 const QRE = /^\s*(?:\$\s*\$\s*)?[\u200e\u200f\u202a-\u202e]*\s*(?:س|Q)\s*\/?\s*\$?\s*([0-9\u0660-\u0669]+)\s*\*?\s*\$?\s*[/\\:\-–]?\s*/i;
 // السطر اللي يبدي بمعادلة: الرقم ينكتب بآخره «… جد / س 4»
 const QEND = /\s*\/?\s*(?:س|Q)\s*([0-9\u0660-\u0669]+)\s*$/i;
+// \u0646\u0633\u062e\u0629 \u0623\u0633\u0626\u0644\u062a\u0647\u0627 \u0645\u0631\u0642\u0645\u0629 \u00ab1/ 2/ 3/\u00bb \u0628\u0644\u0627 \u00ab\u0633\u00bb \u0623\u0648 Q: \u062a\u0646\u0642\u0628\u0644 \u0628\u0633 \u0625\u0630\u0627 \u0623\u0648\u0644 \u0633\u0637\u0631 \u0628\u0639\u062f \u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u00ab1/\u00bb\u060c
+// \u0648\u0628\u0639\u062f\u0647\u0627 \u0643\u0644 \u0631\u0642\u0645 \u0644\u0627\u0632\u0645 \u064a\u0643\u0648\u0646 \u0627\u0644\u0644\u064a \u0628\u0639\u062f\u0647 \u0628\u0627\u0644\u062a\u0633\u0644\u0633\u0644\u060c \u0641\u0640\u00ab1/ 2/\u00bb \u062a\u062d\u062a \u0633\u0624\u0627\u0644 (\u0641\u0631\u0648\u0639\u0647) \u062a\u0628\u0642\u0649 \u0645\u0646 \u0646\u0641\u0633 \u0627\u0644\u0633\u0624\u0627\u0644
+const BARE = /^\s*[\u200e\u200f\u202a-\u202e]*\s*([0-9\u0660-\u0669]+)\s*\/\s*/;
 const toNum = (d: string) => Number(d.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x660)));
 const HEAD = /نموذج|Model|^الامتحان\s*\{|^Exam\s*\{/i;
 
 /** سطور الوورد (من docxLines) ← نسخ */
 export function splitExamDoc(lines: string[]): WordBlock[] {
   const out: WordBlock[] = [];
-  let cur: WordBlock | null = null, head: string[] = [];
+  let cur: WordBlock | null = null, head: string[] = [], bare = false;
   for (const raw of lines) {
     const l = raw.trim();
     if (!l) continue;
     const end = QRE.test(l) ? null : QEND.exec(l);
     const m = end ? null : QRE.exec(l);
-    if (m || end) {
-      const n = toNum((m ?? end)![1]);
-      if (!cur || n === 1 || head.length) { cur = { head, model: modelOf(head), qs: [], odd: false }; out.push(cur); head = []; }
-      cur.qs.push({ n, text: (m ? l.slice(m[0].length) : l.slice(0, end!.index)).replace(/^\s*[*/]+\s*/, "").trim() });
+    let b = m || end ? null : BARE.exec(l);
+    if (b) {
+      const n = toNum(b[1]);
+      const ok = head.length ? n === 1 : bare && !!cur?.qs.length && n === cur.qs[cur.qs.length - 1].n + 1;
+      if (!ok) b = null;
+    }
+    if (m || end || b) {
+      const n = toNum((m ?? end ?? b)![1]);
+      if (!cur || n === 1 || head.length) { cur = { head, model: modelOf(head), qs: [], odd: false }; out.push(cur); head = []; bare = !!b; }
+      const text = m || b ? l.slice((m ?? b)![0].length) : l.slice(0, end!.index);
+      cur.qs.push({ n, text: text.replace(/^\s*[*/]+\s*/, "").trim() });
     } else if (HEAD.test(l) || !cur) head.push(l);
     // سطر بعد السؤال (مثل «1 / ...» أو معادلة بسطر وحده) يكمل نفس السؤال
     else if (cur.qs.length && !head.length) cur.qs[cur.qs.length - 1].text += "\n" + l;
