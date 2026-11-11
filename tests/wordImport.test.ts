@@ -82,3 +82,13 @@ test("📄 أسئلة من الوورد: المطابقة قبل الحفظ، و
   await assert.rejects(examUpload(bad), /docx/);
   assert.ok((await find("bank_questions")).length >= 7);
 });
+
+test("أشكال رقم السؤال بالوورد: «س /3» و«س1*/» و«س $4*$» و«… / س 4» بآخر السطر و«$$ س 1»", () => {
+  const lines = ["نموذج A · امتحان", "$$ س 1 / جد 11", "س /2 جد 12", "س3*/ جد 13", "س $4*$ جد 14", "$x+1=5$ جد / س 5", "س ٦ / جد 16"];
+  const b = splitExamDoc(lines);
+  assert.equal(b.length, 1);
+  assert.deepEqual(b[0].qs.map((q) => q.n), [1, 2, 3, 4, 5, 6]);
+  assert.equal(b[0].odd, false);
+  assert.equal(b[0].qs[2].text, "جد 13");
+  assert.equal(b[0].qs[4].text, "$x+1=5$ جد");
+});

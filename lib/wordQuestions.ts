@@ -4,7 +4,11 @@
 
 export type WordBlock = { head: string[]; model: string | null; qs: { n: number; text: string }[]; odd: boolean };
 
-const QRE = /^\s*[‎‏‪-‮]*\s*(?:س|Q)\s*(\d+)\s*[/\\:\-–]?\s*/i;
+// «س 3 /» و«س /3» و«س3:» و«س1*/» و«س $4*$» و«Q 3 /»، وأحياناً قبلها معادلة فارغة «$$»، والأرقام عربية لو هندية
+const QRE = /^\s*(?:\$\s*\$\s*)?[\u200e\u200f\u202a-\u202e]*\s*(?:س|Q)\s*\/?\s*\$?\s*([0-9\u0660-\u0669]+)\s*\*?\s*\$?\s*[/\\:\-–]?\s*/i;
+// السطر اللي يبدي بمعادلة: الرقم ينكتب بآخره «… جد / س 4»
+const QEND = /\s*\/?\s*(?:س|Q)\s*([0-9\u0660-\u0669]+)\s*$/i;
+const toNum = (d: string) => Number(d.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x660)));
 const HEAD = /نموذج|Model|^الامتحان\s*\{|^Exam\s*\{/i;
 
 /** سطور الوورد (من docxLines) ← نسخ */
@@ -14,11 +18,12 @@ export function splitExamDoc(lines: string[]): WordBlock[] {
   for (const raw of lines) {
     const l = raw.trim();
     if (!l) continue;
-    const m = QRE.exec(l);
-    if (m) {
-      const n = Number(m[1]);
+    const end = QRE.test(l) ? null : QEND.exec(l);
+    const m = end ? null : QRE.exec(l);
+    if (m || end) {
+      const n = toNum((m ?? end)![1]);
       if (!cur || n === 1 || head.length) { cur = { head, model: modelOf(head), qs: [], odd: false }; out.push(cur); head = []; }
-      cur.qs.push({ n, text: l.slice(m[0].length).trim() });
+      cur.qs.push({ n, text: (m ? l.slice(m[0].length) : l.slice(0, end!.index)).replace(/^\s*[*/]+\s*/, "").trim() });
     } else if (HEAD.test(l) || !cur) head.push(l);
     // سطر بعد السؤال (مثل «1 / ...» أو معادلة بسطر وحده) يكمل نفس السؤال
     else if (cur.qs.length && !head.length) cur.qs[cur.qs.length - 1].text += "\n" + l;
