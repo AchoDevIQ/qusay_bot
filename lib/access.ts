@@ -34,8 +34,8 @@ export const childrenOf = async (gid: number) => await find("guardians", { guard
 export const isGuardian = async (gid: number) => (await childrenOf(gid)).length > 0;
 /** سلّم أول امتحان (مو امتحان تجربة): من هنا لازم يربط ولي أمره */
 export const tookExam = async (uid: number) => (await find("sched_items", { user_id: uid, status: "done" })).some((i) => i.notified !== "test");
-/** حسابه مقفول: امتحن وبعده ما ربط ولي أمره */
-export const needsGuardian = async (uid: number) => await tookExam(uid) && !await guardianOf(uid);
+/** حسابه مقفول: امتحن وبعده ما ربط ولي أمره. طلاب التجربة (أرقامهم سالبة) ما ينقفلون، حتى صاحب البوت يجرب بيهم */
+export const needsGuardian = async (uid: number) => uid > 0 && await tookExam(uid) && !await guardianOf(uid);
 /** الرسالة اللي يحولها الطالب لولي أمره: خطوتين بس، بكلام بسيط لكبار السن */
 export const guardianText = (name: string) => `السلام عليكم، آني ${name}.\nاربطوا حسابكم ويا حسابي حتى توصلكم درجاتي أول بأول:\n١- دوسوا الرابط الأزرق جوة.\n٢- دوسوا الزر الأزرق «START» أو «ابدأ».\nبس هذا، ما تكتبون أي شي 🌷`;
 /** زر «انسخ» بالتليجرام ياخذ 256 حرف بس: إذا الاسم طويل تنسخ نسخة أقصر، والرابط يبقى كامل */

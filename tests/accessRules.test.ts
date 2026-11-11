@@ -128,6 +128,12 @@ test("ورا أول امتحان لازم يربط ولي الأمر: الحسا
   assert.ok(long.length <= 256 && long.endsWith(link));
   await assert.rejects(home(12, "ask"), /ولي أمرك/);
   await assert.rejects(home(12, "exams"), /ولي أمرك/);
+  // طالب التجربة (رقمه سالب) ما ينقفل حتى لو عنده أوراق مسلمة
+  const { needsGuardian } = await import("../lib/access.ts");
+  await insert("students", { user_id: -4, name: "طالب تجربة 4", curr: "عربي" });
+  await insert("sched_items", { user_id: -4, exam_id: 1, at: "2026-01-02 10:00", status: "done" });
+  assert.equal(await needsGuardian(-4), false);
+  assert.equal(await needsGuardian(12), true);
   const param = link.split("?start=")[1];
   calls.length = 0;
   await start(12, `/start ${param}`);                      // الطالب نفسه ما يصير
