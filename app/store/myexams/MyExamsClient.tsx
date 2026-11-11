@@ -1,6 +1,5 @@
 "use client";
 // امتحاناتي: الطالب يرتب جدوله مرة وحدة، وبعدها يشوف مواعيده
-import { WordOrder } from "../agreeSteps";
 import PhotoPick from "../PhotoPick";
 import AiCompare, { type AiQ } from "./AiCompare";
 import PdfPages from "../PdfPages";
@@ -10,6 +9,7 @@ import { DateInput, deviceId, deviceNow, haptic, openOutside, platform } from ".
 import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import PenPage, { hasPenDraft, type PenHead } from "./PenPage";
+import { oathProgress } from "../../../lib/oathText.ts";
 
 type Item = { id: number; exam?: number; skippable?: boolean; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
@@ -25,6 +25,26 @@ type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice:
 type Paper = { ai: AiQ[]; solutions: string | null; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null; skip?: boolean }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; skip?: boolean; obj: ObjState | null }[] };
 /** «أجب عن K أسئلة فقط»: تنبيه فوك الأسئلة، ويصير أحمر إذا جاوب أكثر */
+/** القسم قبل الأسئلة: الطالب يكتب الجملة كاملة بيده (اللصق ممنوع)، ويطلعله وين غلط وكم كلمة باقية */
+function TypeOath({ sentence, busy, onDone }: { sentence: string; busy: boolean; onDone: (text: string) => void }) {
+  const [text, setText] = useState("");
+  const p = oathProgress(text, sentence);
+  return (
+    <div className="card agcard">
+      <h2>🤲 القسم قبل الأسئلة</h2>
+      <div className="agbody">
+        <p className="agtext agsmall">الأسئلة تنفتح بعد ما تكتب جملة القسم كاملة بيدك، مثل ما هي:</p>
+        <div className="agtext">{sentence}</div>
+        <textarea className="agtype" rows={3} dir="rtl" value={text} placeholder="اكتب الجملة هنا…" autoComplete="off" spellCheck={false}
+          onChange={(e) => setText(e.target.value)} onPaste={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()} />
+        {p.wrong ? <div className="agwrong">❌ كتبت «{p.wrong.got}»{p.wrong.want ? <>، لازم «{p.wrong.want}»</> : "، هاي زايدة"}</div>
+          : p.ok ? <div className="agbuilt ok">✅ كتبتها صح</div>
+          : text.trim() ? <div className="exhint">باقي {p.left} {p.left === 1 ? "كلمة" : "كلمات"}</div> : null}
+        <button type="button" className="btn agbtn" disabled={!p.ok || busy} onClick={() => { haptic(); onDone(text); }}>{p.ok ? "📖 افتح الأسئلة" : "اكتب الجملة كاملة أول"}</button>
+      </div>
+    </div>
+  );
+}
 function AnswerOnlyNote({ k, n, done }: { k: number; n: number; done: number }) {
   return (
     <div className={"expad exhint" + (done > k ? " exbad" : "")}>
@@ -639,8 +659,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       <div className="card"><h2>📝 {room.title}</h2></div>
       {/* رقم الطالب فوك كل صفحة: إذا أحد صورها ونشرها نعرف منو */}
       {!room.sworn ? (
-        <WordOrder key={room.id} title="🤲 القسم قبل الأسئلة" intro="الأسئلة تنفتح بعد ما تكمل جملة القسم: اقراها، ودوس كل فراغ «؟؟؟» واختار الكلمة الصحيحة:" okLabel="📖 افتح الأسئلة" sentence={room.oath}
-          onDone={async () => { setBusy(true); const r = await call({ action: "oath", item: room.id }); setBusy(false); if (r?.room) setRoom(r.room); }} />
+        <TypeOath key={room.id} sentence={room.oath} busy={busy}
+          onDone={async (text) => { setBusy(true); const r = await call({ action: "oath", item: room.id, text }); setBusy(false); if (r?.room) setRoom(r.room); }} />
       ) : (
       <>
       {room.pages.map((p) => <div key={p} className="exidwrap"><span className="exid">🆔 {room.sid}</span><img className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" /></div>)}

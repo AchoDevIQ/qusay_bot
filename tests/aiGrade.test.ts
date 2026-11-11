@@ -587,7 +587,7 @@ test("📝 امتحن بنفسك: امتحان حي باسم طالب تجربة
   const room: any = await openRoom(-9, a, s);
   assert.equal(room.sworn, false);
   assert.match(room.oath, /طالب تجربة 9/);
-  assert.equal(((await takeOath(-9, a, s)) as any).sworn, true);
+  assert.equal(((await takeOath(-9, a, s, room.oath)) as any).sworn, true);
   // يعيدها: الورقة القديمة تنمسح، والقسم يرجع يطلع
   const b = await startTestExam(-9, ver);
   assert.equal(await one("sched_items", { id: a }), null);

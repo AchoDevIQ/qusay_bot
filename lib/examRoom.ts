@@ -1,6 +1,7 @@
 // غرفة الامتحان للطالب الإلكتروني: الدخول بوقته، النسخة، صور الأسئلة، ورفع الأجوبة بدون أي كود
 import { titleFor } from "./examTitlesEn.ts";
 import { answerOnlyOf } from "./answerOnly.ts";
+import { sameOath } from "./oathText.ts";
 import { photosAllowed } from "./inPerson.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { activeStop, checkStopped } from "./checkpoints.ts";
@@ -72,15 +73,17 @@ async function pagesOf(e: Row, v: Row, curr: string) {
   }
   return [];
 }
-// القسم: قبل ما تنفتح الأسئلة، الطالب يرتب جملة «أني الطالب (اسمه الرباعي) أقسم بالله أنني لن أغش في هذا الامتحان»
+// القسم: قبل ما تنفتح الأسئلة، الطالب يكتب بيده الجملة كاملة «أني الطالب (اسمه الرباعي) أقسم بالله أنني لن أغش في هذا الامتحان»
 const oathKey = (item: number) => `oath_${item}`;
 export const oathSentence = (name: string) => `أني الطالب ${String(name ?? "").replace(/\s+/g, " ").trim()} أقسم بالله أنني لن أغش في هذا الامتحان`;
-export async function takeOath(uid: number, id: unknown, s: SchedSettings) {
+export async function takeOath(uid: number, id: unknown, s: SchedSettings, typed: unknown) {
   const it = await liveRoom(uid, id, s);
   if (!await kvGet(oathKey(it.id))) {
+    const st = await student(it.user_id);
+    need(sameOath(String(typed ?? ""), oathSentence(st?.name ?? "")), "اكتب جملة القسم كاملة مثل ما هي، كل كلمة بمكانها");
     await kvSet(oathKey(it.id), stamp());
     const e = await one("bank_exams", { id: it.exam_id });
-    await logActivity(uid, `🤲 كمل جملة القسم إنه ما يغش بامتحان ${e?.title ?? ""}`);
+    await logActivity(uid, `🤲 كتب جملة القسم إنه ما يغش بامتحان ${e?.title ?? ""}`);
   }
   return await roomView(it, s);
 }

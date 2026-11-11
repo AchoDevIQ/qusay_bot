@@ -622,7 +622,7 @@ export async function myExamAction(body: Row) {
     const s = await schedSettings();
     // الغرفة أول: تحديث المواعيد يعيد كتابة الامتحانات اللي لسه ما بدت
     if (a === "openExam") { const room = await openRoom(id, body.item, s); return { ...await studentInfo(id), room }; }
-    if (a === "oath") { const room = await takeOath(id, body.item, s); return { ...await studentInfo(id), room }; }
+    if (a === "oath") { const room = await takeOath(id, body.item, s, body.text); return { ...await studentInfo(id), room }; }
     if (a === "delAnswer") { const room = await deleteAnswer(id, body.item, body.answer, s); return { ...await studentInfo(id), room }; }
     await submitRoom(id, body.item, s);
     return { ...await studentInfo(id), notice: "✅ وصلت أجوبتك" };

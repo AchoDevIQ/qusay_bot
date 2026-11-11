@@ -496,7 +496,11 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.match(opened.room.oath, /^أني الطالب .+ أقسم بالله أنني لن أغش في هذا الامتحان$/);
   assert.deepEqual(opened.room.pages, []);   // الأسئلة ما تنفتح قبل القسم
   await assert.rejects(upload(90, item, 1), /كمل جملة القسم/);
-  assert.equal((await act(90, "oath", { item })).room.sworn, true);
+  await assert.rejects(act(90, "oath", { item }), /اكتب جملة القسم كاملة/);            // بدون ما يكتبها
+  await assert.rejects(act(90, "oath", { item, text: "أني الطالب أقسم بالله" }), /اكتب جملة القسم كاملة/);   // ناقصة
+  // الهمزة والتاء المربوطة والمسافات ما تفرق
+  const typed = opened.room.oath.replace("أني", "اني").replace("أقسم", "اقسم").replace(/ /g, "  ") + ".";
+  assert.equal((await act(90, "oath", { item, text: typed })).room.sworn, true);
   await assert.rejects(upload(91, item, 1), /غير موجود/);      // طالب ثاني
   await assert.rejects(upload(90, item, 9), /السؤال/);
   await assert.rejects(upload(90, item, 1, Buffer.from("not image")), /صورة/);
@@ -547,7 +551,7 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.equal((await act(92, "info")).items.find((i: any) => i.id === it2).state, "open");
   const back = await act(92, "openExam", { item: it2 });
   assert.ok(back.room.closeAt > stamp());                     // وقته يبدي من دخوله
-  await act(92, "oath", { item: it2 });
+  await act(92, "oath", { item: it2, text: back.room.oath });
   assert.ok(await upload(92, it2, 1));
   // صورة وحدة لكل سؤال: الثانية تبدل الأولى
   assert.equal((await upload(92, it2, 1)).questions[0].answers.length, 1);
