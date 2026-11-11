@@ -1,8 +1,7 @@
-/* خط اسم قصي العميري لكل التطبيق. بس الأرقام الإنگليزية والحروف الفارسية (گ چ پ ژ ڤ ک ی) تجي من Cairo، لأن خطه يرسمها فارغة أو بالأرقام الهندية */
-@font-face{font-family:Boahmed;src:url(/boahmed.ttf);font-display:swap;unicode-range:U+0000-002F,U+003A-067D,U+067F-0685,U+0687-0697,U+0699-06A3,U+06A5-06A8,U+06AA-06AE,U+06B0-06CB,U+06CD-10FFFF}
+/* خط كل التطبيق هو الخط اللي يختاره صاحب البوت من «✍️ الخط» (QAppEn للإنجليزي والأرقام، QAppAr للعربي، من /api/font). الحروف الناقصة (گ چ پ) تجي من Cairo */
 :root{--ink:#101929;--ink2:#162238;--ink3:#1d2c47;--line:#2a3b5c;--gold:#F9C445;--gold2:#CEA239;--txt:#F4F1E8;--mut:#9fb0c9;--red:#ff7a6b;--ok:#6ee7a8}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--ink);color:var(--txt);font-family:Boahmed,Cairo,system-ui,sans-serif;font-synthesis:none}
+html,body{margin:0;background:var(--ink);color:var(--txt);font-family:QAppEn,QAppAr,Cairo,system-ui,sans-serif;font-synthesis:none}
 button,input,select,textarea{font-family:inherit}
 body{padding-bottom:110px}
 .wrap{max-width:640px;margin:0 auto;padding:0 14px}
@@ -10,7 +9,7 @@ body{padding-bottom:110px}
 header{position:relative;padding:24px 14px 20px;text-align:center;background:
  radial-gradient(ellipse at 50% -10%,#3b82f6 0%,transparent 65%),linear-gradient(180deg,#1e3a8a,#0f1d40);border-bottom:1px solid #1e3a8a}
 header img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}
-header h1{font-family:Boahmed,Cairo;font-weight:400;font-size:34px;margin:6px 0 0;color:#fff;text-shadow:0 2px 12px rgba(59,130,246,.7)}
+header h1{font-family:QAppEn,QAppAr,Cairo;font-weight:400;font-size:34px;margin:6px 0 0;color:#fff;text-shadow:0 2px 12px rgba(59,130,246,.7)}
 header p{margin:2px 0 0;color:#bfdbfe;font-size:14px}
 .steps{display:flex;gap:8px;justify-content:center;margin:16px 0 4px}
 .steps span{font-size:13px;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}

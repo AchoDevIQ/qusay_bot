@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { closeApp, haptic, openOutside, deviceId } from "../shared";
 
-type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; fresh?: boolean; link?: string | null; children?: string[] };
+type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[] };
 type Reply = List & { url?: string; close?: boolean; error?: string };
 
 const svg = (body: ReactNode) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{body}</svg>;
@@ -18,12 +18,11 @@ const ICONS: Record<string, ReactNode> = {
 };
 
 /** ورا أول امتحان: يحول الرابط لولي أمره، وولي الأمر يدوسه ويدوس START بس */
-function GuardianGate({ link, name, recheck, busy }: { link: string; name: string; recheck: () => void; busy: boolean }) {
+function GuardianGate({ link, text, copyText, recheck, busy }: { link: string; text: string; copyText: string; recheck: () => void; busy: boolean }) {
   const [copied, setCopied] = useState(false);
-  const text = `السلام عليكم، آني ${name}.\nحتى توصلكم درجاتي بالتليجرام:\n١- دوسوا على الرابط الأزرق جوة.\n٢- يطلعلكم البوت، دوسوا الزر الأزرق «START» أو «ابدأ» اللي جوة الشاشة.\nوبس، ما تحتاجون تكتبون أي شي 🌷`;
   const tgShare = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
   async function copy() {
-    try { await navigator.clipboard.writeText(`${text}\n${link}`); setCopied(true); } catch { setCopied(false); }
+    try { await navigator.clipboard.writeText(copyText); setCopied(true); } catch { setCopied(false); }
   }
   return (
     <div className="card">
@@ -110,7 +109,7 @@ export default function HomeClient() {
             <div className="who">أنت ولي أمر: <b>{data.children.join("، ")}</b><br />الدرجات راح توصلك هنا بالمحادثة.</div>
           </div>
         )}
-        {data?.link && <GuardianGate link={data.link} name={data.name} recheck={() => void recheck()} busy={busy === "check"} />}
+        {data?.link && <GuardianGate link={data.link} text={data.linkText ?? ""} copyText={data.linkCopy ?? data.link} recheck={() => void recheck()} busy={busy === "check"} />}
         {data && !data.link && !data.children && (
           <div className="hmgrid">
             {tiles.map((t) => (

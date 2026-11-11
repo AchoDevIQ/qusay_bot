@@ -8,7 +8,7 @@ import { kvGet, kvSet } from "./db.ts";
 type Font = { id: string; name: string; file: string; range?: string };
 const dir = (f: string) => path.join(process.cwd(), "assets", "fonts", f);
 export const AR_RANGE = "U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF";
-const LATIN_RANGE = "U+0000-024F,U+2000-206F,U+20AC,U+2122";
+export const LATIN_RANGE = "U+0000-024F,U+2000-206F,U+20AC,U+2122";
 export const AR_FONTS: Font[] = [
   { id: "tajawal", name: "Tajawal", file: dir("Tajawal-Bold.ttf") },
   { id: "almarai", name: "Almarai", file: dir("Almarai-Bold.ttf") },
@@ -57,3 +57,17 @@ export function fontsCss(c: FontChoice = DEFAULT_FONTS) {
 /** كل كتابة الصور تستعمل هذا */
 export const FONT_STACK = "QLatin,QAr,QArFb,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif";
 export const pageFonts = async () => fontsCss(await fontChoice());
+
+/** خط صفحات التطبيق (الأزرار، العناوين، اسم «قصي العميري»): نفس الخط المختار للصور */
+export async function appFontsCss() {
+  const c = await fontChoice();
+  const ar = arFont(c), en = enFont(c);
+  return `@font-face{font-family:QAppEn;src:url(/api/font?f=en-${en.id}) format("truetype");font-display:swap;unicode-range:${LATIN_RANGE}}`
+    + `@font-face{font-family:QAppAr;src:url(/api/font?f=ar-${ar.id}) format("truetype");font-display:swap;unicode-range:${ar.range ?? AR_RANGE}}`;
+}
+/** ملف الخط نفسه: «ar-tajawal» أو «en-nunito» */
+export function appFontFile(f: string) {
+  const [k, id] = f.split("-");
+  const font = (k === "ar" ? AR_FONTS : k === "en" ? EN_FONTS : []).find((x) => x.id === id);
+  return font && fs.existsSync(font.file) ? fs.readFileSync(font.file) : null;
+}

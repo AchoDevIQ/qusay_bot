@@ -48,7 +48,7 @@ export default function AdminHomeClient() {
             ))}
           </div>
         )}
-        {data && !data.closed && <Link className="exbtn" href={`/store/multi${search}`} style={{ textDecoration: "none", display: "block", textAlign: "center", marginBottom: 10 }}>🗂 فتح أكثر من صفحة</Link>}
+        {data && !data.closed && <Link className="exbtn" href={`/store/multi${search}`} style={{ textDecoration: "none", display: "block", textAlign: "center", margin: "12px auto 10px", maxWidth: 480 }}>🗂 فتح أكثر من صفحة</Link>}
         {data?.groups.map((g) => (
           <section key={g.title}>
             <div className="adgroup">{g.title}</div>

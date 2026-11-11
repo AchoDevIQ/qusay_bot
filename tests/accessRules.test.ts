@@ -119,6 +119,13 @@ test("ورا أول امتحان لازم يربط ولي الأمر: الحسا
   assert.ok(kb.includes("حوّل لولي أمرك") && kb.includes("t.me/share/url") && kb.includes("copy_text") && kb.includes("START"));
   const link = (await home(12)).link as string;
   assert.ok(link.includes("?start=par_12_"));
+  // الرسالة باسمه الكامل و«توصلكم أول بأول»، وزر «انسخ» ما يقص الرابط (حده 256 حرف)
+  const h12 = await home(12);
+  assert.match(String(h12.linkText), /آني طالب رقم 12 اسم\.\nاربطوا حسابكم ويا حسابي حتى توصلكم درجاتي أول بأول/);
+  assert.ok(String(h12.linkCopy).endsWith(link));
+  const { guardianCopy } = await import("../lib/access.ts");
+  const long = guardianCopy("عبد الرحمن محمد عبد الله حسين علي الجبوري", link);
+  assert.ok(long.length <= 256 && long.endsWith(link));
   await assert.rejects(home(12, "ask"), /ولي أمرك/);
   await assert.rejects(home(12, "exams"), /ولي أمرك/);
   const param = link.split("?start=")[1];
@@ -127,8 +134,15 @@ test("ورا أول امتحان لازم يربط ولي الأمر: الحسا
   assert.match(JSON.stringify(calls), /لولي الأمر، مو للطالب/);
   await start(50, "/start par_12_wrong");
   assert.equal(await one("guardians", { guardian_id: 50 }), null);
+  calls.length = 0;
   await start(50, `/start ${param}`);
   assert.ok(await one("guardians", { guardian_id: 50, student_id: 12 }));
+  assert.match(JSON.stringify(calls), /مو للمراسلة/);         // من يربط يعرف إن البوت مو للمراسلة
+  calls.length = 0;
+  await start(50, "شلونكم، شكد درجته؟");                      // ولي الأمر يكتب: يطلعله «مو للمراسلة» ومعرف الأستاذ
+  const reply = calls.find((c) => c.method === "sendMessage" && c.p.chat_id === 50)!.p.text;
+  assert.match(reply, /هذا البوت مو للمراسلة/);
+  assert.match(reply, /راسلوا الأستاذ قصي العميري/);
   assert.equal((await home(12)).link, null);
   calls.length = 0;
   await start(51, `/start ${param}`);                      // ولي أمر ثاني مرفوض

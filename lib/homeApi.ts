@@ -1,7 +1,7 @@
 // الصفحة الرئيسية للطالب، وإرسال طلب المتجر للسيرفر مباشرة
 import { checkDevice } from "./deviceLock.ts";
 import { getSession, one, put, setSession, type Row } from "./db.ts";
-import { canAsk, childrenOf, guardianLink, guardianOf, logActivity, needsGuardian } from "./access.ts";
+import { canAsk, childrenOf, guardianCopy, guardianLink, guardianOf, guardianText, logActivity, needsGuardian } from "./access.ts";
 import { allowUpdate } from "./bot.ts";
 import { BTN_ME } from "./config.ts";
 import { hasExamMenu, student } from "./data.ts";
@@ -68,6 +68,9 @@ export async function homeAction(body: Row) {
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
       name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id),
       link: needLink ? await guardianLink(id) : null,
+      // نفس رسالة المحادثة بالضبط، باسمه الكامل
+      linkText: needLink ? guardianText(String(s.name).trim()) : null,
+      linkCopy: needLink ? guardianCopy(String(s.name).trim(), await guardianLink(id)) : null,
     };
   }
   if (a === "regInfo") {

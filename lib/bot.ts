@@ -8,7 +8,7 @@ import { invitePrompt, inviteCb, reviewCb } from "./competition.ts";
 import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setGraderView, setStudentView, student, tooManyFails, viewingAsGrader, viewingAsStudent } from "./data.ts";
 import { ADMIN_IDS, WEBHOOK_SECRET } from "./config.ts";
 import { guardianSeen, onMemberUpdate } from "./guardianWatch.ts";
-import { isGuardian, linkGuardian } from "./access.ts";
+import { isGuardian, linkGuardian, notForChatText } from "./access.ts";
 import { HOME_PAGE, mainKb, regKb } from "./keyboards.ts";
 import { api, answerCb, send } from "./telegram.ts";
 import { btn, esc } from "./util.ts";
@@ -53,7 +53,8 @@ async function onMessage(m: Row) {
     const r = await linkGuardian(uid, text.slice(text.indexOf("par_") + 4).trim());
     if (r.error) { await send(chat, r.error); return; }
     await setSession(uid, "", {});
-    await send(chat, `✅ <b>تم الربط بنجاح</b>\nصرت ولي أمر الطالب: <b>${esc(r.name)}</b>\nدرجاته راح توصلك هنا. ما تحتاج تسوي شي ثاني 🌷`, { replyKb: await mainKb(uid) });
+    await send(chat, `✅ <b>تم الربط بنجاح</b>\nصرتوا مربوطين ويا الطالب: <b>${esc(r.name)}</b>\nدرجاته راح توصلكم هنا أول بأول. ما تحتاجون تسوون شي ثاني 🌷`, { replyKb: await mainKb(uid) });
+    await send(chat, await notForChatText());
     await send(r.sid!, "✅ انربط ولي أمرك. افتح القائمة وكمل 🌷");
     return;
   }
@@ -108,6 +109,11 @@ async function onMessage(m: Row) {
     }
     if (st.startsWith("a:ex") && await examBankMessage(chat, uid, m, st, data)) return;
     if (st.startsWith("a:") && text && await onAdminText(chat, uid, text, st, data)) return;
+  }
+  // ولي الأمر يكتب أو يدز صورة للبوت: البوت مو للمراسلة، ويطلعله معرف الأستاذ
+  if (!text.startsWith("/start") && await isGuardian(uid) && !await student(uid) && !await isStaff(uid) && !await myOffice(uid)) {
+    await send(chat, await notForChatText());
+    return;
   }
   if (st === "q:write" || (st === "q:sent" && m.media_group_id && data.mg === m.media_group_id)) {
     return await qNewMessage(chat, uid, m, st === "q:write" ? data : { ...data, t: null });

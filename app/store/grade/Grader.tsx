@@ -83,7 +83,7 @@ function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: n
       if (it.p.length === 2) ctx.lineTo(it.p[0] * w + 0.1, it.p[1] * h);
       ctx.stroke();
     } else if (it.t === "x") {
-      ctx.fillStyle = it.c; ctx.font = `700 ${it.z * w}px Boahmed, Cairo, Tahoma, Arial, sans-serif`; ctx.textBaseline = "middle";
+      ctx.fillStyle = it.c; ctx.font = `700 ${it.z * w}px QAppEn, QAppAr, Cairo, Tahoma, Arial, sans-serif`; ctx.textBaseline = "middle";
       it.s.split("\n").forEach((line, i) => ctx.fillText(line, it.x * w, it.y * h + i * it.z * w * 1.25));
     } else if (it.t === "i") {
       const im = imgs?.get(it.id);
@@ -466,7 +466,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   }
   /** صور الورقة المصححة اللي توصل للطالب: غلاف، وبعده كل صفحة بتصحيحها */
   async function composeAll(prep: Prepared): Promise<Blob[]> {
-    try { await Promise.all(["600", "700", "800", "900"].map((w) => document.fonts.load(`${w} 40px Cairo`, "اب Ab گ 1"))); await document.fonts.load("40px Boahmed", "اب"); await document.fonts.ready; } catch { /* بدون خطوط */ }
+    try { await Promise.all(["600", "700", "800", "900"].map((w) => document.fonts.load(`${w} 40px Cairo`, "اب Ab گ 1"))); await document.fonts.load("40px QAppAr", "اب"); await document.fonts.load("40px QAppEn", "Ab 1"); await document.fonts.ready; } catch { /* بدون خطوط */ }
     const info: HeaderInfo = { slug: paper.slug, chapter: paper.chapter, title: paper.title, info: paper.info, model: paper.model, name: paper.name, total: prep.total, lang: paper.lang, sid: paper.sid };
     const logo = await loadImage("/logo.png");
     const out = [await coverImage(info, prep.comment, prep.sticker ? await loadImage(stickerUrl(prep.sticker)) : null, logo)];
