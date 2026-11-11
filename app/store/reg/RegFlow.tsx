@@ -227,8 +227,8 @@ export default function RegFlow({ D }: { D: RegData }) {
           <label>المنهج <i>*</i></label>
           <Seg options={CURR_OPTS} value={f.curr ?? ""} onPick={(v) => set("curr", v)} />
           <Err id="curr" errs={errs} />
-          <label>إنت هذه السنة طالب بالمدرسة بأي صف؟ <i>*</i></label>
-          <p className="rgsub">اختار صفك الحقيقي بالمدرسة، حتى لو تدرس ويانا مادة السادس.</p>
+          <label>إنت هسه بالسادس، لو ناجح للخامس؟ <i>*</i></label>
+          <p className="rgsub">صفك الحقيقي بالمدرسة هذه السنة، حتى لو تدرس ويانا مادة السادس.</p>
           <Seg options={GRADE_OPTS} value={f.grade ?? ""} onPick={(v) => set("grade", v)} />
           <Err id="grade" errs={errs} />
         </div>
