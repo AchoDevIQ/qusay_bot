@@ -1102,16 +1102,19 @@ export async function syncVersions(center: number) {
   if (!mine.length) return 0;
   const slots = await placeSlots(center);
   const all = await find("place_dates");
-  const versions = await find("bank_versions");
+  // بس النسخ الإجبارية: الاختيارية تنفتح عشوائي للطالب، وما تطلع بقائمة نسخ الأوقات
+  const versions = await find("bank_versions", { kind: "mandatory" }, { order: ["model"] });
   let changed = 0;
   for (const d of mine) {
     const ids = versions.filter((v) => v.exam_id === d.exam_id).map((v) => v.id as number);
     const times = slots.filter((t) => t.d === weekdayOf(String(d.day))).map((t) => t.t).sort();
     let cur: Record<string, number> = {};
     try { cur = JSON.parse(d.versions || "{}"); } catch { /* نسخ خربانة: تنعاد */ }
+    // نسخة مو من نسخ هذا الامتحان الإجبارية (مثلاً اختيارية انحطت غلط) تنعاد. «أول نسخة جاهزة» (0) تبقى
+    const valid = (v: number) => v === 0 || ids.includes(v);
     const out: Record<string, number> = {};
-    for (const t of times) if (t in cur) out[t] = cur[t];
-    const missing = times.filter((t) => !(t in cur));
+    for (const t of times) if (t in cur && valid(cur[t])) out[t] = cur[t];
+    const missing = times.filter((t) => !(t in out));
     if (missing.length && ids.length) {
       const used = new Map(ids.map((id) => [id, 0]));
       for (const o of all) if (o.center_id !== center && o.exam_id === d.exam_id) {
@@ -1133,10 +1136,11 @@ export async function syncVersions(center: number) {
 }
 /** مرة وحدة: الأماكن اللي مواعيدها بلا نسخ تاخذ نسخها */
 export async function fillAllVersions() {
-  if (await kvGet("versions_fill_v1")) return 0;
+  // v2: التعبئة الأولى حطت نسخ اختيارية ببعض الأوقات، فتنعاد بنسخ إجبارية
+  if (await kvGet("versions_fill_v2")) return 0;
   let n = 0;
   for (const c of new Set((await find("place_dates")).map((d) => d.center_id as number))) n += await syncVersions(c);
-  await kvSet("versions_fill_v1", "1");
+  await kvSet("versions_fill_v2", "1");
   return n;
 }
 

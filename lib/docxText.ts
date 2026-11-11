@@ -95,7 +95,7 @@ function para(n: Node): string {
 export function docxLines(docx: Buffer): string[] {
   const xml = unzipEntry(docx, "word/document.xml");
   if (!xml) throw new Error("ما لگيت نص الملزمة داخل الملف");
-  const tree = new XMLParser({ preserveOrder: true, ignoreAttributes: false, attributeNamePrefix: "@_", trimValues: false, processEntities: true }).parse(xml.toString("utf8")) as Node[];
+  const tree = new XMLParser({ preserveOrder: true, ignoreAttributes: false, attributeNamePrefix: "@_", trimValues: false, processEntities: true, parseTagValue: false, parseAttributeValue: false }).parse(xml.toString("utf8")) as Node[];
   const lines: string[] = [];
   const walk = (list: Node[]) => {
     for (const n of list) {

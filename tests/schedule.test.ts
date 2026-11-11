@@ -1034,7 +1034,7 @@ test("⏰ وقت جديد ياخذ نسخة وحده، والوقت المشال
   await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "16:00" }], initData: admin });
   await schedAdminAction({ action: "fillDates", center: c, start: nextWeekday(5), initData: admin });
   const rows = await find("place_dates", { center_id: c });
-  const vs = await find("bank_versions");
+  const vs = (await find("bank_versions")).filter((v) => v.kind === "mandatory");   // الأوقات تاخذ نسخ إجبارية بس
   const row = rows.find((r) => vs.filter((v) => v.exam_id === r.exam_id).length >= 2)!;
   const ids = vs.filter((v) => v.exam_id === row.exam_id).map((v) => v.id as number);
   const cur = async () => JSON.parse((await find("place_dates", { center_id: c, exam_id: row.exam_id }))[0].versions);
@@ -1124,4 +1124,23 @@ test("👁 شوف جدوله مثل ما يطلعله: رابط عرض بس، م
   await assert.rejects(myExamAction({ token: viewToken(970), action: "confirm" }), /عرض بس/);
   // رابط الطالب العادي ما يصير رابط عرض
   await assert.rejects(myExamAction({ token: "v970.1.abc", action: "info" }), (e: any) => e.status === 401);
+});
+
+test("النسخ التلقائية بالأوقات إجبارية بس: الاختيارية اللي انحطت غلط تتبدل، و«أول نسخة جاهزة» تبقى", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "نسخ إجبارية" });
+  const c = await insert("centers", { area_id: area, name: "مركز النسخ الإجبارية", active: 1 });
+  const e = await insert("bank_exams", { slug: "zzm", chapter: "فصل النسخ", ord: 1, title: "امتحان النسخ", info: "", minutes: 60 });
+  const va = await insert("bank_versions", { exam_id: e, model: "A", kind: "mandatory", ok: 1 });
+  const vb = await insert("bank_versions", { exam_id: e, model: "B", kind: "mandatory", ok: 1 });
+  const vf = await insert("bank_versions", { exam_id: e, model: "F", kind: "optional", ok: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "16:00" }, { d: 5, t: "20:30" }, { d: 5, t: "22:00" }], initData: admin });
+  const sat = nextWeekday(5);
+  await put("place_dates", { center_id: c, exam_id: e, day: sat, versions: JSON.stringify({ "16:00": vf, "20:30": 0, "22:00": va }) });
+  const { syncVersions } = await import("../lib/schedApi.ts");
+  await syncVersions(c);
+  const v = JSON.parse((await find("place_dates", { center_id: c, exam_id: e }))[0].versions);
+  assert.equal(v["20:30"], 0);              // اختيار صاحب البوت «أول نسخة جاهزة» يبقى
+  assert.equal(v["22:00"], va);
+  assert.equal(v["16:00"], vb);             // الاختيارية تبدلت بإجبارية غير عن باقي اليوم
 });
