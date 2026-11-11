@@ -1,6 +1,7 @@
 // الحضوري: المساعد يقرا كيو ار الطالب فينسجل حضوره، ويطبع إله ليبل أو ورقة امتحان كاملة باسمه حسب المركز.
 // بعد الامتحان أوراق الكل تنحط بالسكانر، والصور تنرفع مرة وحدة، والأكواد المطبوعة توديها لكل طالب وسؤال،
 // وتروح للمصححين مثل أوراق الإلكتروني
+import { FONT_STACK, pageFonts } from "./imgFonts.ts";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import path from "node:path";
 import QRCode from "qrcode";
@@ -258,7 +259,7 @@ export async function labelPage(c: LabelInfo, fit = false) {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ليبل ${esc(c.name)}</title>
 <style id="ps">@page{size:58mm 39mm;margin:0}</style>
 <script>if(${fit ? "true" : "/Android/i.test(navigator.userAgent)"}){document.documentElement.style.setProperty("--u","calc(100vw/58)");document.getElementById("ps").textContent="@page{margin:0}"}</script>
-<style>:root{--u:1mm}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#000;font-family:Tahoma,Arial,sans-serif}
+<style>${await pageFonts()}:root{--u:1mm}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#000;font-family:${FONT_STACK}}
 .l{width:${mm(58)};height:${mm(39)};padding:${mm(1.5)} ${mm(2)};display:flex;flex-direction:column;gap:${mm(1)};overflow:hidden}
 .nm{font-weight:700;font-size:${size(c.name, 13, 10.5, 8.5)};line-height:1.2;white-space:nowrap;overflow:hidden}
 .mid{flex:1;min-height:0;display:flex;gap:${mm(2)};align-items:center}.q{width:${mm(19)};height:${mm(19)};flex:none}.q svg{width:100%;height:100%}
@@ -297,7 +298,7 @@ export async function paperHtml(kind: "i" | "v", id: number) {
 ${src ? `<img class="qi" src="${src}" alt="سؤال ${q.n}">` : `<div class="miss">صورة السؤال ${q.n} مو موجودة</div>`}<div class="ans">الحل</div></section>`);
   }
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(e?.title ?? "امتحان")}</title>
-<style>@page{size:A4;margin:10mm}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#000;font-family:Tahoma,Arial,sans-serif}
+<style>${await pageFonts()}@page{size:A4;margin:10mm}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#000;font-family:${FONT_STACK}}
 .p{height:277mm;display:flex;flex-direction:column;page-break-after:always;break-after:page}.p:last-child{page-break-after:auto;break-after:auto}
 header{display:flex;gap:4mm;align-items:center;border-bottom:.4mm solid #000;padding-bottom:3mm}.qr{width:22mm;height:22mm;flex:none}.qr svg{width:100%;height:100%}
 .h{flex:1}.ti{font-size:12pt;font-weight:700}.who{font-size:11pt;margin-top:1.5mm}.lb{margin-top:1.5mm;width:62mm;height:42mm;border:.4mm dashed #888;display:flex;align-items:center;justify-content:center;color:#777;font-size:9pt}

@@ -157,3 +157,23 @@ test("رسالة المصحح: كتابة أو صوت، والزر يحتاج ا
   await put("staff", { user_id: 31, name: "ثاني", perms: "grade" });
   await assert.rejects(gradeUpload((() => { const f = new FormData(); f.set("initData", sign(31)); f.set("action", "message"); f.set("id", String(id)); f.set("text", "x"); return f; })()), /مصحح ثاني/);
 });
+
+test("✍️ الخط: صاحب البوت يختار العربي والإنجليزي، وكل الصور تاخذه، والغلط يبقى على القديم", async () => {
+  const { fontsCss, fontChoice } = await import("../lib/imgFonts.ts");
+  const { gradeCardHtml } = await import("../lib/documents.ts");
+  const own = sign(1);
+  const r: any = await commentsAction({ action: "list", initData: own });
+  assert.deepEqual([r.fonts.ar, r.fonts.en], ["tajawal", "nunito"]);
+  assert.ok(r.fonts.ar_list.length >= 8 && r.fonts.en_list.length >= 4);
+  const s: any = await commentsAction({ action: "fonts", ar: "almarai", en: "poppins", initData: own });
+  assert.match(s.notice, /انحفظ الخط/);
+  assert.deepEqual([s.fonts.ar, s.fonts.en], ["almarai", "poppins"]);
+  await commentsAction({ action: "fonts", ar: "مو موجود", en: "inter", initData: own });
+  assert.deepEqual(await fontChoice(), { ar: "almarai", en: "inter" });
+  // الصورة بيها الخطين المختارين (غير الافتراضي)
+  const css = fontsCss(await fontChoice());
+  assert.notEqual(css, fontsCss());
+  assert.ok(gradeCardHtml({ name: "س", exam: "x", center: "c", total: 50, at: "a" }, css).includes(css));
+  await assert.rejects(commentsAction({ action: "fontPreview", ar: "cairo", en: "nunito", initData: own }), /ما گدرت أرسم/);   // ماكو متصفح بالتست
+  await commentsAction({ action: "fonts", ar: "tajawal", en: "nunito", initData: own });
+});

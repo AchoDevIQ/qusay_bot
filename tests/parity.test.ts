@@ -109,7 +109,9 @@ function normalDb(db: Record<string, any[]>) {
 }
 const scrubFiles = (f: Record<string, string>) =>
   // السطور الفارغة بالـ HTML ما تأثر على الرسم (الوصل القديم بيه سطر فارغ داخل التنسيق)
-  Object.fromEntries(Object.entries(f).map(([k, v]) => [scrub(k), scrub(v).replace(/<div style="display:flex;align-items:center;gap:12px;margin-top:10px[\s\S]*?افتح طلبك بالبوت[\s\S]*?<\/div>\s*<\/div>/g, "").replace(/\n{2,}/g, "\n")]));
+  Object.fromEntries(Object.entries(f).map(([k, v]) => [scrub(k), scrub(v)
+    // الخطوط اختيار صاحب البوت (✍️ الخط)، مو سلوك: تنشال من المقارنة
+    .replace(/@font-face\{[^}]*\}/g, "").replace(/font-family:[^;}]*/g, "font-family:*").replace(/<div style="display:flex;align-items:center;gap:12px;margin-top:10px[\s\S]*?افتح طلبك بالبوت[\s\S]*?<\/div>\s*<\/div>/g, "").replace(/\n{2,}/g, "\n")]));
 
 const sorted = (db: Record<string, any[]>) => Object.fromEntries(Object.entries(db).map(([t, rows]) => [t, rows.map((r) => JSON.stringify(Object.entries(r).sort())).sort()]));
 for (const driver of ["sqlite", "firestore"]) for (const file of fs.readdirSync(DIR).filter((f) => /^phase.*\.json$/.test(f)).sort()) {

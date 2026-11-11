@@ -5,7 +5,8 @@ import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Comment = { id: number; lo: number; hi: number; text: string; sticker: number };
 type Sticker = { id: number; name: string; lo: number; hi: number };
-type Data = { comments: Comment[]; stickers: Sticker[]; notice: string };
+type FontOpt = { id: string; name: string };
+type Data = { comments: Comment[]; stickers: Sticker[]; fonts: { ar: string; en: string; ar_list: FontOpt[]; en_list: FontOpt[] }; preview?: string; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const BANDS = Array.from({ length: 10 }, (_, i) => [i * 10, i === 9 ? 100 : i * 10 + 9]);
 
@@ -33,6 +34,7 @@ export default function CommentsClient() {
               </div>
               <div className="exhint">الأحمر يعني ماكو مقولة لهاي الدرجات.</div>
             </div>
+            <Fonts key={`${data.fonts.ar}|${data.fonts.en}`} d={data} busy={busy} call={call} />
             <AddComment stickers={data.stickers} busy={busy} call={call} />
             {[...groups].map(([k, list]) => (
               <div className="card" key={k}>
@@ -69,6 +71,31 @@ function Fields({ lo, hi, text, sticker, setLo, setHi, setText, setSticker, stic
       </div>
       <textarea className="tmtext" rows={3} placeholder="اكتب المقولة" value={text} onChange={(e) => setText(e.target.value)} />
     </>
+  );
+}
+
+/** ✍️ الخط: عربي وإنجليزي لكل الصور اللي يسويها البوت. 👁 يرسم بطاقة تجريبية قبل الحفظ */
+function Fonts({ d, busy, call }: { d: Data; busy: boolean; call: Call }) {
+  const [ar, setAr] = useState(d.fonts.ar);
+  const [en, setEn] = useState(d.fonts.en);
+  const [img, setImg] = useState("");
+  const same = ar === d.fonts.ar && en === d.fonts.en;
+  return (
+    <div className="card expad">
+      <div className="exlabel">✍️ الخط</div>
+      <div className="exhint">خط كل الصور اللي يسويها البوت: بطاقة الدرجة، والفقاعة، وبطاقة المعلومات، والوصولات، والليبل، والأوراق المطبوعة. اختار وشوف البطاقة، وبعدها احفظ.</div>
+      <label className="adtop"><small>الخط العربي</small>
+        <select value={ar} onChange={(e) => { setAr(e.target.value); setImg(""); }}>{d.fonts.ar_list.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+      </label>
+      <label className="adtop"><small>الخط الإنجليزي والأرقام</small>
+        <select value={en} onChange={(e) => { setEn(e.target.value); setImg(""); }}>{d.fonts.en_list.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+      </label>
+      <div className="exline adtop">
+        <button type="button" className="exbtn" disabled={busy} onClick={async () => { const r = await call({ action: "fontPreview", ar, en }); if (r?.preview) setImg(r.preview); }}>👁 شوف البطاقة</button>
+        <button type="button" className="btn" disabled={busy || same} onClick={() => void call({ action: "fonts", ar, en })}>💾 احفظ الخط</button>
+      </div>
+      {img && <img src={img} alt="بطاقة تجريبية بالخط المختار" style={{ width: "100%", marginTop: 10, borderRadius: 12 }} />}
+    </div>
   );
 }
 

@@ -2,11 +2,12 @@
 // فوك اسم الطالب الرباعي بعرض الليبل، بالنص الكود (تطبعه الطابعة نفسها) ورقمه ومركزه ووقته، وجوة اسم الامتحان بعرض الليبل.
 // الكتابة العربية صور، لأن خطوط الطابعة ما بيها عربي
 import fs from "node:fs";
-import path from "node:path";
 
 export type LabelInfo = { item: number; uid: number; name: string; exam: string; center: string; at: string };
 
-let fontReady = false;
+const registered = new Set<string>();
+/** خطوط الليبل: نفس الخط اللي اختاره صاحب البوت للصور (عربي، واحتياطي لـ گ چ، وإنجليزي) */
+let FAM = "QArFb, QLatin_nunito";
 type Ctx = { font: string; measureText(t: string): { width: number }; fillText(t: string, x: number, y: number): void };
 
 /** يقسم النص على سطور بأكبر حجم يخليه يوسع */
@@ -14,7 +15,7 @@ function fit(g: Ctx, text: string, width: number, sizes: number[], maxLines: num
   const words = String(text ?? "").split(/\s+/).filter(Boolean);
   let result = { size: sizes[sizes.length - 1], lines: [] as string[] };
   for (const size of sizes) {
-    g.font = `bold ${size}px QArabic, QLatin`;
+    g.font = `bold ${size}px ${FAM}`;
     const lines: string[] = [];
     let cur = "";
     for (const word of words) {
@@ -51,14 +52,16 @@ async function bitmap(p: Piece, dx: number, dy: number) {
   ]);
 }
 
-function ensureFonts(GlobalFonts: { registerFromPath(p: string, name: string): unknown }) {
-  if (fontReady) return;
-  const p = path.join(process.cwd(), "assets", "fonts", "NotoSansArabic-Bold.ttf");
-  if (fs.existsSync(p)) GlobalFonts.registerFromPath(p, "QArabic");
-  // الخط العربي ما بي حروف إنجليزية ولا # و( ): Nunito يكملها بخط واضح، لأن السيرفر ما بي خطوط
-  const latin = path.join(process.cwd(), "assets", "fonts", "Nunito-Bold.ttf");
-  if (fs.existsSync(latin)) GlobalFonts.registerFromPath(latin, "QLatin");
-  fontReady = true;
+async function ensureFonts(GlobalFonts: { registerFromPath(p: string, name: string): unknown }) {
+  const { AR_FALLBACK, arFont, enFont, fontChoice } = await import("./imgFonts.ts");
+  const c = await fontChoice();
+  const ar = arFont(c), en = enFont(c);
+  const reg = (file: string, name: string) => { if (!registered.has(name) && fs.existsSync(file)) { GlobalFonts.registerFromPath(file, name); registered.add(name); } };
+  reg(AR_FALLBACK, "QArFb");
+  reg(ar.file, `QAr_${ar.id}`);
+  reg(en.file, `QLatin_${en.id}`);
+  // الخط القديم يرسم گ چ والأرقام فارغة: هناك الاحتياطي أول
+  FAM = ar.id === "boahmed" ? `QArFb, QLatin_${en.id}` : `QAr_${ar.id}, QArFb, QLatin_${en.id}`;
 }
 
 /** أجزاء الليبل بنقاط ليبل 58×39 (464×312). نفس الترتيب لطابعة Vision ولجهاز SUNMI */
@@ -71,9 +74,9 @@ function pieces(c: LabelInfo): Piece[] {
     { x: 8, y: 4, w: 448, h: 52, draw: (g, w) => { const f = fit(g, c.name, w - 4, [36, 32, 28, 24, 20], 1); lines(g, f.lines, f.size, w, 0); } },
     // جنب الكود: الرقم والمركز والوقت
     { x: 170, y: 60, w: 286, h: 142, draw: (g, w) => {
-      g.direction = "ltr"; g.font = "bold 26px QArabic, QLatin"; g.fillText(`#${c.uid}`, w - 2, 0);
+      g.direction = "ltr"; g.font = `bold 26px ${FAM}`; g.fillText(`#${c.uid}`, w - 2, 0);
       g.direction = "rtl"; const f = fit(g, c.center, w - 4, [24, 21, 18], 2); lines(g, f.lines, f.size, w, 38);
-      g.direction = "ltr"; g.font = "bold 22px QArabic, QLatin"; g.fillText(`${c.at.slice(0, 10)}  ${c.at.slice(11, 16)}`, w - 2, 108);
+      g.direction = "ltr"; g.font = `bold 22px ${FAM}`; g.fillText(`${c.at.slice(0, 10)}  ${c.at.slice(11, 16)}`, w - 2, 108);
     } },
     // اسم الامتحان: جوة، بعرض الليبل، ويوسع سطرين إذا طويل
     { x: 8, y: 208, w: 448, h: 92, draw: (g, w) => { const f = fit(g, c.exam, w - 4, [32, 28, 24, 21, 18], 2); lines(g, f.lines, f.size, w, 0); } },
@@ -83,7 +86,7 @@ function pieces(c: LabelInfo): Piece[] {
 /** dx وdy: تحريك الطباعة بالنقاط (8 نقاط بالملم) إذا الليبل طالع زاحف */
 export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
   const { GlobalFonts } = await import("@napi-rs/canvas");
-  ensureFonts(GlobalFonts);
+  await ensureFonts(GlobalFonts);
   const parts = await Promise.all(pieces(c).map((p) => bitmap(p, dx, dy)));
   return Buffer.concat([
     Buffer.from("SIZE 58 mm,39 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\n", "latin1"),
@@ -96,7 +99,7 @@ export async function labelTspl(c: LabelInfo, dx = 0, dy = 0): Promise<Buffer> {
  *  heightMm: طول الليبلة، حتى الصورة ما تطلع منها. widthMm: عرض الكتابة. dxMm: تحريك لليمين (+) أو لليسار (-) إذا الليبلة مو بنص الطابعة */
 export async function labelPng(c: LabelInfo, heightMm = 39, widthMm = 48, dxMm = 0): Promise<Buffer> {
   const { createCanvas, GlobalFonts } = await import("@napi-rs/canvas");
-  ensureFonts(GlobalFonts);
+  await ensureFonts(GlobalFonts);
   const W = 384, cw = Math.max(160, Math.min(W, Math.round(widthMm * 8)));
   const s = Math.min(cw / 464, (Math.max(20, heightMm) * 8 - 16) / 312);
   const H = Math.round(312 * s), ox = Math.round((W - 464 * s) / 2 + Math.max(-20, Math.min(20, dxMm)) * 8);

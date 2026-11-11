@@ -7,6 +7,7 @@ import { DEFAULT_COMMENTS } from "./defaultComments.ts";
 import { files } from "./files.ts";
 import { stamp } from "./util.ts";
 import { authed, need } from "./webApi.ts";
+import { AR_FONTS, EN_FONTS, fontChoice, setFontChoice } from "./imgFonts.ts";
 
 const PERM = "owner";
 const MAX_STICKER = 6 * 1024 * 1024;
@@ -27,6 +28,8 @@ async function pageData() {
   return {
     comments: (await find("grade_comments", {})).sort(byRange).map((c) => ({ id: c.id, lo: c.lo, hi: c.hi, text: c.text, sticker: c.sticker_id ?? 0 })),
     stickers: (await find("stickers", {})).sort(byRange).map((s) => ({ id: s.id, name: s.name, lo: s.lo, hi: s.hi })),
+    // ✍️ خط الصور: صاحب البوت يختاره، وكل الصور تتغير وياه
+    fonts: { ...await fontChoice(), ar_list: AR_FONTS.map((f) => ({ id: f.id, name: f.name })), en_list: EN_FONTS.map((f) => ({ id: f.id, name: f.name })) },
   };
 }
 
@@ -62,6 +65,15 @@ export async function commentsAction(body: Row) {
     await remove("stickers", { id });
     for (const c of await find("grade_comments", { sticker_id: id })) await update("grade_comments", { id: c.id }, { sticker_id: null });
     notice = "🗑 انمسح الملصق";
+  } else if (a === "fonts") {
+    await setFontChoice({ ar: String(body.ar ?? ""), en: String(body.en ?? "") });
+    notice = "✅ انحفظ الخط: كل الصور الجاية تطلع بيه";
+  } else if (a === "fontPreview") {
+    // بطاقة درجة تجريبية بالخط المختار (قبل الحفظ)، حتى يشوفه صاحب البوت
+    const { gradeCardSample } = await import("./documents.ts");
+    const png = await gradeCardSample({ ar: String(body.ar ?? ""), en: String(body.en ?? "") });
+    need(png, "ما گدرت أرسم البطاقة هسه، جرب بعد شوية");
+    return { ...await pageData(), preview: `data:image/png;base64,${png!.toString("base64")}`, notice: "" };
   } else need(a === "list", "أمر غير معروف");
   return { ...await pageData(), notice };
 }

@@ -8,7 +8,8 @@ import { promisify } from "node:util";
 import QRCode from "qrcode";
 import { kvSet, one, type Row } from "./db.ts";
 import type { RenderJob } from "./browserRender.ts";
-import { ARABIC_FALLBACK, ARABIC_FONT, FONT, LATIN_FONT, LOGO, PDF_DIR, WORD_CHECK } from "./config.ts";
+import { LOGO, PDF_DIR, WORD_CHECK } from "./config.ts";
+import { DEFAULT_FONTS, FONT_STACK, fontsCss, pageFonts, type FontChoice } from "./imgFonts.ts";
 import { btn, esc, fileStamp, money, num, stamp } from "./util.ts";
 import { upload, send, type Kb } from "./telegram.ts";
 import { centerName, examLabel, orderItems, ordersByIds, placeOf, profileText, sellerLabel } from "./data.ts";
@@ -18,8 +19,6 @@ const ensureDir = () => fs.mkdirSync(PDF_DIR, { recursive: true });
 const b64 = (p: string) => fs.readFileSync(p).toString("base64");
 const logoTag = () => (fs.existsSync(LOGO) ? `<img src="data:image/png;base64,${b64(LOGO)}">` : "");
 /** الإنجليزي والأرقام بخط واضح، والعربي يبقى بخط قصي العميري */
-const latinFace = () => (fs.existsSync(LATIN_FONT) ? `@font-face{font-family:QLatin;src:url(data:font/ttf;base64,${b64(LATIN_FONT)});unicode-range:U+0000-024F,U+2000-206F,U+20AC,U+2122}` : "");
-const fontFace = () => (fs.existsSync(FONT) ? `@font-face{font-family:Boahmed;src:url(data:font/ttf;base64,${b64(FONT)})}` : "");
 
 export function findBrowser(): string | null {
   if (process.env.CHROME_PATH) return fs.existsSync(process.env.CHROME_PATH) ? process.env.CHROME_PATH : null;
@@ -113,10 +112,10 @@ async function ordersHtml(orders: Row[]) {
 ${await examQr(o.id)}<div class=foot>⚠️ جميع المشتريات غير قابلة للإرجاع إطلاقاً ولأي سبب كان</div>
 </section>`;
   })));
-  return `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>
+  return `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>${await pageFonts()}
 @page{size:A5;margin:9mm}
 html,body{margin:0}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#101929}
+body{font-family:${FONT_STACK};color:#101929}
 .page{page-break-after:always;break-after:page}
 .page:last-child{page-break-after:auto;break-after:auto}
 .head{display:flex;align-items:center;gap:10px;background:#101929;color:#fff;border-radius:10px;padding:8px 12px;border-bottom:4px solid #CEA239}
@@ -170,8 +169,8 @@ export async function sendOrdersPdf(chat: number, ids: number[], reprint = false
 export async function listPdf(chat: number, title: string, headers: string[], rows: unknown[][], fname: string) {
   const th = headers.map((h) => `<th>${esc(h)}</th>`).join("");
   const tr = rows.map((r, i) => `<tr><td class=n>${i + 1}</td>${r.map((x) => `<td>${esc(x)}</td>`).join("")}</tr>`).join("");
-  const htm = `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>@page{size:A4;margin:12mm}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#101929}
+  const htm = `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>${await pageFonts()}@page{size:A4;margin:12mm}
+body{font-family:${FONT_STACK};color:#101929}
 .h{display:flex;align-items:center;gap:12px;background:#101929;color:#F9C445;padding:8px 14px;border-radius:10px;border-bottom:4px solid #CEA239}
 .h img{height:44px}.h b{font-size:18px}.h span{color:#cfd7e6;font-size:11px;display:block}
 table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th{background:#101929;color:#fff;padding:6px}
@@ -193,14 +192,14 @@ async function profileCardHtml(s: Row, title: string) {
     ["📞", "الهاتف الأول", s.phone1], ["📞", "الهاتف الثاني", s.phone2], ["📝", "نوع الامتحان", s.exam ?? ""]];
   if (s.exam === "حضوري") rows.push(["🏫", "المركز الامتحاني", await centerName(s.center_id) || "—"]);
   const tr = rows.map(([i, k, v]) => `<tr><td class="k"><span>${i}</span>${esc(k)}</td><td class="v${k.startsWith("الهاتف") ? " ltr" : ""}">${esc(v)}</td></tr>`).join("");
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${fontFace()}
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${await pageFonts()}
 *{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;
+body{font-family:${FONT_STACK};color:#F4F1E8;
 background:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%);
 display:flex;flex-direction:column;align-items:center;padding:24px 30px 40px;min-height:1200px}
 .top{text-align:center}.top img{height:92px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}
 .top h1{margin:0;font-size:38px;font-weight:800;letter-spacing:2px;color:#F9C445}
-.top p{margin:2px 0 0;font-family:Boahmed,'Segoe UI';font-size:23px;color:#cfd7e6}
+.top p{margin:2px 0 0;font-family:${FONT_STACK};font-size:23px;color:#cfd7e6}
 .card{width:100%;margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}
 .card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239)}
 table{width:100%;border-collapse:collapse}td{padding:11px 22px;border-top:1px solid #2a3b5c;font-size:21px;vertical-align:middle}
@@ -234,25 +233,20 @@ export async function sendProfileCard(chat: number, s: Row, title: string, capti
 
 // ---------- بطاقة الدرجة: توصل للطالب وولي أمره بعد التصحيح (الأوراق نفسها بصفحة امتحاناتي)
 export type GradeCard = { name: string; exam: string; center: string; total: number; at: string; sticker?: string; quote?: string };
-const AR_RANGE = "U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF";
-/** بطاقة الدرجة والفقاعة: الإنجليزي Nunito، والعربي Tajawal، والحروف اللي ما بيه من Noto */
-const cardFont = () => latinFace()
-  + (fs.existsSync(ARABIC_FONT) ? `@font-face{font-family:QAr;src:url(data:font/ttf;base64,${b64(ARABIC_FONT)});unicode-range:${AR_RANGE}}` : "")
-  + (fs.existsSync(ARABIC_FALLBACK) ? `@font-face{font-family:QArFb;src:url(data:font/ttf;base64,${b64(ARABIC_FALLBACK)});unicode-range:${AR_RANGE}}` : "");
-export function gradeCardHtml(c: GradeCard) {
+export function gradeCardHtml(c: GradeCard, css = fontsCss()) {
   const color = c.total >= 90 ? "#4ade80" : c.total >= 50 ? "#F9C445" : "#ff7a6b";
   const row = (icon: string, k: string, v: string) => `<tr><td class="k"><span>${icon}</span>${k}</td><td class="v">${esc(v)}</td></tr>`;
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
-${cardFont()}
-*{box-sizing:border-box}html,body{margin:0;width:760px;background:#101929;color:#F4F1E8;font-family:QLatin,QAr,QArFb,'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif}
+${css}
+*{box-sizing:border-box}html,body{margin:0;width:760px;background:#101929;color:#F4F1E8;font-family:${FONT_STACK}}
 .top{padding:30px 20px 26px;text-align:center;background:radial-gradient(ellipse at 50% -10%,#3b82f6 0%,transparent 65%),linear-gradient(180deg,#1e3a8a,#0f1d40)}
 .top img{height:120px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}
 .top h1{margin:8px 0 0;font-size:52px;font-weight:400;color:#fff;text-shadow:0 2px 14px rgba(59,130,246,.75)}
 .top p{margin:4px 0 0;font-size:24px;color:#bfdbfe}
 .grade{margin:-34px auto 0;width:300px;height:300px;border-radius:50%;background:#162238;border:10px solid ${color};display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 18px 40px rgba(0,0,0,.45);position:relative}
 .gradew{position:relative}.stk{position:absolute;left:16px;top:44px;width:205px;height:205px;object-fit:contain;filter:drop-shadow(0 8px 16px rgba(0,0,0,.5))}
-.grade b{font-family:'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:130px;line-height:1;color:${color};font-weight:800}
-.grade span{font-family:'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:34px;color:#9fb0c9;font-weight:700}
+.grade b{font-family:${FONT_STACK};font-size:130px;line-height:1;color:${color};font-weight:800}
+.grade span{font-family:${FONT_STACK};font-size:34px;color:#9fb0c9;font-weight:700}
 table{width:calc(100% - 56px);margin:30px 28px 34px;border-collapse:collapse;background:#162238;border:1px solid #2a3b5c;border-radius:22px;overflow:hidden}
 td{padding:16px 22px;border-top:1px solid #2a3b5c;font-size:27px;vertical-align:middle}tr:first-child td{border-top:0}
 td.k{width:36%;color:#9fb0c9;white-space:nowrap}td.k span{display:inline-block;width:46px}td.v{color:#fff}
@@ -269,10 +263,24 @@ export async function gradeCardPng(item: number, c: GradeCard, tag = ""): Promis
   try {
     ensureDir();
     const hp = path.join(PDF_DIR, `grade_${item}${tag}.html`), pp = path.join(PDF_DIR, `grade_${item}${tag}.png`);
-    fs.writeFileSync(hp, gradeCardHtml(c), "utf8");
+    fs.writeFileSync(hp, gradeCardHtml(c, await pageFonts()), "utf8");
     // المقولة جوة البطاقة: الصورة تطول بقدر سطورها
-    const quoteH = c.quote ? 30 + Math.ceil(c.quote.length / 44) * 42 : 0;
+    const quoteH = cardQuoteH(c.quote);
     if (await htmlToPng(hp, pp, 760, 940 + quoteH)) return fs.readFileSync(pp);
+  } catch (e) { console.error(e); }
+  return null;
+}
+
+/** طول المقولة جوة البطاقة: بعض الخطوط أعرض، فنحسب 36 حرف بالسطر حتى ما تنقص */
+const cardQuoteH = (q?: string) => (q ? 34 + Math.ceil(q.length / 36) * 44 : 0);
+/** بطاقة درجة تجريبية بخط معين، لصفحة اختيار الخط */
+export async function gradeCardSample(f: Partial<FontChoice>): Promise<Buffer | null> {
+  try {
+    ensureDir();
+    const hp = path.join(PDF_DIR, "grade_sample.html"), pp = path.join(PDF_DIR, "grade_sample.png");
+    const c: GradeCard = { name: "زينب علي حسين جاسم", exam: "قبل x & y المحاضرة (1 & 2) · Mid-Year Exam", center: "الإلكتروني", total: 84, at: "السبت 3/1/2027 · 5:00 PM", quote: "گلي شنو صعب عليك؟ چان أحسن لو تدرس أكثر، بس إنت للأحلى." };
+    fs.writeFileSync(hp, gradeCardHtml(c, fontsCss({ ar: f.ar || DEFAULT_FONTS.ar, en: f.en || DEFAULT_FONTS.en })), "utf8");
+    if (await htmlToPng(hp, pp, 760, 940 + cardQuoteH(c.quote))) return fs.readFileSync(pp);
   } catch (e) { console.error(e); }
   return null;
 }
@@ -291,13 +299,13 @@ export function imageSize(b: Buffer): { w: number; h: number } {
   }
   return { w: 900, h: 1200 };
 }
-export function bubbleHtml(src: string, text: string, w: number, h: number) {
+export function bubbleHtml(src: string, text: string, w: number, h: number, css = fontsCss()) {
   const n = text.length, size = Math.round((n <= 40 ? 0.052 : n <= 90 ? 0.042 : 0.033) * w);
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
-${cardFont()}
+${css}
 *{box-sizing:border-box}html,body{margin:0;width:${w}px;height:${h}px;overflow:hidden;background:#111}
 img{display:block;width:${w}px;height:${h}px}
-.b{position:absolute;top:${Math.round(w * 0.02)}px;right:${Math.round(w * 0.02)}px;width:${Math.round(w * 0.46)}px;padding:${Math.round(w * 0.04)}px ${Math.round(w * 0.035)}px;background:#fff;border:${Math.max(3, Math.round(w * 0.005))}px solid #000;border-radius:50%;color:#000;text-align:center;white-space:pre-wrap;font-family:QLatin,QAr,QArFb,'Noto Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:${size}px;line-height:1.35}
+.b{position:absolute;top:${Math.round(w * 0.02)}px;right:${Math.round(w * 0.02)}px;width:${Math.round(w * 0.46)}px;padding:${Math.round(w * 0.04)}px ${Math.round(w * 0.035)}px;background:#fff;border:${Math.max(3, Math.round(w * 0.005))}px solid #000;border-radius:50%;color:#000;text-align:center;white-space:pre-wrap;font-family:${FONT_STACK};font-size:${size}px;line-height:1.35}
 .b:after{content:"";position:absolute;left:12%;bottom:-${Math.round(w * 0.045)}px;border-top:${Math.round(w * 0.06)}px solid #000;border-right:${Math.round(w * 0.05)}px solid transparent}
 </style></head><body><img src="${src}"><div class="b">${esc(text)}</div></body></html>`;
 }
@@ -308,7 +316,7 @@ export async function bubblePng(img: Buffer, type: string, text: string, tag: st
     const s = imageSize(img);
     const w = 900, h = Math.min(1600, Math.round((s.h / s.w) * w));
     const hp = path.join(PDF_DIR, `bubble_${tag}.html`), pp = path.join(PDF_DIR, `bubble_${tag}.png`);
-    fs.writeFileSync(hp, bubbleHtml(`data:${type};base64,${img.toString("base64")}`, text, w, h), "utf8");
+    fs.writeFileSync(hp, bubbleHtml(`data:${type};base64,${img.toString("base64")}`, text, w, h, await pageFonts()), "utf8");
     if (await htmlToPng(hp, pp, w, h)) return fs.readFileSync(pp);
   } catch (e) { console.error(e); }
   return null;
@@ -319,11 +327,11 @@ export async function bubblePng(img: Buffer, type: string, text: string, tag: st
 async function receiptPaperHtml(o: Row, items: Row[]) {
   const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class="n">${it.qty}</td><td class="n">${num(it.qty * it.price)}</td></tr>`).join("");
   const logo = fs.existsSync(LOGO) ? `<img class="logo" src="data:image/png;base64,${b64(LOGO)}">` : "";
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${await pageFonts()}
 @page{size:58mm ${130 + 17 * items.length}mm;margin:0}
-*{box-sizing:border-box}body{margin:0;width:58mm;padding:3mm 2.5mm;font-family:Tahoma,'Segoe UI',Arial,sans-serif;color:#000;font-size:10.5pt}
+*{box-sizing:border-box}body{margin:0;width:58mm;padding:3mm 2.5mm;font-family:${FONT_STACK};color:#000;font-size:10.5pt}
 .c{text-align:center}.logo{height:15mm;filter:grayscale(1) contrast(1.6)}
-h1{margin:1mm 0 0;font-size:15pt;letter-spacing:.5px;font-family:'Segoe UI',Arial}
+h1{margin:1mm 0 0;font-size:15pt;letter-spacing:.5px;font-family:${FONT_STACK}}
 .sub{font-size:9.5pt}.hr{border-top:1.4px dashed #000;margin:2mm 0}
 .kv{display:flex;justify-content:space-between;font-size:9.5pt;line-height:1.55}
 table{width:100%;border-collapse:collapse;font-size:9.5pt}th{border-bottom:1.2px solid #000;padding:1mm 0;text-align:right}
@@ -350,13 +358,13 @@ td{padding:1.1mm 0;vertical-align:top;border-bottom:.6px dotted #000}.n{text-ali
 /** وصل إلكتروني ملون يوصل للطالب بالبوت */
 async function receiptCardHtml(o: Row, items: Row[]) {
   const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class="n">× ${it.qty}</td><td class="m">${money(it.qty * it.price)}</td></tr>`).join("");
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${fontFace()}
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${await pageFonts()}
 *{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#F4F1E8;min-height:1600px;padding:24px 30px 40px;
+body{font-family:${FONT_STACK};color:#F4F1E8;min-height:1600px;padding:24px 30px 40px;
 background:radial-gradient(ellipse at 50% 0%,rgba(249,196,69,.20),transparent 55%),linear-gradient(180deg,#14203a,#101929 40%)}
 .top{text-align:center}.top img{height:86px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.5))}
 .top h1{margin:0;font-size:36px;font-weight:800;letter-spacing:2px;color:#F9C445}
-.top p{margin:0;font-family:Boahmed,'Segoe UI';font-size:22px;color:#cfd7e6}
+.top p{margin:0;font-family:${FONT_STACK};font-size:22px;color:#cfd7e6}
 .card{margin-top:16px;background:#162238;border:1px solid #2a3b5c;border-radius:24px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.35)}
 .card h2{margin:0;padding:12px 22px;font-size:24px;font-weight:800;color:#101929;background:linear-gradient(90deg,#F9C445,#CEA239);display:flex;justify-content:space-between}
 .info{display:flex;flex-wrap:wrap;gap:6px 24px;padding:14px 22px;font-size:19px;color:#cfd7e6;border-bottom:1px solid #2a3b5c}.info b{color:#F4F1E8}
@@ -396,9 +404,9 @@ export async function sendColorReceipt(chat: number, oid: number) {
 /** وصل A5 بإطار، للطابعة الكبيرة */
 async function receiptFramedHtml(o: Row, items: Row[]) {
   const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
-  return `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>
+  return `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>${await pageFonts()}
 @page{size:A5;margin:8mm}html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{margin:0;font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#101929}
+body{margin:0;font-family:${FONT_STACK};color:#101929}
 .fr{box-sizing:border-box;min-height:190mm;padding:5mm;border:4px double #CEA239;border-radius:10px}
 .head{display:flex;align-items:center;gap:10px;background:#101929;border-radius:10px;padding:8px 12px;border-bottom:4px solid #CEA239}
 .head img{height:48px}.head h1{flex:1;margin:0;font-size:20px;color:#F9C445}.head b{color:#F9C445;font-size:20px}
