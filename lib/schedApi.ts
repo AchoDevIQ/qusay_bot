@@ -17,7 +17,7 @@ import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
 import { send } from "./telegram.ts";
-import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, spreadVersions, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { esc, stamp, todayStr } from "./util.ts";
 import { authed, ensure, intOf, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
@@ -126,7 +126,7 @@ async function planHoliday(exam: number, days: number, centers: number[], onlyFo
     const r = { from: x.day as string, to: addDays(x.day, days - 1) };
     // العطل اللي من هذا اليوم وبعده تزحف ويا امتحاناتها، والعطل اللي قبله ثابتة
     const mine = hols.filter((h) => !h.insert).flatMap((h) => h.places.filter((p) => p.center === center).map((p) => ({ id: h.id, from: p.from, to: p.to })));
-    const base = dayOk(new Set(slots.map((t) => t.d)), s, mine.filter((p) => p.from < r.from));
+    const base = dayOk(new Set(slots.map((t) => t.d)), await placeSettings(center, s), mine.filter((p) => p.from < r.from));
     const lost = daysLost(r.from, r.to, base);
     const ok = (d: string) => base(d) && !inRange(d, r);
     const timesOf = (d: string) => slots.filter((t) => t.d === weekdayOf(d)).map((t) => t.t).sort();
@@ -313,9 +313,9 @@ async function myHolidays(uid: number, sc: Row | null) {
   return mergeHolidays(rows).filter((x) => x.to >= today);
 }
 /** عطلة نصف السنة (أو عطلة الطالب الخاص اللي اختارها): سطر بجدوله بين الامتحانات، ويا وصفها */
-function midHolidayRow(sc: Row | null, s: SchedSettings) {
+async function midHolidayRow(sc: Row | null, s: SchedSettings) {
   const own = sc && sc.mode !== "general" ? holOf(sc.hol) : undefined;
-  const mid = own ? (own.from && own.to ? own : null) : midRange(s);
+  const mid = own ? (own.from && own.to ? own : null) : sc?.mode === "general" ? await midFor(Number(sc.center_id ?? 0), s) : midRange(s);
   return mid && mid.to >= todayStr() ? { from: mid.from, to: mid.to, reason: own ? "عطلتك" : s.holidayNote || "عطلة نصف السنة" } : null;
 }
 /** عطلة فوك عطلة قبل نفس الامتحان: تطلع عطلة وحدة من أول يوم لآخر يوم */
@@ -431,7 +431,7 @@ async function studentInfo(uid: number) {
     repick: general && !picksFit(slots, picksOf(sched!)),
     picks: general ? picksOf(sched!) : null,
     schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour, times: sched.picks ? JSON.parse(sched.picks) : null, hol: holOf(sched.hol) ?? null } : null,
-    holidays: await myHolidays(uid, sched), midHol: midHolidayRow(sched, s), gap: s.gap,
+    holidays: await myHolidays(uid, sched), midHol: await midHolidayRow(sched, s), gap: s.gap,
     days: daysView(slots),
     optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
     // آخر سيطرة عبرها: تومض ويا شخصيتها لحد ما يشوفها
@@ -704,7 +704,21 @@ const dayList = (raw: unknown) => {
 };
 // ---------- عطلة نصف السنة بالجدول العام: الامتحانات اللي داخلها تطلع لبعدها، واللي بعدها تزحف وياها بنفس الترتيب والفراغات
 const MID_KEY = "midyear_shift";
-type MidPlace = { center: number; moved: { exam: number; day: string; to: string; versions: string; toVersions: string }[]; hols: HolMove[] };
+/** عطلة نصف السنة لمكان معين اذا تختلف عن الباقي: من، إلى. فاضية = هذا المكان بلا عطلة */
+const MID_PLACES = "midyear_places";
+async function midPlaces(): Promise<Record<string, Range>> { try { const j = JSON.parse(await kvGet(MID_PLACES) ?? "{}"); return j && typeof j === "object" ? j : {}; } catch { return {}; } }
+/** عطلة نصف السنة بهذا المكان: الخاصة بيه، وإلا مال كل الأماكن */
+async function midFor(center: number, s: SchedSettings): Promise<Range | null> {
+  const own = (await midPlaces())[String(center)];
+  if (own) return own.from && own.to ? own : null;
+  return midRange(s);
+}
+/** إعدادات المكان: عطلة نصف السنة مالته بدل العامة */
+async function placeSettings(center: number, s: SchedSettings): Promise<SchedSettings> {
+  const r = await midFor(center, s);
+  return { ...s, holidayStart: r?.from ?? "", holidayDays: r ? daysOf(r).length : 0 };
+}
+type MidPlace = { center: number; from?: string; to?: string; moved: { exam: number; day: string; to: string; versions: string; toVersions: string }[]; hols: HolMove[] };
 type MidShift = { from: string; to: string; places: MidPlace[] };
 async function midShift(): Promise<MidShift | null> {
   try { const j = JSON.parse(await kvGet(MID_KEY) ?? "null"); return j && Array.isArray(j.places) ? j : null; } catch { return null; }
@@ -731,10 +745,9 @@ async function undoMidyear(m: MidShift) {
 }
 /** كل مكان: من أول امتحان داخل العطلة، كل يوم امتحان ياخذ يوم الامتحان الصالح اللي بنفس ترتيبه بس برا العطلة.
  *  يعني اللي داخل العطلة يطلع لأول أيام بعدها، واللي بعدها يزحف بعدد أيام الامتحان اللي راحت، والفراغات تبقى مثل ما هي */
-async function applyMidyear(range: Range, s: SchedSettings): Promise<MidPlace[]> {
+async function applyMidyear(range: Range, s: SchedSettings, centers: number[]): Promise<MidPlace[]> {
   const list = await holidays();
   const out: MidPlace[] = [];
-  const centers = [...new Set((await find("place_dates")).map((r) => r.center_id as number))];
   for (const center of centers) {
     const rows = await find("place_dates", { center_id: center });
     const first = rows.map((r) => String(r.day)).filter((d) => inRange(d, range)).sort()[0];
@@ -768,27 +781,34 @@ async function applyMidyear(range: Range, s: SchedSettings): Promise<MidPlace[]>
       const r = list.find((h) => h.id === m.id)?.places.find((y) => y.center === center);
       if (r) { r.from = m.toFrom; r.to = m.toTo; }
     }
-    if (moved.length || hols.length) out.push({ center, moved, hols });
+    if (moved.length || hols.length) out.push({ center, from: range.from, to: range.to, moved, hols });
   }
   await saveHolidays(list);
   return out;
 }
 /** انحفظت عطلة نصف السنة: العطلة القديمة ترجع مواعيدها، والجديدة تطلع الامتحانات منها. يرجع عدد الأماكن اللي تغيرت */
 async function syncMidyear(s: SchedSettings) {
-  const range = midRange(s);
   const old = await midShift();
+  // كل مكان يعرف بأي عطلة زحف (القديم كان عطلة وحدة للكل)
+  const done: MidPlace[] = (old?.places ?? []).map((p) => ({ ...p, from: p.from ?? old!.from, to: p.to ?? old!.to }));
   const changed = new Set<number>();
-  if (old && (!range || old.from !== range.from || old.to !== range.to)) {
-    await undoMidyear(old);
-    old.places.forEach((p) => changed.add(p.center));
-    await kvSet(MID_KEY, JSON.stringify(null));
+  const centers = [...new Set([...(await find("place_dates")).map((r) => r.center_id as number), ...done.map((p) => p.center)])];
+  const keep: MidPlace[] = [];
+  for (const center of centers) {
+    const range = await midFor(center, s);
+    let mine = done.filter((p) => p.center === center);
+    const stale = mine.filter((p) => !range || p.from !== range.from || p.to !== range.to);
+    // عطلته تغيرت أو انشالت: يرجع اللي زحف، من الأخير للأول
+    for (const p of [...stale].reverse()) { await undoMidyear({ from: p.from!, to: p.to!, places: [p] }); changed.add(center); }
+    mine = mine.filter((p) => !stale.includes(p));
+    keep.push(...mine);
+    if (range) {
+      const added = await applyMidyear(range, await placeSettings(center, s), [center]);
+      if (added.length) { keep.push(...added); changed.add(center); }
+    }
   }
-  if (range) {
-    const keep = old && old.from === range.from && old.to === range.to ? old.places : [];
-    const places = await applyMidyear(range, s);
-    places.forEach((p) => changed.add(p.center));
-    await kvSet(MID_KEY, JSON.stringify({ ...range, places: [...keep, ...places] }));
-  }
+  const g = midRange(s);
+  await kvSet(MID_KEY, JSON.stringify({ from: g?.from ?? "", to: g?.to ?? "", places: keep }));
   for (const c of changed) await tellPlace(c);
   return changed.size;
 }
@@ -823,11 +843,26 @@ export async function schedAdminAction(body: Row) {
   let notice = "";
   let preview: Row | null = null;
   if (a === "midHoliday") {
-    // سطر عطلة نصف السنة بجدول الامتحانات: من، إلى، ووصفها. نفس حفظ الإعدادات، والباقي يبقى
+    // سطر عطلة نصف السنة بجدول الامتحانات: من، إلى، ووصفها. لكل الأماكن (نفس حفظ الإعدادات)، أو لهذا المكان بس
     const old = await schedSettings();
-    return schedAdminAction({ ...old, action: "save", initData: body.initData, center: body.center, holidayStart: body.holidayStart, holidayDays: body.holidayDays, holidayNote: body.holidayNote });
+    const center = Number(body.center ?? 0);
+    if (body.scope === "place" || body.scope === "reset") {
+      const map = await midPlaces();
+      if (body.scope === "reset") delete map[String(center)];
+      else {
+        const from = String(body.holidayStart ?? ""), n = Number(body.holidayDays) || 0;
+        need(!from || (validDay(from) && n > 0 && n <= 120), "اختار العطلة من تاريخ إلى تاريخ");
+        map[String(center)] = from ? { from, to: addDays(from, n - 1) } : { from: "", to: "" };
+      }
+      await kvSet(MID_PLACES, JSON.stringify(map));
+      if (body.holidayNote !== undefined) await kvSet("sched_settings", JSON.stringify({ ...old, holidayNote: String(body.holidayNote).trim().slice(0, 120) }));
+      const moved = await syncMidyear(await schedSettings());
+      notice = `✅ انحفظت عطلة نصف السنة ${body.scope === "reset" ? "لهذا المكان مثل باقي الأماكن" : "لهذا المكان بس"}${moved ? "، وزحفت مواعيده" : ""}`;
+    } else return schedAdminAction({ ...old, action: "save", initData: body.initData, center, holidayStart: body.holidayStart, holidayDays: body.holidayDays, holidayNote: body.holidayNote });
   }
-  if (a === "save") {
+  if (a === "midHoliday") {
+    // انحفظت فوك لهذا المكان
+  } else if (a === "save") {
     const old = await schedSettings();
     const holidayStart = String(body.holidayStart ?? "");
     need(!holidayStart || validDay(holidayStart), "تاريخ بداية العطلة غير صحيح");
@@ -886,21 +921,27 @@ export async function schedAdminAction(body: Row) {
       .sort((x, y) => String(x.slug).localeCompare(String(y.slug)) || (x.pos ?? x.ord) - (y.pos ?? y.ord));
     const ss = await schedSettings();
     // يتوزع بلا عطل، وبعدها العطل قبل الامتحانات تنحط مثل باقي الأماكن، فكل مكان عطلته قبل نفس الامتحان
-    const days = slotDays(slots, String(body.start), exams.length, ss);
+    const days = slotDays(slots, String(body.start), exams.length, await placeSettings(center, ss));
+    // مواعيده انعادت من الصفر: سجل زحف نصف السنة القديم مالته ما بقى إله معنى
+    const shift = await midShift();
+    if (shift) await kvSet(MID_KEY, JSON.stringify({ ...shift, places: shift.places.filter((p) => p.center !== center) }));
     const old = new Map((await find("place_dates", { center_id: center })).map((d) => [d.exam_id, d.versions]));
-    // امتحان ما إله نسخ بهذا المكان: ياخذ ترتيب نسخ مكان ثاني (الإلكتروني أول)، على أوقات يومه هنا
-    const others = (await find("place_dates")).filter((d) => d.center_id !== center && d.versions && d.versions !== "{}").sort((a, b) => a.center_id - b.center_id);
-    const srcSlots = new Map<number, Slot[]>();
+    // امتحان ما إله نسخ بهذا المكان: كل وقت ياخذ نسخة، الأقل استعمال بالأماكن الثانية لنفس الامتحان،
+    // حتى ما تتكرر النسخ بين المعاهد. إذا النسخ ما تكفي، تبدي تتكرر
+    const others = (await find("place_dates")).filter((d) => d.center_id !== center && d.versions && d.versions !== "{}");
     const copyVersions = async (examId: number, day: string) => {
-      const src = others.find((d) => d.exam_id === examId);
       const ids = versions.filter((v) => v.exam_id === examId).map((v) => v.id as number);
-      if (!src || !ids.length) return "{}";
-      if (!srcSlots.has(src.center_id)) srcSlots.set(src.center_id, await placeSlots(src.center_id));
-      const sv: Record<string, number> = JSON.parse(src.versions);
-      const first = Object.keys(sv).sort().map((t) => sv[t]).find((v) => ids.includes(v));
-      if (first === undefined) return "{}";
       const times = slots.filter((t) => t.d === weekdayOf(day)).map((t) => t.t).sort();
-      return JSON.stringify(spreadVersions(times, ids, ids.indexOf(first)));
+      if (!ids.length || !times.length) return "{}";
+      const used = new Map(ids.map((id) => [id, 0]));
+      for (const d of others.filter((x) => x.exam_id === examId)) for (const v of Object.values(JSON.parse(d.versions) as Record<string, number>)) if (used.has(v)) used.set(v, used.get(v)! + 1);
+      const out: Record<string, number> = {};
+      const today = new Set<number>();
+      for (const t of times) {
+        const pick = [...ids].sort((x, y) => Number(today.has(x)) - Number(today.has(y)) || used.get(x)! - used.get(y)! || ids.indexOf(x) - ids.indexOf(y))[0];
+        out[t] = pick; today.add(pick); used.set(pick, used.get(pick)! + 1);
+      }
+      return JSON.stringify(out);
     };
     const rows: { exam: number; day: string; versions: string }[] = [];
     for (const [i, e] of exams.entries()) if (days[i]) {
@@ -1024,7 +1065,7 @@ export async function schedAdminAction(body: Row) {
     const gone = new Set(chain.map((x) => x.id));
     await saveHolidays((await holidays()).filter((x) => !gone.has(x.id)));
     notice = chain.length > 1 ? `↩️ انشالت ${chain.length} عطل قبل ${h!.title}، ورجعت المواعيد` : "↩️ انشالت العطلة، ورجعت المواعيد";
-  } else need(a === "list", "أمر غير معروف");
+  } else need(a === "list" || a === "midHoliday", "أمر غير معروف");
   const holidayList = (await holidays()).map((h) => ({ id: h.id, title: h.title, days: h.days, reason: h.reason, places: h.places.map((p) => `${p.name}: ${prettyDay(p.from)}`), students: h.students.filter((x) => x.on).length }));
   const holReqs = await Promise.all((await holRequests()).map(async (r) => {
     const sc = await one("schedules", { user_id: r.uid });
@@ -1058,6 +1099,8 @@ async function placesPage(center: number) {
   const exams = (await find("bank_exams")).sort((a, b) => String(a.slug).localeCompare(String(b.slug)) || (a.pos ?? a.ord) - (b.pos ?? b.ord));
   return {
     canLoad: !await kvGet("places_loaded"), canLoadDates: !await kvGet("old_dates_loaded_v2"), week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), places, center,
+    // عطلة نصف السنة بهذا المكان، وهل تختلف عن الباقي
+    mid: await midFor(center, await schedSettings()), midOwn: !!(await midPlaces())[String(center)],
     slots: await placeSlots(center), students: (await find("schedules", { mode: "general", center_id: center })).length,
     rows: exams.map((e) => {
       const d = dates.get(e.id);

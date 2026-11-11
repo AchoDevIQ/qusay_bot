@@ -977,7 +977,9 @@ test("🗓 توزيع مكان جديد: ياخذ العطل اللي قبل ن�
   assert.match(f.notice, /انحطت \d+ عطلة/);
   assert.equal(await day(c2, before), await day(c1, before));
   assert.equal(await day(c2, target), await day(c1, target));
-  if (vids.length) assert.deepEqual(Object.values(JSON.parse((await find("place_dates", { center_id: c2, exam_id: before }))[0].versions)), [vids.at(-1)]);
+  // نسخة غير مال المكان الأول، حتى ما تتكرر بين المعاهد (إذا اكو أكثر من نسخة)
+  const got = Object.values(JSON.parse((await find("place_dates", { center_id: c2, exam_id: before }))[0].versions));
+  if (vids.length > 1) assert.ok(got.length === 1 && got[0] !== vids.at(-1) && vids.includes(got[0] as number));
   const rec = f.holidays.find((x: any) => x.id === hid);
   assert.equal(rec.places.length, 2);
   // توزيعه مرة ثانية ما يكرر العطلة
@@ -1013,4 +1015,36 @@ test("🏖 سطر عطلة نصف السنة: من، إلى، ووصف يطلع 
   await schedAdminAction({ action: "save", initData: admin, window: s.window, extra: s.extra, perDay: s.perDay, gap: s.gap, holidayStart: from, holidayDays: 10 });
   assert.equal((await schedSettings()).holidayNote, "عطلة نصف السنة، نرجع بالفصل الرابع");
   await schedAdminAction({ action: "midHoliday", center: c, holidayStart: before.holidayStart, holidayDays: before.holidayDays, holidayNote: before.holidayNote, initData: admin });
+});
+
+test("🏖 عطلة نصف السنة لمكان وحده: تقدم أو تأخر يوم، والباقي ما يتغير، و↩️ يرجعه مثلهم", async () => {
+  const admin = sign(1);
+  const before = await schedSettings();
+  const area = await insert("areas", { gov: "بغداد", name: "عطلة مكان" });
+  const c1 = await insert("centers", { area_id: area, name: "مركز العطلة العامة", active: 1 });
+  const c2 = await insert("centers", { area_id: area, name: "مركز العطلة الخاصة", active: 1 });
+  const [a, b, cc, d] = (await find("bank_exams", { chapter: "الفصل الأول" })).sort((x, y) => x.ord - y.ord);
+  const sun1 = addDays(nextWeekday(6), 21), wed1 = addDays(sun1, 3), sun2 = addDays(sun1, 7), wed2 = addDays(sun1, 10), sun3 = addDays(sun1, 14);
+  for (const c of [c1, c2]) {
+    await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 6, t: "16:00" }, { d: 2, t: "16:00" }], initData: admin });
+    await schedAdminAction({ action: "saveDates", center: c, rows: [{ exam: a.id, date: sun1 }, { exam: b.id, date: wed1 }, { exam: cc.id, date: sun2 }, { exam: d.id, date: wed2 }], initData: admin });
+  }
+  const days = async (c: number) => { const m = new Map((await find("place_dates", { center_id: c })).map((x) => [x.exam_id, x.day])); return [a, b, cc, d].map((e) => m.get(e.id)); };
+  // لكل الأماكن: الأربعاء الأول عطلة
+  await schedAdminAction({ action: "midHoliday", center: c1, holidayStart: wed1, holidayDays: 1, initData: admin });
+  assert.deepEqual(await days(c1), [sun1, sun2, wed2, sun3]);
+  assert.deepEqual(await days(c2), [sun1, sun2, wed2, sun3]);
+  // المركز الثاني: عطلته بالأحد الثاني بدالها
+  const r: any = await schedAdminAction({ action: "midHoliday", center: c2, scope: "place", holidayStart: sun2, holidayDays: 1, initData: admin });
+  assert.match(r.notice, /لهذا المكان بس/);
+  assert.deepEqual([r.midOwn, r.mid], [true, { from: sun2, to: sun2 }]);
+  assert.deepEqual(await days(c2), [sun1, wed1, wed2, sun3]);
+  assert.deepEqual(await days(c1), [sun1, sun2, wed2, sun3]);   // الأول ما تغير
+  const info1: any = await schedAdminAction({ action: "list", center: c1, initData: admin });
+  assert.deepEqual([info1.midOwn, info1.mid], [false, { from: wed1, to: wed1 }]);
+  // ↩️ مثل باقي الأماكن
+  await schedAdminAction({ action: "midHoliday", center: c2, scope: "reset", initData: admin });
+  assert.deepEqual(await days(c2), [sun1, sun2, wed2, sun3]);
+  await schedAdminAction({ action: "midHoliday", center: c1, holidayStart: before.holidayStart, holidayDays: before.holidayDays, holidayNote: before.holidayNote, initData: admin });
+  assert.deepEqual(await days(c1), [sun1, wed1, sun2, wed2]);
 });
