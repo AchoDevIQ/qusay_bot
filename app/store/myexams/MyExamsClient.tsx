@@ -15,7 +15,7 @@ type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; w
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
   appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
-  name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; gap: number;
+  name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
@@ -311,7 +311,7 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
 function HolRow({ h, busy, off, keep }: { h: Hol; busy: boolean; off: (ids: number[]) => Promise<unknown>; keep: (ids: number[]) => Promise<unknown> }) {
   return (
     <tr className="lcrow">
-      <td>🏖 <b>عطلة{h.reason ? `: ${h.reason}` : ""}</b><small className="pdmode">{h.from === h.to ? prettyDay(h.from) : `${prettyDay(h.from)} إلى ${prettyDay(h.to)}`} · قبل {h.title}</small>
+      <td>🏖 <b>عطلة{h.reason ? `: ${h.reason}` : ""}</b><small className="pdmode">{h.from === h.to ? prettyDay(h.from) : `من ${prettyDay(h.from)} إلى ${prettyDay(h.to)}`}{h.title ? ` · قبل ${h.title}` : ""}</small>
         {h.cancel && <div className="hint">تريد العطلة؟ ❌ يشيلها ويصعد جدولك.</div>}
         {h.kept && <small className="pdmode">✅ خليتها</small>}
       </td>
@@ -342,8 +342,10 @@ function AttendCode({ code }: { code: string }) {
 
 function List({ info, busy, enter, paper, ask, file, off, cmd }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown>; off: (ids: number[]) => Promise<unknown>; cmd: (b: Record<string, unknown>) => Promise<unknown> }) {
   // العطلة تطلع قبل أول امتحان بعدها
-  const holAt = (i: number) => info.holidays.filter((h) => info.items.findIndex((x) => String(x.at).slice(0, 10) >= h.from) === i);
-  const holLast = info.holidays.filter((h) => !info.items.some((x) => String(x.at).slice(0, 10) >= h.from));
+  // عطلة نصف السنة سطر بين الامتحانات ويا العطل الثانية
+  const hols: Hol[] = [...info.holidays, ...(info.midHol ? [{ id: 0, ids: [], title: "", cancel: false, ...info.midHol }] : [])].sort((a, b) => a.from.localeCompare(b.from));
+  const holAt = (i: number) => hols.filter((h) => info.items.findIndex((x) => String(x.at).slice(0, 10) >= h.from) === i);
+  const holLast = hols.filter((h) => !info.items.some((x) => String(x.at).slice(0, 10) >= h.from));
   // وين وصل الطالب: الامتحان المفتوح هسه، وإذا ماكو فالجاي. الزر فوق الجدول ينزله عليه (ويا محاضراته اللي قبله)
   const now = info.items.find((i) => i.state === "open") ?? info.items.find((i) => i.state === "locked" || i.state === "center");
   return (

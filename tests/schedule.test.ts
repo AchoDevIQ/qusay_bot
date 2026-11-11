@@ -990,3 +990,27 @@ test("🗓 توزيع مكان جديد: ياخذ العطل اللي قبل ن�
   assert.ok(await day(c2, target) < was);
   assert.equal(await day(c1, target), await day(c2, target));
 });
+
+test("🏖 سطر عطلة نصف السنة: من، إلى، ووصف يطلع للطالب بجدوله بين الامتحانات", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "سطر العطلة" });
+  const c = await insert("centers", { area_id: area, name: "مركز سطر العطلة", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "16:00" }, { d: 1, t: "17:00" }], initData: admin });
+  const before = await schedSettings();
+  const from = addDays(todayStr(), 40), to = addDays(from, 9);
+  const r: any = await schedAdminAction({ action: "midHoliday", center: c, holidayStart: from, holidayDays: 10, holidayNote: "عطلة نصف السنة، نرجع بالفصل الرابع", initData: admin });
+  assert.match(r.notice, /انحفظت/);
+  assert.equal(r.holidayNote, "عطلة نصف السنة، نرجع بالفصل الرابع");
+  const s = await schedSettings();
+  assert.deepEqual([s.holidayStart, s.holidayDays, s.window, s.perDay], [from, 10, before.window, before.perDay]);   // الباقي ما يتغير
+  // طالب ويا الطلاب بهذا المركز يشوفها سطر بجدوله
+  await student(131, "حضوري");
+  await put("students", { ...(await find("students", { user_id: 131 }))[0], center_id: c });
+  await put("schedules", { user_id: 131, mode: "general", center_id: c, picks: JSON.stringify({ "5": "16:00", "1": "17:00" }), created: stamp() });
+  const info = await act(131, "info");
+  assert.deepEqual(info.midHol, { from, to, reason: "عطلة نصف السنة، نرجع بالفصل الرابع" });
+  // حفظ الإعدادات من فوك بدون الوصف ما يمسحه
+  await schedAdminAction({ action: "save", initData: admin, window: s.window, extra: s.extra, perDay: s.perDay, gap: s.gap, holidayStart: from, holidayDays: 10 });
+  assert.equal((await schedSettings()).holidayNote, "عطلة نصف السنة، نرجع بالفصل الرابع");
+  await schedAdminAction({ action: "midHoliday", center: c, holidayStart: before.holidayStart, holidayDays: before.holidayDays, holidayNote: before.holidayNote, initData: admin });
+});

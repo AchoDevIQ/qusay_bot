@@ -12,7 +12,7 @@ const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; inserted?: number; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
-type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holReqs?: { uid: number; name: string; want: string; now: string; at: string }[] };
+type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; gap: number; holidayStart: string; holidayDays: number; holidayNote: string; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holReqs?: { uid: number; name: string; want: string; now: string; at: string }[] };
 type Hol = { id: number; title: string; days: number; reason: string; places: string[]; students: number };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
@@ -185,6 +185,33 @@ function Slots({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   );
 }
 
+/** عطلة نصف السنة سطر بين الامتحانات: من، إلى، ووصف يطلع للطلاب. الحفظ يزحف الامتحانات اللي داخلها */
+function MidRow({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
+  const [from, setFrom] = useState(d.holidayStart);
+  const [to, setTo] = useState(d.holidayStart && d.holidayDays > 0 ? addDays(d.holidayStart, d.holidayDays - 1) : "");
+  const [note, setNote] = useState(d.holidayNote || "عطلة نصف السنة");
+  const days = from && to >= from ? Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1 : 0;
+  const bad = (!!from !== !!to) || (!!from && to < from);
+  return (
+    <div className="adexamrow" style={{ background: "rgba(249,196,69,.12)", border: "1px dashed #CEA239" }}>
+      <b>🏖 {d.holidayNote || "عطلة نصف السنة"}</b>
+      <small className="pdmode">{d.holidayStart && d.holidayDays > 0 ? `من ${prettyDay(d.holidayStart)} إلى ${prettyDay(addDays(d.holidayStart, d.holidayDays - 1))}` : "ما محددة"}</small>
+      <div className="adexamcells">
+        <div><small>من</small><DateInput label="عطلة نصف السنة من" value={from} onChange={setFrom} /></div>
+        <div><small>إلى</small><DateInput label="عطلة نصف السنة إلى" min={from} value={to} onChange={setTo} /></div>
+      </div>
+      <label className="adtop"><small>الوصف (يطلع للطلاب بجدولهم)</small>
+        <input value={note} maxLength={120} placeholder="مثلاً: عطلة نصف السنة" onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {bad && <small className="exbad">اختار «من» و«إلى»، و«إلى» بعد «من».</small>}
+      {days > 0 && <small className="exhint">{days} يوم. الامتحانات اللي داخلها تطلع لبعدها، والباقي يزحف وياها.</small>}
+      <div className="exline adtop">
+        <button type="button" className="btn" disabled={busy || bad} onClick={() => void act({ action: "midHoliday", holidayStart: from, holidayDays: days, holidayNote: note })}>💾 احفظ العطلة</button>
+      </div>
+    </div>
+  );
+}
+
 function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   const [rows, setRows] = useState(d.rows);
   const [start, setStart] = useState("");
@@ -192,6 +219,9 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   // دسة وحدة: يوم هذا الامتحان يصير فراغ، وهو واللي بعده يزحفون ليوم الامتحان الجاي
   const holiday = (exam: number) => void act({ action: "holidayAdd", exam, days: 1, scope });
   const chapters = [...new Set(rows.map((r) => r.chapter))];
+  const midFrom = d.holidayStart && d.holidayDays > 0 ? d.holidayStart : "";
+  const midAt = midFrom ? [...rows].filter((r) => r.date && r.date >= midFrom).sort((x, y) => x.date.localeCompare(y.date))[0]?.exam : undefined;
+  const mid = <MidRow key={`${d.holidayStart}|${d.holidayDays}|${d.holidayNote}`} d={d} busy={busy} act={act} />;
   const set = (exam: number, o: Partial<Row>) => setRows(rows.map((r) => (r.exam === exam ? { ...r, ...o } : r)));
   const timesOf = (date: string) => { if (!date) return []; const w = (new Date(date + "T00:00:00Z").getUTCDay() + 6) % 7; return d.slots.filter((x) => x.d === w).map((x) => x.t).sort(); };
   // كل امتحان بالفصل ياخذ نسخة غير بكل وقت، ويبدي من نسخة عشوائية حتى ما يتعلمون إن أول وقت دائماً A
@@ -217,14 +247,17 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
       {scope === "all" && <div className="exhint">بكل مكان العطلة تصير قبل نفس الامتحان، حسب تاريخه بذاك المكان.</div>}
       <div className="exlabel adtop">📄 النسخة بكل وقت</div>
       <div className="exhint">جنب كل امتحان تطلع أوقات يومه، وتختار لكل وقت نسخته. الاختيار يخص هذا الامتحان بس، فطلاب الوقت الأول ما يگدرون يوصلون الأسئلة للي بعدهم. ما ينحفظ إلا تدوس «حفظ المواعيد والنسخ».</div>
+      {!midAt && mid}
       {chapters.map((c) => (
         <div key={c}>
+          {midAt !== undefined && rows.find((r) => r.chapter === c)?.exam === midAt && mid}
           <div className="adgroup">{c}</div>
           <button type="button" className="exbtn" disabled={busy} onClick={() => spread(c)}>🎲 نسخة غير بكل وقت لكل امتحانات {c}</button>
           {rows.filter((r) => r.chapter === c).map((r) => {
             const times = timesOf(r.date);
             return (
               <Fragment key={r.exam}>
+              {midAt === r.exam && rows.find((x) => x.chapter === c)?.exam !== r.exam && mid}
               {(r.hols ?? []).map((h) => (
                 <div className="adexamrow" key={h.id} style={{ background: "rgba(249,196,69,.08)" }}>
                   <b>🏖 فراغ · {prettyDay(h.from)}</b> <small className="pdmode">قبل {r.title}</small>

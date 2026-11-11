@@ -312,6 +312,12 @@ async function myHolidays(uid: number, sc: Row | null) {
     : h.students.filter((x) => x.uid === uid && x.on).map((x) => ({ id: h.id, exam: h.exam, from: x.from, to: x.to, title: h.title, reason: h.reason, cancel: !x.kept, kept: !!x.kept }))));
   return mergeHolidays(rows).filter((x) => x.to >= today);
 }
+/** عطلة نصف السنة (أو عطلة الطالب الخاص اللي اختارها): سطر بجدوله بين الامتحانات، ويا وصفها */
+function midHolidayRow(sc: Row | null, s: SchedSettings) {
+  const own = sc && sc.mode !== "general" ? holOf(sc.hol) : undefined;
+  const mid = own ? (own.from && own.to ? own : null) : midRange(s);
+  return mid && mid.to >= todayStr() ? { from: mid.from, to: mid.to, reason: own ? "عطلتك" : s.holidayNote || "عطلة نصف السنة" } : null;
+}
 /** عطلة فوك عطلة قبل نفس الامتحان: تطلع عطلة وحدة من أول يوم لآخر يوم */
 function mergeHolidays<T extends { id: number; exam: number; from: string; to: string; reason: string }>(rows: T[]) {
   const out: (T & { ids: number[] })[] = [];
@@ -425,7 +431,7 @@ async function studentInfo(uid: number) {
     repick: general && !picksFit(slots, picksOf(sched!)),
     picks: general ? picksOf(sched!) : null,
     schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour, times: sched.picks ? JSON.parse(sched.picks) : null, hol: holOf(sched.hol) ?? null } : null,
-    holidays: await myHolidays(uid, sched), gap: s.gap,
+    holidays: await myHolidays(uid, sched), midHol: midHolidayRow(sched, s), gap: s.gap,
     days: daysView(slots),
     optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
     // آخر سيطرة عبرها: تومض ويا شخصيتها لحد ما يشوفها
@@ -816,6 +822,11 @@ export async function schedAdminAction(body: Row) {
   const a = String(body.action ?? "");
   let notice = "";
   let preview: Row | null = null;
+  if (a === "midHoliday") {
+    // سطر عطلة نصف السنة بجدول الامتحانات: من، إلى، ووصفها. نفس حفظ الإعدادات، والباقي يبقى
+    const old = await schedSettings();
+    return schedAdminAction({ ...old, action: "save", initData: body.initData, center: body.center, holidayStart: body.holidayStart, holidayDays: body.holidayDays, holidayNote: body.holidayNote });
+  }
   if (a === "save") {
     const old = await schedSettings();
     const holidayStart = String(body.holidayStart ?? "");
@@ -828,7 +839,9 @@ export async function schedAdminAction(body: Row) {
     need(fromHour <= toHour, "آخر ساعة لازم تكون بعد أول ساعة");
     const next: SchedSettings = {
       window: intOf(body.window, 1, 600, "وقت الدخول بالدقائق، من 1 إلى 600"), extra: intOf(body.extra, 0, 600, "الوقت الإضافي بالدقائق، من 0 إلى 600"), excWindow: body.excWindow === undefined ? old.excWindow : intOf(body.excWindow, 1, 10000, "وقت الاستثناء بالدقائق"), optionalOpen: body.optionalOpen === undefined ? old.optionalOpen : !!body.optionalOpen, perDay: intOf(body.perDay, 1, 10, "امتحانات اليوم من 1 إلى 10"), gap: intOf(body.gap, 0, 600, "الفاصل بالدقائق، من 0 إلى 600"),
-      holidayStart, holidayDays: intOf(body.holidayDays, 0, 120, "أيام العطلة من 0 إلى 120"), blockedHours: [], excluded: body.excluded === undefined ? old.excluded : dayList(body.excluded), fromHour, toHour, offDays,
+      holidayStart, holidayDays: intOf(body.holidayDays, 0, 120, "أيام العطلة من 0 إلى 120"),
+      // وصف العطلة يطلع للطلاب بجدولهم، مثلاً «عطلة نصف السنة»
+      holidayNote: body.holidayNote === undefined ? old.holidayNote : String(body.holidayNote).trim().slice(0, 120), blockedHours: [], excluded: body.excluded === undefined ? old.excluded : dayList(body.excluded), fromHour, toHour, offDays,
       // الطالب يگدر يختار صورة جوابه من الاستوديو، لو الكاميرا بس
       gallery: body.gallery === undefined ? old.gallery : !!body.gallery,
     };
