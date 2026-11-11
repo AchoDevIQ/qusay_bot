@@ -228,11 +228,17 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
   const set = (exam: number, o: Partial<Row>) => setRows(rows.map((r) => (r.exam === exam ? { ...r, ...o } : r)));
   const timesOf = (date: string) => { if (!date) return []; const w = (new Date(date + "T00:00:00Z").getUTCDay() + 6) % 7; return d.slots.filter((x) => x.d === w).map((x) => x.t).sort(); };
   // كل امتحان بالفصل ياخذ نسخة غير بكل وقت، ويبدي من نسخة عشوائية حتى ما يتعلمون إن أول وقت دائماً A
-  const spread = (chapter: string) => setRows(rows.map((r) => {
-    if (r.chapter !== chapter || !r.models.length) return r;
-    const ids = r.models.map((m) => m.id);
-    return { ...r, versions: { ...r.versions, ...spreadVersions(timesOf(r.date), ids, Math.floor(Math.random() * ids.length)) } };
-  }));
+  const save = (rs: typeof rows) => void act({ action: "saveDates", rows: rs.map((r) => ({ exam: r.exam, date: r.date, versions: r.versions })) });
+  // 🎲 يوزع النسخ وينحفظ بنفس الدوسة
+  const spread = (chapter: string) => {
+    const next = rows.map((r) => {
+      if (r.chapter !== chapter || !r.models.length) return r;
+      const ids = r.models.map((m) => m.id);
+      return { ...r, versions: { ...r.versions, ...spreadVersions(timesOf(r.date), ids, Math.floor(Math.random() * ids.length)) } };
+    });
+    setRows(next);
+    save(next);
+  };
   return (
     <div className="exfoot">
       <div className="exlabel">🗓 وزع امتحانات الكتاب بالترتيب من تاريخ</div>
@@ -249,13 +255,16 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
       </div>
       {scope === "all" && <div className="exhint">بكل مكان العطلة تصير قبل نفس الامتحان، حسب تاريخه بذاك المكان.</div>}
       <div className="exlabel adtop">📄 النسخة بكل وقت</div>
-      <div className="exhint">جنب كل امتحان تطلع أوقات يومه، وتختار لكل وقت نسخته. الاختيار يخص هذا الامتحان بس، فطلاب الوقت الأول ما يگدرون يوصلون الأسئلة للي بعدهم. ما ينحفظ إلا تدوس «حفظ المواعيد والنسخ».</div>
+      <div className="exhint">جنب كل امتحان تطلع أوقات يومه، وتختار لكل وقت نسخته. الاختيار يخص هذا الامتحان بس، فطلاب الوقت الأول ما يگدرون يوصلون الأسئلة للي بعدهم. «🎲 نسخة غير بكل وقت» ينحفظ وحده. إذا غيرت نسخة بإيدك، دوس «💾 حفظ المواعيد والنسخ» اللي جنبه أو اللي جوة.</div>
       {!midAt && mid}
       {chapters.map((c) => (
         <div key={c}>
           {midAt !== undefined && rows.find((r) => r.chapter === c)?.exam === midAt && mid}
           <div className="adgroup">{c}</div>
-          <button type="button" className="exbtn" disabled={busy} onClick={() => spread(c)}>🎲 نسخة غير بكل وقت لكل امتحانات {c}</button>
+          <div className="exline">
+            <button type="button" className="exbtn" disabled={busy} onClick={() => spread(c)}>🎲 نسخة غير بكل وقت لكل امتحانات {c}</button>
+            <button type="button" className="exbtn" disabled={busy} onClick={() => save(rows)}>💾 حفظ المواعيد والنسخ</button>
+          </div>
           {rows.filter((r) => r.chapter === c).map((r) => {
             const times = timesOf(r.date);
             return (
@@ -299,7 +308,7 @@ function Dates({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
           })}
         </div>
       ))}
-      <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void act({ action: "saveDates", rows: rows.map((r) => ({ exam: r.exam, date: r.date, versions: r.versions })) })}>حفظ المواعيد والنسخ</button>
+      <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save(rows)}>حفظ المواعيد والنسخ</button>
     </div>
   );
 }
