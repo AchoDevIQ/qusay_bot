@@ -631,7 +631,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       </div>
       {/* رقم الطالب فوك كل صفحة: إذا أحد صورها ونشرها نعرف منو */}
       {!room.sworn ? (
-        <WordOrder key={room.id} title="🤲 القسم قبل الأسئلة" intro="الأسئلة تنفتح بعد ما ترتب هذي الجملة بالضغط على الكلمات بالترتيب:" okLabel="📖 افتح الأسئلة" sentence={room.oath}
+        <WordOrder key={room.id} title="🤲 القسم قبل الأسئلة" intro="الأسئلة تنفتح بعد ما تكمل جملة القسم: اقراها، ودوس كل فراغ «؟؟؟» واختار الكلمة الصحيحة:" okLabel="📖 افتح الأسئلة" sentence={room.oath}
           onDone={async () => { setBusy(true); const r = await call({ action: "oath", item: room.id }); setBusy(false); if (r?.room) setRoom(r.room); }} />
       ) : (
       <>

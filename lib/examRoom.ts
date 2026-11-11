@@ -78,7 +78,7 @@ export async function takeOath(uid: number, id: unknown, s: SchedSettings) {
   if (!await kvGet(oathKey(it.id))) {
     await kvSet(oathKey(it.id), stamp());
     const e = await one("bank_exams", { id: it.exam_id });
-    await logActivity(uid, `🤲 رتب جملة القسم إنه ما غش بامتحان ${e?.title ?? ""}`);
+    await logActivity(uid, `🤲 كمل جملة القسم إنه ما يغش بامتحان ${e?.title ?? ""}`);
   }
   return await roomView(it, s);
 }
@@ -155,7 +155,7 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   await checkPhone(uid!, form.get("pf"));
   await checkStopped(uid!);
   const it = await liveRoom(uid!, form.get("item"), s);
-  need(await kvGet(oathKey(it.id)), "رتب جملة القسم أول، وبعدها تنفتح الكاميرا");
+  need(await kvGet(oathKey(it.id)), "كمل جملة القسم أول، وبعدها تنفتح الكاميرا");
   const q = Number(form.get("q"));
   need(await one("bank_questions", { version_id: it.version_id, n: q }), "السؤال غير موجود");
   const f = form.get("file");

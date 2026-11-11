@@ -495,7 +495,7 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.equal(opened.room.sworn, false);
   assert.match(opened.room.oath, /^أني الطالب .+ أقسم بالله أنني لن أغش في هذا الامتحان$/);
   assert.deepEqual(opened.room.pages, []);   // الأسئلة ما تنفتح قبل القسم
-  await assert.rejects(upload(90, item, 1), /رتب جملة القسم/);
+  await assert.rejects(upload(90, item, 1), /كمل جملة القسم/);
   assert.equal((await act(90, "oath", { item })).room.sworn, true);
   await assert.rejects(upload(91, item, 1), /غير موجود/);      // طالب ثاني
   await assert.rejects(upload(90, item, 9), /السؤال/);

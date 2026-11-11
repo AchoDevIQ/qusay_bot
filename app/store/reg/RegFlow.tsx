@@ -1,7 +1,7 @@
 "use client";
 // تسجيل الطالب الجديد خطوة خطوة: الشروط وترتيب كلماتها، معلوماته، وبعدها كلمة المرور
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { termWords } from "../../../lib/orderRules.ts";
+import FillBlanks from "../FillBlanks";
 import { CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanPhone, closeApp, haptic, nameOk, phoneErr, scrollToFirst } from "../shared";
 
 type Area = [number, string, string, [number, string, string?][]];
@@ -267,73 +267,20 @@ export default function RegFlow({ D }: { D: RegData }) {
   );
 }
 
-function shuffledOrder(n: number) {
-  const a = Array.from({ length: n }, (_, i) => i);
-  for (let tries = 0; tries < 5 && a.every((v, i) => v === i); tries++) {
-    for (let i = n - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-  }
-  return a;
-}
-
 function TermStep({ term, n, total, last, agreed, onBack, onOk }: { term: Term; n: number; total: number; last: boolean; agreed: boolean; onBack?: () => void; onOk: () => void }) {
-  const words = useRef(termWords(term.text)).current;
-  const order = useRef(shuffledOrder(words.length)).current;
-  const canOrder = words.length > 1;
-  const [picked, setPicked] = useState<number[]>(() => (agreed ? words.map((_, i) => i) : []));
-  const [wrong, setWrong] = useState(false);
-  const left = words.length - picked.length;
-
-  function press() {
-    haptic();
-    if (canOrder) {
-      // تتقارن الكلمات مو مكانها، لأن الشرط ممكن تتكرر بيه نفس الكلمة
-      const bad = picked.findIndex((p, i) => words[p] !== words[i]);
-      if (bad >= 0) {
-        setPicked(picked.slice(0, bad));
-        setWrong(true);
-        return;
-      }
-    }
-    onOk();
-  }
+  // «املأ الفراغات»: الشرط كامل قدامه، وكم كلمة منه فراغ يختارلها الكلمة الصحيحة. هيچ يقراه كله
+  const [done, setDone] = useState(agreed);
   return (
     <div className="rg">
       <Top title="الشروط والأحكام" step={n} total={total} />
       <div className="rgbody">
-        <div className="rgcard rgterm">{term.text}</div>
-        {canOrder && (
-          <div className="rgcard">
-            <div className="rgask">حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، اضغط كلماته بالترتيب:</div>
-            <div className={"rgbuilt" + (left === 0 ? " full" : "")} aria-live="polite">
-              {!picked.length && <span className="rgempty">اضغط أول كلمة من تحت...</span>}
-              {picked.map((p, i) => (
-                <button type="button" key={p} className="rgword on" aria-label={`امسح ${words[p]}`} onClick={() => { haptic(); setWrong(false); setPicked(picked.filter((_, x) => x !== i)); }}>{words[p]} <span className="rgx">✕</span></button>
-              ))}
-            </div>
-            {/* كلمة غلط: يدوسها فتنمسح، أو يمسح آخر كلمة، أو يمسح الكل */}
-            {picked.length > 0 && (
-              <div className="rgfix">
-                <small>اخترت كلمة غلط؟ دوس عليها فوك (اللي بيها ✕) حتى تنمسح.</small>
-                <button type="button" className="rgfixbtn" onClick={() => { haptic(); setWrong(false); setPicked(picked.slice(0, -1)); }}>⌫ امسح آخر كلمة</button>
-                <button type="button" className="rgfixbtn" onClick={() => { haptic(); setWrong(false); setPicked([]); }}>🗑 امسح الكل</button>
-              </div>
-            )}
-            {wrong && <div className="rgwrong">⚠️ الترتيب غلط. بقت الكلمات الصحيحة، وكمل من بعدها.</div>}
-            {left > 0 && (
-              <div className="rgpool">
-                {order.filter((i) => !picked.includes(i)).map((i) => (
-                  <button type="button" key={i} className="rgword" onClick={() => { haptic(); setWrong(false); setPicked([...picked, i]); }}>{words[i]}</button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="rgcard rgterm">
+          {!agreed && <div className="rgask">حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ: اقرا الشرط، ودوس كل فراغ «؟؟؟» واختار الكلمة الصحيحة.</div>}
+          <FillBlanks text={term.text} filled={agreed} onDone={setDone} />
+        </div>
       </div>
       <Foot>
-        <button type="button" className="rgbtn" disabled={canOrder && left > 0} onClick={press}>{canOrder && left > 0 ? `باقي ${left} كلمة` : last ? "أوافق وأنهي" : "أوافق ومتابعة"}</button>
+        <button type="button" className="rgbtn" disabled={!done} onClick={() => { haptic(); onOk(); }}>{!done ? "كمل الفراغات أول" : last ? "أوافق وأنهي" : "أوافق ومتابعة"}</button>
         {onBack && <button type="button" className="rgback" onClick={onBack}>رجوع</button>}
       </Foot>
     </div>
