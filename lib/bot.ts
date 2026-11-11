@@ -1,5 +1,5 @@
 // نقطة دخول كل رسالة/ضغطة زر من تليجرام
-import { getSession, initDb, kvGet, kvSet, setSession, type Row } from "./db.ts";
+import { getSession, initDb, kvGet, kvSet, one, setSession, type Row } from "./db.ts";
 import { BTN_ADMIN, BTN_ASK, BTN_CANCEL, BTN_EXAMS, BTN_EXIT_GRADER, BTN_EXIT_VIEW, BTN_ME, BTN_MYQ, BTN_OFFICE, BTN_REG, BTN_SHOP, WELCOME, toLatinDigits } from "./config.ts";
 import { examBankMessage } from "./examBank.ts";
 import { examCb, examsMenu, redeemCode } from "./exams.ts";
@@ -141,7 +141,11 @@ async function onCallback(q: Row) {
   let note: string | null = null;
   if (d.startsWith("gs:")) {
     note = d === "gs:done" ? "✅ مستلمة" : await guardianSeen(uid, Number(d.slice(3)));
-    if (d !== "gs:done" && note.startsWith("✅") && mid) await api("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [[{ text: "✅ استلمت", callback_data: "gs:done" }]] } });
+    if (d !== "gs:done" && note.startsWith("✅")) {
+      if (mid) await api("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [[{ text: "✅ استلمت", callback_data: "gs:done" }]] } });
+      // الدرجة اللي كانت تنتظر هذا الاستلام توصل هسه
+      try { const it = await one("sched_items", { id: Number(d.slice(3)) }); const { releaseHeld } = await import("./gradeApi.ts"); if (it) await releaseHeld(Number(it.user_id)); } catch (e) { console.error(e); }
+    }
   } else if (d.startsWith("a:")) {
     note = await allowed(uid, d) ? await onAdminCb(chat, uid, mid, d) : "ما عندك صلاحية";
   } else if (["rc:", "rg:", "rv:", "rd:", "rx:", "ra:", "rb:", "rn:", "rs:"].includes(d.slice(0, 3))) {

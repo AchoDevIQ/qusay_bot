@@ -82,3 +82,31 @@ test("الدرجة ما توصل لأن ولي الأمر حاظر البوت: �
   assert.match(toOwner()[0].p.text, /سوى بلوك/);
   blockFor = null;
 });
+
+test("الدرجة الجديدة تنتظر لحد ما ولي الأمر يدوس «استلمت» على اللي قبلها، وبعدها توصل", async () => {
+  await put("students", { user_id: 91, name: "زيد علي", phone1: "07701111112", phone2: "07702223345", created: stamp() });
+  await put("guardians", { guardian_id: 501, student_id: 91, created: stamp() });
+  const a = await insert("sched_items", { user_id: 91, exam_id: 1, status: "done", graded_at: stamp(), total: 80 });
+  const b = await insert("sched_items", { user_id: 91, exam_id: 1, status: "done", graded_at: stamp(), total: 64 });
+  await gw.guardianSent(91, 501, a);
+  assert.equal(await gw.unseenBefore(91), a);
+  calls.length = 0;
+  await gw.holdGrade(91, 501, b, a);
+  const hold = calls.find((c) => String(c.p.chat_id) === "501")!.p;
+  assert.match(hold.text, /وصلت درجة جديدة للطالب «زيد علي»/);
+  assert.match(hold.text, /دوسوا أول «✅ استلمت الدرجة» على الدرجة اللي قبلها/);
+  assert.equal(hold.reply_markup.inline_keyboard[0][0].callback_data, `gs:${a}`);
+  assert.equal((await gw.guardianState(91)).held, 1);
+  // داس استلمت على الأولى: الثانية توصل هسه بزرها
+  calls.length = 0;
+  await handleUpdate({ callback_query: { id: "c9", from: { id: 501 }, data: `gs:${a}`, message: { message_id: 4, chat: { id: 501 } } } });
+  const got = calls.filter((c) => String(c.p.chat_id) === "501" && c.method === "sendMessage");
+  assert.equal(got.length, 1);
+  assert.match(got[0].p.text, /64/);
+  assert.equal(got[0].p.reply_markup.inline_keyboard[0][0].text, "✅ استلمت الدرجة");
+  assert.equal(got[0].p.reply_markup.inline_keyboard[0][0].callback_data, `gs:${b}`);
+  const st = await gw.guardianState(91);
+  assert.equal(st.held, 0);
+  assert.equal(st.unseen, 1);
+  assert.equal(await gw.unseenBefore(91), b);
+});

@@ -1,19 +1,20 @@
 // متابعة ولي الأمر: ما نگدر نمنع الطالب يمسح البوت من موبايل أهله، بس نكشفه.
 // ١. بلوك: تليگرام يگول للبوت (أو تفشل الرسالة)، فيوصل خبر لصاحب البوت والطالب.
-// ٢. كل درجة توصل لولي الأمر وياها زر «✅ استلمت». إذا ٣ درجات ورا بعض ما انداس عليهن، يوصل خبر لصاحب البوت.
+// ٢. كل درجة توصل لولي الأمر وياها زر «✅ استلمت الدرجة». الدرجة الجديدة ما توصل لحد ما يدوس استلمت على اللي قبلها،
+//    وبدالها توصله رسالة تگله يدوس استلمت. إذا ٣ درجات ما انداس عليهن (موصولة أو منتظرة)، يوصل خبر لصاحب البوت.
 import { ADMIN_IDS } from "./config.ts";
 import { find, kvGet, kvSet, one } from "./db.ts";
 import { send, wasBlocked, type Kb } from "./telegram.ts";
 import { esc, stamp } from "./util.ts";
 
 export const UNSEEN_ALERT = 3;
-type Watch = { unseen: number[]; lastSeen: string | null; blockedAt: string | null; alerted: boolean };
+type Watch = { unseen: number[]; held: number[]; lastSeen: string | null; blockedAt: string | null; alerted: boolean };
 const key = (sid: number) => `guardian_watch_${sid}`;
 async function load(sid: number): Promise<Watch> {
   try {
     const j = JSON.parse((await kvGet(key(sid))) ?? "{}");
-    return { unseen: Array.isArray(j.unseen) ? j.unseen.map(Number) : [], lastSeen: j.lastSeen ?? null, blockedAt: j.blockedAt ?? null, alerted: !!j.alerted };
-  } catch { return { unseen: [], lastSeen: null, blockedAt: null, alerted: false }; }
+    return { unseen: Array.isArray(j.unseen) ? j.unseen.map(Number) : [], held: Array.isArray(j.held) ? j.held.map(Number) : [], lastSeen: j.lastSeen ?? null, blockedAt: j.blockedAt ?? null, alerted: !!j.alerted };
+  } catch { return { unseen: [], held: [], lastSeen: null, blockedAt: null, alerted: false }; }
 }
 const save = (sid: number, w: Watch) => kvSet(key(sid), JSON.stringify(w));
 const nameOf = async (sid: number) => (await one("students", { user_id: sid }))?.name ?? `طالب #${sid}`;
@@ -34,21 +35,52 @@ async function tellOwner(sid: number, text: string) {
 /** حالة ولي الأمر لصفحة الطلاب */
 export async function guardianState(sid: number) {
   const w = await load(sid);
-  return { lastSeen: w.lastSeen, unseen: w.unseen.length, blockedAt: w.blockedAt };
+  return { lastSeen: w.lastSeen, unseen: w.unseen.length + w.held.length, held: w.held.length, blockedAt: w.blockedAt };
 }
 
-export const seenButton = (itemId: number): Kb => [[{ text: "✅ استلمت", callback_data: `gs:${itemId}` }]];
+/** زر الاستلام: بعرض الرسالة كلها، وبكلام واضح (تليگرام ما يسمح بزر أكبر) */
+export const seenButton = (itemId: number): Kb => [[{ text: "✅ استلمت الدرجة", callback_data: `gs:${itemId}` }]];
+export const SEEN_CAPTION = "👇 دوسوا «✅ استلمت الدرجة» حتى نعرف وصلتكم، وتنفتحلكم الدرجة الجاية.";
 
 /** درجة وصلت (أو انرسلت) لولي الأمر: إذا الرسالة فشلت لأنه حاظر البوت، يعتبر بلوك */
 export async function guardianSent(sid: number, gid: number, itemId: number) {
   if (wasBlocked(gid)) { await guardianBlocked(gid); return; }
   const w = await load(sid);
   if (!w.unseen.includes(itemId)) w.unseen.push(itemId);
-  if (w.unseen.length >= UNSEEN_ALERT && !w.alerted) {
-    w.alerted = true;
-    await tellOwner(sid, `⚠️ <b>ولي أمر الطالب «${esc(await nameOf(sid))}» ما فتح آخر ${w.unseen.length} درجات</b>\nما داس «✅ استلمت» عليهن. يمكن الطالب دا يمسح رسائل البوت من موبايل أهله، فتأكد وياهم.`);
-  }
+  await alertIfMany(sid, w);
   await save(sid, w);
+}
+/** ٣ درجات ما انداس عليهن (اللي وصلت واللي منتظرة): خبر لصاحب البوت مرة وحدة */
+async function alertIfMany(sid: number, w: Watch) {
+  if (w.unseen.length + w.held.length >= UNSEEN_ALERT && !w.alerted) {
+    w.alerted = true;
+    await tellOwner(sid, `⚠️ <b>ولي أمر الطالب «${esc(await nameOf(sid))}» ما فتح آخر ${w.unseen.length + w.held.length} درجات</b>\nما داس «✅ استلمت» عليهن. يمكن الطالب دا يمسح رسائل البوت من موبايل أهله، فتأكد وياهم.`);
+  }
+}
+
+/** درجة قبلها بعده ما انداس عليها «استلمت»: رقمها، والدرجة الجديدة تنتظر */
+export async function unseenBefore(sid: number) {
+  const w = await load(sid);
+  return w.unseen.at(-1) ?? null;
+}
+/** الدرجة الجديدة تنتظر: توصل لولي الأمر رسالة يدوس «استلمت» على اللي قبلها */
+export async function holdGrade(sid: number, gid: number, itemId: number, prev: number) {
+  const w = await load(sid);
+  if (!w.held.includes(itemId)) w.held.push(itemId);
+  await send(gid, `📩 <b>وصلت درجة جديدة للطالب «${esc(await nameOf(sid))}»</b>
+حتى تشوفوها، دوسوا أول «✅ استلمت الدرجة» على الدرجة اللي قبلها، لأن بعدكم ما داسين عليها.
+👇 أو دوسوا هنا:`,
+    { kb: [[{ text: "✅ استلمت الدرجة السابقة، وراويني الجديدة", callback_data: `gs:${prev}` }]] });
+  if (wasBlocked(gid)) { await save(sid, w); await guardianBlocked(gid); return; }
+  await alertIfMany(sid, w);
+  await save(sid, w);
+}
+/** أول درجة منتظرة (إذا اكو)، تنشال من الانتظار لأنها راح توصل هسه */
+export async function nextHeld(sid: number) {
+  const w = await load(sid);
+  const id = w.held.shift() ?? null;
+  if (id !== null) await save(sid, w);
+  return id;
 }
 
 /** ولي الأمر داس «استلمت»: لازم يكون هو ولي أمر صاحب الورقة */

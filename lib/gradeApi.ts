@@ -15,7 +15,7 @@ import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
 import { CALIB_PERM, aiCalibIds, aiHeld, aiJudgeObjection, aiPartialOf, aiQuestions, aiResultOf } from "./aiGrade.ts";
-import { guardianSent, seenButton } from "./guardianWatch.ts";
+import { guardianSent, holdGrade, nextHeld, SEEN_CAPTION, seenButton, unseenBefore } from "./guardianWatch.ts";
 import { plainMath, stamp, todayStr } from "./util.ts";
 import { gradeCardPng } from "./documents.ts";
 import { prettyAt } from "./scheduleRules.ts";
@@ -559,25 +559,54 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   const card = await gradeCardPng(it.id, cardInfo);
   // بطاقة الطالب: ملصقه، ومقولته مكتوبة جوة البطاقة نفسها (مو رسالة)
   const studentCard = sticker || c?.text ? (await gradeCardPng(it.id, { ...cardInfo, sticker, quote: c?.text }, "_s")) ?? card : card;
-  /** البطاقة وحدها، وبلا كتابة جنبها لأن كلشي بيها. إذا ما انرسمت، توصل الكتابة بدالها */
-  const deliver = async (chat: number, caption: string, kb: Kb, pic: Buffer | null, fallback: string) => {
-    if (pic && await upload("sendPhoto", { chat_id: String(chat), ...(caption ? { caption, parse_mode: "HTML" } : {}), protect_content: "true", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", pic, "grade.png", "image/png")) return;
-    await send(chat, fallback, { kb, extra: { protect_content: true } });
-  };
+  const deliver = deliverCard;
   {
     const paperBtn: Kb = [[{ text: "📂 شوف ورقتك المصححة", web_app: { url: `${adminPageLink("myexams", it.user_id)}&paper=${it.id}` } }]];
     await deliver(it.user_id, "", paperBtn, studentCard, `${text}\n\n👇 دوس الزر تشوف ورقتك المصححة ودرجة كل سؤال. وإذا تشوف درجة سؤال مو صحيحة، تعترض عليه من هناك.`);
     await sendPaperVoices(it.user_id, it.id);
     const g = await guardianOf(it.user_id);
     if (g) {
-      // ولي الأمر: البطاقة بدون مقولة، ووياها زر «استلمت» (إذا ما ينداس على ٣ درجات ورا بعض، صاحب البوت يوصله خبر)
-      await deliver(g.guardian_id, "👇 دوس «استلمت» حتى نعرف وصلتك.", seenButton(it.id), card, `${head}\nالطالب: <b>${esc(String(st?.name ?? view.name))}</b>\n\n👇 دوس «استلمت» حتى نعرف وصلتك.`);
-      await guardianSent(it.user_id, g.guardian_id, it.id);
+      // ولي الأمر: البطاقة بدون مقولة، ووياها زر «✅ استلمت الدرجة». إذا اللي قبلها بعده ما داس عليها، هاي تنتظر
+      const prev = await unseenBefore(it.user_id);
+      if (prev && prev !== it.id) await holdGrade(it.user_id, g.guardian_id, it.id, prev);
+      else {
+        await deliver(g.guardian_id, SEEN_CAPTION, seenButton(it.id), card, `${head}
+الطالب: <b>${esc(String(st?.name ?? view.name))}</b>
+
+${SEEN_CAPTION}`);
+        await guardianSent(it.user_id, g.guardian_id, it.id);
+      }
     }
     await logActivity(it.user_id, `📝 تم تصحيح امتحان ${view.title}: ${total} من 100`);
     try { await runCheckpoints(it.user_id); } catch (e) { console.error(e); }
   }
   return `✅ انحفظت الدرجة ${total} من 100`;
+}
+
+/** بطاقة الدرجة وحدها، وبلا كتابة جنبها لأن كلشي بيها. إذا ما انرسمت، توصل الكتابة بدالها */
+async function deliverCard(chat: number, caption: string, kb: Kb, pic: Buffer | null, fallback: string) {
+  if (pic && await upload("sendPhoto", { chat_id: String(chat), ...(caption ? { caption, parse_mode: "HTML" } : {}), protect_content: "true", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", pic, "grade.png", "image/png")) return;
+  await send(chat, fallback, { kb, extra: { protect_content: true } });
+}
+/** ولي الأمر داس «استلمت»: الدرجة اللي كانت تنتظر توصله هسه (وحدة وحدة، كل وحدة يدوس استلمت عليها) */
+export async function releaseHeld(sid: number) {
+  const g = await guardianOf(sid);
+  if (!g) return;
+  const id = await nextHeld(sid);
+  if (id === null) return;
+  const it = await one("sched_items", { id });
+  if (!it || it.total === null || it.total === undefined) return;
+  const st = await student(sid);
+  const e = await one("bank_exams", { id: it.exam_id });
+  const when = String(it.started_at || it.attended_at || it.at || "");
+  const info = { name: String(st?.name ?? ""), exam: String(e?.title ?? "امتحان"), center: (await examLabel(sid)).replace(/^حضوري — /, ""), total: Number(it.total), at: when.length >= 16 ? prettyAt(when) : when };
+  const card = await gradeCardPng(it.id, info);
+  await deliverCard(g.guardian_id, SEEN_CAPTION, seenButton(it.id), card, `📝 <b>تم تصحيح امتحان ${esc(info.exam)}</b>
+الدرجة: <b>${info.total}</b> من 100
+الطالب: <b>${esc(info.name)}</b>
+
+${SEEN_CAPTION}`);
+  await guardianSent(sid, g.guardian_id, it.id);
 }
 
 /** المصحح الآلي يحفظ الورقة مثل أي مصحح: الدرجة والمقولة توصل للطالب وولي أمره */
