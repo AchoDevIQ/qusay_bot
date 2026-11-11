@@ -927,29 +927,10 @@ export async function schedAdminAction(body: Row) {
     // مواعيده انعادت من الصفر: سجل زحف نصف السنة القديم مالته ما بقى إله معنى
     const shift = await midShift();
     if (shift) await kvSet(MID_KEY, JSON.stringify({ ...shift, places: shift.places.filter((p) => p.center !== center) }));
+    // النسخ المحددة تبقى، والأوقات اللي ما إلها نسخة تاخذ وحدة تلقائياً (syncVersions)
     const old = new Map((await find("place_dates", { center_id: center })).map((d) => [d.exam_id, d.versions]));
-    // امتحان ما إله نسخ بهذا المكان: كل وقت ياخذ نسخة، الأقل استعمال بالأماكن الثانية لنفس الامتحان،
-    // حتى ما تتكرر النسخ بين المعاهد. إذا النسخ ما تكفي، تبدي تتكرر
-    const others = (await find("place_dates")).filter((d) => d.center_id !== center && d.versions && d.versions !== "{}");
-    const copyVersions = async (examId: number, day: string) => {
-      const ids = versions.filter((v) => v.exam_id === examId).map((v) => v.id as number);
-      const times = slots.filter((t) => t.d === weekdayOf(day)).map((t) => t.t).sort();
-      if (!ids.length || !times.length) return "{}";
-      const used = new Map(ids.map((id) => [id, 0]));
-      for (const d of others.filter((x) => x.exam_id === examId)) for (const v of Object.values(JSON.parse(d.versions) as Record<string, number>)) if (used.has(v)) used.set(v, used.get(v)! + 1);
-      const out: Record<string, number> = {};
-      const today = new Set<number>();
-      for (const t of times) {
-        const pick = [...ids].sort((x, y) => Number(today.has(x)) - Number(today.has(y)) || used.get(x)! - used.get(y)! || ids.indexOf(x) - ids.indexOf(y))[0];
-        out[t] = pick; today.add(pick); used.set(pick, used.get(pick)! + 1);
-      }
-      return JSON.stringify(out);
-    };
     const rows: { exam: number; day: string; versions: string }[] = [];
-    for (const [i, e] of exams.entries()) if (days[i]) {
-      const keep = old.get(e.id);
-      rows.push({ exam: e.id, day: days[i], versions: keep && keep !== "{}" ? keep : await copyVersions(e.id, days[i]) });
-    }
+    for (const [i, e] of exams.entries()) if (days[i]) rows.push({ exam: e.id, day: days[i], versions: old.get(e.id) || "{}" });
     await tx(async () => {
       await remove("place_dates", { center_id: center });
       for (const r of rows) await put("place_dates", { center_id: center, exam_id: r.exam, day: r.day, versions: r.versions });
@@ -1077,7 +1058,57 @@ export async function schedAdminAction(body: Row) {
 }
 const cronUrl = () => `${siteBase()}/api/cron?key=${cronKey()}`;
 /** كل طالب بهذا المكان يوصله خبر واحد إذا تغيرت مواعيده */
+/**
+ * نسخ المكان تمشي ويا أوقاته وحدها: كل وقت باليوم بلا نسخة ياخذ نسخة، والوقت اللي انشال تنشال نسخته.
+ * النسخة الجديدة هي الأقل استعمال بالأماكن الثانية لنفس الامتحان، وغير عن باقي أوقات نفس اليوم،
+ * حتى ما تتكرر النسخ بين المعاهد. إذا النسخ ما تكفي، تبدي تتكرر. النسخ اللي اختارها صاحب البوت ما تتغير
+ */
+export async function syncVersions(center: number) {
+  const mine = await find("place_dates", { center_id: center });
+  if (!mine.length) return 0;
+  const slots = await placeSlots(center);
+  const all = await find("place_dates");
+  const versions = await find("bank_versions");
+  let changed = 0;
+  for (const d of mine) {
+    const ids = versions.filter((v) => v.exam_id === d.exam_id).map((v) => v.id as number);
+    const times = slots.filter((t) => t.d === weekdayOf(String(d.day))).map((t) => t.t).sort();
+    let cur: Record<string, number> = {};
+    try { cur = JSON.parse(d.versions || "{}"); } catch { /* نسخ خربانة: تنعاد */ }
+    const out: Record<string, number> = {};
+    for (const t of times) if (t in cur) out[t] = cur[t];
+    const missing = times.filter((t) => !(t in cur));
+    if (missing.length && ids.length) {
+      const used = new Map(ids.map((id) => [id, 0]));
+      for (const o of all) if (o.center_id !== center && o.exam_id === d.exam_id) {
+        try { for (const v of Object.values(JSON.parse(o.versions || "{}") as Record<string, number>)) if (used.has(v)) used.set(v, used.get(v)! + 1); } catch { /* تتخطى */ }
+      }
+      const today = new Set(Object.values(out));
+      for (const t of missing) {
+        const pick = [...ids].sort((x, y) => Number(today.has(x)) - Number(today.has(y)) || used.get(x)! - used.get(y)! || ids.indexOf(x) - ids.indexOf(y))[0];
+        out[t] = pick; today.add(pick); used.set(pick, used.get(pick)! + 1);
+      }
+    }
+    const sorted = JSON.stringify(Object.fromEntries(Object.entries(out).sort()));
+    if (sorted !== JSON.stringify(Object.fromEntries(Object.entries(cur).sort()))) {
+      await put("place_dates", { ...d, versions: sorted });
+      changed++;
+    }
+  }
+  return changed;
+}
+/** مرة وحدة: الأماكن اللي مواعيدها بلا نسخ تاخذ نسخها */
+export async function fillAllVersions() {
+  if (await kvGet("versions_fill_v1")) return 0;
+  let n = 0;
+  for (const c of new Set((await find("place_dates")).map((d) => d.center_id as number))) n += await syncVersions(c);
+  await kvSet("versions_fill_v1", "1");
+  return n;
+}
+
 async function tellPlace(center: number) {
+  // أي تغيير بالأوقات أو المواعيد: النسخ تتعدل وياه
+  await syncVersions(center);
   const s = await schedSettings();
   const stateOf = async (u: number) => (await find("sched_items", { user_id: u, status: "waiting" })).map((i) => `${i.exam_id}|${i.at}`).sort().join();
   let told = 0;

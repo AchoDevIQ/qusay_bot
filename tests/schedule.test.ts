@@ -636,7 +636,7 @@ test("🏖 عطلة قبل امتحان: هو واللي بعده يزحفون،
   assert.equal((await find("place_dates", { center_id: c, exam_id: a.id }))[0].day, sat);   // اللي قبل العطلة ما يتحرك
   const pb = (await find("place_dates", { center_id: c, exam_id: b.id }))[0];
   assert.equal(pb.day, sat2);
-  assert.deepEqual(JSON.parse(pb.versions), { "20:00": vb });   // نسخة ثاني وقت تبقى لثاني وقت
+  assert.equal(JSON.parse(pb.versions)["20:00"], vb);   // نسخة ثاني وقت تبقى لثاني وقت (وأول وقت ياخذ نسخة وحده)
   assert.equal((await find("place_dates", { center_id: c, exam_id: cc.id }))[0].day, tue2);
   assert.equal((await one("sched_items", { id: ib }))!.at, `${sat2} 20:00`);
   assert.equal((await one("sched_items", { id: ic }))!.at, `${tue2} 21:00`);
@@ -660,7 +660,7 @@ test("🏖 عطلة قبل امتحان: هو واللي بعده يزحفون،
   assert.equal(undo.holidays.length, 0);
   const back = (await find("place_dates", { center_id: c, exam_id: b.id }))[0];
   assert.equal(back.day, tue);
-  assert.deepEqual(JSON.parse(back.versions), { "21:00": vb });
+  assert.equal(JSON.parse(back.versions)["21:00"], vb);
   assert.equal((await find("place_dates", { center_id: c, exam_id: cc.id }))[0].day, sat2);
 });
 
@@ -991,6 +991,35 @@ test("🗓 توزيع مكان جديد: ياخذ العطل اللي قبل ن�
   await schedAdminAction({ action: "holidayDel", center: c1, id: hid, initData: admin });
   assert.ok(await day(c2, target) < was);
   assert.equal(await day(c1, target), await day(c2, target));
+});
+
+test("⏰ وقت جديد ياخذ نسخة وحده، والوقت المشال تنشال نسخته، والنسخة المختارة تبقى", async () => {
+  const admin = sign(1);
+  const area = await insert("areas", { gov: "بغداد", name: "أوقات النسخ" });
+  const c = await insert("centers", { area_id: area, name: "مركز أوقات النسخ", active: 1 });
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "16:00" }], initData: admin });
+  await schedAdminAction({ action: "fillDates", center: c, start: nextWeekday(5), initData: admin });
+  const rows = await find("place_dates", { center_id: c });
+  const vs = await find("bank_versions");
+  const row = rows.find((r) => vs.filter((v) => v.exam_id === r.exam_id).length >= 2)!;
+  const ids = vs.filter((v) => v.exam_id === row.exam_id).map((v) => v.id as number);
+  const cur = async () => JSON.parse((await find("place_dates", { center_id: c, exam_id: row.exam_id }))[0].versions);
+  // التوزيع نفسه نطى نسخة للوقت
+  assert.ok(ids.includes((await cur())["16:00"]));
+  // صاحب البوت يختار نسخة بإيده
+  await schedAdminAction({ action: "saveDates", center: c, rows: rows.map((r) => ({ exam: r.exam_id, date: r.day, versions: r.exam_id === row.exam_id ? { "16:00": ids[1] } : JSON.parse(r.versions) })), initData: admin });
+  // ضاف وقت: ياخذ نسخة غير بدون حفظ ثاني، والمختارة تبقى
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "16:00" }, { d: 5, t: "18:00" }], initData: admin });
+  let v = await cur();
+  assert.equal(v["16:00"], ids[1]);
+  assert.ok(ids.includes(v["18:00"]) && v["18:00"] !== ids[1]);
+  // شال الوقت الأول: نسخته تنشال، والثاني يبقى
+  await schedAdminAction({ action: "saveSlots", center: c, slots: [{ d: 5, t: "18:00" }], initData: admin });
+  const v2 = await cur();
+  assert.deepEqual(Object.keys(v2), ["18:00"]);
+  assert.equal(v2["18:00"], v["18:00"]);
+  // كل المواعيد إلها نسخ
+  for (const r of await find("place_dates", { center_id: c })) if (vs.some((x) => x.exam_id === r.exam_id)) assert.ok(JSON.parse(r.versions)["18:00"]);
 });
 
 test("🏖 سطر عطلة نصف السنة: من، إلى، ووصف يطلع للطالب بجدوله بين الامتحانات", async () => {
