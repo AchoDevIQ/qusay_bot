@@ -88,3 +88,50 @@ test("الصوت: يترفع مرة وحدة، والباقين ياخذون ن�
   assert.equal(audio.filter((c) => c.p.audio === "<file>").length, 1);
   assert.equal(audio.filter((c) => c.p.audio === "AUD1").length, 2);
 });
+
+test("🔁 فصل تعويضي: اللي يشتري امتحاناته من المكتبة ينبهك وقت البيع، والتوصيل ثاني يوم من التجهيز ويا فعّل/ما فعّل", async () => {
+  const { unlockFromSale } = await import("../lib/exams.ts");
+  const { sweepMakeup } = await import("../lib/makeup.ts");
+  const { stamp } = await import("../lib/util.ts");
+  const items = (n: string) => JSON.stringify([{ name: n, qty: 1, price: 5000 }]);
+  await assert.rejects(su(31, "makeup", { chapter: "الفصل الثالث", on: true }), (e: any) => e.status === 403);
+  // قبل ما يصير تعويضي: ما ينحسب
+  const before = await insert("orders", { user_id: 79, name: "قديم", phone1: "07700000079", items: items("امتحانات الفصل الثالث"), printed: 3, office_id: 1, created: `${addDays(today, -5)} 09:00` });
+  const on = await su(30, "makeup", { chapter: "الفصل الثالث", on: true });
+  assert.match(on.notice, /تعويضي/);
+  // صار تعويضي قبل يومين
+  const { kvSet } = await import("../lib/db.ts");
+  await kvSet("makeup_chapters", JSON.stringify({ "الفصل الثالث": `${addDays(today, -2)} 00:00` }));
+  // بيع مكتبة: تنبيه وقتها
+  await put("students", { user_id: 70, name: "مريم المكتبة", exam: "إلكتروني", created: "x", phone1: "07701111111" });
+  const lib = await insert("orders", { user_id: 70, name: "مريم المكتبة", phone1: "07701111111", username: "maryam70", items: items("امتحانات الفصل الثالث"), printed: 3, office_id: 1, created: stamp() });
+  calls.length = 0;
+  await unlockFromSale(70, JSON.parse(items("امتحانات الفصل الثالث")), lib);
+  const alert = calls.find((c) => c.p.chat_id === 1 && /فصل تعويضي/.test(c.p.text ?? ""));
+  assert.ok(alert && /مريم المكتبة/.test(alert.p.text) && /07701111111/.test(alert.p.text) && /t\.me\/maryam70/.test(alert.p.text));
+  assert.ok(calls.some((c) => c.p.chat_id === 30 && /فصل تعويضي/.test(c.p.text ?? "")));
+  assert.ok(!calls.some((c) => c.p.chat_id === 31 && /فصل تعويضي/.test(c.p.text ?? "")));
+  // توصيل تجهز البارحة: واحد فعّل وواحد لا. ومحاضرات بس ما ينحسب. واللي تجهز اليوم ينتظر لباجر
+  const y = `${addDays(today, -1)} 15:00`;
+  const d1 = await insert("orders", { user_id: 71, name: "علي التوصيل", phone1: "07702222222", items: items("محاضرات وامتحانات الفصل الثالث"), printed: 1, created: y, printed_at: y });
+  const d2 = await insert("orders", { user_id: 72, name: "سارة التوصيل", phone1: "07703333333", items: items("امتحانات الفصل الثالث"), printed: 1, created: y, printed_at: y });
+  await insert("orders", { user_id: 73, name: "محاضرات بس", phone1: "07704444444", items: items("محاضرات الفصل الثالث"), printed: 1, created: y, printed_at: y });
+  await insert("orders", { user_id: 74, name: "تجهز اليوم", phone1: "07705555555", items: items("امتحانات الفصل الثالث"), printed: 1, created: stamp(), printed_at: stamp() });
+  await put("order_codes", { code: "111111", order_id: d1, chapters: "[]", used_at: stamp() });
+  await put("order_codes", { code: "222222", order_id: d2, chapters: "[]", used_at: null });
+  calls.length = 0;
+  assert.equal(await sweepMakeup(true), 2);
+  const rep = calls.find((c) => c.p.chat_id === 1)!.p.text;
+  assert.match(rep, /✅ فعّلوا الكود \(1\)[\s\S]*علي التوصيل/);
+  assert.match(rep, /⏳ بعدهم ما فعّلوا \(1\)[\s\S]*سارة التوصيل/);
+  assert.ok(!/محاضرات بس|تجهز اليوم|مريم/.test(rep));
+  assert.equal(await sweepMakeup(true), 0);   // مرة وحدة لكل طلب
+  // الصفحة: القائمة بيها الكل ويا التليفون
+  const r = await su(30, "list");
+  const names = r.makeup.buyers.map((b: any) => b.name).sort();
+  assert.deepEqual(names, ["تجهز اليوم", "سارة التوصيل", "علي التوصيل", "مريم المكتبة"].sort());
+  assert.ok(!names.includes("قديم") && before > 0);
+  // شيله: ماكو قائمة
+  const off = await su(30, "makeup", { chapter: "الفصل الثالث", on: false });
+  assert.equal(off.makeup.buyers.length, 0);
+});

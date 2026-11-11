@@ -8,6 +8,7 @@ import { addDays } from "./scheduleRules.ts";
 import { api, send, sendMany, upload } from "./telegram.ts";
 import { esc, stamp, todayStr } from "./util.ts";
 import { authed, need } from "./webApi.ts";
+import { lateBuyers, makeupChapters, setMakeup } from "./makeup.ts";
 
 export const SIGNUP_PERM = "signups";
 const REPORT_AT = "23:50";
@@ -56,7 +57,11 @@ export async function sweepSignups(force = false) {
 
 async function pageData(date: string) {
   const today = todayStr();
-  return { date, days: [0, 1, 2, 3, 4, 5, 6].map((k) => addDays(today, -k)), chapters: await chaptersOn(date), notice: "" };
+  // الفصول التعويضية: كل فصل بيه امتحانات، بترتيب الكتاب، ومربع «تعويضي»
+  const m = await makeupChapters();
+  const exams = (await find("bank_exams")).sort((a, b) => String(a.slug).localeCompare(String(b.slug)));
+  const makeup = { chapters: [...new Set(exams.map((e) => String(e.chapter)))].map((c) => ({ chapter: c, since: m[c] ?? "" })), buyers: await lateBuyers() };
+  return { date, days: [0, 1, 2, 3, 4, 5, 6].map((k) => addDays(today, -k)), chapters: await chaptersOn(date), makeup, notice: "" };
 }
 
 /** منو توصله الرسالة: اللي سجلوا باليوم، لو كل طلاب الفصل، لو المحددين */
@@ -85,6 +90,13 @@ export async function signupsAction(body: Row | FormData) {
   const a = String(get("action") ?? "");
   const date = DATE.test(String(get("date") ?? "")) ? String(get("date")) : todayStr();
   if (a === "list") return await pageData(date);
+  if (a === "makeup") {
+    const chapter = String(get("chapter") ?? "");
+    need(chapter, "اختار الفصل");
+    const on = String(get("on")) === "true";
+    await setMakeup(chapter, on);
+    return { ...await pageData(date), notice: on ? `🔁 صار ${chapter} تعويضي: كل طالب يشتري امتحاناته من هسه يطلعلك بالقائمة ويوصلك تنبيه` : `انشال ${chapter} من التعويضي` };
+  }
   need(a === "send", "أمر غير معروف");
   const chapter = String(get("chapter") ?? "");
   const raw = get("ids");

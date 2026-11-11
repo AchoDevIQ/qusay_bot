@@ -6,7 +6,8 @@ import VoiceRec from "../VoiceRec";
 
 type Student = { id: number; name: string; at: string; source: string };
 type Chapter = { chapter: string; total: number; students: Student[] };
-type Data = { date: string; days: string[]; chapters: Chapter[]; notice: string };
+type Buyer = { oid: number; uid: number; name: string; phone: string; phone2: string; username: string; source: string; library: boolean; at: string; activated: boolean; chapters: string[] };
+type Data = { date: string; days: string[]; chapters: Chapter[]; makeup: { chapters: { chapter: string; since: string }[]; buyers: Buyer[] }; notice: string };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 
 export default function SignupsClient() {
@@ -28,6 +29,7 @@ export default function SignupsClient() {
               <div><b>{n}</b>سجلوا بهذا اليوم</div>
               <div><b>{data.chapters.filter((c) => c.students.length).length}</b>فصل</div>
             </div></div>
+            <Makeup d={data} busy={busy} call={call} />
             {!data.chapters.length && <div className="empty">بعد ماكو تسجيلات.</div>}
             {data.chapters.map((c) => <ChapterCard key={`${c.chapter}|${data.date}`} c={c} date={data.date} busy={busy} call={call} />)}
           </>
@@ -35,6 +37,49 @@ export default function SignupsClient() {
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
+  );
+}
+
+/** الفصول التعويضية: مربع لكل فصل، وقائمة اللي اشتروا امتحاناته بعد ما صار تعويضي، حتى نتصل بيهم */
+function Makeup({ d, busy, call }: { d: Data; busy: boolean; call: Call }) {
+  const on = d.makeup.chapters.filter((c) => c.since);
+  return (
+    <div className="card">
+      <h2>🔁 الفصول التعويضية</h2>
+      <div className="expad">
+        <div className="exhint">أشّر الفصل اللي بدينا بيه وصار للمتأخرين. من هسه كل طالب يشتري امتحاناته (امتحانات، لو محاضرات وامتحانات) يطلع هنا ويوصلك تنبيه: من المكتبة وقت البيع، ومن التوصيل ثاني يوم من تجهيز طلبه. اللي يشتري محاضرات بس ما يطلع.</div>
+        {d.makeup.chapters.map((c) => (
+          <label key={c.chapter} className="adcheck">
+            <input type="checkbox" checked={!!c.since} disabled={busy} onChange={(e) => void call({ action: "makeup", chapter: c.chapter, on: e.target.checked, date: d.date })} />
+            {" "}{c.chapter} تعويضي{c.since && <small className="pdmode"> · من {c.since.slice(0, 10)}</small>}
+          </label>
+        ))}
+        {!!on.length && (
+          <>
+            <div className="exlabel adtop">📋 اللي سجلوا بالفصول التعويضية ({d.makeup.buyers.length})</div>
+            {!d.makeup.buyers.length && <div className="exhint">بعد محد سجل.</div>}
+            {!!d.makeup.buyers.length && (
+              <table className="extable"><tbody>
+                {d.makeup.buyers.map((b) => (
+                  <tr key={b.oid}>
+                    <td>
+                      <b>{b.name}</b>
+                      {!b.library && <span className="adentag" style={{ background: b.activated ? "#0b5d3b" : "#7a5a00" }}>{b.activated ? "✅ فعّل" : "⏳ بعده ما فعّل"}</span>}
+                      <small className="pdmode">📘 {b.chapters.join("، ")} · {b.source} · {b.at.slice(0, 10)}</small>
+                      <div className="exline">
+                        {b.phone && <a className="exbtn" href={`tel:${b.phone}`}>📞 {b.phone}</a>}
+                        {b.phone2 && <a className="exbtn" href={`tel:${b.phone2}`}>📞 {b.phone2}</a>}
+                        {(b.username || b.uid > 0) && <a className="exbtn" href={b.username ? `https://t.me/${b.username}` : `tg://user?id=${b.uid}`}>✈️ {b.username ? `@${b.username}` : "تليگرام"}</a>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody></table>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

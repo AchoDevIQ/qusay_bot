@@ -34,6 +34,8 @@ export async function unlockFromSale(sid: number, items: Row[], oid: number) {
   const chapters = chaptersOf(items);
   if (!chapters.length) return chapters;
   await grantExams(sid, chapters, oid);
+  // فصل تعويضي: صاحب البوت يوصله تنبيه حتى يتصل بالطالب
+  await (await import("./makeup.ts")).notifyMakeupSale(oid);
   await send(sid, `🔓 <b>انفتحت امتحاناتك</b>\n${chaptersText(chapters)}\n\nاضغط «${BTN_EXAMS}» حتى تشوفها 👇`, { replyKb: await mainKb(sid) });
   return chapters;
 }

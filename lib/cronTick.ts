@@ -14,6 +14,7 @@ import { ADMIN_IDS } from "./config.ts";
 import { finishByAi, paperName, aiObjectionsTick } from "./gradeApi.ts";
 import { schedSettings } from "./schedApi.ts";
 import { fixLectureTitles } from "./examBank.ts";
+import { sweepMakeup } from "./makeup.ts";
 import { ApiError, ensure } from "./webApi.ts";
 import { cronKey } from "./webAuth.ts";
 
@@ -39,6 +40,7 @@ export async function cronTick(key: unknown) {
     await step("signups", () => sweepSignups());
     await step("birthdays", () => sweepBirthdays());
     await step("lectureTitles", () => fixLectureTitles());
+    await step("makeup", () => sweepMakeup());
   } finally {
     await kvSet(LOCK, "0");
   }
