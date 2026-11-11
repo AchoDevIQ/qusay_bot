@@ -98,7 +98,7 @@ export default function PenPage({ item, sid, model, head, q, imgUrl, busy, onSav
 
   // الورقة تدخل كلها بالشاشة، بدون تحريك
   useEffect(() => {
-    const size = () => setFit(Math.min((window.innerWidth - 20) / W, (window.innerHeight - 150) / H));
+    const size = () => setFit(Math.min((window.innerWidth - 20) / W, (window.innerHeight - 230) / H));
     size(); window.addEventListener("resize", size); return () => window.removeEventListener("resize", size);
   }, []);
   // الورقة نفسها: تنرسم مرة وحدة بعد ما الخط والصور تحمل

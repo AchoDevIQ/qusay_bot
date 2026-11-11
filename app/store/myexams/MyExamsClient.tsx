@@ -581,7 +581,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [closed, setClosed] = useState(false);
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 20000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 5000); return () => clearInterval(t); }, []);
   const left = minutesLeft(room.closeAt, room.now, since);
   useEffect(() => { if (left <= 0) setClosed(true); }, [left, tick]);
   // ✏️ اكتب بالقلم: رقم السؤال المفتوح بورقة الكتابة
@@ -618,7 +618,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     return (
       <>
         {error && <div className="wrap"><div className="err">⚠️ {error}</div></div>}
-        <div className="pen-left">⏳ باقي <b>{left}</b> دقيقة</div>
+        <ExamTimer flat left={left} minutes={room.minutes} extra={room.extra} />
         <PenPage item={room.id} sid={room.sid} model={room.model} head={room.head} q={penQ} imgUrl={penQ.img ? fileUrl(room.id, penQ.img) : null} busy={busy}
           onSave={async (f) => { const ok = await upload(penQ.n, f); if (ok) { setPen(null); setOpen(penQ.n); } return ok; }} onClose={() => setPen(null)} />
       </>
@@ -626,9 +626,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   }
   return (
     <div className="wrap">
-      <div className="card"><h2>📝 {room.title}</h2>
-        <div className="who">⏳ باقي <b>{left}</b> دقيقة<br /><small className="hint">الوقت {room.minutes} دقيقة، وفوقه {room.extra} دقيقة حتى تصور وتدز.</small></div>
-      </div>
+      <ExamTimer left={left} minutes={room.minutes} extra={room.extra} />
+      <div className="card"><h2>📝 {room.title}</h2></div>
       {/* رقم الطالب فوك كل صفحة: إذا أحد صورها ونشرها نعرف منو */}
       {!room.sworn ? (
         <WordOrder key={room.id} title="🤲 القسم قبل الأسئلة" intro="الأسئلة تنفتح بعد ما تكمل جملة القسم: اقراها، ودوس كل فراغ «؟؟؟» واختار الكلمة الصحيحة:" okLabel="📖 افتح الأسئلة" sentence={room.oath}
@@ -683,6 +682,17 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       </div>
       </>
       )}
+    </div>
+  );
+}
+
+/** عداد الامتحان: ثابت فوك الصفحة، ينزل دقيقة دقيقة بدون صوت. يبدي من وقت الامتحان + الوقت الإضافي */
+function ExamTimer({ left, minutes, extra, flat = false }: { left: number; minutes: number; extra: number; flat?: boolean }) {
+  const n = Math.max(0, left);
+  return (
+    <div className={"extimer" + (n <= 10 ? " low" : "") + (flat ? " flat" : "")} role="timer" aria-live="off">
+      <b>⏳ {n}</b><span>دقيقة باقية</span>
+      <small>الامتحان {minutes} دقيقة + {extra} دقيقة للتصوير والإرسال</small>
     </div>
   );
 }
