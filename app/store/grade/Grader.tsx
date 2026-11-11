@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pageAuth } from "../adminPage";
 import PdfPages, { pdfByQuestion, pdfToImages } from "../PdfPages";
 import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
+import { COLORS, WIDTHS } from "./pens";
 import VoiceRec from "../VoiceRec";
 import MessageBox from "./MessageBox";
 
@@ -22,9 +23,6 @@ type Ink = { rot: number; items: Item[] };
 type Page = { src: string | null; q: number | null; qs?: number[] };   // qs: صفحة وحدة بيها أكثر من سؤال
 type Tool = "hand" | "pen" | "eraser" | "text" | "stamp" | "wrong" | "sticker";
 
-const COLORS = ["#111111", "#555555", "#9e9e9e", "#ffffff", "#e53935", "#c62828", "#ff5252", "#ff7043", "#fb8c00", "#ffb300", "#fdd835", "#c0ca33",
-  "#7cb342", "#1f9d55", "#00897b", "#00acc1", "#039be5", "#1e5bd8", "#3949ab", "#5e35b1", "#8e24aa", "#d81b60", "#ec407a", "#6d4c41"];
-const WIDTHS = [2, 5];
 const ZOOMS = [0.75, 1, 1.25, 1.5, 2, 2.5];
 const GREEN = "#1f9d55";
 const RED = "#e53935";

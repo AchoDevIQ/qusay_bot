@@ -35,7 +35,8 @@ export function loadImage(src: string): Promise<HTMLImageElement | null> {
 }
 
 /** الهدر: العربي من اليمين بخلفية غامقة، والإنكليزي من اليسار بخلفية فاتحة وشريط ملون */
-export function drawHeader(ctx: CanvasRenderingContext2D, h: number, x: HeaderInfo, logo: HTMLImageElement | null, big = false) {
+/** badge: بدل دائرة الدرجة (مثلاً رقم السؤال بورقة الكتابة بالقلم) */
+export function drawHeader(ctx: CanvasRenderingContext2D, h: number, x: HeaderInfo, logo: HTMLImageElement | null, big = false, badge?: { top: string; sub: string }) {
   const t = themeOf(x.slug), en = x.lang === "en";
   const chapterNo = Number(/(\d+)/.exec(x.slug)?.[1] ?? 0);
   ctx.save();
@@ -60,11 +61,11 @@ export function drawHeader(ctx: CanvasRenderingContext2D, h: number, x: HeaderIn
   if (logo) ctx.drawImage(logo, logoX - r * 0.78, cy - r * 0.78, r * 1.56, r * 1.56);
   // الدرجة بالطرف الثاني
   const gx = en ? W - pad - r : pad + r, pass = x.total >= 50;
-  ctx.fillStyle = pass ? "#1f9d55" : "#d32f2f"; ctx.beginPath(); ctx.arc(gx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = badge ? t.accent : pass ? "#1f9d55" : "#d32f2f"; ctx.beginPath(); ctx.arc(gx, cy, r, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 4; ctx.stroke();
-  ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = `900 ${r * 0.78}px ${FONT}`; ctx.fillText(String(x.total), gx, cy - r * 0.12);
-  ctx.font = `700 ${r * 0.26}px ${FONT}`; ctx.fillText("/ 100", gx, cy + r * 0.48);
+  ctx.fillStyle = badge ? t.from : "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `900 ${r * 0.78}px ${FONT}`; ctx.fillText(badge ? badge.top : String(x.total), gx, cy - r * 0.12);
+  ctx.font = `700 ${r * 0.26}px ${FONT}`; ctx.fillText(badge ? badge.sub : "/ 100", gx, cy + r * 0.48);
   // الكتابة بالنص
   const textL = en ? logoX + r + 26 : gx + r + 26, textR = en ? gx - r - 26 : logoX - r - 26, tw = textR - textL;
   ctx.direction = en ? "ltr" : "rtl"; ctx.textAlign = en ? "left" : "right";

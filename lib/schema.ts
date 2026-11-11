@@ -28,7 +28,7 @@ export const SCHEMA: Record<string, Table> = {
   qmsgs: { key: "id", auto: true, cols: nulls("qid", "kind", "chat_id", "msg_id") },
   bank_exams: { key: "id", auto: true, cols: { ...nulls("slug", "chapter", "ord", "title", "info", "minutes", "pos", "group_versions"), manual: 0 } },
   bank_versions: { key: "id", auto: true, cols: { ...nulls("exam_id", "model", "issues", "pdf_ar", "pdf_en", "pages_ar", "pages_en", "answer_pdf"), kind: "mandatory", ok: 1, has_en: 0, manual: 0 } },
-  bank_questions: { key: "id", auto: true, cols: { ...nulls("version_id", "n", "max_mark", "q_file", "a_files"), edited: 0 } },
+  bank_questions: { key: "id", auto: true, cols: { ...nulls("version_id", "n", "max_mark", "q_file", "a_files", "q_text"), edited: 0 } },
   bank_edits: { key: "id", auto: true, cols: nulls("user_id", "what", "created") },
   exam_access: { key: ["user_id", "chapter"], cols: nulls("order_id", "created") },
   order_codes: { key: "code", cols: nulls("order_id", "chapters", "used_at") },

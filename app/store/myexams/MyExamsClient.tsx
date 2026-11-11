@@ -9,6 +9,7 @@ import { addDays, ampm, prettyAt, prettyDay } from "../../../lib/scheduleRules.t
 import { DateInput, deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
+import PenPage, { hasPenDraft, type PenHead } from "./PenPage";
 
 type Item = { id: number; exam?: number; skippable?: boolean; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
@@ -23,7 +24,7 @@ type Hol = { id: number; ids: number[]; from: string; to: string; title: string;
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
 type Paper = { ai: AiQ[]; solutions: string | null; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
 type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
-type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; answers: { id: number; file: string }[] }[] };
+type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; max: number; img: string | null; text: string | null; answers: { id: number; file: string }[] }[]; head: PenHead };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
 
 export default function MyExamsClient() {
@@ -583,26 +584,44 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 20000); return () => clearInterval(t); }, []);
   const left = minutesLeft(room.closeAt, room.now, since);
   useEffect(() => { if (left <= 0) setClosed(true); }, [left, tick]);
-  async function send() {
-    if (!draft) return;
+  // ✏️ اكتب بالقلم: رقم السؤال المفتوح بورقة الكتابة
+  const [pen, setPen] = useState<number | null>(null);
+  /** يدز صورة جواب سؤال (من الكاميرا أو من ورقة القلم). الجديدة تبدل القديمة */
+  async function upload(q: number, file: Blob) {
     setBusy(true); setError("");
     try {
       const f = new FormData();
       f.set("token", new URLSearchParams(location.search).get("t") ?? ""); f.set("device", await deviceId()); f.set("pf", await platform());
-      f.set("item", String(room.id)); f.set("q", String(draft.q));
-      f.set("file", await prepare(draft.file, draft.turns, scan), "answer.jpg");
+      f.set("item", String(room.id)); f.set("q", String(q));
+      f.set("file", file, "answer.jpg");
       const res = await fetch("/api/myexams", { method: "POST", body: f });
       const j = await res.json();
-      if (!res.ok) { setError(j.error ?? "ما وصلت الصورة، حاول مرة ثانية"); if (res.status === 403) setClosed(true); return; }
+      if (!res.ok) { setError(j.error ?? "ما وصلت الصورة، حاول مرة ثانية"); if (res.status === 403) setClosed(true); return false; }
       setRoom(j.room);
-      if (more.length) await pickPhoto(draft.q, more); else setDraft(null);
-    } catch { setError("ماكو اتصال، حاول مرة ثانية"); } finally { setBusy(false); }
+      return true;
+    } catch { setError("ماكو اتصال، حاول مرة ثانية"); return false; } finally { setBusy(false); }
+  }
+  async function send() {
+    if (!draft) return;
+    if (!await upload(draft.q, await prepare(draft.file, draft.turns, scan))) return;
+    if (more.length) await pickPhoto(draft.q, more); else setDraft(null);
   }
   const total = room.questions.reduce((n, q) => n + q.answers.length, 0);
   if (closed) {
     return (
       <div className="wrap"><div className="card warn exerr">{total ? "انتهى الوقت، وأجوبتك اللي دزيتها انحفظت." : "⛔ انتهى وقت الامتحان المحدد، وأعطيناك وقت إضافي، ولم ترسل الإجابة."}</div>
         <button type="button" className="btn agbtn" onClick={leave}>رجوع لامتحاناتي</button></div>
+    );
+  }
+  const penQ = pen === null ? null : room.questions.find((x) => x.n === pen) ?? null;
+  if (penQ && room.sworn) {
+    return (
+      <>
+        {error && <div className="wrap"><div className="err">⚠️ {error}</div></div>}
+        <div className="pen-left">⏳ باقي <b>{left}</b> دقيقة</div>
+        <PenPage item={room.id} sid={room.sid} model={room.model} head={room.head} q={penQ} imgUrl={penQ.img ? fileUrl(room.id, penQ.img) : null} busy={busy}
+          onSave={async (f) => { const ok = await upload(penQ.n, f); if (ok) { setPen(null); setOpen(penQ.n); } return ok; }} onClose={() => setPen(null)} />
+      </>
     );
   }
   return (
@@ -641,11 +660,18 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                       </div>
                     </div>
                   ) : q.answers.length ? (
-                    <div className="exhint">صورة وحدة لكل سؤال. إذا تريد تبدلها، احذفها وصور غيرها.</div>
+                    <>
+                      <div className="exhint">صورة وحدة لكل سؤال. إذا تريد تبدلها، احذفها وصور غيرها{hasPenDraft(room.id, q.n) ? "، أو عدل كتابتك" : ""}.</div>
+                      {hasPenDraft(room.id, q.n) && <button type="button" className="exbtn" disabled={busy} onClick={() => setPen(q.n)}>✏️ عدل كتابتك</button>}
+                    </>
                   ) : (
-                    <div className="exline">
-                      <PhotoPick gallery={room.gallery} label={`السؤال ${q.n}`} onFiles={(fs) => void pickPhoto(q.n, fs)} />
-                    </div>
+                    <>
+                      <div className="exhint">جاوب بالكاميرا (تصور ورقتك)، أو اكتب بالقلم على الشاشة إذا عندك آيباد.</div>
+                      <div className="exline">
+                        <PhotoPick gallery={room.gallery} label={`السؤال ${q.n}`} onFiles={(fs) => void pickPhoto(q.n, fs)} />
+                        <button type="button" className="exbtn" disabled={busy} onClick={() => setPen(q.n)}>✏️ اكتب بالقلم</button>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
