@@ -252,7 +252,13 @@ body.grwide .grtop{padding-left:104px}
 .cpch>summary{cursor:pointer;padding:14px 16px;font-size:17px;display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}.cpexam{border-top:1px solid var(--line);padding:8px 0}.cpname{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.cpadd{font-size:13px;padding:6px 10px}.cpbox{margin-top:8px;padding:10px 12px;border:2px solid var(--gold);border-radius:12px}.cpon2 .cpname span{font-weight:700}
 
 /* السكة: المحاضرات قبل كل امتحان */
-.lcrow td{background:var(--ink2);font-size:14px}.lcrow td:first-child{padding-inline-start:18px}.lcline{margin:6px 0 0;padding-inline-start:22px;font-size:14px;line-height:1.7}
+.lcrow td{background:var(--ink2);font-size:14px}
+/* جدول الطالب: المحاضرة تبين محاضرة، والامتحان يبين امتحان */
+.mxkind{display:inline-block;margin-inline-end:8px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:800;vertical-align:middle;white-space:nowrap}
+.mxlec{background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid rgba(147,197,253,.35)}
+.mxexam{background:#F9C445;color:#101929}
+.lcrow td:first-child{border-right:4px solid #3b82f6}
+.mxexamrow td:first-child{border-right:4px solid #F9C445}.lcrow td:first-child{padding-inline-start:18px}.lcline{margin:6px 0 0;padding-inline-start:22px;font-size:14px;line-height:1.7}
 /* الحضوري */
 .atcode{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}.atcode img{width:220px;max-width:70vw;background:#fff;border-radius:14px;padding:8px}
 .atcard{border:2px solid var(--gold);border-radius:14px;padding:12px;margin-top:10px}.atcard b{font-size:18px}.atok{color:var(--ok)}.atrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -333,3 +339,5 @@ body.grwide .grtop{padding-left:104px}
 .dateinput .dateph{opacity:.6;font-weight:400}
 .dateinput input[type=date]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0}
 .exadd .dateinput{flex:1;width:auto}
+
+.mxholrow td:first-child{border-right:4px dashed #CEA239}

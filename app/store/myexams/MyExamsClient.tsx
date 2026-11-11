@@ -310,7 +310,7 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
 /** عطلة بالجدول. الطالب الخاص يگدر يلغيها فيتقدم جدوله */
 function HolRow({ h, busy, off, keep }: { h: Hol; busy: boolean; off: (ids: number[]) => Promise<unknown>; keep: (ids: number[]) => Promise<unknown> }) {
   return (
-    <tr className="lcrow">
+    <tr className="lcrow mxholrow">
       <td>🏖 <b>عطلة{h.reason ? `: ${h.reason}` : ""}</b><small className="pdmode">{h.from === h.to ? prettyDay(h.from) : `من ${prettyDay(h.from)} إلى ${prettyDay(h.to)}`}{h.title ? ` · قبل ${h.title}` : ""}</small>
         {h.cancel && <div className="hint">تريد العطلة؟ ❌ يشيلها ويصعد جدولك.</div>}
         {h.kept && <small className="pdmode">✅ خليتها</small>}
@@ -359,15 +359,15 @@ function List({ info, busy, enter, paper, ask, file, off, cmd }: { info: Info; b
           {holAt(n).map((h) => <HolRow key={h.id} h={h} busy={busy} off={off} keep={(ids) => cmd({ action: "holidayKeep", holidays: ids })} />)}
           {(i.lectures ?? []).map((l, k) => (
             <tr key={l} className="lcrow" id={i.id === now?.id && k === 0 ? "mx-now" : undefined}>
-              <td>{i.id === now?.id && k === 0 && <span className="adentag">📍 وصلت هنا</span>}📺 {l}<small className="pdmode">{info.appLink ? "شوفها بالتطبيق قبل الامتحان" : "ادرسها قبل الامتحان"}</small></td>
+              <td>{i.id === now?.id && k === 0 && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxlec">📺 محاضرة</span>{l}<small className="pdmode">{info.appLink ? "شوفها بالتطبيق قبل الامتحان" : "ادرسها قبل الامتحان"}</small></td>
               <td className="p">
                 {info.appLink && !info.inExam && <button type="button" className="exbtn" onClick={() => openOutside(info.appLink)}>▶️ افتح</button>}
                 {info.lectureFiles?.includes(l) && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void file(l)}>📄 الملف</button>}
               </td>
             </tr>
           ))}
-          <tr className={i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""} id={i.id === now?.id && !(i.lectures ?? []).length ? "mx-now" : undefined}>
-            <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
+          <tr className={`mxexamrow ${i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}`} id={i.id === now?.id && !(i.lectures ?? []).length ? "mx-now" : undefined}>
+            <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxexam">📝 امتحان</span><b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.skippable && (
                 <div className="hint adtop">تگدر تشيل هذا الامتحان من جدولك، فيصعد جدولك:
