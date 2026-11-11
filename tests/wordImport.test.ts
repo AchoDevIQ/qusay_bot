@@ -153,3 +153,13 @@ test("نصف السنة: «Midyear A» و«نصف السنه A» عنوان نس
   assert.deepEqual(b[1].qs.map((q) => q.n), [1, 2]);
   assert.equal(b[1].qs[1].text, "A / جد 41\n02 / B / جد 42");
 });
+
+test("السؤال المكتوب بالعربي: السطر اللي يبدي بمعادلة أو حرف إنجليزي ينقرا من اليسار لليمين ويبقى على اليمين", async () => {
+  const { questionHtml } = await import("../lib/documents.ts");
+  const html = questionHtml("$y=1$ = 16 a جد\nجد المشتقة\ny= $x$", "ar", "", "", (t) => `<i>${t}</i>`);
+  const lines = [...html.matchAll(/<div class="ln( lr)?">/g)].map((m) => !!m[1]);
+  assert.deepEqual(lines, [true, false, true]);
+  assert.match(html, /\.ln\.lr\{direction:ltr;text-align:right\}/);
+  // الإنجليزي ما يتغير
+  assert.doesNotMatch(questionHtml("$y=1$ find a", "en", "", "", (t) => t), /class="ln lr"/);
+});

@@ -9,14 +9,14 @@ import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
-import { logActivity } from "./access.ts";
+import { guardianOf, logActivity } from "./access.ts";
 import { STORE_URL } from "./config.ts";
-import { AI_GRADER, can, student } from "./data.ts";
+import { AI_GRADER, can, staffIds, student } from "./data.ts";
 import { files } from "./files.ts";
 import { adminPageLink } from "./keyboards.ts";
-import { addMinutes, answersClose, itemState, pickMandatory, type SchedSettings } from "./scheduleRules.ts";
+import { addMinutes, ampm, answersClose, itemState, pickMandatory, type SchedSettings } from "./scheduleRules.ts";
 import { send, sendMany } from "./telegram.ts";
-import { stamp } from "./util.ts";
+import { esc, stamp } from "./util.ts";
 import { gradedPages } from "./gradeApi.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { aiPartialOf, aiResultOf, rubricOf } from "./aiGrade.ts";
@@ -136,6 +136,35 @@ async function liveRoom(uid: number, id: unknown, s: SchedSettings) {
   need(it.status === "started", it.status === "done" ? "سلمت هذا الامتحان" : CLOSED_TEXT, 403);
   return it;
 }
+/**
+ * الطالب طلع من صفحة الامتحان وهو يمتحن (راح لتطبيق ثاني أو سكّر التليجرام): تنبيه إله، وخبر لصاحب البوت
+ * وللمساعد اللي عنده صلاحية «🚪»، ولولي أمره إذا مربوط. ما نگول غش: «ما نعرف السبب».
+ * بنفس الدقيقة الخروج ينحسب بس الرسائل ما تتكرر. الرجوع ينكتب بسجله ويا المدة.
+ */
+export async function examLeft(uid: number, id: unknown, s: SchedSettings, phase: unknown, secs: unknown) {
+  const it = await liveRoom(uid, id, s);
+  const e = await one("bank_exams", { id: it.exam_id });
+  const title = String(e?.title ?? "الامتحان");
+  if (phase === "back") {
+    await logActivity(uid, `↩️ رجع لصفحة امتحان ${title} بعد ${Math.max(0, Math.round(Number(secs) || 0))} ثانية`);
+    return { ok: true };
+  }
+  const key = `left_${it.id}`;
+  let prev: { n?: number; at?: number } = {};
+  try { prev = JSON.parse(await kvGet(key) ?? "{}"); } catch { /* أول مرة */ }
+  const n = (Number(prev.n) || 0) + 1, now = Date.now();
+  const quiet = !!prev.at && now - prev.at < 60_000;
+  await kvSet(key, JSON.stringify({ n, at: quiet ? prev.at : now }));
+  await logActivity(uid, `🚪 طلع من صفحة امتحان ${title} وهو يمتحن${n > 1 ? ` (المرة ${n})` : ""}`);
+  if (quiet) return { ok: true, n };
+  const st = await student(uid);
+  const name = esc(st?.name ?? `طالب #${uid}`), when = ampm(stamp().slice(11, 16)), g = await guardianOf(uid);
+  const tell = async (to: number, text: string) => { try { await send(to, text); } catch (x) { console.error(x); } };
+  await tell(uid, `⚠️ <b>طلعت من صفحة الامتحان</b>\nوصل إشعار ${g ? "لأستاذك ولولي أمرك" : "لأستاذك"} إنك طلعت من الامتحان وإنت تمتحن. ارجع للامتحان هسه وكمّل.`);
+  for (const a of await staffIds("leave")) await tell(a, `🚪 <b>${name} طلع من صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nطلع من التطبيق وهو يمتحن، وما نعرف السبب.`);
+  if (g) await tell(Number(g.guardian_id), `السلام عليكم 🌷\nنحب نبلغكم إن <b>${name}</b> طلع من صفحة الامتحان وهو يمتحن (${esc(title)}) الساعة ${when}، وما نعرف السبب.`);
+  return { ok: true, n };
+}
 export async function deleteAnswer(uid: number, item: unknown, answer: unknown, s: SchedSettings) {
   const it = await liveRoom(uid, item, s);
   await remove("exam_answers", { id: Number(answer), item_id: it.id });
@@ -212,7 +241,8 @@ const typedText = (q: Row, curr: unknown) => String((typedLang(curr) === "en" ? 
 const typedRef = (qid: number, curr: unknown) => `qt/${qid}/${typedLang(curr)}`;
 async function typedPng(q: Row, curr: unknown): Promise<Buffer | null> {
   const text = typedText(q, curr), lang = typedLang(curr);
-  const key = `qtext/${q.id}_${lang}_${createHash("sha1").update(text).digest("hex").slice(0, 12)}.png`;
+  // v2: سطر المعادلة بالعربي صار من اليسار لليمين، فالصور القديمة تنرسم من جديد
+  const key = `qtext/v2_${q.id}_${lang}_${createHash("sha1").update(text).digest("hex").slice(0, 12)}.png`;
   const cached = await files().read(key);
   if (cached) return cached;
   const { questionPng } = await import("./documents.ts");

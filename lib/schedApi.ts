@@ -16,7 +16,7 @@ import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
 import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
-import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
+import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, examLeft, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
 import { send } from "./telegram.ts";
 import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { esc, stamp, todayStr } from "./util.ts";
@@ -618,6 +618,7 @@ export async function myExamAction(body: Row) {
     const room = await openRoom(id, item, s);
     return { ...await studentInfo(id), room };
   }
+  if (a === "examLeft") return await examLeft(id, body.item, await schedSettings(), body.phase, body.secs);
   if (a === "openExam" || a === "delAnswer" || a === "submitExam" || a === "oath") {
     const s = await schedSettings();
     // الغرفة أول: تحديث المواعيد يعيد كتابة الامتحانات اللي لسه ما بدت

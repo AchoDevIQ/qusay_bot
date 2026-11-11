@@ -449,10 +449,12 @@ export function questionHtml(text: string, lang: "ar" | "en", css: string, katex
   const iso = (t: string) => { let out = "", at = 0; for (const m of t.matchAll(ISO)) { out += esc(t.slice(at, m.index)) + `<span class=lt>${esc(m[0])}</span>`; at = m.index! + m[0].length; } return out + esc(t.slice(at)); };
   const sup = (t: string) => t.replace(/\^\{([^{}]*)\}/g, "<sup>$1</sup>").replace(/_\{([^{}]*)\}/g, "<sub>$1</sub>");
   const line = (l: string) => l.split(/(\$[^$]+\$)/).map((p) => (p.startsWith("$") && p.endsWith("$") && p.length > 2 ? `<span class=k>${katexHtml(p.slice(1, -1))}</span>` : sup(lang === "ar" ? iso(p) : esc(p)))).join("");
-  const body = text.split(/\r?\n/).filter((l) => l.trim()).map((l) => `<div class=ln>${line(l.trim())}</div>`).join("");
+  // بالعربي: السطر اللي يبدي بمعادلة أو بحرف إنجليزي («∫…dx = 16 a جد»، «y= …») ينقرا من اليسار لليمين مثل الوورد، ويبقى على اليمين
+  const ltr = (l: string) => lang === "ar" && /^[$A-Za-z]/.test(l);
+  const body = text.split(/\r?\n/).filter((l) => l.trim()).map((l) => `<div class="ln${ltr(l.trim()) ? " lr" : ""}">${line(l.trim())}</div>`).join("");
   return `<!doctype html><html lang=${lang} dir=${lang === "ar" ? "rtl" : "ltr"}><head><meta charset=utf-8><style>${css}${katexCss}
 html,body{margin:0;background:#fff}body{font-family:${FONT_STACK};font-size:34px;color:#14213d;line-height:1.9;padding:16px 24px 26px;width:952px;box-sizing:border-box}
-.ln{margin:2px 0}.lt{direction:ltr;unicode-bidi:isolate;white-space:nowrap}.k{direction:ltr;unicode-bidi:isolate;display:inline-block;margin:0 4px}.k .katex{font-size:1.05em}
+.ln{margin:2px 0}.ln.lr{direction:ltr;text-align:right}.lt{direction:ltr;unicode-bidi:isolate;white-space:nowrap}.k{direction:ltr;unicode-bidi:isolate;display:inline-block;margin:0 4px}.k .katex{font-size:1.05em}
 sup,sub{font-size:.62em;line-height:0}</style></head><body>${body}</body></html>`;
 }
 /** صورة السؤال المكتوب، والبياض اللي تحته ينقص. null إذا المتصفح ما اشتغل */

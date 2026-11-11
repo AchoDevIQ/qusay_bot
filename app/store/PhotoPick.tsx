@@ -4,6 +4,7 @@
 // ماكو ملفات: الطالب لازم يصور ورقته
 import { useEffect, useState } from "react";
 import LiveCamera from "./LiveCamera";
+import { donePicking, markPicking } from "./picking";
 
 export type Way = "camera" | "gallery";
 const KEY = "qmathPickWay";
@@ -39,17 +40,17 @@ export default function PhotoPick({ onFiles, multiple = false, busy = false, lab
     <label key={w} className={cls}>{text}
       <input type="file" hidden multiple={multiple && w === "gallery"} accept="image/*"
         {...(w === "camera" ? { capture: "environment" as const } : {})}
-        onChange={(e) => { const l = e.target.files; got(l, w); e.target.value = ""; }} />
+        onClick={markPicking} onChange={(e) => { donePicking(); const l = e.target.files; got(l, w); e.target.value = ""; }} />
     </label>
   );
   const button = (w: Way, cls: string, text: string) =>
     w === "camera" && !nativeCam
-      ? <button key={w} type="button" className={cls} disabled={busy} onClick={() => { use("camera"); setCam(true); }}>{text}</button>
+      ? <button key={w} type="button" className={cls} disabled={busy} onClick={() => { markPicking(); use("camera"); setCam(true); }}>{text}</button>
       : fileButton(w, cls, text);
   return (
     <div className="pkwrap">
-      {cam && <LiveCamera onClose={() => setCam(false)} onFail={() => { setCam(false); setNativeCam(true); setErr("الموبايل ما سمح بفتح الكاميرا هنا. دوس 📷 الكاميرا مرة ثانية"); }}
-        onShot={(f) => { setCam(false); setErr(""); onFiles([f]); }} />}
+      {cam && <LiveCamera onClose={() => { donePicking(); setCam(false); }} onFail={() => { setCam(false); setNativeCam(true); setErr("الموبايل ما سمح بفتح الكاميرا هنا. دوس 📷 الكاميرا مرة ثانية"); }}
+        onShot={(f) => { donePicking(); setCam(false); setErr(""); onFiles([f]); }} />}
       {!way || choose ? (
         <>
           {!way && <div className="exhint">منين تريد تجيب الصورة؟ البوت يتذكر اختيارك للمرات الجاية.</div>}

@@ -17,7 +17,7 @@ export function themeOf(slug: string) {
   let h = 0; for (const ch of slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return THEMES[h % THEMES.length];
 }
-const EN_NUM = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"];
+export const EN_NUM = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"];
 // نفس خط التطبيق اللي يختاره صاحب البوت (الحروف الناقصة تجي من Cairo)
 const FONT = "QAppEn, QAppAr, Cairo, Tahoma, Arial, sans-serif";
 export const W = 1080;
@@ -26,7 +26,7 @@ function seeded(seed: number) { let s = seed || 1; return () => { s = (s * 16807
 function round(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
-function fitText(ctx: CanvasRenderingContext2D, text: string, max: number, size: number, weight = 800) {
+export function fitText(ctx: CanvasRenderingContext2D, text: string, max: number, size: number, weight = 800) {
   let s = size;
   do { ctx.font = `${weight} ${s}px ${FONT}`; s -= 2; } while (ctx.measureText(text).width > max && s > 14);
 }

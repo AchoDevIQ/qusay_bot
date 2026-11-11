@@ -10,6 +10,7 @@ import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import PenPage, { hasPenDraft, type PenHead } from "./PenPage";
 import { oathProgress } from "../../../lib/oathText.ts";
+import { donePicking, pickingNow } from "../picking";
 
 type Item = { id: number; exam?: number; skippable?: boolean; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
@@ -615,6 +616,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   useEffect(() => { if (left <= 0) setClosed(true); }, [left, tick]);
   // ✏️ اكتب بالقلم: رقم السؤال المفتوح بورقة الكتابة
   const [pen, setPen] = useState<number | null>(null);
+  useLeaveWatch(room.id, room.sworn && !closed);
   /** يدز صورة جواب سؤال (من الكاميرا أو من ورقة القلم). الجديدة تبدل القديمة */
   async function upload(q: number, file: Blob) {
     setBusy(true); setError("");
@@ -636,6 +638,9 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     if (more.length) await pickPhoto(draft.q, more); else setDraft(null);
   }
   const total = room.questions.reduce((n, q) => n + q.answers.length, 0);
+  // زر التسليم بس بعد ما يجاوب كل الأسئلة (أو K بـ«أجب عن K»)، حتى ما يدوسه بالغلط بنص الامتحان
+  const answered = room.questions.filter((q) => q.answers.length).length;
+  const need = room.answerOnly ? Math.min(room.answerOnly, room.questions.length) : room.questions.length;
   if (closed) {
     return (
       <div className="wrap"><div className="card warn exerr">{total ? "انتهى الوقت، وأجوبتك اللي دزيتها انحفظت." : "⛔ انتهى وقت الامتحان المحدد، وأعطيناك وقت إضافي، ولم ترسل الإجابة."}</div>
@@ -647,8 +652,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     return (
       <>
         {error && <div className="wrap"><div className="err">⚠️ {error}</div></div>}
-        <ExamTimer flat left={left} minutes={room.minutes} extra={room.extra} />
         <PenPage item={room.id} sid={room.sid} model={room.model} head={room.head} q={penQ} imgUrl={penQ.img ? fileUrl(room.id, penQ.img) : null} busy={busy}
+          timer={<b className={"pen-time" + (left <= 10 ? " low" : "")} role="timer">⏳ {Math.max(0, left)} دقيقة</b>}
           onSave={async (f) => { const ok = await upload(penQ.n, f); if (ok) { setPen(null); setOpen(penQ.n); } return ok; }} onClose={() => setPen(null)} />
       </>
     );
@@ -669,7 +674,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
         <div className="form">
           {room.questions.map((q) => (
             <div key={q.n}>
-              <button type="button" className={"exqhead" + (open === q.n ? " on" : "")} onClick={() => setOpen(q.n)}><span>السؤال {q.n}</span><span>{q.answers.length ? "✅ مدزوزة" : "ما مدزوز"}</span></button>
+              <button type="button" className={"exqhead" + (open === q.n ? " on" : "")} onClick={() => setOpen(q.n)}><span>السؤال {q.n}</span><span>{q.answers.length ? "✅ انحفظ جوابه" : "بعده ما جاوبته"}</span></button>
               {open === q.n && (
                 <div className="exqbody">
                   {q.answers.map((a) => (
@@ -690,7 +695,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                     </div>
                   ) : q.answers.length ? (
                     <>
-                      <div className="exhint">صورة وحدة لكل سؤال. إذا تريد تبدلها، احذفها وصور غيرها{hasPenDraft(room.id, q.n) ? "، أو عدل كتابتك" : ""}.</div>
+                      <div className="exhint">✅ جوابك انحفظ. تگدر تغيره لحد ما تسلم الامتحان: {hasPenDraft(room.id, q.n) ? "دوس «✏️ عدل كتابتك»، أو احذف الصورة وجاوب من جديد" : "احذف الصورة وصور غيرها"}.</div>
                       {hasPenDraft(room.id, q.n) && <button type="button" className="exbtn" disabled={busy} onClick={() => setPen(q.n)}>✏️ عدل كتابتك</button>}
                     </>
                   ) : (
@@ -707,13 +712,57 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
             </div>
           ))}
           {error && <div className="err">⚠️ {error}</div>}
-          <button type="button" className="btn agbtn adtop" disabled={busy || !total} onClick={async () => { setBusy(true); const r = await call({ action: "submitExam", item: room.id }); setBusy(false); if (r) leave(); }}>✅ سلم الامتحان</button>
+          {answered >= need
+            ? <SubmitExam busy={busy} onYes={async () => { setBusy(true); const r = await call({ action: "submitExam", item: room.id }); setBusy(false); if (r) leave(); }} />
+            : <div className="exhint adtop">📤 زر «سلّم الامتحان» يطلع بعد ما تجاوب {room.answerOnly ? `${need} أسئلة` : "كل الأسئلة"}. باقي {need - answered}. إذا ما تعرف سؤال، ورقتك تتسلم وحدها من يخلص الوقت.</div>}
         </div>
       </div>
       </>
       )}
     </div>
   );
+}
+
+/** زر التسليم: دستين حتى ما ينداس بالغلط */
+function SubmitExam({ busy, onYes }: { busy: boolean; onYes: () => void }) {
+  const [ask, setAsk] = useState(false);
+  return ask
+    ? <div className="exline adtop"><button type="button" className="btn agbtn" disabled={busy} onClick={onYes}>✅ إي، سلّم الامتحان</button><button type="button" className="exbtn" onClick={() => setAsk(false)}>لا، رجوع</button></div>
+    : <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => setAsk(true)}>📤 سلّم الامتحان</button>;
+}
+
+type TgEvents = { onEvent?(e: string, f: () => void): void; offEvent?(e: string, f: () => void): void };
+/**
+ * الطالب طلع من صفحة الامتحان وهو يمتحن (تطبيق ثاني، أو صغّر التليجرام): خبر للسيرفر، والسيرفر يبلغه ويبلغ الأستاذ وولي أمره.
+ * الكاميرا وقائمة الصور ما تنحسب خروج. الرجوع ينكتب ويا المدة
+ */
+function useLeaveWatch(item: number, on: boolean) {
+  useEffect(() => {
+    if (!on) return;
+    let away = 0, dev = "", pf = "";
+    void deviceId().then((d) => { dev = d; }).catch(() => undefined);
+    void platform().then((p) => { pf = p; }).catch(() => undefined);
+    const token = new URLSearchParams(location.search).get("t") ?? "";
+    const tell = (phase: "left" | "back", secs = 0) => {
+      try {
+        void fetch("/api/myexams", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, action: "examLeft", item, phase, secs, device: dev, pf }) }).catch(() => undefined);
+      } catch { /* بدون اتصال */ }
+    };
+    const gone = () => { if (away || pickingNow()) return; away = Date.now(); tell("left"); };
+    const back = () => {
+      setTimeout(donePicking, 1500);
+      if (!away) return;
+      const secs = Math.round((Date.now() - away) / 1000); away = 0; tell("back", secs);
+    };
+    const vis = () => (document.visibilityState === "hidden" ? gone() : back());
+    document.addEventListener("visibilitychange", vis);
+    const w = (window as unknown as { Telegram?: { WebApp?: TgEvents } }).Telegram?.WebApp;
+    try { w?.onEvent?.("deactivated", gone); w?.onEvent?.("activated", back); } catch { /* نسخة قديمة */ }
+    return () => {
+      document.removeEventListener("visibilitychange", vis);
+      try { w?.offEvent?.("deactivated", gone); w?.offEvent?.("activated", back); } catch { /* نسخة قديمة */ }
+    };
+  }, [item, on]);
 }
 
 /** عداد الامتحان: ثابت فوك الصفحة، ينزل دقيقة دقيقة بدون صوت. يبدي من وقت الامتحان + الوقت الإضافي */

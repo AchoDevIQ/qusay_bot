@@ -501,6 +501,20 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   // الهمزة والتاء المربوطة والمسافات ما تفرق
   const typed = opened.room.oath.replace("أني", "اني").replace("أقسم", "اقسم").replace(/ /g, "  ") + ".";
   assert.equal((await act(90, "oath", { item, text: typed })).room.sworn, true);
+  // طلع من صفحة الامتحان وهو يمتحن: تنبيه إله وخبر للأستاذ («ما نعرف السبب»)، وبنفس الدقيقة ما تتكرر الرسائل
+  calls.length = 0;
+  assert.equal((await act(90, "examLeft", { item, phase: "left" })).n, 1);
+  const toStudent = calls.find((c) => c.p.chat_id === 90)?.p.text ?? "";
+  const toOwner = calls.find((c) => c.p.chat_id === 1)?.p.text ?? "";
+  assert.match(toStudent, /طلعت من صفحة الامتحان/);
+  assert.match(toOwner, /طلع من صفحة الامتحان/);
+  assert.match(toOwner, /ما نعرف السبب/);
+  assert.doesNotMatch(toOwner + toStudent, /غش/);
+  calls.length = 0;
+  assert.equal((await act(90, "examLeft", { item, phase: "left" })).n, 2);
+  assert.equal(calls.length, 0);
+  assert.equal((await act(90, "examLeft", { item, phase: "back", secs: 42 })).ok, true);
+  await assert.rejects(act(91, "examLeft", { item, phase: "left" }), /غير موجود|سجل معلوماتك/);   // طالب ثاني
   await assert.rejects(upload(91, item, 1), /غير موجود/);      // طالب ثاني
   await assert.rejects(upload(90, item, 9), /السؤال/);
   await assert.rejects(upload(90, item, 1, Buffer.from("not image")), /صورة/);
