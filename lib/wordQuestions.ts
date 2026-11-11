@@ -18,6 +18,7 @@ const HEAD = /نموذج|Model|^الامتحان\s*\{|^Exam\s*\{/i;
 export function splitExamDoc(lines: string[]): WordBlock[] {
   const out: WordBlock[] = [];
   let cur: WordBlock | null = null, head: string[] = [], bare = false;
+  const bareBlocks = new Set<WordBlock>();
   for (const raw of lines) {
     const l = raw.trim();
     if (!l) continue;
@@ -29,15 +30,34 @@ export function splitExamDoc(lines: string[]): WordBlock[] {
       const ok = head.length ? n === 1 : bare && !!cur?.qs.length && n === cur.qs[cur.qs.length - 1].n + 1;
       if (!ok) b = null;
     }
+    // بالعربي أحياناً الرقم يطلع بنص السطر «… sinx 10/ اذا علمت ان»: ينقبل بس إذا هو الرقم اللي بعده بالتسلسل
+    if (!m && !end && !b && bare && cur?.qs.length && !head.length) {
+      const next = cur.qs[cur.qs.length - 1].n + 1;
+      const mid = new RegExp(`(^|\\s)${next}\\s*/(?=\\s|$)`).exec(l);
+      if (mid) {
+        cur.qs.push({ n: next, text: (l.slice(0, mid.index) + mid[1] + l.slice(mid.index + mid[0].length)).replace(/\s{2,}/g, " ").trim() });
+        continue;
+      }
+    }
     if (m || end || b) {
       const n = toNum((m ?? end ?? b)![1]);
-      if (!cur || n === 1 || head.length) { cur = { head, model: modelOf(head), qs: [], odd: false }; out.push(cur); head = []; bare = !!b; }
+      if (!cur || n === 1 || head.length) { cur = { head, model: modelOf(head), qs: [], odd: false }; out.push(cur); head = []; bare = !!b; if (b) bareBlocks.add(cur); }
       const text = m || b ? l.slice((m ?? b)![0].length) : l.slice(0, end!.index);
       cur.qs.push({ n, text: text.replace(/^\s*[*/]+\s*/, "").trim() });
     } else if (HEAD.test(l) || !cur) head.push(l);
     // سطر بعد السؤال (مثل «1 / ...» أو معادلة بسطر وحده) يكمل نفس السؤال
     else if (cur.qs.length && !head.length) cur.qs[cur.qs.length - 1].text += "\n" + l;
     else head.push(l);
+  }
+  // بالترقيم «1/ 2/»: سطر كلام قصير بين سؤالين (مثل «جد y`» قبل الاشتقاقات) يروح للسؤال اللي بعده
+  const intro = (t: string) => t.length <= 40 && !t.includes("$") && !/[0-9]/.test(t);
+  for (const b of bareBlocks) {
+    for (let k = 0; k + 1 < b.qs.length; k++) {
+      const lines = b.qs[k].text.split("\n");
+      const moved: string[] = [];
+      while (lines.length > 1 && intro(lines[lines.length - 1])) moved.unshift(lines.pop()!);
+      if (moved.length) { b.qs[k].text = lines.join("\n"); b.qs[k + 1].text = [...moved, b.qs[k + 1].text].join("\n"); }
+    }
   }
   for (const b of out) b.odd = b.qs.some((q, i) => q.n !== i + 1);
   return out;

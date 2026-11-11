@@ -3,7 +3,10 @@
 // والعربي فوك هذا بأرقام المعادلات اللي نفسها بالإنجليزي، فكل نسخة عربية تثبت على توأمها.
 // بس النسخ اللي طابقت بالضبط تنحفظ (نص كل سؤال بـ q_text و q_text_en)، والباقي يطلع بالتقرير حتى تتصلح بالوورد.
 import { docxLines } from "./docxText.ts";
-import { find, update, type Row } from "./db.ts";
+import { createHash } from "node:crypto";
+import { find, insert, update, type Row } from "./db.ts";
+import { files } from "./files.ts";
+import { need } from "./webApi.ts";
 import { alignBlocks, blockText, sameMath, splitExamDoc, type WordBlock } from "./wordQuestions.ts";
 
 type BankRow = { exam: Row; v: Row; qs: Row[] };
@@ -46,7 +49,76 @@ export async function matchWord(arDoc: Buffer | null, enDoc: Buffer | null, chap
     exam: r.exam.id as number, title: String(r.exam.title ?? ""), model: String(r.v.model ?? ""), kind: String(r.v.kind ?? ""), n: r.qs.length,
     ar: side(A, aa[i], r, i, enDoc ? ae : null), en: side(E, ae[i], r, i, null),
   }));
-  return { rows, bank, A, E, aa, ae, extraAr: A.length - aa.filter((j) => j >= 0).length, extraEn: E.length - ae.filter((j) => j >= 0).length };
+  const m = { rows, bank, A, E, aa, ae, extraAr: A.length - aa.filter((j) => j >= 0).length, extraEn: E.length - ae.filter((j) => j >= 0).length };
+  return { ...m, grow: growable(m, !!arDoc, !!enDoc) };
+}
+
+export type Grow = { exam: number; title: string; from: number; to: number; marks: number[] };
+type Matched = { rows: WordRow[]; bank: BankRow[]; A: WordBlock[]; E: WordBlock[]; aa: number[]; ae: number[] };
+/** 100 درجة على n سؤال بالتساوي (الزايد على الأسئلة الأولى) */
+export const evenMarks = (n: number) => Array.from({ length: n }, (_, i) => Math.floor(100 / n) + (i < 100 % n ? 1 : 0));
+/**
+ * امتحانات كل نسخها بالوورد بيها أسئلة أكثر من البوت، ونفس العدد بكل النسخ وبالعربي والإنجليزي
+ * (مثلاً Ln&E: بالبوت 7، والسؤال السابع بي التكامل والاشتقاقات سوا، وبالوورد 10)
+ */
+function growable(m: Matched, ar: boolean, en: boolean): Grow[] {
+  const out: Grow[] = [];
+  for (const id of [...new Set(m.rows.map((r) => r.exam))]) {
+    const idx = m.rows.flatMap((r, i) => (r.exam === id ? [i] : []));
+    const sizes = new Set<number>();
+    const ok = idx.every((i) => {
+      const e = en ? (m.ae[i] >= 0 ? m.E[m.ae[i]] : null) : undefined;
+      const a = ar ? (m.aa[i] >= 0 ? m.A[m.aa[i]] : null) : undefined;
+      if (e === null || a === null || e?.odd || a?.odd) return false;
+      if (a && e && sameMath(blockText(a), blockText(e)) < 0.35) return false;
+      for (const b of [a, e]) if (b) sizes.add(b.qs.length);
+      return sizes.size === 1 && [...sizes][0] > m.bank[i].qs.length;
+    });
+    if (!ok || sizes.size !== 1) continue;
+    const to = [...sizes][0];
+    out.push({ exam: id, title: m.rows[idx[0]].title, from: Math.max(...idx.map((i) => m.bank[i].qs.length)), to, marks: evenMarks(to) });
+  }
+  return out;
+}
+
+/**
+ * يخلي أسئلة الامتحان بالبوت بعدد الوورد: الأسئلة الموجودة تبقى بصورها، والأخير منها (اللي كان بي الزايد) والجداد
+ * تنرسم صورهن من نص الوورد، والدرجات بالتساوي، والنص ينحفظ. ما يصير إذا أحد امتحن هذا الامتحان
+ */
+export async function growExam(arDoc: Buffer | null, enDoc: Buffer | null, chapter: string, examId: number, growId: number) {
+  const m = await matchWord(arDoc, enDoc, chapter, examId);
+  const g = m.grow.find((x) => x.exam === growId);
+  need(g, "عدد الأسئلة بالوورد لازم يكون نفسه بكل نسخ الامتحان، بالعربي والإنجليزي");
+  const taken = (await find("sched_items", { exam_id: growId })).some((it) => it.started_at || it.submitted_at || it.total != null);
+  need(!taken, "اكو طلاب امتحنوا هذا الامتحان، فما يتغير عدد أسئلته");
+  const { questionPng } = await import("./documents.ts");
+  // الصور أول، حتى إذا وحدة ما انرسمت ما يتغير شي
+  const plan: { r: BankRow; a?: WordBlock; e?: WordBlock; pics: Map<number, string> }[] = [];
+  for (const [i, r] of m.bank.entries()) {
+    if (r.exam.id !== growId) continue;
+    const a = m.aa[i] >= 0 ? m.A[m.aa[i]] : undefined, e = m.ae[i] >= 0 ? m.E[m.ae[i]] : undefined;
+    const pics = new Map<number, string>();
+    for (let k = Math.max(0, r.qs.length - 1); k < g!.to; k++) {
+      const [text, lang] = a ? [a.qs[k].text, "ar" as const] : [e!.qs[k].text, "en" as const];
+      const png = await questionPng(text, lang);
+      need(png, `ما گدرت أرسم السؤال ${k + 1} بنسخة ${r.v.model}`);
+      const key = `bank/word/v${r.v.id}_q${k + 1}_${createHash("sha1").update(text).digest("hex").slice(0, 10)}.png`;
+      await files().write(key, png!, "image/png");
+      pics.set(k, key);
+    }
+    plan.push({ r, a, e, pics });
+  }
+  for (const { r, a, e, pics } of plan) {
+    for (let k = 0; k < g!.to; k++) {
+      const row: Row = { max_mark: g!.marks[k], edited: 1 };
+      if (a) row.q_text = a.qs[k].text;
+      if (e) row.q_text_en = e.qs[k].text;
+      if (pics.has(k)) row.q_file = pics.get(k);
+      if (k < r.qs.length) await update("bank_questions", { id: r.qs[k].id }, row);
+      else await insert("bank_questions", { version_id: r.v.id, n: k + 1, a_files: "[]", ...row });
+    }
+  }
+  return g!;
 }
 
 /** يحفظ نص كل سؤال للنسخ اللي طابقت بس. يرجع كم نسخة انحفظت بكل لغة */

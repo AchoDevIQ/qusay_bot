@@ -107,3 +107,31 @@ test("ترقيم «1/ 2/ 3/» بلا س أو Q: ينقبل بعد العنوان
   // نسخة بلا عنوان أسئلتها بـ«س»: «1 /» فروع، مو أسئلة
   assert.deepEqual(b[2].qs.map((q) => q.n), [1]);
 });
+
+test("بالوورد أسئلة أكثر من البوت بكل النسخ: يطلع زر يخليه مثل الوورد، وما يتغير شي إذا الصورة ما انرسمت أو أحد امتحن", async () => {
+  const e = await insert("bank_exams", { slug: "g1", chapter: "فصل النمو", ord: 1, pos: 1, title: "Ln&E", info: "", minutes: 60 });
+  const vs = [await insert("bank_versions", { exam_id: e, model: "A", kind: "mandatory", ok: 1 }), await insert("bank_versions", { exam_id: e, model: "B", kind: "mandatory", ok: 1 })];
+  for (const v of vs) for (let k = 1; k <= 2; k++) await insert("bank_questions", { version_id: v, n: k, max_mark: 50, q_file: `g${v}_${k}.png`, a_files: "[]" });
+  const en = body(["Exam {4} · ln & e · Model A Time: 1:15", "1/ find 11", "2/ find 12", "find y`", "3/ y=13",
+    "Exam {4} · ln & e · Model B Time: 1:15", "1/ find 21", "2/ find 22", "find y`", "3/ y=23 4/ x"].map(p).join(""));
+  const form = (action: string) => { const f = new FormData(); f.set("initData", sign(1)); f.set("action", action); f.set("chapter", "فصل النمو"); f.set("en", new Blob([en])); f.set("grow", String(e)); return f; };
+  const pre: any = await examUpload(form("wordPreview"));
+  assert.deepEqual(pre.word.grow, [{ exam: e, title: "Ln&E", from: 2, to: 3, marks: [34, 33, 33] }]);
+  // بالاختبار ماكو متصفح يرسم الصورة: يرفض وما يتغير شي
+  await assert.rejects(examUpload(form("wordGrow")), /أرسم/);
+  assert.equal((await find("bank_questions", { version_id: vs[0] })).length, 2);
+  // أحد بدأ الامتحان: يرفض
+  await insert("sched_items", { user_id: 5, exam_id: e, status: "done", started_at: "2026-11-01 10:00" });
+  await assert.rejects(examUpload(form("wordGrow")), /امتحنوا/);
+});
+
+test("الرقم بنص السطر بالعربي «… sinx 10/ اذا علمت ان» ينقبل إذا هو اللي بعده بالتسلسل", () => {
+  const b = splitExamDoc(["الامتحان {4} ln &e D 1:15", "1/ جد 1", "2/ جد 2", "$y'=cotx$ اثبت ان , e^{y}=sinx 3/ اذا علمت ان", "عدد 7/ مو سؤال"]);
+  assert.deepEqual(b[0].qs.map((q) => q.n), [1, 2, 3]);
+  assert.equal(b[0].qs[2].text, "$y'=cotx$ اثبت ان , e^{y}=sinx اذا علمت ان\nعدد 7/ مو سؤال");
+});
+
+test("بالترقيم «1/ 2/»: «جد y`» بين سؤالين يروح للسؤال اللي بعده", () => {
+  const b = splitExamDoc(["الامتحان {4} ln &e A 1:15", "1/ جد 1", "7/ $x=16$ جد a", "جد y`", "8/ $y=25$"].map((l, i) => (i === 2 ? "2/ $x=16$ جد a" : i === 4 ? "3/ $y=25$" : l)));
+  assert.deepEqual(b[0].qs.map((q) => q.text), ["جد 1", "$x=16$ جد a", "جد y`\n$y=25$"]);
+});

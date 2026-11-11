@@ -10,7 +10,8 @@ type Exam = { id: number; ord: number; title: string; info: string; titleEn: str
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type WordSide = { ok: boolean; got: number[] | null; first: string } | null;
 type WordRow = { exam: number; title: string; model: string; kind: string; n: number; ar: WordSide; en: WordSide };
-type WordResult = { rows: WordRow[]; extraAr: number; extraEn: number; saved: { ar: number; en: number } | null };
+type WordGrow = { exam: number; title: string; from: number; to: number; marks: number[] };
+type WordResult = { rows: WordRow[]; extraAr: number; extraEn: number; saved: { ar: number; en: number } | null; grow?: WordGrow[]; grown?: WordGrow | null };
 type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean; lastTwoDone: boolean; notice?: string; word?: WordResult };
 
 const lectureOf = (info: string) => /\(([\d\s&]+)\)/.exec(info)?.[0] ?? "";
@@ -418,9 +419,10 @@ function WordImport({ chapters, result, busy, call }: { chapters: Chapter[]; res
   const [ar, setAr] = useState<File | null>(null);
   const [en, setEn] = useState<File | null>(null);
   const [all, setAll] = useState(false);
-  const send = (action: string) => {
+  const send = (action: string, grow?: number) => {
     const f = new FormData();
     f.set("action", action);
+    if (grow) f.set("grow", String(grow));
     if (target.startsWith("e:")) f.set("exam", target.slice(2)); else f.set("chapter", target);
     if (ar) f.set("ar", ar);
     if (en) f.set("en", en);
@@ -450,6 +452,13 @@ function WordImport({ chapters, result, busy, call }: { chapters: Chapter[]; res
       </div>
       {result && (
         <>
+          {result.grown && <div className="exhint atok">✅ «{result.grown.title}» صار {result.grown.to} أسئلة، درجاتها {result.grown.marks.join("، ")}. هسه دوس «💾 احفظ المطابق».</div>}
+          {(result.grow ?? []).map((g) => (
+            <div key={g.exam} className="exhint">
+              🔢 «{g.title}»: بالوورد {g.to} أسئلة بكل النسخ، وبالبوت {g.from}. تگدر تخليه {g.to} مثل الوورد: الدرجات تصير {g.marks.join("، ")}، والأسئلة الجديدة تنرسم صورها من نص الوورد.
+              <div className="exline"><Confirm label={`🔢 خليه ${g.to} أسئلة`} disabled={busy} onYes={() => send("wordGrow", g.exam)} /></div>
+            </div>
+          ))}
           {result.saved && <div className="exhint atok">✅ انحفظت أسئلة {result.saved.ar} نسخة بالعربي و{result.saved.en} نسخة بالإنجليزي.</div>}
           <div className="exhint">من {rows.length} نسخة: {rows.some((r) => r.ar) ? `العربي طابق ${okAr}` : ""}{rows.some((r) => r.ar) && rows.some((r) => r.en) ? "، " : ""}{rows.some((r) => r.en) ? `الإنجليزي طابق ${okEn}` : ""}.{result.extraAr ? ` بالعربي ${result.extraAr} نسخة زايدة ما إلها مكان.` : ""}{result.extraEn ? ` بالإنجليزي ${result.extraEn} نسخة زايدة.` : ""}</div>
           <label className="adcheck adflat"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /><span>راويني كل النسخ (هسه بس اللي ما طابقت)</span></label>
