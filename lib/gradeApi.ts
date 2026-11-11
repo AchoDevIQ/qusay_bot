@@ -1,5 +1,6 @@
 import { toLatinDigits } from "./config.ts";
 // صفحة التصحيح: أول مصحح يفتح الورقة تصير إله، يضغط درجة كل سؤال، والبوت يجمع ويبلغ الطالب وولي أمره
+import { titleFor } from "./examTitlesEn.ts";
 import { ADMIN_IDS } from "./config.ts";
 import { runCheckpoints } from "./checkpoints.ts";
 import path from "node:path";
@@ -164,7 +165,8 @@ export const objectionsWaiting = async (uid: number) => (await objectionPapers(u
 async function headerInfo(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });
   const st = await student(it.user_id);
-  return { slug: e?.slug ?? "", info: e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar", sid: it.user_id };
+  // الهدر الإنجليزي يكتب العنوان الإنجليزي
+  return { slug: e?.slug ?? "", info: st?.curr === "إنجليزي" ? String(e?.title_en || e?.info || "") : e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar", sid: it.user_id };
 }
 async function paperView(it: Row, withObj = false, editing = false) {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
@@ -553,7 +555,7 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   // الطالب وولي أمره توصلهم بطاقة الدرجة بس (صورة)، والأوراق المصححة يشوفوها بـ «📝 امتحاناتي»
   const st = await student(it.user_id);
   const when = String(it.started_at || it.attended_at || it.at || "");
-  const cardInfo = { name: String(st?.name ?? view.name), exam: view.title, center: (await examLabel(it.user_id)).replace(/^حضوري — /, ""), total, at: when.length >= 16 ? prettyAt(when) : when };
+  const cardInfo = { name: String(st?.name ?? view.name), exam: titleFor(await one("bank_exams", { id: it.exam_id }), st?.curr) || view.title, center: (await examLabel(it.user_id)).replace(/^حضوري — /, ""), total, at: when.length >= 16 ? prettyAt(when) : when };
   // بطاقة الطالب بيها الملصق حسب درجته، وبطاقة ولي الأمر بدون ملصق
   const sticker = await stickerData(c?.sticker);
   const card = await gradeCardPng(it.id, cardInfo);
@@ -599,7 +601,7 @@ export async function releaseHeld(sid: number) {
   const st = await student(sid);
   const e = await one("bank_exams", { id: it.exam_id });
   const when = String(it.started_at || it.attended_at || it.at || "");
-  const info = { name: String(st?.name ?? ""), exam: String(e?.title ?? "امتحان"), center: (await examLabel(sid)).replace(/^حضوري — /, ""), total: Number(it.total), at: when.length >= 16 ? prettyAt(when) : when };
+  const info = { name: String(st?.name ?? ""), exam: titleFor(e, st?.curr), center: (await examLabel(sid)).replace(/^حضوري — /, ""), total: Number(it.total), at: when.length >= 16 ? prettyAt(when) : when };
   const card = await gradeCardPng(it.id, info);
   await deliverCard(g.guardian_id, SEEN_CAPTION, seenButton(it.id), card, `📝 <b>تم تصحيح امتحان ${esc(info.exam)}</b>
 الدرجة: <b>${info.total}</b> من 100

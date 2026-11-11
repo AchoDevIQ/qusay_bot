@@ -1,4 +1,5 @@
 // غرفة الامتحان للطالب الإلكتروني: الدخول بوقته، النسخة، صور الأسئلة، ورفع الأجوبة بدون أي كود
+import { titleFor } from "./examTitlesEn.ts";
 import { photosAllowed } from "./inPerson.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { activeStop, checkStopped } from "./checkpoints.ts";
@@ -90,14 +91,14 @@ async function roomView(it: Row, s: SchedSettings) {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   const sworn = !!await kvGet(oathKey(it.id));
   return {
-    id: it.id, sid: it.user_id, title: e.title, model: v.model, oath: oathSentence(st?.name ?? ""), sworn: !!await kvGet(oathKey(it.id)), gallery: s.gallery, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra,
+    id: it.id, sid: it.user_id, title: titleFor(e, st?.curr), model: v.model, oath: oathSentence(st?.name ?? ""), sworn: !!await kvGet(oathKey(it.id)), gallery: s.gallery, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra,
     // صور الأسئلة ما توصل للصفحة أصلاً قبل القسم
     pages: await kvGet(oathKey(it.id)) ? await pagesOf(e, v, st?.curr ?? "") : [],
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark ?? 0, answers: answers.filter((a) => a.q === q.n).map((a) => ({ id: a.id, file: a.file })),
       // ورقة الكتابة بالقلم: صورة السؤال (بعد القسم بس)، ونصه إذا انرفع من الوورد
       img: sworn && q.q_file && !String(q.q_file).startsWith("tg:") ? String(q.q_file) : null, text: sworn ? q.q_text ?? null : null })),
     // هدر ورقة الكتابة بالقلم: نفس هدر الفصل بالورقة المصححة، واسمه الرباعي
-    head: { slug: String(e.slug ?? ""), chapter: String(e.chapter ?? ""), title: String(e.title ?? ""), info: String(e.info ?? ""), name: String(st?.name ?? ""), lang: st?.curr === "إنجليزي" ? "en" : "ar" },
+    head: { slug: String(e.slug ?? ""), chapter: String(e.chapter ?? ""), title: titleFor(e, st?.curr), info: st?.curr === "إنجليزي" ? String(e.title_en || e.info || "") : String(e.info ?? ""), name: String(st?.name ?? ""), lang: st?.curr === "إنجليزي" ? "en" : "ar" },
   };
 }
 async function ownItem(uid: number, id: unknown) {

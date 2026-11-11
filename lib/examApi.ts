@@ -1,4 +1,5 @@
 // واجهة صفحة إدارة الامتحانات: كل طلب لازم صاحبه يكون عنده صلاحية الامتحانات
+import { defaultEnTitle } from "./examTitlesEn.ts";
 import { AUDIO } from "./objections.ts";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -39,7 +40,7 @@ export async function examList(uid: number) {
     if (!c) { c = { slug: e.slug, chapter: e.chapter, exams: [] }; chapters.push(c); }
     const dir = `${e.slug}/e${e.ord}`;
     c.exams.push({
-      id: e.id, ord: e.ord, title: e.title, info: e.info, minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0, skippable: skip.includes(e.id),
+      id: e.id, ord: e.ord, title: e.title, info: e.info, titleEn: String(e.title_en ?? "") || defaultEnTitle(e), minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0, skippable: skip.includes(e.id),
       versions: (vBy.get(e.id) ?? []).map((v) => {
         const pdf = (lang: "ar" | "en") => v["pdf_" + lang] || (lang === "ar" || v.has_en ? `${dir}/${v.model}/student_${lang}.pdf` : null);
         // صور الصفحات تنعرض داخل الصفحة. إذا انرفع PDF بديل، ينفتح الملف نفسه
@@ -221,9 +222,9 @@ export async function examAction(body: Row) {
     const title = String(body.title ?? "").trim().slice(0, 80);
     need(title, "اكتب عنوان الامتحان");
     need(await one("bank_exams", { id }), "الامتحان غير موجود");
-    // الاسم الإنجليزي يطلع لطلاب الإنجليزي
+    // الاسم الإنجليزي يطلع لطلاب المنهج الإنجليزي (بمكانه الخاص، مو بمعلومات الامتحان)
     const en = body.en === undefined ? undefined : String(body.en).trim().slice(0, 80);
-    await update("bank_exams", { id }, en === undefined ? { title } : { title, info: en });
+    await update("bank_exams", { id }, en === undefined ? { title } : { title, title_en: en });
     await logEdit(uid, `امتحان ${id}: العنوان ${title}${en ? ` / ${en}` : ""}`);
   } else if (a === "skippable") {
     // الأصل: الامتحان ما ينحذف. صاحب الصلاحية يأشر على امتحان (مثلاً مكرر) فطالب الجدول الخاص يگدر يشيله

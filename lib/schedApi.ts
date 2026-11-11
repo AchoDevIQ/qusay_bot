@@ -1,4 +1,5 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
+import { titleFor } from "./examTitlesEn.ts";
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { photosAllowed, studentCode } from "./inPerson.ts";
 import { appLink, lectureMap, sendLectureFile, visibleLectureFiles } from "./lectures.ts";
@@ -417,6 +418,9 @@ async function studentInfo(uid: number) {
   const late = general ? await lateExams(uid, sched!, s) : [];
   // جدول المكان كله يطلع حتى يعرف شوكت يخلص، والفصول اللي ما اشتراها مقفولة
   const lockedRows: Row[] = [];
+  // طالب المنهج الإنجليزي يشوف عناوين الامتحانات بالإنجليزي
+  const byId = new Map((await find("bank_exams")).map((e) => [e.id as number, e]));
+  const enTitle = (exam: number, title: string) => (st?.curr === "إنجليزي" && byId.get(exam)?.title_en) || title;
   const lec = await lectureMap();
   const skip = new Set(await skippableExams()), kept = new Set(await keptExams(uid));
   if (general) {
@@ -426,7 +430,7 @@ async function studentInfo(uid: number) {
     for (const [examId, day] of await placeDays(sched!.center_id)) {
       const e = allExams.get(examId);
       const at = pickedAt(day, picks);
-      if (e && at && !mine.has(examId)) lockedRows.push({ id: -e.id, title: e.title, chapter: e.chapter, minutes: e.minutes ?? 75, lectures: lec.get(e.id) ?? [], at, state: "notbought" });
+      if (e && at && !mine.has(examId)) lockedRows.push({ id: -e.id, title: titleFor(e, st?.curr), chapter: e.chapter, minutes: e.minutes ?? 75, lectures: lec.get(e.id) ?? [], at, state: "notbought" });
     }
   }
   return {
@@ -451,7 +455,7 @@ async function studentInfo(uid: number) {
     // المنافسة: مجموعته وترتيبه بالمركز
     comp: await studentComp(uid),
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
-    items: [...(await itemsView(uid, s)).map((i) => ({ ...i, skippable: !general && !!sched && i.status === "waiting" && !i.optional && i.state === "locked" && skip.has(i.exam) && !kept.has(i.exam) })), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
+    items: [...(await itemsView(uid, s)).map((i) => ({ ...i, title: enTitle(i.exam, i.title), skippable: !general && !!sched && i.status === "waiting" && !i.optional && i.state === "locked" && skip.has(i.exam) && !kept.has(i.exam) })), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
     week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s), offDays: s.offDays,
     holiday: s.holidayStart && s.holidayDays ? { start: s.holidayStart, days: s.holidayDays } : null,
     holReq: (await holRequests()).find((r) => r.uid === uid) ?? null,

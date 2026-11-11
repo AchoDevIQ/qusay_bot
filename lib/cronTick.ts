@@ -40,6 +40,7 @@ export async function cronTick(key: unknown) {
     await step("signups", () => sweepSignups());
     await step("birthdays", () => sweepBirthdays());
     await step("lectureTitles", () => fixLectureTitles());
+    await step("examTitlesEn", async () => (await import("./examTitlesEn.ts")).fillEnTitles());
     await step("versionsFill", () => fillAllVersions());
     await step("makeup", () => sweepMakeup());
   } finally {

@@ -6,7 +6,7 @@ import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
-type Exam = { id: number; ord: number; title: string; info: string; minutes: number; privateVersion: number; skippable: boolean; versions: Version[] };
+type Exam = { id: number; ord: number; title: string; info: string; titleEn: string; minutes: number; privateVersion: number; skippable: boolean; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Data = { chapters: Chapter[]; generalMinutes: number; fileToken: string; bookMissing: boolean; lastTwoDone: boolean; notice?: string };
 
@@ -189,7 +189,7 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
   useEffect(() => setMinutes(String(exam.minutes)), [exam.minutes]);
   const [title, setTitle] = useState(exam.title);
   useEffect(() => setTitle(exam.title), [exam.title]);
-  const [en, setEn] = useState(exam.info);
+  const [en, setEn] = useState(exam.titleEn);
   useEffect(() => setEn(exam.info), [exam.info]);
   const version = exam.versions.find((v) => v.id === openVersion);
   return (
@@ -203,7 +203,7 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
       <div className="exadd">
         <input aria-label="عنوان الامتحان" placeholder="الاسم بالعربي" value={title} onChange={(e) => setTitle(e.target.value)} />
         <input aria-label="الاسم بالإنجليزي" dir="ltr" placeholder="🇬🇧 الاسم بالإنجليزي" value={en} onChange={(e) => setEn(e.target.value)} />
-        <button type="button" className="exbtn" disabled={busy || !title.trim() || (title.trim() === exam.title && en.trim() === exam.info)} onClick={() => call({ action: "renameExam", id: exam.id, title, en })}>حفظ العنوان</button>
+        <button type="button" className="exbtn" disabled={busy || !title.trim() || (title.trim() === exam.title && en.trim() === exam.titleEn)} onClick={() => call({ action: "renameExam", id: exam.id, title, en })}>حفظ العنوان</button>
       </div>
       <MarksEditor exam={exam} busy={busy} call={call} />
       <PrivateVersion exam={exam} busy={busy} call={call} />

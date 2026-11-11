@@ -61,9 +61,9 @@ async function init() {
     CREATE TABLE IF NOT EXISTS settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, office_id INTEGER, amount INTEGER, n INTEGER, created TEXT);
     CREATE TABLE IF NOT EXISTS staff_pay(id INTEGER PRIMARY KEY AUTOINCREMENT, staff_id INTEGER, amount INTEGER, created TEXT);
     CREATE TABLE IF NOT EXISTS qmsgs(id INTEGER PRIMARY KEY AUTOINCREMENT, qid INTEGER, kind TEXT, chat_id INTEGER, msg_id INTEGER);
-    CREATE TABLE IF NOT EXISTS bank_exams(id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, chapter TEXT, ord INTEGER, title TEXT, info TEXT, minutes INTEGER, UNIQUE(slug, ord));
+    CREATE TABLE IF NOT EXISTS bank_exams(id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, chapter TEXT, ord INTEGER, title TEXT, info TEXT, minutes INTEGER, title_en TEXT, UNIQUE(slug, ord));
     CREATE TABLE IF NOT EXISTS bank_versions(id INTEGER PRIMARY KEY AUTOINCREMENT, exam_id INTEGER, model TEXT, kind TEXT DEFAULT 'mandatory', ok INTEGER DEFAULT 1, issues TEXT, has_en INTEGER DEFAULT 0, UNIQUE(exam_id, model));
-    CREATE TABLE IF NOT EXISTS bank_questions(id INTEGER PRIMARY KEY AUTOINCREMENT, version_id INTEGER, n INTEGER, max_mark INTEGER, q_file TEXT, a_files TEXT, q_text TEXT, edited INTEGER DEFAULT 0, UNIQUE(version_id, n));
+    CREATE TABLE IF NOT EXISTS bank_questions(id INTEGER PRIMARY KEY AUTOINCREMENT, version_id INTEGER, n INTEGER, max_mark INTEGER, q_file TEXT, a_files TEXT, q_text TEXT, q_text_en TEXT, edited INTEGER DEFAULT 0, UNIQUE(version_id, n));
     CREATE TABLE IF NOT EXISTS bank_edits(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS exam_access(user_id INTEGER, chapter TEXT, order_id INTEGER, created TEXT, PRIMARY KEY(user_id, chapter));
     CREATE TABLE IF NOT EXISTS order_codes(code TEXT PRIMARY KEY, order_id INTEGER UNIQUE, chapters TEXT, used_at TEXT);
@@ -95,6 +95,8 @@ async function init() {
   await addColumn("orders", "curr", "TEXT");
   await addColumn("schedules", "hol", "TEXT");
   await addColumn("bank_questions", "q_text", "TEXT");
+  await addColumn("bank_questions", "q_text_en", "TEXT");
+  await addColumn("bank_exams", "title_en", "TEXT");
   await addColumn("settlements", "parts", "TEXT");
   await addColumn("company_settlements", "parts", "TEXT");
   await addColumn("grader_settlements", "forgiven", "INTEGER");
