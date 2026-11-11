@@ -341,3 +341,8 @@ body.grwide .grtop{padding-left:104px}
 .exadd .dateinput{flex:1;width:auto}
 
 .mxholrow td:first-child{border-right:4px dashed #CEA239}
+
+/* ترتيب الجملة: الكلمة المختارة تنمسح بالدوس عليها */
+.agchip{display:inline-flex;align-items:center;gap:4px;margin:3px;padding:4px 10px;border-radius:999px;border:1px solid var(--gold2);background:rgba(249,196,69,.12);color:var(--txt);font:inherit;cursor:pointer}
+.agchip span{font-size:11px;color:var(--red)}
+.agfix{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}.agfix small{flex-basis:100%;color:var(--mut)}.agfix .exbtn{flex:1}
