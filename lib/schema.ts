@@ -26,7 +26,7 @@ export const SCHEMA: Record<string, Table> = {
   settlements: { key: "id", auto: true, cols: nulls("office_id", "amount", "n", "created", "parts") },
   staff_pay: { key: "id", auto: true, cols: nulls("staff_id", "amount", "created") },
   qmsgs: { key: "id", auto: true, cols: nulls("qid", "kind", "chat_id", "msg_id") },
-  bank_exams: { key: "id", auto: true, cols: { ...nulls("slug", "chapter", "ord", "title", "info", "minutes", "pos", "group_versions", "title_en"), manual: 0 } },
+  bank_exams: { key: "id", auto: true, cols: { ...nulls("slug", "chapter", "ord", "title", "info", "minutes", "pos", "group_versions", "title_en", "answer_only"), manual: 0 } },
   bank_versions: { key: "id", auto: true, cols: { ...nulls("exam_id", "model", "issues", "pdf_ar", "pdf_en", "pages_ar", "pages_en", "answer_pdf"), kind: "mandatory", ok: 1, has_en: 0, manual: 0 } },
   bank_questions: { key: "id", auto: true, cols: { ...nulls("version_id", "n", "max_mark", "q_file", "a_files", "q_text", "q_text_en"), edited: 0 } },
   bank_edits: { key: "id", auto: true, cols: nulls("user_id", "what", "created") },

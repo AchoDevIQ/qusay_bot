@@ -4,6 +4,7 @@ import { checkDevice, checkPhone } from "./deviceLock.ts";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { ADMIN_IDS } from "./config.ts";
+import { SKIP } from "./answerOnly.ts";
 import { find, insert, one, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { can, isAdmin, student } from "./data.ts";
@@ -48,7 +49,7 @@ export async function objectionInfo(uid: number, raw: unknown) {
   const objs = new Map((await find("objections", { item_id: it.id })).map((o) => [o.q, o]));
   return {
     id: it.id, title: e?.title ?? "امتحان", total: it.total,
-    questions: qs.map((q) => ({ n: q.n, max: q.max_mark, mark: marks.get(q.n) ?? 0, obj: objs.has(q.n) ? view(objs.get(q.n)!) : null })),
+    questions: qs.map((q) => ({ n: q.n, max: q.max_mark, mark: marks.get(q.n) ?? 0, skip: marks.get(q.n) === SKIP, obj: objs.has(q.n) ? view(objs.get(q.n)!) : null })),
   };
 }
 
@@ -69,6 +70,7 @@ export async function submitObjection(form: FormData) {
   for (const n of picked) {
     need(qs.has(n), "السؤال غير موجود");
     need(!done.has(n), `اعترضت على السؤال ${n} من قبل`);
+    need(marks.get(n) !== SKIP, `السؤال ${n} تركته، ما جاوبت عليه`);
     const text = String(form.get(`text_${n}`) ?? "").trim().slice(0, TEXT_MAX);
     // الاعتراض كتابة بس (لا صوت ولا صورة)
     need(text, `اكتب سبب اعتراضك على السؤال ${n}`);
@@ -110,7 +112,7 @@ export async function testObjection(it: Row) {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
   const taken = new Set((await find("objections", { item_id: it.id })).map((o) => o.q));
-  const free = qs.filter((q) => !taken.has(q.n)).sort(() => Math.random() - 0.5).slice(0, 2);
+  const free = qs.filter((q) => !taken.has(q.n) && marks.get(q.n) !== SKIP).sort(() => Math.random() - 0.5).slice(0, 2);
   need(free.length, "كل أسئلة هذي الورقة انعترض عليها");
   const texts = ["🧪 اعتراض تجربة: حليت السؤال بطريقة ثانية وجوابي النهائي صحيح.", "🧪 اعتراض تجربة: نسيت أصحح الخطوة الثانية، هي موجودة بالصفحة الثانية."];
   for (const [i, q] of free.entries()) await insert("objections", { item_id: it.id, user_id: it.user_id, q: q.n, text: texts[i], voice: null, status: "open", old_mark: marks.get(q.n) ?? 0, new_mark: null, reason: null, created: stamp(), decided_at: null, decided_by: null });

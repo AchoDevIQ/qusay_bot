@@ -21,7 +21,7 @@ export async function studentPapers(uid: number) {
       id: it.id, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", optional: it.kind === "optional",
       submitted: it.submitted_at ?? "", graded: it.graded_at ?? "", total: it.total ?? null,
       grader: it.grader_id ? await staffName(it.grader_id) : "", ai,
-      marks: qs.map((q) => ({ n: q.n, max: q.max_mark, mark: marks.get(q.n) ?? null })),
+      marks: qs.map((q) => ({ n: q.n, max: q.max_mark, mark: marks.get(q.n) === -1 ? null : marks.get(q.n) ?? null, skip: marks.get(q.n) === -1 })),
       objections: { open: objs.filter((o) => o.status === "open").length, ok: objs.filter((o) => o.status === "accepted").length, no: objs.filter((o) => o.status === "rejected").length },
       // الصور: الورقة المصححة إذا انحفظت، وإلا جوابه مثل ما رفعه
       pages: graded.length ? graded : answers.filter((f) => /\.(jpe?g|png)$/i.test(f)),

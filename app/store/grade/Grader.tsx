@@ -8,12 +8,13 @@ import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
 import { COLORS, WIDTHS } from "./pens";
 import VoiceRec from "../VoiceRec";
 import MessageBox from "./MessageBox";
+import { SKIP, missingQs, paperTotal } from "../../../lib/answerOnly.ts";
 
-export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null; byAi?: boolean };
+export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null; answered?: boolean; byAi?: boolean };
 export type GVoice = { id?: string; name: string; ref: string };
 /** شلون صحح المصحح الآلي كل سؤال: درجة كل خطوة وسببها */
 export type AiQ = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { awarded: number; possible: number; reason: string; expected: string; student: string }[] };
-export type Paper = { editing?: boolean; ai?: AiQ[] | null; errors?: string[]; voices?: GVoice[]; myVoices?: GVoice[]; inPerson?: boolean; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[] };
+export type Paper = { editing?: boolean; ai?: AiQ[] | null; errors?: string[]; voices?: GVoice[]; myVoices?: GVoice[]; inPerson?: boolean; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[]; answerOnly?: number };
 /** اعتراض الطالب على سؤال: نصه، وتسجيله إذا موجود، ودرجته قبل الاعتراض */
 export type Objection = { q: number; text: string; voice: string | null; old: number };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
@@ -425,8 +426,11 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const page = pages?.[at];
   const curQ = page?.q ?? qSel;
   const q = paper.questions.find((x) => x.n === curQ);
-  const total = Object.values(marks).reduce<number>((s, m) => s + (m ?? 0), 0);
-  const missing = paper.questions.filter((x) => marks[x.n] === null || marks[x.n] === undefined).length;
+  // «أجب عن K أسئلة»: المتروك ما ينحسب، والزايد على K (الأخير) هم ما ينحسب
+  const k = paper.answerOnly ?? 0;
+  const withMarks = paper.questions.map((x) => ({ ...x, mark: marks[x.n] ?? null }));
+  const total = paperTotal(withMarks, k);
+  const missing = missingQs(withMarks, k).length;
   const changedObj = (o: Objection) => marks[o.q] !== null && marks[o.q] !== undefined && marks[o.q] !== o.old;
   const undecided = objs.filter((o) => !changedObj(o) && rejects[o.q] === undefined);
   const accepted = objs.filter(changedObj).length;
@@ -487,7 +491,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   }
   /** حفظ الورقة: لازم كل الأسئلة عدها درجة. بعدها تنفتح الورقة الجاية مباشرة، والحفظ يكمل بالخلفية */
   function save() {
-    const miss = paper.questions.find((x) => marks[x.n] === null || marks[x.n] === undefined);
+    const missN = missingQs(withMarks, k)[0];
+    const miss = paper.questions.find((x) => x.n === missN);
     if (miss) {
       setSaveErr(`باقي درجة السؤال ${miss.n}`);
       const i = pages?.findIndex((p) => holds(p, miss.n)) ?? -1;
@@ -551,13 +556,15 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       </div>
       {q && (
         <div className="gk-row gk-marks">
-          {page?.q === null && <div className="gk-qs">{paper.questions.filter((x) => !page.qs || page.qs.includes(x.n)).map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
+          {page?.q === null && <div className="gk-qs">{paper.questions.filter((x) => !page.qs || page.qs.includes(x.n)).map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] === SKIP ? " · ⏭" : marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
           <span className="gk-q">س{q.n}<small> من {q.max}</small>{q.byAi && <small className="gk-byai"> · 🤖 صححه AI</small>}</span>
           <div className="gk-nums" style={{ ["--cols" as string]: q.max + 1 <= 16 ? q.max + 1 : Math.ceil((q.max + 1) / 2) }}>
             {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (
               <button type="button" key={m} className={(marks[q.n] === m ? "on" : "") + (objMode && objOf(q.n)?.old === m ? " gk-was" : "")} disabled={busy || locked || (objMode && !objOf(q.n)) || (!objMode && !!q.byAi)} onClick={() => void press(m)}>{m}</button>
             ))}
+            {k > 0 && !objMode && <button type="button" className={marks[q.n] === SKIP ? "on" : ""} title="الطالب ما جاوب على هذا السؤال" disabled={busy || locked || !!q.byAi} onClick={() => void press(SKIP)}>⏭ ترك</button>}
           </div>
+          {k > 0 && <span className="gk-hint">أجب عن {k} من {paper.questions.length}: تنحسب أول {k} جاوبهن</span>}
           <span className="gk-total">{total} / 100</span>
           {!locked && !objMode && <button type="button" className="gk-save" disabled={busy} onClick={save}>💾 حفظ{missing ? ` (باقي ${missing})` : ""}</button>}
           {objMode && <button type="button" className="gk-save" disabled={busy} onClick={decide}>💾 حفظ الرد{undecided.length ? ` (باقي ${undecided.length})` : ""}</button>}

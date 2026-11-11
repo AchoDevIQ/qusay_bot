@@ -11,9 +11,11 @@ const QEND = /\s*\/?\s*(?:س|Q)\s*([0-9\u0660-\u0669]+)\s*$/i;
 // \u0646\u0633\u062e\u0629 \u0623\u0633\u0626\u0644\u062a\u0647\u0627 \u0645\u0631\u0642\u0645\u0629 \u00ab1/ 2/ 3/\u00bb \u0628\u0644\u0627 \u00ab\u0633\u00bb \u0623\u0648 Q: \u062a\u0646\u0642\u0628\u0644 \u0628\u0633 \u0625\u0630\u0627 \u0623\u0648\u0644 \u0633\u0637\u0631 \u0628\u0639\u062f \u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u00ab1/\u00bb\u060c
 // \u0648\u0628\u0639\u062f\u0647\u0627 \u0643\u0644 \u0631\u0642\u0645 \u0644\u0627\u0632\u0645 \u064a\u0643\u0648\u0646 \u0627\u0644\u0644\u064a \u0628\u0639\u062f\u0647 \u0628\u0627\u0644\u062a\u0633\u0644\u0633\u0644\u060c \u0641\u0640\u00ab1/ 2/\u00bb \u062a\u062d\u062a \u0633\u0624\u0627\u0644 (\u0641\u0631\u0648\u0639\u0647) \u062a\u0628\u0642\u0649 \u0645\u0646 \u0646\u0641\u0633 \u0627\u0644\u0633\u0624\u0627\u0644
 // (\u0648\u0627\u0644\u0634\u0627\u0631\u062d\u0629 \u0623\u062d\u064a\u0627\u0646\u0627\u064b \u062a\u0646\u0643\u062a\u0628 \u062f\u0627\u062e\u0644 \u0645\u0639\u0627\u062f\u0644\u0629 \u00ab10 $/$\u00bb)
-const BARE = /^\s*[\u200e\u200f\u202a-\u202e]*\s*([0-9\u0660-\u0669]+)\s*(?:\$\s*\/\s*\$|\/)\s*/;
+// وأحياناً الرقم وراه فرع السؤال مباشرة «05 A / …»
+const BARE = /^\s*[\u200e\u200f\u202a-\u202e]*\s*([0-9\u0660-\u0669]+)\s*(?:\$\s*\/\s*\$|\/|(?=[ABab]\s*\/))\s*/;
 const toNum = (d: string) => Number(d.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x660)));
-const HEAD = /نموذج|Model|^الامتحان\s*\{|^Exam\s*\{/i;
+// عنوان نسخة: «نموذج A» و«Model A» و«الامتحان {…}» و«نصف السنه A» و«Midyear A»
+const HEAD = /نموذج|Model|^الامتحان\s*\{|^Exam\s*\{|^نصف\s*السن[ةه]|^Midyear/i;
 
 /** سطور الوورد (من docxLines) ← نسخ */
 export function splitExamDoc(lines: string[]): WordBlock[] {
@@ -39,6 +41,12 @@ export function splitExamDoc(lines: string[]): WordBlock[] {
         cur.qs.push({ n: next, text: (l.slice(0, mid.index) + mid[1] + l.slice(mid.index + mid[0].length)).replace(/\s{2,}/g, " ").trim() });
         continue;
       }
+    }
+    // نفس رقم السؤال مرة ثانية وبعده حرف فرع («Q1/ A/ …» وبعدها «Q1/ B/ …»): فرع ثاني من نفس السؤال.
+    // بلا حرف فرع («س 2» مرتين) يبقى غلط بالترقيم ويطلع بالتقرير
+    if (m && cur?.qs.length && !head.length && toNum(m[1]) === cur.qs[cur.qs.length - 1].n && /^\s*[ABab]\s*[\/\-]/.test(l.slice(m[0].length))) {
+      cur.qs[cur.qs.length - 1].text += "\n" + (m ? l.slice(m[0].length) : l.slice(0, end!.index)).trim();
+      continue;
     }
     if (m || end || b) {
       const n = toNum((m ?? end ?? b)![1]);
@@ -66,7 +74,7 @@ export function splitExamDoc(lines: string[]): WordBlock[] {
 /** حرف النسخة من العنوان: «نموذج A» أو «Model B» أو «{1 & 2} C _» */
 function modelOf(head: string[]): string | null {
   for (const h of head) {
-    const m = /(?:نموذج|Model)\s*([A-Z])\b/i.exec(h) ?? /\}\s*([A-Z])\s*_/.exec(h);
+    const m = /(?:نموذج|Model|نصف\s*السن[ةه]|Midyear)\s*([A-Z])\b/i.exec(h) ?? /\}\s*([A-Z])\s*_/.exec(h);
     if (m) return m[1].toUpperCase();
   }
   return null;

@@ -6,6 +6,7 @@ import { docxLines } from "./docxText.ts";
 import { createHash } from "node:crypto";
 import { find, insert, update, type Row } from "./db.ts";
 import { files } from "./files.ts";
+import { answerOnlyOf } from "./answerOnly.ts";
 import { need } from "./webApi.ts";
 import { alignBlocks, blockText, sameMath, splitExamDoc, type WordBlock } from "./wordQuestions.ts";
 
@@ -76,7 +77,10 @@ function growable(m: Matched, ar: boolean, en: boolean): Grow[] {
     });
     if (!ok || sizes.size !== 1) continue;
     const to = [...sizes][0];
-    out.push({ exam: id, title: m.rows[idx[0]].title, from: Math.max(...idx.map((i) => m.bank[i].qs.length)), to, marks: evenMarks(to) });
+    // «أجب عن K»: كل سؤال 100÷K (نصف السنة: 6 أسئلة، كل واحد 20)
+    const k = answerOnlyOf(m.bank[idx[0]].exam);
+    const marks = k && k < to && 100 % k === 0 ? Array<number>(to).fill(100 / k) : evenMarks(to);
+    out.push({ exam: id, title: m.rows[idx[0]].title, from: Math.max(...idx.map((i) => m.bank[i].qs.length)), to, marks });
   }
   return out;
 }

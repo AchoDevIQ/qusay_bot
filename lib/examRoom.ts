@@ -1,5 +1,6 @@
 // غرفة الامتحان للطالب الإلكتروني: الدخول بوقته، النسخة، صور الأسئلة، ورفع الأجوبة بدون أي كود
 import { titleFor } from "./examTitlesEn.ts";
+import { answerOnlyOf } from "./answerOnly.ts";
 import { photosAllowed } from "./inPerson.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { activeStop, checkStopped } from "./checkpoints.ts";
@@ -91,7 +92,7 @@ async function roomView(it: Row, s: SchedSettings) {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   const sworn = !!await kvGet(oathKey(it.id));
   return {
-    id: it.id, sid: it.user_id, title: titleFor(e, st?.curr), model: v.model, oath: oathSentence(st?.name ?? ""), sworn: !!await kvGet(oathKey(it.id)), gallery: s.gallery, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra,
+    id: it.id, sid: it.user_id, title: titleFor(e, st?.curr), model: v.model, oath: oathSentence(st?.name ?? ""), sworn: !!await kvGet(oathKey(it.id)), gallery: s.gallery, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra, answerOnly: answerOnlyOf(e),
     // صور الأسئلة ما توصل للصفحة أصلاً قبل القسم
     pages: await kvGet(oathKey(it.id)) ? await pagesOf(e, v, st?.curr ?? "") : [],
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark ?? 0, answers: answers.filter((a) => a.q === q.n).map((a) => ({ id: a.id, file: a.file })),

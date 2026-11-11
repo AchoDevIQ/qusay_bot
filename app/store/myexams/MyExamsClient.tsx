@@ -22,9 +22,17 @@ type Info = {
 };
 type Hol = { id: number; ids: number[]; from: string; to: string; title: string; reason: string; cancel: boolean; kept?: boolean };
 type ObjState = { status: "open" | "accepted" | "rejected"; text: string; voice: boolean; old: number; mark: number | null; reason: string };
-type Paper = { ai: AiQ[]; solutions: string | null; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
-type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; obj: ObjState | null }[] };
-type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; max: number; img: string | null; text: string | null; answers: { id: number; file: string }[] }[]; head: PenHead };
+type Paper = { ai: AiQ[]; solutions: string | null; id: number; title: string; chapter: string; submitted: string; graded: string; total: number | null; marks: { n: number; max: number; mark: number | null; skip?: boolean }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean; questions: string[] };
+type Obj = { id: number; title: string; total: number; questions: { n: number; max: number; mark: number; skip?: boolean; obj: ObjState | null }[] };
+/** «أجب عن K أسئلة فقط»: تنبيه فوك الأسئلة، ويصير أحمر إذا جاوب أكثر */
+function AnswerOnlyNote({ k, n, done }: { k: number; n: number; done: number }) {
+  return (
+    <div className={"expad exhint" + (done > k ? " exbad" : "")}>
+      ✂️ <b>جاوب عن {k} أسئلة بس من {n}.</b> {done > k ? `جاوبت ${done}: تنحسب أول ${k} بالترتيب، والباقي ما ينحسب. احذف جواب السؤال اللي ما تريده.` : `جاوبت ${done} من ${k}.`}
+    </div>
+  );
+}
+type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; max: number; img: string | null; text: string | null; answers: { id: number; file: string }[] }[]; head: PenHead; answerOnly?: number };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
 
 export default function MyExamsClient() {
@@ -471,8 +479,8 @@ function Objection({ obj, first, setObj, leave }: { obj: Obj; first: number; set
               const mine = pick[q.n];
               return (
                 <div key={q.n} className={"obq" + (mine ? " on" : "")}>
-                  <div className="obhead"><b>السؤال {q.n}</b><span>{q.obj?.status === "accepted" ? q.obj.mark : q.mark} من {q.max}</span></div>
-                  {q.obj ? (
+                  <div className="obhead"><b>السؤال {q.n}</b><span>{q.skip ? "⏭ ترك" : <>{q.obj?.status === "accepted" ? q.obj.mark : q.mark} من {q.max}</>}</span></div>
+                  {q.skip ? null : q.obj ? (
                     <div className={"obstate " + q.obj.status}>{STATUS(q.obj)}{q.obj.text && <small>اعتراضك: {q.obj.text}</small>}{q.obj.voice && <small>🎙 دزيت تسجيل صوتي</small>}</div>
                   ) : mine ? (
                     <>
@@ -543,8 +551,8 @@ function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: 
             <div className="expad exhint">شفت التصحيح وتشوف درجة سؤال مو صحيحة؟ دوس «اعترض» جنبه واكتب ليش.</div>
             <table className="extable"><tbody>
               {paper.marks.map((m) => (
-                <tr key={m.n}><td>السؤال {m.n}<small className="pdmode"><b>{m.mark ?? "—"}</b> من {m.max}</small></td>
-                  <td className="p"><button type="button" className="exbtn" disabled={busy} onClick={() => object(paper.id, m.n)}>✋ اعترض</button></td></tr>
+                <tr key={m.n}><td>السؤال {m.n}<small className="pdmode">{m.skip ? "⏭ ترك" : <><b>{m.mark ?? "—"}</b> من {m.max}</>}</small></td>
+                  <td className="p">{!m.skip && <button type="button" className="exbtn" disabled={busy} onClick={() => object(paper.id, m.n)}>✋ اعترض</button>}</td></tr>
               ))}
             </tbody></table>
           </div>
@@ -637,6 +645,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       <>
       {room.pages.map((p) => <div key={p} className="exidwrap"><span className="exid">🆔 {room.sid}</span><img className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" /></div>)}
       <div className="card"><h2>📷 صور جواب كل سؤال</h2>
+        {!!room.answerOnly && <AnswerOnlyNote k={room.answerOnly} n={room.questions.length} done={room.questions.filter((q) => q.answers.length).length} />}
         <div className="form">
           {room.questions.map((q) => (
             <div key={q.n}>

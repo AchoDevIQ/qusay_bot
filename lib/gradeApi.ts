@@ -1,3 +1,4 @@
+import { SKIP, answerOnlyOf, missingQs, paperTotal, type MarkQ } from "./answerOnly.ts";
 import { toLatinDigits } from "./config.ts";
 // صفحة التصحيح: أول مصحح يفتح الورقة تصير إله، يضغط درجة كل سؤال، والبوت يجمع ويبلغ الطالب وولي أمره
 import { titleFor } from "./examTitlesEn.ts";
@@ -147,7 +148,7 @@ export async function aiObjectionsTick(limit = 4) {
       }
     }
     if (!lines.length) continue;
-    const total = (await find("question_marks", { item_id: it.id })).reduce((s, m) => s + (m.mark ?? 0), 0);
+    const total = await itemTotal(it);
     await update("sched_items", { id: it.id }, { total });
     const view = await paperRow(it);
     await send(it.user_id, `🤖 <b>رد نظام التصحيح AI على اعتراضك</b>\nامتحان: ${esc(view.title)}\n\n${lines.join("\n\n")}\n\nدرجتك${accepted ? " الجديدة" : ""}: <b>${total}</b> من 100`, { extra: { protect_content: true } });
@@ -179,14 +180,26 @@ async function paperView(it: Row, withObj = false, editing = false) {
   const part = await aiPartialOf(it.id);
   const ink: Record<number, string> = {};
   for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
+  const answered = answeredOf(answers);
   return {
     ink, errors: await errorsOf(it.exam_id), ...await voicesOf(it), ai: await aiResultOf(it.id), inPerson: (await student(it.user_id))?.exam === "حضوري",
     objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark })),
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
     // byAi: صححه نظام التصحيح AI، فالمصحح ما يغيره (يصحح بس الأسئلة اللي حوّلها)
-    questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null, byAi: !editing && !!part && !part.includes(q.n) })), editing,
+    questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null, answered: answered(q.n), byAi: !editing && !!part && !part.includes(q.n) })), editing,
+    answerOnly: answerOnlyOf(await one("bank_exams", { id: it.exam_id })),
   };
+}
+/** جاوب على السؤال؟ بس إذا الأجوبة صور لكل سؤال؛ إذا الورقة كاملة (حضوري) ما نعرف */
+const answeredOf = (answers: Row[]) => (n: number) => (answers.some((a) => !a.q) ? undefined : answers.some((a) => a.q === n));
+/** مجموع الورقة من درجاتها المحفوظة، ويا قاعدة «أجب عن K أسئلة» */
+async function itemTotal(it: Row) {
+  const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
+  const answered = answeredOf(await find("exam_answers", { item_id: it.id }));
+  const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
+  const mq: MarkQ[] = qs.map((q) => ({ n: q.n, mark: marks.get(q.n) ?? null, answered: answered(q.n) }));
+  return paperTotal(mq, answerOnlyOf(await one("bank_exams", { id: it.exam_id })));
 }
 const voicesOf = async (it: Row) => ({ voices: (await examVoices(it.exam_id)).map(({ id, name, ref }) => ({ id, name, ref })), myVoices: (await paperVoices(it.id)).map((v) => ({ name: v.name, ref: v.ref })) });
 /** الورقة لازم تكون لهذا المصحح، حتى ما يكتب اثنين على نفس الورقة */
@@ -213,7 +226,6 @@ async function workPaper(uid: number, raw: unknown) {
   need(it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
   return { it: it!, obj: false };
 }
-const sumMarks = (qs: { mark: number | null }[]) => qs.reduce((s, q) => s + (q.mark ?? 0), 0);
 /** أوراق تجربة بدون طلاب حقيقيين: الجواب صورة السؤال نفسه، حتى تنجرب الشاشة وما توصل رسالة لأحد */
 /** طلاب تجربة: 3 طلاب، لكل واحد ورقة مسلمة بكل امتحان جاهز (جوابها الحل النموذجي).
  *  مثل الطلاب الحقيقيين: صاحب البوت يفتح صفحتهم ويعترض كأنه الطالب. أرقامهم سالبة، فما توصلهم رسائل وما تنحسب بالأجور */
@@ -418,7 +430,9 @@ export async function gradeAction(body: Row) {
     const q = await one("bank_questions", { version_id: it.version_id, n: Number(body.q) });
     need(q, "السؤال غير موجود");
     const mark = Number(body.mark);
-    need(Number.isInteger(mark) && mark >= 0 && mark <= q!.max_mark, `الدرجة من 0 إلى ${q!.max_mark}، رقم كامل`);
+    // «⏭ ترك» بس بامتحان «أجب عن K أسئلة»
+    const skipOk = mark === SKIP && !obj && !!answerOnlyOf(await one("bank_exams", { id: it.exam_id }));
+    need(skipOk || (Number.isInteger(mark) && mark >= 0 && mark <= q!.max_mark), `الدرجة من 0 إلى ${q!.max_mark}، رقم كامل`);
     const part = obj || await isEditing(uid, it.id) ? null : await aiPartialOf(it.id);
     need(!part || part.includes(q!.n) || await isAdmin(uid), "هذا السؤال صححه نظام التصحيح AI، إنت صحح بس الأسئلة اللي حوّلها إلك");
     if (obj) {
@@ -444,11 +458,11 @@ export async function gradeAction(body: Row) {
   } else if (a === "prepare") {
     // قبل الحفظ: المقولة والملصق حتى الصفحة تركب صورة الغلاف
     const { it, obj } = await workPaper(uid, body.id);
-    if (obj) return { total: sumMarks((await paperView(it, true)).questions), comment: "", sticker: 0, sent: 0 };
+    if (obj) { const v = await paperView(it, true); return { total: paperTotal(v.questions, v.answerOnly), comment: "", sticker: 0, sent: 0 }; }
     const view = await paperView(it);
-    const left = view.questions.filter((q) => q.mark === null).map((q) => q.n);
+    const left = missingQs(view.questions, view.answerOnly);
     need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
-    const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
+    const total = paperTotal(view.questions, view.answerOnly);
     const c = await pickComment(it.user_id, total);
     return { total, comment: c?.text ?? "", sticker: c?.sticker?.id ?? 0, sent: c?.id ?? 0 };
   } else if (a === "finish") {
@@ -520,9 +534,9 @@ async function stickerData(s: Row | null | undefined) {
 /** حفظ ورقة مصححة بعد تعديلها: الدرجة والصور تتبدل، وإذا الدرجة تغيرت يوصل خبر للطالب وولي أمره */
 async function finishEdit(uid: number, it: Row, photos: Buffer[]) {
   const view = await paperView(it);
-  const left = view.questions.filter((q) => q.mark === null).map((q) => q.n);
+  const left = missingQs(view.questions, view.answerOnly);
   need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
-  const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
+  const total = paperTotal(view.questions, view.answerOnly);
   const old = Number(it.total);
   await update("sched_items", { id: it.id }, { total });
   await keepPages(it.id, photos);
@@ -542,9 +556,9 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   const it = await myPaper(uid, raw);
   need(!it.graded_at, "الورقة مخلصة");
   const view = await paperView(it);
-  const left = view.questions.filter((q) => q.mark === null).map((q) => q.n);
+  const left = missingQs(view.questions, view.answerOnly);
   need(!left.length, `باقي درجة الأسئلة: ${left.join("، ")}`);
-  const total = view.questions.reduce((s, q) => s + (q.mark as number), 0);
+  const total = paperTotal(view.questions, view.answerOnly);
   await update("sched_items", { id: it.id }, { total, graded_at: stamp() });
   await keepPages(it.id, photos);
   const head = `📝 <b>تم تصحيح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
@@ -662,7 +676,7 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
       lines.push(`❌ السؤال ${o.q}: انرفض اعتراضك وبقت درجته ${o.old_mark}${reason ? `\nالسبب: ${esc(reason)}` : ""}`);
     }
   }
-  const total = (await find("question_marks", { item_id: it.id })).reduce((s, m) => s + (m.mark ?? 0), 0);
+  const total = await itemTotal(it);
   await update("sched_items", { id: it.id }, { total });
   if (accepted) await keepPages(it.id, photos);
   const view = await paperRow(it);

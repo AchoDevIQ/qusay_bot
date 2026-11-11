@@ -1,12 +1,13 @@
 "use client";
 // صفحة وحدة لإدارة الامتحانات: جدول الامتحانات، وكل شي ينفتح داخل نفس الصفحة بدون رسائل بالبوت
+import { fullMarks } from "../../../lib/answerOnly.ts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import PdfPages from "../PdfPages";
 import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
-type Exam = { id: number; ord: number; title: string; info: string; titleEn: string; minutes: number; privateVersion: number; skippable: boolean; versions: Version[] };
+type Exam = { id: number; ord: number; title: string; info: string; titleEn: string; minutes: number; privateVersion: number; skippable: boolean; answerOnly: number; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type WordSide = { ok: boolean; got: number[] | null; first: string } | null;
 type WordRow = { exam: number; title: string; model: string; kind: string; n: number; ar: WordSide; en: WordSide };
@@ -212,6 +213,7 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
       </div>
       <MarksEditor exam={exam} busy={busy} call={call} />
       <PrivateVersion exam={exam} busy={busy} call={call} />
+      <AnswerOnly exam={exam} busy={busy} call={call} />
       <label className="adcheck adflat exfoot"><input type="checkbox" checked={exam.skippable} disabled={busy} onChange={(e) => call({ action: "skippable", id: exam.id, on: e.target.checked })} /><span>🗑 يمكن حذفه: طالب الجدول الخاص يگدر يشيله من جدوله (مثلاً امتحان مكرر). بدون هذا ما ينحذف.</span></label>
       <div className="excols">
         {(["mandatory", "optional"] as const).map((kind) => {
@@ -270,7 +272,8 @@ function MarksEditor({ exam, busy, call }: { exam: Exam; busy: boolean; call: Ca
 
 function MarksBox({ exam, kind, count, start, models, busy, call }: { exam: Exam; kind: string; count: number; start: number[]; models: string[]; busy: boolean; call: Call }) {
   const [marks, setMarks] = useState(start.map(String));
-  const total = marks.reduce((s, m) => s + (Number(m) || 0), 0);
+  // «أجب عن K»: المجموع لأكبر K درجات
+  const total = fullMarks(marks.map((m) => Number(m) || 0), exam.answerOnly);
   return (
     <div className="exversion">
       <div className="exhint">{count} أسئلة · النسخ {models.join(" ")}</div>
@@ -280,7 +283,7 @@ function MarksBox({ exam, kind, count, start, models, busy, call }: { exam: Exam
         ))}
       </div>
       <div className="exline">
-        <b className={total === 100 ? "" : "exbad"}>المجموع {total} من 100</b>
+        <b className={total === 100 ? "" : "exbad"}>المجموع{exam.answerOnly ? ` (أكبر ${exam.answerOnly})` : ""} {total} من 100</b>
         <button type="button" className="exbtn" disabled={busy || total !== 100 || marks.join() === start.join()} onClick={() => call({ action: "marks", id: exam.id, kind, marks })}>حفظ</button>
       </div>
     </div>
@@ -414,6 +417,21 @@ function AddExam({ slug, generalMinutes, busy, call, near, side, label = "➕ ا
 }
 
 /** «📄 أسئلة من الوورد»: ملف الفصل بالعربي والإنجليزي، المطابقة ويا النسخ تطلع قبل، والحفظ للمطابق بس */
+/** «أجب عن K أسئلة فقط»: الطالب يشوف كل الأسئلة ويحل K، والمجموع من أول K جاوبهن */
+function AnswerOnly({ exam, busy, call }: { exam: Exam; busy: boolean; call: (b: Record<string, unknown>) => Promise<unknown> }) {
+  const most = Math.max(0, ...exam.versions.map((v) => v.questions.length));
+  return (
+    <div className="exline">
+      <span className="exhint">✂️ استثناء، الطالب يجاوب عن:</span>
+      <select className="exnum adwide" aria-label="عدد الأسئلة المطلوبة" disabled={busy} value={exam.answerOnly} onChange={(e) => void call({ action: "answerOnly", id: exam.id, value: Number(e.target.value) })}>
+        <option value={0}>كل الأسئلة</option>
+        {Array.from({ length: most }, (_, i) => i + 1).map((k) => <option key={k} value={k}>{k} أسئلة فقط</option>)}
+      </select>
+      {!!exam.answerOnly && <span className="exhint">إذا جاوب أكثر من {exam.answerOnly}، تنحسب أول {exam.answerOnly} بالترتيب. المصحح يأشر اللي ما جاوبه «⏭ ترك».</span>}
+    </div>
+  );
+}
+
 function WordImport({ chapters, result, busy, call }: { chapters: Chapter[]; result?: WordResult; busy: boolean; call: (b: Record<string, unknown> | FormData) => Promise<unknown> }) {
   const [target, setTarget] = useState("");
   const [ar, setAr] = useState<File | null>(null);

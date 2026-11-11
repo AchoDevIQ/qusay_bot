@@ -140,3 +140,16 @@ test("«10 $/$» (الشارحة داخل معادلة) هم رقم سؤال", (
   const b = splitExamDoc(["الامتحان {4} ln &e B 1:15", "1/ جد 1", "2 $/$ اذا كان $y=5$ اثبت"]);
   assert.deepEqual(b[0].qs.map((q) => [q.n, q.text]), [[1, "جد 1"], [2, "اذا كان $y=5$ اثبت"]]);
 });
+
+test("نصف السنة: «Midyear A» و«نصف السنه A» عنوان نسخة، و«Q1/ B/» فرع من نفس السؤال، و«05 A /» رقم سؤال", () => {
+  const b = splitExamDoc([
+    "Midyear A (Answer only five questions)", "Q1/ find 11", "Q1/ B /prove 12", "Q2 / A/ find 21", "B/ find 22",
+    "نصف السنه B ( الاجابه عن خمس اسئله فقط )", "01 / A / جد 31", "B / جد 32", "02 A / جد 41", "02 / B / جد 42",
+  ]);
+  assert.equal(b.length, 2);
+  assert.equal(b[0].model, "A");
+  assert.deepEqual(b[0].qs.map((q) => q.text), ["find 11\nB /prove 12", "A/ find 21\nB/ find 22"]);
+  assert.equal(b[1].model, "B");
+  assert.deepEqual(b[1].qs.map((q) => q.n), [1, 2]);
+  assert.equal(b[1].qs[1].text, "A / جد 41\n02 / B / جد 42");
+});

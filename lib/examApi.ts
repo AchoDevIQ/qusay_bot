@@ -1,6 +1,7 @@
 // واجهة صفحة إدارة الامتحانات: كل طلب لازم صاحبه يكون عنده صلاحية الامتحانات
 import { defaultEnTitle } from "./examTitlesEn.ts";
 import { growExam, matchWord, saveWord } from "./wordImport.ts";
+import { answerOnlyOf, fullMarks } from "./answerOnly.ts";
 import { AUDIO } from "./objections.ts";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -41,7 +42,7 @@ export async function examList(uid: number) {
     if (!c) { c = { slug: e.slug, chapter: e.chapter, exams: [] }; chapters.push(c); }
     const dir = `${e.slug}/e${e.ord}`;
     c.exams.push({
-      id: e.id, ord: e.ord, title: e.title, info: e.info, titleEn: String(e.title_en ?? "") || defaultEnTitle(e), minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0, skippable: skip.includes(e.id),
+      id: e.id, ord: e.ord, title: e.title, info: e.info, titleEn: String(e.title_en ?? "") || defaultEnTitle(e), minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0, skippable: skip.includes(e.id), answerOnly: answerOnlyOf(e),
       versions: (vBy.get(e.id) ?? []).map((v) => {
         const pdf = (lang: "ar" | "en") => v["pdf_" + lang] || (lang === "ar" || v.has_en ? `${dir}/${v.model}/student_${lang}.pdf` : null);
         // صور الصفحات تنعرض داخل الصفحة. إذا انرفع PDF بديل، ينفتح الملف نفسه
@@ -84,7 +85,8 @@ export async function examAction(body: Row) {
     if (!v!.ok) {
       const qs = await find("bank_questions", { version_id: id });
       need(qs.length, "ضيف سؤال واحد على الأقل");
-      need(sumOf(qs, "max_mark") === 100, "مجموع الدرجات لازم يكون 100");
+      const k = answerOnlyOf(await one("bank_exams", { id: v!.exam_id }));
+      need(fullMarks(qs.map((q) => Number(q.max_mark) || 0), k) === 100, k ? `مجموع درجات أكبر ${k} أسئلة لازم يكون 100` : "مجموع الدرجات لازم يكون 100");
       need(v!.answer_pdf, "ارفع الجواب النموذجي PDF");
       need(!v!.manual || pageList(v!, "ar").length || v!.pdf_ar, "ارفع صور نسخة الطالب بالعربي");
     }
@@ -104,10 +106,12 @@ export async function examAction(body: Row) {
     });
     await logEdit(uid, `الوقت العام للامتحانات ${n} دقيقة`);
   } else if (a === "marks") {
-    need(await one("bank_exams", { id }), "الامتحان غير موجود");
+    const ex = await one("bank_exams", { id });
+    need(ex, "الامتحان غير موجود");
     need(Array.isArray(body.marks) && body.marks.length, "اكتب الدرجات");
     const marks = (body.marks as unknown[]).map((m) => intOf(m, 1, 100, "كل درجة لازم رقم كامل من 1 إلى 100"));
-    need(marks.reduce((s, m) => s + m, 0) === 100, "مجموع الدرجات لازم يكون 100");
+    const k = answerOnlyOf(ex);
+    need(fullMarks(marks, k) === 100, k ? `مجموع درجات أكبر ${k} أسئلة لازم يكون 100 (الطالب يجاوب عن ${k})` : "مجموع الدرجات لازم يكون 100");
     need(!body.kind || ["mandatory", "optional"].includes(String(body.kind)), "نوع غير معروف");
     await tx(async () => {
       // الإجباري والاختياري كل واحد إله درجاته، حتى لو عدد الأسئلة نفسه. تتطبق على نسخ نفس النوع ونفس عدد الأسئلة
@@ -227,6 +231,19 @@ export async function examAction(body: Row) {
     const en = body.en === undefined ? undefined : String(body.en).trim().slice(0, 80);
     await update("bank_exams", { id }, en === undefined ? { title } : { title, title_en: en });
     await logEdit(uid, `امتحان ${id}: العنوان ${title}${en ? ` / ${en}` : ""}`);
+  } else if (a === "answerOnly") {
+    // «أجب عن K أسئلة فقط» (مثل نصف السنة 6 والإجابة عن 5). 0 = كل الأسئلة
+    need(await one("bank_exams", { id }), "الامتحان غير موجود");
+    const k = intOf(body.value ?? 0, 0, 50, "عدد الأسئلة رقم كامل");
+    if (k) {
+      const counts = await Promise.all((await find("bank_versions", { exam_id: id })).map(async (v) => (await find("bank_questions", { version_id: v.id })).length));
+      // يصير قبل لا تنضاف الأسئلة الزايدة (مثلاً نصف السنة 5 بالبوت، وبعدها تصير 6 من الوورد)
+      need(counts.some((c) => c >= k), `الامتحان بي أقل من ${k} أسئلة`);
+    }
+    const started = (await find("sched_items", { exam_id: id })).some((it) => it.started_at || it.submitted_at);
+    need(!started, "اكو طلاب امتحنوا هذا الامتحان، فما تتغير قاعدته");
+    await update("bank_exams", { id }, { answer_only: k || null });
+    await logEdit(uid, `امتحان ${id}: ${k ? `الإجابة عن ${k} أسئلة فقط` : "كل الأسئلة"}`);
   } else if (a === "skippable") {
     // الأصل: الامتحان ما ينحذف. صاحب الصلاحية يأشر على امتحان (مثلاً مكرر) فطالب الجدول الخاص يگدر يشيله
     need(await one("bank_exams", { id }), "الامتحان غير موجود");

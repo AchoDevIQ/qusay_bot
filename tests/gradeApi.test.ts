@@ -191,3 +191,43 @@ test("رابط المؤقت: بالمفتاح بس، وصاحب البوت بس 
   const staffPage: any = await schedAdminAction({ action: "list", initData: sign(23) });
   assert.equal(staffPage.cronUrl, "");
 });
+
+test("استثناء «أجب عن K أسئلة»: ⏭ ترك، اللي ما بي جواب ما يحتاج درجة، والمجموع أول K جاوبهن بالترتيب", async () => {
+  await put("staff", { user_id: 30, name: "مصحح الترك", perms: "grade" });
+  await put("students", { user_id: 60, name: "طالب الترك", curr: "عربي", exam: "إلكتروني", created: "2026-01-01 10:00" });
+  const e = await insert("bank_exams", { slug: "t", chapter: "فصل التجربة", ord: 777001, title: "نصف السنة", info: "", minutes: 60, pos: 1, answer_only: 2 });
+  const v = await insert("bank_versions", { exam_id: e, model: "A", kind: "mandatory", ok: 1 });
+  for (const n of [1, 2, 3]) await insert("bank_questions", { version_id: v, n, max_mark: 50, q_file: `t/q${n}.png` });
+  // جاوب على س2 وس3 بس
+  const id = await insert("sched_items", { user_id: 60, exam_id: e, at: "x", status: "done", version_id: v, started_at: "x", submitted_at: "x" });
+  for (const q of [2, 3]) await insert("exam_answers", { item_id: id, q, file: `a${q}.jpg`, created: "x" });
+  const opened = await g(30, "open", { id });
+  assert.equal(opened.paper.answerOnly, 2);
+  assert.deepEqual(opened.paper.questions.map((q: any) => q.answered), [false, true, true]);
+  await g(30, "mark", { id, q: 2, mark: 40 });
+  await g(30, "mark", { id, q: 3, mark: 30 });
+  // س1 ما بي جواب، فما يحتاج درجة
+  assert.match((await g(30, "finish", { id })).notice, /70 من 100/);
+  // ورقة ثانية: جاوب الثلاثة، فتنحسب أول اثنين بس
+  const id2 = await insert("sched_items", { user_id: 60, exam_id: e, at: "x", status: "done", version_id: v, started_at: "x", submitted_at: "x" });
+  for (const q of [1, 2, 3]) await insert("exam_answers", { item_id: id2, q, file: `b${q}.jpg`, created: "x" });
+  await g(30, "open", { id: id2 });
+  await g(30, "mark", { id: id2, q: 1, mark: 10 });
+  await g(30, "mark", { id: id2, q: 2, mark: 20 });
+  await g(30, "mark", { id: id2, q: 3, mark: 50 });
+  assert.match((await g(30, "finish", { id: id2 })).notice, /30 من 100/);
+  // ورقة ثالثة: المصحح يأشر س1 «ترك»
+  const id3 = await insert("sched_items", { user_id: 60, exam_id: e, at: "x", status: "done", version_id: v, started_at: "x", submitted_at: "x" });
+  await insert("exam_answers", { item_id: id3, q: 0, file: "whole.pdf", created: "x" });
+  await g(30, "open", { id: id3 });
+  await g(30, "mark", { id: id3, q: 1, mark: -1 });
+  await g(30, "mark", { id: id3, q: 2, mark: 45 });
+  await assert.rejects(g(30, "finish", { id: id3 }), /باقي درجة الأسئلة: 3/);
+  await g(30, "mark", { id: id3, q: 3, mark: 35 });
+  assert.match((await g(30, "finish", { id: id3 })).notice, /80 من 100/);
+  // امتحان عادي: «ترك» مرفوض
+  const { e: e2, v: v2 } = await exam();
+  const id4 = await paper(60, e2, v2);
+  await g(30, "open", { id: id4 });
+  await assert.rejects(g(30, "mark", { id: id4, q: 1, mark: -1 }), /من 0 إلى 40/);
+});

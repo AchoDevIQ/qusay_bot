@@ -367,7 +367,8 @@ export async function examplesFor(_examId: number, versionId: number, n: number)
     if (!it?.graded_at) continue;
     const ai = (await shadowOf(id))?.find((x) => x.n === n);
     const mark = await one("question_marks", { item_id: id, q: n });
-    if (!ai || !mark || !ai.lines?.length) continue;
+    // «⏭ ترك» (-1) مو درجة يتعلم منها
+    if (!ai || !mark || Number(mark.mark) < 0 || !ai.lines?.length) continue;
     out.push({ student: ai.lines.join(" ; ").slice(0, 400), ai: ai.score, teacher: Number(mark.mark) || 0 });
   }
   return out.sort((a, b) => Math.abs(b.teacher - b.ai) - Math.abs(a.teacher - a.ai)).slice(0, 6);

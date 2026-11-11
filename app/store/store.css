@@ -188,6 +188,7 @@ body.grwide .grtop{padding-left:104px}
 .gk-w{flex:1;height:34px;border-radius:8px;border:1px solid #ccc;background:#f3f3f3;display:flex;align-items:center;justify-content:center;cursor:pointer}.gk-w span{display:block;width:60%;background:#111;border-radius:4px}.gk-w.on{border:2px solid #111}
 .gk-marks{flex-wrap:wrap}.gk-nums{display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0}.gk-nums button,.gk-qs button{min-width:40px;height:40px;border:0;border-radius:10px;background:#2a2c31;color:#fff;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;flex:none}
 .gk-nums button.on,.gk-qs button.on{background:#1f9d55;box-shadow:0 0 0 3px #7ee2a8;transform:scale(1.08)}.gk-qs{display:flex;gap:6px;width:100%;overflow-x:auto}.gk-q{font-weight:800;white-space:nowrap}.gk-q small{color:#b9bcc4;font-weight:400}.gk-total{font-weight:800;color:var(--gold);white-space:nowrap}
+.gk-hint{font-size:12px;color:#b9bcc4;white-space:nowrap}
 .gk-finish{height:42px;border:0;border-radius:10px;background:#1f9d55;color:#fff;font-family:inherit;font-size:15px;font-weight:800;padding:0 14px;cursor:pointer;white-space:nowrap}.gk-finish:disabled{background:#3a3d44;color:#aaa}
 .gk-stage{flex:1;overflow:auto;padding:6px 8px calc(12px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}.gk-page{width:100%;display:flex;justify-content:center}
 .gk-sheet{position:relative;flex:none;box-shadow:0 4px 18px rgba(0,0,0,.5)}.gk-sheet canvas{position:absolute;inset:0;display:block}
