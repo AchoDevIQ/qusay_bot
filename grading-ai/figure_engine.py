@@ -29,7 +29,7 @@ from finals import amatch as finals_match
 from llm.router import complete_vision_json
 from math_engine import sandbox
 from math_engine.graphs import find_function
-from rubric_engine import FULL, STATUS, Verdict, rubric_lines, share_for
+from rubric_engine import FULL, STATUS, Verdict, ask_model, carried_final_credit, final_mark, rubric_lines, share_for
 
 FigureKind = Literal["graph", "geometry"]
 
@@ -74,6 +74,11 @@ class TurningPoint(BaseModel):
     kind: Literal["max", "min", "flat"]
 
 
+class Span(BaseModel):
+    low: Optional[float] = Field(description="Where the interval starts; null if it has no lower bound")
+    high: Optional[float] = Field(description="Where the interval ends; null if it has no upper bound")
+
+
 class GraphRead(BaseModel):
     x_intercepts: List[float] = Field(description="x values where the student's curve meets the x-axis, read against their axis scale")
     y_intercept: Optional[float] = Field(description="y value where the curve meets the y-axis; null if not shown")
@@ -82,6 +87,10 @@ class GraphRead(BaseModel):
     table_points: List[Point] = Field(default_factory=list, description="Every (x, y) in the student's table of values, as written; empty if no table")
     vertical_asymptotes: List[float] = Field(description="x values of vertical asymptotes (usually dashed lines)")
     horizontal_asymptotes: List[float] = Field(description="y values of horizontal asymptotes")
+    increasing: List[Span] = Field(default_factory=list, description="The intervals of x the student WROTE for where the function increases, e.g. {x : x > 1} is low 1, high null; empty if not written")
+    decreasing: List[Span] = Field(default_factory=list, description="The intervals the student wrote for where it decreases; empty if not written")
+    concave_up: List[Span] = Field(default_factory=list, description="The intervals the student wrote for where the curve is concave up (convex); empty if not written")
+    concave_down: List[Span] = Field(default_factory=list, description="The intervals the student wrote for where the curve is concave down; empty if not written")
 
 
 class Measurement(BaseModel):
@@ -96,7 +105,7 @@ class FigureOut(BaseModel):
     steps: List[FigureStep]
     graph: Optional[GraphRead] = Field(description="For a graph question: what the student's graph shows; null otherwise")
     measurements: List[Measurement] = Field(description="For geometry: angles and lengths the student marked or stated")
-    student_finals: List[str] = Field(description="Each final value the student wrote at the end, plain math; empty list if none")
+    student_finals: List[str] = Field(description="Each final value the student wrote at the end, plain math; leave out a value the student rejected (يهمل) or crossed out; empty list if none")
 
 
 FIGURE_PROMPT = """You check one student's handwritten answer to a math question that is answered with a drawing: {what}.
@@ -118,6 +127,8 @@ How to judge a drawing:
 - A hand sketch is judged on its features (where it crosses the axes, its shape, its turning points, its asymptotes,
   its labels), not on neatness. A value within half a grid square, or within about 10% of the axis range, is correct.
 - Asymptotes are usually dashed lines; a curve should approach them without crossing a vertical one.
+- A value the student rejected or crossed out («يهمل», "rejected") is not one of their answers.
+- An interval is right in any equivalent wording: {x : x > 1}, x ∈ (1, ∞) and "for x greater than 1" are the same.
 - A turning point is a peak or a trough. Where the curve only flattens and keeps rising or falling (x^5 at 0),
   that is an inflection point, not a turning point.
 - Judge the written steps (domain, intercepts, symmetry, asymptotes, critical points, increase and decrease,
@@ -135,20 +146,38 @@ def _pt(p: Dict) -> str:
     return f"({p['x']:g}, {p['y']:g})"
 
 
+def _interval(iv: List) -> str:
+    lo, hi = iv
+    return "all x" if lo is None and hi is None else f"x < {hi:g}" if lo is None else f"x > {lo:g}" if hi is None else f"{lo:g} < x < {hi:g}"
+
+
+_SYMMETRY = {"even": "even: symmetric about the y-axis", "odd": "odd: symmetric about the origin",
+             "none": "neither about the y-axis nor about the origin"}
+
+
 def reference_lines(expected: Dict) -> str:
     """The exact features as prompt lines: the reference the model judges the written steps against."""
     def listed(values, fmt=lambda v: f"{v:g}"):
         return "none" if values == [] else ("not a finite list" if values is None else ", ".join(fmt(v) for v in values))
-    return "\n".join([
+    lines = [
         "Its exact features, worked out by algebra (the reference for the steps):",
+        f"- domain: {expected.get('domain') or 'not worked out'}",
         f"- x-intercepts: {listed(expected.get('x_intercepts'))}",
         f"- y-intercept: {'none' if expected.get('y_intercept') is None else format(expected['y_intercept'], 'g')}",
-        f"- turning points: {listed(expected.get('turning_points'), lambda t: t['kind'] + ' ' + _pt(t))}",
-        f"- inflection points: {listed(expected.get('inflection_points'), _pt)}",
+        f"- symmetry: {_SYMMETRY.get(expected.get('symmetry'), 'not worked out')}",
         f"- vertical asymptotes: {listed(expected.get('vertical_asymptotes'), lambda v: f'x = {v:g}')}",
         f"- horizontal asymptotes: {listed(expected.get('horizontal_asymptotes'), lambda v: f'y = {v:g}')}",
         f"- holes: {listed(expected.get('holes'), _pt)}",
-    ])
+        f"- turning points: {listed(expected.get('turning_points'), lambda t: t['kind'] + ' ' + _pt(t))}",
+    ]
+    for label, key in (("increasing on", "increasing"), ("decreasing on", "decreasing")):
+        if expected.get(key) is not None:
+            lines.append(f"- {label}: {listed(expected[key], _interval)}")
+    lines.append(f"- inflection points: {listed(expected.get('inflection_points'), _pt)}")
+    for label, key in (("concave up on", "concave_up"), ("concave down on", "concave_down")):
+        if expected.get(key) is not None:
+            lines.append(f"- {label}: {listed(expected[key], _interval)}")
+    return "\n".join(lines)
 
 
 def _close(a: float, b: float, tol: float) -> bool:
@@ -205,7 +234,35 @@ def compare_graph(expected: Dict, read: Optional[Dict]) -> List[Dict]:
         # and the inflection step's own verdict covers that
         ok = all(any(_close(g["x"], e["x"], tol) and _close(g["y"], e["y"], tol) for e in exp_ip) for g in got_ip)
         checks.append({"feature": "inflection_points", "expected": exp_ip, "read": got_ip, "ok": ok})
+    for key in ("increasing", "decreasing", "concave_up", "concave_down"):
+        exp_iv, got_iv = expected.get(key), read.get(key) or []
+        if exp_iv is not None and got_iv:
+            # The intervals the student wrote, against the exact ones (only where they wrote some)
+            got = [[span.get("low"), span.get("high")] for span in got_iv]
+            checks.append({"feature": key, "expected": exp_iv, "read": got, "ok": same_intervals(exp_iv, got)})
     return checks
+
+
+INFINITY = float("inf")
+
+
+def _joined(spans: List[List]) -> List[List[float]]:
+    """Intervals sorted and joined where they touch, so {x < 0} and {x > 0} read the same as "all x"
+    with one point left out: a student may split at a point the answer key runs through."""
+    out: List[List[float]] = []
+    for lo, hi in sorted([-INFINITY if lo is None else float(lo), INFINITY if hi is None else float(hi)] for lo, hi in spans):
+        if out and lo <= out[-1][1] + 1e-9:
+            out[-1][1] = max(out[-1][1], hi)
+        else:
+            out.append([lo, hi])
+    return out
+
+
+def same_intervals(expected: List[List], read: List[List]) -> bool:
+    """The same stretches of the x-axis, end points within a written value's rounding (0.58 for 1/sqrt(3))."""
+    a, b = _joined(expected), _joined(read)
+    near = lambda u, v: u == v or (abs(u) != INFINITY and abs(v) != INFINITY and abs(u - v) <= max(0.02, 0.02 * abs(u)))
+    return len(a) == len(b) and all(near(x[0], y[0]) and near(x[1], y[1]) for x, y in zip(a, b))
 
 
 def table_tolerance(y: float) -> float:
@@ -237,9 +294,8 @@ async def judge_figure(steps, pages: List[bytes], page_media, kind: str, functio
     prompt = (FIGURE_PROMPT.replace("{what}", _WHAT.get(kind, "a drawing")).replace("{rubric}", rubric_lines(steps))
               .replace("{function_line}", function_line).replace("{examples}", examples))
     imgs = [(b, page_media(b), f"Student's answer, page {k + 1}") for k, b in enumerate(pages)]
-    out = FigureOut(**await complete_vision_json("grading", prompt, schema=FigureOut, detail="high", images=imgs))
-    by = {s.index: s for s in out.steps}
-    if sorted(by) != list(range(1, len(steps) + 1)):
+    out, by = await ask_model(prompt, FigureOut, imgs, len(steps), complete=complete_vision_json)
+    if by is None:
         return None
 
     unreadable_photo = out.has_figure and not out.figure_readable
@@ -266,11 +322,18 @@ async def judge_figure(steps, pages: List[bytes], page_media, kind: str, functio
     if final is not None:
         last, pts = rows[-1], float(steps[-1].points)
         model_full = last["verdict"] in FULL
-        final_disagreement = (model_full and final < 1.0) or (not model_full and final >= 1.0)
-        mark = round(pts * final * 2) / 2
+        final_disagreement = (model_full and final < 1.0) or (not model_full and final >= 1.0 and last["verdict"] != "unreadable")
+        mark = final_mark(pts, final)
+        note = f"Final answer checked by algebra: {final:.0%} of the teacher's values. "
+        carried = await carried_final_credit(steps, rows, out.student_finals, strictness) if final < 1.0 else None
+        if carried is not None and carried > mark:
+            mark = carried
+            note += "It has the form of the teacher's answer with numbers carried from an earlier mistake: follow-through credit. "
         last["awarded"] = mark
         last["status"] = "correct" if mark >= pts else ("partially_correct" if mark > 0 else "incorrect")
-        last["reason"] = f"Final answer checked by algebra: {final:.0%} of the teacher's values. " + last["reason"]
+        last["reason"] = note + last["reason"]
+        if last["verdict"] == "unreadable":
+            last["verdict"] = "correct" if mark >= pts else "wrong"  # its final values were read and checked after all
 
     return {
         "steps": rows,
@@ -279,6 +342,7 @@ async def judge_figure(steps, pages: List[bytes], page_media, kind: str, functio
         "unreadable": sum(1 for r in rows if r["verdict"] == "unreadable"),
         "unreadable_photo": unreadable_photo,
         "final_disagreement": final_disagreement,
+        "student_finals": list(out.student_finals),
         "feature_disagreement": feature_disagreement,
         "lines": [r["student"] for r in rows if r["student"].strip()],
         "figure": {

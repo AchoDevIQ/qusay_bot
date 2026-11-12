@@ -346,13 +346,26 @@ def _parse_json_object(text: str) -> dict:
 # Image helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+def high_detail_max_edge() -> int:
+    """
+    The long edge pages are shrunk to before they go to Claude. An image is billed by its area
+    (about one token per 28x28 pixels), so 1600 costs under half of the default 2400. Lower it
+    with IMAGE_MAX_EDGE only after measuring that grading holds up: handwriting needs resolution.
+    """
+    try:
+        edge = int(os.getenv("IMAGE_MAX_EDGE", ""))
+    except ValueError:
+        return CLAUDE_HIGH_DETAIL_MAX_EDGE
+    return min(max(edge, CLAUDE_LOW_DETAIL_MAX_EDGE), 4000)
+
+
 def _downscale_for_claude(image_bytes: bytes, media_type: str, detail: str) -> tuple:
     """
     Claude has no `detail` switch: low detail caps the long edge at 1092 px, any other
     level at CLAUDE_HIGH_DETAIL_MAX_EDGE, and the result is kept under the 5 MB API limit.
     Images that are already small enough are sent unchanged.
     """
-    max_edge = CLAUDE_LOW_DETAIL_MAX_EDGE if detail == "low" else CLAUDE_HIGH_DETAIL_MAX_EDGE
+    max_edge = CLAUDE_LOW_DETAIL_MAX_EDGE if detail == "low" else high_detail_max_edge()
     try:
         import cv2
         import numpy as np

@@ -23,7 +23,7 @@ def main() -> None:
     protocol_out = sys.stdout
     sys.stdout = sys.stderr  # Stray prints must not corrupt the protocol stream
 
-    from math_engine.verifier import assignments_satisfy, follows_from, verify_equivalence
+    from math_engine.verifier import assignments_satisfy, follows_from, solves_exactly, value_contradicts, verify_equivalence
     from math_engine.finals import final_values
     from math_engine.graphs import function_values, graph_features
 
@@ -40,6 +40,10 @@ def main() -> None:
                 result = follows_from(*request["args"])
             elif request["op"] == "assignments_satisfy":
                 result = assignments_satisfy(request["args"][0], list(request["args"][1]))
+            elif request["op"] == "solves_exactly":
+                result = solves_exactly(request["args"][0], list(request["args"][1]))
+            elif request["op"] == "value_contradicts":
+                result = value_contradicts(request["args"][0], list(request["args"][1]))
             elif request["op"] == "final_values":
                 result = final_values(request["args"][0])
             elif request["op"] == "graph_features":

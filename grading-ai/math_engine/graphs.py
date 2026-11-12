@@ -9,17 +9,24 @@ text is parsed by math_engine.safe_expr, so it is never evaluated as code.
     graph_features("f(x) = x^2 - 4")
     -> {"function": "x**2 - 4", "x_intercepts": [-2.0, 2.0], "y_intercept": -4.0,
         "turning_points": [{"x": 0.0, "y": -4.0, "kind": "min"}], "inflection_points": [],
-        "vertical_asymptotes": [], "horizontal_asymptotes": [], "holes": []}
+        "vertical_asymptotes": [], "horizontal_asymptotes": [], "holes": [],
+        "domain": "all real numbers", "symmetry": "even",
+        "increasing": [[0.0, None]], "decreasing": [[None, 0.0]],
+        "concave_up": [[None, None]], "concave_down": []}
 
 A turning point is a peak or a trough: f' changes sign there. Where f' is 0 but keeps its sign
 (x^5 at 0) the curve only flattens, so that point is an inflection point, not a turning point.
+A list is None when it is not finite or cannot be worked out (the intercepts of sin x, the
+asymptotes of tan x): there is then nothing exact to compare a sketch with.
 """
 import re
 from typing import Dict, List, Optional, Sequence
 
 from sympy import (
-    Abs, FiniteSet, Symbol, diff, fraction, limit, nsimplify, oo, S, simplify, solveset, together,
+    FiniteSet, Interval, Symbol, Union, diff, exp, fraction, limit, nsimplify, oo, S, simplify, solveset, together,
 )
+from sympy.calculus.singularities import singularities
+from sympy.calculus.util import continuous_domain
 
 from math_engine.normalizer import strip_annotations, strip_arabic_text
 from math_engine.verifier import safe_parse
@@ -29,6 +36,8 @@ X = Symbol("x", real=True)
 
 # Typeset dashes and operators that SymPy does not read: "x² – 3x", "2 × x"
 _SYMBOLS = str.maketrans({"–": "-", "—": "-", "−": "-", "×": "*", "÷": "/", "·": "*"})
+# "|x - 2|" is abs(x - 2)
+_BARS = re.compile(r"\|([^|]+)\|")
 # "f(x) = ...", "y = ...", "g(x)=...", with Arabic letters already mapped (ص -> y, س -> x)
 _FUNCTION_LINE = re.compile(r"(?:\b[a-zA-Z]\s*\(\s*x\s*\)|\by)\s*=\s*([^;,\n=:،]+)")
 
@@ -66,7 +75,7 @@ def _finite_real(solutions) -> Optional[List]:
 def _function(text: str):
     """f as a SymPy expression in the real symbol X, or None when the text is not a function of x alone."""
     rhs = find_function(text) or (text or "").translate(_SYMBOLS).strip()
-    expr = safe_parse(rhs)
+    expr = safe_parse(_BARS.sub(r"abs(\1)", rhs))
     if expr is None or not hasattr(expr, "free_symbols"):
         return None
     symbols = expr.free_symbols
@@ -86,6 +95,84 @@ def _step(p: float, others: Sequence[float]) -> float:
     return min([0.5] + [g / 2 for g in gaps])
 
 
+def _limit(f, point, side: str = "+"):
+    """limit(), with a^x spelled as e^(x ln a) first: SymPy gets 2^x at -oo wrong otherwise."""
+    try:
+        return limit(f.rewrite(exp), X, point, side)
+    except Exception:
+        return limit(f, X, point, side)
+
+
+def _infinite(value) -> bool:
+    return value in (oo, -oo) or bool(getattr(value, "is_infinite", False)) or value.has(oo, -oo, S.ComplexInfinity)
+
+
+def _excluded(f, den) -> Optional[List]:
+    """The real points where f is not defined (poles, holes, the edge of ln x): a finite list, or
+    None when there are infinitely many (tan x)."""
+    try:
+        points = singularities(f, X, S.Reals)
+    except Exception:
+        points = S.EmptySet
+    if den.free_symbols:
+        points = Union(points, solveset(den, X, S.Reals))
+    return _finite_real(points)
+
+
+def _domain(f):
+    try:
+        return continuous_domain(f, X, S.Reals)
+    except Exception:
+        return None
+
+
+def _domain_edges(domain) -> List[float]:
+    """The finite end points of the domain's intervals (0 for sqrt(x), -2 and 2 for sqrt(4 - x^2))."""
+    parts = domain.args if isinstance(domain, Union) else [domain]
+    edges = []
+    for part in parts:
+        if isinstance(part, Interval):
+            edges += [v for v in (_num(part.start), _num(part.end)) if v is not None]
+    return edges
+
+
+def _domain_text(domain) -> Optional[str]:
+    if domain is None:
+        return None
+    if domain == S.Reals:
+        return "all real numbers"
+    parts = domain.args if isinstance(domain, Union) else [domain]
+    out = []
+    for part in parts:
+        if not isinstance(part, Interval):
+            return None
+        lo = "-inf" if part.start == -oo else f"{_num(part.start):g}"
+        hi = "inf" if part.end == oo else f"{_num(part.end):g}"
+        out.append(("(" if part.left_open or part.start == -oo else "[") + f"{lo}, {hi}"
+                   + (")" if part.right_open or part.end == oo else "]"))
+    return " U ".join(out)
+
+
+def _sign_intervals(f, expr, breaks: Sequence[float], open_points: Sequence[float]):
+    """
+    The real line cut at the break points, sorted by the sign of expr inside each piece:
+    (where it is positive, where it is negative), as [low, high] with None for no bound.
+    Neighbouring pieces with the same sign join up unless a point f is undefined at lies between.
+    Pieces outside f's domain are left out (x < 0 for ln x, although 1/x has a sign there).
+    """
+    points = sorted({b for b in breaks if b is not None})
+    edges = [None] + points + [None]
+    signed = []
+    for lo, hi in zip(edges, edges[1:]):
+        at = 0.0 if lo is None and hi is None else hi - 1.0 if lo is None else lo + 1.0 if hi is None else (lo + hi) / 2
+        sign = _sign(expr, at) if _num(f.subs(X, at)) is not None else 0
+        if sign and signed and signed[-1][0] == sign and signed[-1][1][1] == lo and lo not in open_points:
+            signed[-1][1][1] = hi
+        elif sign:
+            signed.append((sign, [lo, hi]))
+    return [iv for sign, iv in signed if sign > 0], [iv for sign, iv in signed if sign < 0]
+
+
 def function_values(text: str, xs: Sequence[float]) -> Optional[List[Optional[float]]]:
     """f at each x (None where f is undefined), or None when the text is not a function of x."""
     f = _function(text)
@@ -101,24 +188,24 @@ def graph_features(text: str) -> Optional[Dict]:
         return None
 
     num, den = fraction(together(f))
-    # Points outside the domain: a vertical asymptote, or a hole where the factor cancels
-    excluded = _finite_real(solveset(den, X, S.Reals)) if den.free_symbols else []
+    # Points outside the domain: a vertical asymptote where f runs off to infinity, a hole where it does not
+    excluded = _excluded(f, den)
     vertical, holes = [], []
+    reduced = simplify(f)
     for p in excluded or []:
-        reduced = simplify(f)
-        lim = limit(reduced, X, p)
-        if lim in (oo, -oo) or lim.has(oo) or Abs(lim) is oo:
+        right, left = _limit(reduced, p, "+"), _limit(reduced, p, "-")
+        if _infinite(right) or _infinite(left):
             vertical.append(_num(p))
-        else:
-            holes.append({"x": _num(p), "y": _num(lim)})
+        elif _num(right) is not None and _num(right) == _num(left):
+            holes.append({"x": _num(p), "y": _num(right)})
+    poles = [_num(p) for p in excluded or []]
 
     roots = _finite_real(solveset(num, X, S.Reals))
     x_intercepts = None if roots is None else sorted(
         _num(r) for r in roots if not den.free_symbols or _num(den.subs(X, r)) not in (None, 0.0))
 
-    y0 = None if 0.0 in [v for v in vertical] + [h["x"] for h in holes] else _num(f.subs(X, 0))
+    y0 = None if 0.0 in poles else _num(f.subs(X, 0))
 
-    poles = [_num(p) for p in excluded or []]
     turning = []
     d1 = simplify(diff(f, X))
     critical = _finite_real(solveset(d1, X, S.Reals)) if d1.free_symbols else []
@@ -156,10 +243,21 @@ def graph_features(text: str) -> Optional[Dict]:
 
     horizontal = []
     for end in (oo, -oo):
-        lim = limit(f, X, end)
+        lim = _limit(f, end)
         value = _num(lim) if lim.is_finite else None
         if value is not None and value not in horizontal:
             horizontal.append(value)
+
+    # Where the curve rises, falls and bends, for the written steps of a curve sketch
+    domain = _domain(f)
+    edges = _domain_edges(domain) if domain is not None else []
+    rising = falling = cup = cdown = None
+    if excluded is not None and critical is not None:
+        rising, falling = _sign_intervals(f, d1, [_num(c) for c in critical] + poles + edges, poles)
+    if excluded is not None and candidates is not None:
+        cup, cdown = _sign_intervals(f, d2, [_num(c) for c in candidates] + poles + edges, poles)
+    mirrored = f.subs(X, -X)
+    symmetry = "even" if simplify(mirrored - f) == 0 else "odd" if simplify(mirrored + f) == 0 else "none"
 
     return {
         "function": str(nsimplify(f) if f.is_polynomial(X) else f),
@@ -168,7 +266,13 @@ def graph_features(text: str) -> Optional[Dict]:
         # None: infinitely many (sin x) or not solvable
         "turning_points": None if critical is None else sorted(turning, key=lambda t: t["x"])[:MAX_FEATURES],
         "inflection_points": None if candidates is None else sorted(inflection, key=lambda t: t["x"])[:MAX_FEATURES],
-        "vertical_asymptotes": sorted(v for v in vertical if v is not None),
+        "vertical_asymptotes": None if excluded is None else sorted(v for v in vertical if v is not None),  # None: tan x
         "horizontal_asymptotes": sorted(horizontal),
         "holes": holes,
+        "domain": _domain_text(domain),
+        "symmetry": symmetry,  # even: about the y-axis; odd: about the origin
+        "increasing": rising,
+        "decreasing": falling,
+        "concave_up": cup,
+        "concave_down": cdown,
     }

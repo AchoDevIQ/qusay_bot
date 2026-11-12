@@ -186,6 +186,26 @@ def assignments_satisfy(prior_expr: str, assignment_exprs: Tuple[str, ...]) -> b
 
 
 @lru_cache(maxsize=4096)
+def solves_exactly(prior_expr: str, candidate_exprs: Tuple[str, ...]) -> bool:
+    """Time-limited math_engine.verifier.solves_exactly. False when it cannot be shown."""
+    try:
+        return bool(_pool.run("solves_exactly", [prior_expr, list(candidate_exprs)]))
+    except Exception as e:
+        logger.warning(f"Carried-error check abandoned: {e}")
+        return False
+
+
+@lru_cache(maxsize=4096)
+def value_contradicts(prior_expr: str, candidate_exprs: Tuple[str, ...]) -> bool:
+    """Time-limited math_engine.verifier.value_contradicts. False when it cannot be shown."""
+    try:
+        return bool(_pool.run("value_contradicts", [prior_expr, list(candidate_exprs)]))
+    except Exception as e:
+        logger.warning(f"Rubric check abandoned: {e}")
+        return False
+
+
+@lru_cache(maxsize=4096)
 def _final_values_cached(text: str) -> Optional[str]:
     result = _pool.run("final_values", [text])
     return json.dumps(result) if result is not None else None

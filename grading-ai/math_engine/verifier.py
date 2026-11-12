@@ -193,7 +193,25 @@ def verify_equivalence(expr_a: str, expr_b: str) -> VerificationResult:
     clauses_b = clause_set(expr_b) or [expr_b]
     if len(clauses_a) == 1 and len(clauses_b) == 1:
         return _verify_single(clauses_a[0], clauses_b[0])
+    if len(clauses_a) == 1 and _states_more_roots(expr_a, expr_b):
+        # "x = 3 or x = 5" against the milestone "x = 3": the answer does not just contain the
+        # milestone, it adds a root the reference does not have
+        return VerificationResult(equivalent=None, confidence=0.0, method="extra_roots", status="uncertain",
+                                  detail="The answer lists more values than the reference.")
     return _verify_clause_sets(clauses_a, clauses_b)
+
+
+def _states_more_roots(expr_a: str, expr_b: str) -> bool:
+    """True when the answer gives one unknown more distinct values than the reference does."""
+    from math_engine.finals import final_values  # imported here: finals imports this module
+    try:
+        a, b = final_values(expr_a), final_values(expr_b)
+    except Exception:
+        return False
+    if not a or not b or any("value" not in sol for sol in a + b):
+        return False
+    distinct = lambda sols: {(round(sol["value"][0], 9), round(sol["value"][1], 9)) for sol in sols}
+    return len(distinct(b)) > len(distinct(a))
 
 
 def _verify_clause_sets(clauses_a: List[str], clauses_b: List[str]) -> VerificationResult:
@@ -707,6 +725,79 @@ def follows_from(prior_expr: str, candidate_expr: str) -> bool:
         return any(simplify(sol - cand_rhs) == 0 for sol in solve(prior_lhs - prior_rhs, var))
     except Exception:
         return False
+
+
+def _solutions_and_values(prior_expr: str, candidate_exprs: List[str]):
+    """
+    (solutions of the equation prior_expr in one unknown, the values the candidates give that
+    unknown), or None when this is not that situation: the prior is not an equation in one
+    unknown with numeric solutions, or a candidate is not "unknown = number" for the same unknown.
+    """
+    prior_sides = extract_equation_sides(prior_expr)
+    if len(prior_sides) < 2 or not candidate_exprs:
+        return None
+    prior_lhs, prior_rhs = safe_parse(prior_sides[0]), safe_parse(prior_sides[-1])
+    if prior_lhs is None or prior_rhs is None:
+        return None
+    values, var = [], None
+    for candidate in candidate_exprs:
+        sides = extract_equation_sides(candidate)
+        if len(sides) < 2:
+            return None
+        lhs, rhs = safe_parse(sides[0]), safe_parse(sides[-1])
+        if lhs is None or rhs is None or len(getattr(lhs, "free_symbols", ())) != 1 or getattr(rhs, "free_symbols", None):
+            return None
+        symbol = next(iter(lhs.free_symbols))
+        if lhs != symbol or (var is not None and symbol != var):
+            return None
+        var = symbol
+        values.append(rhs)
+    equation = prior_lhs - prior_rhs
+    if getattr(equation, "free_symbols", set()) != {var}:
+        return None
+    try:
+        solutions = solve(equation, var)
+    except Exception:
+        return None
+    if not solutions or any(getattr(sol, "free_symbols", None) for sol in solutions):
+        return None
+    return solutions, values
+
+
+def _same_number(a, b) -> bool:
+    try:
+        return simplify(a - b) == 0
+    except Exception:
+        return False
+
+
+def solves_exactly(prior_expr: str, candidate_exprs: List[str]) -> bool:
+    """
+    True when the candidates ("x = 3", "x = -3") are exactly the solutions of the equation
+    prior_expr in that unknown: every solution stated, none added. This is a line that follows
+    from the one before it with no mistake of its own; "x = 3" alone after "x^2 = 9" does not.
+    When every candidate is real, only the real solutions are compared (x = 2 after x^3 = 8).
+    """
+    found = _solutions_and_values(prior_expr, candidate_exprs)
+    if found is None:
+        return False
+    solutions, values = found
+    if all(v.is_real for v in values):
+        solutions = [sol for sol in solutions if sol.is_real]
+    return (bool(solutions) and all(any(_same_number(sol, v) for v in values) for sol in solutions)
+            and all(any(_same_number(sol, v) for sol in solutions) for v in values))
+
+
+def value_contradicts(prior_expr: str, candidate_exprs: List[str]) -> bool:
+    """
+    True only when it is certain that a stated value does not solve the equation before it:
+    "x = 3" after "x^2 = 4". Used to catch a slip in a rubric; anything that cannot be decided is False.
+    """
+    found = _solutions_and_values(prior_expr, candidate_exprs)
+    if found is None:
+        return False
+    solutions, values = found
+    return any(not any(_same_number(sol, v) for sol in solutions) for v in values)
 
 
 def assignments_satisfy(prior_expr: str, assignment_exprs: List[str]) -> bool:

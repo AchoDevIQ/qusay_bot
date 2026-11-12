@@ -9,6 +9,7 @@ import { files } from "./files.ts";
 import { api, send } from "./telegram.ts";
 import { ADMIN_IDS, TOKEN } from "./config.ts";
 import { stamp } from "./util.ts";
+import { dailyCap, dayOf, engineTag, overCap, spentOn } from "./aiGuard.ts";
 
 export type RubricStep = { text: string; points: number };
 export type Usage = { model: string; calls: number; input: number; output: number };
@@ -170,8 +171,22 @@ export async function saveRubric(qid: number, raw: unknown, by: number) {
   if (steps.some((s) => !Number.isFinite(s.points) || s.points < 0)) throw new Error("درجة الخطوة لازم رقم");
   const sum = steps.reduce((t, s) => t + s.points, 0);
   if (!near(sum, Number(q.max_mark))) throw new Error(`مجموع الخطوات ${sum} ولازم يساوي درجة السؤال ${q.max_mark}`);
+  // فحص الخطوات بالجبر قبل الحفظ (AI_RUBRIC_CHECK=1): خطوة غلط تغلّط كل أوراق السؤال.
+  // الخدمة ترجع بس الأخطاء المؤكدة (قيمة ما تحقق المعادلة اللي قبلها)، وإذا ما ردت نحفظ بدون فحص
+  if (process.env.AI_RUBRIC_CHECK === "1" && aiLinked()) {
+    const errors = await rubricErrors(Number(q.max_mark), steps);
+    if (errors.length) throw new Error(errors.join(" | "));
+  }
   await kvSet(rubricKey(qid), JSON.stringify({ steps, at: new Date().toISOString(), by }));
   return steps;
+}
+/** أخطاء الخطوات المؤكدة من خدمة التصحيح (/bot/rubric/check)، كل وحدة بسطر يقراه الأستاذ. فارغة إذا سليمة أو الخدمة ما ردت */
+export async function rubricErrors(max: number, steps: RubricStep[]): Promise<string[]> {
+  try {
+    const r = await svc("/bot/rubric/check", { max_points: max, steps: steps.map((s) => ({ text: s.text, points: s.points })) }, 30_000);
+    return (Array.isArray(r?.issues) ? r.issues : []).filter((i: any) => i?.severity === "error")
+      .map((i: any) => (Number(i.step) > 0 ? `الخطوة ${i.step}: ` : "") + String(i.message ?? ""));
+  } catch { return []; }
 }
 export const clearRubric = (qid: number) => kvSet(rubricKey(qid), "null");
 
@@ -374,9 +389,24 @@ export async function examplesFor(_examId: number, versionId: number, n: number)
   return out.sort((a, b) => Math.abs(b.teacher - b.ai) - Math.abs(a.teacher - a.ai)).slice(0, 6);
 }
 // نفس الصور ونفس الخطوات = نفس النتيجة: تنحفظ أول مرة، والمرة الثانية ترجع المحفوظة بدون تصحيح جديد ولا كلفة
-const ENGINE = "rubric-2";
-const cacheKey = (steps: RubricStep[], imgs: Buffer[]) => {
-  const h = createHash("sha256").update(ENGINE).update(JSON.stringify(steps));
+const ENGINE = "rubric-4";
+// نسخة محرك التصحيح ترجعها الخدمة من /health (تتغير لحالها كل ما يتغير كود التصحيح)، وتدخل بمفتاح الحفظ:
+// محرك جديد ما يرجّع درجات محفوظة من محرك قديم، وما واحد يحتاج يتذكر يغيّر الاسم بإيده
+let engineSeen: { at: number; version: string } | null = null;
+const ENGINE_TTL_MS = 10 * 60_000;
+async function engineVersion(): Promise<string> {
+  if (engineSeen && Date.now() - engineSeen.at < ENGINE_TTL_MS) return engineSeen.version;
+  let version = "";
+  try {
+    const token = await googleIdToken(svcUrl());
+    const res = await fetch(svcUrl() + "/health", { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(10_000) });
+    if (res.ok) version = String((await res.json())?.engine_version ?? "");
+  } catch { /* الخدمة ما ردت: نبقى على الاسم الثابت */ }
+  engineSeen = { at: Date.now(), version };
+  return version;
+}
+const cacheKey = (steps: RubricStep[], imgs: Buffer[], version = "") => {
+  const h = createHash("sha256").update(engineTag(ENGINE, version)).update(JSON.stringify(steps));
   for (const b of imgs) h.update(b);
   return `ai_cache_${h.digest("hex").slice(0, 40)}`;
 };
@@ -384,7 +414,7 @@ const cacheKey = (steps: RubricStep[], imgs: Buffer[]) => {
 async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], examples: Example[] = []): Promise<AiQuestion> {
   const max = Number(q.max_mark);
   const useCache = process.env.AI_CACHE !== "0";
-  const key = cacheKey(steps, imgs);
+  const key = cacheKey(steps, imgs, useCache ? await engineVersion() : "");
   if (useCache) {
     const hit = await readJson<AiQuestion | null>(key, null);
     if (hit && typeof hit.score === "number") return { ...hit, n: q.n, usage: [] };
@@ -602,6 +632,8 @@ async function compareItems(): Promise<Row[]> {
 }
 /** 🔬 يصحح الأوراق بالسر بالمصحح الثاني. يشتغل بس إذا ماكو أوراق حقيقية تنتظر بهذي الدكة */
 async function photoTick(limit: number) {
+  // AI_COMPARE=0 يطفي المقارنة السرية: المصحح الثاني يكلف أكثر من التصحيح الحقيقي، وبعد ما تنقاس الدقة ما إلها حاجة
+  if (process.env.AI_COMPARE === "0") return 0;
   const todo: Row[] = [];
   for (const it of await compareItems()) {
     if (todo.length >= limit) break;
@@ -666,8 +698,24 @@ async function forward(it: Row, res: AiQuestion[], usage: Usage[], nameOf: (it: 
 }
 
 /** دكة المؤقت: ياخذ كم ورقة ويصححها. الواثق منها توصل للطالب، واللي مو متأكد منها تروح لمصحح */
+/** الحد اليومي لكلفة نظام التصحيح (AI_DAILY_USD_CAP بالدولار). من يوصله يوگف لباچر، والأوراق تبقى تنتظر، وصاحب البوت يتبلغ مرة باليوم */
+async function overDailyCap(): Promise<boolean> {
+  const cap = dailyCap(process.env.AI_DAILY_USD_CAP);
+  if (cap === null) return false;
+  const day = dayOf(stamp());
+  const spent = spentOn(day, await aiLog(), await prices());
+  if (!overCap(spent, cap)) return false;
+  const noteKey = `ai_cap_note_${day}`;
+  if (!await kvGet(noteKey)) {
+    await kvSet(noteKey, "1");
+    const text = "👤 <b>لصاحب البوت بس</b>\n⚠️ نظام التصحيح AI وصل الحد اليومي للكلفة (" + cap + " دولار) فوگف لباچر. الأوراق تبقى تنتظر.\nكلفة اليوم: " + spent.toFixed(2) + " دولار";
+    for (const id of ADMIN_IDS) await send(id, text);
+  }
+  return true;
+}
 export async function aiGradeTick(finish: (uid: number, itemId: number) => Promise<unknown>, nameOf: (it: Row) => Promise<string>, limit = PER_TICK) {
   if (!aiLinked() || !await aiOn()) return { off: true };
+  if (await overDailyCap()) return { capped: true };
   const take = await makeTaker();
   const picked: Row[] = [];
   for (const it of await find("sched_items", { status: "done" }, { order: ["id"] })) {
