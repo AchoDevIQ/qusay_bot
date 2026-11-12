@@ -3,7 +3,7 @@
 import { ADMIN_IDS } from "./config.ts";
 import { count, find, one, type Row } from "./db.ts";
 import { AI_GRADER, isAdmin, staffIds, staffName } from "./data.ts";
-import { compareState, aiLinked, aiStudentsState, calibState, setAiStudent, setCalib, aiLog, aiOn, aiPending, aiRetry, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricOf, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
+import { compareState, aiLinked, aiStudentsState, calibState, setAiStudent, setCalib, aiLog, aiOn, aiPending, aiRetry, aiSettings, clearRubric, costOf, draftExam, draftQueueState, draftRubric, queueDrafts, prices, rubricFull, saveRubric, setAiOn, setChapterScope, setPrice, tryGrade } from "./aiGrade.ts";
 import { EXAM_PERM } from "./examBank.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -21,11 +21,11 @@ async function listData(uid: number) {
   let ready = 0;
   const qOf = new Map<number, Row[]>();
   // كل الخطوات سوية مو وحدة وحدة، حتى الصفحة تفتح بسرعة
-  const allSteps = await Promise.all(questions.map((q) => rubricOf(q.id)));
+  const allSteps = await Promise.all(questions.map((q) => rubricFull(q.id)));
   questions.forEach((q, i) => {
-    const steps = allSteps[i];
+    const steps = allSteps[i]?.steps ?? null;
     if (steps) ready++;
-    qOf.set(q.version_id, [...(qOf.get(q.version_id) ?? []), { id: q.id, n: q.n, max: q.max_mark, q: q.q_file, a: JSON.parse(q.a_files || "[]"), steps }]);
+    qOf.set(q.version_id, [...(qOf.get(q.version_id) ?? []), { id: q.id, n: q.n, max: q.max_mark, q: q.q_file, a: JSON.parse(q.a_files || "[]"), steps, alts: allSteps[i]?.alts ?? [] }]);
   });
   const chapters: Row[] = [];
   for (const e of exams.sort((a, b) => String(a.slug).localeCompare(String(b.slug)) || (a.pos ?? a.ord) - (b.pos ?? b.ord))) {
@@ -96,8 +96,8 @@ export async function aiGradeAction(body: Row) {
   }
   if (a === "draft") {
     need(aiLinked(), "خدمة التصحيح مو مربوطة بعد بالسيرفر");
-    const steps = await draftRubric(id).catch(fail);
-    return { ...await listData(uid), draft: { id, steps }, notice: "راجع الخطوات ودرجاتها، وبعدين دوس حفظ" };
+    const d = await draftRubric(id).catch(fail);
+    return { ...await listData(uid), draft: { id, steps: d.steps, alts: d.alts }, notice: d.alts.length ? `الحل بيه ${d.alts.length + 1} طرق: كل طريقة طلعت لحالها بدرجتها الكاملة. راجعها ودوس حفظ` : "راجع الخطوات ودرجاتها، وبعدين دوس حفظ" };
   }
   if (a === "retry") {
     await aiRetry(id).catch(fail);
@@ -119,7 +119,8 @@ export async function aiGradeAction(body: Row) {
     return { ...await listData(uid), notice: parts.join(" · ") };
   }
   if (a === "save") {
-    await saveRubric(id, body.steps, uid).catch(fail);
+    // alts: طرق الحل الثانية مثل ما هي بالصفحة. صفحة قديمة ما ترسلها، فتبقى المحفوظة
+    await saveRubric(id, body.steps, uid, Array.isArray(body.alts) ? body.alts : undefined).catch(fail);
     return { ...await listData(uid), notice: "✅ انحفظت الخطوات" };
   }
   if (a === "clear") {

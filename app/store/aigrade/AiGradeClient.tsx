@@ -7,12 +7,13 @@ import PhotoPick from "../PhotoPick";
 import Thumbs from "../Thumbs";
 
 type Step = { text: string; points: number };
-type Q = { id: number; n: number; max: number; q: string | null; a: string[]; steps: Step[] | null };
+type Q = { id: number; n: number; max: number; q: string | null; a: string[]; steps: Step[] | null; alts?: Step[][] };
+const WAY = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة"];
 type Version = { id: number; model: string; kind: string; pdf: boolean; questions: Q[] };
 type Exam = { id: number; title: string; on: boolean; versions: Version[]; ready: boolean };
 type Chapter = { slug: string; chapter: string; grader: number; exams: Exam[] };
 type Sum = { sent: number; unsure: number; cost: number };
-type Trial = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; expected: string; student: string }[] };
+type Trial = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; method?: number; steps: { status: string; awarded: number; possible: number; reason: string; expected: string; student: string }[] };
 type Log = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed"; note?: string; name?: string; exam?: string; total?: number; toName: string; cost: number };
 type PriceRow = { model: string; in: number; out: number; missing: boolean };
 type CmpRow = { id: number; name: string; exam: string; model: string; teacher: number | null; current: number | null; photo: number | null; currentIqd: number | null; photoIqd: number | null };
@@ -21,7 +22,7 @@ type Data = {
   aiStudents: { minAvg: number; minPapers: number; chosen: StuRow[]; candidates: StuRow[] };
   calib: { n: number; topics: { exam: number; title: string; done: number; of: number; versions: { model: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] }[] };
   on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string; retry: boolean }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
-  fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[] }; trial?: { id: number; result: Trial }; notice?: string;
+  fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[]; alts?: Step[][] }; trial?: { id: number; result: Trial }; notice?: string;
 };
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 type StuRow = { id: number; name: string; papers: number; avg: number | null };
@@ -81,7 +82,7 @@ export default function AiGradeClient() {
                   <div key={v.id} className="aig-ver">
                     <div className="exlabel">النموذج {v.model}{v.kind === "optional" ? " (اختياري)" : ""}</div>
                     {!v.questions.length && <div className="exhint">ماكو أسئلة بهذا النموذج.</div>}
-                    {v.questions.map((q) => <QCard key={q.id} q={q} pdf={v.pdf} busy={busy} call={call} fileUrl={fileUrl} draft={data.draft?.id === q.id ? data.draft.steps : undefined} trial={data.trial?.id === q.id ? data.trial.result : undefined} linked={data.linked} />)}
+                    {v.questions.map((q) => <QCard key={q.id} q={q} pdf={v.pdf} busy={busy} call={call} fileUrl={fileUrl} draft={data.draft?.id === q.id ? data.draft : undefined} trial={data.trial?.id === q.id ? data.trial.result : undefined} linked={data.linked} />)}
                   </div>
                 ))}
               </details>
@@ -211,19 +212,24 @@ function Prices({ rows, busy, call }: { rows: PriceRow[]; busy: boolean; call: C
   );
 }
 
-function QCard({ q, pdf, busy, call, fileUrl, draft, trial, linked }: { q: Q; pdf: boolean; busy: boolean; call: Call; fileUrl: (r: string) => string; draft?: Step[]; trial?: Trial; linked: boolean }) {
+function QCard({ q, pdf, busy, call, fileUrl, draft, trial, linked }: { q: Q; pdf: boolean; busy: boolean; call: Call; fileUrl: (r: string) => string; draft?: { steps: Step[]; alts?: Step[][] }; trial?: Trial; linked: boolean }) {
   const [steps, setSteps] = useState<Step[]>(q.steps ?? []);
+  // طرق الحل الثانية (إذا الأستاذ حل السؤال بأكثر من طريقة): كل وحدة لحالها بدرجة السؤال كاملة
+  const [alts, setAlts] = useState<Step[][]>(q.alts ?? []);
   const [open, setOpen] = useState(false);
   // الخطوات اللي طلعها الذكاء تنحط بالمربعات، وما تنحفظ لحد ما يدوس حفظ
-  useEffect(() => { if (draft) { setSteps(draft); setOpen(true); } }, [draft]);
-  useEffect(() => { if (!draft) setSteps(q.steps ?? []); }, [q.steps]); // eslint-disable-line react-hooks/exhaustive-deps
-  const sum = steps.reduce((t, s) => t + (Number(s.points) || 0), 0);
-  const ok = steps.length > 0 && Math.abs(sum - q.max) < 0.01 && steps.every((s) => s.text.trim());
+  useEffect(() => { if (draft) { setSteps(draft.steps); setAlts(draft.alts ?? []); setOpen(true); } }, [draft]);
+  useEffect(() => { if (!draft) { setSteps(q.steps ?? []); setAlts(q.alts ?? []); } }, [q.steps, q.alts]); // eslint-disable-line react-hooks/exhaustive-deps
+  const total = (list: Step[]) => list.reduce((t, s) => t + (Number(s.points) || 0), 0);
+  const whole = (list: Step[]) => list.length > 0 && Math.abs(total(list) - q.max) < 0.01 && list.every((s) => s.text.trim());
+  const sum = total(steps);
+  const ok = whole(steps) && alts.every(whole);
   const set = (i: number, p: Partial<Step>) => setSteps(steps.map((s, j) => (j === i ? { ...s, ...p } : s)));
+  const setAlt = (k: number, list: Step[]) => setAlts(alts.map((a, j) => (j === k ? list : a)));
   return (
     <div className="aig-q">
       <button type="button" className="aig-qhead" onClick={() => setOpen(!open)}>
-        س{q.n} <small>من {q.max}</small> {q.steps ? `· ✅ ${q.steps.length} خطوات` : "· ⏳ بدون خطوات"} {open ? "▲" : "▼"}
+        س{q.n} <small>من {q.max}</small> {q.steps ? `· ✅ ${q.steps.length} خطوات${q.alts?.length ? ` · 🔀 ${q.alts.length + 1} طرق حل` : ""}` : "· ⏳ بدون خطوات"} {open ? "▲" : "▼"}
       </button>
       {open && (
         <div className="aig-body">
@@ -232,6 +238,7 @@ function QCard({ q, pdf, busy, call, fileUrl, draft, trial, linked }: { q: Q; pd
             : pdf ? <div className="exhint">📄 الحل النموذجي مرفوع PDF للنموذج كله، والذكاء يلگى هذا السؤال بداخله.</div>
             : <div className="exbad">ماكو حل نموذجي لهذا السؤال، فلازم تكتب الخطوات بإيدك.</div>}
           {(q.a.length > 0 || pdf) && <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "draft", id: q.id })}>🤖 طلّع الخطوات من صورة الحل</button>}
+          {alts.length > 0 && <div className="exlabel">🔀 الطريقة الأولى</div>}
           {steps.map((s, i) => (
             <div key={i} className="aig-step">
               <span className="aig-n">{i + 1}</span>
@@ -241,9 +248,28 @@ function QCard({ q, pdf, busy, call, fileUrl, draft, trial, linked }: { q: Q; pd
             </div>
           ))}
           <button type="button" className="btn ghost" onClick={() => setSteps([...steps, { text: "", points: 0 }])}>➕ خطوة</button>
-          <div className={ok ? "fdok" : "exbad"}>المجموع {sum} من {q.max}{!ok && steps.length ? " · لازم يساوي درجة السؤال" : ""}</div>
+          <div className={whole(steps) ? "fdok" : "exbad"}>المجموع {sum} من {q.max}{!whole(steps) && steps.length ? " · لازم يساوي درجة السؤال" : ""}</div>
+          {alts.map((list, k) => (
+            <div key={k} className="aig-alt">
+              <div className="exlabel">🔀 الطريقة {WAY[k + 1] ?? k + 2}</div>
+              <div className="exhint">طريقة حل ثانية من حلك النموذجي. الطالب اللي يحل بيها ياخذ درجته عليها كاملة، مثل الطريقة الأولى.</div>
+              {list.map((s, i) => (
+                <div key={i} className="aig-step">
+                  <span className="aig-n">{i + 1}</span>
+                  <textarea dir="ltr" rows={2} value={s.text} onChange={(e) => setAlt(k, list.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} />
+                  <input type="number" inputMode="decimal" min={0} value={Number.isFinite(s.points) ? s.points : 0} onChange={(e) => setAlt(k, list.map((x, j) => (j === i ? { ...x, points: Number(e.target.value) } : x)))} />
+                  <button type="button" className="aig-x" aria-label="امسح الخطوة" onClick={() => setAlt(k, list.filter((_, j) => j !== i))}>✕</button>
+                </div>
+              ))}
+              <div className="aig-btns">
+                <button type="button" className="btn ghost" onClick={() => setAlt(k, [...list, { text: "", points: 0 }])}>➕ خطوة</button>
+                <button type="button" className="btn ghost" onClick={() => setAlts(alts.filter((_, j) => j !== k))}>🗑 احذف هاي الطريقة</button>
+              </div>
+              <div className={whole(list) ? "fdok" : "exbad"}>المجموع {total(list)} من {q.max}{!whole(list) ? " · لازم يساوي درجة السؤال" : ""}</div>
+            </div>
+          ))}
           <div className="aig-btns">
-            <button type="button" className="btn" disabled={busy || !ok} onClick={() => void call({ action: "save", id: q.id, steps })}>💾 حفظ الخطوات</button>
+            <button type="button" className="btn" disabled={busy || !ok} onClick={() => void call({ action: "save", id: q.id, steps, alts })}>💾 حفظ الخطوات</button>
             {q.steps && <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "clear", id: q.id })}>🗑 امسح الخطوات</button>}
           </div>
           {q.steps && <TryBox q={q} busy={busy} call={call} trial={trial} linked={linked} />}
@@ -286,6 +312,7 @@ function TryBox({ q, busy, call, trial, linked }: { q: Q; busy: boolean; call: C
       {trial && (
         <div className="aig-result">
           <div className="aig-score">انطى <b>{trial.score}</b> من {trial.max}</div>
+          {!!trial.method && trial.method > 1 && <div className="exhint">🔀 انحسبت على الطريقة {WAY[trial.method - 1] ?? trial.method} من حلك النموذجي (الطالب حل بيها).</div>}
           <div className={trial.review ? "exbad" : "fdok"}>{trial.review ? `⚠️ مو متأكد، فچان يحولها للمصحح${trial.reason ? `: ${trial.reason}` : ""}` : "✅ متأكد، فچان يدزها للطالب مباشرة"}</div>
           {trial.steps.map((s, i) => (
             <div key={i} className="aig-tstep">

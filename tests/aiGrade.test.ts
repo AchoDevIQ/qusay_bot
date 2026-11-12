@@ -674,3 +674,73 @@ test("🔬 المقارنة: المصحح الثاني يصحح بالسر، و�
   await tick();
   assert.equal(tg.slice(sentBefore).filter((m) => String(m.p.chat_id) === "120").length, 0);
 });
+
+test("🔀 الحل النموذجي بطريقتين: كل طريقة تنحفظ بدرجة السؤال كاملة، والطالب ينحسب له على الطريقة اللي حل بيها", async () => {
+  const { rubricFull, tryGrade, aiJudgeObjection, setCalib } = await import("../lib/aiGrade.ts");
+  const { myPaper } = await import("../lib/examRoom.ts");
+  await setCalib(0);
+  const e9 = await insert("bank_exams", { slug: "c2m", chapter: "الأعداد المركبة", ord: 1, title: "قبل x و y", minutes: 60, pos: 1 });
+  const vA = await insert("bank_versions", { exam_id: e9, model: "A", kind: "mandatory", ok: 1 });
+  const vB = await insert("bank_versions", { exam_id: e9, model: "B", kind: "mandatory", ok: 1 });
+  const qa = await insert("bank_questions", { version_id: vA, n: 1, max_mark: 15, q_file: "none/q.png", a_files: JSON.stringify(["ans/sol.png"]) });
+  const qb = await insert("bank_questions", { version_id: vB, n: 1, max_mark: 15, q_file: "none/q.png", a_files: JSON.stringify(["ans/sol.png"]) });
+  const first = [{ text: "(4i+2i^2)/(-2+i-6i+3i^2)", points: 3 }, { text: "(-2+4i)/(-5-5i) * (-5+5i)/(-5+5i)", points: 2 }, { text: "(10-30i-20)/50", points: 5 }, { text: "-1/5 - 3/5 i", points: 5 }];
+  const second = [{ text: "2i/(-1-3i) * (-1+3i)/(-1+3i) * (2+i)/(2-i) * (2+i)/(2+i)", points: 3 }, { text: "(-6-2i)/10 * (3+4i)/5", points: 5 }, { text: "(-10-30i)/50", points: 4 }, { text: "-1/5 - 3/5 i", points: 3 }];
+  const rows = (list: typeof first, got: number) => list.map((s, i) => ({ status: got >= 15 || i === 0 ? "correct" : "incorrect", awarded: got >= 15 ? s.points : i === 0 ? got : 0, possible: s.points, reason: "", reason_ar: "", expected: `EN ${s.text}`, student: "" }));
+  // الطالب حل بالطريقة الثانية: بخطوات الأولى ياخذ 6، وبخطوات الثانية 15
+  let viaFirst = 6, viaSecond = 15;
+  aiReply = (route, body) => {
+    if (route === "/bot/rubric") return Response.json({ steps: first, alternatives: [second], marks_written: true, issues: [], usage: [] });
+    if (route === "/bot/objection") return Response.json({ accept: false, new_score: 15, reason: "الدرجة صحيحة", usage: [] });
+    const main = body.steps[0].text === first[0].text;
+    return Response.json({ score: main ? viaFirst : viaSecond, requires_review: false, review_reason: "", student_lines: ["x"], steps: rows(main ? first : second, main ? viaFirst : viaSecond), usage: [{ model: "m", calls: 1, input: 10, output: 0 }] });
+  };
+  // «طلّع الخطوات»: كل طريقة ترجع لحالها، وما تنحفظ لحد ما يدوس حفظ
+  const d: any = await aiGradeAction({ initData: sign(1), action: "draft", id: qa });
+  assert.deepEqual([d.draft.steps.map((s: any) => s.points), d.draft.alts.map((a: any) => a.map((s: any) => s.points))], [[3, 2, 5, 5], [[3, 5, 4, 3]]]);
+  assert.match(d.notice, /2 طرق/);
+  assert.equal(await rubricFull(qa), null);
+  // طريقة مجموعها مو درجة السؤال ما تنحفظ
+  await assert.rejects(aiGradeAction({ initData: sign(1), action: "save", id: qa, steps: first, alts: [second.slice(0, 3)] }), /بالطريقة الثانية 12 ولازم يساوي درجة السؤال 15/);
+  const saved: any = await aiGradeAction({ initData: sign(1), action: "save", id: qa, steps: d.draft.steps, alts: d.draft.alts });
+  const shown = saved.chapters.find((c: any) => c.slug === "c2m").exams[0].versions[0].questions[0];
+  assert.deepEqual([shown.steps.length, shown.alts.length, shown.alts[0][1].points], [4, 1, 5]);
+  // تعديل الطريقة الأولى من صفحة قديمة (ما ترسل الطرق الثانية): الطريقة الثانية تبقى
+  await saveRubric(qa, [{ ...first[0], points: 4 }, { ...first[1], points: 1 }, first[2], first[3]], 1);
+  assert.deepEqual([(await rubricFull(qa))!.steps[0].points, (await rubricFull(qa))!.alts.length], [4, 1]);
+  await saveRubric(qa, first, 1);
+  // «طلّع واحفظ خطوات كل أسئلة الموضوع» يحفظ الطريقتين هم
+  await aiGradeAction({ initData: sign(1), action: "draftAll", id: e9 });
+  assert.deepEqual((await rubricFull(qb))!.alts[0].map((s) => s.points), [3, 5, 4, 3]);
+
+  // 🧪 التجربة: ينحسب له الأعلى، ومكتوب بأي طريقة
+  const img = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 5, 5]);
+  ai.length = 0;
+  const t = await tryGrade(qa, [img]);
+  assert.deepEqual([t.score, t.method, ai.filter((c) => c.route === "/bot/grade").length], [15, 2, 2]);
+  assert.deepEqual(ai[1].body.steps.map((s: any) => s.points), [3, 5, 4, 3]);
+  // أخذها كاملة بالطريقة الأولى: ما يسأل عن الثانية
+  viaFirst = 15; ai.length = 0;
+  const full = await tryGrade(qa, [img]);
+  assert.deepEqual([full.score, full.method, ai.length], [15, undefined, 1]);
+  // الطريقة الثانية ما زادته: تبقى درجة الأولى
+  viaFirst = 6; viaSecond = 4;
+  const low = await tryGrade(qa, [img]);
+  assert.deepEqual([low.score, low.method], [6, undefined]);
+
+  // ورقة حقيقية: الدرجة الأعلى توصل للطالب، وكلفة التصحيحين تنحسب، والحل المعروض والاعتراض على نفس الطريقة
+  viaSecond = 15;
+  await setAiOn(true);
+  await setChapterScope("c2m", [e9], 0);
+  const p = await insert("sched_items", { user_id: 90, exam_id: e9, at: `${todayStr()} 11:00`, status: "done", version_id: vA, started_at: stamp(), submitted_at: stamp() });
+  await insert("exam_answers", { item_id: p, q: 1, file: "ans/a.jpg", created: stamp() });
+  for (let i = 0; i < 4 && !(await one("sched_items", { id: p }))!.graded_at; i++) await tick();
+  assert.deepEqual([(await one("sched_items", { id: p }))!.total, (await aiResultOf(p))![0].method], [15, 2]);
+  const logged: any = await aiGradeAction({ initData: sign(1), action: "list" });
+  assert.ok(logged.log.some((r: any) => r.kind === "sent" && r.item === p));
+  const view: any = await myPaper(90, p);
+  assert.deepEqual(view.ai[0].steps.map((s: any) => s.expected), second.map((s) => s.text));
+  ai.length = 0;
+  await aiJudgeObjection((await one("sched_items", { id: p }))!, 1, "أستحق أكثر", 15);
+  assert.deepEqual([ai[0].route, ai[0].body.steps[0].text], ["/bot/objection", second[0].text]);
+});

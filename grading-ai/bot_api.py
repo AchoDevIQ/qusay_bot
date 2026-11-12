@@ -920,6 +920,7 @@ async def finish(req: "GradeReq", bucket: list, steps: list, score: float, confi
 class RubricStepOut(BaseModel):
     text: str = Field(description="The step exactly as written on the solution, as plain math (e.g. x^2 - y^2 = 7)")
     points: float = Field(ge=0, description="Marks the teacher wrote for this step; 0 when none is written")
+    method: int = Field(default=1, ge=1, le=9, description="1 for the solution's first way. 2, 3... only for the steps of ANOTHER COMPLETE WAY to solve the same question, written after the first under a heading such as الطريقة الثانية, طريقة أخرى, حل آخر or Another method. Parts of one question (1/ 2/, أ ب, a b) are not other ways: they stay 1")
 
 
 class RubricOut(BaseModel):
@@ -934,7 +935,11 @@ List the solution's marking steps in order, top to bottom:
 - One entry per marked step. When the teacher's marks group several lines under one mark, keep them as ONE step (join the lines with "  ;  ").
 - text: the math of the step, copied faithfully as plain text (use ^ for powers, sqrt() for roots, i for the imaginary unit, ASCII digits, and x y z for س ص ع). Do not include the mark number itself in the text.
 - points: the mark written for that step. If no marks are written anywhere, set marks_written to false and give every step 0.
-Ignore page headers, question numbers and decoration."""
+- method: 1 for every step, unless the teacher solved the SAME question again in another complete way (a heading such as
+  «الطريقة الثانية», «طريقة ثانية», «طريقة أخرى», «حل آخر» or "Another method", ending at the same final answer): the steps of
+  that second way get 2, of a third way 3. A student follows only ONE of these ways, so each way carries the question's full marks.
+  Parts or branches of one question (1/ 2/, أ ب, a b, two things to prove) are NOT other ways: they all stay 1.
+Ignore page headers, question numbers, decoration and remarks to the grader (ملاحظة)."""
 
 PDF_PART = """
 
@@ -965,10 +970,38 @@ def fit_points(points: List[float], total: float) -> List[float]:
     return whole
 
 
+def split_methods(steps: List[dict], total: float, marks_written: bool):
+    """
+    The teacher's first way to solve the question and his other complete ways ("الطريقة الثانية"), as
+    (first way, other ways, unclear). A student follows one way only, so every way must carry the
+    question's full marks by itself: the tags are trusted only when the marks the teacher wrote for
+    EACH way add up to the question's mark. Parts of one question (1/ 2/) tagged as ways by mistake
+    never do, so they stay one list, as do steps with no marks written (unclear is then True).
+    """
+    groups: dict = {}
+    for s in steps:
+        groups.setdefault(int(s.get("method") or 1), []).append(s)
+    if len(groups) < 2:
+        return steps, [], False
+    ways = list(groups.values())
+    whole = lambda way: abs(sum(float(s.get("points") or 0) for s in way) - float(total)) < 0.01
+    if not marks_written or not all(whole(way) for way in ways):
+        return steps, [], True
+    return ways[0], ways[1:], False
+
+
+def draft_steps(steps: List[dict], total: float) -> List[dict]:
+    pts = fit_points([float(s.get("points") or 0) for s in steps], total)
+    return [{"text": s["text"].strip()[:MAX_STEP_CHARS], "points": p, "objective": s["text"].strip()[:MAX_STEP_CHARS]}
+            for s, p in zip(steps, pts)]
+
+
 @app.post("/bot/rubric", dependencies=[Depends(check_key)])
 async def bot_rubric(req: RubricReq):
     """Draft steps from the teacher's solution pages, with the marks the teacher wrote next to
-    each step. Falls back to one step per written line with points shared evenly."""
+    each step. Falls back to one step per written line with points shared evenly.
+    When the teacher solved the question in more than one complete way, `steps` is his first way and
+    `alternatives` holds the others, each worth the question's full marks."""
     bucket = start_usage()
     if req.pdf and req.question:
         pages = await pdf_pages(req.pdf)
@@ -985,11 +1018,16 @@ async def bot_rubric(req: RubricReq):
         )
         steps = [s for s in out.get("steps", []) if (s.get("text") or "").strip()][:MAX_STEPS]
         if steps:
-            pts = fit_points([float(s.get("points") or 0) for s in steps], req.max_points)
-            drafted = [{"text": s["text"].strip()[:MAX_STEP_CHARS], "points": p, "objective": s["text"].strip()[:MAX_STEP_CHARS]}
-                       for s, p in zip(steps, pts)]
-            return {"steps": drafted, "marks_written": bool(out.get("marks_written")),
-                    "issues": await check_rubric([Step(**d) for d in drafted], req.max_points), "usage": usage_report(bucket)}
+            first, others, unclear = split_methods(steps, req.max_points, bool(out.get("marks_written")))
+            drafted = draft_steps(first, req.max_points)
+            alternatives = [draft_steps(way, req.max_points) for way in others]
+            issues = await check_rubric([Step(**d) for d in drafted], req.max_points)
+            for k, way in enumerate(alternatives, start=2):
+                issues += [{**i, "method": k} for i in await check_rubric([Step(**d) for d in way], req.max_points)]
+            if unclear:
+                issues.append(_issue("methods_unclear", 0))
+            return {"steps": drafted, "alternatives": alternatives, "marks_written": bool(out.get("marks_written")),
+                    "issues": issues, "usage": usage_report(bucket)}
     except Exception:
         logger.exception("reading the rubric failed")
     if req.pdf:
@@ -1000,7 +1038,7 @@ async def bot_rubric(req: RubricReq):
     texts = [l["text"].strip()[:MAX_STEP_CHARS] for l in lines if (l.get("text") or "").strip()][:MAX_STEPS]
     pts = split_points(len(texts), req.max_points)
     drafted = [{"text": t, "points": p, "objective": t} for t, p in zip(texts, pts)]
-    return {"steps": drafted, "marks_written": False,
+    return {"steps": drafted, "alternatives": [], "marks_written": False,
             "issues": await check_rubric([Step(**d) for d in drafted], req.max_points) if drafted else [], "usage": usage_report(bucket)}
 
 
@@ -1020,6 +1058,7 @@ RUBRIC_ISSUES = {
     "wrong_value": ("error", "القيمة «{value}» ما تحقق المعادلة اللي قبلها «{prior}»"),
     "duplicate_step": ("note", "نفس نص الخطوة {other}"),
     "final_not_values": ("note", "الجواب النهائي ما ينقرا كقيم، فما راح ينفحص بالجبر"),
+    "methods_unclear": ("note", "الحل بيه أكثر من طريقة، بس درجات كل طريقة ما تساوي درجة السؤال، فانحسبت كلها خطوات وحدة. راجعها"),
     "no_function": ("note", "سؤال رسم والدالة مو مكتوبة بأي خطوة بصيغة f(x) = ... ، فالرسم ما راح يتطابق مع الحساب"),
 }
 _RUBRIC_CHAIN = re.compile(rf"{ARROW_PATTERN}|;|\n")

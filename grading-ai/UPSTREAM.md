@@ -51,6 +51,13 @@ Added 2026-11-10 to 2026-11-12 (requests stay compatible; responses only gain fi
   is close to black or has no sharp edge, the response gains `photo_quality`, one entry per page in page
   order with `problem` "dark", "blurred" or "". The bot only tells the teacher which page it was.
   `PHOTO_GATE=0` turns the measurement off.
+- `/bot/rubric` separates the teacher's alternative ways to solve one question (changed 2026-11-13 at the owner's
+  request). When the model answer solves the question again under «الطريقة الثانية» / «طريقة أخرى» / «حل آخر», `steps`
+  is the first way and the new field `alternatives` holds the others, each worth the question's full marks (before, all
+  ways were one list and the marks were scaled, so each way was worth about half). The split is made only when the marks
+  written for every way add up to the question's mark; parts of one question (1/ 2/) never do, so they stay one list and
+  the note `methods_unclear` is added. Issues found in another way carry `method` (2, 3...). The bot grades with the first
+  way and, when the student did not get full marks, with each alternative, and keeps the highest result.
 - `POST /bot/rubric/check` checks a rubric; `/bot/rubric` returns the same `issues` with its draft.
 - `engine_version` in `/health` and in every grade response: the bot keys its cache on it.
 - `final_answer` in the grade response: both final answers and what the algebra made of them.

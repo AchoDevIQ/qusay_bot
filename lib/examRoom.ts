@@ -19,7 +19,7 @@ import { send, sendMany } from "./telegram.ts";
 import { esc, stamp } from "./util.ts";
 import { gradedPages } from "./gradeApi.ts";
 import { studentPapers } from "./studentPapers.ts";
-import { aiPartialOf, aiResultOf, rubricOf } from "./aiGrade.ts";
+import { aiPartialOf, aiResultOf, methodSteps, rubricFull } from "./aiGrade.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
@@ -297,7 +297,9 @@ async function aiShown(it: Row) {
   const qs = new Map((await find("bank_questions", { version_id: it.version_id })).map((q) => [q.n as number, q.id as number]));
   return await Promise.all(((await aiResultOf(it.id)) ?? []).filter((q) => !part || !part.includes(q.n)).map(async (q) => {
     // عمود الحل النموذجي: خطواتك المحفوظة نفسها (مو صياغة الذكاء بالإنگليزي)
-    const mine = qs.has(q.n) ? await rubricOf(qs.get(q.n)!) : null;
+    // (بطريقة الحل اللي انحسبت بيها درجته، إذا الحل النموذجي بيه أكثر من طريقة)
+    const saved = qs.has(q.n) ? await rubricFull(qs.get(q.n)!) : null;
+    const mine = saved ? methodSteps(saved, q.method) : null;
     const sameCount = !!mine && mine.length === q.steps.length;
     return {
       n: q.n, score: q.score, max: q.max, note: q.note ?? "",

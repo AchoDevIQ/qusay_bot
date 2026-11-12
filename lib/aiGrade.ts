@@ -12,6 +12,8 @@ import { stamp } from "./util.ts";
 import { dailyCap, dayOf, engineTag, overCap, spentOn } from "./aiGuard.ts";
 
 export type RubricStep = { text: string; points: number };
+/** خطوات السؤال: الطريقة الأولى، وطرق الحل الثانية إذا الأستاذ حل السؤال بأكثر من طريقة. كل طريقة مجموعها درجة السؤال كاملة */
+export type Rubric = { steps: RubricStep[]; alts: RubricStep[][] };
 export type Usage = { model: string; calls: number; input: number; output: number };
 export type Price = { in: number; out: number };
 /** المواضيع اللي يصححها، ولكل فصل المصحح اللي توصله الأوراق اللي مو متأكد منها */
@@ -157,27 +159,46 @@ const sumUsage = (lists: Usage[][]): Usage[] => {
   return [...out.values()];
 };
 
-export async function rubricOf(qid: number): Promise<RubricStep[] | null> {
-  const j = await readJson<{ steps?: RubricStep[] } | null>(rubricKey(qid), null);
-  return Array.isArray(j?.steps) && j!.steps.length ? j!.steps : null;
+/** خطوات السؤال المحفوظة بكل طرق حلها، أو null إذا ما إله خطوات */
+export async function rubricFull(qid: number): Promise<Rubric | null> {
+  const j = await readJson<{ steps?: RubricStep[]; alts?: RubricStep[][] } | null>(rubricKey(qid), null);
+  if (!Array.isArray(j?.steps) || !j!.steps.length) return null;
+  return { steps: j!.steps, alts: (Array.isArray(j!.alts) ? j!.alts : []).filter((a) => Array.isArray(a) && a.length) };
 }
+/** خطوات الطريقة الأولى (اللي تنعرض وتنعد «خطوات السؤال») */
+export async function rubricOf(qid: number): Promise<RubricStep[] | null> {
+  return (await rubricFull(qid))?.steps ?? null;
+}
+/** خطوات الطريقة اللي انصحح بيها الجواب: 1 الأولى، 2 فما فوق من الطرق الثانية. رقم ما موجود يرجع للأولى */
+export const methodSteps = (r: Rubric, method = 1): RubricStep[] => r.alts[method - 2] ?? r.steps;
+export const METHOD_NAME = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة"];
+const methodName = (k: number) => METHOD_NAME[k - 1] ?? String(k);
 const near = (a: number, b: number) => Math.abs(a - b) < 0.01;
-export async function saveRubric(qid: number, raw: unknown, by: number) {
+const cleanSteps = (raw: unknown): RubricStep[] => (Array.isArray(raw) ? raw : [])
+  .map((s: any) => ({ text: String(s?.text ?? "").trim().slice(0, 2000), points: Number(s?.points) })).filter((s) => s.text);
+/** يحفظ خطوات السؤال. alts: طرق الحل الثانية؛ إذا ما انرسلت تبقى المحفوظة مثل ما هي (تعديل الطريقة الأولى ما يمسحها) */
+export async function saveRubric(qid: number, raw: unknown, by: number, altsRaw?: unknown) {
   const q = await one("bank_questions", { id: qid });
   if (!q) throw new Error("السؤال غير موجود");
-  const steps: RubricStep[] = (Array.isArray(raw) ? raw : []).map((s: any) => ({ text: String(s?.text ?? "").trim().slice(0, 2000), points: Number(s?.points) }))
-    .filter((s) => s.text);
+  const steps = cleanSteps(raw);
   if (!steps.length) throw new Error("اكتب خطوة وحدة على الأقل");
-  if (steps.some((s) => !Number.isFinite(s.points) || s.points < 0)) throw new Error("درجة الخطوة لازم رقم");
-  const sum = steps.reduce((t, s) => t + s.points, 0);
-  if (!near(sum, Number(q.max_mark))) throw new Error(`مجموع الخطوات ${sum} ولازم يساوي درجة السؤال ${q.max_mark}`);
+  const alts = altsRaw === undefined ? (await rubricFull(qid))?.alts ?? [] : (Array.isArray(altsRaw) ? altsRaw : []).map(cleanSteps).filter((a) => a.length).slice(0, METHOD_NAME.length - 1);
+  // كل طريقة لحالها لازم تساوي درجة السؤال: الطالب يحل بطريقة وحدة وياخذ بيها الدرجة كاملة
+  for (const [k, way] of [steps, ...alts].entries()) {
+    const where = alts.length ? ` بالطريقة ${methodName(k + 1)}` : "";
+    if (way.some((s) => !Number.isFinite(s.points) || s.points < 0)) throw new Error(`درجة الخطوة لازم رقم${where}`);
+    const sum = way.reduce((t, s) => t + s.points, 0);
+    if (!near(sum, Number(q.max_mark))) throw new Error(`مجموع الخطوات${where} ${sum} ولازم يساوي درجة السؤال ${q.max_mark}`);
+  }
   // فحص الخطوات بالجبر قبل الحفظ (AI_RUBRIC_CHECK=1): خطوة غلط تغلّط كل أوراق السؤال.
   // الخدمة ترجع بس الأخطاء المؤكدة (قيمة ما تحقق المعادلة اللي قبلها)، وإذا ما ردت نحفظ بدون فحص
   if (process.env.AI_RUBRIC_CHECK === "1" && aiLinked()) {
-    const errors = await rubricErrors(Number(q.max_mark), steps);
-    if (errors.length) throw new Error(errors.join(" | "));
+    for (const [k, way] of [steps, ...alts].entries()) {
+      const errors = await rubricErrors(Number(q.max_mark), way);
+      if (errors.length) throw new Error((k ? `الطريقة ${methodName(k + 1)}: ` : "") + errors.join(" | "));
+    }
   }
-  await kvSet(rubricKey(qid), JSON.stringify({ steps, at: new Date().toISOString(), by }));
+  await kvSet(rubricKey(qid), JSON.stringify({ steps, ...(alts.length ? { alts } : {}), at: new Date().toISOString(), by }));
   return steps;
 }
 /** أخطاء الخطوات المؤكدة من خدمة التصحيح (/bot/rubric/check)، كل وحدة بسطر يقراه الأستاذ. فارغة إذا سليمة أو الخدمة ما ردت */
@@ -232,7 +253,7 @@ export async function draftQueueTick(by: number, limit = DRAFT_PER_TICK) {
   const queue = [...batch];
   await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
     for (let id = queue.shift(); id; id = queue.shift()) {
-      try { if (!await rubricOf(id)) await saveRubric(id, await draftRubric(id), by); ok.push(id); }
+      try { if (!await rubricOf(id)) { const d = await draftRubric(id); await saveRubric(id, d.steps, by, d.alts); } ok.push(id); }
       catch { bad.push(id); }
     }
   }));
@@ -267,7 +288,7 @@ export async function draftExam(examId: number, by: number) {
   const queue = [...todo];
   await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
     for (let q = queue.shift(); q; q = queue.shift()) {
-      try { await saveRubric(q.id, await draftRubric(q.id), by); done++; }
+      try { const d = await draftRubric(q.id); await saveRubric(q.id, d.steps, by, d.alts); done++; }
       catch { failed.push(`${model.get(q.version_id) ?? ""} س${q.n}`); }
     }
   }));
@@ -325,8 +346,9 @@ export async function svc(route: string, body: object, ms = 120_000): Promise<an
   return await res.json();
 }
 
-/** يطلع خطوات من صور حل المدرس، وصاحب البوت يعدلها قبل الحفظ */
-export async function draftRubric(qid: number): Promise<RubricStep[]> {
+/** يطلع خطوات من صور حل المدرس، وصاحب البوت يعدلها قبل الحفظ.
+ *  إذا الحل بيه أكثر من طريقة كاملة («الطريقة الثانية»)، كل طريقة ترجع لحالها بدرجتها الكاملة */
+export async function draftRubric(qid: number): Promise<Rubric> {
   const q = await one("bank_questions", { id: qid });
   if (!q) throw new Error("السؤال غير موجود");
   const refs: string[] = JSON.parse(q.a_files || "[]");
@@ -341,10 +363,13 @@ export async function draftRubric(qid: number): Promise<RubricStep[]> {
   }
   const r = await svc("/bot/rubric", body, 180_000);
   await addLog({ at: stamp(), kind: "rubric", q: qid, usage: sumUsage([r.usage ?? []]) });
-  return (r.steps ?? []).map((s: any) => ({ text: String(s.text ?? ""), points: Number(s.points) || 0 }));
+  const way = (list: unknown): RubricStep[] => (Array.isArray(list) ? list : []).map((s: any) => ({ text: String(s?.text ?? ""), points: Number(s?.points) || 0 }));
+  return { steps: way(r.steps), alts: (Array.isArray(r.alternatives) ? r.alternatives : []).map(way).filter((a: RubricStep[]) => a.length) };
 }
 
-export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; note?: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; reason_ar?: string; reason_en?: string; expected: string; student: string; student_tex?: string; analysis_failed?: boolean; student_message?: string }[]; usage?: Usage[]; photo?: PhotoFlag[] };
+export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; note?: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; reason_ar?: string; reason_en?: string; expected: string; student: string; student_tex?: string; analysis_failed?: boolean; student_message?: string }[]; usage?: Usage[]; photo?: PhotoFlag[];
+  /** طريقة الحل اللي انحسبت بيها الدرجة إذا مو الأولى (2 = الطريقة الثانية بالحل النموذجي) */
+  method?: number };
 /** صورة معتمة أو مهزوزة بجواب سؤال: رقم الصورة بالسؤال (من 1) وشنو بيها. ما توگف التصحيح، بس الأستاذ يتبلغ */
 export type PhotoFlag = { page: number; problem: "dark" | "blurred" };
 export const PHOTO_PERM = "aiphoto";
@@ -374,16 +399,16 @@ async function gradePaper(it: Row, withExamples = true, photo = false): Promise<
   // ورقة بلا ولا صورة جواب: مو «ما جاوب»، الصور بعدها ما وصلت
   if (!answers.length) throw new Error("ماكو صور جواب بالورقة");
   return await Promise.all(qs.map(async (q): Promise<AiQuestion> => {
-    const steps = await rubricOf(q.id);
-    if (!steps) throw new Error(`سؤال ${q.n} بدون خطوات`);
+    const rubric = await rubricFull(q.id);
+    if (!rubric) throw new Error(`سؤال ${q.n} بدون خطوات`);
     const max = Number(q.max_mark);
     const mine = answers.filter((a) => a.q === q.n);
     // ما جاوب: صفر بدون ما نسأل الخدمة
     if (!mine.length) return { n: q.n, score: 0, max, review: false, reason: "ما جاوب", lines: [], steps: [], usage: [] };
     const imgs = await Promise.all(mine.map((a) => readRef(a.file)));
     if (imgs.some((b) => !b)) throw new Error(`صورة جواب سؤال ${q.n} مفقودة`);
-    if (photo) return await gradePhoto(q, steps, imgs as Buffer[]);
-    return await gradeQuestion(q, steps, imgs as Buffer[], withExamples ? await examplesFor(it.exam_id, it.version_id, q.n) : []);
+    if (photo) return await gradePhoto(q, rubric.steps, imgs as Buffer[]);
+    return await gradeBest(q, rubric, imgs as Buffer[], withExamples ? await examplesFor(it.exam_id, it.version_id, q.n) : []);
   }));
 }
 type Example = { student: string; ai: number; teacher: number };
@@ -448,6 +473,20 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], exampl
   if (useCache && !res.review) await kvSet(key, JSON.stringify({ ...res, usage: [] }));
   return res;
 }
+/** الطالب يحل بطريقة وحدة من طرق الحل النموذجي: يتصحح بالطريقة الأولى، وإذا ما أخذ الدرجة كاملة وللسؤال طرق ثانية
+ *  يتصحح بيها هم، وتنحسب له أعلى درجة. method يگول بأي طريقة انحسبت (حتى الاعتراض وعرض الحل يمشون عليها) */
+async function gradeBest(q: Row, rubric: Rubric, imgs: Buffer[], examples: Example[] = []): Promise<AiQuestion> {
+  let best = await gradeQuestion(q, rubric.steps, imgs, examples);
+  const usage = [...(best.usage ?? [])];
+  for (const [i, way] of rubric.alts.entries()) {
+    if (best.score >= best.max) break;
+    const r = await gradeQuestion(q, way, imgs, examples);
+    usage.push(...(r.usage ?? []));
+    // نفس الدرجة: المتأكد منها أولى من اللي مو متأكد منها
+    if (r.score > best.score || (r.score === best.score && best.review && !r.review)) best = { ...r, method: i + 2 };
+  }
+  return { ...best, usage };
+}
 /** 🔬 نفس السؤال بمصحح Math-Grading وهو يشوف الصور، للمقارنة بس */
 async function gradePhoto(q: Row, steps: RubricStep[], imgs: Buffer[]): Promise<AiQuestion> {
   const max = Number(q.max_mark);
@@ -463,11 +502,11 @@ async function gradePhoto(q: Row, steps: RubricStep[], imgs: Buffer[]): Promise<
 export async function tryGrade(qid: number, imgs: Buffer[]): Promise<AiQuestion> {
   const q = await one("bank_questions", { id: qid });
   if (!q) throw new Error("السؤال غير موجود");
-  const steps = await rubricOf(q.id);
-  if (!steps) throw new Error("احفظ خطوات حل هذا السؤال أول");
+  const rubric = await rubricFull(q.id);
+  if (!rubric) throw new Error("احفظ خطوات حل هذا السؤال أول");
   if (!imgs.length) throw new Error("اختار صورة الجواب");
   const v = await one("bank_versions", { id: q.version_id });
-  const res = await gradeQuestion(q, steps, imgs, v ? await examplesFor(v.exam_id, q.version_id, q.n) : []);
+  const res = await gradeBest(q, rubric, imgs, v ? await examplesFor(v.exam_id, q.version_id, q.n) : []);
   await addLog({ at: stamp(), kind: "try", q: qid, usage: sumUsage([res.usage ?? []]) });
   return { ...res, usage: undefined };
 }
@@ -495,11 +534,13 @@ export async function aiQuestions(it: Row): Promise<Set<number>> {
 export async function aiJudgeObjection(it: Row, qn: number, text: string, oldMark: number) {
   const q = await one("bank_questions", { version_id: it.version_id, n: qn });
   if (!q) throw new Error("السؤال غير موجود");
-  const steps = await rubricOf(q.id);
-  if (!steps) throw new Error(`سؤال ${qn} بدون خطوات`);
+  const rubric = await rubricFull(q.id);
+  if (!rubric) throw new Error(`سؤال ${qn} بدون خطوات`);
   const imgs = (await Promise.all((await find("exam_answers", { item_id: it.id, q: qn }, { order: ["id"] })).map((a) => readRef(a.file)))).filter((b): b is Buffer => !!b);
   if (!imgs.length) throw new Error("ماكو صورة جواب لهذا السؤال");
   const old = (await aiResultOf(it.id))?.find((x) => x.n === qn);
+  // الاعتراض ينحكم على نفس طريقة الحل اللي انحسبت بيها الدرجة
+  const steps = methodSteps(rubric, old?.method);
   const r = await svc("/bot/objection", {
     max_points: Number(q.max_mark), old_score: oldMark, objection: text.slice(0, OBJECTION_MAX) || "الطالب يشوف درجته مو صحيحة",
     steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
