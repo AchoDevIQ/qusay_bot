@@ -64,7 +64,8 @@ async function buildPages(paper: Paper, url: (r: string) => string): Promise<Pag
   if (paper.questions.some((q) => q.answers.length) || !paper.whole.length) {
     for (const q of paper.questions) {
       if (q.answers.length) for (const f of q.answers) await add(f, q.n);
-      else out.push({ src: null, q: q.n });
+      // «أجب عن K»: السؤال اللي ما جاوبه متروك، فما يطلع للمصحح أصلاً
+      else if (!(paper.answerOnly && q.answered === false)) out.push({ src: null, q: q.n });
     }
   }
   return out;
@@ -284,7 +285,9 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const [at, setAt] = useState(0);
   const [inks, setInks] = useState<Record<number, Ink>>(() => Object.fromEntries(Object.entries(paper.ink ?? {}).map(([k, v]) => [Number(k), parseInk(v)])));
   const [marks, setMarks] = useState<Record<number, number | null>>(() => Object.fromEntries(paper.questions.map((q) => [q.n, q.mark])));
-  const [qSel, setQSel] = useState(objs[0]?.q ?? paper.questions.find((q) => q.mark === null)?.n ?? paper.questions[0]?.n ?? 0);
+  // «أجب عن K»: الأسئلة اللي ما جاوبها ما تطلع للمصحح (متروكة وحدها)
+  const shownQs = paper.questions.filter((x) => !(paper.answerOnly && x.answered === false));
+  const [qSel, setQSel] = useState(objs[0]?.q ?? shownQs.find((q) => q.mark === null)?.n ?? shownQs[0]?.n ?? 0);
   const [tool, setTool] = useState<Tool>("pen");
   // لون القلم وسمكه يبقون نفسهم بكل الصفحات والأوراق، لحد ما المصحح يبدلهم
   const [color, setColorState] = useState("#e53935");
@@ -452,7 +455,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     void sent.finally(() => pendingMarks.current.delete(sent));
     if (objMode) return;
     await new Promise((r) => setTimeout(r, 450));
-    const nextQ = paper.questions[paper.questions.findIndex((x) => x.n === n) + 1];
+    const nextQ = shownQs[shownQs.findIndex((x) => x.n === n) + 1];
     if (!nextQ || (q && q.n !== n)) return;
     if (page && holds(page, nextQ.n)) setQSel(nextQ.n);
     else if ((page?.q !== null || page?.qs) && pages) { const i = pages.findIndex((p) => holds(p, nextQ.n)); if (i >= 0) { go(i); setQSel(nextQ.n); } }
@@ -558,13 +561,13 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       </div>
       {q && (
         <div className="gk-row gk-marks">
-          {page?.q === null && <div className="gk-qs">{paper.questions.filter((x) => !page.qs || page.qs.includes(x.n)).map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] === SKIP ? " · ⏭" : marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
+          {page?.q === null && <div className="gk-qs">{shownQs.filter((x) => !page.qs || page.qs.includes(x.n)).map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] === SKIP ? " · ⏭" : marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
           <span className="gk-q">س{q.n}<small> من {q.max}</small>{q.byAi && <small className="gk-byai"> · 🤖 صححه AI</small>}</span>
           <div className="gk-nums" style={{ ["--cols" as string]: q.max + 1 <= 16 ? q.max + 1 : Math.ceil((q.max + 1) / 2) }}>
             {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (
               <button type="button" key={m} className={(marks[q.n] === m ? "on" : "") + (objMode && objOf(q.n)?.old === m ? " gk-was" : "")} disabled={busy || locked || (objMode && !objOf(q.n)) || (!objMode && !!q.byAi)} onClick={() => void press(m)}>{m}</button>
             ))}
-            {k > 0 && !objMode && <button type="button" className={marks[q.n] === SKIP ? "on" : ""} title="الطالب ما جاوب على هذا السؤال" disabled={busy || locked || !!q.byAi} onClick={() => void press(SKIP)}>⏭ ترك</button>}
+            {k > 0 && !objMode && q.answered !== false && (q.answered === undefined || marks[q.n] === SKIP) && <button type="button" className={marks[q.n] === SKIP ? "on" : ""} title="الطالب ما جاوب على هذا السؤال" disabled={busy || locked || !!q.byAi} onClick={() => void press(SKIP)}>⏭ ترك</button>}
           </div>
           {k > 0 && <span className="gk-hint">أجب عن {k} من {paper.questions.length}: تنحسب أول {k} جاوبهن</span>}
           <span className="gk-total">{total} / 100</span>
