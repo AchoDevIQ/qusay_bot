@@ -110,6 +110,27 @@ test("يصحح وحده: الدرجة تنحفظ وتوصل للطالب، وا�
   assert.equal(await staffName(AI_GRADER), "🤖 نظام التصحيح AI");
 });
 
+test("📷 صورة معتمة أو مهزوزة: الورقة تنصحح وتوصل للطالب عادي، والأستاذ واللي عنده صلاحية 📷 يتبلغون بالسؤال ورقم الصورة", async () => {
+  const { photoFlags, photoAlert } = await import("../lib/aiGrade.ts");
+  assert.deepEqual(photoFlags([{ problem: "" }, { problem: "blurred" }, { problem: "dark" }]), [{ page: 2, problem: "blurred" }, { page: 3, problem: "dark" }]);
+  assert.deepEqual(photoFlags(undefined), []);
+  assert.equal(photoAlert("طالب", "امتحان", [{ n: 1, score: 5, max: 5, review: false, reason: "", lines: [], steps: [] }]), "");
+  await put("staff", { user_id: 42, name: "مساعد الصور", perms: "aiphoto" });
+  const p = await paper(90, [1]);
+  aiReply = () => Response.json({ score: 52, requires_review: false, review_reason: "", student_lines: ["x=2"], steps: [{ status: "correct", awarded: 30, possible: 30, reason: "صح", expected: "", student: "x=2" }], usage: [], photo_quality: [{ brightness: 4, sharpness: 30, problem: "dark" }] });
+  ai.length = 0; tg.length = 0;
+  assert.deepEqual(await tick(), { graded: 1, unsure: 0, failed: 0 });
+  // الخدمة انسألت والدرجة انحفظت ووصلت للطالب: الصورة ما وگفت شي
+  assert.equal(ai.length, 1);
+  const row = (await one("sched_items", { id: p }))!;
+  assert.deepEqual([row.grader_id, row.total], [AI_GRADER, 52]);
+  assert.ok(tg.some((c) => c.method === "sendMessage" && String(c.p.chat_id) === "90" && /الدرجة: <b>52<\/b>/.test(c.p.text)));
+  for (const who of ["1", "42"]) assert.ok(tg.some((c) => String(c.p.chat_id) === who && /صورة مو واضحة/.test(c.p.text ?? "") && /س1، الصورة 1: معتمة جداً/.test(c.p.text ?? "") && /ما توگفت/.test(c.p.text ?? "")), `تنبيه ${who}`);
+  // التنبيه ما يوصل للطالب ولا للمصحح العادي
+  assert.ok(!tg.some((c) => ["90", "41"].includes(String(c.p.chat_id)) && /صورة مو واضحة/.test(c.p.text ?? "")));
+  assert.deepEqual((await aiResultOf(p))![0].photo, [{ page: 1, problem: "dark" }]);
+});
+
 test("الخدمة عطلانة: الورقة ترجع للمصححين، وبعد 3 محاولات يبطل يحاول عليها ويخبر صاحب البوت", async () => {
   const p = await paper(90, [1, 2]);
   aiReply = () => new Response("boom", { status: 500 });

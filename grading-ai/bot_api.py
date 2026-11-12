@@ -200,8 +200,9 @@ def decode_images(raw: List[str]) -> List[bytes]:
     return out
 
 
-# Photo check before any model call. The limits are deliberately loose (tuned on synthetic pages, not on
-# real papers): only a photo that is close to black, or so blurred that no stroke has an edge, is refused.
+# Photo check. It never refuses a paper: every photo is graded. A page that is close to black, or so
+# blurred that no stroke has an edge, is only reported in `photo_quality`, so the bot can tell the teacher
+# which page it was. The limits are deliberately loose (tuned on synthetic pages, not on real papers).
 # PHOTO_GATE=0 turns the check off; PHOTO_MIN_BRIGHTNESS / PHOTO_MIN_SHARPNESS move the limits.
 PHOTO_LONG_EDGE = 1000
 
@@ -216,7 +217,7 @@ def _photo_limit(name: str, default: float) -> float:
 def photo_quality(image: bytes) -> dict:
     """
     {"brightness", "sharpness", "problem"} for one page. problem is "dark", "blurred" or "" (usable,
-    or could not be measured: a photo is never refused on a failed measurement).
+    or could not be measured).
     brightness: mean grey level, 0-255. sharpness: the mean of the strongest 0.05% of edges at a
     1000 px long edge, so one sharp line on an otherwise empty page still counts as sharp.
     """
@@ -364,8 +365,6 @@ DOUBT = {
     "low_confidence": "ثقته بالتصحيح قليلة ({c:.2f})",
     "figure": "الرسم: النقاط المقروءة من رسم الطالب ما تطابق الحساب ({features})",
     "figure_unreadable": "صورة الرسم ما تنقرا",
-    "photo_dark": "الصورة معتمة جداً وما تنقرا",
-    "photo_blurred": "الصورة مهزوزة وما تنقرا",
 }
 
 
@@ -473,12 +472,16 @@ async def second_look(req: "GradeReq", pages: List[bytes], steps: list) -> dict:
 async def bot_grade(req: GradeReq):
     bucket = start_usage()
     pages = decode_images(req.images)
-    # A photo nobody could read is refused before any model call: the student is asked for another one
+    # Every paper is graded, whatever its photos look like. A dark or blurred page is only reported
+    # (one entry per page, in page order), so the bot can tell the teacher which page to look at
     quality = await asyncio.gather(*(asyncio.to_thread(photo_quality, b) for b in pages)) if pages and photo_gate_on() else []
-    if quality and all(q["problem"] for q in quality):
-        doubt = DOUBT["photo_dark" if any(q["problem"] == "dark" for q in quality) else "photo_blurred"]
-        return await finish(req, bucket, [], 0.0, 0.0, doubt, [], {"changed": 0, "final": None}, "none",
-                            all_failed=True, photo_quality=quality)
+    out = await grade_pages(req, bucket, pages)
+    if any(q["problem"] for q in quality):
+        out["photo_quality"] = list(quality)
+    return out
+
+
+async def grade_pages(req: GradeReq, bucket: list, pages: List[bytes]) -> dict:
     kind = req.figure or (figure_kind(req.steps) if req.engine in ("rubric", "figure") else None)
     if pages and (req.engine == "figure" or kind):
         # Figure engine: graphs, plots and geometry. Verdicts per step from the photo, and the drawing's
@@ -851,7 +854,7 @@ def _rubric_steps_unread(req: "GradeReq") -> list:
 
 
 async def finish(req: "GradeReq", bucket: list, steps: list, score: float, confidence: float, doubt: str, texts: list,
-                 look: dict, engine: str, all_failed: bool = False, photo_quality: Optional[list] = None) -> dict:
+                 look: dict, engine: str, all_failed: bool = False) -> dict:
     # The student reads the marking: each step's reason, and one short note, in the student's language
     note = ""
     reason_key = "reason_ar" if req.lang == "ar" else "reason_en"
@@ -907,7 +910,6 @@ async def finish(req: "GradeReq", bucket: list, steps: list, score: float, confi
         "usage": usage_report(bucket),
         "steps": steps,
         **({"figure": look["figure"]} if look.get("figure") else {}),
-        **({"photo_quality": photo_quality} if photo_quality else {}),
     }
 
 

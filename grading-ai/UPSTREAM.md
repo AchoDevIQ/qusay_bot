@@ -47,8 +47,10 @@ Added 2026-11-10 to 2026-11-12 (requests stay compatible; responses only gain fi
 - A final answer wrong only through an earlier mistake gets the follow-through share when it has the
   teacher's form. A "wrong" step that follows exactly from the student's previous wrong line becomes a
   carried error (`carried_steps`).
-- A photo that is close to black or has no sharp edge is refused before any model call:
-  `engine: "none"`, every step flagged, `photo_quality` per page. `PHOTO_GATE=0` turns this off.
+- No photo is refused (changed 2026-11-12 at the owner's request): every paper is graded. When a page
+  is close to black or has no sharp edge, the response gains `photo_quality`, one entry per page in page
+  order with `problem` "dark", "blurred" or "". The bot only tells the teacher which page it was.
+  `PHOTO_GATE=0` turns the measurement off.
 - `POST /bot/rubric/check` checks a rubric; `/bot/rubric` returns the same `issues` with its draft.
 - `engine_version` in `/health` and in every grade response: the bot keys its cache on it.
 - `final_answer` in the grade response: both final answers and what the algebra made of them.

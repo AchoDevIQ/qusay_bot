@@ -4,7 +4,7 @@
 // الورقة اللي ما يگدر عليها (سؤال بدون خطوات، جواب ملف كامل، الخدمة عطلانة) تبقى للمصححين مثل قبل.
 import { createHash } from "node:crypto";
 import { find, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
-import { AI_GRADER } from "./data.ts";
+import { AI_GRADER, staffIds } from "./data.ts";
 import { files } from "./files.ts";
 import { api, send } from "./telegram.ts";
 import { ADMIN_IDS, TOKEN } from "./config.ts";
@@ -344,7 +344,21 @@ export async function draftRubric(qid: number): Promise<RubricStep[]> {
   return (r.steps ?? []).map((s: any) => ({ text: String(s.text ?? ""), points: Number(s.points) || 0 }));
 }
 
-export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; note?: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; reason_ar?: string; reason_en?: string; expected: string; student: string; student_tex?: string; analysis_failed?: boolean; student_message?: string }[]; usage?: Usage[] };
+export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; note?: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; reason_ar?: string; reason_en?: string; expected: string; student: string; student_tex?: string; analysis_failed?: boolean; student_message?: string }[]; usage?: Usage[]; photo?: PhotoFlag[] };
+/** صورة معتمة أو مهزوزة بجواب سؤال: رقم الصورة بالسؤال (من 1) وشنو بيها. ما توگف التصحيح، بس الأستاذ يتبلغ */
+export type PhotoFlag = { page: number; problem: "dark" | "blurred" };
+export const PHOTO_PERM = "aiphoto";
+const PHOTO_WORD: Record<PhotoFlag["problem"], string> = { dark: "معتمة جداً", blurred: "مهزوزة" };
+/** من رد خدمة التصحيح (photo_quality: سطر لكل صورة بالترتيب) للصور اللي بيها مشكلة بس */
+export function photoFlags(raw: unknown): PhotoFlag[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((q: any, i): PhotoFlag[] => (q?.problem === "dark" || q?.problem === "blurred" ? [{ page: i + 1, problem: q.problem }] : []));
+}
+/** نص تنبيه الأستاذ: أي سؤال وأي صورة. فارغ إذا كل الصور واضحة */
+export function photoAlert(name: string, exam: string, res: AiQuestion[]): string {
+  const lines = res.flatMap((q) => (q.photo ?? []).map((f) => `• س${q.n}، الصورة ${f.page}: ${PHOTO_WORD[f.problem]}`));
+  if (!lines.length) return "";
+  return `👤 <b>تنبيه إداري، ما يوصل للطالب</b>\n📷 <b>صورة مو واضحة بورقة عند نظام التصحيح AI</b>\nالطالب: <b>${name}</b>\nالامتحان: ${exam}\n${lines.join("\n")}\n\nالورقة ما توگفت: انصححت مثل باقي الأوراق. إذا تريد تتأكد من درجتها افتح 🎓 الطلاب ← الطالب ← 📝 أوراقه.`;
+}
 export async function aiResultOf(itemId: number): Promise<AiQuestion[] | null> {
   const j = await readJson<AiQuestion[] | null>(resultKey(itemId), null);
   return Array.isArray(j) ? j : null;
@@ -428,6 +442,8 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], exampl
   }, 230_000);
   const score = Math.max(0, Math.min(max, Math.round(Number(r.score) || 0)));
   const res: AiQuestion = { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), note: String(r.note ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
+  const photo = photoFlags(r.photo_quality);
+  if (photo.length) res.photo = photo;
   // ما نحفظ نتيجة ما متأكد منها: المرة الجاية تنصحح من جديد
   if (useCache && !res.review) await kvSet(key, JSON.stringify({ ...res, usage: [] }));
   return res;
@@ -733,6 +749,9 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
       const res = await gradePaper(it);
       const usage = sumUsage(res.map((q) => q.usage ?? []));
       await kvSet(resultKey(it.id), JSON.stringify(res));
+      // صورة معتمة أو مهزوزة ما توگف الورقة: تنصحح عادي، والأستاذ (واللي عنده صلاحية 📷) يتبلغ بالسؤال ورقم الصورة
+      const alert = photoAlert(await nameOf(it), (await one("bank_exams", { id: it.exam_id }))?.title ?? "", res);
+      if (alert) for (const id of await staffIds(PHOTO_PERM)) await send(id, alert).catch((e) => console.error("ai photo alert", it.id, e));
       if (res.some((q) => q.review)) { await forward(it, res, usage, nameOf); unsure++; return; }
       for (const q of res) await put("question_marks", { item_id: it.id, q: q.n, mark: q.score });
       await finish(AI_GRADER, it.id);
