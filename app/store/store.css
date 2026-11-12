@@ -338,7 +338,7 @@ body.grwide .grtop{padding-left:104px}
 .dateinput{position:relative;display:flex;align-items:center;min-height:48px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--ink);color:var(--txt);font-size:16px;font-weight:700;cursor:pointer;box-sizing:border-box;width:100%}
 .dateinput:focus-within{border-color:var(--gold)}
 .dateinput .dateph{opacity:.6;font-weight:400}
-.dateinput input[type=date]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0}
+.dateinput input[type=date]{position:absolute;inset:0;display:block;width:100%;height:100%;min-height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0;-webkit-appearance:none;appearance:none;font-size:16px}
 .exadd .dateinput{flex:1;width:auto}
 
 .mxholrow td{background:rgba(206,162,57,.08)}

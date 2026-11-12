@@ -588,7 +588,9 @@ export async function myExamAction(body: Row) {
     need(plan.ok, plan.ok ? "" : plan.error);
     if (!plan.ok) return {};
     const titles = new Map(left.map((e) => [e.id, e.title]));
-    if (a === "preview") return { ...await studentInfo(id), preview: { items: plan.items.map((i) => ({ title: titles.get(i.examId), at: i.at })), days: plan.days, maxPerDay: plan.maxPerDay, perWeek: plan.perWeek } };
+    // الامتحانات اللي «يمكن حذفه» تتعلم بالمعاينة، حتى يعرف من هسه شنو يگدر يشيل بعد التثبيت
+    const skip = new Set(await skippableExams());
+    if (a === "preview") return { ...await studentInfo(id), preview: { items: plan.items.map((i) => ({ title: titles.get(i.examId), at: i.at, skip: skip.has(i.examId) })), days: plan.days, maxPerDay: plan.maxPerDay, perWeek: plan.perWeek } };
     await saveItems(id, f, plan.items);
     await logActivity(id, `🗓 ثبت جدول امتحاناته: ${plan.items.length} امتحان`);
     return { ...await studentInfo(id), notice: "✅ انثبت جدولك" };
@@ -705,6 +707,34 @@ export async function myExamAction(body: Row) {
     });
     await logActivity(id, `🗑 شال امتحان ${title} من جدوله، فصعد جدوله`);
     return { ...await studentInfo(id), notice: `🗑 انشال ${title}، وصعد جدولك` };
+  }
+  if (a === "moveTime") {
+    // طالب الجدول الخاص يغير وقت امتحان بنفس يومه، لحد اليوم اللي قبله
+    const sc = await one("schedules", { user_id: id });
+    need(sc && sc.mode !== "general", "هذا لطالب الجدول الخاص");
+    const it = await one("sched_items", { id: Number(body.item), user_id: id });
+    need(it?.status === "waiting" && !it.kind && it.notified !== "test", "هذا الامتحان ما يتغير وقته");
+    const day = String(it!.at).slice(0, 10);
+    need(day > todayStr(), "وقت الامتحان يتغير لحد اليوم اللي قبله بس. بيوم الامتحان نفسه ما يتغير");
+    const t = String(body.time ?? "");
+    need(/^\d{2}:\d{2}$/.test(t), "اختار الوقت");
+    need(t !== String(it!.at).slice(11, 16), "هذا نفس وقته");
+    const place = await placeFor(id);
+    const s = await schedSettings();
+    if (place.inPerson) need((await placeSlots(place.centerId)).some((x) => x.d === weekdayOf(day) && x.t === t), "اختار من أوقات مركزك بهذا اليوم");
+    else need(t.endsWith(":00") && allowedHours(s).includes(Number(t.slice(0, 2))), `الامتحان يبدي من الساعة ${ampm(`${String(s.fromHour).padStart(2, "0")}:00`)} إلى ${ampm(`${String(s.toHour).padStart(2, "0")}:00`)} بس`);
+    // ما يتداخل ويا امتحان ثاني عنده بنفس اليوم، ويبقى الفاصل بينهم
+    const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
+    const mins = (x: Row) => Number(exams.get(x.exam_id)?.minutes ?? 75);
+    const m = (at: string) => Number(at.slice(11, 13)) * 60 + Number(at.slice(14, 16));
+    const mine = m(`${day} ${t}`);
+    const clash = (await find("sched_items", { user_id: id })).find((x) => x.id !== it!.id && String(x.at).slice(0, 10) === day && !["skipped", "missed"].includes(String(x.status))
+      && mine < m(String(x.at)) + mins(x) + s.gap && m(String(x.at)) < mine + mins(it!) + s.gap);
+    need(!clash, clash ? `⏰ هذا الوقت يتداخل ويا امتحانك الثاني بنفس اليوم (${exams.get(clash.exam_id)?.title ?? ""} ${ampm(String(clash.at).slice(11, 16))}). لازم يبقى ${s.gap} دقيقة بين الامتحانين.` : "");
+    await update("sched_items", { id: it!.id }, { at: `${day} ${t}`, notified: null });
+    const title = String(exams.get(it!.exam_id)?.title ?? "");
+    await logActivity(id, `🕐 غير وقت ${title} يوم ${prettyDay(day)}: من ${ampm(String(it!.at).slice(11, 16))} إلى ${ampm(t)}`);
+    return { ...await studentInfo(id), notice: `✅ صار وقت ${title} ${prettyDay(day)} الساعة ${ampm(t)}` };
   }
   if (a === "holidayOff") {
     const list = await holidays();

@@ -227,7 +227,9 @@ export function DateInput({ value, onChange, min, label, placeholder = "اختا
   return (
     <span className="dateinput">
       <span className={ok ? "" : "dateph"}>📅 {text}</span>
-      <input type="date" aria-label={label ?? "التاريخ"} min={min} value={value} onChange={(e) => onChange(e.target.value)} />
+      {/* الخانة الفارغة بالموبايل تصغر وما تنداس، فالدوسة تفتح المنتقي بنفسها */}
+      <input type="date" aria-label={label ?? "التاريخ"} min={min} value={value} onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* المنتقي مفتوح أصلاً */ } }} />
     </span>
   );
 }

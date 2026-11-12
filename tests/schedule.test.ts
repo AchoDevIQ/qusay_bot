@@ -615,6 +615,16 @@ test("الجدول الخاص: الطالب يختار وقت كل امتحان�
   assert.ok(buildPlan(exams(1), { ...one, times: { "0": ["16:00"] }, settings: { ...S, blockedHours: [16] } }).ok);
 });
 
+test("🗓 كل يوم بوقته: الاثنين امتحانين والأربعاء واحد بوقت ثاني، واليوم اللي بيه وقت واحد ما ينحطله اثنين", () => {
+  const one = { ...base, end: "2027-02-03", weekdays: [0, 2], settings: { ...S, gap: 30 } };   // اثنين 1/2 وأربعاء 3/2
+  const r = buildPlan(exams(3, 60), { ...one, times: { "0": ["08:00", "16:00"], "2": ["20:00"] } });
+  assert.ok(r.ok);
+  if (r.ok) assert.deepEqual(r.items.map((i) => i.at), ["2027-02-01 08:00", "2027-02-01 16:00", "2027-02-03 20:00"]);
+  const tight = buildPlan(exams(4, 60), { ...one, times: { "0": ["08:00", "16:00"], "2": ["20:00"] } });
+  assert.equal(tight.ok, false);
+  if (!tight.ok) assert.match(tight.error, /امتحان ثاني باليوم/);
+});
+
 test("العطلة: كم يوم امتحان راح، ووين يوصل كل امتحان، والنسخ تمشي بترتيب الوقت", () => {
   const sat = "2027-02-06", tue = "2027-02-09";   // سبت وثلاثاء
   const ok = (d: string) => [5, 1].includes(weekdayOf(d)) && d !== tue;
@@ -830,6 +840,23 @@ test("🗑 امتحان يمكن حذفه: الأصل ما ينحذف، وإذا
   assert.equal(kept.items.find((i: any) => i.id === now[0].id).skippable, false);
   await examAction({ action: "skippable", id: items[0].exam, on: false, initData: admin });
   await examAction({ action: "skippable", id: now[0].exam, on: false, initData: admin });
+});
+
+test("🕐 الطالب الخاص يغير وقت امتحان بنفس يومه لحد اليوم اللي قبله، وما يتداخل ويا امتحانه الثاني", async () => {
+  await student(104);
+  await put("exam_access", { user_id: 104, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  const done = await act(104, "confirm", form({ weekdays: [0, 1, 2, 3, 4, 5, 6], times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["14:00", "18:00"]])) }));
+  const items = done.items.filter((i: any) => !i.optional);
+  const [a, b] = items;
+  await update("sched_items", { id: b.id }, { at: `${a.at.slice(0, 10)} 18:00` });   // امتحانين بنفس اليوم
+  const r = await act(104, "moveTime", { item: a.id, time: "15:00" });
+  assert.match(r.notice, /3:00 مساءً/);
+  assert.equal(r.items.find((i: any) => i.id === a.id).at, `${a.at.slice(0, 10)} 15:00`);
+  await assert.rejects(act(104, "moveTime", { item: a.id, time: "17:00" }), /يتداخل/);
+  await assert.rejects(act(104, "moveTime", { item: a.id, time: "03:00" }), /بس/);
+  // بيوم الامتحان نفسه ما يتغير
+  await update("sched_items", { id: b.id }, { at: `${todayStr()} 23:00` });
+  await assert.rejects(act(104, "moveTime", { item: b.id, time: "22:00" }), /اليوم اللي قبله/);
 });
 
 test("أيام ما يمتحن بيها الطالب الخاص الإلكتروني: ما تطلعله وينرفض إذا اختارها", async () => {

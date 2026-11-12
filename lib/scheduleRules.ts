@@ -36,8 +36,9 @@ function neededWeekdays(n: number, start: string, end: string, s: SchedSettings,
 /** times: وقت كل امتحان باليوم (الأول، الثاني...) لكل يوم من الأسبوع، يختاره الطالب. بدونه كل الامتحانات تبدي من hour */
 export function buildPlan(exams: PlanExam[], o: { start: string; end: string; weekdays: number[]; hour: number; perDay: number; settings: SchedSettings; times?: Record<string, string[]> }): Plan {
   const { start, end, weekdays, hour, settings: s, times } = o;
-  // الطالب اللي اختار وقت امتحان واحد باليوم ما ينحطله امتحانين
-  const perDay = times ? Math.min(o.perDay, ...weekdays.map((w) => (times[String(w)] ?? []).length)) : o.perDay;
+  // كل يوم بقد الأوقات اللي اختارها إله: اليوم اللي بيه وقت واحد ما ينحطله امتحانين
+  const capW = (w: number) => (times ? Math.min(o.perDay, (times[String(w)] ?? []).length) : o.perDay);
+  const perDay = Math.min(...weekdays.map(capW), o.perDay);
   if (!exams.length) return { ok: false, error: "ماكو امتحانات تنحسب بالجدول." };
   if (end < start) return { ok: false, error: "تاريخ النهاية لازم يكون بعد البداية." };
   if (!weekdays.length) return { ok: false, error: "اختار أيام الامتحان." };
@@ -45,17 +46,25 @@ export function buildPlan(exams: PlanExam[], o: { start: string; end: string; we
   if (!times && s.blockedHours.includes(hour)) return { ok: false, error: "هذي الساعة موقوفة من الإدارة، اختار غيرها." };
   const days = availableDays(start, end, weekdays, s);
   const n = exams.length;
-  if (days.length * perDay < n) {
-    const k = neededWeekdays(n, start, end, s, perDay);
-    const second = times && perDay < o.perDay ? "، أو اختار وقت امتحان ثاني باليوم" : "";
+  const caps = days.map((d) => capW(weekdayOf(d)));
+  const room = caps.reduce((t, c) => t + c, 0);
+  if (room < n) {
+    const k = neededWeekdays(n, start, end, s, Math.max(1, perDay));
+    const second = times && weekdays.some((w) => capW(w) < o.perDay) ? "، أو اختار وقت امتحان ثاني باليوم" : "";
     if (k === null) return { ok: false, error: `عندك ${n} امتحان، والمدة ما تكفي حتى لو اخترت كل الأيام. مدد تاريخ النهاية${second}.` };
-    return { ok: false, minWeekdays: k, error: `عندك ${n} امتحان، وهالأيام تكفي لـ ${days.length * perDay} بس. اختار ${k} أيام بالأسبوع على الأقل، أو مدد تاريخ النهاية${second}.` };
+    return { ok: false, minWeekdays: k, error: `عندك ${n} امتحان، وهالأيام تكفي لـ ${room} بس. اختار ${k} أيام بالأسبوع على الأقل، أو مدد تاريخ النهاية${second}.` };
+  }
+  // بالتساوي: كل دورة تنطي كل يوم بعده بيه مكان امتحان واحد، والدورة الناقصة تتوزع على طول المدة
+  const counts = caps.map(() => 0);
+  for (let r = 0, left = n; left > 0; r++) {
+    const open = caps.flatMap((c, i) => (c > r ? [i] : []));
+    const take = Math.min(left, open.length);
+    for (let j = 0; j < take; j++) counts[open[Math.floor((j * open.length) / take)]]++;
+    left -= take;
   }
   const perDayIdx = new Map<number, PlanExam[]>();
-  exams.forEach((e, i) => {
-    const di = Math.floor((i * days.length) / n);
-    perDayIdx.set(di, [...(perDayIdx.get(di) ?? []), e]);
-  });
+  let next = 0;
+  counts.forEach((c, di) => { if (c) { perDayIdx.set(di, exams.slice(next, next + c)); next += c; } });
   const items: PlanItem[] = [];
   let maxPerDay = 0;
   for (const [di, list] of [...perDayIdx].sort((a, b) => a[0] - b[0])) {
