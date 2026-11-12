@@ -2,6 +2,7 @@
 // الفيديو يوصل للطالب بالبوت محمي (ما ينحول ولا ينحفظ)، والرابط ما يطلعله أبد.
 // الأزرار تنحط وحدها: كل سطر يبدي بـ «س1» أو «Q1» أو «مثال» زر، والفيديوهات التوضيحية تدور سؤالها بكلماته.
 // صاحب البوت يعدل كل زر (الرابط، الفيديو، الصفحة والمكان) ويحذف الفيديو اللي ما يعجبه.
+import { pdfjsLib } from "./pdfjs.ts";
 import { randomUUID } from "node:crypto";
 import { find, insert, one, remove, update, type Row } from "./db.ts";
 import { files } from "./files.ts";
@@ -50,7 +51,7 @@ export function parseLink(raw: string): { chat: string; msg: number } | null {
 
 /** سطور كل صفحة ومكانها من فوك (0 فوك، 1 جوه) */
 async function pageLines(pdf: Buffer) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await pdfjsLib();
   const task = pdfjs.getDocument({ data: new Uint8Array(pdf), verbosity: 0 });
   const doc = await task.promise;
   const out: { page: number; y: number; text: string }[] = [];

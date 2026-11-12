@@ -3,6 +3,7 @@
 // ويلگى عناوين المحاضرات («القطع المكافئ المحاضرة 3» / «lecture 3 parabola») فيعرف كل صفحة لأي محاضرة.
 // الطالب يصور السؤال من الملزمة، وClaude يگول بس وين السؤال (الملزمة والصفحة). الرد للطالب قالب ثابت يكتبه صاحب البوت.
 // إذا ماكو مفتاح، أو الجواب الآلي طافي، أو ما لگاه، السؤال يروح للأستاذ مثل قبل
+import { pdfjsLib } from "./pdfjs.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -39,7 +40,7 @@ export const hasKey = () => !!(process.env.ANTHROPIC_API_KEY || "").trim();
 // ---------- قراية الـ PDF
 /** نص كل صفحة بالترتيب: السطور من فوك لجوة، وبكل سطر من اليمين لليسار */
 export async function pdfPages(buf: Buffer): Promise<string[]> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await pdfjsLib();
   const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), disableFontFace: true, verbosity: 0 }).promise;
   const out: string[] = [];
   for (let i = 1; i <= doc.numPages; i++) {
@@ -169,7 +170,7 @@ async function pageImage(b: Booklet, n: number): Promise<Buffer | null> {
   if (cached) return cached;
   const pdf = await files().read(`booklets/${b.id}.pdf`);
   if (!pdf) return null;
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await pdfjsLib();
   const doc = await pdfjs.getDocument({ data: new Uint8Array(pdf), verbosity: 0 }).promise;
   if (n > doc.numPages) return null;
   const page = await doc.getPage(n);

@@ -1,6 +1,7 @@
 // ملازم الطلاب: صاحب البوت يرفع PDF (أكثر من ملزمة للفصل)، واللي اشترى الفصل (محاضرات أو امتحانات) تطلعله.
 // الطالب يكتب فوك الصفحات وكتابته تنحفظ إله بس. ملف الـ PDF ما يوصل للطالب أبد: كل صفحة تطلع صورة عليها اسمه ورقمه،
 // وتنفتح بس من تلگرام الموبايل وعلى جهازه، وتنقفل وقت الامتحان
+import { pdfjsLib } from "./pdfjs.ts";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -111,7 +112,7 @@ async function cleanPage(b: Row, n: number): Promise<Buffer | null> {
   if (cached) return cached;
   const pdf = await files().read(`notes/${b.file}.pdf`);
   if (!pdf) return null;
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await pdfjsLib();
   const task = pdfjs.getDocument({ data: new Uint8Array(pdf), verbosity: 0 });
   const doc = await task.promise;
   if (n > doc.numPages) return null;
@@ -206,11 +207,14 @@ export async function noteAdmin(raw: Row | FormData) {
     const lang = ["ar", "en", "all"].includes(String(body.lang)) ? String(body.lang) : "all";
     const buf = Buffer.from(await (f as Blob).arrayBuffer());
     need(buf.subarray(0, 4).toString() === "%PDF", "لازم ملف PDF");
-    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const task = pdfjs.getDocument({ data: new Uint8Array(buf), verbosity: 0 });
-    const doc = await task.promise;
-    const pages = doc.numPages;
-    await task.destroy();
+    // إذا ما انقرا الملف، السبب يطلع بالشاشة بدل «صار خطأ»
+    let pages = 0;
+    try {
+      const pdfjs = await pdfjsLib();
+      const task = pdfjs.getDocument({ data: new Uint8Array(buf), verbosity: 0 });
+      pages = (await task.promise).numPages;
+      await task.destroy();
+    } catch (e) { console.error("note upload:", e); need(false, `ما گدرت أقرا ملف الـ PDF (${String((e as Error)?.message ?? e).slice(0, 160)}). صور هاي الرسالة ودزها`); }
     const file = randomUUID().slice(0, 12);
     await files().write(`notes/${file}.pdf`, buf, "application/pdf");
     await insert("note_books", { title, chapter, lang, file, pages, created: stamp() });
