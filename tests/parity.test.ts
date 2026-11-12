@@ -53,7 +53,7 @@ function normal(v: any): any {
   return v;
 }
 // ميزات جديدة ما موجودة بالبوت القديم: جداول الامتحانات وزر لوحة التحكم
-const NEW_TABLES = ["note_books", "note_ink", "schedules", "place_slots", "place_dates", "exam_answers", "question_marks", "paper_ink", "objections", "grader_pay", "grader_settlements", "student_devices", "student_stops", "checkpoint_done", "center_rent", "comp_groups", "comp_members", "grade_comments", "stickers", "comment_sent", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
+const NEW_TABLES = ["note_books", "note_ink", "note_marks", "note_videos", "schedules", "place_slots", "place_dates", "exam_answers", "question_marks", "paper_ink", "objections", "grader_pay", "grader_settlements", "student_devices", "student_stops", "checkpoint_done", "center_rent", "comp_groups", "comp_members", "grade_comments", "stickers", "comment_sent", "sched_items", "activity", "guardians", "company_settlements", "student_pass", "pass_requests","bank_exams", "bank_versions", "bank_questions", "bank_edits", "exam_access", "order_codes"];
 function dropNewButtons(e: any) {
   const kb = e.p?.reply_markup?.inline_keyboard;
   if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(editgrade|station|exams|schedule|exception|retake|move|camup|signups|birthdays|competition|grade|aicalib|objections|attend|sales|company|fees|online|centers|guardians|leave|msg)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));

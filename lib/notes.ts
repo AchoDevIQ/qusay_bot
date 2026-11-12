@@ -10,6 +10,7 @@ import { isAdmin, student } from "./data.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { files } from "./files.ts";
+import { addVideo, autoMarks, bookMarksAdmin, deleteMark, deleteVideo, marksFor, saveMark, sendMark, videoList } from "./noteMarks.ts";
 import { chapterLabel, firstRoundOnly } from "./orderRules.ts";
 import { labelChapters } from "./scheduleRules.ts";
 import { stamp } from "./util.ts";
@@ -81,7 +82,14 @@ export async function noteAction(body: Row) {
     return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages })) };
   }
   const b = await myBook(uid, body.book);
-  if (a === "open") { await logActivity(uid, `📘 فتح ملزمة ${b.title}`); return { ok: true }; }
+  if (a === "open") { await logActivity(uid, `📘 فتح ملزمة ${b.title}`); return { ok: true, marks: await marksFor(b.id) }; }
+  if (a === "marks") return { marks: await marksFor(b.id) };
+  if (a === "play") {
+    limitPlays(uid);
+    const notice = await sendMark(uid, b.id, body.mark, body.kind);
+    await logActivity(uid, `${body.kind === "solution" ? "🎬 فيديو حل" : "▶️ فيديو توضيح"} من ملزمة ${b.title}`);
+    return { notice };
+  }
   const page = pageOf(b, body.page);
   const key = { user_id: uid, book_id: b.id, page };
   if (a === "ink") return { ink: (await one("note_ink", key))?.ink ?? "" };
@@ -155,6 +163,14 @@ function limitPages(uid: number, now = Date.now()) {
   need(hits.length < PAGE_LIMIT, "قلبت هواية صفحات، انتظر دقيقة", 429);
   pageHits.set(uid, [...hits, now]);
 }
+// الفيديوهات: حد بالدقيقة حتى ما أحد يكرر الدوس
+const playHits = new Map<number, number[]>();
+function limitPlays(uid: number, now = Date.now()) {
+  if (playHits.size > 10_000) playHits.clear();
+  const hits = (playHits.get(uid) ?? []).filter((t) => now - t < 60_000);
+  need(hits.length < 10, "دزيت هواية فيديوهات، انتظر دقيقة", 429);
+  playHits.set(uid, [...hits, now]);
+}
 export async function notePage(token: unknown, book: unknown, rawPage: unknown, pf: unknown, device?: unknown) {
   const uid = await studentUid(token, pf);
   await checkDevice(uid, device);
@@ -172,7 +188,7 @@ async function adminData(uid: number, notice = "") {
   for (const e of exams) if (e.chapter) seen.add(String(e.chapter));
   const books = (await find("note_books")).sort(byOrder);
   for (const b of books) seen.add(String(b.chapter));
-  return { chapters: [...seen], books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang, pages: b.pages, created: b.created })), link: `/store/notes?t=${encodeURIComponent(homeToken(uid))}`, notice };
+  return { chapters: [...seen], books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang, pages: b.pages, created: b.created })), videos: await videoList(), link: `/store/notes?t=${encodeURIComponent(homeToken(uid))}`, notice };
 }
 export async function noteAdmin(raw: Row | FormData) {
   const body: Row = raw instanceof FormData ? Object.fromEntries([...raw.entries()]) : raw;
@@ -200,10 +216,25 @@ export async function noteAdmin(raw: Row | FormData) {
     await insert("note_books", { title, chapter, lang, file, pages, created: stamp() });
     return await adminData(uid, `✅ انرفعت «${title}»: ${pages} صفحة`);
   }
+  if (a === "videoUpload") {
+    need(body.file instanceof Blob, "اختار فيديو");
+    return await adminData(uid, await addVideo(body.file as Blob & { name?: string }));
+  }
+  if (a === "videoDelete") return await adminData(uid, await deleteVideo(Number(body.id)));
+  if (["marks", "autoMarks", "markSave", "markDelete"].includes(a)) {
+    const book = await one("note_books", { id: Number(body.book) });
+    need(book, "الملزمة غير موجودة");
+    let notice = "";
+    if (a === "autoMarks") { const r = await autoMarks(book!); notice = `✅ انحطت ${r.marks} زر على الأسئلة، وانربط ${r.linked} فيديو توضيحي`; }
+    if (a === "markSave") { await saveMark(book!, body); notice = "💾 انحفظ"; }
+    if (a === "markDelete") { await deleteMark(book!, Number(body.id)); notice = "🗑 انحذف الزر"; }
+    return { ...await adminData(uid, notice), marks: await bookMarksAdmin(book!.id), book: book!.id };
+  }
   need(a === "delete", "أمر غير معروف");
   const id = Number(body.id);
   need(await one("note_books", { id }), "الملزمة غير موجودة");
   await remove("note_ink", { book_id: id });
+  await remove("note_marks", { book_id: id });
   await remove("note_books", { id });
   return await adminData(uid, "🗑 انحذفت");
 }

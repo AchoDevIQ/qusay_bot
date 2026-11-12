@@ -355,3 +355,9 @@ body.grwide .grtop{padding-left:104px}
 .extimer{position:sticky;top:0;z-index:30;display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:4px 10px;margin:0 -14px 10px;padding:10px 14px;background:linear-gradient(90deg,var(--gold),var(--gold2));color:var(--ink);box-shadow:0 6px 18px rgba(0,0,0,.35)}.extimer b{font-size:30px;font-weight:900;line-height:1}.extimer span{font-size:17px;font-weight:800}.extimer small{flex-basis:100%;text-align:center;font-size:12px;font-weight:700;opacity:.8}.extimer.low{background:linear-gradient(90deg,#ff7a6b,#d32f2f);color:#fff}.extimer.flat{margin:0}
 /* «📄 أسئلة من الوورد»: اختيار الملفات */
 .exfile{display:flex;flex-direction:column;gap:6px;margin:8px 0;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;font-size:14px;font-weight:700;color:var(--txt)}.exfile input{font-family:inherit;color:var(--mut)}
+
+/* أزرار الفيديو داخل الملزمة: على يسار السؤال، فوك الكتابة */
+.ntsheet .ntmark{position:absolute;left:4px;z-index:3;display:flex;gap:4px;flex-wrap:wrap;max-width:70%}
+.ntsheet .ntmark button{font:inherit;font-size:11px;font-weight:700;padding:2px 7px;opacity:.93;border-radius:999px;border:1px solid var(--gold2,#cea239);background:rgba(13,33,64,.92);color:#f9c445;box-shadow:0 2px 6px rgba(0,0,0,.35);cursor:pointer}
+.ntsheet .ntmark button:disabled{opacity:.6}
+.ntmsg{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(249,196,69,.14);border:1px solid var(--gold2,#cea239);font-size:14px;cursor:pointer}

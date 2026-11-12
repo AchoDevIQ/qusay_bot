@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 import NotesCard from "./NotesCard";
+import MarksCard from "./MarksCard";
 import QaCard from "./QaCard";
 
 type Lecture = { from: number; to: number; topic: string; lecture: number };
@@ -24,6 +25,7 @@ export default function BookletsClient() {
           <>
             <div className="exhint tmhint">الطالب يسأل عادي (صورة أو كتابة). إذا الجواب الآلي شغال وسؤاله إنت حاله بالملازم، يوصله الحل نفسه من الملزمة بصورة بإطار. وإذا بعده ما فهم، أو نفس الحل وصله قبل، أو ما لگيناه، سؤاله يوصلك. وإذا الجواب الآلي طافي، الأسئلة توصلك مثل قبل.</div>
             <NotesCard />
+            <MarksCard />
             <QaCard />
             <details className="card cpch"><summary><b>📕 الطريقة القديمة: صور من PDF الملازم</b></summary>
             <AutoCard data={data} busy={busy} call={call} />

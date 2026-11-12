@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { deviceId, deviceNow, haptic, platform } from "../shared";
 
 type Book = { id: number; title: string; chapter: string; pages: number };
+type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
 type Tool = "hand" | "pen" | "mark" | "erase";
 
@@ -81,6 +82,16 @@ function Reader({ book, onClose }: { book: Book; onClose: () => void }) {
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(true);
   const [boxW, setBoxW] = useState(360);
+  // أزرار الفيديو يم الأسئلة: الفيديو يوصل بالبوت محمي
+  const [marks, setMarks] = useState<Mark[]>([]);
+  const [msg, setMsg] = useState("");
+  const [sending, setSending] = useState(false);
+  useEffect(() => { post({ action: "marks", book: book.id }).then((j) => setMarks(j.marks ?? [])).catch(() => undefined); }, [book.id]);
+  async function play(m: Mark, kind: "video" | "solution") {
+    haptic(); setSending(true); setMsg("⏳ دا يوصلك الفيديو بالبوت...");
+    try { const j = await post({ action: "play", book: book.id, mark: m.id, kind }); setMsg(`${j.notice}. سد الملزمة وشوفه، وترجع لنفس الصفحة.`); }
+    catch (e) { setMsg(`⚠️ ${(e as Error).message}`); } finally { setSending(false); }
+  }
   const stage = useRef<HTMLDivElement>(null);
   const bg = useRef<HTMLCanvasElement>(null);
   const top = useRef<HTMLCanvasElement>(null);
@@ -193,12 +204,19 @@ function Reader({ book, onClose }: { book: Book; onClose: () => void }) {
         </div>
       )}
       {err && <div className="ntbad">⚠️ {err}</div>}
+      {msg && <div className="ntmsg" onClick={() => setMsg("")}>{msg}</div>}
       <div className="ntstage" ref={stage}>
         {!img && !err && <div className="gk-empty">جاري فتح الصفحة...</div>}
         {img && (
           <div className="ntsheet" style={{ width: w, height: h }}>
             <canvas ref={bg} style={{ width: w, height: h }} />
             <canvas ref={top} style={{ width: w, height: h, touchAction: tool === "hand" ? "auto" : "none" }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { live.current = null; redraw(strokesRef.current); }} />
+            {marks.filter((m) => m.page === page).map((m) => (
+              <div key={m.id} className="ntmark" style={{ top: Math.max(0, m.y * h - 4) }}>
+                {m.solution && <button type="button" disabled={sending} onClick={() => void play(m, "solution")}>🎬 فيديو حل السؤال</button>}
+                {m.video && <button type="button" disabled={sending} onClick={() => void play(m, "video")}>▶️ فيديو توضيح السؤال</button>}
+              </div>
+            ))}
           </div>
         )}
       </div>

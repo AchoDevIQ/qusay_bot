@@ -1,0 +1,185 @@
+// أزرار داخل الملزمة: يم كل سؤال «🎬 فيديو حل السؤال» (فيديو الأستاذ من قناته) و«▶️ فيديو توضيح السؤال» (الفيديو المتحرك).
+// الفيديو يوصل للطالب بالبوت محمي (ما ينحول ولا ينحفظ)، والرابط ما يطلعله أبد.
+// الأزرار تنحط وحدها: كل سطر يبدي بـ «س1» أو «Q1» أو «مثال» زر، والفيديوهات التوضيحية تدور سؤالها بكلماته.
+// صاحب البوت يعدل كل زر (الرابط، الفيديو، الصفحة والمكان) ويحذف الفيديو اللي ما يعجبه.
+import { randomUUID } from "node:crypto";
+import { find, insert, one, remove, update, type Row } from "./db.ts";
+import { files } from "./files.ts";
+import { api, upload } from "./telegram.ts";
+import { stamp } from "./util.ts";
+import { need } from "./webApi.ts";
+
+export const VIDEO_MAX = 30 * 1024 * 1024;
+
+/** كل فيديو توضيحي وكلمات سؤاله بالملزمة العربية والإنجليزية (أول سطر يطابق) */
+const CATALOG: { name: string; ar: RegExp; en: RegExp }[] = [
+  { name: "الخزان المتسرب", ar: /خزان.{0,6}شكل متوازي/, en: /Polyhedron tank/i },
+  { name: "السلم المنزلق", ar: /سلم طوله\s*\(?\s*10/, en: /ladder with 10 ?m/i },
+  { name: "طريقان متعامدان", ar: /طريقان متعامدان/, en: /Two perpendicular roads/i },
+  { name: "البالون المتصاعد", ar: /يتصاعد بالون/, en: /balloon \(?mounting/i },
+  { name: "العمود وظل الرجل", ar: /عمود طوله\s*\(?\s*7\.2/, en: /pole of length 7\.2/i },
+  { name: "المرشح المخروطي", ar: /مرشح مخروط/, en: /conical filter/i },
+  { name: "كومة الرمل", ar: /رمل ناعم/, en: /Sand is leaking/i },
+  { name: "مكعب مغطى بالجليد", ar: /مكعب صلد/, en: /solid cube/i },
+  { name: "بالون يتسرب منه الغاز", ar: /س\s*3\s*[/:]?\s*بالون كروي مملوء بالغاز/, en: /Q\s*3\s*\/\s*A spherical balloon filled with gas/i },
+  { name: "أرض يحدها نهر", ar: /يحدها نهر/, en: /bounded by a river/i },
+  { name: "التقريب بالمماس", ar: /جد تقريبا/, en: /Find approximation/i },
+  { name: "مبرهنة رول", ar: /تعينها/, en: /defined by Rolle/i },
+  { name: "مبرهنة القيمة المتوسطة", ar: /برهن\s*ان\s*ال?دالة.{0,30}1,7\]/, en: /Prove that the function f\(x\)\s*=\s*x/i },
+];
+const Q_AR = /^\s*(س\s*\d+\s*[:/：-]?|مثال\s*\d*)/;
+const Q_EN = /^\s*(Q\s*\d+\s*[/:.-]|Example\s*\d*)/i;
+
+/** اسم الفيديو من اسم ملفه: «السلم_المنزلق_English_عربي.mp4» ← السلم المنزلق، إنجليزي */
+export function videoName(fname: string) {
+  const base = fname.replace(/\.[a-z0-9]+$/i, "");
+  const lang = /English|انجليزي|إنجليزي|_en$/i.test(base) ? "en" : "ar";
+  const name = base.replace(/_?(English|عربي|انجليزي|إنجليزي|ar|en)(?=_|$)/gi, "").replace(/_+/g, " ").trim();
+  return { name: name || base, lang };
+}
+
+/** رابط منشور القناة: t.me/c/123/45 (خاصة)، أو t.me/name/45 (عامة) */
+export function parseLink(raw: string): { chat: string; msg: number } | null {
+  const s = raw.trim();
+  let m = /^(?:https?:\/\/)?t\.me\/c\/(\d+)\/(?:\d+\/)?(\d+)(?:[/?#].*)?$/i.exec(s);
+  if (m) return { chat: `-100${m[1]}`, msg: Number(m[2]) };
+  m = /^(?:https?:\/\/)?t\.me\/([a-z][\w]{3,})\/(\d+)(?:[/?#].*)?$/i.exec(s);
+  if (m && m[1].toLowerCase() !== "c") return { chat: `@${m[1]}`, msg: Number(m[2]) };
+  return null;
+}
+
+/** سطور كل صفحة ومكانها من فوك (0 فوك، 1 جوه) */
+async function pageLines(pdf: Buffer) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const task = pdfjs.getDocument({ data: new Uint8Array(pdf), verbosity: 0 });
+  const doc = await task.promise;
+  const out: { page: number; y: number; text: string }[] = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    const p = await doc.getPage(n);
+    const h = p.getViewport({ scale: 1 }).height;
+    const rows: { y: number; text: string }[] = [];
+    for (const it of (await p.getTextContent()).items as { str?: string; transform?: number[] }[]) {
+      if (!it.str || !it.transform) continue;
+      const y = it.transform[5];
+      const row = rows.find((r) => Math.abs(r.y - y) < 3);
+      if (row) row.text += it.str; else rows.push({ y, text: it.str });
+    }
+    for (const r of rows.sort((a, b) => b.y - a.y)) out.push({ page: n, y: Math.max(0, Math.min(1, 1 - r.y / h - 0.012)), text: r.text.replace(/\s+/g, " ").trim() });
+  }
+  await task.destroy();
+  return out;
+}
+
+/** يحط الأزرار وحدها. الأزرار اللي عدلها صاحب البوت تبقى، والتلقائية تنعاد. يرجع عدد الأزرار والفيديوهات اللي انربطت */
+export async function autoMarks(book: Row) {
+  const pdf = await files().read(`notes/${book.file}.pdf`);
+  need(pdf, "ملف الملزمة مو موجود");
+  const lines = await pageLines(pdf!);
+  const en = book.lang === "en";
+  await remove("note_marks", { book_id: book.id, auto: 1 });
+  const kept = await find("note_marks", { book_id: book.id });
+  const near = (list: Row[], page: number, y: number, d: number) => list.find((m) => m.page === page && Math.abs(Number(m.y) - y) < d);
+  const made: Row[] = [];
+  for (const l of lines) {
+    if (!(en ? Q_EN : Q_AR).test(l.text) || near(kept, l.page, l.y, 0.03) || near(made, l.page, l.y, 0.03)) continue;
+    made.push({ book_id: book.id, page: l.page, y: l.y, label: l.text.slice(0, 60), video_id: null, solution: null, auto: 1 });
+  }
+  // الفيديوهات التوضيحية بلغة الملزمة: كل واحد على سؤاله (الزر اللي فوكه بنفس الصفحة، أو زر جديد)
+  const videos = (await find("note_videos", { lang: en ? "en" : "ar" }));
+  let linked = 0;
+  for (const c of CATALOG) {
+    const v = videos.find((x) => x.name === c.name);
+    if (!v || [...kept, ...made].some((m) => m.video_id === v.id)) continue;
+    const l = lines.find((x) => (en ? c.en : c.ar).test(x.text));
+    if (!l) continue;
+    const mark = [...made].filter((m) => m.page === l.page && Number(m.y) <= l.y + 0.03 && l.y - Number(m.y) < 0.12).sort((a, b) => Number(b.y) - Number(a.y))[0];
+    if (mark) mark.video_id = v.id;
+    else made.push({ book_id: book.id, page: l.page, y: l.y, label: l.text.slice(0, 60), video_id: v.id, solution: null, auto: 1 });
+    linked++;
+  }
+  for (const m of made) await insert("note_marks", m);
+  return { marks: made.length, linked };
+}
+
+const pub = (m: Row) => ({ id: m.id as number, page: m.page as number, y: Number(m.y), video: !!m.video_id, solution: !!m.solution });
+/** أزرار الملزمة للطالب: مكانها وشنو بيها، بلا روابط */
+export async function marksFor(bookId: number) {
+  return (await find("note_marks", { book_id: bookId })).filter((m) => m.video_id || m.solution).sort((a, b) => a.page - b.page || Number(a.y) - Number(b.y)).map(pub);
+}
+
+/** يدز الفيديو للطالب بالبوت، محمي */
+export async function sendMark(uid: number, bookId: number, markId: unknown, kind: unknown) {
+  const m = await one("note_marks", { id: Number(markId), book_id: bookId });
+  need(m, "هذا الزر مو موجود");
+  if (kind === "solution") {
+    const l = parseLink(String(m!.solution ?? ""));
+    need(l, "فيديو الحل بعده ما انضاف لهذا السؤال");
+    const r = await api("copyMessage", { chat_id: uid, from_chat_id: l!.chat, message_id: l!.msg, protect_content: true });
+    need(r, "ما گدرت أوصل فيديو الحل. بلغ الأستاذ", 502);
+    return "🎬 وصلك فيديو حل السؤال بالمحادثة";
+  }
+  const v = m!.video_id && await one("note_videos", { id: m!.video_id });
+  need(v, "الفيديو التوضيحي مو موجود لهذا السؤال");
+  const caption = `▶️ فيديو توضيح السؤال: ${v!.name}`;
+  // أول مرة يرتفع لتلگرام، وبعدها نستعمل رقمه
+  if (v!.tg) {
+    const r = await api("sendVideo", { chat_id: uid, video: v!.tg, caption, protect_content: true });
+    if (r) return "▶️ وصلك فيديو توضيح السؤال بالمحادثة";
+  }
+  const buf = await files().read(`explainers/${v!.file}.mp4`);
+  need(buf, "ملف الفيديو مو موجود");
+  const r = await upload("sendVideo", { chat_id: String(uid), caption, protect_content: "true", supports_streaming: "true" }, "video", buf!, `${v!.file}.mp4`, "video/mp4");
+  need(r, "ما وصل الفيديو، جرب مرة ثانية", 502);
+  const id = r?.video?.file_id;
+  if (id) await update("note_videos", { id: v!.id }, { tg: id });
+  return "▶️ وصلك فيديو توضيح السؤال بالمحادثة";
+}
+
+// ---------- صاحب البوت
+export async function videoList() {
+  return (await find("note_videos")).sort((a, b) => String(a.name).localeCompare(String(b.name)) || String(a.lang).localeCompare(String(b.lang))).map((v) => ({ id: v.id as number, name: v.name as string, lang: v.lang as string, size: v.size as number }));
+}
+export async function addVideo(f: Blob & { name?: string }) {
+  need(f.size > 0, "اختار فيديو");
+  need(f.size <= VIDEO_MAX, "الفيديو كبير، أكثر شي 30 ميگا");
+  const buf = Buffer.from(await f.arrayBuffer());
+  need(buf.subarray(4, 8).toString() === "ftyp", "لازم فيديو mp4");
+  const { name, lang } = videoName(String(f.name ?? "فيديو"));
+  const file = randomUUID().slice(0, 12);
+  await files().write(`explainers/${file}.mp4`, buf, "video/mp4");
+  // نفس الاسم واللغة: الجديد يبدل القديم، والأزرار تبقى عليه
+  const old = await one("note_videos", { name, lang });
+  if (old) { await update("note_videos", { id: old.id }, { file, tg: null, size: buf.length, created: stamp() }); return `🔁 انبدل «${name}»`; }
+  await insert("note_videos", { name, lang, file, tg: null, size: buf.length, created: stamp() });
+  return `✅ انرفع «${name}» (${lang === "en" ? "إنجليزي" : "عربي"})`;
+}
+/** يحذف الفيديو التوضيحي، ويختفي زره من الملازم (زر الحل يبقى) */
+export async function deleteVideo(id: number) {
+  const v = await one("note_videos", { id });
+  need(v, "الفيديو مو موجود");
+  for (const m of await find("note_marks", { video_id: id })) await update("note_marks", { id: m.id }, { video_id: null, auto: 0 });
+  await remove("note_videos", { id });
+  return `🗑 انحذف «${v!.name}»`;
+}
+export async function bookMarksAdmin(bookId: number) {
+  return (await find("note_marks", { book_id: bookId })).sort((a, b) => a.page - b.page || Number(a.y) - Number(b.y))
+    .map((m) => ({ id: m.id as number, page: m.page as number, y: Number(m.y), label: String(m.label ?? ""), video: (m.video_id as number) ?? null, solution: String(m.solution ?? "") }));
+}
+export async function saveMark(book: Row, body: Row) {
+  const page = Number(body.page), y = Number(body.y);
+  need(Number.isInteger(page) && page >= 1 && page <= book.pages, "رقم الصفحة غلط");
+  need(y >= 0 && y <= 1, "المكان غلط");
+  const solution = String(body.solution ?? "").trim();
+  need(!solution || parseLink(solution), "رابط الحل لازم يكون رابط منشور بالقناة، مثل https://t.me/c/123456/78");
+  const video = body.video ? Number(body.video) : null;
+  if (video) need(await one("note_videos", { id: video }), "الفيديو مو موجود");
+  const row = { book_id: book.id, page, y, label: String(body.label ?? "").slice(0, 80), video_id: video, solution: solution || null, auto: 0 };
+  if (body.id) {
+    need(await one("note_marks", { id: Number(body.id), book_id: book.id }), "الزر مو موجود");
+    await update("note_marks", { id: Number(body.id) }, row);
+  } else await insert("note_marks", row);
+}
+export async function deleteMark(book: Row, id: number) {
+  need(await one("note_marks", { id, book_id: book.id }), "الزر مو موجود");
+  await remove("note_marks", { id });
+}

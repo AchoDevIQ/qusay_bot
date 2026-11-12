@@ -53,6 +53,8 @@ export const SCHEMA: Record<string, Table> = {
   exam_answers: { key: "id", auto: true, cols: nulls("item_id", "q", "file", "created") },
   note_books: { key: "id", auto: true, cols: nulls("title", "chapter", "lang", "file", "pages", "ord", "created") },
   note_ink: { key: ["user_id", "book_id", "page"], cols: { ink: null } },
+  note_marks: { key: "id", auto: true, cols: nulls("book_id", "page", "y", "label", "video_id", "solution", "auto") },
+  note_videos: { key: "id", auto: true, cols: nulls("name", "lang", "file", "tg", "size", "created") },
   activity: { key: "id", auto: true, cols: nulls("user_id", "what", "created") },
   guardians: { key: ["guardian_id", "student_id"], cols: { created: null } },
   company_settlements: { key: "id", auto: true, cols: nulls("from_id", "to_id", "n", "gross", "fees", "net", "created", "parts") },
