@@ -80,7 +80,7 @@ export async function takeOath(uid: number, id: unknown, s: SchedSettings, typed
   const it = await liveRoom(uid, id, s);
   if (!await kvGet(oathKey(it.id))) {
     const st = await student(it.user_id);
-    need(sameOath(String(typed ?? ""), oathSentence(st?.name ?? "")), "اكتب جملة القسم كاملة مثل ما هي، كل كلمة بمكانها");
+    need(sameOath(String(typed ?? ""), oathSentence(st?.name ?? "")), "رتب جملة القسم كاملة، كل كلمة بمكانها");
     await kvSet(oathKey(it.id), stamp());
     const e = await one("bank_exams", { id: it.exam_id });
     await logActivity(uid, `🤲 كتب جملة القسم إنه ما يغش بامتحان ${e?.title ?? ""}`);
@@ -198,7 +198,9 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   const buf = Buffer.from(await (f as Blob).arrayBuffer());
   const kind = kindOf(buf);
   need(kind, "لازم صورة");
-  const ref = path.posix.join("student_answers", String(uid), String(it.id), `q${q}_${randomUUID()}.${kind}`);
+  // ورقة «✏️ اكتب بالقلم» بيها السؤال مكتوب فوك، فنعلمها حتى المصحح ما يطلعله السؤال مرة ثانية
+  const pen = /^pen_q\d+\./.test(String((f as File).name ?? ""));
+  const ref = path.posix.join("student_answers", String(uid), String(it.id), `q${q}_${pen ? "pen_" : ""}${randomUUID()}.${kind}`);
   await files().write(ref, buf, kind === "png" ? "image/png" : "image/jpeg");
   // صورة وحدة لكل سؤال: الجديدة تبدل القديمة
   await remove("exam_answers", { item_id: it.id, q });

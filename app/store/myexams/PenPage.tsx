@@ -88,6 +88,8 @@ export default function PenPage({ item, sid, model, head, questions, start, busy
   const [ask, setAsk] = useState(false);
   const live = useRef<Stroke | null>(null);
   const penSeen = useRef(false);
+  /** الإصبع بعد ما انكتب بالقلم: ما يرسم، يحرك الورقة لفوك ولجوة */
+  const drag = useRef<number | null>(null);
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState("#111111");
   const [width, setWidth] = useState(2);
@@ -108,7 +110,9 @@ export default function PenPage({ item, sid, model, head, questions, start, busy
       const top = bar.current?.getBoundingClientRect().bottom ?? 120;
       // حجم الصفحة (A+ / A−) يكبّر كلشي: الورقة تنحسب بدونه حتى تبقى داخل الشاشة
       const z = Number((document.documentElement.style as unknown as { zoom: string }).zoom) || 1;
-      setFit(Math.max(0.2, Math.min((window.innerWidth - 12) / z / W, (window.innerHeight - top - 10) / z / H)));
+      // الشاشة العريضة (الآيباد): الورقة بعرض الشاشة كله، وتنزل لجوة بالإصبع. الموبايل: الورقة كلها بالشاشة
+      const wFit = (window.innerWidth - 12) / z / W, hFit = (window.innerHeight - top - 10) / z / H;
+      setFit(Math.max(0.2, window.innerWidth >= 700 ? wFit : Math.min(wFit, hFit)));
     };
     size(); const t = setTimeout(size, 400);
     window.addEventListener("resize", size);
@@ -180,14 +184,16 @@ export default function PenPage({ item, sid, model, head, questions, start, busy
     if (keep.length !== strokes.length) change(keep);
   }
   function down(e: React.PointerEvent) {
-    if (skip(e) || sending) return;
+    if (skip(e)) { drag.current = e.clientY; return; }
+    if (sending) return;
     e.preventDefault(); ink.current!.setPointerCapture(e.pointerId);
     const [x, y] = pt(e);
     if (tool === "eraser") { erase(x, y); return; }
     live.current = { c: color, w: width, p: tool === "ruler" ? [x, y, x, y] : [x, y] }; redraw();
   }
   function move(e: React.PointerEvent) {
-    if (skip(e) || !(e.buttons & 1)) return;
+    if (skip(e)) { if (drag.current !== null) { window.scrollBy(0, drag.current - e.clientY); drag.current = e.clientY; } return; }
+    if (!(e.buttons & 1)) return;
     const [x, y] = pt(e);
     if (tool === "eraser") { erase(x, y); return; }
     if (!live.current) return;
@@ -277,7 +283,7 @@ export default function PenPage({ item, sid, model, head, questions, start, busy
         {!ready && <div className="gk-empty">جاري تجهيز الورقة...</div>}
         <canvas ref={bg} style={{ width: W * fit, height: H * fit }} />
         <canvas ref={ink} style={{ width: W * fit, height: H * fit, touchAction: "none", cursor: tool === "eraser" ? "cell" : "crosshair" }}
-          onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { live.current = null; redraw(); }} />
+          onPointerDown={down} onPointerMove={move} onPointerUp={(e) => { if (e.pointerType === "touch") drag.current = null; up(); }} onPointerCancel={() => { drag.current = null; live.current = null; redraw(); }} />
       </div>
       {sent && (
         <div className="pen-done" role="dialog">

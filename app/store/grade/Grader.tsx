@@ -21,7 +21,7 @@ export type Prepared = { total: number; comment: string; sticker: number; sent: 
 type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "w"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
 export type Sticker = { id: number; name: string; lo: number; hi: number };
 type Ink = { rot: number; items: Item[] };
-type Page = { src: string | null; q: number | null; qs?: number[] };   // qs: صفحة وحدة بيها أكثر من سؤال
+type Page = { src: string | null; q: number | null; qs?: number[]; pen?: boolean };   // qs: صفحة وحدة بيها أكثر من سؤال. pen: ورقة القلم، السؤال مكتوب عليها
 type Tool = "hand" | "pen" | "eraser" | "text" | "stamp" | "wrong" | "sticker";
 
 const ZOOMS = [0.75, 1, 1.25, 1.5, 2, 2.5];
@@ -55,7 +55,7 @@ async function buildPages(paper: Paper, url: (r: string) => string): Promise<Pag
       // نفس الصورة لأكثر من سؤال (ورقة A3): صفحة وحدة، والمصحح يقلب بين أسئلتها
       const had = q !== null ? shared.get(f) : undefined;
       if (had && q !== null) { had.qs = [...(had.qs ?? [had.q!]), q]; had.q = null; return; }
-      const pg: Page = { src: url(f), q };
+      const pg: Page = { src: url(f), q, pen: isPen(f) };
       out.push(pg);
       if (q !== null) shared.set(f, pg);
     }
@@ -70,6 +70,8 @@ async function buildPages(paper: Paper, url: (r: string) => string): Promise<Pag
   return out;
 }
 
+/** جواب انكتب بـ «✏️ اكتب بالقلم»: اسمه بالسيرفر q3_pen_… */
+export const isPen = (f: string) => /\/q\d+_pen_[^/]*$/.test(f);
 const stickerUrl = (id: number) => `/api/sticker?id=${id}`;
 function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: number, live?: Item | null, imgs?: Map<number, HTMLImageElement>, clear = true) {
   if (clear) ctx.clearRect(0, 0, w, h);
@@ -608,7 +610,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       <div className="gk-stage" ref={stage}>
         {!pages && <div className="gk-empty">جاري تجهيز الورقة...</div>}
         {pages && !pages.length && <div className="gk-empty">⚠️ ماكو صفحات بهذي الورقة.</div>}
-        {page && showQ && q && <div className="gk-qtop" ref={qtop}><b>س{q.n}</b><TrimmedImage src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
+        {page && showQ && q && !page.pen && <div className="gk-qtop" ref={qtop}><b>س{q.n}</b><TrimmedImage src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
         {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={fitH} locked={locked} onAdd={addItem} onErase={erase} onMove={moveItem} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
       </div>
       {textAt && (
