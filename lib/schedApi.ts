@@ -10,7 +10,7 @@ import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } fr
 import { boughtLectures, logActivity, needsGuardian } from "./access.ts";
 import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
-import { skippableExams } from "./skipExams.ts";
+import { examWith, skippableExams } from "./skipExams.ts";
 import { centerName, isAdmin, student } from "./data.ts";
 import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
@@ -58,9 +58,18 @@ export async function boughtExams(uid: number) {
   const versions = await find("bank_versions");
   const skip = (examId: number) => { const vs = versions.filter((v) => v.exam_id === examId); return vs.length > 0 && vs.every((v) => v.kind !== "mandatory"); };
   const out: Row[] = [];
-  for (const ch of chapters.flatMap(labelChapters)) {
-    const list = (await find("bank_exams", { chapter: ch })).filter((e) => !skip(e.id)).sort((a, b) => (a.pos ?? a.ord) - (b.pos ?? b.ord) || a.id - b.id);
-    out.push(...list);
+  const mine = chapters.flatMap(labelChapters);
+  // امتحان مربوط بفصل ثاني اشتراه الطالب: يطلع بآخر ذاك الفصل، مو ويا فصله
+  const withCh = await examWith();
+  const elsewhere = (e: Row) => !!withCh[String(e.id)] && withCh[String(e.id)] !== e.chapter && mine.includes(withCh[String(e.id)]);
+  const order = (a: Row, b: Row) => (a.pos ?? a.ord) - (b.pos ?? b.ord) || a.id - b.id;
+  const all = await find("bank_exams");
+  const seen = new Set<number>();
+  for (const ch of mine) {
+    const list = all.filter((e) => e.chapter === ch && !skip(e.id) && !elsewhere(e)).sort(order);
+    const extra = all.filter((e) => elsewhere(e) && withCh[String(e.id)] === ch && !skip(e.id))
+      .sort((a, b) => mine.indexOf(String(a.chapter)) - mine.indexOf(String(b.chapter)) || String(a.slug).localeCompare(String(b.slug)) || order(a, b));
+    for (const e of [...list, ...extra]) if (!seen.has(e.id)) { seen.add(e.id); out.push(e); }
   }
   return out;
 }
@@ -448,7 +457,9 @@ async function studentInfo(uid: number) {
     // الحضوري يختار يمتحن بالآيباد (إذا مركزه ما مفتوحله يصور)
     ipad: place.inPerson && !await photosAllowed(uid) ? await ipadExam(uid) : null,
     inPerson: place.inPerson, place: place.label, name: st?.name ?? "", remaining: left.length, mode: sched?.mode ?? (sched ? "private" : null),
-    needsChoice: !sched && left.length > 0, needsBuild: !general && left.some((e) => !planned.has(e.id)),
+    needsChoice: !sched && left.length > 0,
+    // وهو يرتب جدوله الخاص: الامتحانات اللي يگدر يشيلها من هسه
+    canDrop: left.filter((e) => skip.has(e.id)).map((e) => ({ exam: e.id as number, title: enTitle(e.id, String(e.title)) })), needsBuild: !general && left.some((e) => !planned.has(e.id)),
     // الإدارة غيرت الأوقات واللي اختاره راح: يختار من جديد
     repick: general && !picksFit(slots, picksOf(sched!)),
     picks: general ? picksOf(sched!) : null,
@@ -550,9 +561,15 @@ async function planFor(uid: number, body: Row) {
     need(!f.weekdays.some((d) => s.offDays.includes(d)), `لا يوجد امتحانات في هذا اليوم: ${f.weekdays.filter((d) => s.offDays.includes(d)).map((d) => DAYS[d]).join("، ")}. اختار غيره`);
   }
   if (!place.inPerson && f.times) need(Object.values(f.times).flat().every((t) => { const h = Number(t.slice(0, 2)); return h >= s.fromHour && h <= s.toHour; }), `الامتحان يبدي من الساعة ${ampm(`${String(s.fromHour).padStart(2, "0")}:00`)} إلى ${ampm(`${String(s.toHour).padStart(2, "0")}:00`)} بس`);
-  const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
+  const all = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
+  // الامتحانات اللي «يمكن حذفه» وشالها وهو يرتب: ما تدخل الجدول
+  const skippable = new Set(await skippableExams());
+  const drop = [...new Set((Array.isArray(body.drop) ? body.drop : []).map(Number))];
+  need(drop.every((x) => skippable.has(x) && all.some((e) => e.id === x)), "هذا الامتحان ما يمكن حذفه");
+  const left = all.filter((e) => !drop.includes(e.id));
+  need(left.length, "شلت كل الامتحانات. خلي واحد على الأقل");
   const settings = { ...withOwnHol(s, f.hol), excluded: [...s.excluded, ...await studentHolidayDays(uid)] };
-  return { f, left, plan: buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings }) };
+  return { f, left, drop, plan: buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings }) };
 }
 async function saveItems(uid: number, f: Row & { times?: Record<string, string[]>; hol?: OwnHol }, items: { examId: number; at: string }[]) {
   await tx(async () => {
@@ -584,7 +601,7 @@ export async function myExamAction(body: Row) {
   if (a === "preview" || a === "confirm") {
     const info = await studentInfo(id);
     need(info.needsBuild, "جدولك مثبت. لتغييره تواصل ويا قصي العميري");
-    const { f, left, plan } = await planFor(id, body);
+    const { f, left, drop, plan } = await planFor(id, body);
     need(plan.ok, plan.ok ? "" : plan.error);
     if (!plan.ok) return {};
     const titles = new Map(left.map((e) => [e.id, e.title]));
@@ -592,7 +609,8 @@ export async function myExamAction(body: Row) {
     const skip = new Set(await skippableExams());
     if (a === "preview") return { ...await studentInfo(id), preview: { items: plan.items.map((i) => ({ title: titles.get(i.examId), at: i.at, skip: skip.has(i.examId) })), days: plan.days, maxPerDay: plan.maxPerDay, perWeek: plan.perWeek } };
     await saveItems(id, f, plan.items);
-    await logActivity(id, `🗓 ثبت جدول امتحاناته: ${plan.items.length} امتحان`);
+    for (const x of drop) await insert("sched_items", { user_id: id, exam_id: x, at: stamp(), status: "skipped" });
+    await logActivity(id, `🗓 ثبت جدول امتحاناته: ${plan.items.length} امتحان${drop.length ? `، وشال ${drop.length}` : ""}`);
     return { ...await studentInfo(id), notice: "✅ انثبت جدولك" };
   }
   if (a === "placePreview" || a === "joinPlace") {

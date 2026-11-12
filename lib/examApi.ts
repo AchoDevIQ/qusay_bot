@@ -14,7 +14,7 @@ import { files } from "./files.ts";
 import { api } from "./telegram.ts";
 import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { fileToken, verifyFileToken } from "./webAuth.ts";
-import { SKIP_KEY, skippableExams } from "./skipExams.ts";
+import { SKIP_KEY, WITH_KEY, examWith, skippableExams } from "./skipExams.ts";
 import { autoInsertExam } from "./schedApi.ts";
 
 export { ApiError };
@@ -36,13 +36,14 @@ export async function examList(uid: number) {
   for (const q of questions) qBy.set(q.version_id, [...(qBy.get(q.version_id) ?? []), q]);
   for (const v of versions) vBy.set(v.exam_id, [...(vBy.get(v.exam_id) ?? []), v]);
   const skip = await skippableExams();
+  const withCh = await examWith();
   const chapters: Row[] = [];
   for (const e of exams) {
     let c = chapters.find((x) => x.slug === e.slug);
     if (!c) { c = { slug: e.slug, chapter: e.chapter, exams: [] }; chapters.push(c); }
     const dir = `${e.slug}/e${e.ord}`;
     c.exams.push({
-      id: e.id, ord: e.ord, title: e.title, info: e.info, titleEn: String(e.title_en ?? "") || defaultEnTitle(e), minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0, skippable: skip.includes(e.id), answerOnly: answerOnlyOf(e),
+      id: e.id, ord: e.ord, title: e.title, info: e.info, titleEn: String(e.title_en ?? "") || defaultEnTitle(e), minutes: e.minutes, privateVersion: JSON.parse(e.group_versions || "{}").private ?? 0, skippable: skip.includes(e.id), withChapter: withCh[String(e.id)] ?? "", answerOnly: answerOnlyOf(e),
       versions: (vBy.get(e.id) ?? []).map((v) => {
         const pdf = (lang: "ar" | "en") => v["pdf_" + lang] || (lang === "ar" || v.has_en ? `${dir}/${v.model}/student_${lang}.pdf` : null);
         // صور الصفحات تنعرض داخل الصفحة. إذا انرفع PDF بديل، ينفتح الملف نفسه
@@ -250,6 +251,16 @@ export async function examAction(body: Row) {
     const list = await skippableExams();
     await kvSet(SKIP_KEY, JSON.stringify(body.on ? [...new Set([...list, id])] : list.filter((x) => x !== id)));
     await logEdit(uid, `امتحان ${id}: ${body.on ? "يمكن حذفه" : "لا يمكن حذفه"}`);
+  } else if (a === "examWith") {
+    // الامتحان يطلع ويا فصل ثاني (مثلاً إعادة الفصل الأول يطلع لمشتري الفصل الثالث). فارغ = ويا فصله
+    const e = await one("bank_exams", { id });
+    need(e, "الامتحان غير موجود");
+    const ch = String(body.chapter ?? "");
+    need(!ch || ch.startsWith("الفصل"), "اختار الفصل");
+    const map = await examWith();
+    if (ch && ch !== e!.chapter) map[String(id)] = ch; else delete map[String(id)];
+    await kvSet(WITH_KEY, JSON.stringify(map));
+    await logEdit(uid, `امتحان ${id}: ${ch && ch !== e!.chapter ? `يطلع ويا ${ch}` : "يطلع ويا فصله"}`);
   } else if (a === "privateVersion") {
     // نسخة الطالب اللي جدوله خاص. نسخ المجاميع من صفحة جدول الامتحانات
     const e = await one("bank_exams", { id });

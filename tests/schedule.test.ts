@@ -859,6 +859,34 @@ test("🕐 الطالب الخاص يغير وقت امتحان بنفس يوم�
   await assert.rejects(act(104, "moveTime", { item: b.id, time: "22:00" }), /اليوم اللي قبله/);
 });
 
+test("📚 امتحان يطلع ويا فصل ثاني، و🗑 يشيله وهو يرتب جدوله الخاص", async () => {
+  const admin = sign(1);
+  const ch3 = await insert("bank_exams", { slug: "t3", chapter: "الفصل السابع", ord: 1, title: "امتحان الفصل السابع", minutes: 60, pos: 1 });
+  const re1 = await insert("bank_exams", { slug: "t1", chapter: "الفصل الثامن", ord: 99, title: "إعادة الفصل الأول", minutes: 60, pos: 99 });
+  await examAction({ action: "examWith", id: re1, chapter: "الفصل السابع", initData: admin });
+  await student(105);
+  await put("exam_access", { user_id: 105, chapter: "الفصل السابع", order_id: 1, created: "1" });
+  const info = await act(105, "info");
+  assert.equal(info.remaining, 2);   // امتحان الفصل السابع وويا الإعادة
+  assert.deepEqual(info.canDrop, []);
+  await examAction({ action: "skippable", id: re1, on: true, initData: admin });
+  assert.deepEqual((await act(105, "info")).canDrop.map((x: any) => x.exam), [re1]);
+  await assert.rejects(act(105, "preview", form({ drop: [ch3] })), /ما يمكن حذفه/);
+  const pv = await act(105, "preview", form({ drop: [re1], times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["15:00"]])) }));
+  assert.equal(pv.preview.items.length, 1);
+  const done = await act(105, "confirm", form({ drop: [re1], times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["15:00"]])) }));
+  assert.equal(done.items.filter((i: any) => !i.optional).length, 1);
+  assert.equal(done.needsBuild, false);
+  // اللي مشتري الفصل الأول بس: الإعادة تطلعله ويا فصله
+  await student(106);
+  await put("exam_access", { user_id: 106, chapter: "الفصل الثامن", order_id: 1, created: "1" });
+  const { boughtExams } = await import("../lib/schedApi.ts");
+  assert.ok((await boughtExams(106)).some((e: any) => e.id === re1));
+  assert.ok(!(await boughtExams(106)).some((e: any) => e.id === ch3));
+  await examAction({ action: "skippable", id: re1, on: false, initData: admin });
+  await examAction({ action: "examWith", id: re1, chapter: "", initData: admin });
+});
+
 test("أيام ما يمتحن بيها الطالب الخاص الإلكتروني: ما تطلعله وينرفض إذا اختارها", async () => {
   const admin = sign(1);
   const old: any = await schedAdminAction({ action: "list", initData: admin });

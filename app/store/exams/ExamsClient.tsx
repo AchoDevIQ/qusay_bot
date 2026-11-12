@@ -7,7 +7,7 @@ import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
 type Question = { id: number; n: number; max: number; q: string | null; edited: boolean };
 type Version = { id: number; model: string; kind: string; ok: boolean; issues: string[]; manual: boolean; pdfAr: string | null; pdfEn: string | null; pagesAr: string[]; pagesEn: string[]; answerPdf: string | null; questions: Question[] };
-type Exam = { id: number; ord: number; title: string; info: string; titleEn: string; minutes: number; privateVersion: number; skippable: boolean; answerOnly: number; versions: Version[] };
+type Exam = { id: number; ord: number; title: string; info: string; titleEn: string; minutes: number; privateVersion: number; skippable: boolean; withChapter: string; answerOnly: number; versions: Version[] };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type WordSide = { ok: boolean; got: number[] | null; first: string } | null;
 type WordRow = { exam: number; title: string; model: string; kind: string; n: number; ar: WordSide; en: WordSide };
@@ -73,7 +73,7 @@ export default function ExamsClient() {
                       <td className="p">{e.versions.length}</td><td className="p">{fmtTime(e.minutes)}{e.minutes !== data!.generalMinutes ? <small className="exown"> خاص</small> : null}</td>
                     </tr>
                   }>
-                    <ExamPanel key={e.id + ":" + e.versions.map((v) => v.questions.map((q) => q.max).join()).join("|")} exam={e} busy={busy} call={call} fileUrl={fileUrl} openVersion={openVersion} setOpenVersion={(v) => { setOpenVersion(v); setOpenQ(null); }} openQ={openQ} setOpenQ={setOpenQ} />
+                    <ExamPanel key={e.id + ":" + e.versions.map((v) => v.questions.map((q) => q.max).join()).join("|")} exam={e} chapters={[...new Set((data?.chapters ?? []).map((c) => c.chapter).filter((c) => String(c).startsWith("الفصل")))]} busy={busy} call={call} fileUrl={fileUrl} openVersion={openVersion} setOpenVersion={(v) => { setOpenVersion(v); setOpenQ(null); }} openQ={openQ} setOpenQ={setOpenQ} />
                     <div className="exline">
                       <AddExam slug={ch.slug} generalMinutes={data!.generalMinutes} busy={busy} call={call} near={e.id} side="before" label="➕ امتحان قبله" />
                       <AddExam slug={ch.slug} generalMinutes={data!.generalMinutes} busy={busy} call={call} near={e.id} side="after" label="➕ امتحان بعده" />
@@ -187,8 +187,8 @@ function FileButton({ label, accept, multiple, onFiles, disabled }: { label: str
 }
 
 type Call = (b: Record<string, unknown> | FormData) => Promise<unknown>;
-function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, openQ, setOpenQ }: {
-  exam: Exam; busy: boolean; call: Call; fileUrl: (r: string) => string;
+function ExamPanel({ exam, chapters = [], busy, call, fileUrl, openVersion, setOpenVersion, openQ, setOpenQ }: {
+  exam: Exam; chapters?: string[]; busy: boolean; call: Call; fileUrl: (r: string) => string;
   openVersion: number | null; setOpenVersion: (v: number | null) => void; openQ: number | null; setOpenQ: (q: number | null) => void;
 }) {
   const [minutes, setMinutes] = useState(String(exam.minutes));
@@ -215,6 +215,7 @@ function ExamPanel({ exam, busy, call, fileUrl, openVersion, setOpenVersion, ope
       <PrivateVersion exam={exam} busy={busy} call={call} />
       <AnswerOnly exam={exam} busy={busy} call={call} />
       <label className="adcheck adflat exfoot"><input type="checkbox" checked={exam.skippable} disabled={busy} onChange={(e) => call({ action: "skippable", id: exam.id, on: e.target.checked })} /><span>🗑 يمكن حذفه: طالب الجدول الخاص يگدر يشيله من جدوله (مثلاً امتحان مكرر). بدون هذا ما ينحذف.</span></label>
+      <WithChapter exam={exam} chapters={chapters} busy={busy} call={call} />
       <div className="excols">
         {(["mandatory", "optional"] as const).map((kind) => {
           const list = exam.versions.filter((v) => v.kind === kind);
@@ -418,6 +419,20 @@ function AddExam({ slug, generalMinutes, busy, call, near, side, label = "➕ ا
 
 /** «📄 أسئلة من الوورد»: ملف الفصل بالعربي والإنجليزي، المطابقة ويا النسخ تطلع قبل، والحفظ للمطابق بس */
 /** «أجب عن K أسئلة فقط»: الطالب يشوف كل الأسئلة ويحل K، والمجموع من أول K جاوبهن */
+/** الامتحان يطلع ويا فصل ثاني: مثلاً إعادة الفصل الأول ونصف السنة يطلعن لمشتري الفصل الثالث قبل العطلة */
+function WithChapter({ exam, chapters, busy, call }: { exam: Exam; chapters: string[]; busy: boolean; call: Call }) {
+  return (
+    <div className="exfoot">
+      <label>📚 يطلع ويا الفصل:</label>
+      <select value={exam.withChapter} disabled={busy} onChange={(e) => void call({ action: "examWith", id: exam.id, chapter: e.target.value })}>
+        <option value="">فصله (مثل ما هو)</option>
+        {chapters.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <div className="exhint">مثلاً إعادة الفصل الأول ونصف السنة: اختار «الفصل الثالث»، فيطلع لكل من اشترى الفصل الثالث، بآخر امتحاناته. اللي ما مشتري الفصل الثالث يطلعله ويا فصله.</div>
+    </div>
+  );
+}
+
 function AnswerOnly({ exam, busy, call }: { exam: Exam; busy: boolean; call: (b: Record<string, unknown>) => Promise<unknown> }) {
   const most = Math.max(0, ...exam.versions.map((v) => v.questions.length));
   return (
