@@ -19,6 +19,7 @@ const CATALOG: { name: string; ar: RegExp; en: RegExp }[] = [
   { name: "طريقان متعامدان", ar: /طريقان متعامدان/, en: /Two perpendicular roads/i },
   { name: "البالون المتصاعد", ar: /يتصاعد بالون/, en: /balloon \(?mounting/i },
   { name: "العمود وظل الرجل", ar: /عمود طوله\s*\(?\s*7\.2/, en: /pole of length 7\.2/i },
+  { name: "حادلة التبليط", ar: /حادلة تبليط/, en: /paving ?truck/i },
   { name: "المرشح المخروطي", ar: /مرشح مخروط/, en: /conical filter/i },
   { name: "كومة الرمل", ar: /رمل ناعم/, en: /Sand is leaking/i },
   { name: "مكعب مغطى بالجليد", ar: /مكعب صلد/, en: /solid cube/i },
