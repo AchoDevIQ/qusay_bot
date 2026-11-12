@@ -61,10 +61,12 @@ async function sendPicked(chat: number, title: string, rows: Row[]) {
 }
 /** طلاب التجربة: كل واحد ويا رابط يفتح صفحة امتحاناته كأنه هو */
 async function testStudents() {
-  const items = await find("sched_items");
+  const items = await find("sched_items"), access = await find("exam_access");
   return (await find("students")).filter((x) => x.user_id < 0).sort((a, b) => b.user_id - a.user_id).map((x) => {
     const mine = items.filter((i) => i.user_id === x.user_id);
-    return { id: x.user_id as number, name: x.name as string, papers: mine.length, graded: mine.filter((i) => i.graded_at).length, link: `/store/myexams?t=${homeToken(x.user_id)}&owner=1` };
+    // الفصول اللي «مشتريها» من 📚، حتى صاحب البوت يعرف منو جاهز يجرب الجدول الخاص
+    const chapters = access.filter((r) => r.user_id === x.user_id).map((r) => String(r.chapter));
+    return { id: x.user_id as number, name: x.name as string, papers: mine.length, graded: mine.filter((i) => i.graded_at).length, chapters, link: `/store/myexams?t=${homeToken(x.user_id)}&owner=1` };
   });
 }
 async function pageData(q: string, f: Filters, uid = 0) {
