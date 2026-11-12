@@ -1,6 +1,7 @@
 "use client";
 // صفحة الطلاب: الأرقام، البحث، وفورمة كل طالب داخل نفس الصفحة
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import VoiceRec from "../VoiceRec";
 import PhotoPick from "../PhotoPick";
 import Thumbs from "../Thumbs";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
@@ -12,11 +13,13 @@ type TestStudent = { id: number; name: string; papers: number; graded: number; c
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null; skip?: boolean }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
-type Data = { file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
+type Data = { canMsg?: boolean; file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
 const GENDER_OPTS = [{ v: "بنين", label: "بنين" }, { v: "بنات", label: "بنات" }];
+/** رفع فورم (فويس) بنفس البحث والفلاتر اللي بالصفحة */
+const UploadCtx = createContext<(f: FormData) => Promise<Data | null>>(async () => null);
 const EXAM_OPTS = [{ v: "حضوري", label: "🏫 حضوري" }, { v: "إلكتروني", label: "💻 إلكتروني" }];
 
 export default function StudentsClient() {
@@ -30,6 +33,7 @@ export default function StudentsClient() {
   const [picked, setPicked] = useState<number[]>([]);
   const [printing, setPrinting] = useState(false);
   const act = (b: Record<string, unknown>) => call({ q: shown, filters, ...b });
+  const upload = (f: FormData) => { f.set("q", shown); f.set("filters", JSON.stringify(filters)); return call(f); };
   function filter(k: keyof typeof filters, v: string) {
     const next = { ...filters, [k]: v };
     setFilters(next);
@@ -45,19 +49,19 @@ export default function StudentsClient() {
   }
   if (fileOf && data) {
     return (
-      <>
+      <UploadCtx.Provider value={upload}>
         <AdminHeader title="📂 ملف الطالب" />
         <div className="wrap">
           <button type="button" className="exbtn" style={{ marginBottom: 10 }} onClick={() => { setFileOf(null); setFileData(null); }}>⬅️ رجوع لقائمة الطلاب</button>
           <FileView s={data.results.find((x) => x.id === fileOf.id) ?? fileOf} file={fileData} data={data} busy={busy} call={act} close={() => { setFileOf(null); setFileData(null); }} />
         </div>
         <StatusBar busy={busy} error={error} notice={data.notice} />
-      </>
+      </UploadCtx.Provider>
     );
   }
 
   return (
-    <>
+    <UploadCtx.Provider value={upload}>
       <AdminHeader title="🎓 الطلاب" />
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
@@ -111,7 +115,7 @@ export default function StudentsClient() {
         )}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
-    </>
+    </UploadCtx.Provider>
   );
 }
 
@@ -227,6 +231,39 @@ function FileView({ s, file, data, busy, call, close }: { s: S; file: StudentFil
   );
 }
 
+/** «📩 رسالة»: للطالب أو لولي أمره، كتابة أو فويس أو الاثنين. توصل بالبوت ومحمية ما تنحول */
+function MsgPanel({ s, busy }: { s: S; busy: boolean }) {
+  const upload = useContext(UploadCtx);
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState<"student" | "guardian">("student");
+  const [text, setText] = useState("");
+  const [voice, setVoice] = useState<Blob | null>(null);
+  const [rec, setRec] = useState(false);
+  if (!open) return <div className="exline expad"><button type="button" className="exbtn" onClick={() => setOpen(true)}>📩 رسالة للطالب أو لولي أمره</button></div>;
+  async function send() {
+    const f = new FormData();
+    f.set("action", "message"); f.set("id", String(s.id)); f.set("to", to); f.set("text", text);
+    if (voice) f.set("voice", voice, "voice");
+    if (await upload(f)) { setText(""); setVoice(null); setOpen(false); }
+  }
+  return (
+    <div className="card expad adtop">
+      <div className="exlabel">📩 رسالة إلى</div>
+      <div className="seg">
+        <button type="button" className={to === "student" ? "on" : ""} onClick={() => setTo("student")}>🎓 الطالب</button>
+        <button type="button" className={to === "guardian" ? "on" : ""} disabled={!s.guardian} onClick={() => setTo("guardian")}>👨‍👧 ولي أمره{s.guardian ? "" : " (مو مربوط)"}</button>
+      </div>
+      <textarea className="stfield adtop" rows={3} maxLength={3000} placeholder="اكتب الرسالة (أو سجل فويس، أو الاثنين)" value={text} onChange={(e) => setText(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }} />
+      <VoiceRec value={voice} onChange={setVoice} onRecording={setRec} btn="exbtn" label="🎙 فويس (اختياري، أكثر شي 5 دقايق)" />
+      <div className="exline adtop">
+        <button type="button" className="btn" disabled={busy || rec || (!text.trim() && !voice)} onClick={() => void send()}>📤 دز {to === "guardian" ? "لولي أمره" : "للطالب"}</button>
+        <button type="button" className="exbtn" disabled={rec} onClick={() => setOpen(false)}>إلغاء</button>
+      </div>
+      <div className="exhint">توصل بالبوت باسم «الأستاذ قصي العميري»، ومحمية ما تنحول. وتنكتب بسجل الطالب.</div>
+    </div>
+  );
+}
+
 function Form({ s, data, close, busy, call, inFile }: { s: S; data: Data; close: () => void; busy: boolean; call: Call; inFile?: boolean }) {
   const startArea = data.areas.find((a) => a.centers.some((c) => c.id === s.centerId));
   const [name, setName] = useState(s.name);
@@ -271,6 +308,7 @@ function Form({ s, data, close, busy, call, inFile }: { s: S; data: Data; close:
         {s.gw && !s.gw.blockedAt && <span className={s.gw.unseen >= 3 ? "exhint exbad" : "exhint"}>✅ آخر مرة استلم درجة: {s.gw.lastSeen ? s.gw.lastSeen.slice(0, 16) : "بعده ما داس استلمت"}{s.gw.unseen ? ` · ${s.gw.unseen} درجة ما فتحها` : ""}</span>}
         {s.wa && <a className="exbtn" href={s.wa} target="_blank" rel="noreferrer">💬 واتساب ولي الأمر</a>}
       </div>
+      {data.canMsg && <MsgPanel s={s} busy={busy} />}
       {!inFile && data.papers?.id === s.id && <PapersPanel papers={data.papers} />}
       {!inFile && data.sched?.id === s.id && <SchedPanel key={data.sched.perDay} sched={data.sched} id={s.id} busy={busy} call={call} />}
       {data.log?.id === s.id && (

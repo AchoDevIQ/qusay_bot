@@ -10,6 +10,7 @@ import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "
 import { guardianOf, logActivity } from "./access.ts";
 import { can, AI_GRADER, examLabel, isAdmin, staffIds, staffName, staffRow, student } from "./data.ts";
 import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
+import { deliverMsg, voiceOf } from "./directMsg.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, openObjections, testObjection } from "./objections.ts";
 import { balanceOf, gradeOnly, gradeScope, payAction, payData, setGradeOnly } from "./graderPay.ts";
@@ -709,38 +710,28 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
   return `✅ انحفظ الرد: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total} من 100`;
 }
 
-const VOICE_MAX = 20 * 1024 * 1024;
-/** رسالة من المصحح للطالب: كتابة، وتسجيل صوت، وزر يفتح محادثة تلگرام. ورقة التجربة توصل للمصحح نفسه */
+/** رسالة من المصحح للطالب: كتابة، وتسجيل صوت، وزر يفتح محادثة تلگرام. ورقة التجربة توصل للمصحح نفسه.
+ *  objection: رد بالفويس على الاعتراض، فالعنوان يگول هيچ */
 async function messageStudent(uid: number, form: FormData) {
   const row = await one("sched_items", { id: Number(form.get("id")) });
   need(row?.status === "done", "الورقة غير موجودة");
   need(row!.grader_id === uid || (row!.graded_at && await canHandle(uid, row!)), "هذي الورقة أخذها مصحح ثاني", 409);
   const it = row!;
   const text = String(form.get("text") ?? "").trim().slice(0, 3000);
-  const voice = form.get("voice");
-  const hasVoice = voice instanceof Blob && voice.size > 0;
-  need(text || hasVoice, "اكتب رسالة أو سجل صوت");
-  if (hasVoice) need((voice as Blob).size <= VOICE_MAX, "التسجيل طويل هواية");
+  const voice = voiceOf(form);
+  need(text || voice, "اكتب رسالة أو سجل صوت");
   const btnText = String(form.get("btnText") ?? "").trim().slice(0, 40);
   const user = String(form.get("btnUser") ?? "").trim().replace(/^@/, "").replace(/^https?:\/\/t\.me\//, "");
   if (btnText || user) need(btnText && /^[A-Za-z0-9_]{4,32}$/.test(user), "الزر يحتاج نص واسم مستخدم تلگرام صحيح");
   const view = await paperRow(it);
-  const to = it.user_id;
   const kb = btnText ? { inline_keyboard: [[{ text: btnText, url: `https://t.me/${user}` }]] } : undefined;
-  const caption = `📩 <b>رسالة من المصحح</b>\nبخصوص امتحان: ${esc(view.title)}${text ? `\n\n${esc(text)}` : ""}`;
-  if (hasVoice) {
-    const type = (voice as Blob).type || "";
-    // تلگرام يشغلها كرسالة صوتية إذا m4a أو ogg أو mp3، وإلا تنرسل كملف صوت
-    const ext = /mp4|m4a|aac/.test(type) ? "m4a" : /ogg/.test(type) ? "ogg" : /mpeg|mp3/.test(type) ? "mp3" : "webm";
-    const method = ext === "webm" ? "sendDocument" : "sendVoice";
-    const fields: Record<string, string> = { chat_id: String(to), caption, parse_mode: "HTML", protect_content: "true" };
-    if (kb) fields.reply_markup = JSON.stringify(kb);
-    const ok = await upload(method, fields, method === "sendVoice" ? "voice" : "document", Buffer.from(await (voice as Blob).arrayBuffer()), `voice.${ext}`, type || "audio/ogg");
-    need(ok, "ما وصلت الرسالة الصوتية، جرب مرة ثانية");
-  } else {
-    await send(to, caption, { extra: { protect_content: true, ...(kb ? { reply_markup: kb } : {}) } });
-  }
-  await logActivity(it.user_id, `📩 وصلته رسالة من المصحح بخصوص ${view.title}`);
+  const objection = form.get("objection") === "1";
+  const caption = `📩 <b>${objection ? "رد المصحح على اعتراضك" : "رسالة من المصحح"}</b>
+بخصوص امتحان: ${esc(view.title)}${text ? `
+
+${esc(text)}` : ""}`;
+  await deliverMsg(it.user_id, caption, voice, kb);
+  await logActivity(it.user_id, `📩 وصلته ${objection ? "رد بالفويس على اعتراضه" : "رسالة من المصحح"} بخصوص ${view.title}`);
   return { ok: true, notice: isTest(it) ? "🧪 وصلت الرسالة إلك إنت، لأنه طالب تجربة" : "✅ وصلت الرسالة للطالب" };
 }
 

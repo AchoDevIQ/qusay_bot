@@ -4,7 +4,8 @@ import { deviceOf, unlockDevice } from "./deviceLock.ts";
 import { find, one, remove, setSession, type Row } from "./db.ts";
 import { activityOf, guardianOf, logActivity } from "./access.ts";
 import { GOVS, GRADES, toLatinDigits } from "./config.ts";
-import { areasWithCenters, can, centerName, isAdmin, placeOf, student } from "./data.ts";
+import { areasWithCenters, can, centerName, isAdmin, placeOf, staffName, student } from "./data.ts";
+import { deliverMsg, voiceOf } from "./directMsg.ts";
 import { listPdf } from "./documents.ts";
 import { deliverPassword } from "./password.ts";
 import { saveStudent, studentFromForm } from "./student.ts";
@@ -25,6 +26,8 @@ import { SCHED_PERM, resetSchedule, setPerDay, setStudentHoliday, studentSchedul
 import { authed, intOf, need } from "./webApi.ts";
 
 export const STUDENTS_PERM = "students";
+/** رسالة لطالب واحد أو لولي أمره من صفحة الطلاب */
+export const MSG_PERM = "msg";
 const RECENT = 100;
 
 export async function studentsStats() {
@@ -77,6 +80,7 @@ async function pageData(q: string, f: Filters, uid = 0) {
     stats: await studentsStats(), results: await Promise.all(rows.map(view)), found: found.length, limit: RECENT, govs: GOVS,
     areas: (await areasWithCenters()).map((a) => ({ id: a.id, gov: a.gov, name: a.name, centers: centers.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, name: c.name })) })),
     tests: uid && await isAdmin(uid) ? await testStudents() : null,
+    canMsg: uid ? await can(uid, MSG_PERM) : false,
     testVersions: uid && await isAdmin(uid) ? await testVersions() : null,
   };
 }
@@ -93,10 +97,35 @@ async function testVersions() {
       qs: qs.filter((q) => q.version_id === v.id).sort((a, b) => a.n - b.n).map((q) => ({ n: q.n as number, max: q.max_mark as number })) }))
     .filter((v) => v.qs.length);
 }
+/** «📩 رسالة»: كتابة أو فويس أو الاثنين، للطالب نفسه أو لولي أمره المربوط بالبوت. محمية ما تنحول */
+async function messageAction(uid: number, form: FormData) {
+  need(await can(uid, MSG_PERM), "ما عندك صلاحية الرسائل", 403);
+  const id = Number(form.get("id"));
+  const st = await student(id);
+  need(st, "الطالب غير موجود");
+  const toGuardian = form.get("to") === "guardian";
+  const text = String(form.get("text") ?? "").trim().slice(0, 3000);
+  const voice = voiceOf(form);
+  need(text || voice, "اكتب رسالة أو سجل صوت");
+  const g = toGuardian ? await guardianOf(id) : null;
+  need(!toGuardian || g, "ولي أمره مو مربوط بالبوت. تگدر تراسله بالواتساب");
+  const head = toGuardian ? `📩 <b>رسالة من الأستاذ قصي العميري</b>
+بخصوص الطالب: <b>${esc(st!.name)}</b>` : "📩 <b>رسالة من الأستاذ قصي العميري</b>";
+  await deliverMsg(toGuardian ? g!.guardian_id : id, `${head}${text ? `
+
+${esc(text)}` : ""}`, voice);
+  const by = await isAdmin(uid) ? "صاحب البوت" : await staffName(uid);
+  const what = `${voice ? "فويس" : "رسالة"}${voice && text ? " ويا كتابة" : ""}`;
+  await logActivity(id, toGuardian ? `📩 وصل ${what} لولي أمره من ${by}` : `📩 وصله ${what} من ${by}`);
+  let f: Row = {};
+  try { f = JSON.parse(String(form.get("filters") ?? "{}")); } catch { /* بدون فلاتر */ }
+  return { ...await pageData(String(form.get("q") ?? ""), filtersOf(f), uid), notice: `✅ وصلت الرسالة ${toGuardian ? "لولي أمر" : "لـ"} ${st!.name}${id < 0 ? " (طالب تجربة، فوصلتك إنت)" : ""}` };
+}
 const TEST_MAX_PICS = 6, TEST_MAX_BYTES = 12 * 1024 * 1024;
 /** رفع ورقة تجربة من صور حقيقية (صور جواب كل سؤال) */
 export async function studentUpload(form: FormData) {
   const uid = await authed(form.get("initData"), STUDENTS_PERM);
+  if (form.get("action") === "message") return await messageAction(uid, form);
   need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
   need(form.get("action") === "testPaper", "أمر غير معروف");
   const byQ = new Map<number, Buffer[]>();

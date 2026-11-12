@@ -301,6 +301,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const [penBox, setPenBox] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [overlay, setOverlay] = useState<"" | "model" | "question">("");
+  const [objVoice, setObjVoice] = useState<Blob | null>(null);
   const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
   const [text, setText] = useState("");
   const [saveErr, setSaveErr] = useState("");
@@ -490,8 +491,16 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     return out;
   }
   /** رد الاعتراض: كل اعتراض لازم أما تتغير درجته (ينقبل) أو ينضغط رفض */
-  function decide() {
+  async function decide() {
     if (undecided.length) { setSaveErr(`غير الدرجة أو ارفض اعتراض السؤال ${undecided[0].q}`); goQ(undecided[0].q); return; }
+    // الفويس يوصل أول، وإذا ما وصل الرد ما ينحفظ حتى المصحح يعيده
+    if (objVoice) {
+      const fd = new FormData();
+      fd.set("initData", pageAuth()); fd.set("action", "message"); fd.set("id", String(paper.id)); fd.set("objection", "1"); fd.set("text", ""); fd.set("voice", objVoice, "voice");
+      const res = await fetch("/api/grade", { method: "POST", body: fd }).catch(() => null);
+      if (!res?.ok) { setSaveErr(`ما وصل الفويس: ${(await res?.json().catch(() => ({})))?.error ?? "ماكو اتصال"}`); return; }
+      setObjVoice(null);
+    }
     onDecide(Promise.all([flush(), ...pendingMarks.current]).then(() => undefined), composeAll, rejects, accepted);
   }
   /** حفظ الورقة: لازم كل الأسئلة عدها درجة. بعدها تنفتح الورقة الجاية مباشرة، والحفظ يكمل بالخلفية */
@@ -572,7 +581,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           {k > 0 && <span className="gk-hint">أجب عن {k} من {paper.questions.length}: تنحسب أول {k} جاوبهن</span>}
           <span className="gk-total">{total} / 100</span>
           {!locked && !objMode && <button type="button" className="gk-save" disabled={busy} onClick={save}>💾 حفظ{missing ? ` (باقي ${missing})` : ""}</button>}
-          {objMode && <button type="button" className="gk-save" disabled={busy} onClick={decide}>💾 حفظ الرد{undecided.length ? ` (باقي ${undecided.length})` : ""}</button>}
+          {objMode && <button type="button" className="gk-save" disabled={busy || recOn} onClick={() => void decide()}>💾 حفظ الرد{undecided.length ? ` (باقي ${undecided.length})` : ""}</button>}
         </div>
       )}
       {q && paper.ai?.find((x) => x.n === q.n) && <AiNote a={paper.ai.find((x) => x.n === q.n)!} />}
@@ -608,6 +617,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
               </div>
             );
           })() : <div className="gk-objbody">هذا السؤال ما عليه اعتراض. اختار سؤال من فوك.</div>}
+          <div className="gk-objbody"><VoiceRec value={objVoice} onChange={setObjVoice} onRecording={setRecOn} label="🎙 رد بالفويس على اعتراضه (اختياري، يوصله ويا الرد)" /></div>
         </div>
       )}
       <div className="gk-stage" ref={stage}>

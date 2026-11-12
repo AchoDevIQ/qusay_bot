@@ -136,3 +136,33 @@ test("طالب تجربة: «📚 اعطيه الفصل» يخليه مشتري 
   assert.equal(await one("schedules", { user_id: sid }), null);
   await assert.rejects(studentAction({ initData: sign(2), action: "testChapter", sid, chapter: "فصل التجربة" }));
 });
+
+test("📩 رسالة من صفحة الطلاب: للطالب أو لولي أمره، كتابة أو فويس، محمية، وبس اللي عنده الصلاحية", async () => {
+  const { studentUpload } = await import("../lib/studentApi.ts");
+  await put("students", { user_id: 700, name: "طالب الرسائل", exam: "إلكتروني", created: "2026-01-01 00:00" });
+  await put("staff", { user_id: 60, name: "مساعد طلاب", perms: "students" });
+  await put("staff", { user_id: 61, name: "مساعد رسائل", perms: "students,msg" });
+  const form = (uid: number, x: Record<string, string>, voice = false) => {
+    const f = new FormData(); f.set("initData", sign(uid)); f.set("action", "message");
+    for (const [k, v] of Object.entries(x)) f.set(k, v);
+    if (voice) f.set("voice", new Blob([Buffer.from("OggS-voice")], { type: "audio/ogg" }), "voice");
+    return f;
+  };
+  await assert.rejects(studentUpload(form(60, { id: "700", to: "student", text: "هلو" })), /صلاحية الرسائل/);
+  await assert.rejects(studentUpload(form(61, { id: "700", to: "student", text: " " })), /اكتب رسالة أو سجل صوت/);
+  await assert.rejects(studentUpload(form(61, { id: "700", to: "guardian", text: "هلو" })), /ولي أمره مو مربوط/);
+  sent.length = 0;
+  const r: any = await studentUpload(form(61, { id: "700", to: "student", text: "ادرس زين" }));
+  assert.match(r.notice, /وصلت الرسالة لـ طالب الرسائل/);
+  const msg = sent.find((x) => x.m === "sendMessage");
+  assert.equal(msg.p.chat_id, 700);
+  assert.equal(msg.p.protect_content, true);
+  assert.match(msg.p.text, /رسالة من الأستاذ قصي العميري[\s\S]*ادرس زين/);
+  await put("guardians", { guardian_id: 9700, student_id: 700, created: "x" });
+  sent.length = 0;
+  await studentUpload(form(1, { id: "700", to: "guardian", text: "ابنكم ممتاز" }, true));
+  assert.ok(sent.some((x) => x.m === "sendVoice"), "الفويس ينرسل كرسالة صوتية");
+  const log = (await find("activity", { user_id: 700 })).map((x) => String(x.what));
+  assert.ok(log.some((w) => /وصله رسالة من مساعد رسائل/.test(w)));
+  assert.ok(log.some((w) => /وصل فويس ويا كتابة لولي أمره من صاحب البوت/.test(w)));
+});
