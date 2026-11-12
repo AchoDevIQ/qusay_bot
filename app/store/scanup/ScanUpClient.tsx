@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import RescanList, { type Rescan } from "../attend/RescanList";
 import { AdminHeader, pageAuth } from "../adminPage";
 import { assignPages, type PageItem } from "./assign";
+import { pdfClient } from "../pdfClient";
 
 type Src = { file: File; page: number };           // page = رقم صفحة الـ PDF، أو 0 للصورة
 type Hit = { src: Src; flip: boolean; item: number; q: number; seq: number; qs?: number[]; label: string };
@@ -18,8 +19,7 @@ const DETECT_W = 1300, UPLOAD_W = 1600;
 const docs = new WeakMap<File, ReturnType<typeof openPdf>>();
 const pdfDoc = (file: File) => { let d = docs.get(file); if (!d) { d = openPdf(file); docs.set(file, d); } return d; };
 async function openPdf(file: File) {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  const pdfjs = await pdfClient();
   return await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), disableFontFace: true }).promise;
 }
 /** الصفحة على كانفس بعرض معين، ومقلوبة إذا انحطت بالسكانر بالمقلوب */

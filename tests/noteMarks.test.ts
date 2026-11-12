@@ -87,3 +87,14 @@ test("🔍 الأزرار تنحط على الأسئلة، والفيديو ال
   r = await admin("markDelete", { book, id: manual.id });
   assert.equal(await one("note_marks", { id: manual.id }), null);
 });
+
+test("ملف عامل الـ PDF بـ public مطابق لنسخة المكتبة، والصفحات ما تطلبه من داخل المكتبة", async () => {
+  const fs = await import("node:fs");
+  for (const f of ["pdf.min.mjs", "pdf.worker.min.mjs"]) assert.ok(fs.readFileSync(`public/${f}`).equals(fs.readFileSync(`node_modules/pdfjs-dist/build/${f}`)), `انسخ node_modules/pdfjs-dist/build/${f} إلى public`);
+  const version = JSON.parse(fs.readFileSync("node_modules/pdfjs-dist/package.json", "utf8")).version;
+  assert.ok(fs.readFileSync("app/store/pdfClient.ts", "utf8").includes(`const V = "${version}";`), "حدث رقم النسخة بـ app/store/pdfClient.ts");
+  // الصفحات ما تطلب المكتبة من الحزمة أبداً
+  for (const f of ["app/store/PdfPages.tsx", "app/store/scanup/ScanUpClient.tsx"]) assert.doesNotMatch(fs.readFileSync(f, "utf8"), /import\("pdfjs-dist"\)/);
+  // new URL على ملف من مكتبة خارج الحزمة يفشّل بناء البوت كله
+  for (const f of ["app/store/PdfPages.tsx", "app/store/scanup/ScanUpClient.tsx"]) assert.doesNotMatch(fs.readFileSync(f, "utf8"), /new URL\("pdfjs-dist/);
+});

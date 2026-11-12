@@ -1,11 +1,11 @@
 "use client";
 // صفحات PDF كبيرة داخل الصفحة، لأن تليجرام ما يعرض PDF بالموبايل
 import { useEffect, useRef, useState } from "react";
+import { pdfClient } from "./pdfClient";
 
 /** كل صفحة من PDF تصير صورة، حتى ينكتب فوكها بالقلم مثل الصور */
 export async function pdfToImages(url: string, width = 1400): Promise<string[]> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  const pdfjs = await pdfClient();
   const doc = await pdfjs.getDocument({ url, disableFontFace: true }).promise;
   const out: string[] = [];
   for (let i = 1; i <= doc.numPages; i++) {
@@ -23,8 +23,7 @@ export async function pdfToImages(url: string, width = 1400): Promise<string[]> 
 
 /** يقص ملف الحلول سؤال سؤال حسب علامات «س1، س2...» بيمين الصفحة. اللي قبل أول علامة بالصفحة تكملة للسؤال اللي قبله */
 export async function pdfByQuestion(url: string, width = 1400): Promise<{ q: number; src: string }[]> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  const pdfjs = await pdfClient();
   const doc = await pdfjs.getDocument({ url, disableFontFace: true }).promise;
   const out: { q: number; src: string }[] = [];
   let last = 0;
@@ -73,8 +72,7 @@ export default function PdfPages({ url, outside = true }: { url: string; outside
     setState("loading");
     void (async () => {
       try {
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+        const pdfjs = await pdfClient();
         const doc = await pdfjs.getDocument({ url, disableFontFace: true }).promise;
         box.current?.replaceChildren();
         for (let i = 1; i <= doc.numPages && !stop; i++) {
