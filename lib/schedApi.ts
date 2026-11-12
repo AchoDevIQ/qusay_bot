@@ -53,7 +53,16 @@ export async function scheduleChapters(uid: number): Promise<string[]> {
 }
 /** الامتحانات الإجبارية من الفصول اللي اشتراها، بترتيبها */
 export async function boughtExams(uid: number) {
-  const chapters = await scheduleChapters(uid);
+  return await examsFor(await scheduleChapters(uid));
+}
+/** فصول المنهج بترتيبها (من البنك) */
+async function allChapters() {
+  const first = new Map<string, string>();
+  for (const e of await find("bank_exams")) if (String(e.chapter).startsWith("الفصل") && (!first.has(e.chapter) || String(e.slug) < first.get(e.chapter)!)) first.set(e.chapter, String(e.slug));
+  return [...first].sort((a, b) => a[1].localeCompare(b[1], undefined, { numeric: true })).map(([c]) => c);
+}
+/** امتحانات هذي الفصول بترتيبها، ويا الامتحانات المربوطة بيها من فصول ثانية */
+async function examsFor(chapters: string[]) {
   // الامتحان اللي كل نسخه اختيارية ما يدخل الجدول. اللي نسخه لسه ما انضافت يدخل بمكانه
   const versions = await find("bank_versions");
   const skip = (examId: number) => { const vs = versions.filter((v) => v.exam_id === examId); return vs.length > 0 && vs.every((v) => v.kind !== "mandatory"); };
@@ -459,7 +468,10 @@ async function studentInfo(uid: number) {
     inPerson: place.inPerson, place: place.label, name: st?.name ?? "", remaining: left.length, mode: sched?.mode ?? (sched ? "private" : null),
     needsChoice: !sched && left.length > 0,
     // وهو يرتب جدوله الخاص: الامتحانات اللي يگدر يشيلها من هسه
-    canDrop: left.filter((e) => skip.has(e.id)).map((e) => ({ exam: e.id as number, title: enTitle(e.id, String(e.title)) })), needsBuild: !general && left.some((e) => !planned.has(e.id)),
+    canDrop: left.filter((e) => skip.has(e.id)).map((e) => ({ exam: e.id as number, title: enTitle(e.id, String(e.title)) })),
+    // جدوله كامل وهو يرتب: كل الامتحانات بالترتيب، واللي «يمكن حذفه» معلم
+    toPlan: left.map((e) => ({ exam: e.id as number, title: enTitle(e.id, String(e.title)), chapter: String(e.chapter), skip: skip.has(e.id) })),
+    perWeekMax: s.perWeek, needsBuild: !general && left.some((e) => !planned.has(e.id)),
     // الإدارة غيرت الأوقات واللي اختاره راح: يختار من جديد
     repick: general && !picksFit(slots, picksOf(sched!)),
     picks: general ? picksOf(sched!) : null,
@@ -513,7 +525,7 @@ export async function setStudentHoliday(uid: number, hol: OwnHol) {
   need(sc && sc.mode !== "general", "هذا الطالب ما عنده جدول خاص");
   await closeMissed(uid, s);
   const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
-  const f = { start: addDays(todayStr(), 1), end: sc!.end_day, weekdays: JSON.parse(sc!.weekdays), hour: sc!.hour, times: sc!.picks ? JSON.parse(sc!.picks) as Record<string, string[]> : undefined, hol };
+  const f = { start: addDays(todayStr(), 1), end: sc!.pack ? addDays(todayStr(), PACK_DAYS) : sc!.end_day, pack: !!sc!.pack, weekdays: JSON.parse(sc!.weekdays), hour: sc!.hour, times: sc!.picks ? JSON.parse(sc!.picks) as Record<string, string[]> : undefined, hol };
   const plan = buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: { ...withOwnHol(s, hol), excluded: [...s.excluded, ...await studentHolidayDays(uid)] } });
   need(left.length === 0 || plan.ok, plan.ok ? "" : `بهذي العطلة ما يكفي الوقت: ${plan.error}`);
   await saveItems(uid, { ...f, start: sc!.start_day }, plan.ok ? plan.items : []);
@@ -521,9 +533,14 @@ export async function setStudentHoliday(uid: number, hol: OwnHol) {
   await logActivity(uid, `🏖 تغيرت عطلته: ${holText(hol)}`);
   return holText(hol);
 }
+/** الجدول بالأسبوع يدور أيام لحد 3 سنين */
+const PACK_DAYS = 1100;
 function formOf(body: Row, minStart: string) {
-  const start = body.start, end = body.end;
-  need(validDay(start) && validDay(end), "اختار تاريخ البداية والنهاية");
+  const start = body.start;
+  // pack: اختار كم امتحان بالأسبوع، فالنهاية تطلع من الحساب
+  const pack = !!body.pack;
+  const end = pack && validDay(start) ? addDays(String(start), PACK_DAYS) : body.end;
+  need(validDay(start) && validDay(end), pack ? "اختار تاريخ البداية" : "اختار تاريخ البداية والنهاية");
   need(start >= minStart, "تاريخ البداية لازم يكون من باجر فصاعداً");
   const weekdays = [...new Set((Array.isArray(body.weekdays) ? body.weekdays : []).map(Number))].filter((d) => DAY_ORDER.includes(d)) as number[];
   // وقت كل امتحان باليوم (الأول والثاني...) لكل يوم من أيامه، يختاره الطالب
@@ -543,7 +560,7 @@ function formOf(body: Row, minStart: string) {
   const hour = times ? Number(times[String(weekdays[0])][0].slice(0, 2)) : intOf(body.hour, 0, 23, "اختار الساعة");
   // عطلته: يختارها هو من إلى، أو يشيلها
   const hol = body.holFrom !== undefined || body.holTo !== undefined ? holFromBody(body) : undefined;
-  return { start: start as string, end: end as string, weekdays, hour, times, hol };
+  return { start: start as string, end: end as string, weekdays, hour, times, hol, pack };
 }
 async function planFor(uid: number, body: Row) {
   const s = await schedSettings();
@@ -568,12 +585,56 @@ async function planFor(uid: number, body: Row) {
   need(drop.every((x) => skippable.has(x) && all.some((e) => e.id === x)), "هذا الامتحان ما يمكن حذفه");
   const left = all.filter((e) => !drop.includes(e.id));
   need(left.length, "شلت كل الامتحانات. خلي واحد على الأقل");
+  if (f.pack) {
+    need(f.times, "اختار وقت الامتحان لكل يوم");
+    const week = f.weekdays.reduce((t, d) => t + (f.times![String(d)]?.length ?? 0), 0);
+    need(week <= s.perWeek, `أكثر شي ${s.perWeek} امتحانات بالأسبوع. احذف يوم أو وقت`);
+  }
   const settings = { ...withOwnHol(s, f.hol), excluded: [...s.excluded, ...await studentHolidayDays(uid)] };
   return { f, left, drop, plan: buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings }) };
 }
-async function saveItems(uid: number, f: Row & { times?: Record<string, string[]>; hol?: OwnHol }, items: { examId: number; at: string }[]) {
+/** «كم امتحان بالأسبوع؟»: لكل اختيار، شوكت يخلص الفصول اللي اشتراها، وشوكت يخلص المنهج كله إذا كمل بنفس الوتيرة واشترى الباقي */
+async function paceInfo(uid: number, body: Row) {
+  const s = await schedSettings();
+  const start = String(body.start ?? "");
+  need(validDay(start), "اختار تاريخ البداية");
+  const items = await find("sched_items", { user_id: uid });
+  const drop = new Set((Array.isArray(body.drop) ? body.drop : []).map(Number));
+  const mine = await scheduleChapters(uid);
+  const all = await allChapters();
+  const last = Math.max(-1, ...mine.flatMap(labelChapters).map((c) => all.indexOf(c)));
+  const later = all.filter((_, i) => i > last);
+  const left = remaining(await examsFor(mine), items).filter((e) => !drop.has(e.id));
+  const whole = remaining(await examsFor([...mine, ...later]), items).filter((e) => !drop.has(e.id));
+  const place = await placeFor(uid);
+  // أيام مركزه للحضوري، وكل الأيام إلا المحجوبة للإلكتروني
+  const centerDays = place.inPerson ? new Set((await placeSlots(place.centerId)).map((x) => x.d)) : null;
+  const usable = DAY_ORDER.filter((d) => (centerDays ? centerDays.has(d) : !s.offDays.includes(d)));
+  const hol = body.holFrom !== undefined || body.holTo !== undefined ? holFromBody(body) : undefined;
+  const settings = { ...withOwnHol(s, hol), excluded: [...s.excluded, ...await studentHolidayDays(uid)] };
+  const perDay = await perDayFor(uid, s);
+  // أيام متباعدة بالأسبوع: k امتحان، كل يوم واحد، وإذا الأيام ما تكفي امتحانين باليوم
+  const endOf = (list: Row[], k: number) => {
+    if (!list.length || !usable.length) return null;
+    const per = Math.ceil(k / usable.length);
+    if (per > perDay) return null;
+    const pick = usable.length >= k ? Array.from({ length: k }, (_, i) => usable[Math.floor((i * usable.length) / k)]) : usable;
+    const times: Record<string, string[]> = {};
+    let room = k;
+    for (const d of pick) { const c = Math.min(per, room); room -= c; times[String(d)] = ["06:00", "12:00", "18:00", "23:00"].slice(0, c); }
+    const wd = pick.filter((d) => times[String(d)].length);
+    const plan = buildPlan(toPlanExams(list).map((e) => ({ ...e, minutes: 60 })), { start, end: addDays(start, PACK_DAYS), weekdays: wd, hour: 6, perDay, settings: { ...settings, gap: 0 }, times, pack: true });
+    return plan.ok && plan.items.length ? plan.items[plan.items.length - 1].at.slice(0, 10) : null;
+  };
+  const low = Math.min(2, s.perWeek);
+  const options = Array.from({ length: s.perWeek - low + 1 }, (_, i) => low + i).map((k) => ({ k, end: endOf(left, k), all: later.length ? endOf(whole, k) : null })).filter((o) => o.end);
+  return { n: left.length, nAll: whole.length, chapters: mine, later, options };
+}
+async function saveItems(uid: number, f: Row & { times?: Record<string, string[]>; hol?: OwnHol; pack?: boolean }, items: { examId: number; at: string }[]) {
   await tx(async () => {
-    await put("schedules", { user_id: uid, mode: "private", center_id: null, picks: f.times ? JSON.stringify(f.times) : null, start_day: f.start, end_day: f.end, weekdays: JSON.stringify(f.weekdays), hour: f.hour, created: stamp(), hol: f.hol ? JSON.stringify(f.hol) : null });
+    // بالأسبوع: النهاية هي آخر امتحان
+    const end = f.pack && items.length ? items.map((i) => i.at.slice(0, 10)).sort().pop()! : f.end;
+    await put("schedules", { user_id: uid, mode: "private", center_id: null, picks: f.times ? JSON.stringify(f.times) : null, start_day: f.start, end_day: end, weekdays: JSON.stringify(f.weekdays), hour: f.hour, created: stamp(), hol: f.hol ? JSON.stringify(f.hol) : null, pack: f.pack ? 1 : null });
     await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });
     for (const it of items) await insert("sched_items", { user_id: uid, exam_id: it.examId, at: it.at, status: "waiting" });
   });
@@ -598,6 +659,7 @@ export async function myExamAction(body: Row) {
   await checkStopped(id);
   // سلّم أول امتحان: الحساب ينقفل لحد ما يربط ولي أمره
   need(!await needsGuardian(id), "🔒 حسابك مقفول لحد ما تربط ولي أمرك. افتح 🏠 القائمة الرئيسية وسوي الخطوات، أو شوف الرسالة بالمحادثة.");
+  if (a === "pace") return { ...await studentInfo(id), pace: await paceInfo(id, body) };
   if (a === "preview" || a === "confirm") {
     const info = await studentInfo(id);
     need(info.needsBuild, "جدولك مثبت. لتغييره تواصل ويا قصي العميري");
@@ -908,7 +970,7 @@ async function rebuildAll(s: SchedSettings) {
     await closeMissed(uid, s);
     const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
     if (!left.length) continue;
-    const f = { start, end: sc.end_day, weekdays: JSON.parse(sc.weekdays), hour: sc.hour, times: sc.picks ? JSON.parse(sc.picks) as Record<string, string[]> : undefined, hol: holOf(sc.hol) };
+    const f = { start, end: sc.pack ? addDays(start, PACK_DAYS) : sc.end_day, pack: !!sc.pack, weekdays: JSON.parse(sc.weekdays), hour: sc.hour, times: sc.picks ? JSON.parse(sc.picks) as Record<string, string[]> : undefined, hol: holOf(sc.hol) };
     const plan = buildPlan(toPlanExams(left), { ...f, perDay: await perDayFor(uid, s), settings: { ...withOwnHol(s, f.hol), excluded: [...s.excluded, ...await studentHolidayDays(uid)] } });
     if (plan.ok) {
       await saveItems(uid, f, plan.items);
@@ -965,6 +1027,8 @@ export async function schedAdminAction(body: Row) {
       holidayNote: body.holidayNote === undefined ? old.holidayNote : String(body.holidayNote).trim().slice(0, 120), blockedHours: [], excluded: body.excluded === undefined ? old.excluded : dayList(body.excluded), fromHour, toHour, offDays,
       // الطالب يگدر يختار صورة جوابه من الاستوديو، لو الكاميرا بس
       gallery: body.gallery === undefined ? old.gallery : !!body.gallery,
+      // الجدول الخاص: أكثر شي كم امتحان بالأسبوع يگدر يختار الطالب
+      perWeek: body.perWeek === undefined ? old.perWeek : intOf(body.perWeek, 1, 14, "امتحانات الأسبوع من 1 إلى 14"),
     };
     await kvSet("sched_settings", JSON.stringify(next));
     notice = "✅ انحفظت الإعدادات";

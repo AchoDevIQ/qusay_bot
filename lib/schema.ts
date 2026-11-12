@@ -32,7 +32,7 @@ export const SCHEMA: Record<string, Table> = {
   bank_edits: { key: "id", auto: true, cols: nulls("user_id", "what", "created") },
   exam_access: { key: ["user_id", "chapter"], cols: nulls("order_id", "created") },
   order_codes: { key: "code", cols: nulls("order_id", "chapters", "used_at") },
-  schedules: { key: "user_id", cols: nulls("mode", "center_id", "picks", "start_day", "end_day", "weekdays", "hour", "created", "hol") },
+  schedules: { key: "user_id", cols: nulls("mode", "center_id", "picks", "start_day", "end_day", "weekdays", "hour", "created", "hol", "pack") },
   place_slots: { key: "center_id", cols: { slots: null } },
   place_dates: { key: ["center_id", "exam_id"], cols: nulls("day", "versions") },
   sched_items: { key: "id", auto: true, cols: nulls("user_id", "exam_id", "at", "status", "version_id", "started_at", "submitted_at", "opened_at", "notified", "grader_id", "total", "graded_at", "kind", "paid_id", "attended_at", "attended_by", "exc_state", "exc_reason", "exc_at", "exc_by", "fixed", "retake_of") },

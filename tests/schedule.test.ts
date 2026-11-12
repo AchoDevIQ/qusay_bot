@@ -1217,3 +1217,65 @@ test("النسخ التلقائية بالأوقات إجبارية بس: الا
   assert.equal(v["22:00"], va);
   assert.equal(v["16:00"], vb);             // الاختيارية تبدلت بإجبارية غير عن باقي اليوم
 });
+
+test("📦 بالأسبوع: الأيام تنملى بالترتيب من البداية، والنهاية تطلع من الحساب", () => {
+  // 2027-02-01 اثنين. الاثنين وقت واحد والأربعاء وقتين = 3 بالأسبوع
+  const times = { "0": ["16:00"], "2": ["16:00", "18:00"] };
+  const o = { start: "2027-02-01", end: "2030-01-01", weekdays: [0, 2], hour: 16, perDay: 2, settings: { ...S, gap: 30 }, times };
+  const packed = buildPlan(exams(7), { ...o, pack: true });
+  assert.ok(packed.ok);
+  if (!packed.ok) return;
+  assert.deepEqual(packed.items.map((i) => i.at), ["2027-02-01 16:00", "2027-02-03 16:00", "2027-02-03 18:00", "2027-02-08 16:00", "2027-02-10 16:00", "2027-02-10 18:00", "2027-02-15 16:00"]);
+  assert.equal(packed.perWeek, 3);
+  assert.equal(packed.days, 5);
+  // بدون pack نفس الامتحانات تتوزع على المدة كلها
+  const spread = buildPlan(exams(7), o);
+  assert.ok(spread.ok && spread.items[spread.items.length - 1].at > "2028-01-01");
+});
+
+test("🗓 الجدول الخاص بالأسبوع: جدوله كامل، كم امتحان بالأسبوع وشوكت يخلص الفصل والمنهج، والتثبيت", async () => {
+  await bank("الفصل الأربعون", 6, "zy1");
+  await bank("الفصل الخمسون", 4, "zz1");
+  await student(120);
+  await put("exam_access", { user_id: 120, chapter: "الفصل الأربعون", order_id: 1, created: "1" });
+  const info = await act(120, "info");
+  assert.equal(info.toPlan.length, 6);
+  assert.ok(info.toPlan.every((x: any) => x.chapter === "الفصل الأربعون" && x.skip === false));
+  assert.equal(info.perWeekMax, (await schedSettings()).perWeek);
+  const from = nextWeekday(0, 14);
+  await assert.rejects(act(120, "pace", { start: "bad" }), /تاريخ البداية/);
+  const { pace } = await act(120, "pace", { start: from });
+  assert.equal(pace.n, 6);
+  assert.equal(pace.nAll, 10);
+  assert.deepEqual(pace.chapters, ["الفصل الأربعون"]);
+  assert.deepEqual(pace.later, ["الفصل الخمسون"]);
+  assert.deepEqual(pace.options.map((o: any) => o.k), [2, 3, 4]);
+  // أكثر امتحانات بالأسبوع = يخلص أبكر، والمنهج كله بعد الفصل
+  for (let i = 1; i < pace.options.length; i++) assert.ok(pace.options[i].end <= pace.options[i - 1].end);
+  assert.ok(pace.options.every((o: any) => o.all > o.end));
+  // الحد من الإعدادات: 3 بالأسبوع يشيل اختيار الأربعة
+  const cur = await schedSettings();
+  const saveWeek = (perWeek: number) => schedAdminAction({ action: "save", initData: sign(1), window: cur.window, extra: cur.extra, perDay: cur.perDay, gap: cur.gap, holidayStart: cur.holidayStart, holidayDays: cur.holidayDays, perWeek });
+  await saveWeek(3);
+  assert.deepEqual((await act(120, "pace", { start: from })).pace.options.map((o: any) => o.k), [2, 3]);
+  const one16 = (ds: number[]) => Object.fromEntries(ds.map((d) => [String(d), ["16:00"]]));
+  await assert.rejects(act(120, "preview", { start: from, weekdays: [0, 1, 2, 3], times: one16([0, 1, 2, 3]), pack: true }), /أكثر شي 3 امتحانات بالأسبوع/);
+  await saveWeek(4);
+  const f = { start: from, weekdays: [0, 2, 4], times: one16([0, 2, 4]), holFrom: "", holTo: "", pack: true };
+  const pv = await act(120, "preview", f);
+  assert.equal(pv.preview.items.length, 6);
+  const done = await act(120, "confirm", f);
+  assert.equal(done.needsBuild, false);
+  const days = done.items.filter((i: any) => !i.optional).map((i: any) => String(i.at).slice(0, 10)).sort();
+  assert.equal(days.length, 6);
+  assert.equal(days[0], from);
+  assert.ok(days.every((d: string) => [0, 2, 4].includes(weekdayOf(d))));
+  const sc = await one("schedules", { user_id: 120 });
+  assert.equal(sc!.pack, 1);
+  assert.equal(sc!.end_day, days[5]);        // النهاية هي آخر امتحان
+  // اشترى الفصل اللي بعده: يرتب من جديد والباقي بس الجديد
+  await put("exam_access", { user_id: 120, chapter: "الفصل الخمسون", order_id: 2, created: "2" });
+  const again = await act(120, "info");
+  assert.equal(again.needsBuild, true);
+  assert.equal(again.toPlan.length, 10);
+});

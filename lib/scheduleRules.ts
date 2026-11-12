@@ -1,6 +1,6 @@
 // حساب جدول الامتحانات: بدون قاعدة بيانات حتى ينفحص لوحده. الأيام: 0 = الاثنين، مثل DAYS بالإعدادات
-export type SchedSettings = { window: number; extra: number; excWindow: number; optionalOpen: boolean; perDay: number; gap: number; holidayStart: string; holidayDays: number; holidayNote: string; blockedHours: number[]; excluded: string[]; gallery: boolean; fromHour: number; toHour: number; offDays: number[] };
-export const DEFAULT_SETTINGS: SchedSettings = { window: 15, extra: 15, excWindow: 60, optionalOpen: true, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, holidayNote: "", blockedHours: [], excluded: [], gallery: false, fromHour: 8, toHour: 22, offDays: [] };
+export type SchedSettings = { window: number; extra: number; excWindow: number; optionalOpen: boolean; perDay: number; gap: number; holidayStart: string; holidayDays: number; holidayNote: string; blockedHours: number[]; excluded: string[]; gallery: boolean; fromHour: number; toHour: number; offDays: number[]; perWeek: number };
+export const DEFAULT_SETTINGS: SchedSettings = { window: 15, extra: 15, excWindow: 60, optionalOpen: true, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, holidayNote: "", blockedHours: [], excluded: [], gallery: false, fromHour: 8, toHour: 22, offDays: [], perWeek: 4 };
 export type PlanExam = { id: number; minutes: number };
 export type PlanItem = { examId: number; at: string };
 export type Plan = { ok: true; items: PlanItem[]; days: number; maxPerDay: number; perWeek: number } | { ok: false; error: string; minWeekdays?: number };
@@ -34,7 +34,7 @@ function neededWeekdays(n: number, start: string, end: string, s: SchedSettings,
 }
 /** يوزع الامتحانات بالتساوي على الأيام المتاحة. الامتحان الثاني بنفس اليوم يبدي بعد نهاية اللي قبله */
 /** times: وقت كل امتحان باليوم (الأول، الثاني...) لكل يوم من الأسبوع، يختاره الطالب. بدونه كل الامتحانات تبدي من hour */
-export function buildPlan(exams: PlanExam[], o: { start: string; end: string; weekdays: number[]; hour: number; perDay: number; settings: SchedSettings; times?: Record<string, string[]> }): Plan {
+export function buildPlan(exams: PlanExam[], o: { start: string; end: string; weekdays: number[]; hour: number; perDay: number; settings: SchedSettings; times?: Record<string, string[]>; pack?: boolean }): Plan {
   const { start, end, weekdays, hour, settings: s, times } = o;
   // كل يوم بقد الأوقات اللي اختارها إله: اليوم اللي بيه وقت واحد ما ينحطله امتحانين
   const capW = (w: number) => (times ? Math.min(o.perDay, (times[String(w)] ?? []).length) : o.perDay);
@@ -54,9 +54,11 @@ export function buildPlan(exams: PlanExam[], o: { start: string; end: string; we
     if (k === null) return { ok: false, error: `عندك ${n} امتحان، والمدة ما تكفي حتى لو اخترت كل الأيام. مدد تاريخ النهاية${second}.` };
     return { ok: false, minWeekdays: k, error: `عندك ${n} امتحان، وهالأيام تكفي لـ ${room} بس. اختار ${k} أيام بالأسبوع على الأقل، أو مدد تاريخ النهاية${second}.` };
   }
-  // بالتساوي: كل دورة تنطي كل يوم بعده بيه مكان امتحان واحد، والدورة الناقصة تتوزع على طول المدة
+  // بالتساوي: كل دورة تنطي كل يوم بعده بيه مكان امتحان واحد، والدورة الناقصة تتوزع على طول المدة.
+  // pack: الطالب اختار كم امتحان بالأسبوع، فتنملى الأيام بالترتيب من البداية لحد ما تخلص
   const counts = caps.map(() => 0);
-  for (let r = 0, left = n; left > 0; r++) {
+  if (o.pack) for (let di = 0, left = n; left > 0 && di < caps.length; di++) { counts[di] = Math.min(caps[di], left); left -= counts[di]; }
+  for (let r = 0, left = o.pack ? 0 : n; left > 0; r++) {
     const open = caps.flatMap((c, i) => (c > r ? [i] : []));
     const take = Math.min(left, open.length);
     for (let j = 0; j < take; j++) counts[open[Math.floor((j * open.length) / take)]]++;
@@ -91,8 +93,9 @@ export function buildPlan(exams: PlanExam[], o: { start: string; end: string; we
       minute += e.minutes + s.gap;
     }
   }
-  const weeks = Math.max(1, Math.ceil((parse(end).getTime() - parse(start).getTime() + DAY_MS) / (7 * DAY_MS)));
-  return { ok: true, items, days: days.length, maxPerDay, perWeek: Math.ceil(n / weeks) };
+  const last = o.pack && items.length ? items[items.length - 1].at.slice(0, 10) : end;
+  const weeks = Math.max(1, Math.ceil((parse(last).getTime() - parse(start).getTime() + DAY_MS) / (7 * DAY_MS)));
+  return { ok: true, items, days: o.pack ? perDayIdx.size : days.length, maxPerDay, perWeek: Math.ceil(n / weeks) };
 }
 const ORDINAL = ["الأول", "الثاني", "الثالث", "الرابع"];
 /** 16:30 تصير 990 دقيقة. الوقت الغلط -1 */

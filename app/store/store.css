@@ -361,3 +361,14 @@ body.grwide .grtop{padding-left:104px}
 .ntsheet .ntmark button{font:inherit;font-size:11px;font-weight:700;padding:2px 7px;opacity:.93;border-radius:999px;border:1px solid var(--gold2,#cea239);background:rgba(13,33,64,.92);color:#f9c445;box-shadow:0 2px 6px rgba(0,0,0,.35);cursor:pointer}
 .ntsheet .ntmark button:disabled{opacity:.6}
 .ntmsg{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(249,196,69,.14);border:1px solid var(--gold2,#cea239);font-size:14px;cursor:pointer}
+
+/* الجدول الخاص: أرقام الخطوات، واختيارات «كم امتحان بالأسبوع» */
+.pcsteps { display: flex; gap: 8px; justify-content: center; margin-bottom: 4px; }
+.pcsteps span { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; border: 2px solid var(--gold, #cea239); opacity: 0.45; }
+.pcsteps span.done { opacity: 1; }
+.pcsteps span.on { opacity: 1; background: var(--gold); color: var(--ink); }
+.pcopt { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: right; padding: 12px 14px; margin-top: 8px; border-radius: 12px; border: 2px solid rgba(206, 162, 57, 0.45); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.pcopt > b { font-size: 1.05em; }
+.pcopt span { font-size: 0.92em; line-height: 1.6; opacity: 0.9; }
+.pcopt.on { border-color: var(--gold, #cea239); background: rgba(206, 162, 57, 0.16); }
+.pctag { display: inline-block; margin-inline-start: 8px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--gold2); color: var(--gold); font-size: 0.78em; font-weight: 700; white-space: nowrap; }

@@ -296,6 +296,8 @@ export async function addTestStudent() {
 export async function giveTestChapter(sid: number, chapter: string) {
   need(sid < 0 && await student(sid), "اختار طالب تجربة");
   need(chapter && (await find("bank_exams")).some((e) => e.chapter === chapter), "اختار الفصل");
+  // طالب التجربة يصير مشتري هذا الفصل بس، مثل طالب حقيقي اشترى فصل واحد
+  await remove("exam_access", { user_id: sid });
   await put("exam_access", { user_id: sid, chapter, order_id: null, created: stamp() });
 }
 /** «🎫 طالب حضوري تجريبي»: طالب حضوري بالمركز المختار، وامتحان اليوم ينتظر حضوره، حتى تنجرب قراءة الحضور والليبل.

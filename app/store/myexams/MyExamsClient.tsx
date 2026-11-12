@@ -16,7 +16,7 @@ type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; w
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
   viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
-  name: string; remaining: number; canDrop?: { exam: number; title: string }[]; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
+  name: string; remaining: number; canDrop?: { exam: number; title: string }[]; toPlan?: { exam: number; title: string; chapter: string; skip: boolean }[]; perWeekMax?: number; pace?: Pace; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
 };
@@ -133,7 +133,7 @@ export default function MyExamsClient() {
             {info.needsChoice ? "انزل لـ «🗓 شلون تمتحن؟» ودوس «👤 بدون الطلاب (جدول خاص)»."
               : info.needsBuild ? "رتب جدوله من «🗓 رتب جدول امتحاناتك» اللي تحت."
               : !info.items.length ? "ما عنده امتحانات. ارجع للطلاب واعطيه فصل بـ «📚 اعطيه الفصل وافتح جدوله»."
-              : "جدوله مرتب. تحت كل امتحان: ✅ خليه و❌ شيله (إذا يمكن حذفه)، و🕐 غير الوقت. حتى ترتبه من جديد ارجع ودوس «📚 اعطيه الفصل وافتح جدوله» مرة ثانية."}
+              : "جدوله مرتب. تحت كل امتحان: ✅ خليه و🗑 احذفه (إذا يمكن حذفه)، و🕐 غير الوقت. حتى ترتبه من جديد ارجع ودوس «📚 اعطيه الفصل وافتح جدوله» مرة ثانية."}
           </div>
         )}
         {info?.viewOnly && <div className="card warn exerr">👁 هذا جدول <b>{info.name}</b> مثل ما يطلعله بالضبط. عرض بس، أي زر تدوسه ما يغير شي.</div>}
@@ -234,7 +234,7 @@ function Choice({ info, busy, call }: { info: Info; busy: boolean; call: (b: Rec
         <button type="button" className="btn" onClick={() => { haptic(); setWay("general"); }}>👥 تريد تمشي ويا الطلاب (جدول عام)</button>
         <div className="hint">أيام ثابتة ويا الطلاب، وتختار الوقت اللي يناسبك بكل يوم.</div>
         <button type="button" className="btn ghost" onClick={() => { haptic(); setWay("private"); }}>👤 تريد تمشي وحدك (جدول خاص)</button>
-        <div className="hint">إنت ترتب امتحاناتك: أيامك ووقت كل يوم، وتشيل الامتحانات اللي مو إجبارية.</div>
+        <div className="hint">إنت ترتب امتحاناتك: كم امتحان بالأسبوع، وأيامك ووقت كل يوم، وتحذف الامتحانات اللي مو إجبارية.</div>
       </div>
     </div>
   );
@@ -280,6 +280,10 @@ function MyHoliday({ info, busy, call }: { info: Info; busy: boolean; call: (b: 
   );
 }
 
+type Pace = { n: number; nAll: number; chapters: string[]; later: string[]; options: { k: number; end: string; all: string | null }[] };
+const countWord = (k: number) => (k === 1 ? "امتحان واحد" : k === 2 ? "امتحانين" : k <= 10 ? `${k} امتحانات` : `${k} امتحان`);
+
+/** الجدول الخاص بأربع خطوات: تاريخ البداية، جدوله كامل (ويحذف اللي مو إجباري)، كم امتحان بالأسبوع، الأيام والأوقات */
 function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
   const old = info.schedule;
   // الحضوري: أيام مركزه وأوقاته بس. الإلكتروني: أي يوم، ومن ساعات الإدارة
@@ -288,100 +292,166 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
   const nameOf = (d: number) => info.week.find((w) => w.i === d)?.name ?? "";
   const hours = info.hours.map((h) => `${String(h).padStart(2, "0")}:00`);
   const slotsOf = (d: number) => (center ? info.days.find((x) => x.d === d)?.times.map((x) => x.t) ?? [] : hours);
-  const k = Math.max(1, Math.min(info.perDay, 3));
+  const slotsPerDay = Math.max(1, Math.min(info.perDay, 3));
+  const [step, setStep] = useState(1);
   const [start, setStart] = useState(info.minStart);
-  const [end, setEnd] = useState(old?.end ?? "");
+  // الامتحانات اللي «يمكن حذفه» وحذفها من هسه
+  const [drop, setDrop] = useState<number[]>([]);
+  const [pace, setPace] = useState<Pace | null>(null);
+  // كم امتحان بالأسبوع
+  const [k, setK] = useState(0);
   const [days, setDays] = useState<number[]>((old?.weekdays ?? []).filter((d) => allowed.includes(d)));
   // كل يوم إله وقته: الطالب يگدر يمتحن الأحد ب8 والثلاثاء ب4
   const [perDay, setPerDayTimes] = useState<Record<string, string[]>>(() => old?.times ?? (old ? Object.fromEntries((old.weekdays ?? []).map((d) => [String(d), [`${String(old.hour).padStart(2, "0")}:00`]])) : {}));
   const [shown, setShown] = useState<Preview | null>(null);
-  // الامتحانات اللي «يمكن حذفه» وشالها من هسه
-  const [drop, setDrop] = useState<number[]>([]);
-  // عطلته: تبدي بعطلة نصف السنة مال الإدارة (أو اللي اختارها قبل)، ويغيرها أو يشيلها
+  // عطلته: تبدي بعطلة نصف السنة مال الإدارة (أو اللي اختارها قبل)، ويغيرها أو يحذفها
   const adminHol = info.holiday ? { from: info.holiday.start, to: addDays(info.holiday.start, info.holiday.days - 1) } : { from: "", to: "" };
   const [holFrom, setHolFrom] = useState(old?.hol ? old.hol.from : adminHol.from);
   const [holTo, setHolTo] = useState(old?.hol ? old.hol.to : adminHol.to);
   const timesOf = (d: number) => (perDay[String(d)] ?? []).filter(Boolean);
-  // نفس أوقات أول يوم لكل الأيام (الوقت اللي ما موجود بيوم المركز ينشال)
   const ordered = [...days].sort((a, b) => allowed.indexOf(a) - allowed.indexOf(b));
-  const copyFirst = () => { const first = perDay[String(ordered[0])] ?? []; change(setPerDayTimes)(Object.fromEntries(days.map((d) => [String(d), d === ordered[0] ? first : first.filter((t) => slotsOf(d).includes(t))]))); };
   const times = Object.fromEntries(days.map((d) => [String(d), timesOf(d)]));
-  const form = { start, end, weekdays: days, times, holFrom, holTo, drop };
+  const total = days.reduce((t, d) => t + timesOf(d).length, 0);
+  const form = { start, weekdays: days, times, holFrom, holTo, drop, pack: true };
+  // تغيير البداية أو العطلة أو الحذف يغير حساب «شوكت تخلص»، فينحسب من جديد
+  const base = <T,>(fn: (v: T) => void) => (v: T) => { fn(v); setPace(null); setShown(null); };
   const change = <T,>(fn: (v: T) => void) => (v: T) => { fn(v); setShown(null); };
   const holOk = (!holFrom && !holTo) || (!!holFrom && !!holTo && holTo >= holFrom);
-  const ready = !!start && !!end && days.length > 0 && days.every((d) => timesOf(d).length > 0) && holOk;
+  const list = info.toPlan ?? [];
+  const left = list.filter((x) => !drop.includes(x.exam)).length;
+  const chosen = pace?.options.find((o) => o.k === k);
+  async function toPace() {
+    const r = await call({ action: "pace", start, holFrom, holTo, drop });
+    if (!r?.pace) return;
+    setPace(r.pace);
+    // اللي كان مرتب جدوله قبل يبقى على عدده إذا بعده من الاختيارات
+    if (!r.pace.options.some((o) => o.k === k)) setK(r.pace.options.some((o) => o.k === total) ? total : 0);
+    setStep(3);
+  }
   // اختيار وقت الامتحان رقم n يمسح اللي بعده إذا صار قبله
-  const pick = (list: string[], n: number, t: string) => { const out = list.slice(0, n); if (t) out[n] = t; return out; };
-  const Picks = ({ list, options, set }: { list: string[]; options: string[]; set: (l: string[]) => void }) => (
+  const pick = (l: string[], n: number, t: string) => { const out = l.slice(0, n); if (t) out[n] = t; return out; };
+  const Picks = ({ list: l, options, set }: { list: string[]; options: string[]; set: (l: string[]) => void }) => (
     <>
-      {Array.from({ length: k }, (_, n) => n).filter((n) => n === 0 || (list[n - 1] && options.some((t) => t > list[n - 1]))).map((n) => (
+      {Array.from({ length: slotsPerDay }, (_, n) => n).filter((n) => n === 0 || (l[n - 1] && options.some((t) => t > l[n - 1]))).map((n) => (
         <div key={n}>
-          <label>{n === 0 ? "وقت الامتحان الأول" : `وقت الامتحان ${["", "الثاني", "الثالث"][n]} (إذا صار عندك ${n === 1 ? "امتحانين" : "3 امتحانات"} بنفس اليوم)`}</label>
-          <select value={list[n] ?? ""} onChange={(e) => change(set)(pick(list, n, e.target.value))}>
+          <label>{n === 0 ? "وقت الامتحان" : `وقت امتحان ${["", "ثاني", "ثالث"][n]} بنفس اليوم (إذا تريد)`}</label>
+          <select value={l[n] ?? ""} onChange={(e) => change(set)(pick(l, n, e.target.value))}>
             <option value="">{n === 0 ? "اختار الوقت" : "ما أريد"}</option>
-            {options.filter((t) => n === 0 || t > list[n - 1]).map((t) => <option key={t} value={t}>{ampm(t)}</option>)}
+            {options.filter((t) => n === 0 || t > l[n - 1]).map((t) => <option key={t} value={t}>{ampm(t)}</option>)}
           </select>
         </div>
       ))}
     </>
   );
+  const Back = ({ to }: { to: number }) => <button type="button" className="exbtn" onClick={() => { haptic(); setShown(null); setStep(to); }}>⬅️ رجوع</button>;
   return (
     <div className="card">
       <h2>🗓 {old ? "رتب جدولك من جديد" : "رتب جدول امتحاناتك"}</h2>
       <div className="form">
-        <div className="warn locked">عندك <b>{info.remaining - drop.length}</b> امتحان. {old ? "اشتريت فصل جديد، فانعاد توزيع الامتحانات الباقية." : "اختار المدة والأيام ووقت كل يوم، واحنا نوزعها."}{info.perDay > 1 ? <> تگدر تمتحن أكثر شي <b>{info.perDay === 2 ? "امتحانين" : `${info.perDay} امتحانات`}</b> باليوم، ومن حقك تختار امتحانين بنفس اليوم.</> : <> امتحان واحد باليوم.</>}</div>
-        {!!info.canDrop?.length && (
-          <div className="adsale">
-            <b>🗑 امتحانات مو إجبارية: تگدر تشيلها من جدولك</b>
-            {info.canDrop.map((x) => (
-              <div key={x.exam} className="exline">
-                <span>{drop.includes(x.exam) ? "❌ " : "✅ "}{x.title}</span>
-                <button type="button" className={`exbtn ${drop.includes(x.exam) ? "" : "on"}`} onClick={() => change(setDrop)(drop.filter((y) => y !== x.exam))}>✅ خليه</button>
-                <button type="button" className={`exbtn ${drop.includes(x.exam) ? "on" : ""}`} onClick={() => change(setDrop)([...new Set([...drop, x.exam])])}>❌ شيله</button>
+        <div className="pcsteps">{[1, 2, 3, 4].map((n) => <span key={n} className={n === step ? "on" : n < step ? "done" : ""}>{n}</span>)}</div>
+
+        {step === 1 && (
+          <>
+            <div className="warn locked"><b>الخطوة 1: شوكت تبدي؟</b>{old && <> اشتريت فصل جديد، فنرتب امتحاناتك الباقية من جديد.</>}</div>
+            <label>تبدي من تاريخ</label>
+            <DateInput label="تبدي من تاريخ" min={info.minStart} value={start} onChange={base(setStart)} />
+            <label>🏖 عطلتك: من</label>
+            <DateInput label="عطلتك من" value={holFrom} placeholder="بدون عطلة" onChange={base(setHolFrom)} />
+            <label>إلى</label>
+            <DateInput label="عطلتك إلى" min={holFrom} value={holTo} placeholder="بدون عطلة" onChange={base(setHolTo)} />
+            {holFrom && holTo && holTo < holFrom && <div className="hint exbad">«إلى» لازم يكون بعد «من».</div>}
+            {(!!holFrom || !!holTo) && (!holFrom || !holTo) && <div className="hint exbad">اختار «من» و«إلى» هم.</div>}
+            <div className="hint">{holFrom && holTo ? "أيام عطلتك ما بيها امتحانات. " : "ما عندك عطلة: الامتحانات تمشي بدون توقف. "}
+              {(holFrom || holTo)
+                ? <button type="button" className="exbtn" onClick={() => { base(setHolFrom)(""); setHolTo(""); }}>بدون عطلة</button>
+                : info.holiday ? <button type="button" className="exbtn" onClick={() => { base(setHolFrom)(adminHol.from); setHolTo(adminHol.to); }}>رجّع عطلة نصف السنة</button> : null}
+            </div>
+            <button type="button" className="btn agbtn adtop" disabled={!start || !holOk} onClick={() => { haptic(); setStep(2); }}>التالي: شوف جدولك كامل</button>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div className="warn locked"><b>الخطوة 2: هذا جدولك كامل.</b> عندك <b>{countWord(left)}</b>.{list.some((x) => x.skip) && <> الامتحان المكتوب جنبه «مو إجباري» تگدر تحذفه من جدولك.</>}</div>
+            <table className="extable"><tbody>
+              {list.map((x, n) => {
+                const gone = drop.includes(x.exam);
+                return (
+                  <Fragment key={x.exam}>
+                    {(n === 0 || list[n - 1].chapter !== x.chapter) && <tr className="lcrow"><td colSpan={2}><b>📚 {x.chapter}</b></td></tr>}
+                    <tr className={gone ? "mxlocked" : ""}>
+                      <td>{gone ? <s>{x.title}</s> : x.title}{x.skip && <span className="pctag">{gone ? "🗑 محذوف" : "مو إجباري"}</span>}</td>
+                      <td className="p">{x.skip && (gone
+                        ? <button type="button" className="exbtn" onClick={() => base(setDrop)(drop.filter((y) => y !== x.exam))}>↩️ رجعه</button>
+                        : <button type="button" className="exbtn" onClick={() => base(setDrop)([...new Set([...drop, x.exam])])}>🗑 احذفه</button>)}</td>
+                    </tr>
+                  </Fragment>
+                );
+              })}
+            </tbody></table>
+            <div className="atrow adtop">
+              <Back to={1} />
+              <button type="button" className="btn agbtn" disabled={busy || !left} onClick={() => void toPace()}>{busy ? "جاري الحساب..." : "التالي: كم امتحان بالأسبوع؟"}</button>
+            </div>
+          </>
+        )}
+
+        {step === 3 && pace && (
+          <>
+            <div className="warn locked"><b>الخطوة 3: كم امتحان تريد بالأسبوع؟</b> كل اختيار مكتوب جواه شوكت تخلص.</div>
+            {!pace.options.length && <div className="hint exbad">ماكو أيام تكفي للامتحانات. راجع الإدارة.</div>}
+            {pace.options.map((o) => (
+              <button type="button" key={o.k} className={`pcopt ${k === o.k ? "on" : ""}`} onClick={() => { haptic(); change(setK)(o.k); }}>
+                <b>{k === o.k ? "✅ " : ""}{countWord(o.k)} بالأسبوع</b>
+                <span>تخلص {pace.chapters.join(" و")} تقريباً يوم <b>{prettyDay(o.end)}</b></span>
+                {o.all && <span>وإذا كملت هيج واشتريت {pace.later.join(" و")}، تخلص المنهج كله تقريباً يوم <b>{prettyDay(o.all)}</b></span>}
+              </button>
+            ))}
+            <div className="atrow adtop">
+              <Back to={2} />
+              <button type="button" className="btn agbtn" disabled={!chosen} onClick={() => { haptic(); setStep(4); }}>التالي: الأيام والأوقات</button>
+            </div>
+          </>
+        )}
+
+        {step === 4 && (
+          <>
+            <div className="warn locked"><b>الخطوة 4: اختار أيامك ووقت كل يوم.</b> اخترت {countWord(k)} بالأسبوع، فلازم تختار <b>{k}</b> أوقات بالأسبوع. اخترت <b>{total}</b> من <b>{k}</b>.{info.perDay > 1 && <> تگدر تخلي امتحانين بنفس اليوم.</>}</div>
+            <label>أيام الامتحان بالأسبوع{center ? " (أيام مركزك)" : ""}</label>
+            <div className="seg wrap2">
+              {allowed.map((d) => (
+                <button type="button" key={d} className={days.includes(d) ? "on" : ""} onClick={() => { haptic(); change(setDays)(days.includes(d) ? days.filter((x) => x !== d) : [...days, d]); }}>{nameOf(d)}</button>
+              ))}
+              {/* اليوم اللي حجبته الإدارة يطلع مطفي، حتى الطالب يعرف ليش */}
+              {!center && info.week.filter((w) => (info.offDays ?? []).includes(w.i)).map((w) => <button type="button" key={w.i} disabled style={{ opacity: 0.45 }}>🚫 {w.name}</button>)}
+            </div>
+            {!center && !!(info.offDays ?? []).length && <div className="hint">🚫 {info.week.filter((w) => (info.offDays ?? []).includes(w.i)).map((w) => w.name).join("، ")}: لا يوجد امتحانات في هذا اليوم.</div>}
+            {ordered.map((d) => (
+              <div key={d} className="adsale">
+                <b>📅 يوم {nameOf(d)}</b>
+                <Picks list={perDay[String(d)] ?? []} options={slotsOf(d)} set={(l) => setPerDayTimes({ ...perDay, [String(d)]: l })} />
               </div>
             ))}
-          </div>
-        )}
-        <label>تبدي من تاريخ</label>
-        <DateInput label="تبدي من تاريخ" min={info.minStart} value={start} onChange={change(setStart)} />
-        <label>تخلص بتاريخ{old ? " (تگدر تبقيه أو تغيره)" : ""}</label>
-        <DateInput label="تخلص بتاريخ" min={start} value={end} onChange={change(setEnd)} />
-        <label>🏖 عطلتك: من</label>
-        <DateInput label="عطلتك من" value={holFrom} placeholder="بدون عطلة" onChange={change(setHolFrom)} />
-        <label>إلى</label>
-        <DateInput label="عطلتك إلى" min={holFrom} value={holTo} placeholder="بدون عطلة" onChange={change(setHolTo)} />
-        {holFrom && holTo && holTo < holFrom && <div className="hint exbad">«إلى» لازم يكون بعد «من».</div>}
-        {(!!holFrom || !!holTo) && (!holFrom || !holTo) && <div className="hint exbad">اختار «من» و«إلى» هم.</div>}
-        <div className="hint">{holFrom && holTo ? "أيام عطلتك ما بيها امتحانات. " : "ما عندك عطلة: الامتحانات تمشي بدون توقف. "}
-          {(holFrom || holTo)
-            ? <button type="button" className="exbtn" onClick={() => { change(setHolFrom)(""); setHolTo(""); }}>شيل العطلة</button>
-            : info.holiday ? <button type="button" className="exbtn" onClick={() => { change(setHolFrom)(adminHol.from); setHolTo(adminHol.to); }}>رجّع عطلة نصف السنة</button> : null}
-        </div>
-        <label>أيام الامتحان بالأسبوع{center ? " (أيام مركزك)" : ""}</label>
-        <div className="seg wrap2">
-          {allowed.map((d) => (
-            <button type="button" key={d} className={days.includes(d) ? "on" : ""} onClick={() => { haptic(); change(setDays)(days.includes(d) ? days.filter((x) => x !== d) : [...days, d]); }}>{nameOf(d)}</button>
-          ))}
-          {/* اليوم اللي حجبته الإدارة يطلع مطفي، حتى الطالب يعرف ليش */}
-          {!center && info.week.filter((w) => (info.offDays ?? []).includes(w.i)).map((w) => <button type="button" key={w.i} disabled style={{ opacity: 0.45 }}>🚫 {w.name}</button>)}
-        </div>
-        {!center && !!(info.offDays ?? []).length && <div className="hint">🚫 {info.week.filter((w) => (info.offDays ?? []).includes(w.i)).map((w) => w.name).join("، ")}: لا يوجد امتحانات في هذا اليوم.</div>}
-        {ordered.map((d) => (
-          <div key={d} className="adsale">
-            <b>📅 يوم {nameOf(d)}</b>
-            <Picks list={perDay[String(d)] ?? []} options={slotsOf(d)} set={(l) => setPerDayTimes({ ...perDay, [String(d)]: l })} />
-          </div>
-        ))}
-        {days.length > 1 && timesOf(ordered[0]).length > 0 && <button type="button" className="exbtn" onClick={copyFirst}>📋 نفس أوقات يوم {nameOf(ordered[0])} لكل الأيام</button>}
-        {info.perDay > 1 && <div className="hint">إذا اخترت وقت امتحان ثاني، ممكن يصير عندك امتحانين بنفس اليوم. لازم يكون بعد نهاية الأول بـ {info.gap} دقيقة على الأقل.</div>}
-        {!shown && <button type="button" className="btn agbtn adtop" disabled={busy || !ready} onClick={async () => { const r = await call({ action: "preview", ...form }); if (r?.preview) setShown(r.preview); }}>{busy ? "جاري الحساب..." : "شوف جدولي"}</button>}
-        {shown && (
-          <>
-            <div className="warn locked adtop">📊 {shown.items.length} امتحان على {shown.days} يوم، بحدود {shown.perWeek} بالأسبوع، وأكثر شي {shown.maxPerDay} باليوم.</div>
-            <table className="extable"><tbody>{shown.items.map((i) => <tr key={i.title + i.at}><td>{i.title}{i.skip && <span className="adentag">🗑 تگدر تشيله</span>}</td><td className="adphone">{prettyAt(i.at)}</td></tr>)}</tbody></table>
-            {shown.items.some((i) => i.skip) && <div className="hint">🗑 الامتحانات المعلّمة تگدر تشيلها من جدولك بعد ما تثبته (بجدولك تحت كل واحد: ✅ خليه / ❌ شيله)، فيصعد جدولك.</div>}
-            <div className="rgalert adtop">⚠️ بعد التثبيت، تگدر تغير وقت أي امتحان لحد اليوم اللي قبله (🕐 غير الوقت). غير هذا يكون عن طريق الإدارة.</div>
-            <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void call({ action: "confirm", ...form })}>✅ ثبت جدولي</button>
+            {info.perDay > 1 && <div className="hint">الامتحان الثاني بنفس اليوم لازم يكون بعد نهاية الأول بـ {info.gap} دقيقة على الأقل.</div>}
+            {total > k && <div className="hint exbad">اخترت {total} أوقات، وإنت تريد {countWord(k)} بالأسبوع. احذف يوم أو وقت، أو ارجع وغير العدد.</div>}
+            {total < k && total > 0 && <div className="hint">باقي {k - total}: اختار يوم ثاني، أو وقت ثاني بنفس اليوم.</div>}
+            {!shown && (
+              <div className="atrow adtop">
+                <Back to={3} />
+                <button type="button" className="btn agbtn" disabled={busy || total !== k || days.some((d) => !timesOf(d).length)} onClick={async () => { const r = await call({ action: "preview", ...form }); if (r?.preview) setShown(r.preview); }}>{busy ? "جاري الحساب..." : "شوف جدولي"}</button>
+              </div>
+            )}
+            {shown && (
+              <>
+                <div className="warn locked adtop">📊 {countWord(shown.items.length)}، {countWord(k)} بالأسبوع. آخر امتحان يوم <b>{prettyDay(shown.items[shown.items.length - 1].at.slice(0, 10))}</b>.</div>
+                <table className="extable"><tbody>{shown.items.map((i) => <tr key={i.title + i.at}><td>{i.title}{i.skip && <span className="pctag">مو إجباري</span>}</td><td className="adphone">{prettyAt(i.at)}</td></tr>)}</tbody></table>
+                <div className="rgalert adtop">⚠️ بعد التثبيت، تگدر تغير وقت أي امتحان لحد اليوم اللي قبله (🕐 غير الوقت). غير هذا يكون عن طريق الإدارة.</div>
+                <div className="atrow adtop">
+                  <Back to={3} />
+                  <button type="button" className="btn agbtn" disabled={busy} onClick={() => void call({ action: "confirm", ...form })}>✅ ثبت جدولي</button>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -417,13 +487,13 @@ function HolRow({ h, busy, off, keep }: { h: Hol; busy: boolean; off: (ids: numb
   return (
     <tr className="lcrow mxholrow">
       <td>🏖 <b>عطلة{h.reason ? `: ${h.reason}` : ""}</b><small className="pdmode">{h.from === h.to ? prettyDay(h.from) : `من ${prettyDay(h.from)} إلى ${prettyDay(h.to)}`}{h.title ? ` · قبل ${h.title}` : ""}</small>
-        {h.cancel && <div className="hint">تريد العطلة؟ ❌ يشيلها ويصعد جدولك.</div>}
+        {h.cancel && <div className="hint">تريد العطلة؟ 🗑 يحذفها ويصعد جدولك.</div>}
         {h.kept && <small className="pdmode">✅ خليتها</small>}
       </td>
       <td className="p">
         {h.cancel && <>
           <button type="button" className="exbtn" disabled={busy} onClick={() => void keep(h.ids)}>✅ خليها</button>
-          <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void off(h.ids)}>❌ شيلها</button>
+          <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void off(h.ids)}>🗑 احذفها</button>
         </>}
       </td>
     </tr>
@@ -504,8 +574,8 @@ function List({ info, busy, enter, paper, ask, file, off, cmd }: { info: Info; b
             <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxexam">📝 امتحان</span><b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.skippable && (
-                <div className="hint adtop">تگدر تشيل هذا الامتحان من جدولك، فيصعد جدولك:
-                  <div className="exline"><button type="button" className="exbtn" disabled={busy} onClick={() => void cmd({ action: "keepExam", item: i.id })}>✅ خليه</button><button type="button" className="exbtn" disabled={busy} onClick={() => void cmd({ action: "skipExam", item: i.id })}>❌ شيله</button></div>
+                <div className="hint adtop">هذا الامتحان مو إجباري. تگدر تحذفه من جدولك، فيصعد جدولك:
+                  <div className="exline"><button type="button" className="exbtn" disabled={busy} onClick={() => void cmd({ action: "keepExam", item: i.id })}>✅ خليه</button><button type="button" className="exbtn" disabled={busy} onClick={() => void cmd({ action: "skipExam", item: i.id })}>🗑 احذفه</button></div>
                 </div>
               )}
               {info.mode === "private" && !i.optional && i.status === "waiting" && String(i.at).slice(0, 10) > info.today && <MoveTime info={info} item={i} busy={busy} cmd={cmd} />}

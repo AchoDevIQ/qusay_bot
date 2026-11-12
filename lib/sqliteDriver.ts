@@ -139,6 +139,7 @@ async function init() {
   await addColumn("schedules", "mode", "TEXT");
   await addColumn("schedules", "center_id", "INTEGER");
   await addColumn("schedules", "picks", "TEXT");
+  await addColumn("schedules", "pack", "INTEGER");
   await addColumn("bank_versions", "pages_ar", "TEXT");
   await addColumn("bank_versions", "pages_en", "TEXT");
   await addColumn("bank_versions", "answer_pdf", "TEXT");
