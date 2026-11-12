@@ -127,6 +127,15 @@ export default function MyExamsClient() {
       </header>
       <div className="wrap">
         {fromOwner && <button type="button" className="exbtn" style={{ marginBottom: 10 }} onClick={() => history.back()}>⬅️ رجوع للطلاب</button>}
+        {/* صاحب البوت فاتح صفحة طالب تجربة: يعرف وين هو وشنو يدوس */}
+        {fromOwner && info && !info.viewOnly && (
+          <div className="card warn locked">🧪 هذي صفحة «📝 امتحاناتي» مال <b>{info.name}</b>، مثل ما يشوفها هو.{" "}
+            {info.needsChoice ? "انزل لـ «🗓 شلون تمتحن؟» ودوس «👤 بدون الطلاب (جدول خاص)»."
+              : info.needsBuild ? "رتب جدوله من «🗓 رتب جدول امتحاناتك» اللي تحت."
+              : !info.items.length ? "ما عنده امتحانات. ارجع للطلاب واعطيه فصل بـ «📚 اعطيه الفصل وافتح جدوله»."
+              : "جدوله مرتب. تحت كل امتحان: ✅ خليه و❌ شيله (إذا يمكن حذفه)، و🕐 غير الوقت. حتى ترتبه من جديد ارجع ودوس «📚 اعطيه الفصل وافتح جدوله» مرة ثانية."}
+          </div>
+        )}
         {info?.viewOnly && <div className="card warn exerr">👁 هذا جدول <b>{info.name}</b> مثل ما يطلعله بالضبط. عرض بس، أي زر تدوسه ما يغير شي.</div>}
         {error && stopPic ? (
           <div className="card cpflash stop">

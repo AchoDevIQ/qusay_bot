@@ -431,12 +431,12 @@ function TestStudents({ tests, chapters, busy, act }: { tests: TestStudent[]; ch
         {tests.map((t) => (
           <div key={t.id} className="atrow">
             <span><b>{t.name}</b> <small className="pdmode">{t.papers} ورقة · انصححت {t.graded}{t.chapters?.length ? ` · 📚 ${t.chapters.join("، ")}` : ""}</small></span>
-            <a className="exbtn" style={{ textDecoration: "none" }} href={t.link}>👁 افتح صفحته كطالب</a>
+            <a className="exbtn" style={{ textDecoration: "none" }} href={t.link}>👁 افتح امتحاناته كطالب</a>
           </div>
         ))}
         {!!tests.length && !!chapters.length && (
           <div className="form adtop">
-            <div className="exhint">📚 حتى تجرب الجدول الخاص: اعطي طالب تجربة فصل، فيصير كأنه مشتريه وجدوله ينفتح. بعدها افتح صفحته كطالب ← امتحاناتي ← 👤 بدون الطلاب (جدول خاص).</div>
+            <div className="exhint">📚 حتى تجرب الجدول الخاص: اعطي طالب تجربة فصل، فيصير كأنه مشتريه وجدوله ينفتح. بعدها افتح امتحاناته كطالب (تنفتح صفحة «📝 امتحاناتي» مالته مباشرة) ← 👤 بدون الطلاب (جدول خاص).</div>
             <select aria-label="طالب التجربة" value={sid} onChange={(e) => setSid(Number(e.target.value))}>{tests.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
             <select aria-label="الفصل" value={chapter} onChange={(e) => setChapter(e.target.value)}>
               <option value="">اختار الفصل...</option>

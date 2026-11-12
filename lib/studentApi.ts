@@ -237,7 +237,7 @@ export async function studentAction(body: Row) {
     await giveTestChapter(sid, chapter);
     // جدوله ينفتح من جديد، حتى يختار الجدول الخاص ويرتبه ويا الفصل الجديد
     await resetSchedule(sid);
-    notice = `📚 ${(await student(sid))?.name ?? "طالب التجربة"} صار مشتري ${chapter}، وجدوله مفتوح يرتبه. افتح صفحته كطالب ← امتحاناتي`;
+    notice = `📚 ${(await student(sid))?.name ?? "طالب التجربة"} صار مشتري ${chapter}، وجدوله مفتوح يرتبه. افتح امتحاناته كطالب (تنفتح صفحة «📝 امتحاناتي» مالته مباشرة)`;
   } else if (a === "tryInPerson") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     const k = await startInPersonTest(Number(body.center), Number(body.vid), !!body.late);
