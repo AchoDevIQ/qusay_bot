@@ -427,7 +427,7 @@ function AnswerOnly({ exam, busy, call }: { exam: Exam; busy: boolean; call: (b:
         <option value={0}>كل الأسئلة</option>
         {Array.from({ length: most }, (_, i) => i + 1).map((k) => <option key={k} value={k}>{k} أسئلة فقط</option>)}
       </select>
-      {!!exam.answerOnly && <span className="exhint">إذا جاوب أكثر من {exam.answerOnly}، تنحسب أول {exam.answerOnly} بالترتيب. المصحح يأشر اللي ما جاوبه «⏭ ترك».</span>}
+      {!!exam.answerOnly && <span className="exhint">إذا جاوب أكثر من {exam.answerOnly}، تنحسب أول {exam.answerOnly} بالترتيب. السؤال اللي ما جاوبه ما يطلع للمصحح.</span>}
     </div>
   );
 }
