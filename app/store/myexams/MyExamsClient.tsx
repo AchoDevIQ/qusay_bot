@@ -3,7 +3,7 @@
 import PhotoPick from "../PhotoPick";
 import AiCompare, { type AiQ } from "./AiCompare";
 import PdfPages from "../PdfPages";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { addDays, ampm, prettyAt, prettyDay } from "../../../lib/scheduleRules.ts";
 import { DateInput, deviceId, deviceNow, haptic, openOutside, platform } from "../shared";
 import QRCode from "qrcode";
@@ -626,6 +626,15 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   useEffect(() => { if (left <= 0) setClosed(true); }, [left, tick]);
   // ✏️ اكتب بالقلم: رقم السؤال المفتوح بورقة الكتابة
   const [pen, setPen] = useState<number | null>(null);
+  // الآيباد (شاشة عريضة): السؤال مكتوب فوك ورقة القلم، فما نطلع صفحات الأسئلة، وورقة القلم تنفتح وحدها بعد القسم
+  const [wide, setWide] = useState(false);
+  useEffect(() => { setWide(window.innerWidth >= 700); }, []);
+  const autoPen = useRef(false);
+  useEffect(() => {
+    if (!wide || !room.sworn || autoPen.current) return;
+    autoPen.current = true;
+    setPen(room.questions.find((q) => !q.answers.length)?.n ?? room.questions[0]?.n ?? 1);
+  }, [wide, room.sworn]); // eslint-disable-line react-hooks/exhaustive-deps
   useLeaveWatch(room.id, room.sworn && !closed);
   /** يدز صورة جواب سؤال (من الكاميرا أو من ورقة القلم). الجديدة تبدل القديمة */
   async function upload(q: number, file: Blob) {
@@ -681,7 +690,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
           onDone={async (text) => { setBusy(true); const r = await call({ action: "oath", item: room.id, text }); setBusy(false); if (r?.room) setRoom(r.room); }} />
       ) : (
       <>
-      {room.pages.map((p) => <div key={p} className="exidwrap"><span className="exid">🆔 {room.sid}</span><img className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" /></div>)}
+      {!wide && room.pages.map((p) => <div key={p} className="exidwrap"><span className="exid">🆔 {room.sid}</span><img className="eximg" src={fileUrl(room.id, p)} alt="أسئلة الامتحان" /></div>)}
       <div className="card"><h2>📷 صور جواب كل سؤال</h2>
         {!!room.answerOnly && <AnswerOnlyNote k={room.answerOnly} n={room.questions.length} done={room.questions.filter((q) => q.answers.length).length} />}
         <div className="expad">
