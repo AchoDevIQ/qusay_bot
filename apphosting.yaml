@@ -23,6 +23,10 @@ env:
   - variable: GRADING_AI_KEY
     secret: GRADING_AI_KEY
     availability: [RUNTIME]
+  # فحص خطوات الحل بالجبر قبل الحفظ: خطوة بيها قيمة ما تحقق المعادلة اللي قبلها ما تنحفظ
+  - variable: AI_RUBRIC_CHECK
+    value: "1"
+    availability: [RUNTIME]
   - variable: ADMIN
     value: "7223248656"
     availability: [RUNTIME]
