@@ -11,7 +11,7 @@ import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
-import { TEST_STUDENTS, addTestPaper, addTestStudent, deleteTests, makeInPersonSet, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
+import { TEST_STUDENTS, addTestPaper, addTestStudent, giveTestChapter, deleteTests, makeInPersonSet, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
 import { fileToken, homeToken, viewToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { studentFile } from "./studentFile.ts";
@@ -200,6 +200,13 @@ export async function studentAction(body: Row) {
   } else if (a === "addTest") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     notice = `➕ انضاف طالب تجربة ${await addTestStudent()}`;
+  } else if (a === "testChapter") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const sid = Number(body.sid), chapter = String(body.chapter ?? "");
+    await giveTestChapter(sid, chapter);
+    // جدوله ينفتح من جديد، حتى يختار الجدول الخاص ويرتبه ويا الفصل الجديد
+    await resetSchedule(sid);
+    notice = `📚 ${(await student(sid))?.name ?? "طالب التجربة"} صار مشتري ${chapter}، وجدوله مفتوح يرتبه. افتح صفحته كطالب ← امتحاناتي`;
   } else if (a === "tryInPerson") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     const k = await startInPersonTest(Number(body.center), Number(body.vid), !!body.late);

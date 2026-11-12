@@ -291,6 +291,12 @@ export async function addTestStudent() {
   await put("students", { user_id: -k, name: `طالب تجربة ${k}`, curr: "عربي", grade: "السادس العلمي", gov: "بغداد", area: "تجربة", phone1: "", phone2: "", exam: "إلكتروني", created: stamp() });
   return k;
 }
+/** «📚 اعطيه فصل»: طالب التجربة يصير مشتري الفصل (بدون طلب)، حتى صاحب البوت يجرب الجدول الخاص بصفحته */
+export async function giveTestChapter(sid: number, chapter: string) {
+  need(sid < 0 && await student(sid), "اختار طالب تجربة");
+  need(chapter && (await find("bank_exams")).some((e) => e.chapter === chapter), "اختار الفصل");
+  await put("exam_access", { user_id: sid, chapter, order_id: null, created: stamp() });
+}
 /** «🎫 طالب حضوري تجريبي»: طالب حضوري بالمركز المختار، وامتحان اليوم ينتظر حضوره، حتى تنجرب قراءة الحضور والليبل.
  *  نفس الطالب للمركز يرجع ينستعمل، وورقته القديمة بنفس الامتحان تنشال. يرجع رقمه اللي ينكتب بصفحة الحضوري */
 export async function startInPersonTest(centerId: number, vid: number, late = false) {

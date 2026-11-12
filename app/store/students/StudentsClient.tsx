@@ -64,7 +64,7 @@ export default function StudentsClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && s && (
           <>
-            {data.tests && <TestStudents tests={data.tests} busy={busy} act={act} />}
+            {data.tests && <TestStudents tests={data.tests} chapters={[...new Set((data.testVersions ?? []).map((v) => v.chapter).filter(Boolean))]} busy={busy} act={act} />}
             {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} code={data.tryCode} codes={data.tryCodes} />}
             {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions} busy={busy} act={act} />}
             {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
@@ -379,7 +379,9 @@ function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"
 }
 
 /** طلاب تجربة لصاحب البوت: أوراقهم تنتظر بالتصحيح مثل أي طالب، ويفتح صفحتهم كأنه هو حتى يشوف الدرجة ويعترض */
-function TestStudents({ tests, busy, act }: { tests: TestStudent[]; busy: boolean; act: (b: Record<string, unknown>) => unknown }) {
+function TestStudents({ tests, chapters, busy, act }: { tests: TestStudent[]; chapters: string[]; busy: boolean; act: (b: Record<string, unknown>) => unknown }) {
+  const [sid, setSid] = useState(tests[0]?.id ?? 0);
+  const [chapter, setChapter] = useState("");
   return (
     <div className="card">
       <h2>🧪 طلاب تجربة</h2>
@@ -391,6 +393,17 @@ function TestStudents({ tests, busy, act }: { tests: TestStudent[]; busy: boolea
             <a className="exbtn" style={{ textDecoration: "none" }} href={t.link}>👁 افتح صفحته كطالب</a>
           </div>
         ))}
+        {!!tests.length && !!chapters.length && (
+          <div className="form adtop">
+            <div className="exhint">📚 حتى تجرب الجدول الخاص: اعطي طالب تجربة فصل، فيصير كأنه مشتريه وجدوله ينفتح. بعدها افتح صفحته كطالب ← امتحاناتي ← 👤 بدون الطلاب (جدول خاص).</div>
+            <select aria-label="طالب التجربة" value={sid} onChange={(e) => setSid(Number(e.target.value))}>{tests.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+            <select aria-label="الفصل" value={chapter} onChange={(e) => setChapter(e.target.value)}>
+              <option value="">اختار الفصل...</option>
+              {chapters.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <button type="button" className="exbtn" disabled={busy || !sid || !chapter} onClick={() => void act({ action: "testChapter", sid, chapter })}>📚 اعطيه الفصل وافتح جدوله</button>
+          </div>
+        )}
         <div className="exline adtop">
           <Confirm label={tests.length ? "🔄 سويهم من جديد" : "🧪 سوي طلاب تجربة"} disabled={busy} onYes={() => void act({ action: "makeTests" })} />
           <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "addTest" })}>➕ زيد طالب تجربة</button>

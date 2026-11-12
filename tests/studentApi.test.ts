@@ -121,3 +121,18 @@ test("قوائم PDF توصل لمحادثة صاحب الطلب", async () => {
   assert.match(r.notice, /وصلك/);
   assert.ok(sent.some((x) => x.m === "sendDocument"));
 });
+
+test("طالب تجربة: «📚 اعطيه الفصل» يخليه مشتري الفصل ويفتح جدوله حتى يجرب الجدول الخاص", async () => {
+  const { insert } = await import("../lib/db.ts");
+  await insert("bank_exams", { slug: "c9", chapter: "فصل التجربة", ord: 1, title: "امتحان", minutes: 60, pos: 1 });
+  await st({ action: "addTest" });
+  const sid = (await find("students")).find((x) => x.user_id < 0)!.user_id as number;
+  await put("schedules", { user_id: sid, mode: "private", created: "x" });
+  await assert.rejects(st({ action: "testChapter", sid, chapter: "فصل غير موجود" }), /اختار الفصل/);
+  await assert.rejects(st({ action: "testChapter", sid: 5, chapter: "فصل التجربة" }), /طالب تجربة/);
+  const r: any = await st({ action: "testChapter", sid, chapter: "فصل التجربة" });
+  assert.match(r.notice, /صار مشتري فصل التجربة/);
+  assert.ok(await one("exam_access", { user_id: sid, chapter: "فصل التجربة" }));
+  assert.equal(await one("schedules", { user_id: sid }), null);
+  await assert.rejects(studentAction({ initData: sign(2), action: "testChapter", sid, chapter: "فصل التجربة" }));
+});
