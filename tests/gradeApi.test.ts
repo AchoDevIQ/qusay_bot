@@ -231,3 +231,14 @@ test("استثناء «أجب عن K أسئلة»: ⏭ ترك، اللي ما ب
   await g(30, "open", { id: id4 });
   await assert.rejects(g(30, "mark", { id: id4, q: 1, mark: -1 }), /من 0 إلى 40/);
 });
+
+test("التجمعات: الموضوع اللي بيه أقدم ورقة مسلمة يطلع أول، حتى الاختياري ما تتأخر أوراقه", async () => {
+  const late = await exam("optional"), early = await exam("optional");
+  const a = await paper(50, late.e, late.v), b = await paper(50, early.e, early.v);
+  await update("sched_items", { id: a }, { submitted_at: "2026-03-02 09:00", kind: "optional" });
+  await update("sched_items", { id: b }, { submitted_at: "2025-12-01 09:00", kind: "optional" });
+  const groups = (await g(20, "list")).groups as { exam: number; oldest: string }[];
+  const ia = groups.findIndex((x) => x.exam === late.e), ib = groups.findIndex((x) => x.exam === early.e);
+  assert.ok(ib >= 0 && ia > ib, "الأقدم تسليماً أول");
+  assert.equal(groups[ib].oldest, "2025-12-01 09:00");
+});

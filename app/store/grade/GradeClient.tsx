@@ -6,7 +6,7 @@ import Grader, { type Paper, type Prepared, type Sticker } from "./Grader";
 
 type Row = { id: number; exam: number; general: boolean; optional: boolean; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
 type ObjRow = Row & { qs: number[] };
-type Group = { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number };
+type Group = { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; oldest?: string };
 type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
 type History = { day: string; days: { d: string; n: number }[]; prev: string; next: string; due: number | null; count: number; owner: boolean; rows: HistRow[] };
 type Rate = { mandatory: number; optional: number; deduct: number };
@@ -206,7 +206,7 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
           <div className="gkgroups">
             {shown.map((g) => (
               <div key={`${g.exam}|${g.general}`} className="gkgroup">
-                <div><b>{g.title}</b><small>{g.chapter}</small></div>
+                <div><b>{g.title}</b><small>{g.chapter}{g.oldest ? <> · أقدم ورقة <span dir="ltr">{g.oldest.slice(0, 16)}</span></> : null}</small></div>
                 <span className="gkcount">{g.count} ورقة{g.tests ? ` (${g.tests} تجربة)` : ""}</span>
                 <button type="button" className="btn" disabled={busy} onClick={() => openGroup(g)}>▶ فتح التجمع</button>
               </div>

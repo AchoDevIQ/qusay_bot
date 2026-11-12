@@ -55,15 +55,18 @@ async function waitingFor(uid: number, papers: Row[]) {
 async function examGroups(waiting: Row[]) {
   const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
   const general = new Set((await find("schedules", { mode: "general" })).map((s) => s.user_id));
-  // الجدول العام والخاص كل واحد بروحه، وداخلهم حسب الموضوع حتى يصحح طلاب الموضوع سوا
-  const groups = new Map<string, { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; order: number }>();
+  // الجدول العام والخاص كل واحد بروحه، وداخلهم حسب الموضوع حتى يصحح طلاب الموضوع سوا.
+  // الترتيب: الموضوع اللي بيه أقدم ورقة مسلمة أول (مثل الاختياري اللي ينقدم بأي وقت)، حتى ما تتأخر ورقة على صاحبها
+  const groups = new Map<string, { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; order: number; oldest: string }>();
   for (const p of waiting) {
     const e = exams.get(p.exam_id), gen = general.has(p.user_id), key = `${p.exam_id}|${gen}`;
-    const g = groups.get(key) ?? { exam: p.exam_id, general: gen, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", count: 0, tests: 0, order: (e?.pos ?? 0) * 1000 + (e?.ord ?? 0) };
+    const g = groups.get(key) ?? { exam: p.exam_id, general: gen, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", count: 0, tests: 0, order: (e?.pos ?? 0) * 1000 + (e?.ord ?? 0), oldest: "" };
     g.count++; if (isTest(p)) g.tests++;
+    const at = String(p.submitted_at ?? "");
+    if (at && (!g.oldest || at < g.oldest)) g.oldest = at;
     groups.set(key, g);
   }
-  return [...groups.values()].sort((a, b) => a.order - b.order);
+  return [...groups.values()].sort((a, b) => (a.oldest || "~").localeCompare(b.oldest || "~") || a.order - b.order);
 }
 /** مربع صاحب البوت: الفصول وامتحاناتها، والمصححين، والامتحانات المحددة هسه */
 async function onlyData() {

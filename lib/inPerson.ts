@@ -152,6 +152,16 @@ async function allCfg(): Promise<Record<string, Partial<CenterCfg>>> {
 export async function centerCfg(cid: number | null | undefined): Promise<CenterCfg> {
   return { ...DEFAULT_CFG, ...(await allCfg())[String(cid ?? "")] };
 }
+/** الطالب الحضوري اختار يمتحن بالآيباد: ما تنطبعله ورقة، وأسئلته تنفتح بالآيباد من يسجلون حضوره بالمركز */
+const ipadKey = (uid: number) => `ipad_exam_${uid}`;
+export async function ipadExam(uid: number) {
+  const st = await student(uid);
+  return st?.exam === "حضوري" && !(await centerCfg(st.center_id)).photos && await kvGet(ipadKey(uid)) === "1";
+}
+export async function setIpadExam(uid: number, on: boolean) {
+  await kvSet(ipadKey(uid), on ? "1" : "");
+  await logActivity(uid, on ? "📱 اختار يمتحن الحضوري بالآيباد" : "📄 رجع يمتحن الحضوري بالورقة");
+}
 /** الطالب الحضوري يگدر يصور أجوبته بنفسه؟ بس إذا صاحب البوت فتحها لمركزه */
 export async function photosAllowed(uid: number) {
   const st = await student(uid);
@@ -186,7 +196,8 @@ async function itemCard(it: Row) {
   const cfg = await centerCfg(st?.center_id);
   return {
     item: it.id as number, uid: it.user_id as number, name: st?.name ?? "طالب", exam: e?.title ?? "امتحان", at: it.at as string,
-    center: await centerName(st?.center_id) || "", print: cfg.print, attendedAt: it.attended_at ?? "", printed: !!await kvGet(labelKey(it.id)),
+    // طالب الآيباد ما ينطبعله شي: لا ليبل ولا ورقة
+    center: await centerName(st?.center_id) || "", print: await ipadExam(it.user_id) ? "ipad" as const : cfg.print, attendedAt: it.attended_at ?? "", printed: !!await kvGet(labelKey(it.id)),
     label: printToken("l", it.id), paper: printToken("i", it.id),
   };
 }

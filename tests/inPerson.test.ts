@@ -121,3 +121,30 @@ test("تصوير الورقة بكاميرا المساعد: اللي عنده �
   assert.equal((await one("sched_items", { id: it2 }))!.status, "done");
   assert.deepEqual((await at(42, "cam", { code: "82" })).cam.have.sort(), [1, 2]);
 });
+
+test("الحضوري بالآيباد: يختاره بنفسه، ما ينطبعله شي، والأسئلة تنفتح بس بعد الحضور والوقت يبدي من هسه", async () => {
+  // مركز ثاني ما مفتوحله التصوير (اختبار قبل يفتحه لمركز الأول)
+  const c2 = await insert("centers", { area_id: area, name: "معهد ثاني", active: 1 });
+  await put("students", { user_id: 82, name: "حضوري آيباد", exam: "حضوري", center_id: c2, created: "2026-01-01 00:00" });
+  await put("guardians", { guardian_id: 9082, student_id: 82, created: "x" });
+  const it82 = await insert("sched_items", { user_id: 82, exam_id: ex, at: stamp(), status: "waiting" });
+  const me = (uid: number, action: string, x: object = {}) => myExamAction({ token: homeToken(uid), pf: "ios", device: "dev-" + String(uid).padStart(14, "0"), action, ...x }) as Promise<any>;
+  await assert.rejects(me(82, "openExam", { item: it82 }), /ينقدم بالمركز/);
+  await assert.rejects(me(81, "ipadExam", { on: true }), /للطالب الحضوري/);
+  assert.equal((await me(82, "info")).ipad, false);
+  assert.equal((await me(82, "ipadExam", { on: true })).ipad, true);
+  // قبل الحضور: مقفول، حتى لو قاعد بالبيت
+  await assert.rejects(me(82, "openExam", { item: it82 }), /من يسجلون حضورك/);
+  assert.equal((await me(82, "info")).items.find((i: any) => i.id === it82).state, "center");
+  const r = await at(40, "scan", { code: ip.studentCode(82) });
+  assert.equal(r.card.print, "ipad");
+  assert.ok(!r.card.queued);
+  assert.equal((await me(82, "info")).items.find((i: any) => i.id === it82).state, "open");
+  const opened = await me(82, "openExam", { item: it82 });
+  assert.equal(opened.room.id, it82);
+  const row = (await one("sched_items", { id: it82 }))!;
+  assert.equal(row.status, "started");
+  assert.ok(row.started_at && row.started_at >= row.attended_at);
+  // يرجع للورقة
+  assert.equal((await me(82, "ipadExam", { on: false })).ipad, false);
+});

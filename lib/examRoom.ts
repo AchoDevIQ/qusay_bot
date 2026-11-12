@@ -2,7 +2,7 @@
 import { titleFor } from "./examTitlesEn.ts";
 import { answerOnlyOf } from "./answerOnly.ts";
 import { sameOath } from "./oathText.ts";
-import { photosAllowed } from "./inPerson.ts";
+import { ipadExam, photosAllowed } from "./inPerson.ts";
 import { notifyGraders } from "./graderPay.ts";
 import { activeStop, checkStopped } from "./checkpoints.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
@@ -43,6 +43,11 @@ export async function closeFinished(uid: number, s: SchedSettings) {
   }
   for (const it of await find("sched_items", { user_id: uid, status: "exception" })) {
     if (now >= addMinutes(it.opened_at, s.excWindow)) await update("sched_items", { id: it.id }, { status: "missed" });
+  }
+  // طالب الآيباد سجلوا حضوره وما فتح الأسئلة لحد ما خلص الوقت: فايت
+  if (await ipadExam(uid)) for (const it of await find("sched_items", { user_id: uid, status: "attended" })) {
+    const e = await one("bank_exams", { id: it.exam_id });
+    if (it.attended_at && now >= answersClose(it.attended_at, e?.minutes ?? 75, s.extra)) await update("sched_items", { id: it.id }, { status: "missed" });
   }
 }
 /** حالة الامتحان بعين الطالب */
@@ -113,9 +118,21 @@ async function ownItem(uid: number, id: unknown) {
 }
 /** يدخل الطالب: أول مرة تنحدد نسخته ويبدي وقته */
 export async function openRoom(uid: number, id: unknown, s: SchedSettings) {
-  need((await student(uid))?.exam !== "حضوري" || await photosAllowed(uid), "امتحانك حضوري، ينقدم بالمركز");
+  const ipad = await ipadExam(uid);
+  need((await student(uid))?.exam !== "حضوري" || ipad || await photosAllowed(uid), "امتحانك حضوري، ينقدم بالمركز");
   await closeFinished(uid, s);
   let it = await ownItem(uid, id);
+  if (ipad) {
+    // الحضوري بالآيباد: الأسئلة تنفتح بس بعد ما يسجلون حضوره بالمركز، والوقت يبدي من هسه
+    need(["attended", "started", "done"].includes(String(it.status)), "أسئلتك تنفتح بالآيباد من يسجلون حضورك بالمركز");
+    if (it.status === "attended") {
+      const now = stamp();
+      await update("sched_items", { id: it.id }, { status: "started", started_at: now, opened_at: now });
+      const e = await one("bank_exams", { id: it.exam_id });
+      await logActivity(uid, `📱 فتح امتحان ${e?.title ?? ""} بالآيباد بالمركز`);
+      it = await ownItem(uid, id);
+    }
+  }
   const state = roomState(it, s);
   need(state !== "locked", "الامتحان لسه ما بدا");
   need(state !== "done", "سلمت هذا الامتحان");

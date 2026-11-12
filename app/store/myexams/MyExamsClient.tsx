@@ -15,7 +15,7 @@ type Item = { id: number; exam?: number; skippable?: boolean; optional?: boolean
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  viewOnly?: boolean; appLink: string; attendCode: string; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
@@ -100,6 +100,20 @@ export default function MyExamsClient() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function enterOptional(exam: number) { const r = await call({ action: "openOptional", exam }); if (r?.room) setRoom(r.room); }
   async function enter(item: number) { const r = await call({ action: "openExam", item }); if (r?.room) setRoom(r.room); }
+  // الحضوري بالآيباد: يوم امتحانه الصفحة تسأل كل شوية، ومن يسجلون حضوره تنفتح أسئلته وحدها (مرة وحدة لكل امتحان)
+  const autoIn = useRef(new Set<number>());
+  const today = info?.today ?? "";
+  const waitingToday = !!info?.ipad && !room && info.items.some((i) => i.state === "center" && String(i.at).startsWith(today));
+  useEffect(() => {
+    if (!waitingToday) return;
+    const t = setInterval(() => { void call({ action: "info" }); }, 8000);
+    return () => clearInterval(t);
+  }, [waitingToday]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!info?.ipad || room) return;
+    const it = info.items.find((i) => i.state === "open" && !autoIn.current.has(i.id));
+    if (it) { autoIn.current.add(it.id); void enter(it.id); }
+  }, [info, room]); // eslint-disable-line react-hooks/exhaustive-deps
   if (obj) return <Objection obj={obj} first={firstQ} setObj={setObj} leave={() => { const back = paper?.id; setObj(null); void (back ? openPaper(back) : call({ action: "info" })); }} />;
   if (paper) return <PaperView paper={paper} busy={busy} error={error} object={(id, q) => void openObj(id, q)} leave={() => { setPaper(null); void call({ action: "info" }); }} />;
   if (room) return <ExamRoom room={room} setRoom={setRoom} call={call} leave={() => { setRoom(null); void call({ action: "info" }); }} />;
@@ -134,7 +148,8 @@ export default function MyExamsClient() {
         {info && info.mode !== "general" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
-        {info?.attendCode && <AttendCode code={info.attendCode} />}
+        {info?.attendCode && <AttendCode code={info.attendCode} ipad={!!info.ipad} />}
+        {info && info.ipad !== null && info.ipad !== undefined && <IpadChoice on={info.ipad} busy={busy} call={call} />}
         {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} off={(ids) => call({ action: "holidayOff", holidays: ids })} cmd={call} />}
         {info?.comp && <CompCard c={info.comp} busy={busy} call={call} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
@@ -367,7 +382,36 @@ function HolRow({ h, busy, off, keep }: { h: Hol; busy: boolean; off: (ids: numb
 }
 
 /** كود الحضور للطالب الحضوري: يطلعه للمساعد بالمركز، فينسجل حضوره وتنطبع ورقته */
-function AttendCode({ code }: { code: string }) {
+/** الحضوري يختار يمتحن بالآيباد: الحساب كله لازم يكون على الآيباد (جهاز واحد) */
+function IpadChoice({ on, busy, call }: { on: boolean; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+  const [sure, setSure] = useState(false);
+  return (
+    <div className="card expad">
+      <div className="exlabel">📱 تمتحن بالآيباد؟</div>
+      {on ? (
+        <>
+          <div className="exhint atok">✅ إنت تمتحن بالآيباد. بالمركز ما تنطبعلك ورقة، ومن يسجلون حضورك تنفتح أسئلتك بالآيباد وحدها، وتجاوب بالقلم.</div>
+          <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void call({ action: "ipadExam", on: false })}>📄 رجعني أمتحن بالورقة</button>
+        </>
+      ) : sure ? (
+        <>
+          <div className="exhint exbad">⚠️ حسابك يشتغل على جهاز واحد بس. إذا تمتحن بالآيباد، لازم تفتح البوت كله من الآيباد (مو من الموبايل)، وتجيبه وياك للمركز مشحون.</div>
+          <div className="exline adtop">
+            <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "ipadExam", on: true })}>✅ إي، أمتحن بالآيباد</button>
+            <button type="button" className="exbtn" onClick={() => setSure(false)}>رجوع</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="exhint">إذا تجيب آيباد وياك للمركز، تگدر تجاوب بالقلم عليه بدال الورقة. الأسئلة تنفتح بس من يسجلون حضورك بالمركز.</div>
+          <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setSure(true)}>📱 أمتحن بالآيباد</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AttendCode({ code, ipad = false }: { code: string; ipad?: boolean }) {
   const [src, setSrc] = useState("");
   useEffect(() => { void QRCode.toDataURL(code, { margin: 1, width: 360, errorCorrectionLevel: "M" }).then(setSrc); }, [code]);
   return (
@@ -375,7 +419,7 @@ function AttendCode({ code }: { code: string }) {
       <h2>🎫 كود الحضور</h2>
       <div className="expad atcode">
         {src && <img src={src} alt="كود الحضور" />}
-        <div className="exhint">طلّع هذا الكود للمساعد بالمركز قبل الامتحان. ينسجل حضورك وتنطبع ورقتك باسمك. سوّيله سكرين شوت حتى يكون عندك حتى بدون انترنت.</div>
+        <div className="exhint">{ipad ? "طلّع هذا الكود للمساعد بالمركز قبل الامتحان. من ينسجل حضورك تنفتح أسئلتك بالآيباد وحدها." : "طلّع هذا الكود للمساعد بالمركز قبل الامتحان. ينسجل حضورك وتنطبع ورقتك باسمك."} سوّيله سكرين شوت حتى يكون عندك حتى بدون انترنت.</div>
       </div>
     </div>
   );

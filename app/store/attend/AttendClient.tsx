@@ -6,7 +6,7 @@ import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import { openOutside, scanQr } from "../shared";
 import RescanList, { type Rescan } from "./RescanList";
 
-type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean; late?: boolean; printed?: boolean };
+type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper" | "ipad"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean; late?: boolean; printed?: boolean };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
 type Exam = { id: number; title: string; chapter: string; versions: { id: number; pageMap: number[][] | null; model: string; token: string }[] };
 type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
@@ -93,7 +93,7 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
   }
   // الطباعة تنفتح وحدها حسب المركز، حتى المساعد ما يدوس شي
   function afterAttend(r: Data | null) {
-    if (r?.card && !r.card.already && !r.card.queued && !r.card.late) openOutside(printUrl(r.card.print, r.card.print === "label" ? r.card.label : r.card.paper));
+    if (r?.card && !r.card.already && !r.card.queued && !r.card.late && r.card.print !== "ipad") openOutside(printUrl(r.card.print, r.card.print === "label" ? r.card.label : r.card.paper));
   }
   function camera() {
     const ok = scanQr("وجه الكاميرا على كود الطالب", (t) => { void go(t); return true; });
@@ -124,6 +124,7 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
           <b>{c.name}</b> <span dir="ltr">#{c.uid}</span>
           <div className={c.already ? "exhint" : "exhint atok"}>{c.already ? `⚠️ كان مسجل حضوره من ${c.attendedAt.slice(11, 16)}` : "✅ انسجل حضوره"}</div>
           <div className="exhint">{c.exam} · {c.center} · {c.at.slice(11, 16)}</div>
+          {c.print === "ipad" && <div className="exhint atok">📱 يمتحن بالآيباد: لا تطبعله شي. أسئلته انفتحت بالآيباد مالته.</div>}
           {c.queued && <div className="exhint atok">🖨 الليبل انرسل لمحطة الطباعة</div>}
           {c.printed && !c.queued && <div className="exhint exbad">⚠️ هذا الطالب مطبوع له ليبل</div>}
           <div className="atrow">

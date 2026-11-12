@@ -1,7 +1,7 @@
 // جدول الامتحانات: إعدادات الإدارة، بناء الطالب لجدوله، وعرضه
 import { titleFor } from "./examTitlesEn.ts";
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
-import { photosAllowed, studentCode } from "./inPerson.ts";
+import { ipadExam, photosAllowed, setIpadExam, studentCode } from "./inPerson.ts";
 import { appLink, lectureMap, sendLectureFile, visibleLectureFiles } from "./lectures.ts";
 import { checkStopped, checkpointCard, seeCheckpoint } from "./checkpoints.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
@@ -382,18 +382,25 @@ async function syncGeneral(uid: number, sc: Row, s: SchedSettings) {
   });
   await closeMissed(uid, s);
 }
+/** الحضوري بالآيباد: ينتظر الحضور بالمركز لحد ما يفوت وقت الدخول، وبعد الحضور الامتحان مفتوح إله */
+function ipadState(status: string, state: string) {
+  if (status === "started" || status === "attended") return "open" as const;
+  if (status === "done") return "done" as const;
+  return state === "missed" ? "past" as const : "center" as const;
+}
 async function itemsView(uid: number, s: SchedSettings) {
   await closeFinished(uid, s);
   const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
   const now = stamp();
   // الحضوري ينقدم بالمركز، إلا إذا صاحب البوت فتحله يصور أجوبته بنفسه
   const inPerson = (await placeFor(uid)).inPerson && !await photosAllowed(uid);
+  const ipad = inPerson && await ipadExam(uid);
   const lec = await lectureMap();
   return (await find("sched_items", { user_id: uid }, { order: ["at"] })).filter((i) => i.status !== "skipped").map((i) => {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
-    return { id: i.id, exam: i.exam_id as number, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of, state: inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
+    return { id: i.id, exam: i.exam_id as number, optional: i.kind === "optional", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of, state: ipad ? ipadState(i.status, state) : inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
   });
 }
 /** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
@@ -438,6 +445,8 @@ async function studentInfo(uid: number) {
     appLink: await boughtLectures(uid) ? await appLink() : "",
     // كود الحضور: المساعد يقراه بالمركز
     attendCode: place.inPerson ? studentCode(uid) : "",
+    // الحضوري يختار يمتحن بالآيباد (إذا مركزه ما مفتوحله يصور)
+    ipad: place.inPerson && !await photosAllowed(uid) ? await ipadExam(uid) : null,
     inPerson: place.inPerson, place: place.label, name: st?.name ?? "", remaining: left.length, mode: sched?.mode ?? (sched ? "private" : null),
     needsChoice: !sched && left.length > 0, needsBuild: !general && left.some((e) => !planned.has(e.id)),
     // الإدارة غيرت الأوقات واللي اختاره راح: يختار من جديد
@@ -617,6 +626,12 @@ export async function myExamAction(body: Row) {
     await logActivity(id, `🎯 دخل امتحان اختياري: ${e!.title}`);
     const room = await openRoom(id, item, s);
     return { ...await studentInfo(id), room };
+  }
+  if (a === "ipadExam") {
+    const st = await student(id);
+    need(st?.exam === "حضوري" && !await photosAllowed(id), "هذا للطالب الحضوري بس");
+    await setIpadExam(id, !!body.on);
+    return { ...await studentInfo(id), notice: body.on ? "📱 تمام: بالمركز ما تنطبعلك ورقة، ومن يسجلون حضورك تنفتح أسئلتك بالآيباد" : "📄 رجعت تمتحن بالورقة بالمركز" };
   }
   if (a === "examLeft") return await examLeft(id, body.item, await schedSettings(), body.phase, body.secs);
   if (a === "openExam" || a === "delAnswer" || a === "submitExam" || a === "oath") {

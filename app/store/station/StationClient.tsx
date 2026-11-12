@@ -113,7 +113,7 @@ export default function StationClient() {
       await write(r.job);
       await api({ action: "printed", id: c.item });
       setStatus(`✅ انطبع: ${c.name}`);
-    } else setStatus(c.printed ? `⚠️ ${c.name}: مطبوع له ليبل` : c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
+    } else setStatus(c.print === "ipad" ? `📱 ${c.name}: يمتحن بالآيباد، لا تطبعله شي` : c.printed ? `⚠️ ${c.name}: مطبوع له ليبل` : c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
   });
   /** قرار الجاي بغير وقته: بعدها الكاميرا ترجع تقرا */
   const decide = (allow: boolean) => once(async () => {
