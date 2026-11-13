@@ -360,6 +360,17 @@ body.grwide .grtop{padding-left:104px}
 .ntsheet .ntmark{position:absolute;left:4px;z-index:3;display:flex;gap:4px;flex-wrap:wrap;max-width:70%}
 .ntsheet .ntmark button{font:inherit;font-size:11px;font-weight:700;padding:2px 7px;opacity:.93;border-radius:999px;border:1px solid var(--gold2,#cea239);background:rgba(13,33,64,.92);color:#f9c445;box-shadow:0 2px 6px rgba(0,0,0,.35);cursor:pointer}
 .ntsheet .ntmark button:disabled{opacity:.6}
+.ntyt{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:#000;color:#fff;user-select:none;-webkit-user-select:none}
+.ntytbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:rgba(13,33,64,.96)}
+.ntytbox{position:relative;flex:1;min-height:0;background:#000}
+.ntytframe,.ntytframe>*,.ntytframe iframe{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none}
+.ntytcover{position:absolute;inset:0;z-index:2}
+.ntytmsg{position:absolute;inset:auto 10px 50% 10px;z-index:3;text-align:center;font-size:15px}
+.ntytctl{display:flex;align-items:center;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:rgba(13,33,64,.96)}
+.ntytctl input[type=range]{flex:1;min-width:60px}
+.ntytctl small{white-space:nowrap;font-size:12px}
+.ntytctl select{font:inherit;font-size:12px;padding:4px;border-radius:8px;background:#0d2140;color:#f9c445;border:1px solid var(--gold2,#cea239)}
+@media (max-width:420px){.ntytctl{flex-wrap:wrap}.ntytctl input[type=range]{order:-1;flex-basis:100%}}
 .ntmsg{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(249,196,69,.14);border:1px solid var(--gold2,#cea239);font-size:14px;cursor:pointer}
 
 /* الجدول الخاص: أرقام الخطوات، واختيارات «كم امتحان بالأسبوع» */

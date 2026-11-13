@@ -11,7 +11,7 @@ import { isAdmin, student } from "./data.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { files } from "./files.ts";
-import { addVideo, autoMarks, bookMarksAdmin, deleteMark, deleteVideo, marksFor, saveMark, sendMark, videoList } from "./noteMarks.ts";
+import { addVideo, autoMarks, bookMarksAdmin, deleteMark, deleteVideo, marksFor, pasteSolutions, saveMark, sendMark, videoList } from "./noteMarks.ts";
 import { chapterLabel, firstRoundOnly } from "./orderRules.ts";
 import { labelChapters } from "./scheduleRules.ts";
 import { stamp } from "./util.ts";
@@ -87,9 +87,9 @@ export async function noteAction(body: Row) {
   if (a === "marks") return { marks: await marksFor(b.id) };
   if (a === "play") {
     limitPlays(uid);
-    const notice = await sendMark(uid, b.id, body.mark, body.kind);
+    const r = await sendMark(uid, b.id, body.mark, body.kind);
     await logActivity(uid, `${body.kind === "solution" ? "🎬 فيديو حل" : "▶️ فيديو توضيح"} من ملزمة ${b.title}`);
-    return { notice };
+    return r;
   }
   const page = pageOf(b, body.page);
   const key = { user_id: uid, book_id: b.id, page };
@@ -225,13 +225,14 @@ export async function noteAdmin(raw: Row | FormData) {
     return await adminData(uid, await addVideo(body.file as Blob & { name?: string }));
   }
   if (a === "videoDelete") return await adminData(uid, await deleteVideo(Number(body.id)));
-  if (["marks", "autoMarks", "markSave", "markDelete"].includes(a)) {
+  if (["marks", "autoMarks", "markSave", "markDelete", "solutionsPaste"].includes(a)) {
     const book = await one("note_books", { id: Number(body.book) });
     need(book, "الملزمة غير موجودة");
     let notice = "";
     if (a === "autoMarks") { const r = await autoMarks(book!); notice = `✅ انحطت ${r.marks} زر على الأسئلة، وانربط ${r.linked} فيديو توضيحي`; }
     if (a === "markSave") { await saveMark(book!, body); notice = "💾 انحفظ"; }
     if (a === "markDelete") { await deleteMark(book!, Number(body.id)); notice = "🗑 انحذف الزر"; }
+    if (a === "solutionsPaste") { const r = await pasteSolutions(book!, String(body.text ?? "")); notice = `✅ انربط ${r.linked} سؤال بفيديو حله${r.added ? `، وانضاف ${r.added} زر جديد` : ""}${r.bad.length ? `. ⚠️ ${r.bad.length} سطر ما انفهم: ${r.bad.slice(0, 3).join(" | ")}` : ""}`; }
     return { ...await adminData(uid, notice), marks: await bookMarksAdmin(book!.id), book: book!.id };
   }
   need(a === "delete", "أمر غير معروف");

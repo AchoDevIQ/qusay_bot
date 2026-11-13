@@ -89,6 +89,13 @@ export function parseLink(raw: string): { chat: string; msg: number } | null {
   return null;
 }
 
+/** رقم فيديو اليوتيوب: youtu.be/ID، youtube.com/watch?v=ID، shorts، embed، live */
+export function parseYouTube(raw: string): string | null {
+  const s = raw.trim();
+  const m = /^(?:https?:\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/))([\w-]{11})(?:[?&#/].*)?$/i.exec(s);
+  return m ? m[1] : null;
+}
+
 /** سطور كل صفحة ومكانها من فوك (0 فوك، 1 جوه) */
 async function pageLines(pdf: Buffer) {
   const pdfjs = await pdfjsLib();
@@ -148,18 +155,26 @@ export async function marksFor(bookId: number) {
   return (await find("note_marks", { book_id: bookId })).filter((m) => m.video_id || m.solution).sort((a, b) => a.page - b.page || Number(a.y) - Number(b.y)).map(pub);
 }
 
-/** يدز الفيديو للطالب بالبوت، محمي */
-export async function sendMark(uid: number, bookId: number, markId: unknown, kind: unknown) {
+/** يدز الفيديو للطالب بالبوت، محمي. فيديو حل من يوتيوب يرجع رقمه بس، ويشتغل جوّا الملزمة */
+export async function sendMark(uid: number, bookId: number, markId: unknown, kind: unknown): Promise<{ notice: string; yt?: string }> {
   const m = await one("note_marks", { id: Number(markId), book_id: bookId });
   need(m, "هذا الزر مو موجود");
   if (kind === "solution") {
-    const l = parseLink(String(m!.solution ?? ""));
-    need(l, "فيديو الحل بعده ما انضاف لهذا السؤال");
-    const r = await api("copyMessage", { chat_id: uid, from_chat_id: l!.chat, message_id: l!.msg, protect_content: true });
-    need(r, "ما گدرت أوصل فيديو الحل. بلغ الأستاذ", 502);
-    return "🎬 وصلك فيديو حل السؤال بالمحادثة";
+    const yt = parseYouTube(String(m!.solution ?? ""));
+    if (yt) return { notice: "🎬 فيديو حل السؤال", yt };
+    return { notice: await sendSolution(uid, String(m!.solution ?? "")) };
   }
-  const v = m!.video_id && await one("note_videos", { id: m!.video_id });
+  return { notice: await sendExplainer(uid, m!) };
+}
+async function sendSolution(uid: number, link: string) {
+  const l = parseLink(link);
+  need(l, "فيديو الحل بعده ما انضاف لهذا السؤال");
+  const r = await api("copyMessage", { chat_id: uid, from_chat_id: l!.chat, message_id: l!.msg, protect_content: true });
+  need(r, "ما گدرت أوصل فيديو الحل. بلغ الأستاذ", 502);
+  return "🎬 وصلك فيديو حل السؤال بالمحادثة";
+}
+async function sendExplainer(uid: number, m: Row) {
+  const v = m.video_id && await one("note_videos", { id: m.video_id });
   need(v, "الفيديو التوضيحي مو موجود لهذا السؤال");
   const caption = `▶️ فيديو توضيح السؤال: ${v!.name}`;
   // أول مرة يرتفع لتلگرام، وبعدها نستعمل رقمه
@@ -211,7 +226,7 @@ export async function saveMark(book: Row, body: Row) {
   need(Number.isInteger(page) && page >= 1 && page <= book.pages, "رقم الصفحة غلط");
   need(y >= 0 && y <= 1, "المكان غلط");
   const solution = String(body.solution ?? "").trim();
-  need(!solution || parseLink(solution), "رابط الحل لازم يكون رابط منشور بالقناة، مثل https://t.me/c/123456/78");
+  need(!solution || parseLink(solution) || parseYouTube(solution), "رابط الحل لازم يكون رابط يوتيوب، أو رابط منشور بالقناة مثل https://t.me/c/123456/78");
   const video = body.video ? Number(body.video) : null;
   if (video) need(await one("note_videos", { id: video }), "الفيديو مو موجود");
   const row = { book_id: book.id, page, y, label: String(body.label ?? "").slice(0, 80), video_id: video, solution: solution || null, auto: 0 };
@@ -219,6 +234,31 @@ export async function saveMark(book: Row, body: Row) {
     need(await one("note_marks", { id: Number(body.id), book_id: book.id }), "الزر مو موجود");
     await update("note_marks", { id: Number(body.id) }, row);
   } else await insert("note_marks", row);
+}
+/** روابط حل كثيرة مرة وحدة. كل سطر: «ص22 · 0.196 · اسم السؤال · الرابط».
+ *  الرابط يروح للزر اللي بنفس الصفحة وأقرب مكان، وإذا ماكو زر هناك ينضاف زر جديد */
+export async function pasteSolutions(book: Row, text: string) {
+  const marks = await find("note_marks", { book_id: book.id });
+  let linked = 0, added = 0;
+  const bad: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const s = raw.trim();
+    if (!s) continue;
+    const m = /^ص\s*(\d+)\s*·\s*([01](?:\.\d+)?)\s*·\s*(.*?)\s*·\s*(\S+)$/.exec(s);
+    const page = m ? Number(m[1]) : 0, y = m ? Number(m[2]) : -1, link = m?.[4] ?? "";
+    if (!m || page < 1 || page > book.pages || y > 1 || !(parseYouTube(link) || parseLink(link))) { bad.push(s.slice(0, 40)); continue; }
+    const near = marks.filter((x) => x.page === page && Math.abs(Number(x.y) - y) < 0.03).sort((a, b) => Math.abs(Number(a.y) - y) - Math.abs(Number(b.y) - y))[0];
+    if (near) { await update("note_marks", { id: near.id }, { solution: link, auto: 0 }); near.solution = link; }
+    else {
+      const row: Row = { book_id: book.id, page, y, label: m[3].slice(0, 80), video_id: null, solution: link, auto: 0 };
+      row.id = await insert("note_marks", row);
+      marks.push(row);
+      added++;
+    }
+    linked++;
+  }
+  need(linked || bad.length, "الصق الروابط أول");
+  return { linked, added, bad };
 }
 export async function deleteMark(book: Row, id: number) {
   need(await one("note_marks", { id, book_id: book.id }), "الزر مو موجود");

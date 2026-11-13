@@ -16,6 +16,7 @@ export default function MarksCard() {
   const [book, setBook] = useState(0);
   const [progress, setProgress] = useState("");
   const [onlyEmpty, setOnlyEmpty] = useState(false);
+  const [paste, setPaste] = useState("");
   const cur = data?.books.find((b) => b.id === book);
   const marks = data?.book === book ? data?.marks ?? [] : [];
   const videos = (data?.videos ?? []).filter((v) => !cur || cur.lang === "all" ? true : v.lang === (cur.lang === "en" ? "en" : "ar"));
@@ -35,7 +36,7 @@ export default function MarksCard() {
     <div className="card">
       <h2>🎬 أزرار الفيديو داخل الملزمة</h2>
       <div className="form">
-        <div className="exhint">يم كل سؤال بالملزمة يطلع للطالب زرين: «🎬 فيديو حل السؤال» (فيديوك من القناة) و«▶️ فيديو توضيح السؤال» (الفيديو المتحرك). الطالب يدوس، فيوصله الفيديو بالبوت محمي: ما يشوف الرابط، وما يگدر يحوله ولا يحفظه. الزر اللي ما بيه فيديو ما يطلع للطالب.</div>
+        <div className="exhint">يم كل سؤال بالملزمة يطلع للطالب زرين: «🎬 فيديو حل السؤال» (فيديوك) و«▶️ فيديو توضيح السؤال» (الفيديو المتحرك). فيديو الحل إذا رابطه يوتيوب يشتغل جوّا الملزمة، والطالب ما يشوف الرابط ولا يگدر يفتحه باليوتيوب. وإذا رابطه منشور بالقناة، يوصله بالبوت محمي. الفيديو التوضيحي يوصله بالبوت محمي: ما يگدر يحوله ولا يحفظه. الزر اللي ما بيه فيديو ما يطلع للطالب.</div>
         {data && (
           <>
             <details className="cpbox expad">
@@ -59,6 +60,12 @@ export default function MarksCard() {
               <>
                 <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "autoMarks", book })}>{busy ? "جاري التدوير بالملزمة..." : "🔍 حط الأزرار وحدها على الأسئلة"}</button>
                 <div className="hint">يدور كل سؤال (س1، Q1، مثال) ويحطله زر، ويربط كل فيديو توضيحي بسؤاله. الأزرار اللي إنت عدلتها تبقى مثل ما هي.</div>
+                <details className="cpbox expad">
+                  <summary><b>📋 الصق روابط الحل كلها مرة وحدة</b></summary>
+                  <div className="exhint">كل سطر: «ص22 · 0.196 · اسم السؤال · الرابط». الرابط يروح للزر اللي بنفس الصفحة ونفس المكان، وإذا ماكو زر هناك ينضاف زر جديد.</div>
+                  <textarea className="exinput" dir="rtl" rows={6} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="ص22 · 0.196 · المعدلات م2 وزاري س1 · https://youtu.be/…" />
+                  <button type="button" className="btn" disabled={busy || !paste.trim()} onClick={async () => { if (await call({ action: "solutionsPaste", book, text: paste })) setPaste(""); }}>💾 اربطهن</button>
+                </details>
                 <a className="exbtn" href={data.link}>👀 افتح الملازم مثل الطالب</a>
                 <label className="adcheck adflat"><input type="checkbox" checked={onlyEmpty} onChange={(e) => setOnlyEmpty(e.target.checked)} /><span>بس الأسئلة اللي بعدها ما بيها رابط حل</span></label>
                 <div className="hint">{marks.length} زر · {marks.filter((m) => m.solution).length} بيها رابط حل · {marks.filter((m) => m.video).length} بيها فيديو توضيحي</div>
@@ -86,8 +93,8 @@ function MarkRow({ m, book, videos, busy, call }: { m: Mark; book: Book; videos:
   return (
     <details className="cpbox expad" open={isNew ? undefined : !m.solution && !!m.video}>
       <summary>{isNew ? <b>➕ زر جديد</b> : <><b>ص{m.page}</b> <small>({where(m.y)})</small> {m.label || "سؤال"} {m.solution ? "🎬" : ""}{m.video ? "▶️" : ""}</>}</summary>
-      <label>🎬 رابط فيديو الحل (منشور بالقناة)</label>
-      <input className="exinput" dir="ltr" placeholder="https://t.me/c/1234567890/12" value={solution} onChange={(e) => setSolution(e.target.value)} />
+      <label>🎬 رابط فيديو الحل (يوتيوب، أو منشور بالقناة)</label>
+      <input className="exinput" dir="ltr" placeholder="https://youtu.be/…" value={solution} onChange={(e) => setSolution(e.target.value)} />
       <label>▶️ فيديو التوضيح</label>
       <select value={video} onChange={(e) => setVideo(e.target.value)}>
         <option value="">بدون</option>

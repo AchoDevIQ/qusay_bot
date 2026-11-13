@@ -87,9 +87,13 @@ function Reader({ book, onClose }: { book: Book; onClose: () => void }) {
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(false);
   useEffect(() => { post({ action: "marks", book: book.id }).then((j) => setMarks(j.marks ?? [])).catch(() => undefined); }, [book.id]);
+  const [yt, setYt] = useState("");
   async function play(m: Mark, kind: "video" | "solution") {
-    haptic(); setSending(true); setMsg("⏳ دا يوصلك الفيديو بالبوت...");
-    try { const j = await post({ action: "play", book: book.id, mark: m.id, kind }); setMsg(`${j.notice}. سد الملزمة وشوفه، وترجع لنفس الصفحة.`); }
+    haptic(); setSending(true); setMsg(kind === "solution" ? "⏳ دا يفتح فيديو الحل..." : "⏳ دا يوصلك الفيديو بالبوت...");
+    try {
+      const j = await post({ action: "play", book: book.id, mark: m.id, kind });
+      if (j.yt) { setYt(j.yt); setMsg(""); } else setMsg(`${j.notice}. سد الملزمة وشوفه، وترجع لنفس الصفحة.`);
+    }
     catch (e) { setMsg(`⚠️ ${(e as Error).message}`); } finally { setSending(false); }
   }
   const stage = useRef<HTMLDivElement>(null);
@@ -224,6 +228,86 @@ function Reader({ book, onClose }: { book: Book; onClose: () => void }) {
         <button type="button" className="gk-btn" disabled={page >= book.pages} onClick={() => void go(page + 1)}>التالية ‹</button>
         <select aria-label="الصفحة" value={page} onChange={(e) => void go(Number(e.target.value))}>{Array.from({ length: book.pages }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1} / {book.pages}</option>)}</select>
         <button type="button" className="gk-btn" disabled={page <= 1} onClick={() => void go(page - 1)}>› السابقة</button>
+      </div>
+      {yt && <YtPlayer id={yt} onClose={() => setYt("")} />}
+    </div>
+  );
+}
+
+// ---------- فيديو الحل من يوتيوب: يشتغل فوك الملزمة. أزرار اليوتيوب ما تنداس (لا رابط ولا "شوفه على يوتيوب")، والتحكم من أزرارنا
+type YtP = { playVideo(): void; pauseVideo(): void; seekTo(s: number, a: boolean): void; getCurrentTime(): number; getDuration(): number; getPlayerState(): number; setPlaybackRate(r: number): void; destroy(): void };
+type YtNS = { Player: new (el: HTMLElement, o: object) => YtP };
+let ytApi: Promise<YtNS> | null = null;
+function loadYt(): Promise<YtNS> {
+  const w = window as unknown as { YT?: YtNS & { loaded?: number }; onYouTubeIframeAPIReady?: () => void };
+  if (w.YT?.Player) return Promise.resolve(w.YT);
+  ytApi ??= new Promise((ok, bad) => {
+    w.onYouTubeIframeAPIReady = () => ok(w.YT!);
+    const s = document.createElement("script");
+    s.src = "https://www.youtube.com/iframe_api";
+    s.onerror = () => { ytApi = null; bad(new Error("ما انفتح الفيديو. تأكد من النت وحاول مرة ثانية")); };
+    document.head.appendChild(s);
+  });
+  return ytApi;
+}
+// السرعات اللي يقبلها يوتيوب: أبطأ لحد ربع السرعة، وأسرع لحد الضعف
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+function YtPlayer({ id, onClose }: { id: string; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const slot = useRef<HTMLDivElement>(null);
+  const p = useRef<YtP | null>(null);
+  const [ready, setReady] = useState(false);
+  const [err, setErr] = useState("");
+  const [on, setOn] = useState(false);
+  const [t, setT] = useState(0);
+  const [d, setD] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  useEffect(() => {
+    let stop = false;
+    loadYt().then((YT) => {
+      if (stop || !slot.current) return;
+      p.current = new YT.Player(slot.current, {
+        host: "https://www.youtube-nocookie.com", videoId: id, width: "100%", height: "100%",
+        playerVars: { controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, iv_load_policy: 3, modestbranding: 1, autoplay: 1, origin: location.origin },
+        events: {
+          onReady: () => { if (!stop) { setReady(true); setD(p.current!.getDuration()); p.current!.playVideo(); } },
+          onStateChange: (e: { data: number }) => { if (!stop) { setOn(e.data === 1 || e.data === 3); if (e.data === 0) setT(p.current!.getDuration()); } },
+          onError: () => { if (!stop) setErr("هذا الفيديو ما يشتغل هسه. بلغ الأستاذ"); },
+        },
+      });
+    }).catch((e) => { if (!stop) setErr((e as Error).message); });
+    const tick = setInterval(() => { const q = p.current; if (q?.getCurrentTime) { setT(q.getCurrentTime()); const du = q.getDuration(); if (du) setD(du); } }, 500);
+    return () => { stop = true; clearInterval(tick); try { p.current?.destroy(); } catch { /* انسد */ } p.current = null; };
+  }, [id]);
+  const q = () => p.current;
+  const toggle = () => { haptic(); const x = q(); if (!x) return; if (on) x.pauseVideo(); else x.playVideo(); };
+  const jump = (s: number) => { const x = q(); if (!x) return; const n = Math.max(0, Math.min(d || 0, x.getCurrentTime() + s)); x.seekTo(n, true); setT(n); };
+  const full = () => { const el = box.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null; if (!el) return; if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); else if (el.requestFullscreen) void el.requestFullscreen().catch(() => undefined); else el.webkitRequestFullscreen?.(); };
+  return (
+    <div className="ntyt" ref={box} onContextMenu={(e) => e.preventDefault()}>
+      <div className="ntytbar">
+        <b>🎬 فيديو حل السؤال</b>
+        <button type="button" className="gk-btn" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); }}>✖ سد وارجع للملزمة</button>
+      </div>
+      <div className="ntytbox">
+        <div className="ntytframe"><div ref={slot} /></div>
+        {/* غطا شفاف: الطالب ما يگدر يدوس على أي شي من اليوتيوب. دوسة وحدة توقف أو تشغل */}
+        <div className="ntytcover" onClick={toggle} />
+        {err && <div className="ntytmsg">⚠️ {err}</div>}
+        {!ready && !err && <div className="ntytmsg">جاري فتح الفيديو...</div>}
+      </div>
+      <div className="ntytctl">
+        <button type="button" className="gk-ic" aria-label={on ? "وقف" : "شغل"} disabled={!ready} onClick={toggle}>{on ? "⏸" : "▶️"}</button>
+        <button type="button" className="gk-ic" aria-label="ارجع 10 ثواني" disabled={!ready} onClick={() => jump(-10)}>↻10</button>
+        <button type="button" className="gk-ic" aria-label="قدم 10 ثواني" disabled={!ready} onClick={() => jump(10)}>10↺</button>
+        <input type="range" dir="ltr" aria-label="مكان الفيديو" min={0} max={Math.max(1, Math.floor(d))} step={1} value={Math.floor(t)} disabled={!ready} onChange={(e) => { const n = Number(e.target.value); setT(n); q()?.seekTo(n, true); }} />
+        <small dir="ltr">{clock(t)} / {clock(d)}</small>
+        <select aria-label="السرعة" dir="ltr" disabled={!ready} value={speed} onChange={(e) => { const n = Number(e.target.value); setSpeed(n); q()?.setPlaybackRate(n); }}>
+          {SPEEDS.map((s) => <option key={s} value={s}>{s === 1 ? "1x عادي" : `${s}x ${s < 1 ? "أبطأ" : "أسرع"}`}</option>)}
+        </select>
+        <button type="button" className="gk-ic" aria-label="ملء الشاشة" onClick={full}>⛶</button>
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ const { insert, one, put } = await import("../lib/db.ts");
 const { ensure } = await import("../lib/webApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 const { noteAction, noteAdmin } = await import("../lib/notes.ts");
-const { parseLink, videoName } = await import("../lib/noteMarks.ts");
+const { parseLink, parseYouTube, videoName } = await import("../lib/noteMarks.ts");
 const { files } = await import("../lib/files.ts");
 await ensure();
 
@@ -41,6 +41,8 @@ test("رابط منشور القناة واسم الفيديو من ملفه", (
   assert.deepEqual(parseLink("t.me/c/1234567890/5/77?single"), { chat: "-1001234567890", msg: 77 });
   assert.deepEqual(parseLink("https://t.me/qusay_ch/9"), { chat: "@qusay_ch", msg: 9 });
   assert.equal(parseLink("https://youtube.com/x"), null);
+  for (const u of ["https://youtu.be/yrnZcMgZsUw?feature=shared", "https://www.youtube.com/watch?v=yrnZcMgZsUw&t=3", "youtube.com/shorts/yrnZcMgZsUw", "https://m.youtube.com/watch?v=yrnZcMgZsUw"]) assert.equal(parseYouTube(u), "yrnZcMgZsUw", u);
+  for (const u of ["https://youtube.com/x", "https://evil.com/youtu.be/yrnZcMgZsUw", "https://t.me/c/1/2"]) assert.equal(parseYouTube(u), null, u);
   assert.deepEqual(videoName("السلم_المنزلق_English_عربي.mp4"), { name: "السلم المنزلق", lang: "en" });
   assert.deepEqual(videoName("السلم_المنزلق_عربي.mp4"), { name: "السلم المنزلق", lang: "ar" });
 });
@@ -70,6 +72,23 @@ test("🔍 الأزرار تنحط على الأسئلة، والفيديو ال
   // رابط الحل: الغلط ينرفض، والصح ينحفظ ويبقى بعد إعادة التدوير
   const q1 = r.marks.find((m: any) => m.label.startsWith("Q 1"));
   await assert.rejects(admin("markSave", { book, id: q1.id, page: 1, y: q1.y, solution: "https://youtube.com/x" }), /رابط الحل/);
+  // رابط يوتيوب: ينحفظ، والطالب ياخذ رقم الفيديو بس حتى يشتغل جوّا الملزمة، بلا رابط
+  const ex = r.marks.find((m: any) => m.label.startsWith("Example"));
+  await admin("markSave", { book, id: ex.id, page: 1, y: ex.y, label: ex.label, solution: "https://youtu.be/W7hH5Vyt_no?feature=shared" });
+  const exSeen = (await act("marks")).marks.find((m: any) => m.id === ex.id);
+  assert.deepEqual([exSeen.video, exSeen.solution], [false, true]);
+  assert.deepEqual(await act("play", { mark: ex.id, kind: "solution" }), { notice: "🎬 فيديو حل السؤال", yt: "W7hH5Vyt_no" });
+  await admin("markSave", { book, id: ex.id, page: 1, y: ex.y, label: ex.label, solution: "" });
+  // لصق روابط كثيرة: الرابط يروح للزر القريب بنفس الصفحة، والمكان الفارغ ينضافله زر، والسطر الغلط ينذكر
+  const pasted = await admin("solutionsPaste", { book, text: `ص1 · ${(ex.y + 0.01).toFixed(3)} · مثال · https://youtu.be/W7hH5Vyt_no\nص1 · 0.900 · سؤال جوه · https://youtu.be/OLs8XMB0gVk\nكلام غلط` });
+  assert.match(pasted.notice, /انربط 2 سؤال/);
+  assert.match(pasted.notice, /انضاف 1 زر/);
+  assert.match(pasted.notice, /1 سطر ما انفهم/);
+  assert.equal(pasted.marks.find((m: any) => m.id === ex.id).solution, "https://youtu.be/W7hH5Vyt_no");
+  const bottom = pasted.marks.find((m: any) => m.label === "سؤال جوه");
+  assert.equal(bottom.solution, "https://youtu.be/OLs8XMB0gVk");
+  await admin("markDelete", { book, id: bottom.id });
+  await admin("markSave", { book, id: ex.id, page: 1, y: ex.y, label: ex.label, solution: "" });
   r = await admin("markSave", { book, id: q1.id, page: 1, y: q1.y, label: q1.label, solution: "https://t.me/c/123456/9" });
   r = await admin("autoMarks", { book });
   assert.equal(r.marks.find((m: any) => m.id === q1.id)?.solution, "https://t.me/c/123456/9");
