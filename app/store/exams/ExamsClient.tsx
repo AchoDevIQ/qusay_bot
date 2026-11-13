@@ -28,6 +28,9 @@ export default function ExamsClient() {
 
   const fileUrl = (ref: string) => `/api/exams/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
   const ch = data?.chapters[openChapter];
+  // رسالة «شنو تحدّث» بعد رفع صفحات أو جواب: تطلع بمكان واضح حتى لو الأستاذ نازل جوة بالنسخة
+  const noticeBox = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (data?.notice) noticeBox.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [data?.notice]);
 
   return (
     <>
@@ -51,7 +54,7 @@ export default function ExamsClient() {
         {data && data.chapters.length > 1 && (
           <div className="chips">{data.chapters.map((c, i) => <button type="button" key={c.slug} className={i === openChapter ? "on" : ""} onClick={() => { setOpenChapter(i); setOpenExam(null); }}>{c.chapter}</button>)}</div>
         )}
-        {data?.notice && <div className="card warn exerr">{data.notice}</div>}
+        {data?.notice && <div ref={noticeBox} className="card warn exerr" style={{ whiteSpace: "pre-line" }}>{data.notice}</div>}
         {data && <GeneralTime value={data.generalMinutes} busy={busy} call={call} />}
         {data && <WordImport chapters={data.chapters} result={data.word} busy={busy} call={call} />}
         {ch && (

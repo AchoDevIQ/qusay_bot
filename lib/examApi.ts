@@ -16,6 +16,7 @@ import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { fileToken, verifyFileToken } from "./webAuth.ts";
 import { SKIP_KEY, WITH_KEY, examWith, skippableExams } from "./skipExams.ts";
 import { autoInsertExam } from "./schedApi.ts";
+import { syncAnswer, syncPages } from "./versionSync.ts";
 
 export { ApiError };
 
@@ -369,10 +370,16 @@ export async function examUpload(form: FormData) {
     for (const x of files) saved.push(await saveUpload(x, IMAGES));
     await update("bank_versions", { id }, { [a === "pagesAr" ? "pages_ar" : "pages_en"]: JSON.stringify(saved) });
     await logEdit(uid, `نسخة ${id}: صور نسخة الطالب ${a}`);
+    // ملف الطباعة وصور الأسئلة تتبع الصفحات الجديدة
+    const notice = await syncPages(id, a === "pagesAr" ? "ar" : "en", saved);
+    await logEdit(uid, `نسخة ${id}: ${notice.split("\n")[0].slice(0, 200)}`);
+    return { ...await examList(uid), notice };
   } else if (a === "answerPdf") {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
     await update("bank_versions", { id }, { answer_pdf: await saveUpload(form.get("file"), ["pdf"]) });
     await logEdit(uid, `نسخة ${id}: الجواب النموذجي PDF`);
+    // صور الحل القديمة وخطوات التصحيح تتبع الجواب الجديد
+    return { ...await examList(uid), notice: await syncAnswer(id) };
   } else if (a === "pdfAr" || a === "pdfEn") {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
     await update("bank_versions", { id }, { [a === "pdfAr" ? "pdf_ar" : "pdf_en"]: await saveUpload(form.get("file"), ["pdf"]) });

@@ -213,7 +213,8 @@ export const clearRubric = (qid: number) => kvSet(rubricKey(qid), "null");
 
 // «خطوات الفصل كله»: المواضيع المأشرة تدخل بالدور، والمؤقت كل دقيقة يطلّع ويحفظ خطوات كم سؤال
 // (الفصل ممكن بيه مية سؤال، فما يخلص بطلب واحد)
-type DraftQueue = { q: number[]; tries: Record<string, number>; failed: string[] };
+// re: أسئلة إلها خطوات بس جوابها النموذجي تبدل، فتنطلع خطواتها من جديد وتنحفظ فوك القديمة (القديمة تبقى بـ ai_rubric_prev_q_)
+type DraftQueue = { q: number[]; tries: Record<string, number>; failed: string[]; re?: number[] };
 const QUEUE = "ai_draft_queue", DRAFT_PER_TICK = 8, DRAFT_TRIES = 2;
 const readQueue = () => readJson<DraftQueue>(QUEUE, { q: [], tries: {}, failed: [] });
 async function needsDraft(examIds: number[]) {
@@ -230,8 +231,13 @@ export async function queueDrafts(examIds: number[]) {
   const { todo, noSol } = await needsDraft(examIds);
   const st = await readQueue();
   const q = [...new Set([...st.q, ...todo.map((x) => x.id as number)])];
-  await kvSet(QUEUE, JSON.stringify({ q, tries: st.tries, failed: [] }));
+  await kvSet(QUEUE, JSON.stringify({ ...st, q, failed: [] }));
   return { added: todo.length, left: q.length, noSol };
+}
+/** الجواب النموذجي تبدل: خطوات هالأسئلة تنعاد من الجواب الجديد بدكات المؤقت */
+export async function queueRedraft(ids: number[]) {
+  const st = await readQueue();
+  await kvSet(QUEUE, JSON.stringify({ ...st, q: [...new Set([...st.q, ...ids])], re: [...new Set([...(st.re ?? []), ...ids])] }));
 }
 export async function draftQueueState() {
   const st = await readQueue();
@@ -250,10 +256,18 @@ export async function draftQueueTick(by: number, limit = DRAFT_PER_TICK) {
   if (!st.q.length) return { left: 0 };
   const batch = st.q.slice(0, limit);
   const ok: number[] = [], bad: number[] = [];
-  const queue = [...batch];
+  const queue = [...batch], redo = new Set(st.re ?? []);
   await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
     for (let id = queue.shift(); id; id = queue.shift()) {
-      try { if (!await rubricOf(id)) { const d = await draftRubric(id); await saveRubric(id, d.steps, by, d.alts); } ok.push(id); }
+      try {
+        const old = await rubricFull(id);
+        if (!old || redo.has(id)) {
+          const d = await draftRubric(id);
+          if (old) await kvSet(`ai_rubric_prev_q_${id}`, JSON.stringify(old));
+          await saveRubric(id, d.steps, by, d.alts);
+        }
+        ok.push(id);
+      }
       catch { bad.push(id); }
     }
   }));
@@ -267,7 +281,7 @@ export async function draftQueueTick(by: number, limit = DRAFT_PER_TICK) {
   }
   // اللي فشل مرة يرجع لآخر الدور
   const left = now.q.filter((id) => !drop.has(id) && !bad.includes(id)).concat(bad.filter((id) => !drop.has(id)));
-  await kvSet(QUEUE, JSON.stringify({ q: left, tries, failed: failed.slice(-50) }));
+  await kvSet(QUEUE, JSON.stringify({ q: left, tries, failed: failed.slice(-50), re: (now.re ?? []).filter((id) => left.includes(id)) }));
   return { done: ok.length, failed: bad.length, left: left.length };
 }
 
