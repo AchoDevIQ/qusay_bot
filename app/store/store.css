@@ -333,23 +333,37 @@ body.grwide .grtop{padding-left:104px}
 .ntscroll{position:relative;margin:0 auto}
 .ntsheet{position:absolute;left:0}
 .ntpaper{position:absolute;top:0;background:#fff}
-.ntpaper canvas{position:absolute;inset:0;display:block}
+.ntpaper>canvas{position:absolute;inset:0;display:block}
 .ntholder{position:absolute;left:0;display:flex;align-items:center;justify-content:center;background:#e9edf3;color:#7a8597;font-size:28px;font-weight:700}
 .ntholder.ntin{inset:0;width:auto;height:auto;font-size:15px;font-weight:400;padding:20px;text-align:center}
 .ntno{position:absolute;bottom:4px;right:6px;z-index:2;padding:1px 8px;border-radius:999px;background:rgba(15,26,46,.75);color:#fff;font-size:11px;pointer-events:none}
-.ntnote{position:absolute;z-index:2;max-width:45%;min-width:72px;display:flex;flex-direction:column;background:#fff59d;color:#222;border-radius:6px;box-shadow:0 3px 8px rgba(0,0,0,.3);border:1px solid #e6c84a}
-.ntnote.on{z-index:4;max-width:70%;min-width:60%}
-.ntnotemove{align-self:stretch;text-align:center;font-size:13px;line-height:1.2;padding:1px 0;background:#f2dc6a;border-radius:6px 6px 0 0;cursor:grab;touch-action:none;color:#6b5a10}
-.ntnotetext{padding:3px 6px 5px;white-space:pre-wrap;word-break:break-word;line-height:1.35;cursor:text;min-height:1.4em}
-.ntnote textarea{font:inherit;font-size:16px;min-height:70px;border:0;background:#fffbd0;color:#222;padding:5px 6px;resize:vertical;-webkit-user-select:text;user-select:text}
-.ntnotebtns{display:flex;gap:4px;padding:4px}
-.ntnotebtns button{flex:1;font:inherit;font-size:13px;font-weight:700;padding:4px;border-radius:6px;border:1px solid #c9ab2c;background:#fff;color:#222;cursor:pointer}
-.ntytchat{margin-top:12px;font-size:15px}
-.ntnotemode{display:flex;gap:4px;padding:4px 4px 0}
-.ntnotemode button{flex:1;font:inherit;font-size:12px;font-weight:700;padding:3px;border-radius:6px;border:1px solid #c9ab2c;background:#fffbd0;color:#6b5a10;cursor:pointer}
-.ntnotemode button.on{background:#c9ab2c;color:#fff}
-.ntnote canvas.ntnoteink{display:block;width:100%;touch-action:none;background:transparent}
-.ntnote.on canvas.ntnoteink{background:#fffbd0}
+.ntnote{position:absolute;z-index:2;max-width:45%;min-width:72px;display:flex;flex-direction:column;background-color:var(--nb);color:#222;border-radius:6px;box-shadow:0 3px 8px rgba(0,0,0,.3);border:1px solid var(--nl);touch-action:none;cursor:grab}
+.nt-c-y{--nb:#fff59d;--nl:#e6c84a}.nt-c-p{--nb:#f8bbd0;--nl:#e091ad}.nt-c-g{--nb:#c8e6c9;--nl:#8fc493}.nt-c-b{--nb:#bbdefb;--nl:#82b5e3}.nt-c-o{--nb:#ffe0b2;--nl:#f0b56a}.nt-c-w{--nb:#ffffff;--nl:#cfd6e0}
+.nt-b-lines{background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(1.35em - 1px),rgba(0,0,0,.16) calc(1.35em - 1px),rgba(0,0,0,.16) 1.35em)}
+.nt-b-grid{background-image:linear-gradient(rgba(0,0,0,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.12) 1px,transparent 1px);background-size:.9em .9em}
+.nt-b-dots{background-image:radial-gradient(rgba(0,0,0,.28) 1px,transparent 1.5px);background-size:.9em .9em}
+.ntnotemove{align-self:stretch;text-align:center;font-size:12px;line-height:1.2;padding:1px 0;background:rgba(0,0,0,.08);border-radius:6px 6px 0 0;color:rgba(0,0,0,.45)}
+.ntnotetext{padding:3px 6px 5px;white-space:pre-wrap;word-break:break-word;line-height:1.35em;min-height:1.35em}
+.ntnote canvas.ntnoteink{display:block;width:100%}
+.nteditor{max-width:420px;max-height:calc(100% - 20px);overflow:auto;gap:7px}
+.nteditor>small{text-align:start;opacity:.8;font-size:12px;margin-top:2px}
+.ntedittext{font:inherit;font-size:16px;line-height:1.35em;border:1px solid var(--nl);border-radius:8px;background-color:var(--nb);color:#222;padding:6px 8px;resize:vertical;-webkit-user-select:text;user-select:text}
+.nteditpad{border:1px solid var(--nl);border-radius:8px;background-color:var(--nb);color:#222;text-align:start;overflow:hidden}
+.nteditpad canvas{display:block;width:100%;touch-action:none}
+.ntnotemode{display:flex;gap:6px}
+.ntnotemode button{flex:1;font:inherit;font-size:14px;font-weight:700;padding:7px;border-radius:8px;border:1px solid var(--gold2,#cea239);background:transparent;color:#f9c445;cursor:pointer}
+.ntnotemode button.on{background:#f9c445;color:#0d2140}
+.ntnoterow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}
+.ntswatch{width:30px;height:30px;border-radius:50%;border:2px solid #fff;background-color:var(--nb);cursor:pointer;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
+.ntswatch.on{box-shadow:0 0 0 3px #f9c445}
+.ntbgpick{display:flex;flex-direction:column;align-items:center;width:58px;padding:5px 2px;border-radius:8px;border:1px solid var(--nl);background-color:var(--nb);color:#222;font:inherit;font-size:16px;cursor:pointer}
+.ntbgpick small{font-size:10px;font-weight:700}
+.ntbgpick.on{box-shadow:0 0 0 3px #f9c445}
+.ntmini{font:inherit;font-size:13px;font-weight:700;padding:5px 10px;border-radius:8px;border:1px solid var(--gold2,#cea239);background:transparent;color:#f9c445;cursor:pointer}
+.ntmini:disabled{opacity:.4}
+.ntnotebtns{display:flex;gap:6px;margin-top:4px}
+.ntnotebtns button{flex:1;font:inherit;font-size:15px;font-weight:700;padding:9px;border-radius:9px;border:1px solid var(--gold2,#cea239);background:transparent;color:#fff;cursor:pointer}
+.ntnotebtns .ntsave{background:#f9c445;color:#0d2140}
 .ntnotehint{font-size:13px;color:#f9c445}
 .ntfind{font-size:13px}
 .ntfind input{width:92px;font:inherit;font-size:15px;padding:5px 8px;border-radius:8px;border:1px solid var(--gold2,#cea239);background:#fff;color:#111;text-align:center}

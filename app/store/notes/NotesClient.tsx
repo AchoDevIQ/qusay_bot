@@ -9,10 +9,15 @@ type Mark = { id: number; page: number; y: number; video: boolean; solution: boo
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
 type Tool = "hand" | "pen" | "mark" | "erase" | "note";
 /** ملاحظة لاصقة على الصفحة: مكانها (من 0 لـ 1) ونصها */
-type Note = { x: number; y: number; t: string; s?: { p: number[] }[] };
+type Ink = { p: number[]; c?: string };
+type Note = { x: number; y: number; t: string; s?: Ink[]; c?: string; b?: string };
+// ألوان ورقة الملاحظة وأرضياتها: الطالب يختار
+const NOTE_COLORS: [string, string][] = [["y", "أصفر"], ["p", "وردي"], ["g", "أخضر"], ["b", "أزرق"], ["o", "برتقالي"], ["w", "أبيض"]];
+const NOTE_BGS: [string, string, string][] = [["plain", "▫️", "سادة"], ["lines", "☰", "مسطّرة"], ["grid", "▦", "مربعات"], ["dots", "⁘", "نقاط"]];
+const NOTE_INKS = ["#1e3a8a", "#111111", "#e53935", "#1f9d55", "#8e24aa"];
 
-const PENS = ["#111111", "#1e5bd8", "#e53935", "#1f9d55"];
-const MARKS = ["#ffe600", "#7dff6b", "#ff9de2"];
+const PENS = ["#111111", "#1e5bd8", "#e53935", "#1f9d55", "#8e24aa", "#fb8c00", "#6d4c41", "#00acc1"];
+const MARKS = ["#ffe600", "#7dff6b", "#ff9de2", "#7fd3ff", "#ffb74d", "#c39bff"];
 const ZOOMS = [1, 1.5, 2, 3];
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
 
@@ -81,9 +86,7 @@ type SheetApi = { flush: (keepalive?: boolean) => Promise<void>; restore: (s: St
 
 function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => void }) {
   const [page, setPage] = useState(1);
-  const [bookmark, setBookmark] = useState(book.saved && book.saved <= book.pages ? book.saved : 0);
-  const [asking, setAsking] = useState(false);
-  const [keeping, setKeeping] = useState(false);
+  const [bookmark] = useState(book.saved && book.saved <= book.pages ? book.saved : 0);
   const [tool, setTool] = useState<Tool>("hand");
   const [pen, setPen] = useState(PENS[1]);
   const [mark, setMark] = useState(MARKS[0]);
@@ -115,6 +118,20 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
     catch (e) { setMsg(`⚠️ ${(e as Error).message}`); } finally { setSending(false); }
   }
 
+  // 🔖 الصفحة اللي وصلها تنحفظ وحدها: من يوگف على صفحة (غير الأولى) ثلث ثواني، أو من يطلع. فحتى لو سد البوت كله تبقى
+  const lastSaved = useRef(bookmark);
+  const saveSpot = useCallback((n: number, keepalive = false) => {
+    if (n <= 1 || n === lastSaved.current) return;
+    lastSaved.current = n;
+    void post({ action: "bookmark", book: book.id, page: n }, keepalive).catch(() => { lastSaved.current = 0; });
+  }, [book.id]);
+  const pageRef = useRef(page); pageRef.current = page;
+  useEffect(() => { const t = setTimeout(() => saveSpot(page), 3000); return () => clearTimeout(t); }, [page, saveSpot]);
+  useEffect(() => {
+    const hide = () => { if (document.visibilityState === "hidden") saveSpot(pageRef.current, true); };
+    document.addEventListener("visibilitychange", hide);
+    return () => document.removeEventListener("visibilitychange", hide);
+  }, [saveSpot]);
   const flushAll = useCallback(async (keepalive = false) => { await Promise.all([...sheets.current.values()].map((s) => s.flush(keepalive))); }, []);
   useEffect(() => {
     const save = () => { if (document.visibilityState === "hidden") void flushAll(true); };
@@ -159,7 +176,7 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
   return (
     <div className="nt">
       <div className="ntbar">
-        <button type="button" className="gk-btn" onClick={async () => { await flushAll(); if (page > 1 && page !== bookmark) setAsking(true); else onClose(bookmark); }}>⬅️ رجوع</button>
+        <button type="button" className="gk-btn" onClick={async () => { await flushAll(); saveSpot(page); onClose(page > 1 ? page : bookmark); }}>⬅️ رجوع</button>
         <b className="nttitle">{book.title}</b>
         <small className={pending ? "ntwait" : "ntok"}>{err ? "⚠️" : pending ? "⏳ يحفظ" : "✅ محفوظ"}</small>
       </div>
@@ -173,6 +190,10 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
       {(tool === "pen" || tool === "mark") && (
         <div className="ntbar ntcolors">
           {(tool === "pen" ? PENS : MARKS).map((c) => <button type="button" key={c} aria-label="لون" className={"gk-dot" + ((tool === "pen" ? pen : mark) === c ? " on" : "")} style={{ background: c }} onClick={() => (tool === "pen" ? setPen(c) : setMark(c))} />)}
+          {/* 🎨 أي لون يريده */}
+          <label className={"gk-dot ntanycolor" + (!(tool === "pen" ? PENS : MARKS).includes(tool === "pen" ? pen : mark) ? " on" : "")} title="لون ثاني" aria-label="اختار أي لون" style={{ background: !(tool === "pen" ? PENS : MARKS).includes(tool === "pen" ? pen : mark) ? (tool === "pen" ? pen : mark) : undefined }}>
+            <input type="color" value={tool === "pen" ? pen : mark} onChange={(e) => (tool === "pen" ? setPen(e.target.value) : setMark(e.target.value))} />
+          </label>
         </div>
       )}
       {tool === "note" && <div className="ntbar ntcolors ntnotehint">📝 دوس على المكان اللي تريد بيه الملاحظة</div>}
@@ -183,7 +204,7 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
         <button type="submit" className="gk-btn" disabled={!find}>🔍 روح</button>
       </form>
       {err && <div className="ntbad">⚠️ {err}</div>}
-      {bookmark > 0 && page !== bookmark && <button type="button" className="ntbookmark" onClick={() => go(bookmark)}>🔖 آخر مرة وصلت لصفحة {bookmark}. دوس هنا حتى تروح لها</button>}
+      {bookmark > 1 && page === 1 && <button type="button" className="ntbookmark" onClick={() => go(bookmark)}>🔖 آخر مرة وصلت لصفحة {bookmark}. دوس هنا حتى تروح لها</button>}
       {msg && <div className="ntmsg" onClick={() => setMsg("")}>{msg}</div>}
       <div className="ntstage" ref={stage} onScroll={onScroll}>
         <div className="ntscroll" style={{ width: w + side, height: book.pages * step - GAP }}>
@@ -200,21 +221,6 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
       </div>
       {yt && <VideoBox title="🎬 فيديو حل السؤال" yt={yt} onClose={() => setYt("")} onFail={(code) => void post({ action: "videoError", book: book.id, kind: "solution", code }).catch(() => undefined)} />}
       {clip && <VideoBox title="▶️ فيديو توضيح السؤال" src={clip} onClose={() => setClip("")} onChat={clipMark ? () => { setClip(""); void play(clipMark, "chat"); } : undefined} onFail={(code) => void post({ action: "videoError", book: book.id, kind: "video", code }).catch(() => undefined)} />}
-      {asking && (
-        <div className="ntask">
-          <div className="ntaskbox">
-            <b>🔖 تريد تحفظ الصفحة {page}؟</b>
-            <p>من تفتح الملزمة مرة ثانية، يطلعلك زر يوديك لهاي الصفحة على طول.</p>
-            <button type="button" className="btn" disabled={keeping} onClick={async () => {
-              haptic(); setKeeping(true);
-              try { await post({ action: "bookmark", book: book.id, page }); setBookmark(page); onClose(page); }
-              catch (e) { setErr((e as Error).message); setAsking(false); } finally { setKeeping(false); }
-            }}>{keeping ? "⏳ دا يحفظ..." : `🔖 إي، احفظ صفحة ${page}`}</button>
-            <button type="button" className="exbtn" disabled={keeping} onClick={() => onClose(bookmark)}>لا، طلّعني بس</button>
-            <button type="button" className="exbtn" disabled={keeping} onClick={() => setAsking(false)}>↩️ ارجع للملزمة</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -238,8 +244,7 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
   const [notes, setNotes] = useState<Note[]>([]);
   const notesRef = useRef(notes); notesRef.current = notes;
   const [editing, setEditing] = useState(-1);
-  const [noteMode, setNoteMode] = useState<"kb" | "pen">("kb");
-  const drag = useRef<{ i: number; sx: number; sy: number; x: number; y: number } | null>(null);
+  const drag = useRef<{ i: number; sx: number; sy: number; x: number; y: number; moved: boolean } | null>(null);
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cb = useRef({ onPending, onErr }); cb.current = { onPending, onErr };
@@ -305,8 +310,8 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
     if (tool === "erase") { erase(x, y); return; }
     if (tool === "note") {
       // ملاحظة جديدة بمكان الدوسة، وتنفتح للكتابة. بعدها الأداة ترجع لليد حتى يگدر يسحب الملزمة
-      const next = [...notesRef.current, { x: Math.min(x, 0.6), y: Math.min(y, 0.92), t: "" }];
-      notesRef.current = next; setNotes(next); setNoteMode("kb"); setEditing(next.length - 1); onPlaced();
+      const next: Note[] = [...notesRef.current, { x: Math.min(x, 0.6), y: Math.min(y, 0.92), t: "", c: "y", b: "plain" }];
+      notesRef.current = next; setNotes(next); setEditing(next.length - 1); onPlaced();
       return;
     }
     live.current = tool === "mark" ? { c: color, w: 22, h: 1, p: [x, y] } : { c: color, w: 2.5, p: [x, y] };
@@ -326,37 +331,29 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
       {!img && <div className="ntholder ntin">{bad ? "ما انفتحت هاي الصفحة. ارجعلها بعد شوية" : `جاري فتح الصفحة ${n}...`}</div>}
       {img && <canvas ref={bg} style={{ width: w, height: h }} />}
       {img && <canvas ref={topC} style={{ width: w, height: h, touchAction: tool === "hand" ? "auto" : "none" }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { live.current = null; redraw(strokesRef.current); }} />}
+      {/* 📝 الملاحظات: تنسحب من أي مكان بيها، ودوسة وحدة تفتحها للتعديل */}
       {img && notes.map((nt, i) => (
-        <div key={i} className={"ntnote" + (editing === i ? " on" : "")} style={{ left: `${nt.x * 100}%`, top: `${nt.y * 100}%`, fontSize: Math.max(11, Math.round(w / 30)), width: editing !== i && nt.s?.length ? "38%" : undefined }}>
-          <span className="ntnotemove" title="اسحبها لأي مكان" aria-label="حرك الملاحظة"
-            onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); drag.current = { i, sx: e.clientX, sy: e.clientY, x: nt.x, y: nt.y }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* السحب يكمل بدونه */ } }}
-            onPointerMove={(e) => { const d = drag.current; if (!d || d.i !== i) return; const x = Math.max(0, Math.min(0.9, d.x + (e.clientX - d.sx) / w)), y = Math.max(0, Math.min(0.96, d.y + (e.clientY - d.sy) / h)); const next = notesRef.current.map((q, k) => (k === i ? { ...q, x, y } : q)); notesRef.current = next; setNotes(next); }}
-            onPointerUp={() => { if (drag.current) { drag.current = null; touch(); } }} onPointerCancel={() => { drag.current = null; touch(); }}>✥</span>
-          {editing === i ? (
-            <>
-              <span className="ntnotemode">
-                <button type="button" className={noteMode === "kb" ? "on" : ""} onClick={() => setNoteMode("kb")}>⌨️ كيبورد</button>
-                <button type="button" className={noteMode === "pen" ? "on" : ""} onClick={() => setNoteMode("pen")}>✏️ قلم</button>
-              </span>
-              {noteMode === "kb"
-                ? <textarea autoFocus dir="auto" maxLength={300} value={nt.t} placeholder="اكتب ملاحظتك..." onChange={(e) => setNote(i, { ...nt, t: e.target.value })} />
-                : <NoteInk strokes={nt.s ?? []} onChange={(s) => setNote(i, { ...nt, s })} />}
-              {nt.t && noteMode === "pen" && <div className="ntnotetext" dir="auto">{nt.t}</div>}
-              {(nt.s?.length ?? 0) > 0 && noteMode === "kb" && <NoteInk strokes={nt.s!} />}
-              <span className="ntnotebtns">
-                <button type="button" onClick={() => { if (!nt.t.trim() && !nt.s?.length) setNote(i, null); setEditing(-1); }}>✓ تم</button>
-                {noteMode === "pen" && <button type="button" disabled={!nt.s?.length} onClick={() => setNote(i, { ...nt, s: (nt.s ?? []).slice(0, -1) })}>↶</button>}
-                <button type="button" onClick={() => { setNote(i, null); setEditing(-1); }}>🗑 امسحها</button>
-              </span>
-            </>
-          ) : (
-            <div onClick={() => { setNoteMode(nt.s?.length && !nt.t ? "pen" : "kb"); setEditing(i); }}>
-              {nt.t && <div className="ntnotetext" dir="auto">{nt.t}</div>}
-              {(nt.s?.length ?? 0) > 0 && <NoteInk strokes={nt.s!} />}
-            </div>
-          )}
+        <div key={i} className={`ntnote nt-c-${nt.c ?? "y"} nt-b-${nt.b ?? "plain"}`} style={{ left: `${nt.x * 100}%`, top: `${nt.y * 100}%`, fontSize: Math.max(11, Math.round(w / 30)), width: nt.s?.length ? "40%" : undefined }}
+          onPointerDown={(e) => { e.stopPropagation(); drag.current = { i, sx: e.clientX, sy: e.clientY, x: nt.x, y: nt.y, moved: false }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* السحب يكمل بدونه */ } }}
+          onPointerMove={(e) => {
+            const d = drag.current; if (!d || d.i !== i) return;
+            if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 6) return;
+            d.moved = true;
+            const x = Math.max(0, Math.min(0.9, d.x + (e.clientX - d.sx) / w)), y = Math.max(0, Math.min(0.96, d.y + (e.clientY - d.sy) / h));
+            const next = notesRef.current.map((q, k) => (k === i ? { ...q, x, y } : q)); notesRef.current = next; setNotes(next);
+          }}
+          onPointerUp={() => { const d = drag.current; drag.current = null; if (!d) return; if (d.moved) touch(); else setEditing(i); }}
+          onPointerCancel={() => { if (drag.current?.moved) touch(); drag.current = null; }}>
+          <span className="ntnotemove" aria-hidden>✥</span>
+          {nt.t && <div className="ntnotetext" dir="auto">{nt.t}</div>}
+          {(nt.s?.length ?? 0) > 0 && <NoteInk strokes={nt.s!} />}
         </div>
       ))}
+      {editing >= 0 && notes[editing] && (
+        <NoteEditor note={notes[editing]}
+          onSave={(nt) => { setNote(editing, nt.t.trim() || nt.s?.length ? nt : null); setEditing(-1); }}
+          onDelete={() => { setNote(editing, null); setEditing(-1); }} />
+      )}
       <span className="ntno">{n}</span>
       </div>
       {img && marks.map((m) => (
@@ -370,32 +367,79 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
 }
 
 /** كتابة بالقلم جوّا الملاحظة: النقاط من 0 لـ 1 داخل مربع الملاحظة، فتبين نفسها بأي حجم */
-function NoteInk({ strokes, onChange }: { strokes: { p: number[] }[]; onChange?: (s: { p: number[] }[]) => void }) {
+function NoteInk({ strokes, onChange, color = NOTE_INKS[0] }: { strokes: Ink[]; onChange?: (s: Ink[]) => void; color?: string }) {
   const c = useRef<HTMLCanvasElement>(null);
   const live = useRef<number[] | null>(null);
   const paint = useCallback(() => {
     const el = c.current; if (!el) return;
     const r = el.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
-    if (!r.width) return;
+    if (!r.width) { requestAnimationFrame(() => { if (c.current?.getBoundingClientRect().width) paint(); }); return; }
     el.width = r.width * dpr; el.height = r.height * dpr;
     const g = el.getContext("2d")!; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height);
-    g.strokeStyle = "#1e3a8a"; g.lineWidth = Math.max(1.5, r.width / 110); g.lineCap = "round"; g.lineJoin = "round";
-    for (const s of live.current ? [...strokes, { p: live.current }] : strokes) {
+    g.lineWidth = Math.max(1.5, r.width / 110); g.lineCap = "round"; g.lineJoin = "round";
+    for (const s of live.current ? [...strokes, { p: live.current, c: color }] : strokes) {
+      g.strokeStyle = s.c ?? NOTE_INKS[0];
       g.beginPath();
       for (let k = 0; k < s.p.length; k += 2) (k ? g.lineTo : g.moveTo).call(g, s.p[k] * r.width, s.p[k + 1] * r.height);
       if (s.p.length === 2) g.lineTo(s.p[0] * r.width + 0.5, s.p[1] * r.height);
       g.stroke();
     }
-  }, [strokes]);
+  }, [strokes, color]);
   useEffect(() => { paint(); }, [paint]);
   const at = (e: React.PointerEvent) => { const r = c.current!.getBoundingClientRect(); return [+Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)).toFixed(3), +Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)).toFixed(3)]; };
-  if (!onChange) return <canvas ref={c} className="ntnoteink" style={{ aspectRatio: "5 / 3" }} />;
+  if (!onChange) return <canvas ref={c} className="ntnoteink" style={{ aspectRatio: "5 / 3", pointerEvents: "none" }} />;
   return (
-    <canvas ref={c} className="ntnoteink" style={{ aspectRatio: "5 / 3" }}
+    <canvas ref={c} className="ntnoteink ntnotepad" style={{ aspectRatio: "5 / 3" }}
       onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); live.current = at(e); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* يكمل */ } paint(); }}
-      onPointerMove={(e) => { if (!live.current || !(e.buttons & 1)) return; live.current.push(...at(e)); paint(); }}
-      onPointerUp={() => { const p = live.current; live.current = null; if (p && strokes.length < 150) onChange([...strokes, { p }]); else paint(); }}
+      onPointerMove={(e) => { if (!live.current) return; live.current.push(...at(e)); paint(); }}
+      onPointerUp={() => { const p = live.current; live.current = null; if (p && strokes.length < 150) onChange([...strokes, { p, c: color }]); else paint(); }}
       onPointerCancel={() => { live.current = null; paint(); }} />
+  );
+}
+
+/** نافذة الملاحظة: يكتب بالكيبورد أو بالقلم، ويختار لون الورقة وأرضيتها */
+function NoteEditor({ note, onSave, onDelete }: { note: Note; onSave: (n: Note) => void; onDelete: () => void }) {
+  const [d, setD] = useState<Note>(note);
+  const [mode, setMode] = useState<"kb" | "pen">(note.s?.length && !note.t ? "pen" : "kb");
+  const [ink, setInk] = useState(NOTE_INKS[0]);
+  const look = `nt-c-${d.c ?? "y"} nt-b-${d.b ?? "plain"}`;
+  return (
+    <div className="ntask" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="ntaskbox nteditor">
+        <b>📝 ملاحظتك</b>
+        <span className="ntnotemode">
+          <button type="button" className={mode === "kb" ? "on" : ""} onClick={() => setMode("kb")}>⌨️ كيبورد</button>
+          <button type="button" className={mode === "pen" ? "on" : ""} onClick={() => setMode("pen")}>✏️ قلم</button>
+        </span>
+        {mode === "kb" ? (
+          <>
+            <textarea className={`ntedittext ${look}`} autoFocus dir="auto" maxLength={300} rows={4} value={d.t} placeholder="اكتب ملاحظتك..." onChange={(e) => setD({ ...d, t: e.target.value })} />
+            {(d.s?.length ?? 0) > 0 && <div className={`nteditpad ${look}`}><NoteInk strokes={d.s!} /></div>}
+          </>
+        ) : (
+          <>
+            {d.t && <div className={`ntnotetext nteditpad ${look}`} dir="auto">{d.t}</div>}
+            <div className={`nteditpad ${look}`}><NoteInk strokes={d.s ?? []} color={ink} onChange={(s) => setD({ ...d, s })} /></div>
+            <span className="ntnoterow">
+              {NOTE_INKS.map((c) => <button type="button" key={c} aria-label="لون القلم" className={"ntswatch" + (ink === c ? " on" : "")} style={{ background: c }} onClick={() => setInk(c)} />)}
+              <button type="button" className="ntmini" disabled={!d.s?.length} onClick={() => setD({ ...d, s: (d.s ?? []).slice(0, -1) })}>↶ تراجع</button>
+            </span>
+          </>
+        )}
+        <small>لون الورقة</small>
+        <span className="ntnoterow">
+          {NOTE_COLORS.map(([k, name]) => <button type="button" key={k} title={name} aria-label={name} className={`ntswatch nt-c-${k}` + ((d.c ?? "y") === k ? " on" : "")} onClick={() => setD({ ...d, c: k })} />)}
+        </span>
+        <small>الأرضية</small>
+        <span className="ntnoterow">
+          {NOTE_BGS.map(([k, icon, name]) => <button type="button" key={k} title={name} className={`ntbgpick nt-c-${d.c ?? "y"} nt-b-${k}` + ((d.b ?? "plain") === k ? " on" : "")} onClick={() => setD({ ...d, b: k })}>{icon}<small>{name}</small></button>)}
+        </span>
+        <span className="ntnotebtns">
+          <button type="button" className="ntsave" onClick={() => onSave(d)}>✓ احفظ</button>
+          <button type="button" onClick={onDelete}>🗑 امسحها</button>
+        </span>
+      </div>
+    </div>
   );
 }
 

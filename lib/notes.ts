@@ -110,7 +110,7 @@ export async function noteAction(body: Row) {
   try { const d = JSON.parse(ink); items = d.items; notes = d.notes ?? []; } catch { /* يترفض جوة */ }
   need(Array.isArray(items), "الكتابة ما انحفظت، حاول مرة ثانية");
   // 📝 الملاحظات اللاصقة تنحفظ ويا الكتابة بنفس الصفحة
-  need(Array.isArray(notes) && notes.length <= 30 && (notes as Row[]).every((x) => x && typeof x.t === "string" && x.t.length <= 300 && Number(x.x) >= 0 && Number(x.x) <= 1 && Number(x.y) >= 0 && Number(x.y) <= 1 && (x.s === undefined || (Array.isArray(x.s) && x.s.length <= 150 && (x.s as Row[]).every((k) => k && Array.isArray(k.p) && k.p.length <= 4000)))), "الملاحظات بهاي الصفحة هواية. امسح شوية منها", 413);
+  need(Array.isArray(notes) && notes.length <= 30 && (notes as Row[]).every((x) => x && typeof x.t === "string" && x.t.length <= 300 && Number(x.x) >= 0 && Number(x.x) <= 1 && Number(x.y) >= 0 && Number(x.y) <= 1 && (x.s === undefined || (Array.isArray(x.s) && x.s.length <= 150 && (x.s as Row[]).every((k) => k && Array.isArray(k.p) && k.p.length <= 4000 && (k.c === undefined || String(k.c).length <= 20)))) && String(x.c ?? "").length <= 10 && String(x.b ?? "").length <= 10), "الملاحظات بهاي الصفحة هواية. امسح شوية منها", 413);
   if ((items as unknown[]).length || (notes as unknown[]).length) await put("note_ink", { ...key, ink });
   else await remove("note_ink", key);
   return { ok: true };
