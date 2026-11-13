@@ -92,6 +92,8 @@ export async function noteAction(body: Row) {
   }
   if (a === "open") { await logActivity(uid, `📘 فتح ملزمة ${b.title}`); return { ok: true, marks: await marksFor(b.id) }; }
   if (a === "marks") return { marks: await marksFor(b.id) };
+  // الفيديو ما اشتغل عند الطالب: رمز الخطأ ينكتب بسجل السيرفر حتى نعرف السبب
+  if (a === "videoError") { console.warn("note video failed:", JSON.stringify({ uid, book: b.id, kind: String(body.kind ?? "").slice(0, 10), code: String(body.code ?? "").slice(0, 80), pf: String(body.pf ?? "").slice(0, 20) })); return { ok: true }; }
   if (a === "play") {
     limitPlays(uid);
     const r = await sendMark(uid, b.id, body.mark, body.kind);
@@ -108,7 +110,7 @@ export async function noteAction(body: Row) {
   try { const d = JSON.parse(ink); items = d.items; notes = d.notes ?? []; } catch { /* يترفض جوة */ }
   need(Array.isArray(items), "الكتابة ما انحفظت، حاول مرة ثانية");
   // 📝 الملاحظات اللاصقة تنحفظ ويا الكتابة بنفس الصفحة
-  need(Array.isArray(notes) && notes.length <= 30 && (notes as Row[]).every((x) => x && typeof x.t === "string" && x.t.length <= 300 && Number(x.x) >= 0 && Number(x.x) <= 1 && Number(x.y) >= 0 && Number(x.y) <= 1), "الملاحظات بهاي الصفحة هواية. امسح شوية منها", 413);
+  need(Array.isArray(notes) && notes.length <= 30 && (notes as Row[]).every((x) => x && typeof x.t === "string" && x.t.length <= 300 && Number(x.x) >= 0 && Number(x.x) <= 1 && Number(x.y) >= 0 && Number(x.y) <= 1 && (x.s === undefined || (Array.isArray(x.s) && x.s.length <= 150 && (x.s as Row[]).every((k) => k && Array.isArray(k.p) && k.p.length <= 4000)))), "الملاحظات بهاي الصفحة هواية. امسح شوية منها", 413);
   if ((items as unknown[]).length || (notes as unknown[]).length) await put("note_ink", { ...key, ink });
   else await remove("note_ink", key);
   return { ok: true };

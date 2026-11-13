@@ -344,6 +344,12 @@ body.grwide .grtop{padding-left:104px}
 .ntnote textarea{font:inherit;font-size:16px;min-height:70px;border:0;background:#fffbd0;color:#222;padding:5px 6px;resize:vertical;-webkit-user-select:text;user-select:text}
 .ntnotebtns{display:flex;gap:4px;padding:4px}
 .ntnotebtns button{flex:1;font:inherit;font-size:13px;font-weight:700;padding:4px;border-radius:6px;border:1px solid #c9ab2c;background:#fff;color:#222;cursor:pointer}
+.ntytchat{margin-top:12px;font-size:15px}
+.ntnotemode{display:flex;gap:4px;padding:4px 4px 0}
+.ntnotemode button{flex:1;font:inherit;font-size:12px;font-weight:700;padding:3px;border-radius:6px;border:1px solid #c9ab2c;background:#fffbd0;color:#6b5a10;cursor:pointer}
+.ntnotemode button.on{background:#c9ab2c;color:#fff}
+.ntnote canvas.ntnoteink{display:block;width:100%;touch-action:none;background:transparent}
+.ntnote.on canvas.ntnoteink{background:#fffbd0}
 .ntnotehint{font-size:13px;color:#f9c445}
 .ntfind{font-size:13px}
 .ntfind input{width:92px;font:inherit;font-size:15px;padding:5px 8px;border-radius:8px;border:1px solid var(--gold2,#cea239);background:#fff;color:#111;text-align:center}

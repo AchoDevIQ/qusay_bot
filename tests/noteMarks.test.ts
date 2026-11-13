@@ -75,6 +75,13 @@ test("🔍 الأزرار تنحط على الأسئلة، والفيديو ال
   await act("save", { page: 1, ink: withNote });
   assert.equal((await act("ink", { page: 1 })).ink, withNote);
   await assert.rejects(act("save", { page: 1, ink: JSON.stringify({ items: [], notes: [{ x: 3, y: 0, t: "x" }] }) }), /الملاحظات/);
+  // ملاحظة بالقلم: خطوطها تنحفظ وياها، والخطوط الهواية تنرفض
+  const penNote = JSON.stringify({ items: [], notes: [{ x: 0.1, y: 0.1, t: "", s: [{ p: [0.1, 0.2, 0.3, 0.4] }] }] });
+  await act("save", { page: 1, ink: penNote });
+  assert.equal((await act("ink", { page: 1 })).ink, penNote);
+  await assert.rejects(act("save", { page: 1, ink: JSON.stringify({ items: [], notes: [{ x: 0, y: 0, t: "", s: Array(151).fill({ p: [0, 0] }) }] }) }), /الملاحظات/);
+  // الفيديو ما اشتغل: رمزه ينكتب بالسجل بس
+  assert.deepEqual(await act("videoError", { kind: "video", code: "v4" }), { ok: true });
   await act("save", { page: 1, ink: JSON.stringify({ items: [], notes: [] }) });
   assert.equal((await act("ink", { page: 1 })).ink, "");
   const seen = (await act("marks")).marks;

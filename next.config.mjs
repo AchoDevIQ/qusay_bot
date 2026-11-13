@@ -13,6 +13,8 @@ const nextConfig = {
     return [
       { source: "/:path*", headers: safe },
       { source: "/store/:path*", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }] },
+      // الملازم: يوتيوب ما يشغل فيديو الحل إذا ما عرف اسم الموقع (خطأ 153). نطيه اسم الموقع بس، بلا الرابط اللي بيه رمز الدخول
+      { source: "/store/notes", headers: [{ key: "Referrer-Policy", value: "strict-origin" }] },
     ];
   },
 };

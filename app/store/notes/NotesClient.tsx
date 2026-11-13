@@ -9,7 +9,7 @@ type Mark = { id: number; page: number; y: number; video: boolean; solution: boo
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
 type Tool = "hand" | "pen" | "mark" | "erase" | "note";
 /** ملاحظة لاصقة على الصفحة: مكانها (من 0 لـ 1) ونصها */
-type Note = { x: number; y: number; t: string };
+type Note = { x: number; y: number; t: string; s?: { p: number[] }[] };
 
 const PENS = ["#111111", "#1e5bd8", "#e53935", "#1f9d55"];
 const MARKS = ["#ffe600", "#7dff6b", "#ff9de2"];
@@ -98,17 +98,18 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
   const [sending, setSending] = useState(false);
   const [yt, setYt] = useState("");
   const [clip, setClip] = useState("");
+  const [clipMark, setClipMark] = useState<Mark | null>(null);
   const stage = useRef<HTMLDivElement>(null);
   const sheets = useRef(new Map<number, SheetApi>());
   const undo = useRef<{ n: number; prev: Stroke[] }[]>([]);
   useEffect(() => { post({ action: "marks", book: book.id }).then((j) => setMarks(j.marks ?? [])).catch(() => undefined); }, [book.id]);
 
-  async function play(m: Mark, kind: "video" | "solution") {
+  async function play(m: Mark, kind: "video" | "solution" | "chat") {
     haptic(); setSending(true); setMsg("⏳ دا يفتح الفيديو...");
     try {
       const j = await post({ action: "play", book: book.id, mark: m.id, kind });
       if (j.yt) { setYt(j.yt); setMsg(""); }
-      else if (j.clip) { setClip(`/api/notes/video?t=${encodeURIComponent(token())}&book=${book.id}&mark=${m.id}&pf=${encodeURIComponent(tgPlatform())}&d=${encodeURIComponent(deviceNow())}`); setMsg(""); }
+      else if (j.clip) { setClipMark(m); setClip(`/api/notes/video?t=${encodeURIComponent(token())}&book=${book.id}&mark=${m.id}&pf=${encodeURIComponent(tgPlatform())}&d=${encodeURIComponent(deviceNow())}`); setMsg(""); }
       else setMsg(`${j.notice}. سد الملزمة وشوفه، وترجع لنفس الصفحة.`);
     }
     catch (e) { setMsg(`⚠️ ${(e as Error).message}`); } finally { setSending(false); }
@@ -197,8 +198,8 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
           ))}
         </div>
       </div>
-      {yt && <VideoBox title="🎬 فيديو حل السؤال" yt={yt} onClose={() => setYt("")} />}
-      {clip && <VideoBox title="▶️ فيديو توضيح السؤال" src={clip} onClose={() => setClip("")} />}
+      {yt && <VideoBox title="🎬 فيديو حل السؤال" yt={yt} onClose={() => setYt("")} onFail={(code) => void post({ action: "videoError", book: book.id, kind: "solution", code }).catch(() => undefined)} />}
+      {clip && <VideoBox title="▶️ فيديو توضيح السؤال" src={clip} onClose={() => setClip("")} onChat={clipMark ? () => { setClip(""); void play(clipMark, "chat"); } : undefined} onFail={(code) => void post({ action: "videoError", book: book.id, kind: "video", code }).catch(() => undefined)} />}
       {asking && (
         <div className="ntask">
           <div className="ntaskbox">
@@ -237,6 +238,7 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
   const [notes, setNotes] = useState<Note[]>([]);
   const notesRef = useRef(notes); notesRef.current = notes;
   const [editing, setEditing] = useState(-1);
+  const [noteMode, setNoteMode] = useState<"kb" | "pen">("kb");
   const drag = useRef<{ i: number; sx: number; sy: number; x: number; y: number } | null>(null);
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -304,7 +306,7 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
     if (tool === "note") {
       // ملاحظة جديدة بمكان الدوسة، وتنفتح للكتابة. بعدها الأداة ترجع لليد حتى يگدر يسحب الملزمة
       const next = [...notesRef.current, { x: Math.min(x, 0.6), y: Math.min(y, 0.92), t: "" }];
-      notesRef.current = next; setNotes(next); setEditing(next.length - 1); onPlaced();
+      notesRef.current = next; setNotes(next); setNoteMode("kb"); setEditing(next.length - 1); onPlaced();
       return;
     }
     live.current = tool === "mark" ? { c: color, w: 22, h: 1, p: [x, y] } : { c: color, w: 2.5, p: [x, y] };
@@ -325,20 +327,34 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
       {img && <canvas ref={bg} style={{ width: w, height: h }} />}
       {img && <canvas ref={topC} style={{ width: w, height: h, touchAction: tool === "hand" ? "auto" : "none" }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { live.current = null; redraw(strokesRef.current); }} />}
       {img && notes.map((nt, i) => (
-        <div key={i} className={"ntnote" + (editing === i ? " on" : "")} style={{ left: `${nt.x * 100}%`, top: `${nt.y * 100}%`, fontSize: Math.max(11, Math.round(w / 30)) }}>
+        <div key={i} className={"ntnote" + (editing === i ? " on" : "")} style={{ left: `${nt.x * 100}%`, top: `${nt.y * 100}%`, fontSize: Math.max(11, Math.round(w / 30)), width: editing !== i && nt.s?.length ? "38%" : undefined }}>
           <span className="ntnotemove" title="اسحبها لأي مكان" aria-label="حرك الملاحظة"
             onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); drag.current = { i, sx: e.clientX, sy: e.clientY, x: nt.x, y: nt.y }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* السحب يكمل بدونه */ } }}
             onPointerMove={(e) => { const d = drag.current; if (!d || d.i !== i) return; const x = Math.max(0, Math.min(0.9, d.x + (e.clientX - d.sx) / w)), y = Math.max(0, Math.min(0.96, d.y + (e.clientY - d.sy) / h)); const next = notesRef.current.map((q, k) => (k === i ? { ...q, x, y } : q)); notesRef.current = next; setNotes(next); }}
             onPointerUp={() => { if (drag.current) { drag.current = null; touch(); } }} onPointerCancel={() => { drag.current = null; touch(); }}>✥</span>
           {editing === i ? (
             <>
-              <textarea autoFocus dir="auto" maxLength={300} value={nt.t} placeholder="اكتب ملاحظتك..." onChange={(e) => setNote(i, { ...nt, t: e.target.value })} />
+              <span className="ntnotemode">
+                <button type="button" className={noteMode === "kb" ? "on" : ""} onClick={() => setNoteMode("kb")}>⌨️ كيبورد</button>
+                <button type="button" className={noteMode === "pen" ? "on" : ""} onClick={() => setNoteMode("pen")}>✏️ قلم</button>
+              </span>
+              {noteMode === "kb"
+                ? <textarea autoFocus dir="auto" maxLength={300} value={nt.t} placeholder="اكتب ملاحظتك..." onChange={(e) => setNote(i, { ...nt, t: e.target.value })} />
+                : <NoteInk strokes={nt.s ?? []} onChange={(s) => setNote(i, { ...nt, s })} />}
+              {nt.t && noteMode === "pen" && <div className="ntnotetext" dir="auto">{nt.t}</div>}
+              {(nt.s?.length ?? 0) > 0 && noteMode === "kb" && <NoteInk strokes={nt.s!} />}
               <span className="ntnotebtns">
-                <button type="button" onClick={() => { if (!nt.t.trim()) setNote(i, null); setEditing(-1); }}>✓ تم</button>
+                <button type="button" onClick={() => { if (!nt.t.trim() && !nt.s?.length) setNote(i, null); setEditing(-1); }}>✓ تم</button>
+                {noteMode === "pen" && <button type="button" disabled={!nt.s?.length} onClick={() => setNote(i, { ...nt, s: (nt.s ?? []).slice(0, -1) })}>↶</button>}
                 <button type="button" onClick={() => { setNote(i, null); setEditing(-1); }}>🗑 امسحها</button>
               </span>
             </>
-          ) : <div className="ntnotetext" dir="auto" onClick={() => setEditing(i)}>{nt.t}</div>}
+          ) : (
+            <div onClick={() => { setNoteMode(nt.s?.length && !nt.t ? "pen" : "kb"); setEditing(i); }}>
+              {nt.t && <div className="ntnotetext" dir="auto">{nt.t}</div>}
+              {(nt.s?.length ?? 0) > 0 && <NoteInk strokes={nt.s!} />}
+            </div>
+          )}
         </div>
       ))}
       <span className="ntno">{n}</span>
@@ -350,6 +366,36 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
         </div>
       ))}
     </div>
+  );
+}
+
+/** كتابة بالقلم جوّا الملاحظة: النقاط من 0 لـ 1 داخل مربع الملاحظة، فتبين نفسها بأي حجم */
+function NoteInk({ strokes, onChange }: { strokes: { p: number[] }[]; onChange?: (s: { p: number[] }[]) => void }) {
+  const c = useRef<HTMLCanvasElement>(null);
+  const live = useRef<number[] | null>(null);
+  const paint = useCallback(() => {
+    const el = c.current; if (!el) return;
+    const r = el.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (!r.width) return;
+    el.width = r.width * dpr; el.height = r.height * dpr;
+    const g = el.getContext("2d")!; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height);
+    g.strokeStyle = "#1e3a8a"; g.lineWidth = Math.max(1.5, r.width / 110); g.lineCap = "round"; g.lineJoin = "round";
+    for (const s of live.current ? [...strokes, { p: live.current }] : strokes) {
+      g.beginPath();
+      for (let k = 0; k < s.p.length; k += 2) (k ? g.lineTo : g.moveTo).call(g, s.p[k] * r.width, s.p[k + 1] * r.height);
+      if (s.p.length === 2) g.lineTo(s.p[0] * r.width + 0.5, s.p[1] * r.height);
+      g.stroke();
+    }
+  }, [strokes]);
+  useEffect(() => { paint(); }, [paint]);
+  const at = (e: React.PointerEvent) => { const r = c.current!.getBoundingClientRect(); return [+Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)).toFixed(3), +Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)).toFixed(3)]; };
+  if (!onChange) return <canvas ref={c} className="ntnoteink" style={{ aspectRatio: "5 / 3" }} />;
+  return (
+    <canvas ref={c} className="ntnoteink" style={{ aspectRatio: "5 / 3" }}
+      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); live.current = at(e); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* يكمل */ } paint(); }}
+      onPointerMove={(e) => { if (!live.current || !(e.buttons & 1)) return; live.current.push(...at(e)); paint(); }}
+      onPointerUp={() => { const p = live.current; live.current = null; if (p && strokes.length < 150) onChange([...strokes, { p }]); else paint(); }}
+      onPointerCancel={() => { live.current = null; paint(); }} />
   );
 }
 
@@ -375,7 +421,9 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60))
 
 /** يشغل جوّا الملزمة: فيديو الحل من يوتيوب (yt) أو الفيديو التوضيحي من البوت (src)، بنفس الأزرار */
 type Ctl = { play(): void; pause(): void; seek(s: number): void; time(): number; dur(): number; rate(r: number): void };
-function VideoBox({ title, yt, src, onClose }: { title: string; yt?: string; src?: string; onClose: () => void }) {
+function VideoBox({ title, yt, src, onClose, onFail, onChat }: { title: string; yt?: string; src?: string; onClose: () => void; onFail: (code: string) => void; onChat?: () => void }) {
+  // إذا ما اشتغل: رمز الخطأ يطلع للطالب وينكتب بسجل البوت، حتى نعرف السبب
+  const fail = (code: string) => { setErr(`هذا الفيديو ما يشتغل هسه (رمز ${code}). بلغ الأستاذ`); onFail(code); };
   const box = useRef<HTMLDivElement>(null);
   const slot = useRef<HTMLDivElement>(null);
   const vid = useRef<HTMLVideoElement>(null);
@@ -403,7 +451,7 @@ function VideoBox({ title, yt, src, onClose }: { title: string; yt?: string; src
               setReady(true); setD(x.getDuration()); x.playVideo();
             },
             onStateChange: (e: { data: number }) => { if (!stop) { setOn(e.data === 1 || e.data === 3); if (e.data === 0 && yp) setT(yp.getDuration()); } },
-            onError: () => { if (!stop) setErr("هذا الفيديو ما يشتغل هسه. بلغ الأستاذ"); },
+            onError: (e: { data: number }) => { if (!stop) fail(`yt${e.data}`); },
           },
         });
       }).catch((e) => { if (!stop) setErr((e as Error).message); });
@@ -429,11 +477,11 @@ function VideoBox({ title, yt, src, onClose }: { title: string; yt?: string; src
           <video ref={vid} className="ntytvideo" src={src} autoPlay playsInline disablePictureInPicture controlsList="nodownload noplaybackrate noremoteplayback"
             onLoadedMetadata={(e) => { setReady(true); setD(e.currentTarget.duration || 0); e.currentTarget.playbackRate = speed; }}
             onPlay={() => setOn(true)} onPause={() => setOn(false)} onEnded={() => setOn(false)}
-            onError={() => setErr("هذا الفيديو ما يشتغل هسه. بلغ الأستاذ")} />
+            onError={(e) => { const er = e.currentTarget.error; fail(`v${er?.code ?? 0}${er?.message ? ` ${er.message.slice(0, 60)}` : ""}`); }} />
         )}
         {/* غطا شفاف: ما يگدر يدوس على الفيديو نفسه (لا رابط ولا حفظ). دوسة وحدة توقف أو تشغل */}
         <div className="ntytcover" onClick={toggle} />
-        {err && <div className="ntytmsg">⚠️ {err}</div>}
+        {err && <div className="ntytmsg">⚠️ {err}{onChat && <><br /><button type="button" className="btn ntytchat" onClick={onChat}>📩 دزه إلي بالمحادثة</button></>}</div>}
         {!ready && !err && <div className="ntytmsg">جاري فتح الفيديو...</div>}
       </div>
       <div className="ntytctl">

@@ -6,7 +6,7 @@ import { pdfjsLib } from "./pdfjs.ts";
 import { randomUUID } from "node:crypto";
 import { find, insert, one, remove, update, type Row } from "./db.ts";
 import { files } from "./files.ts";
-import { api } from "./telegram.ts";
+import { api, upload } from "./telegram.ts";
 import { stamp } from "./util.ts";
 import { need } from "./webApi.ts";
 
@@ -165,8 +165,27 @@ export async function sendMark(uid: number, bookId: number, markId: unknown, kin
     if (yt) return { notice: "🎬 فيديو حل السؤال", yt };
     return { notice: await sendSolution(uid, String(m!.solution ?? "")) };
   }
+  if (kind === "chat") return { notice: await sendExplainer(uid, m!) };
   need(m!.video_id && await one("note_videos", { id: m!.video_id }), "الفيديو التوضيحي مو موجود لهذا السؤال");
   return { notice: "▶️ فيديو توضيح السؤال", clip: true };
+}
+/** احتياط: إذا الفيديو التوضيحي ما اشتغل جوّا الملزمة، يوصله بالمحادثة محمي */
+async function sendExplainer(uid: number, m: Row) {
+  const v = m.video_id && await one("note_videos", { id: m.video_id });
+  need(v, "الفيديو التوضيحي مو موجود لهذا السؤال");
+  const caption = `▶️ فيديو توضيح السؤال: ${v!.name}`;
+  // أول مرة يرتفع لتلگرام، وبعدها نستعمل رقمه
+  if (v!.tg) {
+    const r = await api("sendVideo", { chat_id: uid, video: v!.tg, caption, protect_content: true });
+    if (r) return "▶️ وصلك فيديو توضيح السؤال بالمحادثة";
+  }
+  const buf = await files().read(`explainers/${v!.file}.mp4`);
+  need(buf, "ملف الفيديو مو موجود");
+  const r = await upload("sendVideo", { chat_id: String(uid), caption, protect_content: "true", supports_streaming: "true" }, "video", buf!, `${v!.file}.mp4`, "video/mp4");
+  need(r, "ما وصل الفيديو، جرب مرة ثانية", 502);
+  const id = r?.video?.file_id;
+  if (id) await update("note_videos", { id: v!.id }, { tg: id });
+  return "▶️ وصلك فيديو توضيح السؤال بالمحادثة";
 }
 // آخر الفيديوهات اللي انقرت تبقى بالذاكرة، لأن المتصفح يطلب الفيديو قطع قطع
 const clipCache = new Map<string, Buffer>();
