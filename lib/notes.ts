@@ -150,16 +150,15 @@ export async function watermark(jpg: Buffer, name: string, uid: number) {
   g.font = `bold ${size}px QArabic`;
   g.textAlign = "center"; g.textBaseline = "middle";
   const text = `${name}  ${uid}`;
-  g.save();
-  g.translate(im.width / 2, im.height / 2);
-  g.rotate(-Math.PI / 6);
-  g.fillStyle = "rgba(30,60,120,.13)";
-  const span = Math.hypot(im.width, im.height), stepY = size * 9, stepX = g.measureText(text).width + size * 5;
-  let row = 0;
-  for (let y = -span / 2; y < span / 2; y += stepY, row++) {
-    for (let x = -span / 2 + (row % 2 ? stepX / 2 : 0); x < span / 2; x += stepX) g.fillText(text, x, y);
+  // شفاف كلش وبثلث أماكن بس (فوك، النص، جوه)، حتى ما يخرب شكل الملزمة، وبعده يبين إذا أحد صوّر الصفحة
+  g.fillStyle = "rgba(30,60,120,.06)";
+  for (const [fx, fy] of [[0.3, 0.2], [0.5, 0.52], [0.7, 0.84]]) {
+    g.save();
+    g.translate(im.width * fx, im.height * fy);
+    g.rotate(-Math.PI / 6);
+    g.fillText(text, 0, 0);
+    g.restore();
   }
-  g.restore();
   return Buffer.from(await c.encode("jpeg", 82));
 }
 // حد للصفحات بالدقيقة، حتى ما أحد يسحب الملزمة كلها أو يشغل السيرفر عن غيره
