@@ -324,6 +324,7 @@ body.grwide .grtop{padding-left:104px}
 .nt{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:#26303f;color:#fff;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .ntbar{flex:none;display:flex;align-items:center;gap:6px;padding:6px 8px;background:#0f1a2e}
 .ntcolors{justify-content:center}
+.nttools{gap:4px}.nttools .gk-ic{flex:1 1 0;min-width:0;max-width:46px;padding-left:0;padding-right:0}.nttools .ntgap{flex:0 0 4px}
 .ntgap{flex:1}
 .nttitle{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:center;font-size:14px}
 .ntok{color:#7dd99b;white-space:nowrap}.ntwait{color:#f7c548;white-space:nowrap}
@@ -336,6 +337,14 @@ body.grwide .grtop{padding-left:104px}
 .ntholder{position:absolute;left:0;display:flex;align-items:center;justify-content:center;background:#e9edf3;color:#7a8597;font-size:28px;font-weight:700}
 .ntholder.ntin{inset:0;width:auto;height:auto;font-size:15px;font-weight:400;padding:20px;text-align:center}
 .ntno{position:absolute;bottom:4px;right:6px;z-index:2;padding:1px 8px;border-radius:999px;background:rgba(15,26,46,.75);color:#fff;font-size:11px;pointer-events:none}
+.ntnote{position:absolute;z-index:2;max-width:45%;min-width:72px;display:flex;flex-direction:column;background:#fff59d;color:#222;border-radius:6px;box-shadow:0 3px 8px rgba(0,0,0,.3);border:1px solid #e6c84a}
+.ntnote.on{z-index:4;max-width:70%;min-width:60%}
+.ntnotemove{align-self:stretch;text-align:center;font-size:13px;line-height:1.2;padding:1px 0;background:#f2dc6a;border-radius:6px 6px 0 0;cursor:grab;touch-action:none;color:#6b5a10}
+.ntnotetext{padding:3px 6px 5px;white-space:pre-wrap;word-break:break-word;line-height:1.35;cursor:text;min-height:1.4em}
+.ntnote textarea{font:inherit;font-size:16px;min-height:70px;border:0;background:#fffbd0;color:#222;padding:5px 6px;resize:vertical;-webkit-user-select:text;user-select:text}
+.ntnotebtns{display:flex;gap:4px;padding:4px}
+.ntnotebtns button{flex:1;font:inherit;font-size:13px;font-weight:700;padding:4px;border-radius:6px;border:1px solid #c9ab2c;background:#fff;color:#222;cursor:pointer}
+.ntnotehint{font-size:13px;color:#f9c445}
 .ntfind{font-size:13px}
 .ntfind input{width:92px;font:inherit;font-size:15px;padding:5px 8px;border-radius:8px;border:1px solid var(--gold2,#cea239);background:#fff;color:#111;text-align:center}
 .ntpages select{padding:6px 10px;border-radius:8px;font-size:15px}

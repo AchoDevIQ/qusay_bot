@@ -70,6 +70,13 @@ test("🔍 الأزرار تنحط على الأسئلة، والفيديو ال
   assert.deepEqual(await act("bookmark", { page: 1 }), { saved: 1 });
   assert.equal((await act("list")).books.find((b: any) => b.id === book).saved, 1);
   await assert.rejects(act("bookmark", { page: 9 }), /الصفحة/);
+  // 📝 الملاحظات اللاصقة: تنحفظ ويا الكتابة، حتى إذا الصفحة ما بيها كتابة، والغلط ينرفض
+  const withNote = JSON.stringify({ items: [], notes: [{ x: 0.2, y: 0.3, t: "راجع هاي" }] });
+  await act("save", { page: 1, ink: withNote });
+  assert.equal((await act("ink", { page: 1 })).ink, withNote);
+  await assert.rejects(act("save", { page: 1, ink: JSON.stringify({ items: [], notes: [{ x: 3, y: 0, t: "x" }] }) }), /الملاحظات/);
+  await act("save", { page: 1, ink: JSON.stringify({ items: [], notes: [] }) });
+  assert.equal((await act("ink", { page: 1 })).ink, "");
   const seen = (await act("marks")).marks;
   assert.deepEqual(seen.map((m: any) => [m.video, m.solution]), [[true, false]]);
   assert.ok(!JSON.stringify(seen).includes("t.me"));

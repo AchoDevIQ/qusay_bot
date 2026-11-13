@@ -104,10 +104,12 @@ export async function noteAction(body: Row) {
   need(a === "save", "أمر غير معروف");
   const ink = String(body.ink ?? "");
   need(ink.length <= INK_MAX, "الكتابة بهاي الصفحة صارت هواية. امسح شوية منها", 413);
-  let items: unknown = null;
-  try { items = JSON.parse(ink).items; } catch { /* يترفض جوة */ }
+  let items: unknown = null, notes: unknown = [];
+  try { const d = JSON.parse(ink); items = d.items; notes = d.notes ?? []; } catch { /* يترفض جوة */ }
   need(Array.isArray(items), "الكتابة ما انحفظت، حاول مرة ثانية");
-  if ((items as unknown[]).length) await put("note_ink", { ...key, ink });
+  // 📝 الملاحظات اللاصقة تنحفظ ويا الكتابة بنفس الصفحة
+  need(Array.isArray(notes) && notes.length <= 30 && (notes as Row[]).every((x) => x && typeof x.t === "string" && x.t.length <= 300 && Number(x.x) >= 0 && Number(x.x) <= 1 && Number(x.y) >= 0 && Number(x.y) <= 1), "الملاحظات بهاي الصفحة هواية. امسح شوية منها", 413);
+  if ((items as unknown[]).length || (notes as unknown[]).length) await put("note_ink", { ...key, ink });
   else await remove("note_ink", key);
   return { ok: true };
 }
