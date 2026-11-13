@@ -11,7 +11,7 @@ Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", S
 const { insert, one, put } = await import("../lib/db.ts");
 const { ensure } = await import("../lib/webApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
-const { noteAction, noteAdmin } = await import("../lib/notes.ts");
+const { noteAction, noteAdmin, noteVideo } = await import("../lib/notes.ts");
 const { parseLink, parseYouTube, videoName } = await import("../lib/noteMarks.ts");
 const { files } = await import("../lib/files.ts");
 await ensure();
@@ -65,10 +65,21 @@ test("🔍 الأزرار تنحط على الأسئلة، والفيديو ال
   await put("guardians", { guardian_id: 1020, student_id: 20, created: "1" });
   await put("exam_access", { user_id: 20, chapter: "الفصل الثالث", created: "1" });
   const act = (action: string, x: object = {}) => noteAction({ token: homeToken(20), device: "dev-00000000000020", pf: "android", action, book, ...x });
+  // 🔖 الصفحة اللي وصلها: تنحفظ، وتطلع بقائمة الملازم، والصفحة الغلط تنرفض
+  assert.equal((await act("list")).books.find((b: any) => b.id === book).saved, 0);
+  assert.deepEqual(await act("bookmark", { page: 1 }), { saved: 1 });
+  assert.equal((await act("list")).books.find((b: any) => b.id === book).saved, 1);
+  await assert.rejects(act("bookmark", { page: 9 }), /الصفحة/);
   const seen = (await act("marks")).marks;
   assert.deepEqual(seen.map((m: any) => [m.video, m.solution]), [[true, false]]);
   assert.ok(!JSON.stringify(seen).includes("t.me"));
   await assert.rejects(act("play", { mark: seen[0].id, kind: "solution" }), /بعده ما انضاف/);
+  // الفيديو التوضيحي يشتغل جوّا الملزمة: الزر يرجع clip، والملف ينطي بس لصاحب الرابط وعلى جهازه
+  assert.deepEqual(await act("play", { mark: seen[0].id, kind: "video" }), { notice: "▶️ فيديو توضيح السؤال", clip: true });
+  const clip = await noteVideo(homeToken(20), book, seen[0].id, "android", "dev-00000000000020");
+  assert.equal(clip.subarray(4, 8).toString(), "ftyp");
+  await assert.rejects(noteVideo("غلط", book, seen[0].id, "android", "dev-00000000000020"), /قديم/);
+  await assert.rejects(noteVideo(homeToken(20), book, 99999, "android", "dev-00000000000020"), /مو موجود/);
   // رابط الحل: الغلط ينرفض، والصح ينحفظ ويبقى بعد إعادة التدوير
   const q1 = r.marks.find((m: any) => m.label.startsWith("Q 1"));
   await assert.rejects(admin("markSave", { book, id: q1.id, page: 1, y: q1.y, solution: "https://youtube.com/x" }), /رابط الحل/);

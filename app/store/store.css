@@ -329,9 +329,14 @@ body.grwide .grtop{padding-left:104px}
 .ntok{color:#7dd99b;white-space:nowrap}.ntwait{color:#f7c548;white-space:nowrap}
 .ntbad{flex:none;padding:6px 10px;background:#b3261e;font-size:13px}
 .ntstage{flex:1 1 0;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
-.ntsheet{position:relative;background:#fff;margin:0 auto}
+.ntscroll{position:relative;margin:0 auto}
+.ntsheet{position:absolute;left:0;background:#fff}
 .ntsheet canvas{position:absolute;inset:0;display:block}
-.ntpages{justify-content:space-between}
+.ntholder{position:absolute;left:0;display:flex;align-items:center;justify-content:center;background:#e9edf3;color:#7a8597;font-size:28px;font-weight:700}
+.ntholder.ntin{inset:0;width:auto;height:auto;font-size:15px;font-weight:400;padding:20px;text-align:center}
+.ntno{position:absolute;bottom:4px;right:6px;z-index:2;padding:1px 8px;border-radius:999px;background:rgba(15,26,46,.75);color:#fff;font-size:11px;pointer-events:none}
+.ntfind{font-size:13px}
+.ntfind input{width:92px;font:inherit;font-size:15px;padding:5px 8px;border-radius:8px;border:1px solid var(--gold2,#cea239);background:#fff;color:#111;text-align:center}
 .ntpages select{padding:6px 10px;border-radius:8px;font-size:15px}
 
 /* خانة التاريخ: يوم/شهر/سنة دايماً، والمنتقي الأصلي شفاف فوكها */
@@ -360,10 +365,15 @@ body.grwide .grtop{padding-left:104px}
 .ntsheet .ntmark{position:absolute;left:4px;z-index:3;display:flex;gap:4px;flex-wrap:wrap;max-width:70%}
 .ntsheet .ntmark button{font:inherit;font-size:11px;font-weight:700;padding:2px 7px;opacity:.93;border-radius:999px;border:1px solid var(--gold2,#cea239);background:rgba(13,33,64,.92);color:#f9c445;box-shadow:0 2px 6px rgba(0,0,0,.35);cursor:pointer}
 .ntsheet .ntmark button:disabled{opacity:.6}
+.ntbookmark{display:block;width:calc(100% - 20px);margin:6px 10px;padding:9px 12px;border-radius:10px;font:inherit;font-size:14px;font-weight:700;text-align:center;cursor:pointer;background:rgba(249,196,69,.18);border:1px solid var(--gold2,#cea239);color:inherit}
+.ntask{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.6)}
+.ntaskbox{width:100%;max-width:360px;display:flex;flex-direction:column;gap:8px;padding:18px 16px;border-radius:14px;background:#0d2140;border:1px solid var(--gold2,#cea239);color:#fff;text-align:center}
+.ntaskbox p{margin:0 0 4px;font-size:14px;opacity:.85}
 .ntyt{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:#000;color:#fff;user-select:none;-webkit-user-select:none}
 .ntytbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:rgba(13,33,64,.96)}
 .ntytbox{position:relative;flex:1;min-height:0;background:#000}
 .ntytframe,.ntytframe>*,.ntytframe iframe{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none}
+.ntytvideo{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;pointer-events:none}
 .ntytcover{position:absolute;inset:0;z-index:2}
 .ntytmsg{position:absolute;inset:auto 10px 50% 10px;z-index:3;text-align:center;font-size:15px}
 .ntytctl{display:flex;align-items:center;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:rgba(13,33,64,.96)}

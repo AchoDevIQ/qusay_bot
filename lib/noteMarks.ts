@@ -1,12 +1,12 @@
 // أزرار داخل الملزمة: يم كل سؤال «🎬 فيديو حل السؤال» (فيديو الأستاذ من قناته) و«▶️ فيديو توضيح السؤال» (الفيديو المتحرك).
-// الفيديو يوصل للطالب بالبوت محمي (ما ينحول ولا ينحفظ)، والرابط ما يطلعله أبد.
+// الفيديو يشتغل جوّا الملزمة (فيديو الحل من يوتيوب، والتوضيحي من البوت)، والرابط ما يطلعله أبد. فيديو حل من منشور بالقناة يوصل بالبوت محمي.
 // الأزرار تنحط وحدها: كل سطر يبدي بـ «س1» أو «Q1» أو «مثال» زر، والفيديوهات التوضيحية تدور سؤالها بكلماته.
 // صاحب البوت يعدل كل زر (الرابط، الفيديو، الصفحة والمكان) ويحذف الفيديو اللي ما يعجبه.
 import { pdfjsLib } from "./pdfjs.ts";
 import { randomUUID } from "node:crypto";
 import { find, insert, one, remove, update, type Row } from "./db.ts";
 import { files } from "./files.ts";
-import { api, upload } from "./telegram.ts";
+import { api } from "./telegram.ts";
 import { stamp } from "./util.ts";
 import { need } from "./webApi.ts";
 
@@ -155,8 +155,9 @@ export async function marksFor(bookId: number) {
   return (await find("note_marks", { book_id: bookId })).filter((m) => m.video_id || m.solution).sort((a, b) => a.page - b.page || Number(a.y) - Number(b.y)).map(pub);
 }
 
-/** يدز الفيديو للطالب بالبوت، محمي. فيديو حل من يوتيوب يرجع رقمه بس، ويشتغل جوّا الملزمة */
-export async function sendMark(uid: number, bookId: number, markId: unknown, kind: unknown): Promise<{ notice: string; yt?: string }> {
+/** زر الفيديو: فيديو الحل من يوتيوب يرجع رقمه، والفيديو التوضيحي يرجع clip، والاثنين يشتغلن جوّا الملزمة.
+ *  فيديو الحل من منشور بالقناة يوصل بالبوت محمي */
+export async function sendMark(uid: number, bookId: number, markId: unknown, kind: unknown): Promise<{ notice: string; yt?: string; clip?: true }> {
   const m = await one("note_marks", { id: Number(markId), book_id: bookId });
   need(m, "هذا الزر مو موجود");
   if (kind === "solution") {
@@ -164,7 +165,25 @@ export async function sendMark(uid: number, bookId: number, markId: unknown, kin
     if (yt) return { notice: "🎬 فيديو حل السؤال", yt };
     return { notice: await sendSolution(uid, String(m!.solution ?? "")) };
   }
-  return { notice: await sendExplainer(uid, m!) };
+  need(m!.video_id && await one("note_videos", { id: m!.video_id }), "الفيديو التوضيحي مو موجود لهذا السؤال");
+  return { notice: "▶️ فيديو توضيح السؤال", clip: true };
+}
+// آخر الفيديوهات اللي انقرت تبقى بالذاكرة، لأن المتصفح يطلب الفيديو قطع قطع
+const clipCache = new Map<string, Buffer>();
+/** ملف الفيديو التوضيحي لزر بالملزمة */
+export async function explainerClip(bookId: number, markId: unknown) {
+  const m = await one("note_marks", { id: Number(markId), book_id: bookId });
+  const v = m?.video_id && await one("note_videos", { id: m.video_id });
+  need(v, "الفيديو التوضيحي مو موجود لهذا السؤال", 404);
+  const key = String(v!.file);
+  let buf = clipCache.get(key);
+  if (!buf) {
+    buf = (await files().read(`explainers/${key}.mp4`)) ?? undefined;
+    need(buf, "ملف الفيديو مو موجود", 404);
+    clipCache.set(key, buf!);
+    while (clipCache.size > 6) clipCache.delete(clipCache.keys().next().value!);
+  }
+  return buf!;
 }
 async function sendSolution(uid: number, link: string) {
   const l = parseLink(link);
@@ -173,24 +192,6 @@ async function sendSolution(uid: number, link: string) {
   need(r, "ما گدرت أوصل فيديو الحل. بلغ الأستاذ", 502);
   return "🎬 وصلك فيديو حل السؤال بالمحادثة";
 }
-async function sendExplainer(uid: number, m: Row) {
-  const v = m.video_id && await one("note_videos", { id: m.video_id });
-  need(v, "الفيديو التوضيحي مو موجود لهذا السؤال");
-  const caption = `▶️ فيديو توضيح السؤال: ${v!.name}`;
-  // أول مرة يرتفع لتلگرام، وبعدها نستعمل رقمه
-  if (v!.tg) {
-    const r = await api("sendVideo", { chat_id: uid, video: v!.tg, caption, protect_content: true });
-    if (r) return "▶️ وصلك فيديو توضيح السؤال بالمحادثة";
-  }
-  const buf = await files().read(`explainers/${v!.file}.mp4`);
-  need(buf, "ملف الفيديو مو موجود");
-  const r = await upload("sendVideo", { chat_id: String(uid), caption, protect_content: "true", supports_streaming: "true" }, "video", buf!, `${v!.file}.mp4`, "video/mp4");
-  need(r, "ما وصل الفيديو، جرب مرة ثانية", 502);
-  const id = r?.video?.file_id;
-  if (id) await update("note_videos", { id: v!.id }, { tg: id });
-  return "▶️ وصلك فيديو توضيح السؤال بالمحادثة";
-}
-
 // ---------- صاحب البوت
 export async function videoList() {
   return (await find("note_videos")).sort((a, b) => String(a.name).localeCompare(String(b.name)) || String(a.lang).localeCompare(String(b.lang))).map((v) => ({ id: v.id as number, name: v.name as string, lang: v.lang as string, size: v.size as number }));

@@ -11,7 +11,7 @@ import { isAdmin, student } from "./data.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { files } from "./files.ts";
-import { addVideo, autoMarks, bookMarksAdmin, deleteMark, deleteVideo, marksFor, pasteSolutions, saveMark, sendMark, videoList } from "./noteMarks.ts";
+import { addVideo, autoMarks, bookMarksAdmin, deleteMark, deleteVideo, explainerClip, marksFor, pasteSolutions, saveMark, sendMark, videoList } from "./noteMarks.ts";
 import { chapterLabel, firstRoundOnly } from "./orderRules.ts";
 import { labelChapters } from "./scheduleRules.ts";
 import { stamp } from "./util.ts";
@@ -80,9 +80,16 @@ export async function noteAction(body: Row) {
   const a = String(body.action ?? "");
   if (a === "list") {
     const books = await myBooks(uid);
-    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages })) };
+    const marks = new Map((await find("note_bookmarks", { user_id: uid })).map((m) => [m.book_id as number, m.page as number]));
+    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages, saved: marks.get(b.id) ?? 0 })) };
   }
   const b = await myBook(uid, body.book);
+  // 🔖 الصفحة اللي وصلها: يحفظها من يطلع، ومن يرجع يدوس عليها ويروح لها
+  if (a === "bookmark") {
+    const page = pageOf(b, body.page);
+    await put("note_bookmarks", { user_id: uid, book_id: b.id, page, at: new Date().toISOString() });
+    return { saved: page };
+  }
   if (a === "open") { await logActivity(uid, `📘 فتح ملزمة ${b.title}`); return { ok: true, marks: await marksFor(b.id) }; }
   if (a === "marks") return { marks: await marksFor(b.id) };
   if (a === "play") {
@@ -156,7 +163,8 @@ export async function watermark(jpg: Buffer, name: string, uid: number) {
   return Buffer.from(await c.encode("jpeg", 82));
 }
 // حد للصفحات بالدقيقة، حتى ما أحد يسحب الملزمة كلها أو يشغل السيرفر عن غيره
-const PAGE_LIMIT = 60;
+// الملزمة تنسحب مثل الـ PDF وتحمل الصفحة اللي قدامه وثنتين قبلها وثنتين بعدها، فالحد أوسع شوية
+const PAGE_LIMIT = 120;
 const pageHits = new Map<number, number[]>();
 function limitPages(uid: number, now = Date.now()) {
   if (pageHits.size > 10_000) pageHits.clear();
@@ -180,6 +188,14 @@ export async function notePage(token: unknown, book: unknown, rawPage: unknown, 
   const jpg = await cleanPage(b, pageOf(b, rawPage));
   need(jpg, "الصفحة غير موجودة", 404);
   return await watermark(jpg!, String((await student(uid))?.name ?? ""), uid);
+}
+
+/** الفيديو التوضيحي يشتغل جوّا الملزمة: نفس شروط الصفحة (رابطه، جهازه، فصوله) */
+export async function noteVideo(token: unknown, book: unknown, mark: unknown, pf: unknown, device?: unknown) {
+  const uid = await studentUid(token, pf);
+  await checkDevice(uid, device);
+  const b = await myBook(uid, book);
+  return await explainerClip(b.id, mark);
 }
 
 // ---------- صاحب البوت
@@ -240,6 +256,7 @@ export async function noteAdmin(raw: Row | FormData) {
   need(await one("note_books", { id }), "الملزمة غير موجودة");
   await remove("note_ink", { book_id: id });
   await remove("note_marks", { book_id: id });
+  await remove("note_bookmarks", { book_id: id });
   await remove("note_books", { id });
   return await adminData(uid, "🗑 انحذفت");
 }

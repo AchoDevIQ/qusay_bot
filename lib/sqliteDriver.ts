@@ -88,6 +88,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS sched_items(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, exam_id INTEGER, at TEXT, status TEXT);
     CREATE TABLE IF NOT EXISTS note_books(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, chapter TEXT, lang TEXT, file TEXT, pages INTEGER, ord INTEGER, created TEXT);
     CREATE TABLE IF NOT EXISTS note_ink(user_id INTEGER, book_id INTEGER, page INTEGER, ink TEXT, PRIMARY KEY(user_id, book_id, page));
+    CREATE TABLE IF NOT EXISTS note_bookmarks(user_id INTEGER, book_id INTEGER, page INTEGER, at TEXT, PRIMARY KEY(user_id, book_id));
     CREATE TABLE IF NOT EXISTS note_marks(id INTEGER PRIMARY KEY AUTOINCREMENT, book_id INTEGER, page INTEGER, y REAL, label TEXT, video_id INTEGER, solution TEXT, auto INTEGER);
     CREATE TABLE IF NOT EXISTS note_videos(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, lang TEXT, file TEXT, tg TEXT, size INTEGER, created TEXT);
     CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
