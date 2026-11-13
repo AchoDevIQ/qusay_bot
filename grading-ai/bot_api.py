@@ -935,9 +935,12 @@ List the solution's marking steps in order, top to bottom:
 - One entry per marked step. When the teacher's marks group several lines under one mark, keep them as ONE step (join the lines with "  ;  ").
 - text: the math of the step, copied faithfully as plain text (use ^ for powers, sqrt() for roots, i for the imaginary unit, ASCII digits, and x y z for س ص ع). Do not include the mark number itself in the text.
 - points: the mark written for that step. If no marks are written anywhere, set marks_written to false and give every step 0.
-- method: 1 for every step, unless the teacher solved the SAME question again in another complete way (a heading such as
-  «الطريقة الثانية», «طريقة ثانية», «طريقة أخرى», «حل آخر» or "Another method", ending at the same final answer): the steps of
-  that second way get 2, of a third way 3. A student follows only ONE of these ways, so each way carries the question's full marks.
+- method: 1 for every step, unless the teacher solved the SAME thing again in another way under a heading such as
+  «الطريقة الثانية», «طريقة ثانية», «طريقة أخرى», «حل آخر» or "Another method": the steps written under that heading get 2,
+  under a third such heading 3. A student follows only ONE of these ways.
+  The other way may solve the whole question again, or only one part of it («الطريقة الثانية لايجاد a»). Either way, tag 2
+  ONLY the steps written under that heading. The first way, and every step that all ways share (the work before the ways
+  split, and the work after them under a heading such as «تكملة الحل للطريقتين»), stay 1.
   Parts or branches of one question (1/ 2/, أ ب, a b, two things to prove) are NOT other ways: they all stay 1.
 Ignore page headers, question numbers, decoration and remarks to the grader (ملاحظة)."""
 
@@ -972,22 +975,44 @@ def fit_points(points: List[float], total: float) -> List[float]:
 
 def split_methods(steps: List[dict], total: float, marks_written: bool):
     """
-    The teacher's first way to solve the question and his other complete ways ("الطريقة الثانية"), as
-    (first way, other ways, unclear). A student follows one way only, so every way must carry the
-    question's full marks by itself: the tags are trusted only when the marks the teacher wrote for
-    EACH way add up to the question's mark. Parts of one question (1/ 2/) tagged as ways by mistake
-    never do, so they stay one list, as do steps with no marks written (unclear is then True).
+    The teacher's first way to solve the question and his other ways ("الطريقة الثانية"), as
+    (first way, other ways, unclear). A student follows one way only, so every way returned carries
+    the question's full marks by itself.
+
+    The first way is every step tagged like the first step: his first way together with the work
+    all ways share. Its written marks must add up to the question's mark, or nothing is split:
+    parts of one question (1/ 2/) tagged as ways by mistake never pass, nor do steps with no marks.
+
+    Another way is one block of steps. It stands for the steps of the first way written just before
+    it whose marks add up to the same: the whole first way when it is a complete solution, or only
+    the part it replaces ("الطريقة الثانية لايجاد a"), the shared steps before and after staying in
+    place. A block that replaces nothing exactly is left out (unclear is then True): the first way
+    is whole without it.
     """
-    groups: dict = {}
-    for s in steps:
-        groups.setdefault(int(s.get("method") or 1), []).append(s)
-    if len(groups) < 2:
+    tags = [int(s.get("method") or 1) for s in steps]
+    if len(set(tags)) < 2:
         return steps, [], False
-    ways = list(groups.values())
-    whole = lambda way: abs(sum(float(s.get("points") or 0) for s in way) - float(total)) < 0.01
-    if not marks_written or not all(whole(way) for way in ways):
+    marks = [float(s.get("points") or 0) for s in steps]
+    main = [i for i, t in enumerate(tags) if t == tags[0]]
+    if not marks_written or abs(sum(marks[i] for i in main) - float(total)) > 0.01:
         return steps, [], True
-    return ways[0], ways[1:], False
+    others, unclear = [], False
+    for tag in dict.fromkeys(t for t in tags if t != tags[0]):
+        block = [i for i, t in enumerate(tags) if t == tag]
+        worth = sum(marks[i] for i in block)
+        replaced, got = [], 0.0
+        if block[-1] - block[0] + 1 == len(block) and worth > 0:
+            for i in reversed([m for m in main if m < block[0]]):
+                if got >= worth - 0.01:
+                    break
+                replaced.append(i)
+                got += marks[i]
+        if not replaced or abs(got - worth) > 0.01:
+            unclear = True
+            continue
+        others.append([steps[i] for i in main if i < replaced[-1]] + [steps[i] for i in block]
+                      + [steps[i] for i in main if i > replaced[0]])
+    return [steps[i] for i in main], others, unclear
 
 
 def draft_steps(steps: List[dict], total: float) -> List[dict]:
@@ -1000,8 +1025,8 @@ def draft_steps(steps: List[dict], total: float) -> List[dict]:
 async def bot_rubric(req: RubricReq):
     """Draft steps from the teacher's solution pages, with the marks the teacher wrote next to
     each step. Falls back to one step per written line with points shared evenly.
-    When the teacher solved the question in more than one complete way, `steps` is his first way and
-    `alternatives` holds the others, each worth the question's full marks."""
+    When the teacher solved the question, or a part of it, in more than one way, `steps` is his first
+    way and `alternatives` holds the others, each a complete list worth the question's full marks."""
     bucket = start_usage()
     if req.pdf and req.question:
         pages = await pdf_pages(req.pdf)
@@ -1058,7 +1083,7 @@ RUBRIC_ISSUES = {
     "wrong_value": ("error", "القيمة «{value}» ما تحقق المعادلة اللي قبلها «{prior}»"),
     "duplicate_step": ("note", "نفس نص الخطوة {other}"),
     "final_not_values": ("note", "الجواب النهائي ما ينقرا كقيم، فما راح ينفحص بالجبر"),
-    "methods_unclear": ("note", "الحل بيه أكثر من طريقة، بس درجات كل طريقة ما تساوي درجة السؤال، فانحسبت كلها خطوات وحدة. راجعها"),
+    "methods_unclear": ("note", "الحل بيه أكثر من طريقة، بس درجات طريقة منهن ما طابقت درجات الطريقة الأولى، فما انفصلت. راجع الخطوات"),
     "no_function": ("note", "سؤال رسم والدالة مو مكتوبة بأي خطوة بصيغة f(x) = ... ، فالرسم ما راح يتطابق مع الحساب"),
 }
 _RUBRIC_CHAIN = re.compile(rf"{ARROW_PATTERN}|;|\n")
