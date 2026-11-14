@@ -875,3 +875,29 @@ test("الاعتراض على ورقة جوابها ملف كامل (مو لسؤ
   assert.equal(ai[0].body.images.length, 1);
   assert.deepEqual([r.accept, r.mark], [true, 9]);
 });
+
+test("⚖️ شدة التصحيح لكل موضوع: تنحفظ من صفحة الفصل، وتروح للخدمة ويا كل سؤال (العادي هو الأصل)", async () => {
+  const { tryGrade, aiSettings, strictOf } = await import("../lib/aiGrade.ts");
+  const e4 = await insert("bank_exams", { slug: "c4s", chapter: "فصل الشدة", ord: 1, title: "شدة 1", minutes: 60, pos: 4 });
+  const e4b = await insert("bank_exams", { slug: "c4s", chapter: "فصل الشدة", ord: 2, title: "شدة 2", minutes: 60, pos: 5 });
+  const v4 = await insert("bank_versions", { exam_id: e4, model: "A", kind: "mandatory", ok: 1 });
+  const s4 = await insert("bank_questions", { version_id: v4, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  await saveRubric(s4, [{ text: "x = 1", points: 10 }], 1);
+  assert.equal(await strictOf(e4), "standard");
+  await setChapterScope("c4s", [e4, e4b], 0, { [e4]: "strict", [e4b]: "lenient" });
+  assert.deepEqual([await strictOf(e4), await strictOf(e4b)], ["strict", "lenient"]);
+  aiReply = () => Response.json({ score: 5, requires_review: false, review_reason: "", student_lines: [], steps: [], usage: [], methods_checked: 1 });
+  ai.length = 0;
+  await tryGrade(s4, [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 4, 4])]);
+  assert.equal(ai.find((c) => c.route === "/bot/grade")!.body.strictness, "strict");
+  // رجعها عادي: ما تنحفظ (الأصل)، والطلب يروح «standard»
+  await setChapterScope("c4s", [e4], 0, { [e4]: "standard", [e4b]: "nonsense" });
+  assert.deepEqual((await aiSettings()).strict, {});
+  ai.length = 0;
+  await tryGrade(s4, [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 4, 5])]);
+  assert.equal(ai.find((c) => c.route === "/bot/grade")!.body.strictness, "standard");
+  // حفظ الفصل بدون شدة (صفحة قديمة) ما يمسح الشدة
+  await setChapterScope("c4s", [e4], 0, { [e4]: "lenient" });
+  await setChapterScope("c4s", [e4], 0);
+  assert.equal(await strictOf(e4), "lenient");
+});

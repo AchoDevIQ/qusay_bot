@@ -10,7 +10,9 @@ type Step = { text: string; points: number };
 type Q = { id: number; n: number; max: number; q: string | null; a: string[]; steps: Step[] | null; alts?: Step[][] };
 const WAY = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة"];
 type Version = { id: number; model: string; kind: string; pdf: boolean; questions: Q[] };
-type Exam = { id: number; title: string; on: boolean; versions: Version[]; ready: boolean };
+type Strict = "lenient" | "standard" | "strict";
+const STRICT_NAME: Record<Strict, string> = { lenient: "😊 متساهل", standard: "⚖️ عادي", strict: "📏 صارم" };
+type Exam = { id: number; title: string; on: boolean; strict?: Strict; versions: Version[]; ready: boolean };
 type Chapter = { slug: string; chapter: string; grader: number; exams: Exam[] };
 type Sum = { sent: number; unsure: number; cost: number };
 type Trial = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; method?: number; steps: { status: string; awarded: number; possible: number; reason: string; expected: string; student: string }[] };
@@ -68,7 +70,7 @@ export default function AiGradeClient() {
               </select>
             </div>
             {ch && <ChapterDraft key={"d" + ch.slug + JSON.stringify(ch.exams.map((e) => e.ready))} ch={ch} queue={data.draftQueue} linked={data.linked} busy={busy} call={call} />}
-            {ch && <Scope key={ch.slug + JSON.stringify(ch.exams.map((e) => e.on)) + ch.grader} ch={ch} graders={data.graders} busy={busy} call={call} />}
+            {ch && <Scope key={ch.slug + JSON.stringify(ch.exams.map((e) => [e.on, e.strict])) + ch.grader} ch={ch} graders={data.graders} busy={busy} call={call} />}
             {ch?.exams.map((e) => (
               <details key={e.id} className="card cpch">
                 <summary><b>{e.title}</b> {e.ready ? "· ✅ خطواته جاهزة" : "· ⏳ باقي خطوات"}</summary>
@@ -143,10 +145,12 @@ function ChapterDraft({ ch, queue, linked, busy, call }: { ch: Chapter; queue: D
 function Scope({ ch, graders, busy, call }: { ch: Chapter; graders: Data["graders"]; busy: boolean; call: Call }) {
   const [on, setOn] = useState<number[]>(ch.exams.filter((e) => e.on).map((e) => e.id));
   const [grader, setGrader] = useState(ch.grader);
+  const [strict, setStrict] = useState<Record<string, Strict>>(Object.fromEntries(ch.exams.map((e) => [String(e.id), e.strict ?? "standard"])));
   const all = on.length === ch.exams.length;
   return (
     <div className="card expad">
       <div className="exlabel">المواضيع اللي يصححها نظام التصحيح AI</div>
+      <div className="exhint">جنب كل موضوع مأشر تختار شدة التصحيح. الفرق بالخطوة الغلط اللي جاية من غلط قبلها (الخطأ المنقول): 😊 متساهل ياخذ 75% من درجتها، ⚖️ عادي 50%، 📏 صارم صفر.</div>
       <button type="button" className="btn ghost" onClick={() => setOn(all ? [] : ch.exams.map((e) => e.id))}>{all ? "شيل الكل" : "أشّر الكل"}</button>
       <div className="aig-topics">
         {ch.exams.map((e) => (
@@ -154,6 +158,11 @@ function Scope({ ch, graders, busy, call }: { ch: Chapter; graders: Data["grader
             <input type="checkbox" checked={on.includes(e.id)} onChange={(x) => setOn(x.target.checked ? [...on, e.id] : on.filter((i) => i !== e.id))} />
             <span>{e.title}</span>
             {on.includes(e.id) && !e.ready && <small className="exbad">باقي خطوات</small>}
+            {on.includes(e.id) && (
+              <select value={strict[String(e.id)] ?? "standard"} onChange={(x) => setStrict({ ...strict, [String(e.id)]: x.target.value as Strict })} onClick={(x) => x.stopPropagation()}>
+                {(Object.keys(STRICT_NAME) as Strict[]).map((k) => <option key={k} value={k}>{STRICT_NAME[k]}</option>)}
+              </select>
+            )}
           </label>
         ))}
       </div>
@@ -162,7 +171,7 @@ function Scope({ ch, graders, busy, call }: { ch: Chapter; graders: Data["grader
         <option value={0}>كل المصححين (اللي ياخذها أول)</option>
         {graders.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
       </select>
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "scope", slug: ch.slug, exams: on, grader })}>💾 حفظ مواضيع الفصل</button>
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "scope", slug: ch.slug, exams: on, grader, strict })}>💾 حفظ مواضيع الفصل</button>
     </div>
   );
 }

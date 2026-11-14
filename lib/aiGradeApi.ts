@@ -32,7 +32,7 @@ async function listData(uid: number) {
     let c = chapters.find((x) => x.slug === e.slug);
     if (!c) { c = { slug: e.slug, chapter: e.chapter, grader: s.unsure[e.slug] ?? 0, exams: [] }; chapters.push(c); }
     const vs = versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id, model: v.model, kind: v.kind, pdf: !!v.answer_pdf, questions: qOf.get(v.id) ?? [] }));
-    c.exams.push({ id: e.id, title: e.title, on: scope.has(e.id), versions: vs, ready: vs.length > 0 && vs.every((v) => v.questions.length && v.questions.every((q: Row) => q.steps)) });
+    c.exams.push({ id: e.id, title: e.title, on: scope.has(e.id), strict: s.strict[String(e.id)] ?? "standard", versions: vs, ready: vs.length > 0 && vs.every((v) => v.questions.length && v.questions.every((q: Row) => q.steps)) });
   }
   const graders = await Promise.all((await staffIds("grade")).map(async (id) => ({ id, name: ADMIN_IDS.includes(id) ? "إنت (صاحب البوت)" : await staffName(id) })));
   // السجل والفلوس: كل ورقة وكلفتها، ومجموع اليوم والشهر والكل
@@ -71,7 +71,7 @@ export async function aiGradeAction(body: Row) {
     const grader = Number(body.grader) || 0;
     need(!grader || (await staffIds("grade")).includes(grader), "هذا الشخص ما عنده صلاحية التصحيح");
     const exams = Array.isArray(body.exams) ? body.exams : [];
-    await setChapterScope(body.slug as string, exams, grader);
+    await setChapterScope(body.slug as string, exams, grader, body.strict && typeof body.strict === "object" ? body.strict as Record<string, unknown> : undefined);
     // أشّر مواضيع وحفظ: يعني يريده يصحح، فيشتغل وحده إذا طافي
     const turnedOn = exams.length > 0 && aiLinked() && !await aiOn();
     if (turnedOn) await setAiOn(true);

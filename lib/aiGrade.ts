@@ -19,7 +19,11 @@ export type Price = { in: number; out: number };
 /** المواضيع اللي يصححها، ولكل فصل المصحح اللي توصله الأوراق اللي مو متأكد منها */
 /** calib: أول كم ورقة بكل نموذج (A، B، C...) يصححها الأستاذ (أو مساعد عنده صلاحية 🎓) قبل ما يبدي، ونظام التصحيح يتعلم منها */
 /** students: طلاب يختارهم صاحب البوت، نظام التصحيح يصحح كل أوراقهم بأي موضوع خطواته جاهزة، حتى لو الموضوع مو مأشر */
-export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number; students: number[] };
+/** شدة التصحيح بالخدمة: «lenient» متساهل، «standard» عادي، «strict» صارم. تفرق بدرجة الخطأ المنقول
+ *  (الخطوة الغلط اللي جاية من غلط قبلها): متساهل 75%، عادي 50%، صارم صفر */
+export type Strictness = "lenient" | "standard" | "strict";
+export const STRICTNESS: Strictness[] = ["lenient", "standard", "strict"];
+export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number; students: number[]; strict: Record<string, Strictness> };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
 export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed" | "objection" | "calib"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
 
@@ -87,7 +91,13 @@ const readJson = async <T>(k: string, def: T): Promise<T> => { try { return JSON
 export async function aiSettings(): Promise<AiSettings> {
   const s = await readJson<Partial<AiSettings>>(SET_KEY, {});
   const calib = Number(s.calib);
-  return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {}, calib: Number.isInteger(calib) && calib >= 0 ? calib : CALIB_DEFAULT, students: Array.isArray(s.students) ? s.students.map(Number) : [] };
+  const strict: Record<string, Strictness> = {};
+  for (const [k, v] of Object.entries(s.strict && typeof s.strict === "object" ? s.strict : {})) if (STRICTNESS.includes(v as Strictness) && v !== "standard") strict[k] = v as Strictness;
+  return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {}, calib: Number.isInteger(calib) && calib >= 0 ? calib : CALIB_DEFAULT, students: Array.isArray(s.students) ? s.students.map(Number) : [], strict };
+}
+/** شدة تصحيح الموضوع (الامتحان). عادي إذا ما مختار */
+export async function strictOf(examId: number): Promise<Strictness> {
+  return (await aiSettings()).strict[String(examId)] ?? "standard";
 }
 /** يضيف طالب لقائمة الذكاء أو يشيله */
 export async function setAiStudent(uid: number, on: boolean) {
@@ -124,12 +134,17 @@ export async function setCalib(n: number) {
   await kvSet(SET_KEY, JSON.stringify(s));
 }
 /** مواضيع فصل وحد: اللي يصححها، ومنو توصله أوراقه اللي مو متأكد منها */
-export async function setChapterScope(slug: string, examIds: number[], grader: number) {
+export async function setChapterScope(slug: string, examIds: number[], grader: number, strict?: Record<string, unknown>) {
   const s = await aiSettings();
   const inChapter = new Set((await find("bank_exams", { slug })).map((e) => e.id as number));
   const pick = examIds.map(Number).filter((id) => inChapter.has(id));
   s.exams = [...s.exams.filter((id) => !inChapter.has(id)), ...pick];
   if (grader) s.unsure[slug] = grader; else delete s.unsure[slug];
+  // شدة كل موضوع بالفصل (إذا انبعثت): العادي ما ينحفظ لأنه الأصل
+  if (strict && typeof strict === "object") for (const id of inChapter) {
+    const v = strict[String(id)];
+    if (STRICTNESS.includes(v as Strictness) && v !== "standard") s.strict[String(id)] = v as Strictness; else delete s.strict[String(id)];
+  }
   await kvSet(SET_KEY, JSON.stringify(s));
 }
 export async function prices(): Promise<Record<string, Price>> {
@@ -431,6 +446,7 @@ async function gradePaper(it: Row, withExamples = true, photo = false): Promise<
   // ولا ورقة ترجع للمصححين بسبب ملف: الجواب اللي ملف كامل (مو لسؤال معين) يروح ويا كل سؤال، والخدمة تلگى بيه جواب
   // كل سؤال. ملف مو صورة يروح هم: الخدمة ما ترفض الورقة، تشيله وتگول (notices)، والمسؤول يتبلغ
   const whole = answers.filter((a) => !a.q);
+  const strict = await strictOf(it.exam_id);
   return await Promise.all(qs.map(async (q): Promise<AiQuestion> => {
     const rubric = await rubricFull(q.id);
     if (!rubric) throw new Error(`سؤال ${q.n} بدون خطوات`);
@@ -441,8 +457,8 @@ async function gradePaper(it: Row, withExamples = true, photo = false): Promise<
     const imgs = await Promise.all(mine.map((a) => readRef(a.file)));
     // صورة بعدها ما وصلت للمخزن: تنعاد بالدكة الجاية (مو رفض، الصورة جاية)
     if (imgs.some((b) => !b)) throw new Error(`صورة جواب سؤال ${q.n} مفقودة`);
-    if (photo) return await gradePhoto(q, rubric.steps, imgs as Buffer[]);
-    return await gradeBest(q, rubric, imgs as Buffer[], withExamples ? await examplesFor(it.exam_id, it.version_id, q.n) : []);
+    if (photo) return await gradePhoto(q, rubric.steps, imgs as Buffer[], strict);
+    return await gradeBest(q, rubric, imgs as Buffer[], withExamples ? await examplesFor(it.exam_id, it.version_id, q.n) : [], strict);
   }));
 }
 type Example = { student: string; ai: number; teacher: number };
@@ -478,17 +494,19 @@ async function engineVersion(): Promise<string> {
   engineSeen = { at: Date.now(), version };
   return version;
 }
-const cacheKey = (steps: RubricStep[], imgs: Buffer[], version = "", alts: RubricStep[][] = []) => {
+const cacheKey = (steps: RubricStep[], imgs: Buffer[], version = "", alts: RubricStep[][] = [], strict: Strictness = "standard") => {
   const h = createHash("sha256").update(engineTag(ENGINE, version)).update(JSON.stringify(steps));
   if (alts.length) h.update(JSON.stringify(alts));
+  // نفس الورقة بشدة ثانية درجتها تختلف. العادي ما يدخل بالمفتاح حتى النتائج المحفوظة قبل تبقى تشتغل
+  if (strict !== "standard") h.update("strictness:" + strict);
   for (const b of imgs) h.update(b);
   return `ai_cache_${h.digest("hex").slice(0, 40)}`;
 };
 /** يرسل جواب سؤال واحد (صوره) للخدمة ويا خطوات حله */
-async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], examples: Example[] = [], alts: RubricStep[][] = []): Promise<AiQuestion> {
+async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], examples: Example[] = [], alts: RubricStep[][] = [], strict: Strictness = "standard"): Promise<AiQuestion> {
   const max = Number(q.max_mark);
   const useCache = process.env.AI_CACHE !== "0";
-  const key = cacheKey(steps, imgs, useCache ? await engineVersion() : "", alts);
+  const key = cacheKey(steps, imgs, useCache ? await engineVersion() : "", alts, strict);
   if (useCache) {
     const hit = await readJson<AiQuestion | null>(key, null);
     if (hit && typeof hit.score === "number") return { ...hit, n: q.n, usage: [] };
@@ -498,6 +516,7 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], exampl
     steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
     images: imgs.map((b) => b.toString("base64")),
     examples,
+    strictness: strict,
     // طرق الحل الثانية: الخدمة تقارن جواب الطالب بكل الطرق بطلب واحد وتصحح على الأقرب
     ...(alts.length ? { alternatives: alts.map((way) => way.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` }))) } : {}),
   // نصبر لحد 4 دقايق قبل ما نعيدها بالدكة الجاية
@@ -516,14 +535,14 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], exampl
 /** الطالب يحل بطريقة وحدة من طرق الحل النموذجي. كل الطرق تروح للخدمة بطلب واحد: تقارن جوابه بكل طريقة
  *  وتصحح على الأقرب له (أعلى درجة). method يگول بأي طريقة انحسبت (حتى الاعتراض وعرض الحل يمشون عليها).
  *  خدمة قديمة ما تعرف الطرق (ما ترجع ways): ينصحح بالطريقة الأولى، وإذا ما أخذ الدرجة كاملة بكل طريقة لحالها */
-async function gradeBest(q: Row, rubric: Rubric, imgs: Buffer[], examples: Example[] = []): Promise<AiQuestion> {
-  let best = await gradeQuestion(q, rubric.steps, imgs, examples, rubric.alts);
+async function gradeBest(q: Row, rubric: Rubric, imgs: Buffer[], examples: Example[] = [], strict: Strictness = "standard"): Promise<AiQuestion> {
+  let best = await gradeQuestion(q, rubric.steps, imgs, examples, rubric.alts, strict);
   // خدمة جديدة: قارنت كل الطرق بنفس الطلب. خدمة قديمة: تجاهلت الطرق وصححت بالأولى، فنجرب الباقي وحدة وحدة
   if (best.ways !== undefined || !rubric.alts.length) return best;
   const usage = [...(best.usage ?? [])];
   for (const [i, way] of rubric.alts.entries()) {
     if (best.score >= best.max) break;
-    const r = await gradeQuestion(q, way, imgs, examples);
+    const r = await gradeQuestion(q, way, imgs, examples, [], strict);
     usage.push(...(r.usage ?? []));
     // نفس الدرجة: المتأكد منها أولى من اللي مو متأكد منها
     if (r.score > best.score || (r.score === best.score && best.review && !r.review)) best = { ...r, method: i + 2 };
@@ -531,10 +550,10 @@ async function gradeBest(q: Row, rubric: Rubric, imgs: Buffer[], examples: Examp
   return { ...best, usage };
 }
 /** 🔬 نفس السؤال بمصحح Math-Grading وهو يشوف الصور، للمقارنة بس */
-async function gradePhoto(q: Row, steps: RubricStep[], imgs: Buffer[]): Promise<AiQuestion> {
+async function gradePhoto(q: Row, steps: RubricStep[], imgs: Buffer[], strict: Strictness = "standard"): Promise<AiQuestion> {
   const max = Number(q.max_mark);
   const r = await svc("/bot/grade", {
-    max_points: max, engine: "photo", feedback: false,
+    max_points: max, engine: "photo", feedback: false, strictness: strict,
     steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
     images: imgs.map((b) => b.toString("base64")),
   }, 230_000);
@@ -549,7 +568,7 @@ export async function tryGrade(qid: number, imgs: Buffer[]): Promise<AiQuestion>
   if (!rubric) throw new Error("احفظ خطوات حل هذا السؤال أول");
   if (!imgs.length) throw new Error("اختار صورة الجواب");
   const v = await one("bank_versions", { id: q.version_id });
-  const res = await gradeBest(q, rubric, imgs, v ? await examplesFor(v.exam_id, q.version_id, q.n) : []);
+  const res = await gradeBest(q, rubric, imgs, v ? await examplesFor(v.exam_id, q.version_id, q.n) : [], v ? await strictOf(v.exam_id) : "standard");
   await addLog({ at: stamp(), kind: "try", q: qid, usage: sumUsage([res.usage ?? []]) });
   return { ...res, usage: undefined };
 }
