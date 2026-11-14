@@ -7,7 +7,7 @@ import { COLORS } from "../grade/pens";
 
 type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; saved?: number };
 type Toc = { t: string; p: number; items?: Toc[] };
-type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean };
+type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean; q?: string };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
 type Tool = "hand" | "pen" | "mark" | "ruler" | "erase" | "note";
 /** ملاحظة لاصقة على الصفحة: مكانها (من 0 لـ 1) ونصها */
@@ -89,7 +89,6 @@ export default function NotesClient() {
 // الملزمة صفحات ورا بعض مثل ملف PDF: الطالب يسحب للأسفل ويقلب، ويكتب برقم الصفحة حتى يروح لها.
 // بس الصفحات القريبة من اللي يشوفها تنرسم (الباقي مربع فارغ بنفس الحجم)، حتى الموبايل ما يثقل والسيرفر ما ينضغط
 const GAP = 10;
-const SIDE = 44;
 const NEAR = 2;
 type SheetApi = { flush: (keepalive?: boolean) => Promise<void>; restore: (s: Stroke[]) => void };
 
@@ -190,9 +189,8 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
     return () => ro.disconnect();
   }, []);
 
-  // أزرار الفيديو بشريط يسار الصفحة، برا الورقة، حتى ما تغطي شي من السؤال
-  const side = marks.length ? SIDE : 0;
-  const w = Math.round((boxW - side) * zoom), h = Math.round(w * ratio), step = h + GAP;
+  // الورقة بعرض الشاشة كله: أزرار الفيديو بشريط تحت الشاشة، برا الملزمة
+  const w = Math.round(boxW * zoom), h = Math.round(w * ratio), step = h + GAP;
   // الصفحة اللي قدامه: اللي تغطي ثلث الشاشة من فوك. تتحدث من يوگف السحب، فالسحب السريع ما يحمل كل الصفحات اللي يمر عليها
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
   function onScroll() {
@@ -213,7 +211,7 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
     setPage(n);
   }
   // التكبير يبقيه على نفس الصفحة
-  const zoomTo = (z: number) => { const n = page; setZoom(z); requestAnimationFrame(() => { const nw = Math.round((boxW - side) * z); stage.current?.scrollTo({ top: (n - 1) * (Math.round(nw * ratio) + GAP) }); }); };
+  const zoomTo = (z: number) => { const n = page; setZoom(z); requestAnimationFrame(() => { const nw = Math.round(boxW * z); stage.current?.scrollTo({ top: (n - 1) * (Math.round(nw * ratio) + GAP) }); }); };
   function back() {
     const u = undo.current.pop(); if (!u) return;
     sheets.current.get(u.n)?.restore(u.prev);
@@ -274,18 +272,20 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
       {bookmark > 1 && page === 1 && <button type="button" className="ntbookmark" onClick={() => go(bookmark)}>🔖 آخر مرة وصلت لصفحة {bookmark}. دوس هنا حتى تروح لها</button>}
       {msg && <div className="ntmsg" onClick={() => setMsg("")}>{msg}</div>}
       <div className="ntstage" ref={stage} onScroll={onScroll}>
-        <div className="ntscroll" style={{ width: w + side, height: book.pages * step - GAP }}>
+        <div className="ntscroll" style={{ width: w, height: book.pages * step - GAP }}>
           {Array.from({ length: book.pages }, (_, i) => i + 1).filter((n) => Math.abs(n - page) <= NEAR).map((n) => (
-            <Sheet key={n} n={n} book={book} top={(n - 1) * step} side={side} w={w} h={h} dpr={dpr} tool={tool} color={tool === "mark" ? mark : pen}
-              marks={marks.filter((m) => m.page === n)} sending={sending} play={play} onRatio={setRatio} onErr={setErr}
+            <Sheet key={n} n={n} book={book} top={(n - 1) * step} w={w} h={h} dpr={dpr} tool={tool} color={tool === "mark" ? mark : pen}
+              onRatio={setRatio} onErr={setErr}
               onPending={(d) => setPending((x) => Math.max(0, x + d))} onUndo={(prev) => { undo.current.push({ n, prev }); if (undo.current.length > 200) undo.current.shift(); }}
               onPlaced={() => setTool("hand")} register={(api) => { if (api) sheets.current.set(n, api); else sheets.current.delete(n); }} />
           ))}
           {Array.from({ length: book.pages }, (_, i) => i + 1).filter((n) => Math.abs(n - page) > NEAR && Math.abs(n - page) <= 40).map((n) => (
-            <div key={`p${n}`} className="ntholder" style={{ top: (n - 1) * step, left: side, width: w, height: h }}>{n}</div>
+            <div key={`p${n}`} className="ntholder" style={{ top: (n - 1) * step, left: 0, width: w, height: h }}>{n}</div>
           ))}
         </div>
       </div>
+      {/* 🎬 فيديوهات الصفحة اللي قدامه: شريط تحت الشاشة، برا الملزمة. يتبدل وحده من يقلب */}
+      {marks.length > 0 && <VideoBar marks={marks.filter((m) => m.page === page)} sending={sending} play={play} />}
       {yt && <VideoBox title="🎬 فيديو حل السؤال" yt={yt} onClose={() => setYt("")} onFail={(code) => void post({ action: "videoError", book: book.id, kind: "solution", code }).catch(() => undefined)} />}
       {clip && <VideoBox title="▶️ فيديو توضيح السؤال" src={clip} onClose={() => setClip("")} onChat={clipMark ? () => { setClip(""); void play(clipMark, "chat"); } : undefined} onFail={(code) => void post({ action: "videoError", book: book.id, kind: "video", code }).catch(() => undefined)} />}
     </div>
@@ -296,9 +296,9 @@ const tgPlatform = () => (window as unknown as { Telegram?: { WebApp?: { platfor
 const pageSrc = (book: number, n: number) => `/api/notes/page?t=${encodeURIComponent(token())}&book=${book}&page=${n}&pf=${encodeURIComponent(tgPlatform())}&d=${encodeURIComponent(deviceNow())}`;
 
 /** صفحة وحدة: صورتها، كتابة الطالب فوكها (تنحفظ وحدها)، وأزرار الفيديو يم أسئلتها */
-function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, play, onRatio, onErr, onPending, onUndo, onPlaced, register }: {
-  n: number; book: Book; top: number; side: number; w: number; h: number; dpr: number; tool: Tool; color: string; marks: Mark[]; sending: boolean;
-  play: (m: Mark, kind: "video" | "solution") => void; onRatio: (r: number) => void; onErr: (e: string) => void;
+function Sheet({ n, book, top, w, h, dpr, tool, color, onRatio, onErr, onPending, onUndo, onPlaced, register }: {
+  n: number; book: Book; top: number; w: number; h: number; dpr: number; tool: Tool; color: string;
+  onRatio: (r: number) => void; onErr: (e: string) => void;
   onPending: (d: number) => void; onUndo: (prev: Stroke[]) => void; onPlaced: () => void; register: (api: SheetApi | null) => void;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -395,8 +395,8 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
   function up() { const s = live.current; if (s) { live.current = null; change([...strokesRef.current, s]); } }
 
   return (
-    <div className="ntsheet" style={{ top, width: w + side, height: h }}>
-      <div className="ntpaper" style={{ left: side, width: w, height: h }}>
+    <div className="ntsheet" style={{ top, width: w, height: h }}>
+      <div className="ntpaper" style={{ left: 0, width: w, height: h }}>
       {!img && <div className="ntholder ntin">{bad ? "ما انفتحت هاي الصفحة. ارجعلها بعد شوية" : `جاري فتح الصفحة ${n}...`}</div>}
       {img && <canvas ref={bg} style={{ width: w, height: h }} />}
       {img && <canvas ref={topC} style={{ width: w, height: h, touchAction: tool === "hand" ? "auto" : "none" }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { live.current = null; redraw(strokesRef.current); }} />}
@@ -425,12 +425,26 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
       )}
       <span className="ntno">{n}</span>
       </div>
-      {img && marks.map((m) => (
-        <div key={m.id} className="ntmark" style={{ top: Math.max(0, m.y * h - 4), width: side }}>
-          {m.solution && <button type="button" aria-label="فيديو حل السؤال" disabled={sending} onClick={() => play(m, "solution")}>🎬<small>الحل</small></button>}
-          {m.video && <button type="button" aria-label="فيديو توضيح السؤال" disabled={sending} onClick={() => play(m, "video")}>▶️<small>شرح</small></button>}
-        </div>
-      ))}
+    </div>
+  );
+}
+
+/** شريط فيديوهات الصفحة تحت الشاشة: «🎬 حل س١» و«▶️ توضيح س١» لكل سؤال بيه فيديو بالصفحة اللي قدامه */
+const arDigits = (t: string) => t.replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
+function VideoBar({ marks, sending, play }: { marks: Mark[]; sending: boolean; play: (m: Mark, kind: "video" | "solution") => void }) {
+  // السؤال بلا رقم: إذا بالصفحة أكثر من واحد ياخذ رقم ترتيبه
+  const tag = (m: Mark, i: number) => (m.q ? ` ${arDigits(m.q)}` : marks.length > 1 ? ` (${arDigits(String(i + 1))})` : "");
+  return (
+    <div className="ntvids">
+      <small>فيديوهات<br />هاي الصفحة</small>
+      <div className="ntvidsrow">
+        {marks.length ? marks.map((m, i) => (
+          <span key={m.id} className="ntvidsq">
+            {m.solution && <button type="button" disabled={sending} onClick={() => play(m, "solution")}>🎬 حل{tag(m, i)}</button>}
+            {m.video && <button type="button" disabled={sending} onClick={() => play(m, "video")}>▶️ توضيح{tag(m, i)}</button>}
+          </span>
+        )) : <span className="ntvidsnone">ماكو فيديو بهاي الصفحة</span>}
+      </div>
     </div>
   );
 }

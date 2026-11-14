@@ -12,7 +12,7 @@ const { insert, one, put } = await import("../lib/db.ts");
 const { ensure } = await import("../lib/webApi.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 const { noteAction, noteAdmin, noteVideo } = await import("../lib/notes.ts");
-const { parseLink, parseYouTube, videoName } = await import("../lib/noteMarks.ts");
+const { parseLink, parseYouTube, questionTag, videoName } = await import("../lib/noteMarks.ts");
 const { files } = await import("../lib/files.ts");
 await ensure();
 
@@ -190,4 +190,14 @@ test("ملف عامل الـ PDF بـ public مطابق لنسخة المكتب�
   for (const f of ["app/store/PdfPages.tsx", "app/store/scanup/ScanUpClient.tsx"]) assert.doesNotMatch(fs.readFileSync(f, "utf8"), /import\("pdfjs-dist"\)/);
   // new URL على ملف من مكتبة خارج الحزمة يفشّل بناء البوت كله
   for (const f of ["app/store/PdfPages.tsx", "app/store/scanup/ScanUpClient.tsx"]) assert.doesNotMatch(fs.readFileSync(f, "utf8"), /new URL\("pdfjs-dist/);
+});
+
+test("questionTag: short name of the question for the video bar under the page", () => {
+  assert.equal(questionTag("س1 / خزان على شكل متوازي"), "س1");
+  assert.equal(questionTag("س 12 : سلم"), "س12");
+  assert.equal(questionTag("Q 3 / A ladder leans"), "Q3");
+  assert.equal(questionTag("مثال 2 جد"), "مثال 2");
+  assert.equal(questionTag("Example"), "Example");
+  assert.equal(questionTag("1) f(x) = (x - 1)"), "");
+  assert.equal(questionTag(null), "");
 });

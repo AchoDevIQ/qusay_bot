@@ -392,14 +392,19 @@ body.grwide .grtop{padding-left:104px}
 .exfile{display:flex;flex-direction:column;gap:6px;margin:8px 0;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;font-size:14px;font-weight:700;color:var(--txt)}.exfile input{font-family:inherit;color:var(--mut)}
 
 /* أزرار الفيديو داخل الملزمة: على يسار السؤال، فوك الكتابة */
-.ntsheet .ntmark{position:absolute;left:0;z-index:3;display:flex;flex-direction:column;align-items:center;gap:3px;padding-right:3px}
-.ntsheet .ntmark button{display:flex;flex-direction:column;align-items:center;width:38px;font:inherit;font-size:15px;line-height:1.1;font-weight:700;padding:3px 0 2px;border-radius:9px;border:1px solid var(--gold2,#cea239);background:rgba(13,33,64,.95);color:#f9c445;box-shadow:0 2px 6px rgba(0,0,0,.35);cursor:pointer}
-.ntsheet .ntmark button small{font-size:9px;font-weight:700}
-.ntsheet .ntmark button:disabled{opacity:.6}
 .ntbookmark{display:block;width:calc(100% - 20px);margin:6px 10px;padding:9px 12px;border-radius:10px;font:inherit;font-size:14px;font-weight:700;text-align:center;cursor:pointer;background:rgba(249,196,69,.18);border:1px solid var(--gold2,#cea239);color:inherit}
 .ntask{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.6)}
 .ntaskbox{width:100%;max-width:360px;display:flex;flex-direction:column;gap:8px;padding:18px 16px;border-radius:14px;background:#0d2140;border:1px solid var(--gold2,#cea239);color:#fff;text-align:center}
 .ntaskbox p{margin:0 0 4px;font-size:14px;opacity:.85}
+/* 🎬 شريط فيديوهات الصفحة تحت الشاشة، برا الملزمة */
+.ntvids{flex:none;display:flex;align-items:center;gap:8px;padding:7px calc(10px + env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));background:#0d2140;border-top:2px solid var(--gold2,#cea239);box-shadow:0 -4px 12px rgba(0,0,0,.3)}
+.ntvids>small{flex:none;font-size:11px;line-height:1.3;font-weight:700;color:#9fb0cc;text-align:center}
+.ntvidsrow{flex:1;min-width:0;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ntvidsrow::-webkit-scrollbar{display:none}
+.ntvidsq{flex:none;display:flex;gap:6px}
+.ntvidsq button{flex:none;white-space:nowrap;font:inherit;font-size:15px;font-weight:800;padding:7px 12px;border-radius:12px;border:1.5px solid var(--gold2,#cea239);background:#13294d;color:#f9c445;cursor:pointer}
+.ntvidsq button:disabled{opacity:.6}
+.ntvidsnone{font-size:13px;color:#9fb0cc;padding:8px 2px}
 .ntyt{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:#000;color:#fff;user-select:none;-webkit-user-select:none}
 .ntytbar{display:flex;flex-direction:column;align-items:center;gap:5px;padding:calc(6px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 7px calc(12px + env(safe-area-inset-left));background:rgba(13,33,64,.96);text-align:center}.ntytbar b{display:block;max-width:100%;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .ntytbox{position:relative;flex:1;min-height:0;background:#000}

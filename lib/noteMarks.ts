@@ -149,7 +149,18 @@ export async function autoMarks(book: Row) {
   return { marks: made.length, linked };
 }
 
-const pub = (m: Row) => ({ id: m.id as number, page: m.page as number, y: Number(m.y), video: !!m.video_id, solution: !!m.solution });
+/** اسم السؤال القصير من سطره: «س1 / خزان...» ← س1، «Q 3 / ...» ← Q3، «مثال 2» ← مثال 2 (للشريط تحت الشاشة) */
+export function questionTag(label: unknown) {
+  const t = String(label ?? "").trim();
+  let m = /^س\s*(\d+)/.exec(t);
+  if (m) return `س${m[1]}`;
+  m = /^Q\s*(\d+)/i.exec(t);
+  if (m) return `Q${m[1]}`;
+  m = /^(مثال|Example)\s*(\d*)/i.exec(t);
+  if (m) return m[2] ? `${m[1]} ${m[2]}` : m[1];
+  return "";
+}
+const pub = (m: Row) => ({ id: m.id as number, page: m.page as number, y: Number(m.y), video: !!m.video_id, solution: !!m.solution, q: questionTag(m.label) });
 /** أزرار الملزمة للطالب: مكانها وشنو بيها، بلا روابط */
 export async function marksFor(bookId: number) {
   return (await find("note_marks", { book_id: bookId })).filter((m) => m.video_id || m.solution).sort((a, b) => a.page - b.page || Number(a.y) - Number(b.y)).map(pub);
