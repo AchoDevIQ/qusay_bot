@@ -130,7 +130,7 @@ test("📝 الراصد: صفحته عليها اسم الطالب بالهدر�
   const px = async (im: any) => { const c = createCanvas(im.width, im.height); const g = c.getContext("2d"); g.drawImage(im, 0, 0); return g.getImageData(0, 0, im.width, im.height).data; };
   const a = await px(mine), b = await px(sol);
   // الصفحة غامقة بس الاسم أبيض بزاوية الهدر، والحل صفحة بيضة
-  let white = 0; for (let y = 20; y < 70; y++) for (let x = 25; x < 250; x++) if (a[(y * 700 + x) * 4] > 200) white++;
+  let white = 0; for (let y = 4; y < 45; y++) for (let x = 25; x < 250; x++) if (a[(y * 700 + x) * 4] > 200) white++;
   assert.ok(white > 50, "اسم الطالب مكتوب بالهدر");
   assert.ok(b[(500 * 700 + 350) * 4] > 200, "الحل النموذجي من ملف الحلول");
   const [book] = (await myBooks(10)).filter((x) => x.kind !== "rasid");

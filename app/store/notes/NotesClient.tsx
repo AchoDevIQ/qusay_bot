@@ -229,6 +229,13 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
         <b className="nttitle">{book.title}</b>
         <small className={pending ? "ntwait" : "ntok"}>{err ? "⚠️" : pending ? "⏳ يحفظ" : "✅ محفوظ"}</small>
       </div>
+      {/* 📝 الراصد: الزرين بشريط لحالهم فوك الأدوات، بعيد عن هدر الصفحة */}
+      {book.kind === "rasid" && (
+        <div className="ntbar ntrasid">
+          <button type="button" className={"gk-btn" + (sol ? "" : " on")} onClick={() => setSol(0)}>📝 حلي</button>
+          <button type="button" className={"gk-btn" + (sol ? " on" : "")} onClick={() => { haptic(); setSol(page); }}>📘 الحل النموذجي</button>
+        </div>
+      )}
       <div className="ntbar nttools">
         <button type="button" className="gk-ic" title="المواضيع" aria-label="المواضيع" onClick={() => { haptic(); setToc(true); }}>📑</button>
         {pick("hand", "👆", "تحريك الصفحة")}{pick("pen", "✏️", "قلم")}{pick("ruler", "📏", "مسطرة: خط مستقيم")}{pick("mark", "🖍️", "تظليل")}{pick("erase", "🧽", "ممحاة")}{pick("note", "📝", "ملاحظة")}
@@ -254,12 +261,6 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
         <button type="submit" className="gk-btn" disabled={!find}>🔍 روح</button>
       </form>
       {toc && <TocPanel book={book} onClose={() => setToc(false)} onPick={(n) => { setToc(false); requestAnimationFrame(() => go(n)); }} />}
-      {book.kind === "rasid" && (
-        <div className="ntbar ntrasid">
-          <button type="button" className={"gk-btn" + (sol ? "" : " on")} onClick={() => setSol(0)}>📝 حلي</button>
-          <button type="button" className={"gk-btn" + (sol ? " on" : "")} onClick={() => { haptic(); setSol(page); }}>📘 الحل النموذجي</button>
-        </div>
-      )}
       {!!sol && (
         <div className="ntsol">
           <div className="ntbar ntrasid">

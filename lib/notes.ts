@@ -171,11 +171,12 @@ export async function watermark(jpg: Buffer, name: string, uid: number, header?:
   if (header) {
     g.fillStyle = "#ffffff"; g.textBaseline = "middle"; g.textAlign = header === "ar" ? "left" : "right";
     const x = header === "ar" ? im.width * 0.04 : im.width * 0.96;
-    g.font = `bold ${Math.round(im.width / 40)}px QArabic`;
-    g.fillText(name, x, im.height * 0.033);
+    // الهدر رفيع (5% من الصفحة): الاسم بسطر، والرقم تحته
     g.font = `bold ${Math.round(im.width / 52)}px QArabic`;
+    g.fillText(name, x, im.height * 0.018);
+    g.font = `bold ${Math.round(im.width / 66)}px QArabic`;
     g.fillStyle = "#ffb26b";
-    g.fillText(`#${uid}`, x, im.height * 0.06);
+    g.fillText(`#${uid}`, x, im.height * 0.038);
   }
   return Buffer.from(await c.encode("jpeg", 82));
 }

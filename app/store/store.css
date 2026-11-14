@@ -426,7 +426,7 @@ body.grwide .grtop{padding-left:104px}
 .pctag { display: inline-block; margin-inline-start: 8px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--gold2); color: var(--gold); font-size: 0.78em; font-weight: 700; white-space: nowrap; }
 
 /* 📝 الراصد: زر حلي وزر الحل النموذجي، والحل يطلع فوك الصفحة */
-.ntrasid{justify-content:center;gap:10px;background:#26282c}.ntrasid .gk-btn{background:#fff;color:#26282c;font-weight:800}.ntrasid .gk-btn.on{background:#e67e22;color:#fff}
+.ntrasid{justify-content:center;gap:10px;background:#fff;border-bottom:1px solid #e3e5e8}.ntrasid .gk-btn{background:#f1f2f4;color:#26282c;font-weight:800;border:1px solid #d5d8de}.ntrasid .gk-btn.on{background:#e67e22;color:#fff}
 .ntsol{position:fixed;inset:0;z-index:60;background:#fff;overflow:auto;display:flex;flex-direction:column}.ntsol .ntbar{position:sticky;top:0}.ntsol img{width:100%;max-width:900px;margin:0 auto;display:block}
 
 /* 📑 المواضيع بالملزمة والراصد */
