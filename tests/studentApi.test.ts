@@ -166,14 +166,3 @@ test("📩 رسالة من صفحة الطلاب: للطالب أو لولي أ�
   assert.ok(log.some((w) => /وصله رسالة من مساعد رسائل/.test(w)));
   assert.ok(log.some((w) => /وصل فويس ويا كتابة لولي أمره من صاحب البوت/.test(w)));
 });
-
-test("📷 ورقة تجربة من صور حقيقية: نماذج الامتحان الاختياري تطلع ويا الإجباري، والاختياري معلّم", async () => {
-  const { insert } = await import("../lib/db.ts");
-  const ex = await insert("bank_exams", { slug: "c8", chapter: "فصل النماذج", ord: 1, title: "امتحان بنموذجين", minutes: 60, pos: 1 });
-  const m = await insert("bank_versions", { exam_id: ex, model: "A", kind: "mandatory", ok: 1 });
-  const o = await insert("bank_versions", { exam_id: ex, model: "B", kind: "optional", ok: 1 });
-  for (const v of [m, o]) await insert("bank_questions", { version_id: v, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
-  const r: any = await st({ action: "list" });
-  const mine = r.testVersions.filter((v: any) => v.exam === ex);
-  assert.deepEqual(mine.map((v: any) => [v.id, v.kind]), [[m, "mandatory"], [o, "optional"]]);
-});

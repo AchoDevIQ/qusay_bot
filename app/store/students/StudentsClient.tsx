@@ -10,7 +10,7 @@ import { CURR_OPTS, DateInput, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type TestStudent = { id: number; name: string; papers: number; graded: number; chapters?: string[]; link: string };
-type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; kind?: string; qs: { n: number; max: number }[] };
+type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null; skip?: boolean }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
 type Data = { canMsg?: boolean; file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
@@ -69,8 +69,8 @@ export default function StudentsClient() {
         {data && s && (
           <>
             {data.tests && <TestStudents tests={data.tests} chapters={[...new Set((data.testVersions ?? []).map((v) => v.chapter).filter(Boolean))]} busy={busy} act={act} />}
-            {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions.filter((v) => v.kind !== "optional")} busy={busy} act={act} code={data.tryCode} codes={data.tryCodes} />}
-            {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions.filter((v) => v.kind !== "optional")} busy={busy} act={act} />}
+            {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} code={data.tryCode} codes={data.tryCodes} />}
+            {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions} busy={busy} act={act} />}
             {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
             <div className="card">
               <h2>📊 الطلاب المسجلين: {s.all}</h2>
@@ -610,7 +610,7 @@ function TestPaper({ tests, versions, busy, upload }: { tests: TestStudent[]; ve
           <>
             <label>النموذج</label>
             <div className="seg">
-              {models.map((x) => <button key={x.id} type="button" className={vid === x.id ? "on" : ""} onClick={() => { setVid(x.id); setPics({}); }}>{x.model}{x.kind === "optional" ? " (اختياري)" : ""}</button>)}
+              {models.map((x) => <button key={x.id} type="button" className={vid === x.id ? "on" : ""} onClick={() => { setVid(x.id); setPics({}); }}>{x.model}</button>)}
             </div>
           </>
         )}
