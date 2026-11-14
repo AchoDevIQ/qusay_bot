@@ -117,3 +117,35 @@ test("🔁 تبديل الصفحات والجواب من صفحة الامتحا
   assert.match(String(await kvGet(`ai_rubric_prev_q_${before!.id}`)), /خطوة قديمة/);
   assert.deepEqual(JSON.parse(String(await kvGet("ai_draft_queue"))).re, []);
 });
+
+test("📄 ملف PDF جديد لنسخة الطالب، وصورة سؤال جديدة: صفحات الطالب والنص المكتوب والخطوات تتبعهم", async () => {
+  const init = sign(1);
+  const e = (await examAction({ action: "addChapter", chapter: "فصل الملف", title: "امتحان الملف", initData: init })).chapters.find((c: any) => c.chapter === "فصل الملف").exams.at(-1);
+  await examAction({ action: "addVersion", id: e.id, initData: init });
+  const v = (await get("SELECT id FROM bank_versions WHERE exam_id=?", e.id))!.id as number;
+  const blank = await page([]);
+  for (let i = 0; i < 3; i++) await examUpload(form({ initData: init, action: "addQuestion", id: v, mark: 20, q: new Blob([blank], { type: "image/png" }) }));
+  const q = await get("SELECT id, q_file FROM bank_questions WHERE version_id=? AND n=2", v);
+  // ملف PDF بصفحة وحدة: صفحة الطالب تنرسم منه، وصور الأسئلة تنقص
+  const pdf = (await imagesPdf([await page([400, 650, 950])]))!;
+  const r = await examUpload(form({ initData: init, action: "pdfAr", id: v, file: new Blob([pdf], { type: "application/pdf" }) }));
+  assert.match(r.notice, /صفحات الامتحان اللي يشوفها الطالب \(1\)/);
+  assert.match(r.notice, /انقصّت/);
+  assert.equal(JSON.parse((await get("SELECT pages_ar FROM bank_versions WHERE id=?", v))!.pages_ar).length, 1);
+  assert.notEqual((await get("SELECT q_file FROM bank_questions WHERE id=?", q!.id))!.q_file, q!.q_file);
+  // ملف ما ينقرى: يبقى ملف الطباعة، والصفحات القديمة، ويگله يرفع صور
+  const pages = (await get("SELECT pages_ar FROM bank_versions WHERE id=?", v))!.pages_ar;
+  const bad = await examUpload(form({ initData: init, action: "pdfAr", id: v, file: new Blob(["%PDF-1.7 broken"], { type: "application/pdf" }) }));
+  assert.match(bad.notice, /ما گدرت أقرا صفحاته/);
+  assert.equal((await get("SELECT pages_ar FROM bank_versions WHERE id=?", v))!.pages_ar, pages);
+  // صورة سؤال جديدة: النص المكتوب ينشال، الخطوات تنعاد، وينذكر إن صفحة الطالب بعدها قديمة
+  await run("UPDATE bank_questions SET q_text=?, q_text_en=? WHERE id=?", "نص قديم", "old text", q!.id);
+  await kvSet(`ai_rubric_q_${q!.id}`, JSON.stringify({ steps: [{ text: "خطوة قديمة", points: 20 }] }));
+  const r2 = await examUpload(form({ initData: init, action: "replaceQ", id: q!.id, file: new Blob([blank], { type: "image/png" }) }));
+  assert.match(r2.notice, /نص السؤال المكتوب القديم انشال/);
+  assert.match(r2.notice, /خطوات التصحيح AI راح تنطلع من جديد/);
+  assert.match(r2.notice, /س2 القديم/);
+  const row = await get("SELECT q_text, q_text_en FROM bank_questions WHERE id=?", q!.id);
+  assert.deepEqual([row!.q_text, row!.q_text_en], [null, null]);
+  assert.ok(JSON.parse(String(await kvGet("ai_draft_queue"))).q.includes(q!.id));
+});

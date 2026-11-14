@@ -281,10 +281,10 @@ export async function noteAdmin(raw: Row | FormData) {
     need(book, "الملزمة غير موجودة");
     let notice = "";
     if (a === "autoMarks") { const r = await autoMarks(book!); notice = `✅ انحطت ${r.marks} زر على الأسئلة، وانربط ${r.linked} فيديو توضيحي`; }
-    if (a === "markSave") { await saveMark(book!, body); notice = "💾 انحفظ"; }
+    if (a === "markSave") { const n = await saveMark(book!, body); notice = `💾 انحفظ${n ? `، وتحدّث وياه ${n} زر لنفس السؤال بالملازم الثانية` : ""}`; }
     if (a === "markDelete") { await deleteMark(book!, Number(body.id)); notice = "🗑 انحذف الزر"; }
-    if (a === "solutionsPaste") { const r = await pasteSolutions(book!, String(body.text ?? "")); notice = `✅ انربط ${r.linked} سؤال بفيديو حله${r.added ? `، وانضاف ${r.added} زر جديد` : ""}${r.bad.length ? `. ⚠️ ${r.bad.length} سطر ما انفهم: ${r.bad.slice(0, 3).join(" | ")}` : ""}`; }
-    return { ...await adminData(uid, notice), marks: await bookMarksAdmin(book!.id), book: book!.id };
+    if (a === "solutionsPaste") { const r = await pasteSolutions(book!, String(body.text ?? "")); notice = `✅ انربط ${r.linked} سؤال بفيديو حله${r.added ? `، وانضاف ${r.added} زر جديد` : ""}${r.spread ? `، وتحدّث وياهن ${r.spread} زر لنفس الأسئلة بالملازم الثانية` : ""}${r.bad.length ? `. ⚠️ ${r.bad.length} سطر ما انفهم: ${r.bad.slice(0, 3).join(" | ")}` : ""}`; }
+    return { ...await adminData(uid, notice), ...await bookMarksAdmin(book!.id), book: book!.id };
   }
   need(a === "delete", "أمر غير معروف");
   const id = Number(body.id);

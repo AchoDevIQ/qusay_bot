@@ -238,9 +238,75 @@ export async function deleteVideo(id: number) {
   return `🗑 انحذف «${v!.name}»`;
 }
 export async function bookMarksAdmin(bookId: number) {
-  return (await find("note_marks", { book_id: bookId })).sort((a, b) => a.page - b.page || Number(a.y) - Number(b.y))
-    .map((m) => ({ id: m.id as number, page: m.page as number, y: Number(m.y), label: String(m.label ?? ""), video: (m.video_id as number) ?? null, solution: String(m.solution ?? "") }));
+  const all = await find("note_marks");
+  const books = new Map((await find("note_books")).map((b) => [b.id as number, b]));
+  const place = (m: Row) => ({ id: m.id as number, book: m.book_id as number, title: String(books.get(m.book_id)?.title ?? ""), page: m.page as number, label: String(m.label ?? "") });
+  const marks = all.filter((m) => m.book_id === bookId).sort((a, b) => a.page - b.page || Number(a.y) - Number(b.y))
+    .map((m) => ({ id: m.id as number, page: m.page as number, y: Number(m.y), label: String(m.label ?? ""), video: (m.video_id as number) ?? null, solution: String(m.solution ?? ""),
+      linked: m.link ? all.filter((o) => o.link === m.link && o.id !== m.id).map(place) : [] }));
+  // أزرار الملازم الثانية: منها يختار السؤال نفسه حتى يربطه
+  const others = all.filter((m) => m.book_id !== bookId && books.has(m.book_id)).sort((a, b) => a.book_id - b.book_id || a.page - b.page || Number(a.y) - Number(b.y)).map(place);
+  return { marks, others };
 }
+
+// ---------- نفس السؤال بأكثر من ملزمة (دفتر المحاضرات، الراصد، الإنجليزي): أزرارها بنفس رقم الربط link.
+// تبدّل فيديو الحل أو الفيديو التوضيحي بوحدة، ينبدل بكل الأزرار المربوطة بيها
+
+/** الفيديو التوضيحي بلغة الملزمة الثانية: نفس اسمه بلغتها (إذا مرفوع) */
+function variant(videos: Row[], v: Row | undefined, lang: string) {
+  if (!v) return undefined;
+  return v.lang === lang ? v : videos.find((x) => x.name === v.name && x.lang === lang);
+}
+/** الزر تغيّر: رابط الحل وفيديو التوضيح يروحون لكل الأزرار المربوطة بيه. يرجع عدد الأزرار اللي تحدثت */
+async function spread(m: Row, before: { solution?: unknown; video_id?: unknown }) {
+  if (!m.link) return 0;
+  const others = (await find("note_marks", { link: m.link })).filter((o) => o.id !== m.id);
+  if (!others.length) return 0;
+  const lang = new Map((await find("note_books")).map((b) => [b.id, b.lang === "en" ? "en" : "ar"]));
+  const videos = await find("note_videos");
+  const byId = (id: unknown) => videos.find((v) => v.id === id);
+  const solChanged = (m.solution ?? null) !== (before.solution ?? null);
+  const vidChanged = (m.video_id ?? null) !== (before.video_id ?? null);
+  let n = 0;
+  for (const o of others) {
+    const patch: Row = {};
+    if (solChanged && (o.solution ?? null) !== (m.solution ?? null)) patch.solution = m.solution ?? null;
+    if (vidChanged) {
+      if (m.video_id) {
+        const pick = variant(videos, byId(m.video_id), lang.get(o.book_id) ?? "ar");
+        if (pick && pick.id !== o.video_id) patch.video_id = pick.id;
+      } else if (o.video_id && byId(o.video_id)?.name === byId(before.video_id)?.name) patch.video_id = null;
+    }
+    if (!Object.keys(patch).length) continue;
+    await update("note_marks", { id: o.id }, { ...patch, auto: 0 });
+    n++;
+  }
+  return n;
+}
+/** يربط الزر بنفس السؤال بملزمة ثانية: اللي ناقصه ياخذه من المربوطين، واللي بيه يروح إلهم */
+async function linkTo(m: Row, otherId: number) {
+  const other = await one("note_marks", { id: otherId });
+  need(other, "السؤال اللي تربطه بيه مو موجود");
+  need(other!.book_id !== m.book_id, "اربطه بسؤال بملزمة ثانية، مو بنفس الملزمة");
+  const key = other!.link ?? m.link ?? other!.id;
+  if (m.link && m.link !== key) for (const x of await find("note_marks", { link: m.link })) await update("note_marks", { id: x.id }, { link: key });
+  await update("note_marks", { id: other!.id }, { link: key, auto: 0 });
+  await update("note_marks", { id: m.id }, { link: key, auto: 0 });
+  const group = (await find("note_marks", { link: key })).filter((x) => x.id !== m.id);
+  const book = await one("note_books", { id: m.book_id });
+  const lang = book?.lang === "en" ? "en" : "ar";
+  const videos = await find("note_videos");
+  const fill: Row = {};
+  if (!m.solution) { const s = group.find((x) => x.solution)?.solution; if (s) fill.solution = s; }
+  if (!m.video_id) {
+    for (const x of group) { const v = variant(videos, videos.find((y) => y.id === x.video_id), lang); if (v) { fill.video_id = v.id; break; } }
+  }
+  if (Object.keys(fill).length) await update("note_marks", { id: m.id }, fill);
+  const now = (await one("note_marks", { id: m.id }))!;
+  return await spread(now, {});
+}
+
+/** يحفظ الزر. يرجع عدد الأزرار المربوطة بيه بالملازم الثانية اللي تحدثت وياه */
 export async function saveMark(book: Row, body: Row) {
   const page = Number(body.page), y = Number(body.y);
   need(Number.isInteger(page) && page >= 1 && page <= book.pages, "رقم الصفحة غلط");
@@ -250,16 +316,27 @@ export async function saveMark(book: Row, body: Row) {
   const video = body.video ? Number(body.video) : null;
   if (video) need(await one("note_videos", { id: video }), "الفيديو مو موجود");
   const row = { book_id: book.id, page, y, label: String(body.label ?? "").slice(0, 80), video_id: video, solution: solution || null, auto: 0 };
-  if (body.id) {
-    need(await one("note_marks", { id: Number(body.id), book_id: book.id }), "الزر مو موجود");
-    await update("note_marks", { id: Number(body.id) }, row);
-  } else await insert("note_marks", row);
+  let id = Number(body.id) || 0;
+  const before = id ? await one("note_marks", { id, book_id: book.id }) : null;
+  if (id) {
+    need(before, "الزر مو موجود");
+    await update("note_marks", { id }, row);
+  } else id = Number(await insert("note_marks", row));
+  const m = (await one("note_marks", { id }))!;
+  // body.link: رقم زر بملزمة ثانية يربطه بيه، و0 يفك الربط
+  if (body.link !== undefined && body.link !== null && body.link !== "") {
+    const want = Number(body.link) || 0;
+    if (want) return await linkTo(m, want);
+    if (m.link) await update("note_marks", { id }, { link: null });
+    return 0;
+  }
+  return before ? await spread(m, before) : 0;
 }
 /** روابط حل كثيرة مرة وحدة. كل سطر: «ص22 · 0.196 · اسم السؤال · الرابط».
  *  الرابط يروح للزر اللي بنفس الصفحة وأقرب مكان، وإذا ماكو زر هناك ينضاف زر جديد */
 export async function pasteSolutions(book: Row, text: string) {
   const marks = await find("note_marks", { book_id: book.id });
-  let linked = 0, added = 0;
+  let linked = 0, added = 0, spreadTo = 0;
   const bad: string[] = [];
   for (const raw of text.split(/\r?\n/)) {
     const s = raw.trim();
@@ -268,7 +345,12 @@ export async function pasteSolutions(book: Row, text: string) {
     const page = m ? Number(m[1]) : 0, y = m ? Number(m[2]) : -1, link = m?.[4] ?? "";
     if (!m || page < 1 || page > book.pages || y > 1 || !(parseYouTube(link) || parseLink(link))) { bad.push(s.slice(0, 40)); continue; }
     const near = marks.filter((x) => x.page === page && Math.abs(Number(x.y) - y) < 0.03).sort((a, b) => Math.abs(Number(a.y) - y) - Math.abs(Number(b.y) - y))[0];
-    if (near) { await update("note_marks", { id: near.id }, { solution: link, auto: 0 }); near.solution = link; }
+    if (near) {
+      const before = { solution: near.solution, video_id: near.video_id };
+      await update("note_marks", { id: near.id }, { solution: link, auto: 0 });
+      near.solution = link;
+      spreadTo += await spread(near, before);
+    }
     else {
       const row: Row = { book_id: book.id, page, y, label: m[3].slice(0, 80), video_id: null, solution: link, auto: 0 };
       row.id = await insert("note_marks", row);
@@ -278,7 +360,7 @@ export async function pasteSolutions(book: Row, text: string) {
     linked++;
   }
   need(linked || bad.length, "الصق الروابط أول");
-  return { linked, added, bad };
+  return { linked, added, bad, spread: spreadTo };
 }
 export async function deleteMark(book: Row, id: number) {
   need(await one("note_marks", { id, book_id: book.id }), "الزر مو موجود");

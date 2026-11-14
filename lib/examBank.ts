@@ -7,6 +7,7 @@ import { files } from "./files.ts";
 import { flowKb } from "./keyboards.ts";
 import { api, edit, send, upload, type Kb } from "./telegram.ts";
 import { btn, cut, esc, stamp } from "./util.ts";
+import { syncAnswerImages, syncPdf, syncQuestion } from "./versionSync.ts";
 
 export const EXAM_PERM = "exams";
 const KIND_LABEL: Record<string, string> = { mandatory: "📌 إجباري", optional: "🎯 اختياري" };
@@ -295,9 +296,9 @@ export async function examBankMessage(chat: number, uid: number, m: Row, st: str
   if (!await can(uid, EXAM_PERM)) return false;
   const text = String(m.text ?? "").trim();
   const photo: string | undefined = m.photo?.at?.(-1)?.file_id;
-  const done = async (id: number) => {
+  const done = async (id: number, synced = "") => {
     await setSession(uid, "", {});
-    await send(chat, "✅ انحفظ التعديل. يشمل بس اللي بعد ما امتحن هذا الامتحان.");
+    await send(chat, "✅ انحفظ التعديل. يشمل بس اللي بعد ما امتحن هذا الامتحان." + (synced ? "\n" + synced : ""));
     await questionView(chat, id);
   };
   if (st === "a:exna") {
@@ -352,8 +353,11 @@ export async function examBankMessage(chat: number, uid: number, m: Row, st: str
     await update("bank_versions", { id: data.id }, { [data.lang === "ar" ? "pdf_ar" : "pdf_en"]: doc.file_id });
     await logEdit(uid, `نسخة ${data.id}: رفع نسخة الطالب ${data.lang}`);
     await setSession(uid, "", {});
+    // صفحات الامتحان اللي يشوفها الطالب وصور الأسئلة تتبع الملف الجديد
+    const synced = await syncPdf(data.id, data.lang === "en" ? "en" : "ar", "tg:" + doc.file_id);
+    await logEdit(uid, `نسخة ${data.id}: ${synced.split("\n")[0].slice(0, 200)}`);
     const [t, kb] = await versionView(data.id);
-    await send(chat, "✅ انحفظت نسخة الطالب.\n\n" + t, { kb });
+    await send(chat, "✅ انحفظت نسخة الطالب.\n" + synced + "\n\n" + t, { kb });
     return true;
   }
   if (st === "a:exm") {
@@ -378,7 +382,7 @@ export async function examBankMessage(chat: number, uid: number, m: Row, st: str
     if (!photo) { await send(chat, "⚠️ أرسل صورة."); return true; }
     await update("bank_questions", { id: data.id }, { q_file: "tg:" + photo, edited: 1 });
     await logEdit(uid, `سؤال ${data.id}: صورة جديدة`);
-    await done(data.id);
+    await done(data.id, await syncQuestion(data.id));
     return true;
   }
   if (st === "a:exqa") {
@@ -391,7 +395,7 @@ export async function examBankMessage(chat: number, uid: number, m: Row, st: str
     if (text !== "تم" || !data.files.length) { await send(chat, "⚠️ أرسل صورة الجواب، أو اكتب تم بعد ما ترسلها."); return true; }
     await update("bank_questions", { id: data.id }, { a_files: JSON.stringify(data.files), edited: 1 });
     await logEdit(uid, `سؤال ${data.id}: جواب جديد`);
-    await done(data.id);
+    await done(data.id, await syncAnswerImages(data.id));
     return true;
   }
   return false;

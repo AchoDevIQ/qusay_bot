@@ -16,7 +16,7 @@ import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { fileToken, verifyFileToken } from "./webAuth.ts";
 import { SKIP_KEY, WITH_KEY, examWith, skippableExams } from "./skipExams.ts";
 import { autoInsertExam } from "./schedApi.ts";
-import { syncAnswer, syncPages } from "./versionSync.ts";
+import { syncAnswer, syncPages, syncPdf, syncQuestion } from "./versionSync.ts";
 
 export { ApiError };
 
@@ -362,6 +362,8 @@ export async function examUpload(form: FormData) {
     need(await one("bank_questions", { id }), "السؤال غير موجود");
     await update("bank_questions", { id }, { q_file: await saveUpload(form.get("file"), IMAGES), edited: 1 });
     await logEdit(uid, `سؤال ${id}: صورة جديدة`);
+    // النص المكتوب وخطوات التصحيح تتبع الصورة الجديدة
+    return { ...await examList(uid), notice: "✅ انبدلت صورة السؤال\n" + await syncQuestion(id) };
   } else if (a === "pagesAr" || a === "pagesEn") {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
     const files = form.getAll("file");
@@ -382,8 +384,13 @@ export async function examUpload(form: FormData) {
     return { ...await examList(uid), notice: await syncAnswer(id) };
   } else if (a === "pdfAr" || a === "pdfEn") {
     need(await one("bank_versions", { id }), "النسخة غير موجودة");
-    await update("bank_versions", { id }, { [a === "pdfAr" ? "pdf_ar" : "pdf_en"]: await saveUpload(form.get("file"), ["pdf"]) });
+    const ref = await saveUpload(form.get("file"), ["pdf"]);
+    await update("bank_versions", { id }, { [a === "pdfAr" ? "pdf_ar" : "pdf_en"]: ref });
     await logEdit(uid, `نسخة ${id}: رفع نسخة الطالب ${a}`);
+    // صفحات الامتحان اللي يشوفها الطالب وصور الأسئلة تتبع الملف الجديد
+    const notice = await syncPdf(id, a === "pdfAr" ? "ar" : "en", ref);
+    await logEdit(uid, `نسخة ${id}: ${notice.split("\n")[0].slice(0, 200)}`);
+    return { ...await examList(uid), notice };
   } else if (a === "wordPreview" || a === "wordSave" || a === "wordGrow") {
     // «📄 أسئلة من الوورد»: ملف الفصل بالعربي والإنجليزي، المطابقة تطلع قبل، والحفظ للمطابق بس
     const doc = async (f: FormDataEntryValue | null) => (f instanceof Blob && f.size ? Buffer.from(await f.arrayBuffer()) : null);

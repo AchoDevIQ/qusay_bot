@@ -132,6 +132,55 @@ test("🔍 الأزرار تنحط على الأسئلة، والفيديو ال
   assert.equal(await one("note_marks", { id: manual.id }), null);
 });
 
+test("🔗 نفس السؤال بالدفتر والراصد والإنجليزي: تبدّل فيديوه بوحدة، يتبدل بالكل", async () => {
+  const one2 = (await import("../lib/db.ts")).one;
+  const lec = await insert("note_books", { title: "دفتر المحاضرات", chapter: "الفصل الخامس", lang: "ar", file: "l1", pages: 5, created: "1" });
+  const ras = await insert("note_books", { title: "الراصد", chapter: "الفصل الخامس", lang: "ar", file: "r1", pages: 5, created: "1", kind: "rasid" });
+  const eng = await insert("note_books", { title: "Ch5 EN", chapter: "الفصل الخامس", lang: "en", file: "e1", pages: 5, created: "1" });
+  await admin("videoUpload", { file: mp4("الصقر_والأرنب_عربي.mp4") });
+  const vids = (await admin("videoUpload", { file: mp4("الصقر_والأرنب_English_عربي.mp4") })).videos;
+  const ar = vids.find((v: any) => v.name === "الصقر والأرنب" && v.lang === "ar").id, en = vids.find((v: any) => v.name === "الصقر والأرنب" && v.lang === "en").id;
+  let r = await admin("markSave", { book: lec, page: 2, y: 0.3, label: "الصقر", solution: "https://youtu.be/W7hH5Vyt_no", video: ar });
+  const L = r.marks[0];
+  r = await admin("markSave", { book: ras, page: 4, y: 0.1, label: "الصقر" });
+  const R = r.marks[0];
+  assert.ok(r.others.some((p: any) => p.id === L.id && p.title === "دفتر المحاضرات"));
+  // الربط: زر الراصد الفارغ ياخذ رابط الحل والفيديو من الدفتر
+  r = await admin("markSave", { book: ras, id: R.id, page: 4, y: 0.1, label: "الصقر", link: L.id });
+  let m = r.marks.find((x: any) => x.id === R.id);
+  assert.equal(m.solution, "https://youtu.be/W7hH5Vyt_no");
+  assert.equal(m.video, ar);
+  assert.deepEqual(m.linked.map((p: any) => p.id), [L.id]);
+  // الإنجليزي ينربط: ياخذ الفيديو التوضيحي الإنجليزي بنفس الاسم
+  r = await admin("markSave", { book: eng, page: 1, y: 0.2, label: "falcon" });
+  const E = r.marks[0];
+  r = await admin("markSave", { book: eng, id: E.id, page: 1, y: 0.2, label: "falcon", link: R.id });
+  m = r.marks.find((x: any) => x.id === E.id);
+  assert.equal(m.video, en);
+  assert.equal(m.linked.length, 2);
+  // تبديل رابط الحل بالراصد: يتبدل بالدفتر والإنجليزي، والإشعار يگول بكم مكان
+  r = await admin("markSave", { book: ras, id: R.id, page: 4, y: 0.1, label: "الصقر", solution: "https://youtu.be/OLs8XMB0gVk", video: ar });
+  assert.match(r.notice, /تحدّث وياه 2 زر/);
+  assert.equal((await one2("note_marks", { id: L.id }))!.solution, "https://youtu.be/OLs8XMB0gVk");
+  assert.equal((await one2("note_marks", { id: E.id }))!.solution, "https://youtu.be/OLs8XMB0gVk");
+  // شيل الفيديو التوضيحي من الدفتر: ينشال من الراصد ومن الإنجليزي (نفس السؤال)
+  await admin("markSave", { book: lec, id: L.id, page: 2, y: 0.3, label: "الصقر", solution: "https://youtu.be/OLs8XMB0gVk" });
+  assert.equal((await one2("note_marks", { id: R.id }))!.video_id, null);
+  assert.equal((await one2("note_marks", { id: E.id }))!.video_id, null);
+  // لصق الروابط بالدفتر يوصل للمربوطين
+  r = await admin("solutionsPaste", { book: lec, text: "ص2 · 0.300 · الصقر · https://youtu.be/yrnZcMgZsUw" });
+  assert.match(r.notice, /تحدّث وياهن 2 زر/);
+  assert.equal((await one2("note_marks", { id: E.id }))!.solution, "https://youtu.be/yrnZcMgZsUw");
+  // فك الربط: الزر يبقى بفيديوه، بس بعد ما يتبدل ويا الباقين
+  r = await admin("markSave", { book: eng, id: E.id, page: 1, y: 0.2, label: "falcon", solution: "https://youtu.be/yrnZcMgZsUw", link: 0 });
+  assert.equal(r.marks.find((x: any) => x.id === E.id).linked.length, 0);
+  await admin("markSave", { book: ras, id: R.id, page: 4, y: 0.1, label: "الصقر", solution: "https://youtu.be/W7hH5Vyt_no" });
+  assert.equal((await one2("note_marks", { id: E.id }))!.solution, "https://youtu.be/yrnZcMgZsUw");
+  assert.equal((await one2("note_marks", { id: L.id }))!.solution, "https://youtu.be/W7hH5Vyt_no");
+  // ما ينربط بزر بنفس الملزمة
+  await assert.rejects(admin("markSave", { book: lec, page: 3, y: 0.5, label: "x", link: L.id }), /ملزمة ثانية/);
+});
+
 test("ملف عامل الـ PDF بـ public مطابق لنسخة المكتبة، والصفحات ما تطلبه من داخل المكتبة", async () => {
   const fs = await import("node:fs");
   for (const f of ["pdf.min.mjs", "pdf.worker.min.mjs"]) assert.ok(fs.readFileSync(`public/${f}`).equals(fs.readFileSync(`node_modules/pdfjs-dist/build/${f}`)), `انسخ node_modules/pdfjs-dist/build/${f} إلى public`);

@@ -6,8 +6,9 @@ import { Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Book = { id: number; title: string; chapter: string; lang: string; pages: number };
 type Video = { id: number; name: string; lang: string; size: number };
-type Mark = { id: number; page: number; y: number; label: string; video: number | null; solution: string };
-type Data = { books: Book[]; videos: Video[]; link: string; notice: string; marks?: Mark[]; book?: number };
+type Place = { id: number; book: number; title: string; page: number; label: string };
+type Mark = { id: number; page: number; y: number; label: string; video: number | null; solution: string; linked: Place[] };
+type Data = { books: Book[]; videos: Video[]; link: string; notice: string; marks?: Mark[]; others?: Place[]; book?: number };
 const LANG: Record<string, string> = { ar: "عربي", en: "إنجليزي" };
 const where = (y: number) => (y < 0.34 ? "فوك" : y < 0.67 ? "نص" : "جوه");
 
@@ -19,6 +20,7 @@ export default function MarksCard() {
   const [paste, setPaste] = useState("");
   const cur = data?.books.find((b) => b.id === book);
   const marks = data?.book === book ? data?.marks ?? [] : [];
+  const others = data?.book === book ? data?.others ?? [] : [];
   const videos = (data?.videos ?? []).filter((v) => !cur || cur.lang === "all" ? true : v.lang === (cur.lang === "en" ? "en" : "ar"));
   async function uploadMany(list: FileList) {
     const all = [...list];
@@ -68,9 +70,10 @@ export default function MarksCard() {
                 </details>
                 <a className="exbtn" href={data.link}>👀 افتح الملازم مثل الطالب</a>
                 <label className="adcheck adflat"><input type="checkbox" checked={onlyEmpty} onChange={(e) => setOnlyEmpty(e.target.checked)} /><span>بس الأسئلة اللي بعدها ما بيها رابط حل</span></label>
-                <div className="hint">{marks.length} زر · {marks.filter((m) => m.solution).length} بيها رابط حل · {marks.filter((m) => m.video).length} بيها فيديو توضيحي</div>
-                {shown.map((m) => <MarkRow key={`${m.id}:${m.page}:${m.y}:${m.video}:${m.solution}`} m={m} book={cur} videos={videos} busy={busy} call={call} />)}
-                <MarkRow m={{ id: 0, page: 1, y: 0.1, label: "", video: null, solution: "" }} book={cur} videos={videos} busy={busy} call={call} />
+                <div className="hint">{marks.length} زر · {marks.filter((m) => m.solution).length} بيها رابط حل · {marks.filter((m) => m.video).length} بيها فيديو توضيحي · {marks.filter((m) => m.linked.length).length} مربوطة بنفس السؤال بملازم ثانية 🔗</div>
+                <div className="exhint">🔗 نفس السؤال إذا موجود بأكثر من ملزمة (دفتر المحاضرات، الراصد، الإنجليزي)، اربط أزراره ببعض. بعدها من تبدّل فيديو الحل أو الفيديو التوضيحي بوحدة، ينبدل بكل الملازم المربوطة وحده. الفيديو التوضيحي ينبدل بلغة كل ملزمة.</div>
+                {shown.map((m) => <MarkRow key={`${m.id}:${m.page}:${m.y}:${m.video}:${m.solution}:${m.linked.map((p) => p.id).join(",")}`} m={m} book={cur} books={data.books} others={others} videos={videos} busy={busy} call={call} />)}
+                <MarkRow m={{ id: 0, page: 1, y: 0.1, label: "", video: null, solution: "", linked: [] }} book={cur} books={data.books} others={others} videos={videos} busy={busy} call={call} />
               </>
             )}
           </>
@@ -81,18 +84,22 @@ export default function MarksCard() {
   );
 }
 
-function MarkRow({ m, book, videos, busy, call }: { m: Mark; book: Book; videos: Video[]; busy: boolean; call: (b: Record<string, unknown>) => Promise<unknown> }) {
+function MarkRow({ m, book, books, others, videos, busy, call }: { m: Mark; book: Book; books: Book[]; others: Place[]; videos: Video[]; busy: boolean; call: (b: Record<string, unknown>) => Promise<unknown> }) {
   const [page, setPage] = useState(String(m.page));
   const [y, setY] = useState(Math.round(m.y * 100));
   const [label, setLabel] = useState(m.label);
   const [video, setVideo] = useState(m.video ? String(m.video) : "");
   const [solution, setSolution] = useState(m.solution);
+  const [linkBook, setLinkBook] = useState(0);
+  const [link, setLink] = useState("");
   const isNew = !m.id;
-  const changed = isNew ? !!(video || solution.trim()) : page !== String(m.page) || y !== Math.round(m.y * 100) || label !== m.label || video !== (m.video ? String(m.video) : "") || solution !== m.solution;
-  const save = () => call({ action: "markSave", book: book.id, id: m.id || undefined, page: Number(page), y: y / 100, label, video: video ? Number(video) : null, solution });
+  const changed = isNew ? !!(video || solution.trim() || link) : page !== String(m.page) || y !== Math.round(m.y * 100) || label !== m.label || video !== (m.video ? String(m.video) : "") || solution !== m.solution || !!link;
+  const save = (extra: Record<string, unknown> = {}) => call({ action: "markSave", book: book.id, id: m.id || undefined, page: Number(page), y: y / 100, label, video: video ? Number(video) : null, solution, ...(link ? { link: Number(link) } : {}), ...extra });
+  const linkedIds = new Set(m.linked.map((p) => p.id));
+  const choices = others.filter((p) => p.book === linkBook && !linkedIds.has(p.id));
   return (
     <details className="cpbox expad" open={isNew ? undefined : !m.solution && !!m.video}>
-      <summary>{isNew ? <b>➕ زر جديد</b> : <><b>ص{m.page}</b> <small>({where(m.y)})</small> {m.label || "سؤال"} {m.solution ? "🎬" : ""}{m.video ? "▶️" : ""}</>}</summary>
+      <summary>{isNew ? <b>➕ زر جديد</b> : <><b>ص{m.page}</b> <small>({where(m.y)})</small> {m.label || "سؤال"} {m.solution ? "🎬" : ""}{m.video ? "▶️" : ""}{m.linked.length ? "🔗" : ""}</>}</summary>
       <label>🎬 رابط فيديو الحل (يوتيوب، أو منشور بالقناة)</label>
       <input className="exinput" dir="ltr" placeholder="https://youtu.be/…" value={solution} onChange={(e) => setSolution(e.target.value)} />
       <label>▶️ فيديو التوضيح</label>
@@ -100,6 +107,24 @@ function MarkRow({ m, book, videos, busy, call }: { m: Mark; book: Book; videos:
         <option value="">بدون</option>
         {videos.map((v) => <option key={v.id} value={v.id}>{v.name} ({LANG[v.lang]})</option>)}
       </select>
+      <label>🔗 نفس السؤال بملزمة ثانية</label>
+      {m.linked.length > 0 && (
+        <div className="hint">
+          مربوط بـ: {m.linked.map((p) => `${p.title} ص${p.page}`).join("، ")}
+          {" "}<Confirm label="فك الربط" disabled={busy} onYes={() => void save({ link: 0 })} />
+        </div>
+      )}
+      <select value={linkBook} onChange={(e) => { setLinkBook(Number(e.target.value)); setLink(""); }}>
+        <option value={0}>{m.linked.length ? "➕ اربطه بملزمة ثانية بعد..." : "➕ اربطه بنفس السؤال بملزمة ثانية..."}</option>
+        {books.filter((b) => b.id !== book.id && others.some((p) => p.book === b.id)).map((b) => <option key={b.id} value={b.id}>{b.chapter} · {b.title}</option>)}
+      </select>
+      {linkBook > 0 && (
+        <select value={link} onChange={(e) => setLink(e.target.value)}>
+          <option value="">اختار السؤال...</option>
+          {choices.map((p) => <option key={p.id} value={p.id}>ص{p.page} · {p.label || "سؤال"}</option>)}
+        </select>
+      )}
+      {link && <div className="hint">لما تحفظ: اللي ناقص بهذا الزر ياخذه من السؤال المربوط، واللي بيه يروح للسؤال المربوط.</div>}
       <label>اسم السؤال (إلك بس)</label>
       <input className="exinput" value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} />
       <div className="exline">

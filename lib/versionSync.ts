@@ -1,10 +1,12 @@
 // لما صاحب البوت يبدّل صفحات نسخة الطالب أو الجواب النموذجي من صفحة الامتحانات، باقي النسخ اللي بالبوت تتبعها:
 // ملف الطباعة PDF ينسوى من الصفحات الجديدة، وصورة كل سؤال تنقص من الصفحة إذا البوت متأكد من مكانه،
-// وصور الحل القديمة تنشال وخطوات التصحيح تنعاد من الجواب الجديد (القديمة تبقى شغالة لحد ما تنحفظ الجديدة)
+// وصور الحل القديمة تنشال وخطوات التصحيح تنعاد من الجواب الجديد (القديمة تبقى شغالة لحد ما تنحفظ الجديدة).
+// ونفس الشي من محادثة التليجرام: ملف PDF جديد لنسخة الطالب، صورة سؤال جديدة، أو صور جواب جديدة
 import { randomUUID } from "node:crypto";
 import { find, one, update } from "./db.ts";
 import { files } from "./files.ts";
-import { queueRedraft, rubricOf } from "./aiGrade.ts";
+import { queueRedraft, readRef, rubricOf } from "./aiGrade.ts";
+import { pdfjsLib } from "./pdfjs.ts";
 
 type Img = { w: number; h: number; data: Uint8ClampedArray };
 async function decode(b: Buffer): Promise<{ img: Img; im: any } | null> {
@@ -120,6 +122,44 @@ export async function syncPages(versionId: number, lang: "ar" | "en", refs: stri
   const pdf = imgs.length === refs.length ? await imagesPdf(imgs) : null;
   if (pdf) { await update("bank_versions", { id: versionId }, { [`pdf_${lang}`]: await store(pdf, "pdf") }); said.push("ملف الطباعة 📄 صار مثل الصفحات الجديدة"); }
   else said.push("⚠️ ما گدرت أسوي ملف الطباعة من هاي الصور، فبقى القديم");
+  return await cropInto(versionId, lang, imgs, said);
+}
+
+const MAX_PDF_PAGES = 12;
+/** صفحات PDF صور PNG. يرجع null إذا الملف ما انقرى أو صفحاته هواية */
+export async function pdfPages(pdf: Buffer): Promise<Buffer[] | null> {
+  try {
+    const pdfjs = await pdfjsLib();
+    const task = pdfjs.getDocument({ data: new Uint8Array(pdf), verbosity: 0 });
+    const doc = await task.promise;
+    if (doc.numPages < 1 || doc.numPages > MAX_PDF_PAGES) { await task.destroy(); return null; }
+    const factory = (doc as unknown as { canvasFactory: { create: (w: number, h: number) => { canvas: { encode: (f: string) => Promise<Buffer> }; context: unknown } } }).canvasFactory;
+    const out: Buffer[] = [];
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const viewport = page.getViewport({ scale: 1600 / page.getViewport({ scale: 1 }).width });
+      const cc = factory.create(viewport.width, viewport.height);
+      await page.render({ canvas: cc.canvas as never, canvasContext: cc.context as never, viewport }).promise;
+      out.push(Buffer.from(await cc.canvas.encode("png")));
+    }
+    await task.destroy();
+    return out;
+  } catch { return null; }
+}
+
+/** ملف PDF نسخة الطالب تبدل (من صفحة الامتحانات أو محادثة التليجرام): صفحات الامتحان اللي يشوفها الطالب تنعاد منه، وصور الأسئلة تنقص منها */
+export async function syncPdf(versionId: number, lang: "ar" | "en", ref: string): Promise<string> {
+  const buf = await readRef(ref);
+  const imgs = buf ? await pdfPages(buf) : null;
+  if (!imgs) return `⚠️ ملف الطباعة انحفظ، بس ما گدرت أقرا صفحاته، فصفحات الامتحان اللي يشوفها الطالب بالبوت بقت القديمة. ارفع صور الصفحات من «🖼 تبديل صور نسخة» بصفحة الامتحانات حتى تتحدث.`;
+  const refs: string[] = [];
+  for (const im of imgs) refs.push(await store(im, "png"));
+  await update("bank_versions", { id: versionId }, { [`pages_${lang}`]: JSON.stringify(refs) });
+  return await cropInto(versionId, lang, imgs, ["ملف الطباعة 📄 انحفظ", `صفحات الامتحان اللي يشوفها الطالب (${imgs.length}) صارت من الملف الجديد`]);
+}
+
+/** صور أسئلة النسخة تنقص من صفحتها الجديدة (عربي، صفحة وحدة) */
+async function cropInto(versionId: number, lang: "ar" | "en", imgs: Buffer[], said: string[]): Promise<string> {
   if (lang === "en") return `✅ ${said.join("، ")}. صور الأسئلة بالبوت عربي، فما تتغير ويا الصفحة الإنجليزية.`;
   const qs = await find("bank_questions", { version_id: versionId }, { order: ["n"] });
   const crops = imgs.length === 1 && qs.length ? await cropQuestions(imgs[0], qs.length) : null;
@@ -128,7 +168,25 @@ export async function syncPages(versionId: number, lang: "ar" | "en", refs: stri
     said.push(`صور الأسئلة (${qs.length}) انقصّت من الصفحة الجديدة`);
     return `✅ ${said.join("، ")}. تأكد منها بفتح كل سؤال.`;
   }
-  return `✅ ${said.join("، ")}.\n⚠️ صور الأسئلة ما تحدثت: ${imgs.length > 1 ? "الصفحات أكثر من وحدة" : "ما گدرت أحدد مكان كل سؤال بالصفحة بالضبط"}. إذا تغيّر سؤال، بدّل صورته بإيدك من «🖼 صورة جديدة» يمه.`;
+  return `✅ ${said.join("، ")}.\n⚠️ صور الأسئلة ما تحدثت: ${imgs.length > 1 ? "الصفحات أكثر من وحدة" : "ما گدرت أحدد مكان كل سؤال بالصفحة بالضبط"}. إذا تغيّر سؤال، بدّل صورته بإيدك من «🖼 تبديل السؤال» يمه.`;
+}
+
+/** صورة سؤال واحد تبدلت: النص المكتوب القديم ينشال، خطوات التصحيح تنعاد، وينذكر إن صفحة الطالب بعدها قديمة */
+export async function syncQuestion(qid: number): Promise<string> {
+  const q = await one("bank_questions", { id: qid });
+  if (!q) return "";
+  const parts: string[] = [];
+  if (q.q_text || q.q_text_en) { await update("bank_questions", { id: qid }, { q_text: null, q_text_en: null }); parts.push("نص السؤال المكتوب القديم انشال (إذا تستعمل نسخ الوورد، ارفعها من جديد)"); }
+  if (await rubricOf(qid)) { await queueRedraft([qid]); parts.push("خطوات التصحيح AI راح تنطلع من جديد خلال دقائق، والقديمة تبقى شغالة لحد ما تنحفظ الجديدة"); }
+  parts.push(`⚠️ صفحة الامتحان اللي يشوفها الطالب وملف الطباعة بعدهم بيهم س${q.n} القديم. ارفع صفحة النسخة الجديدة (PDF أو صور) حتى يتحدثون`);
+  return parts.map((x) => `• ${x}`).join("\n");
+}
+
+/** صور الجواب النموذجي لسؤال تبدلت: خطوات التصحيح تنعاد منها */
+export async function syncAnswerImages(qid: number): Promise<string> {
+  if (!await rubricOf(qid)) return "";
+  await queueRedraft([qid]);
+  return "• خطوات التصحيح AI راح تنطلع من جديد من الجواب الجديد خلال دقائق، والقديمة تبقى شغالة لحد ما تنحفظ الجديدة";
 }
 
 /** الجواب النموذجي تبدل: صور الحل القديمة لكل سؤال تنشال (الجواب الجديد يصير المرجع)، وخطوات التصحيح تنعاد منه */
