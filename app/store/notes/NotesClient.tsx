@@ -581,8 +581,8 @@ function VideoBox({ title, yt, src, onClose, onFail, onChat }: { title: string; 
   return (
     <div className="ntyt" ref={box} onContextMenu={(e) => e.preventDefault()}>
       <div className="ntytbar">
-        <b>{title}</b>
         <button type="button" className="gk-btn" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); }}>✖ سد وارجع للملزمة</button>
+        <b>{title}</b>
       </div>
       <div className="ntytbox">
         {yt && <div className="ntytframe"><div ref={slot} /></div>}
