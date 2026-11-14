@@ -47,6 +47,7 @@ const CATALOG: { name: string; ar: RegExp; en: RegExp }[] = [
   { name: "صفيحة المثلث", ar: /صفيحه على شكل مثلث/, en: /sheet in a shape of isosceles/i },
   { name: "غاز يندفع داخل البالون", ar: /يندفع غاز داخل بالون/, en: /gas is filled into a spherical balloon/i },
   { name: "مكعب الثلج", ar: /ينصهر مكعب من الثلج/, en: /An ice cube melts/i },
+  { name: "مستطيل المعدن وقطره", ar: /مستطيل من المعدن ينقص طوله/, en: /rectangle of metal decreases/i },
   { name: "السلم المنزلق", ar: /سلم طوله\s*\(?\s*10/, en: /ladder with 10 ?m/i },
   { name: "طريقان متعامدان", ar: /طريقان متعامدان/, en: /Two perpendicular roads/i },
   { name: "البالون المتصاعد", ar: /يتصاعد بالون/, en: /balloon \(?mounting/i },
