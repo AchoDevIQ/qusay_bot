@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { deviceId, deviceNow, haptic, platform } from "../shared";
 import { COLORS } from "../grade/pens";
 
-type Book = { id: number; title: string; chapter: string; pages: number; saved?: number };
+type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; saved?: number };
 type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
 type Tool = "hand" | "pen" | "mark" | "ruler" | "erase" | "note";
@@ -69,7 +69,7 @@ export default function NotesClient() {
             <h2>{c}</h2>
             <div className="ntlist">
               {books!.filter((b) => b.chapter === c).map((b) => (
-                <button type="button" key={b.id} className="exbtn" onClick={() => { haptic(); void post({ action: "open", book: b.id }).catch(() => undefined); setOpen(b); }}>📘 {b.title} <small>({b.pages} صفحة{b.saved ? ` · 🔖 وصلت ص${b.saved}` : ""})</small></button>
+                <button type="button" key={b.id} className="exbtn" onClick={() => { haptic(); void post({ action: "open", book: b.id }).catch(() => undefined); setOpen(b); }}>{b.kind === "rasid" ? "📝" : "📘"} {b.title} <small>({b.pages} صفحة{b.saved ? ` · 🔖 وصلت ص${b.saved}` : ""})</small></button>
               ))}
             </div>
           </div>
@@ -104,6 +104,8 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
   const [yt, setYt] = useState("");
   const [clip, setClip] = useState("");
   const [clipMark, setClipMark] = useState<Mark | null>(null);
+  // 📝 الراصد: رقم الصفحة اللي مفتوح حلها النموذجي (0 = يشوف حله هو)
+  const [sol, setSol] = useState(0);
   const stage = useRef<HTMLDivElement>(null);
   const sheets = useRef(new Map<number, SheetApi>());
   const undo = useRef<{ n: number; prev: Stroke[] }[]>([]);
@@ -205,6 +207,21 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
         <input inputMode="numeric" aria-label="رقم الصفحة" placeholder="رقم الصفحة" value={find} onChange={(e) => setFind(e.target.value.replace(/\D/g, "").slice(0, 4))} />
         <button type="submit" className="gk-btn" disabled={!find}>🔍 روح</button>
       </form>
+      {book.kind === "rasid" && (
+        <div className="ntbar ntrasid">
+          <button type="button" className={"gk-btn" + (sol ? "" : " on")} onClick={() => setSol(0)}>📝 حلي</button>
+          <button type="button" className={"gk-btn" + (sol ? " on" : "")} onClick={() => { haptic(); setSol(page); }}>📘 الحل النموذجي</button>
+        </div>
+      )}
+      {!!sol && (
+        <div className="ntsol">
+          <div className="ntbar ntrasid">
+            <button type="button" className="gk-btn" onClick={() => setSol(0)}>📝 حلي</button>
+            <button type="button" className="gk-btn on">📘 الحل النموذجي · صفحة {sol}</button>
+          </div>
+          <img src={pageSrc(book.id, sol) + "&sol=1"} alt="الحل النموذجي" />
+        </div>
+      )}
       {err && <div className="ntbad">⚠️ {err}</div>}
       {bookmark > 1 && page === 1 && <button type="button" className="ntbookmark" onClick={() => go(bookmark)}>🔖 آخر مرة وصلت لصفحة {bookmark}. دوس هنا حتى تروح لها</button>}
       {msg && <div className="ntmsg" onClick={() => setMsg("")}>{msg}</div>}

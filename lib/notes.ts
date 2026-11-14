@@ -81,7 +81,7 @@ export async function noteAction(body: Row) {
   if (a === "list") {
     const books = await myBooks(uid);
     const marks = new Map((await find("note_bookmarks", { user_id: uid })).map((m) => [m.book_id as number, m.page as number]));
-    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages, saved: marks.get(b.id) ?? 0 })) };
+    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages, kind: b.kind ?? "book", saved: marks.get(b.id) ?? 0 })) };
   }
   const b = await myBook(uid, body.book);
   // 🔖 الصفحة اللي وصلها: يحفظها من يطلع، ومن يرجع يدوس عليها ويروح لها
@@ -117,11 +117,12 @@ export async function noteAction(body: Row) {
 }
 
 /** صورة الصفحة بدون العلامة: تنرسم من الـ PDF أول مرة، وبعدها جاهزة */
-async function cleanPage(b: Row, n: number): Promise<Buffer | null> {
-  const ref = `notes/${b.file}/p${n}.jpg`;
+// الراصد: إله ملف ثاني بنفس عدد الصفحات، كل صفحة بيه الحل النموذجي لسؤال صفحته
+async function cleanPage(b: Row, n: number, sol = false): Promise<Buffer | null> {
+  const ref = `notes/${b.file}/${sol ? "s" : "p"}${n}.jpg`;
   const cached = await files().read(ref);
   if (cached) return cached;
-  const pdf = await files().read(`notes/${b.file}.pdf`);
+  const pdf = await files().read(`notes/${b.file}${sol ? ".sol" : ""}.pdf`);
   if (!pdf) return null;
   const pdfjs = await pdfjsLib();
   const task = pdfjs.getDocument({ data: new Uint8Array(pdf), verbosity: 0 });
@@ -139,7 +140,7 @@ async function cleanPage(b: Row, n: number): Promise<Buffer | null> {
 }
 let fontReady = false;
 /** اسم الطالب ورقمه يتطبعون بالصورة نفسها: إذا تسربت صورة، تبين من ياهو الطالب */
-export async function watermark(jpg: Buffer, name: string, uid: number) {
+export async function watermark(jpg: Buffer, name: string, uid: number, header?: "ar" | "en") {
   const { createCanvas, loadImage, GlobalFonts } = await import("@napi-rs/canvas");
   if (!fontReady) {
     const p = path.join(process.cwd(), "assets", "fonts", "NotoSansArabic-Bold.ttf");
@@ -163,6 +164,16 @@ export async function watermark(jpg: Buffer, name: string, uid: number) {
     g.fillText(text, 0, 0);
     g.restore();
   }
+  // صفحة الراصد: اسم الطالب ورقمه بالزاوية الفاضية من الهدر (يسار الهدر العربي، يمين الإنجليزي)
+  if (header) {
+    g.fillStyle = "#ffffff"; g.textBaseline = "middle"; g.textAlign = header === "ar" ? "left" : "right";
+    const x = header === "ar" ? im.width * 0.04 : im.width * 0.96;
+    g.font = `bold ${Math.round(im.width / 40)}px QArabic`;
+    g.fillText(name, x, im.height * 0.033);
+    g.font = `bold ${Math.round(im.width / 52)}px QArabic`;
+    g.fillStyle = "#ffb26b";
+    g.fillText(`#${uid}`, x, im.height * 0.06);
+  }
   return Buffer.from(await c.encode("jpeg", 82));
 }
 // حد للصفحات بالدقيقة، حتى ما أحد يسحب الملزمة كلها أو يشغل السيرفر عن غيره
@@ -183,14 +194,16 @@ function limitPlays(uid: number, now = Date.now()) {
   need(hits.length < 10, "دزيت هواية فيديوهات، انتظر دقيقة", 429);
   playHits.set(uid, [...hits, now]);
 }
-export async function notePage(token: unknown, book: unknown, rawPage: unknown, pf: unknown, device?: unknown) {
+export async function notePage(token: unknown, book: unknown, rawPage: unknown, pf: unknown, device?: unknown, sol?: unknown) {
   const uid = await studentUid(token, pf);
   await checkDevice(uid, device);
   limitPages(uid);
   const b = await myBook(uid, book);
-  const jpg = await cleanPage(b, pageOf(b, rawPage));
+  const rasid = b.kind === "rasid";
+  need(!sol || rasid, "هاي الملزمة ما بيها حل نموذجي", 404);
+  const jpg = await cleanPage(b, pageOf(b, rawPage), !!sol);
   need(jpg, "الصفحة غير موجودة", 404);
-  return await watermark(jpg!, String((await student(uid))?.name ?? ""), uid);
+  return await watermark(jpg!, String((await student(uid))?.name ?? ""), uid, rasid && !sol ? (b.lang === "en" ? "en" : "ar") : undefined);
 }
 
 /** الفيديو التوضيحي يشتغل جوّا الملزمة: نفس شروط الصفحة (رابطه، جهازه، فصوله) */
@@ -208,7 +221,7 @@ async function adminData(uid: number, notice = "") {
   for (const e of exams) if (e.chapter) seen.add(String(e.chapter));
   const books = (await find("note_books")).sort(byOrder);
   for (const b of books) seen.add(String(b.chapter));
-  return { chapters: [...seen], books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang, pages: b.pages, created: b.created })), videos: await videoList(), link: `/store/notes?t=${encodeURIComponent(homeToken(uid))}`, notice };
+  return { chapters: [...seen], books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang, pages: b.pages, kind: b.kind ?? "book", created: b.created })), videos: await videoList(), link: `/store/notes?t=${encodeURIComponent(homeToken(uid))}`, notice };
 }
 export async function noteAdmin(raw: Row | FormData) {
   const body: Row = raw instanceof FormData ? Object.fromEntries([...raw.entries()]) : raw;
@@ -234,10 +247,25 @@ export async function noteAdmin(raw: Row | FormData) {
       pages = (await task.promise).numPages;
       await task.destroy();
     } catch (e) { console.error("note upload:", e); need(false, `ما گدرت أقرا ملف الـ PDF (${String((e as Error)?.message ?? e).slice(0, 160)}). صور هاي الرسالة ودزها`); }
+    // 📝 الراصد: ويا ملف الصفحات ملف الحلول النموذجية، بنفس عدد الصفحات (حل كل صفحة بنفس رقمها)
+    const kind = body.kind === "rasid" ? "rasid" : "book";
+    let sol: Buffer | null = null;
+    if (kind === "rasid") {
+      const s = body.sol;
+      need(s instanceof Blob && s.size > 0, "اختار ملف الحلول النموذجية PDF");
+      need((s as Blob).size <= PDF_MAX, "ملف الحلول كبير، أكثر شي 30 ميگا");
+      sol = Buffer.from(await (s as Blob).arrayBuffer());
+      need(sol.subarray(0, 4).toString() === "%PDF", "ملف الحلول لازم PDF");
+      let solPages = 0;
+      try { const pdfjs = await pdfjsLib(); const task = pdfjs.getDocument({ data: new Uint8Array(sol), verbosity: 0 }); solPages = (await task.promise).numPages; await task.destroy(); }
+      catch (e) { need(false, `ما گدرت أقرا ملف الحلول (${String((e as Error)?.message ?? e).slice(0, 160)})`); }
+      need(solPages === pages, `ملف الحلول بيه ${solPages} صفحة وملف الراصد ${pages}. لازم نفس العدد`);
+    }
     const file = randomUUID().slice(0, 12);
     await files().write(`notes/${file}.pdf`, buf, "application/pdf");
-    await insert("note_books", { title, chapter, lang, file, pages, created: stamp() });
-    return await adminData(uid, `✅ انرفعت «${title}»: ${pages} صفحة`);
+    if (sol) await files().write(`notes/${file}.sol.pdf`, sol, "application/pdf");
+    await insert("note_books", { title, chapter, lang, file, pages, kind, created: stamp() });
+    return await adminData(uid, `✅ انرفع${kind === "rasid" ? " الراصد" : "ت"} «${title}»: ${pages} صفحة`);
   }
   if (a === "videoUpload") {
     need(body.file instanceof Blob, "اختار فيديو");

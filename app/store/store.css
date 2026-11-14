@@ -424,3 +424,7 @@ body.grwide .grtop{padding-left:104px}
 .pcopt span { font-size: 0.92em; line-height: 1.6; opacity: 0.9; }
 .pcopt.on { border-color: var(--gold, #cea239); background: rgba(206, 162, 57, 0.16); }
 .pctag { display: inline-block; margin-inline-start: 8px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--gold2); color: var(--gold); font-size: 0.78em; font-weight: 700; white-space: nowrap; }
+
+/* 📝 الراصد: زر حلي وزر الحل النموذجي، والحل يطلع فوك الصفحة */
+.ntrasid{justify-content:center;gap:10px;background:#26282c}.ntrasid .gk-btn{background:#fff;color:#26282c;font-weight:800}.ntrasid .gk-btn.on{background:#e67e22;color:#fff}
+.ntsol{position:fixed;inset:0;z-index:60;background:#fff;overflow:auto;display:flex;flex-direction:column}.ntsol .ntbar{position:sticky;top:0}.ntsol img{width:100%;max-width:900px;margin:0 auto;display:block}

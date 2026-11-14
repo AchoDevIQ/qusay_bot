@@ -116,3 +116,23 @@ test("رابط لوحة التحكم يشتغل أسبوع بس، ورابط ا�
   assert.equal(verifyInitData(`tk:${t}`, now + 8 * 86400), null);
   assert.equal(verifyHomeToken(t, now + 8 * 86400), 1);
 });
+
+test("📝 الراصد: صفحته عليها اسم الطالب بالهدر، وزر «الحل النموذجي» يجيب حل نفس الصفحة، والملزمة العادية ما بيها حل", async () => {
+  const { createCanvas, loadImage } = await import("@napi-rs/canvas");
+  const page = async (color: string) => { const c = createCanvas(700, 990); const g = c.getContext("2d"); g.fillStyle = color; g.fillRect(0, 0, 700, 990); return Buffer.from(await c.encode("jpeg", 90)); };
+  await insert("note_books", { title: "الراصد (رصد جميع الأسئلة الوزارية للفصل الثالث)", chapter: "الفصل الثالث", lang: "all", file: "r1", pages: 2, kind: "rasid", created: "2026-11-14 10:00" });
+  const r = (await myBooks(10)).find((b) => b.kind === "rasid")!;
+  assert.equal((await act(10, "list")).books.find((b: any) => b.id === r.id).kind, "rasid");
+  await files().write("notes/r1/p1.jpg", await page("#26282c"), "image/jpeg");
+  await files().write("notes/r1/s1.jpg", await page("#ffffff"), "image/jpeg");
+  const mine = await loadImage(await notePage(homeToken(10), r.id, 1, "android", dev(10)));
+  const sol = await loadImage(await notePage(homeToken(10), r.id, 1, "android", dev(10), true));
+  const px = async (im: any) => { const c = createCanvas(im.width, im.height); const g = c.getContext("2d"); g.drawImage(im, 0, 0); return g.getImageData(0, 0, im.width, im.height).data; };
+  const a = await px(mine), b = await px(sol);
+  // الصفحة غامقة بس الاسم أبيض بزاوية الهدر، والحل صفحة بيضة
+  let white = 0; for (let y = 20; y < 70; y++) for (let x = 25; x < 250; x++) if (a[(y * 700 + x) * 4] > 200) white++;
+  assert.ok(white > 50, "اسم الطالب مكتوب بالهدر");
+  assert.ok(b[(500 * 700 + 350) * 4] > 200, "الحل النموذجي من ملف الحلول");
+  const [book] = (await myBooks(10)).filter((x) => x.kind !== "rasid");
+  await assert.rejects(notePage(homeToken(10), book.id, 1, "android", dev(10), true), (e: any) => e.status === 404);
+});
