@@ -11,7 +11,7 @@ type Q = { id: number; n: number; max: number; q: string | null; a: string[]; st
 const WAY = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة"];
 type Version = { id: number; model: string; kind: string; pdf: boolean; questions: Q[] };
 type Strict = "lenient" | "standard" | "strict";
-const STRICT_NAME: Record<Strict, string> = { lenient: "😊 متساهل", standard: "⚖️ عادي", strict: "📏 صارم" };
+const STRICT_NAME: Record<Strict, string> = { lenient: "😊 متساهل (الأصل)", standard: "⚖️ عادي", strict: "📏 صارم" };
 type Exam = { id: number; title: string; on: boolean; strict?: Strict; versions: Version[]; ready: boolean };
 type Chapter = { slug: string; chapter: string; grader: number; exams: Exam[] };
 type Sum = { sent: number; unsure: number; cost: number };
@@ -145,7 +145,7 @@ function ChapterDraft({ ch, queue, linked, busy, call }: { ch: Chapter; queue: D
 function Scope({ ch, graders, busy, call }: { ch: Chapter; graders: Data["graders"]; busy: boolean; call: Call }) {
   const [on, setOn] = useState<number[]>(ch.exams.filter((e) => e.on).map((e) => e.id));
   const [grader, setGrader] = useState(ch.grader);
-  const [strict, setStrict] = useState<Record<string, Strict>>(Object.fromEntries(ch.exams.map((e) => [String(e.id), e.strict ?? "standard"])));
+  const [strict, setStrict] = useState<Record<string, Strict>>(Object.fromEntries(ch.exams.map((e) => [String(e.id), e.strict ?? "lenient"])));
   const all = on.length === ch.exams.length;
   return (
     <div className="card expad">
@@ -159,7 +159,7 @@ function Scope({ ch, graders, busy, call }: { ch: Chapter; graders: Data["grader
             <span>{e.title}</span>
             {on.includes(e.id) && !e.ready && <small className="exbad">باقي خطوات</small>}
             {on.includes(e.id) && (
-              <select value={strict[String(e.id)] ?? "standard"} onChange={(x) => setStrict({ ...strict, [String(e.id)]: x.target.value as Strict })} onClick={(x) => x.stopPropagation()}>
+              <select value={strict[String(e.id)] ?? "lenient"} onChange={(x) => setStrict({ ...strict, [String(e.id)]: x.target.value as Strict })} onClick={(x) => x.stopPropagation()}>
                 {(Object.keys(STRICT_NAME) as Strict[]).map((k) => <option key={k} value={k}>{STRICT_NAME[k]}</option>)}
               </select>
             )}

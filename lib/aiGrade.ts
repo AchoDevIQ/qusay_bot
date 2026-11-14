@@ -23,6 +23,8 @@ export type Price = { in: number; out: number };
  *  (الخطوة الغلط اللي جاية من غلط قبلها): متساهل 75%، عادي 50%، صارم صفر */
 export type Strictness = "lenient" | "standard" | "strict";
 export const STRICTNESS: Strictness[] = ["lenient", "standard", "strict"];
+/** الشدة الأصلية لكل موضوع ما اختار له صاحب البوت شدة (قراره 2026-11-14: الأقل شدة)، حتى الموضوع الجديد */
+export const DEFAULT_STRICT: Strictness = "lenient";
 export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number; students: number[]; strict: Record<string, Strictness> };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
 export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed" | "objection" | "calib"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
@@ -92,12 +94,12 @@ export async function aiSettings(): Promise<AiSettings> {
   const s = await readJson<Partial<AiSettings>>(SET_KEY, {});
   const calib = Number(s.calib);
   const strict: Record<string, Strictness> = {};
-  for (const [k, v] of Object.entries(s.strict && typeof s.strict === "object" ? s.strict : {})) if (STRICTNESS.includes(v as Strictness) && v !== "standard") strict[k] = v as Strictness;
+  for (const [k, v] of Object.entries(s.strict && typeof s.strict === "object" ? s.strict : {})) if (STRICTNESS.includes(v as Strictness) && v !== DEFAULT_STRICT) strict[k] = v as Strictness;
   return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {}, calib: Number.isInteger(calib) && calib >= 0 ? calib : CALIB_DEFAULT, students: Array.isArray(s.students) ? s.students.map(Number) : [], strict };
 }
-/** شدة تصحيح الموضوع (الامتحان). عادي إذا ما مختار */
+/** شدة تصحيح الموضوع (الامتحان). المتساهل إذا ما مختار */
 export async function strictOf(examId: number): Promise<Strictness> {
-  return (await aiSettings()).strict[String(examId)] ?? "standard";
+  return (await aiSettings()).strict[String(examId)] ?? DEFAULT_STRICT;
 }
 /** يضيف طالب لقائمة الذكاء أو يشيله */
 export async function setAiStudent(uid: number, on: boolean) {
@@ -140,10 +142,10 @@ export async function setChapterScope(slug: string, examIds: number[], grader: n
   const pick = examIds.map(Number).filter((id) => inChapter.has(id));
   s.exams = [...s.exams.filter((id) => !inChapter.has(id)), ...pick];
   if (grader) s.unsure[slug] = grader; else delete s.unsure[slug];
-  // شدة كل موضوع بالفصل (إذا انبعثت): العادي ما ينحفظ لأنه الأصل
+  // شدة كل موضوع بالفصل (إذا انبعثت): الأصل (المتساهل) ما ينحفظ
   if (strict && typeof strict === "object") for (const id of inChapter) {
     const v = strict[String(id)];
-    if (STRICTNESS.includes(v as Strictness) && v !== "standard") s.strict[String(id)] = v as Strictness; else delete s.strict[String(id)];
+    if (STRICTNESS.includes(v as Strictness) && v !== DEFAULT_STRICT) s.strict[String(id)] = v as Strictness; else delete s.strict[String(id)];
   }
   await kvSet(SET_KEY, JSON.stringify(s));
 }
@@ -568,7 +570,7 @@ export async function tryGrade(qid: number, imgs: Buffer[]): Promise<AiQuestion>
   if (!rubric) throw new Error("احفظ خطوات حل هذا السؤال أول");
   if (!imgs.length) throw new Error("اختار صورة الجواب");
   const v = await one("bank_versions", { id: q.version_id });
-  const res = await gradeBest(q, rubric, imgs, v ? await examplesFor(v.exam_id, q.version_id, q.n) : [], v ? await strictOf(v.exam_id) : "standard");
+  const res = await gradeBest(q, rubric, imgs, v ? await examplesFor(v.exam_id, q.version_id, q.n) : [], v ? await strictOf(v.exam_id) : DEFAULT_STRICT);
   await addLog({ at: stamp(), kind: "try", q: qid, usage: sumUsage([res.usage ?? []]) });
   return { ...res, usage: undefined };
 }
