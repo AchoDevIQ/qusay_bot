@@ -6,6 +6,7 @@ import { deviceId, deviceNow, haptic, platform } from "../shared";
 import { COLORS } from "../grade/pens";
 
 type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; saved?: number };
+type Toc = { t: string; p: number; items?: Toc[] };
 type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
 type Tool = "hand" | "pen" | "mark" | "ruler" | "erase" | "note";
@@ -48,6 +49,8 @@ export default function NotesClient() {
   const [books, setBooks] = useState<Book[] | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<Book | null>(null);
+  const [start, setStart] = useState(1);
+  const [tocOf, setTocOf] = useState<Book | null>(null);
   useEffect(() => { post({ action: "list" }).then((j) => setBooks(j.books)).catch((e) => setError((e as Error).message)); }, []);
   // الشاشة كلها للملزمة، والضغط المطول ما يطلع قائمة حفظ
   useEffect(() => {
@@ -55,7 +58,8 @@ export default function NotesClient() {
     document.addEventListener("contextmenu", stop);
     return () => document.removeEventListener("contextmenu", stop);
   }, []);
-  if (open) return <Reader book={open} onClose={(saved) => { setBooks((l) => l?.map((b) => (b.id === open.id ? { ...b, saved } : b)) ?? l); setOpen(null); }} />;
+  if (open) return <Reader book={open} start={start} onClose={(saved) => { setBooks((l) => l?.map((b) => (b.id === open.id ? { ...b, saved } : b)) ?? l); setOpen(null); setStart(1); }} />;
+  if (tocOf) return <TocPanel book={tocOf} onClose={() => setTocOf(null)} onPick={(n) => { void post({ action: "open", book: tocOf.id }).catch(() => undefined); setStart(n); setOpen(tocOf); setTocOf(null); }} />;
   const chapters = [...new Set((books ?? []).map((b) => b.chapter))];
   return (
     <>
@@ -69,7 +73,10 @@ export default function NotesClient() {
             <h2>{c}</h2>
             <div className="ntlist">
               {books!.filter((b) => b.chapter === c).map((b) => (
-                <button type="button" key={b.id} className="exbtn" onClick={() => { haptic(); void post({ action: "open", book: b.id }).catch(() => undefined); setOpen(b); }}>{b.kind === "rasid" ? "📝" : "📘"} {b.title} <small>({b.pages} صفحة{b.saved ? ` · 🔖 وصلت ص${b.saved}` : ""})</small></button>
+                <div key={b.id} className="ntbook">
+                  <button type="button" className="exbtn" onClick={() => { haptic(); void post({ action: "open", book: b.id }).catch(() => undefined); setOpen(b); }}>{b.kind === "rasid" ? "📝" : "📘"} {b.title} <small>({b.pages} صفحة{b.saved ? ` · 🔖 وصلت ص${b.saved}` : ""})</small></button>
+                  <button type="button" className="exbtn ntindex" onClick={() => { haptic(); setTocOf(b); }}>📑 المواضيع</button>
+                </div>
               ))}
             </div>
           </div>
@@ -86,7 +93,41 @@ const SIDE = 44;
 const NEAR = 2;
 type SheetApi = { flush: (keepalive?: boolean) => Promise<void>; restore: (s: Stroke[]) => void };
 
-function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => void }) {
+/** 📑 المواضيع: الموضوع ← المحاضرة (أو السؤال بالراصد) ← العنوان الفرعي، والدوسة تفتح الصفحة */
+function TocPanel({ book, onPick, onClose }: { book: Book; onPick: (page: number) => void; onClose: () => void }) {
+  const [toc, setToc] = useState<Toc[] | null>(null);
+  const [err, setErr] = useState("");
+  const [openT, setOpenT] = useState(-1);
+  useEffect(() => { post({ action: "toc", book: book.id }).then((j) => setToc(j.toc ?? [])).catch((e) => setErr((e as Error).message)); }, [book.id]);
+  return (
+    <div className="nttoc">
+      <div className="ntbar"><button type="button" className="gk-btn" onClick={onClose}>⬅️ رجوع</button><b className="nttitle">📑 مواضيع {book.title}</b></div>
+      <div className="wrap">
+        {err && <div className="card warn exerr">⚠️ {err}</div>}
+        {!toc && !err && <div className="empty">⏳ دا يجهز المواضيع...</div>}
+        {toc && !toc.length && <div className="empty">هاي الملزمة ما بيها عناوين مواضيع. افتحها وروح للصفحة بالرقم.</div>}
+        {toc?.map((t, i) => (
+          <div className="card nttopic" key={i}>
+            <button type="button" className={"nttopichead" + (openT === i ? " on" : "")} onClick={() => { haptic(); setOpenT(openT === i ? -1 : i); }}>{openT === i ? "▾" : "◂"} {t.t} <small>ص{t.p}</small></button>
+            {openT === i && (
+              <div className={"nttocitems" + (t.items?.every((l) => !l.items) && (t.items?.length ?? 0) > 8 ? " grid" : "")}>
+                {!t.items?.length && <button type="button" className="exbtn" onClick={() => onPick(t.p)}>افتح الموضوع · ص{t.p}</button>}
+                {t.items?.map((l, k) => (
+                  <div key={k} className="nttocl">
+                    <button type="button" className="exbtn" onClick={() => onPick(l.p)}>{l.t} <small>ص{l.p}</small></button>
+                    {l.items?.map((s, m) => <button type="button" key={m} className="exbtn ntsub" onClick={() => onPick(s.p)}>{s.t} <small>ص{s.p}</small></button>)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onClose: (saved: number) => void }) {
   const [page, setPage] = useState(1);
   const [bookmark] = useState(book.saved && book.saved <= book.pages ? book.saved : 0);
   const [tool, setTool] = useState<Tool>("hand");
@@ -161,6 +202,10 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
       setPage(Math.min(book.pages, Math.max(1, Math.floor((el.scrollTop + el.clientHeight / 3) / step) + 1)));
     }, 180);
   }
+  // فتح من «📑 المواضيع»: يروح للصفحة المختارة أول ما تنفتح الملزمة
+  const opened = useRef(false);
+  useEffect(() => { if (!opened.current && start > 1) { opened.current = true; requestAnimationFrame(() => go(start)); } });
+  const [toc, setToc] = useState(false);
   function go(n: number) {
     if (!Number.isInteger(n) || n < 1 || n > book.pages) { setMsg(`⚠️ اكتب رقم صفحة من 1 لحد ${book.pages}`); return; }
     haptic(); setMsg("");
@@ -185,6 +230,7 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
         <small className={pending ? "ntwait" : "ntok"}>{err ? "⚠️" : pending ? "⏳ يحفظ" : "✅ محفوظ"}</small>
       </div>
       <div className="ntbar nttools">
+        <button type="button" className="gk-ic" title="المواضيع" aria-label="المواضيع" onClick={() => { haptic(); setToc(true); }}>📑</button>
         {pick("hand", "👆", "تحريك الصفحة")}{pick("pen", "✏️", "قلم")}{pick("ruler", "📏", "مسطرة: خط مستقيم")}{pick("mark", "🖍️", "تظليل")}{pick("erase", "🧽", "ممحاة")}{pick("note", "📝", "ملاحظة")}
         <button type="button" className="gk-ic" title="تراجع" aria-label="تراجع" onClick={back}>↶</button>
         <span className="ntgap" />
@@ -207,6 +253,7 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
         <input inputMode="numeric" aria-label="رقم الصفحة" placeholder="رقم الصفحة" value={find} onChange={(e) => setFind(e.target.value.replace(/\D/g, "").slice(0, 4))} />
         <button type="submit" className="gk-btn" disabled={!find}>🔍 روح</button>
       </form>
+      {toc && <TocPanel book={book} onClose={() => setToc(false)} onPick={(n) => { setToc(false); requestAnimationFrame(() => go(n)); }} />}
       {book.kind === "rasid" && (
         <div className="ntbar ntrasid">
           <button type="button" className={"gk-btn" + (sol ? "" : " on")} onClick={() => setSol(0)}>📝 حلي</button>

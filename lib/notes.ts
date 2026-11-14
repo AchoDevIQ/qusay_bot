@@ -1,6 +1,7 @@
 // ملازم الطلاب: صاحب البوت يرفع PDF (أكثر من ملزمة للفصل)، واللي اشترى الفصل (محاضرات أو امتحانات) تطلعله.
 // الطالب يكتب فوك الصفحات وكتابته تنحفظ إله بس. ملف الـ PDF ما يوصل للطالب أبد: كل صفحة تطلع صورة عليها اسمه ورقمه،
 // وتنفتح بس من تلگرام الموبايل وعلى جهازه، وتنقفل وقت الامتحان
+import { bookToc } from "./noteToc.ts";
 import { pdfjsLib } from "./pdfjs.ts";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -84,6 +85,8 @@ export async function noteAction(body: Row) {
     return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages, kind: b.kind ?? "book", saved: marks.get(b.id) ?? 0 })) };
   }
   const b = await myBook(uid, body.book);
+  // 📑 المواضيع: الموضوع، وبعده المحاضرة (أو السؤال بالراصد)، ويا رقم صفحتها
+  if (a === "toc") return { toc: await bookToc(b) };
   // 🔖 الصفحة اللي وصلها: يحفظها من يطلع، ومن يرجع يدوس عليها ويروح لها
   if (a === "bookmark") {
     const page = pageOf(b, body.page);

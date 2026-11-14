@@ -428,3 +428,9 @@ body.grwide .grtop{padding-left:104px}
 /* 📝 الراصد: زر حلي وزر الحل النموذجي، والحل يطلع فوك الصفحة */
 .ntrasid{justify-content:center;gap:10px;background:#26282c}.ntrasid .gk-btn{background:#fff;color:#26282c;font-weight:800}.ntrasid .gk-btn.on{background:#e67e22;color:#fff}
 .ntsol{position:fixed;inset:0;z-index:60;background:#fff;overflow:auto;display:flex;flex-direction:column}.ntsol .ntbar{position:sticky;top:0}.ntsol img{width:100%;max-width:900px;margin:0 auto;display:block}
+
+/* 📑 المواضيع بالملزمة والراصد */
+.ntbook{display:flex;gap:8px;align-items:stretch}.ntbook>.exbtn:first-child{flex:1}.ntindex{flex:none;white-space:nowrap}
+.nttoc{position:fixed;inset:0;z-index:70;background:#f4f5f7;overflow:auto}.nttoc .ntbar{position:sticky;top:0;z-index:1}
+.nttopichead{width:100%;text-align:right;font:inherit;font-weight:800;font-size:18px;background:none;border:0;padding:10px 4px;cursor:pointer;color:#26282c}.nttopichead.on{color:#e67e22}
+.nttocitems{display:flex;flex-direction:column;gap:6px;padding:4px 0 8px}.nttocitems.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr))}.nttocl{display:flex;flex-direction:column;gap:4px}.ntsub{margin-right:18px;font-size:14px;opacity:.9}
