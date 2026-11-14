@@ -190,15 +190,23 @@ export async function saveRubric(qid: number, raw: unknown, by: number, altsRaw?
     const sum = way.reduce((t, s) => t + s.points, 0);
     if (!near(sum, Number(q.max_mark))) throw new Error(`مجموع الخطوات${where} ${sum} ولازم يساوي درجة السؤال ${q.max_mark}`);
   }
-  // فحص الخطوات بالجبر قبل الحفظ (AI_RUBRIC_CHECK=1): خطوة غلط تغلّط كل أوراق السؤال.
-  // الخدمة ترجع بس الأخطاء المؤكدة (قيمة ما تحقق المعادلة اللي قبلها)، وإذا ما ردت نحفظ بدون فحص
-  if (process.env.AI_RUBRIC_CHECK === "1" && aiLinked()) {
+  // فحص الخطوات بالجبر: خطوة غلط تغلّط كل أوراق السؤال. الخدمة ترجع بس الأخطاء المؤكدة (قيمة ما تحقق المعادلة اللي قبلها)،
+  // وإذا ما ردت نحفظ بدون فحص. AI_RUBRIC_CHECK=1 (اللي وافق عليه صاحب البوت 2026-11-12): الخطوات الغلط ما تنحفظ
+  // ويطلع رقم الخطوة والسبب. AI_RUBRIC_CHECK=note (طريقة Muammal 2026-11-13): تنحفظ وصاحب البوت يتبلغ بس
+  const check = aiLinked() ? process.env.AI_RUBRIC_CHECK : undefined;
+  const found: string[] = [];
+  if (check === "1" || check === "note") {
     for (const [k, way] of [steps, ...alts].entries()) {
       const errors = await rubricErrors(Number(q.max_mark), way);
-      if (errors.length) throw new Error((k ? `الطريقة ${methodName(k + 1)}: ` : "") + errors.join(" | "));
+      if (errors.length) found.push((k ? `الطريقة ${methodName(k + 1)}: ` : "") + errors.join(" | "));
     }
   }
+  if (found.length && check === "1") throw new Error(found.join(" | "));
   await kvSet(rubricKey(qid), JSON.stringify({ steps, ...(alts.length ? { alts } : {}), at: new Date().toISOString(), by }));
+  if (found.length) {
+    const text = "👤 <b>لصاحب البوت بس</b>\n⚠️ خطوات حل انحفظت وبيها ملاحظة من فحص الجبر (السؤال " + q.n + "):\n" + found.map((f) => "• " + f).join("\n") + "\n\nالخطوات محفوظة وتشتغل. راجعها إذا تحتاج تعديل.";
+    for (const id of ADMIN_IDS) await send(id, text).catch((e) => console.error("ai rubric note", qid, e));
+  }
   return steps;
 }
 /** أخطاء الخطوات المؤكدة من خدمة التصحيح (/bot/rubric/check)، كل وحدة بسطر يقراه الأستاذ. فارغة إذا سليمة أو الخدمة ما ردت */
@@ -383,7 +391,9 @@ export async function draftRubric(qid: number): Promise<Rubric> {
 
 export type AiQuestion = { n: number; score: number; max: number; review: boolean; reason: string; note?: string; lines: string[]; steps: { status: string; awarded: number; possible: number; reason: string; reason_ar?: string; reason_en?: string; expected: string; student: string; student_tex?: string; analysis_failed?: boolean; student_message?: string }[]; usage?: Usage[]; photo?: PhotoFlag[];
   /** طريقة الحل اللي انحسبت بيها الدرجة إذا مو الأولى (2 = الطريقة الثانية بالحل النموذجي) */
-  method?: number };
+  method?: number;
+  /** كم طريقة حل قارنت الخدمة بطلب واحد (ما يجي من خدمة قديمة) */
+  ways?: number };
 /** صورة معتمة أو مهزوزة بجواب سؤال: رقم الصورة بالسؤال (من 1) وشنو بيها. ما توگف التصحيح، بس الأستاذ يتبلغ */
 export type PhotoFlag = { page: number; problem: "dark" | "blurred" };
 export const PHOTO_PERM = "aiphoto";
@@ -398,6 +408,14 @@ export function photoAlert(name: string, exam: string, res: AiQuestion[]): strin
   if (!lines.length) return "";
   return `👤 <b>تنبيه إداري، ما يوصل للطالب</b>\n📷 <b>صورة مو واضحة بورقة عند نظام التصحيح AI</b>\nالطالب: <b>${name}</b>\nالامتحان: ${exam}\n${lines.join("\n")}\n\nالورقة ما توگفت: انصححت مثل باقي الأوراق. إذا تريد تتأكد من درجتها افتح 🎓 الطلاب ← الطالب ← 📝 أوراقه.`;
 }
+/** نص تنبيه المسؤول عن ورقة انصححت وبيها ملاحظة: أي سؤال، درجته، وشنو السبب. فارغ إذا ماكو ملاحظة.
+ *  الورقة ما توگف: هذا تنبيه بس، والدرجة واصلة للطالب */
+export function issueAlert(name: string, exam: string, res: AiQuestion[]): string {
+  const lines = res.filter((q) => q.review).map((q) => `• س${q.n} (${q.score}/${q.max}): ${q.reason || "ما متأكد"}`);
+  if (!lines.length) return "";
+  return "👤 <b>تنبيه إداري، ما يوصل للطالب</b>\n🤖 <b>نظام التصحيح AI صحح ورقة وبيها ملاحظة</b>\nالطالب: <b>" + name + "</b>\nالامتحان: " + exam + "\n" + lines.join("\n")
+    + "\n\nالورقة انصححت كاملة ووصلت درجتها للطالب. إذا تحتاج تعديل، عدّلها من «✏️ تعديل التصحيح».";
+}
 export async function aiResultOf(itemId: number): Promise<AiQuestion[] | null> {
   const j = await readJson<AiQuestion[] | null>(resultKey(itemId), null);
   return Array.isArray(j) ? j : null;
@@ -408,18 +426,20 @@ async function gradePaper(it: Row, withExamples = true, photo = false): Promise<
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   if (!qs.length) throw new Error("ماكو أسئلة");
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
-  if (answers.some((a) => !a.q)) throw new Error("الجواب ملف كامل");
-  if (answers.some((a) => !isImage(a.file))) throw new Error("الجواب مو صورة");
-  // ورقة بلا ولا صورة جواب: مو «ما جاوب»، الصور بعدها ما وصلت
+  // ورقة بلا ولا صورة جواب: مو «ما جاوب»، الصور بعدها ما وصلت. تنعاد بالدكة الجاية
   if (!answers.length) throw new Error("ماكو صور جواب بالورقة");
+  // ولا ورقة ترجع للمصححين بسبب ملف: الجواب اللي ملف كامل (مو لسؤال معين) يروح ويا كل سؤال، والخدمة تلگى بيه جواب
+  // كل سؤال. ملف مو صورة يروح هم: الخدمة ما ترفض الورقة، تشيله وتگول (notices)، والمسؤول يتبلغ
+  const whole = answers.filter((a) => !a.q);
   return await Promise.all(qs.map(async (q): Promise<AiQuestion> => {
     const rubric = await rubricFull(q.id);
     if (!rubric) throw new Error(`سؤال ${q.n} بدون خطوات`);
     const max = Number(q.max_mark);
-    const mine = answers.filter((a) => a.q === q.n);
+    const mine = [...answers.filter((a) => a.q === q.n), ...whole];
     // ما جاوب: صفر بدون ما نسأل الخدمة
     if (!mine.length) return { n: q.n, score: 0, max, review: false, reason: "ما جاوب", lines: [], steps: [], usage: [] };
     const imgs = await Promise.all(mine.map((a) => readRef(a.file)));
+    // صورة بعدها ما وصلت للمخزن: تنعاد بالدكة الجاية (مو رفض، الصورة جاية)
     if (imgs.some((b) => !b)) throw new Error(`صورة جواب سؤال ${q.n} مفقودة`);
     if (photo) return await gradePhoto(q, rubric.steps, imgs as Buffer[]);
     return await gradeBest(q, rubric, imgs as Buffer[], withExamples ? await examplesFor(it.exam_id, it.version_id, q.n) : []);
@@ -458,16 +478,17 @@ async function engineVersion(): Promise<string> {
   engineSeen = { at: Date.now(), version };
   return version;
 }
-const cacheKey = (steps: RubricStep[], imgs: Buffer[], version = "") => {
+const cacheKey = (steps: RubricStep[], imgs: Buffer[], version = "", alts: RubricStep[][] = []) => {
   const h = createHash("sha256").update(engineTag(ENGINE, version)).update(JSON.stringify(steps));
+  if (alts.length) h.update(JSON.stringify(alts));
   for (const b of imgs) h.update(b);
   return `ai_cache_${h.digest("hex").slice(0, 40)}`;
 };
 /** يرسل جواب سؤال واحد (صوره) للخدمة ويا خطوات حله */
-async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], examples: Example[] = []): Promise<AiQuestion> {
+async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], examples: Example[] = [], alts: RubricStep[][] = []): Promise<AiQuestion> {
   const max = Number(q.max_mark);
   const useCache = process.env.AI_CACHE !== "0";
-  const key = cacheKey(steps, imgs, useCache ? await engineVersion() : "");
+  const key = cacheKey(steps, imgs, useCache ? await engineVersion() : "", alts);
   if (useCache) {
     const hit = await readJson<AiQuestion | null>(key, null);
     if (hit && typeof hit.score === "number") return { ...hit, n: q.n, usage: [] };
@@ -477,20 +498,28 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], exampl
     steps: steps.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` })),
     images: imgs.map((b) => b.toString("base64")),
     examples,
+    // طرق الحل الثانية: الخدمة تقارن جواب الطالب بكل الطرق بطلب واحد وتصحح على الأقرب
+    ...(alts.length ? { alternatives: alts.map((way) => way.map((s, i) => ({ text: s.text, points: s.points, objective: s.text || `Step ${i + 1}` }))) } : {}),
   // نصبر لحد 4 دقايق قبل ما نعيدها بالدكة الجاية
   }, 230_000);
   const score = Math.max(0, Math.min(max, Math.round(Number(r.score) || 0)));
   const res: AiQuestion = { n: q.n, score, max, review: !!r.requires_review, reason: String(r.review_reason ?? ""), note: String(r.note ?? ""), lines: r.student_lines ?? [], steps: r.steps ?? [], usage: r.usage ?? [] };
   const photo = photoFlags(r.photo_quality);
   if (photo.length) res.photo = photo;
+  // كم طريقة قارنت الخدمة، وأي وحدة انحسبت (خدمة قديمة ما ترجعهم)
+  if (typeof r.methods_checked === "number") res.ways = r.methods_checked;
+  if (Number(r.method) > 1) res.method = Number(r.method);
   // ما نحفظ نتيجة ما متأكد منها: المرة الجاية تنصحح من جديد
   if (useCache && !res.review) await kvSet(key, JSON.stringify({ ...res, usage: [] }));
   return res;
 }
-/** الطالب يحل بطريقة وحدة من طرق الحل النموذجي: يتصحح بالطريقة الأولى، وإذا ما أخذ الدرجة كاملة وللسؤال طرق ثانية
- *  يتصحح بيها هم، وتنحسب له أعلى درجة. method يگول بأي طريقة انحسبت (حتى الاعتراض وعرض الحل يمشون عليها) */
+/** الطالب يحل بطريقة وحدة من طرق الحل النموذجي. كل الطرق تروح للخدمة بطلب واحد: تقارن جوابه بكل طريقة
+ *  وتصحح على الأقرب له (أعلى درجة). method يگول بأي طريقة انحسبت (حتى الاعتراض وعرض الحل يمشون عليها).
+ *  خدمة قديمة ما تعرف الطرق (ما ترجع ways): ينصحح بالطريقة الأولى، وإذا ما أخذ الدرجة كاملة بكل طريقة لحالها */
 async function gradeBest(q: Row, rubric: Rubric, imgs: Buffer[], examples: Example[] = []): Promise<AiQuestion> {
-  let best = await gradeQuestion(q, rubric.steps, imgs, examples);
+  let best = await gradeQuestion(q, rubric.steps, imgs, examples, rubric.alts);
+  // خدمة جديدة: قارنت كل الطرق بنفس الطلب. خدمة قديمة: تجاهلت الطرق وصححت بالأولى، فنجرب الباقي وحدة وحدة
+  if (best.ways !== undefined || !rubric.alts.length) return best;
   const usage = [...(best.usage ?? [])];
   for (const [i, way] of rubric.alts.entries()) {
     if (best.score >= best.max) break;
@@ -550,7 +579,9 @@ export async function aiJudgeObjection(it: Row, qn: number, text: string, oldMar
   if (!q) throw new Error("السؤال غير موجود");
   const rubric = await rubricFull(q.id);
   if (!rubric) throw new Error(`سؤال ${qn} بدون خطوات`);
-  const imgs = (await Promise.all((await find("exam_answers", { item_id: it.id, q: qn }, { order: ["id"] })).map((a) => readRef(a.file)))).filter((b): b is Buffer => !!b);
+  // نفس صور التصحيح: صور السؤال، والجواب اللي ملف كامل للورقة (مو لسؤال معين) لأنه انصحح ويا كل سؤال
+  const answers = (await find("exam_answers", { item_id: it.id }, { order: ["id"] })).filter((a) => a.q === qn || !a.q);
+  const imgs = (await Promise.all(answers.map((a) => readRef(a.file)))).filter((b): b is Buffer => !!b);
   if (!imgs.length) throw new Error("ماكو صورة جواب لهذا السؤال");
   const old = (await aiResultOf(it.id))?.find((x) => x.n === qn);
   // الاعتراض ينحكم على نفس طريقة الحل اللي انحسبت بيها الدرجة
@@ -769,8 +800,9 @@ async function forward(it: Row, res: AiQuestion[], usage: Usage[], nameOf: (it: 
 }
 
 /** دكة المؤقت: ياخذ كم ورقة ويصححها. الواثق منها توصل للطالب، واللي مو متأكد منها تروح لمصحح */
-/** الحد اليومي لكلفة نظام التصحيح (AI_DAILY_USD_CAP بالدولار). من يوصله يوگف لباچر، والأوراق تبقى تنتظر، وصاحب البوت يتبلغ مرة باليوم */
-async function overDailyCap(): Promise<boolean> {
+/** حد التنبيه اليومي لكلفة نظام التصحيح (AI_DAILY_USD_CAP بالدولار). التصحيح ما يوگف أبد وما تنتظر ورقة:
+ *  من توصل كلفة اليوم للحد، صاحب البوت يتبلغ مرة باليوم بس */
+async function warnOverDailyCap(): Promise<boolean> {
   const cap = dailyCap(process.env.AI_DAILY_USD_CAP);
   if (cap === null) return false;
   const day = dayOf(stamp());
@@ -779,14 +811,14 @@ async function overDailyCap(): Promise<boolean> {
   const noteKey = `ai_cap_note_${day}`;
   if (!await kvGet(noteKey)) {
     await kvSet(noteKey, "1");
-    const text = "👤 <b>لصاحب البوت بس</b>\n⚠️ نظام التصحيح AI وصل الحد اليومي للكلفة (" + cap + " دولار) فوگف لباچر. الأوراق تبقى تنتظر.\nكلفة اليوم: " + spent.toFixed(2) + " دولار";
+    const text = "👤 <b>لصاحب البوت بس</b>\n⚠️ نظام التصحيح AI وصل الحد اليومي للكلفة (" + cap + " دولار) . التصحيح مستمر وما وگف، هذا تنبيه بس.\nكلفة اليوم: " + spent.toFixed(2) + " دولار";
     for (const id of ADMIN_IDS) await send(id, text);
   }
   return true;
 }
 export async function aiGradeTick(finish: (uid: number, itemId: number) => Promise<unknown>, nameOf: (it: Row) => Promise<string>, limit = PER_TICK) {
   if (!aiLinked() || !await aiOn()) return { off: true };
-  if (await overDailyCap()) return { capped: true };
+  await warnOverDailyCap().catch((e) => console.error("ai cap note", e));
   const take = await makeTaker();
   const picked: Row[] = [];
   for (const it of await find("sched_items", { status: "done" }, { order: ["id"] })) {
@@ -798,7 +830,7 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
     picked.push(it);
   }
   const shadow = await shadowTick(Math.max(2, limit - picked.length));
-  let graded = 0, unsure = 0, failed = 0;
+  let graded = 0, unsure = 0, failed = 0, noted = 0;
   await Promise.all(picked.map(async (it) => {
     try {
       const res = await gradePaper(it);
@@ -807,10 +839,21 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
       // صورة معتمة أو مهزوزة ما توگف الورقة: تنصحح عادي، والأستاذ (واللي عنده صلاحية 📷) يتبلغ بالسؤال ورقم الصورة
       const alert = photoAlert(await nameOf(it), (await one("bank_exams", { id: it.exam_id }))?.title ?? "", res);
       if (alert) for (const id of await staffIds(PHOTO_PERM)) await send(id, alert).catch((e) => console.error("ai photo alert", it.id, e));
-      if (res.some((q) => q.review)) { await forward(it, res, usage, nameOf); unsure++; return; }
+      // ولا ورقة تنرفض ولا تنتظر مصحح: الورقة اللي بيها ملاحظة (خطوة ما انقرت، الجبر والقراءة مختلفين...) تنصحح كلها
+      // وتوصل درجتها للطالب، والمسؤول يتبلغ بالسؤال والسبب. AI_HOLD_UNSURE=1 يرجّع الطريقة القديمة (تحويل للمصحح)
+      const flagged = res.filter((q) => q.review);
+      if (flagged.length && process.env.AI_HOLD_UNSURE === "1") { await forward(it, res, usage, nameOf); unsure++; return; }
       for (const q of res) await put("question_marks", { item_id: it.id, q: q.n, mark: q.score });
       await finish(AI_GRADER, it.id);
-      await addLog({ at: stamp(), kind: "sent", item: it.id, sid: it.user_id, name: await nameOf(it), exam: (await one("bank_exams", { id: it.exam_id }))?.title ?? "", total: res.reduce((t, q) => t + q.score, 0), usage });
+      const exam = await one("bank_exams", { id: it.exam_id });
+      const name = await nameOf(it);
+      if (flagged.length) {
+        const to = exam ? (await aiSettings()).unsure[exam.slug] ?? 0 : 0;
+        const text = issueAlert(name, exam?.title ?? "", res);
+        for (const id of to ? [to] : ADMIN_IDS) await send(id, text).catch((e) => console.error("ai issue alert", it.id, e));
+        noted++;
+      }
+      await addLog({ at: stamp(), kind: "sent", ...(flagged.length ? { note: "⚠️ " + flagged.map((q) => `س${q.n}: ${q.reason || "ما متأكد"}`).join(" | ").slice(0, 300) } : {}), item: it.id, sid: it.user_id, name, exam: exam?.title ?? "", total: res.reduce((t, q) => t + q.score, 0), usage });
       graded++;
     } catch (e) {
       console.error("ai grade", it.id, e);
@@ -831,5 +874,5 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
   }));
   // المقارنة ما تأخر التصحيح الحقيقي
   const compared = picked.length ? 0 : await photoTick(2);
-  return { graded, unsure, failed, ...(shadow ? { shadow } : {}), ...(compared ? { compared } : {}) };
+  return { graded, unsure, failed, ...(noted ? { noted } : {}), ...(shadow ? { shadow } : {}), ...(compared ? { compared } : {}) };
 }

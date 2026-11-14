@@ -322,7 +322,7 @@ async def judge_figure(steps, pages: List[bytes], page_media, kind: str, functio
     if final is not None:
         last, pts = rows[-1], float(steps[-1].points)
         model_full = last["verdict"] in FULL
-        final_disagreement = (model_full and final < 1.0) or (not model_full and final >= 1.0 and last["verdict"] != "unreadable")
+        final_disagreement = model_full and final < 1.0  # as in the rubric engine: equal numbers are not flagged
         mark = final_mark(pts, final)
         note = f"Final answer checked by algebra: {final:.0%} of the teacher's values. "
         carried = await carried_final_credit(steps, rows, out.student_finals, strictness) if final < 1.0 else None
@@ -332,7 +332,7 @@ async def judge_figure(steps, pages: List[bytes], page_media, kind: str, functio
         last["awarded"] = mark
         last["status"] = "correct" if mark >= pts else ("partially_correct" if mark > 0 else "incorrect")
         last["reason"] = note + last["reason"]
-        if last["verdict"] == "unreadable":
+        if last["verdict"] == "unreadable" or (final >= 1.0 and not model_full):
             last["verdict"] = "correct" if mark >= pts else "wrong"  # its final values were read and checked after all
 
     return {

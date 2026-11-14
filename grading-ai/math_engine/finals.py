@@ -23,7 +23,12 @@ itself goes through math_engine.safe_expr, so student text is never evaluated as
     final_values("x^2 = 4 => x = ±2")
     -> [{"value": [2.0, 0.0], "tol": 0.0}, {"value": [-2.0, 0.0], "tol": 0.0}]   (what the chain arrives at)
     final_values("θ = 30°")
-    -> [{"value": [30.0, 0.0], "tol": 0.0, "deg": True}]   (matches π/6 written in radians)
+    -> [{"value": [30.0, 0.0], "tol": 0.0, "deg": True, "name": "θ"}]   (matches π/6 written in radians)
+
+A value that was given to a name carries it ("name": "h" for "h = 6"), so finals.py can tell the
+answer from another quantity the student restated beside it. When a line is several statements
+in a row ("dh/dt = -1 ; rate of decrease 1", "A = 8(8) → A = 64") each value also carries "seg",
+the statement it came from, so a restated result is not asked for twice.
 
 "tol" is the unit of the last digit the value was written to (0.001 for 0.707, 1 for a whole
 number of three or more digits, 0 otherwise). finals.py decides what counts as a rounding of it.
@@ -282,7 +287,8 @@ def _values(s: str, extra: Dict) -> Optional[List[Dict]]:
     assigned = {name for kind, name, _ in items if kind == "assign"}
     if len(assigned) <= 1:
         # "x = 2 or x = -2", "z = 2 + i or -2 - i": one unknown, so each value is a solution
-        return [{"value": _pair(v), "tol": tol, **extra} for _, _, v in items][:MAX_SOLUTIONS]
+        return [{"value": _pair(v), "tol": tol, **extra, **({"name": name} if kind == "assign" else {})}
+                for kind, name, v in items][:MAX_SOLUTIONS]
     if any(kind == "value" for kind, _, _ in items):
         return None  # mixes "x = 2" with bare values: the pairing is unclear
 
@@ -316,6 +322,14 @@ def final_values(text: str) -> Optional[List[Dict]]:
     if not s and _REJECTED.search(text):
         return []  # only a rejected value ("x = -1 يهمل"): it states no answer, which is not the same as unreadable
     result = _values(s, extra)
+    if result is not None and all("value" in sol for sol in result):
+        # Several statements in a row: say which one each value came from
+        segments = [seg for seg in _CHAIN_BREAK.split(s) if seg and seg.strip()]
+        if len(segments) > 1:
+            parts = [_values(seg, extra) for seg in segments]
+            if (all(p is not None and all("value" in sol for sol in p) for p in parts)
+                    and sum(len(p) for p in parts) == len(result)):
+                result = [dict(sol, seg=k) for k, p in enumerate(parts) for sol in p]
     if result is None:
         # A chain ("x^2 = 4 => x = ±2", "x^2 - 4 = 0 ; x = ±2"): the answer is what it arrives at
         segments = [seg for seg in _CHAIN_BREAK.split(s) if seg and seg.strip()]

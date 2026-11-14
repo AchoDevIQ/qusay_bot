@@ -421,7 +421,9 @@ export async function examFile(token: unknown, ref: unknown, perm = EXAM_PERM) {
   need(uid !== null, "الرابط انتهى", 401);
   need(await can(uid!, perm), "ما عندك صلاحية", 403);
   need(typeof ref === "string" && ref, "ملف غير معروف");
-  const r = ref as string;
+  // الشرطة المعكوسة تنحسب فاصل مجلدات على كل نظام: على لينكس هي حرف عادي بالاسم، فـ "..\secret.png" يعدّي فحص
+  // «داخل مجلد المحتوى» وبعدين ينقرا "../secret.png" من برّا المجلد. نحولها قبل الفحص، مو بعده
+  const r = (ref as string).replace(/\\/g, "/");
   if (r.startsWith("tg:") || /^[\w-]{20,}$/.test(r)) {
     const info: any = await api("getFile", { file_id: r.replace(/^tg:/, "") });
     need(info?.file_path, "الملف غير موجود", 404);

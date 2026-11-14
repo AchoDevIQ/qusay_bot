@@ -1,7 +1,7 @@
 # Grading engine
 
 Copied from https://github.com/Muammal/Math-Grading at commit
-`5894b99d1ab467c893db4f2b775bf17040779627` (main): the engine folders
+`a4937f9541b05e6af0d8fce03f58c0186aa0a2af` (main): the engine folders
 (`feedback/ grading/ llm/ math_engine/ ocr/ preprocessing/ review/`), `grading_service.py`,
 and the bot service files `bot_api.py`, `rubric_engine.py`, `figure_engine.py`, `finals.py`.
 `requirements.txt` is that commit's `requirements-bot.txt`.
@@ -47,10 +47,20 @@ Added 2026-11-10 to 2026-11-12 (requests stay compatible; responses only gain fi
 - A final answer wrong only through an earlier mistake gets the follow-through share when it has the
   teacher's form. A "wrong" step that follows exactly from the student's previous wrong line becomes a
   carried error (`carried_steps`).
+- No paper is refused over anything (2026-11-13): `/bot/grade` always answers with a grade. A file that
+  is not a usable image, or is over 25 MB, or is past page 20 is left out and listed in the new `notices`
+  field (`{code, message}`), which also carries every doubt about the marking. `requires_review` is true
+  when `notices` is not empty and means "tell someone". The request's `images` may hold up to 60 entries.
+- The "AI reading and algebra check differ" notice no longer fires on a restated result, a rate followed
+  by its size, another quantity beside the answer, or a decimal one unit off in its last digit.
 - No photo is refused (changed 2026-11-12 at the owner's request): every paper is graded. When a page
   is close to black or has no sharp edge, the response gains `photo_quality`, one entry per page in page
   order with `problem` "dark", "blurred" or "". The bot only tells the teacher which page it was.
   `PHOTO_GATE=0` turns the measurement off.
+- `/bot/grade` takes `alternatives` (the other ways from `/bot/rubric`) and compares the student's work with
+  every way in one model call, grading against the way that fits best. The response gains `method`,
+  `methods_checked` and `methods`. The bot sends all ways in one request and keeps its one-request-per-way loop
+  only for a service that does not return `methods_checked`.
 - `/bot/rubric` separates the teacher's alternative ways to solve one question (changed 2026-11-13 at the owner's
   request). When the model answer solves the question again under «الطريقة الثانية» / «طريقة أخرى» / «حل آخر», `steps`
   is the first way and the new field `alternatives` holds the others, each worth the question's full marks (before, all

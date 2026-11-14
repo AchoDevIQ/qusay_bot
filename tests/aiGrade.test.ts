@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-ai-"));
-Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CONTENT_DIR: tmp, CHROME_PATH: path.join(tmp, "none"), ASSETS_DIR: path.join(tmp, "none"), SETTINGS_FILE: path.join(tmp, "none"), GRADING_AI_URL: "https://ai.test/", GRADING_AI_KEY: "secret-k", AI_CACHE: "0" });
+Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CONTENT_DIR: tmp, CHROME_PATH: path.join(tmp, "none"), ASSETS_DIR: path.join(tmp, "none"), SETTINGS_FILE: path.join(tmp, "none"), GRADING_AI_URL: "https://ai.test/", GRADING_AI_KEY: "secret-k", AI_CACHE: "0", AI_HOLD_UNSURE: "1" });
 delete process.env.FIREBASE_STORAGE_BUCKET;
 fs.mkdirSync(path.join(tmp, "ans"), { recursive: true });
 fs.writeFileSync(path.join(tmp, "ans", "a.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]));
@@ -743,4 +743,135 @@ test("🔀 الحل النموذجي بطريقتين: كل طريقة تنحف�
   ai.length = 0;
   await aiJudgeObjection((await one("sched_items", { id: p }))!, 1, "أستحق أكثر", 15);
   assert.deepEqual([ai[0].route, ai[0].body.steps[0].text], ["/bot/objection", second[0].text]);
+});
+
+// ───── الوضع العادي من 2026-11-13: ولا ورقة تنرفض ولا تنتظر مصحح. فوگ، AI_HOLD_UNSURE=1 يفحص الطريقة القديمة (التحويل)
+test("ورقة بيها ملاحظة تنصحح كلها وتوصل للطالب، والمسؤول يتبلغ بالسؤال والسبب", async () => {
+  const { issueAlert } = await import("../lib/aiGrade.ts");
+  delete process.env.AI_HOLD_UNSURE;
+  try {
+    const exN = await insert("bank_exams", { slug: "c9n", chapter: "فصل الملاحظات", ord: 1, title: "امتحان الملاحظات", minutes: 60, pos: 9 });
+    const vN = await insert("bank_versions", { exam_id: exN, model: "A", kind: "mandatory", ok: 1 });
+    const n1 = await insert("bank_questions", { version_id: vN, n: 1, max_mark: 60, q_file: "none/q1.png", a_files: "[]" });
+    const n2 = await insert("bank_questions", { version_id: vN, n: 2, max_mark: 40, q_file: "none/q2.png", a_files: "[]" });
+    await saveRubric(n1, [{ text: "x = 1", points: 60 }], 1);
+    await saveRubric(n2, [{ text: "y = 2", points: 40 }], 1);
+    await put("students", { user_id: 96, name: "طالب الملاحظة", exam: "إلكتروني", created: "2026-01-01 00:00" });
+    await setAiOn(true);
+    await setChapterScope("c9n", [exN], 41);
+    const p = await insert("sched_items", { user_id: 96, exam_id: exN, at: `${todayStr()} 10:00`, status: "done", version_id: vN, started_at: stamp(), submitted_at: stamp() });
+    for (const q of [1, 2]) await insert("exam_answers", { item_id: p, q, file: "ans/a.jpg", created: stamp() });
+    aiReply = (route, body) => Response.json(body.max_points === 40
+      ? { score: 10, requires_review: true, review_reason: "الخط ما ينقرا", steps: [], usage: [] }
+      : { score: 48, requires_review: false, review_reason: "", steps: [], usage: [] });
+    tg.length = 0;
+    const r: any = await tick();
+    assert.equal(r.unsure, 0);
+    assert.equal(r.failed, 0);
+    assert.equal(r.noted, 1);
+    // الورقة انصححت كلها بنفس الدكة: السؤالين انحفظت درجتهم وما راحت لمصحح
+    const row = (await one("sched_items", { id: p }))!;
+    assert.equal(row.grader_id, AI_GRADER);
+    assert.ok(row.graded_at);
+    assert.deepEqual((await find("question_marks", { item_id: p })).map((m) => [m.q, m.mark]).sort(), [[1, 48], [2, 10]]);
+    // المسؤول عن الفصل يتبلغ بالسؤال ودرجته والسبب، ورسالته مو «حوّل ورقة»
+    const msg = tg.find((c) => c.method === "sendMessage" && String(c.p.chat_id) === "41" && /وبيها ملاحظة/.test(c.p.text))!;
+    assert.ok(msg, "المسؤول ما تبلغ");
+    assert.match(msg.p.text, /طالب الملاحظة/);
+    assert.match(msg.p.text, /س2 \(10\/40\): الخط ما ينقرا/);
+    assert.match(msg.p.text, /وصلت درجتها للطالب/);
+    assert.ok(!tg.some((c) => /حوّل ورقة/.test(String(c.p.text ?? ""))));
+    assert.equal(issueAlert("x", "y", [{ n: 1, score: 5, max: 5, review: false, reason: "", lines: [], steps: [] }]), "");
+  } finally {
+    process.env.AI_HOLD_UNSURE = "1";
+  }
+});
+
+test("حد الكلفة اليومي تنبيه بس: التصحيح ما يوگف", async () => {
+  process.env.AI_DAILY_USD_CAP = "0.000001";
+  try {
+    tg.length = 0;
+    const r: any = await tick();
+    assert.equal(r.capped, undefined);   // قبل: يرجع capped وما يصحح شي
+    assert.equal(r.off, undefined);
+  } finally {
+    delete process.env.AI_DAILY_USD_CAP;
+  }
+});
+
+test("🔀 خدمة تعرف الطرق: كل طرق الحل تروح بطلب واحد، والدرجة على الطريقة اللي ترجعها الخدمة", async () => {
+  const { tryGrade } = await import("../lib/aiGrade.ts");
+  const e8 = await insert("bank_exams", { slug: "c8w", chapter: "فصل الطرق", ord: 1, title: "طرق بطلب واحد", minutes: 60, pos: 8 });
+  const v8 = await insert("bank_versions", { exam_id: e8, model: "A", kind: "mandatory", ok: 1 });
+  const q8 = await insert("bank_questions", { version_id: v8, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  const first = [{ text: "(x-2)(x-3) = 0", points: 6 }, { text: "x = 2 or x = 3", points: 4 }];
+  const second = [{ text: "x = (5 ± 1)/2", points: 6 }, { text: "x = 2 or x = 3", points: 4 }];
+  await saveRubric(q8, first, 1, [second]);
+  aiReply = (route, body) => Response.json({ score: 10, method: body.alternatives ? 2 : 1, methods_checked: 1 + (body.alternatives?.length ?? 0), requires_review: false, review_reason: "", student_lines: [], steps: [], usage: [] });
+  ai.length = 0;
+  const t = await tryGrade(q8, [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 7, 7])]);
+  const calls = ai.filter((c) => c.route === "/bot/grade");
+  assert.equal(calls.length, 1);                                        // طلب واحد بدل طلب لكل طريقة
+  assert.deepEqual(calls[0].body.alternatives.map((w: any) => w.map((s: any) => s.text)), [second.map((s) => s.text)]);
+  assert.deepEqual([t.score, t.method, t.ways], [10, 2, 2]);
+});
+
+test("ورقة بيها جواب ملف كامل (مو لسؤال معين) تنصحح: الملف يروح ويا كل سؤال", async () => {
+  const { tryGrade: _unused } = await import("../lib/aiGrade.ts");
+  const e7 = await insert("bank_exams", { slug: "c7w", chapter: "فصل الملف الكامل", ord: 1, title: "ملف كامل", minutes: 60, pos: 7 });
+  const v7 = await insert("bank_versions", { exam_id: e7, model: "A", kind: "mandatory", ok: 1 });
+  const a1 = await insert("bank_questions", { version_id: v7, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  const a2 = await insert("bank_questions", { version_id: v7, n: 2, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  await saveRubric(a1, [{ text: "x = 1", points: 10 }], 1);
+  await saveRubric(a2, [{ text: "y = 2", points: 10 }], 1);
+  await setAiOn(true);
+  await setChapterScope("c7w", [e7], 0);
+  await put("students", { user_id: 97, name: "طالب الملف", exam: "إلكتروني", created: "2026-01-01 00:00" });
+  const p = await insert("sched_items", { user_id: 97, exam_id: e7, at: `${todayStr()} 12:00`, status: "done", version_id: v7, started_at: stamp(), submitted_at: stamp() });
+  await insert("exam_answers", { item_id: p, q: null, file: "ans/a.jpg", created: stamp() });     // صفحة الورقة كلها
+  aiReply = (route, body) => Response.json({ score: 7, requires_review: false, review_reason: "", student_lines: [], steps: [], usage: [] });
+  ai.length = 0;
+  for (let i = 0; i < 3 && !(await one("sched_items", { id: p }))!.graded_at; i++) await tick();
+  const row = (await one("sched_items", { id: p }))!;
+  assert.ok(row.graded_at, "الورقة ما انصححت");
+  assert.deepEqual((await find("question_marks", { item_id: p })).map((m) => [m.q, m.mark]).sort(), [[1, 7], [2, 7]]);
+  assert.equal(ai.filter((c) => c.route === "/bot/grade").every((c) => c.body.images.length === 1), true);
+});
+
+// فحص الخطوات بالجبر: AI_RUBRIC_CHECK=1 (قرار صاحب البوت) يرفض الحفظ، و AI_RUBRIC_CHECK=note يحفظ ويبلغ صاحب البوت بس
+test("فحص الخطوات بالجبر: «1» ما يحفظ الخطوة الغلط، «note» يحفظها ويبلغ صاحب البوت", async () => {
+  const eR = await insert("bank_exams", { slug: "c6r", chapter: "فصل الفحص", ord: 1, title: "فحص الخطوات", minutes: 60, pos: 6 });
+  const vR = await insert("bank_versions", { exam_id: eR, model: "A", kind: "mandatory", ok: 1 });
+  const qR = await insert("bank_questions", { version_id: vR, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  const bad = [{ text: "x^2 = 4", points: 5 }, { text: "x = 3", points: 5 }];
+  aiReply = (route) => Response.json(route === "/bot/rubric/check" ? { issues: [{ step: 2, severity: "error", message: "x = 3 ما تحقق x^2 = 4" }] } : {});
+  const before = process.env.AI_RUBRIC_CHECK;
+  try {
+    process.env.AI_RUBRIC_CHECK = "1";
+    await assert.rejects(saveRubric(qR, bad, 1), /الخطوة 2: x = 3 ما تحقق/);
+    assert.equal(await rubricOf(qR), null);
+    process.env.AI_RUBRIC_CHECK = "note";
+    tg.length = 0;
+    await saveRubric(qR, bad, 1);
+    assert.deepEqual((await rubricOf(qR))!.map((s) => s.text), ["x^2 = 4", "x = 3"]);
+    assert.ok(tg.some((c) => c.method === "sendMessage" && String(c.p.chat_id) === "1" && /فحص الجبر/.test(c.p.text)));
+  } finally {
+    if (before === undefined) delete process.env.AI_RUBRIC_CHECK; else process.env.AI_RUBRIC_CHECK = before;
+  }
+});
+
+test("الاعتراض على ورقة جوابها ملف كامل (مو لسؤال معين): الملف يروح ويا الاعتراض", async () => {
+  const { aiJudgeObjection } = await import("../lib/aiGrade.ts");
+  const e5 = await insert("bank_exams", { slug: "c5w", chapter: "فصل اعتراض الملف", ord: 1, title: "اعتراض ملف كامل", minutes: 60, pos: 5 });
+  const v5 = await insert("bank_versions", { exam_id: e5, model: "A", kind: "mandatory", ok: 1 });
+  const b1 = await insert("bank_questions", { version_id: v5, n: 1, max_mark: 10, q_file: "none/q.png", a_files: "[]" });
+  await saveRubric(b1, [{ text: "x = 1", points: 10 }], 1);
+  const p = await insert("sched_items", { user_id: 98, exam_id: e5, at: `${todayStr()} 13:00`, status: "done", version_id: v5, started_at: stamp(), submitted_at: stamp() });
+  await insert("exam_answers", { item_id: p, q: null, file: "ans/a.jpg", created: stamp() });
+  aiReply = () => Response.json({ accept: true, new_score: 9, reason: "صح", usage: [] });
+  ai.length = 0;
+  const r = await aiJudgeObjection((await one("sched_items", { id: p }))!, 1, "أستحق أكثر", 7);
+  assert.equal(ai[0].route, "/bot/objection");
+  assert.equal(ai[0].body.images.length, 1);
+  assert.deepEqual([r.accept, r.mark], [true, 9]);
 });

@@ -27,6 +27,11 @@ env:
   - variable: AI_RUBRIC_CHECK
     value: "1"
     availability: [RUNTIME]
+  # الورقة اللي نظام التصحيح AI مو متأكد من سؤال بيها تروح للمصحح المختار للفصل وما توصل للطالب قبل ما ينشوف
+  # (قرار صاحب البوت 2026-11-07). بدونه، من تحديث Muammal 2026-11-13، الورقة توصل للطالب والمسؤول يتبلغ بس
+  - variable: AI_HOLD_UNSURE
+    value: "1"
+    availability: [RUNTIME]
   - variable: ADMIN
     value: "7223248656"
     availability: [RUNTIME]

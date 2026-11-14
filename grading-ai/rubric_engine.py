@@ -13,9 +13,14 @@ run in the SymPy sandbox (math_engine/sandbox.py: safe parser, killable workers)
   ("x = -2", "x = ±2") is matched as values, so the unsolved equation "2x + 4 = 0", half the
   roots, an extra wrong root or the wrong unknown ("y = -2") is not that result.
 - The final answer is compared as numbers (finals.py), so a wrong sign in the final roots
-  always costs the same. When the algebra and the model disagree, the paper is flagged.
+  always costs the same. The paper is flagged only when the model called the last step right and
+  the algebra is sure a value is not; a near miss in the last digit gets no algebra verdict.
   A final answer that is wrong only because of an earlier mistake gets the follow-through
   share like any other step, when it still has the form of the teacher's answer.
+
+Several ways: when the teacher solved the question in more than one way (each worth the full marks),
+the same single model call gives verdicts for every way, each way is marked by the rules below, and
+the student gets the way that fits their work best (method in the result).
 
 Verdict -> share of the step's marks:
     correct, other_route, implied -> 1
@@ -77,6 +82,27 @@ class JudgeOut(BaseModel):
     steps: List[JudgeStep]
     student_finals: List[str] = Field(description="Each final value the student wrote at the very end, one value per item, plain math; leave out a value the student rejected (يهمل) or crossed out; empty list if none")
     lines: List[str] = Field(description="The student's lines for this question, transcribed in order, plain math")
+
+
+class WayVerdicts(BaseModel):
+    way: int = Field(description="The way's number from the teacher's list (1 = the first way)")
+    steps: List[JudgeStep] = Field(description="One verdict for EVERY step of this way, in order and with the same count")
+
+
+class WaysOut(BaseModel):
+    followed: int = Field(description="The number of the way the student's work follows most closely")
+    ways: List[WayVerdicts] = Field(description="One entry per way of the teacher's solution, in order")
+    student_finals: List[str] = Field(description="Each final value the student wrote at the very end, one value per item, plain math; leave out a value the student rejected (يهمل) or crossed out; empty list if none")
+    lines: List[str] = Field(description="The student's lines for this question, transcribed in order, plain math")
+
+
+WAYS_NOTE = """
+The teacher solved this question in more than one way: Way 1, Way 2 ... above. Every way is worth the
+question's full marks on its own, and a student follows ONE of them (the ways may share their first or
+last steps). Set followed to the way the student's work follows most closely. Then give, in ways, one
+entry per way, in order, with a verdict for EVERY step of that way, judged with the same rules as above:
+a step of a way the student did not follow is missing unless the student's work still shows its result.
+"""
 
 
 JUDGE_PROMPT = """You check one student's handwritten answer to a math question against the teacher's solution steps.
@@ -222,14 +248,71 @@ async def ask_model(prompt: str, schema, imgs: list, n: int, complete=None):
     return None, None
 
 
-async def judge(steps, pages: List[bytes], page_media, examples: str = "", strictness: str = "standard") -> Optional[dict]:
-    """Grades one question. None when the model's answer doesn't fit the rubric (the caller falls back)."""
-    imgs = [(b, page_media(b), f"Student's answer, page {k + 1}") for k, b in enumerate(pages)]
-    prompt = JUDGE_PROMPT.replace("{rubric}", rubric_lines(steps)).replace("{examples}", examples)
-    out, by = await ask_model(prompt, JudgeOut, imgs, len(steps))
-    if by is None:
-        return None
+def ways_lines(ways) -> str:
+    """Every way of the teacher's solution, numbered, for the prompt."""
+    return "\n\n".join(f"Way {k}:\n{rubric_lines(way)}" for k, way in enumerate(ways, start=1))
 
+
+async def judge(steps, pages: List[bytes], page_media, examples: str = "", strictness: str = "standard",
+                alternatives=None) -> Optional[dict]:
+    """
+    Grades one question. None when the model's answer doesn't fit the rubric (the caller falls back).
+    alternatives: the teacher's other ways to solve it, each a complete list of steps worth the full
+    marks. Then one model call gives verdicts for every way, each way is marked by code, and the student
+    gets the way that fits their work best (the most marks; on a tie, the way the model says they
+    followed). method in the result is that way's number, 1 for the first.
+    """
+    imgs = [(b, page_media(b), f"Student's answer, page {k + 1}") for k, b in enumerate(pages)]
+    ways = [list(steps)] + [list(w) for w in (alternatives or []) if w]
+    if len(ways) == 1:
+        prompt = JUDGE_PROMPT.replace("{rubric}", rubric_lines(steps)).replace("{examples}", examples)
+        out, by = await ask_model(prompt, JudgeOut, imgs, len(steps))
+        if by is None:
+            return None
+        result = await mark_way(steps, by, out.student_finals, strictness)
+        return {**result, "method": 1, "methods": [{"method": 1, "score": result["score"]}],
+                "student_finals": list(out.student_finals), "lines": [l for l in out.lines if l.strip()]}
+
+    prompt = (JUDGE_PROMPT.replace("Teacher's solution steps (number, marks, expected result):",
+                                   "Teacher's solution, in more than one way (number, marks, expected result):")
+              .replace("{rubric}", ways_lines(ways)).replace("{examples}", WAYS_NOTE + examples))
+    out, fitted = await ask_ways(prompt, imgs, [len(w) for w in ways])
+    if fitted is None:
+        return None
+    marked = {}
+    for k, by in fitted.items():
+        marked[k] = await mark_way(ways[k - 1], by, out.student_finals, strictness)
+    followed = out.followed if out.followed in marked else min(marked)
+    best = max(marked, key=lambda k: (round(marked[k]["score"], 6), k == followed, -k))
+    return {**marked[best], "method": best,
+            "methods": [{"method": k, "score": marked[k]["score"]} for k in sorted(marked)],
+            "followed": followed, "student_finals": list(out.student_finals), "lines": [l for l in out.lines if l.strip()]}
+
+
+async def ask_ways(prompt: str, imgs: list, counts: List[int], complete=None):
+    """
+    The model's reply and, per way number, its verdicts keyed by step; (None, None) when two replies in
+    a row fit no way at all. A way whose verdicts do not fit is left out; the others are still marked.
+    """
+    complete = complete or complete_vision_json
+    for _ in range(MODEL_TRIES):
+        out = WaysOut(**await complete("grading", ASK, schema=WaysOut, detail="high", images=imgs,
+                                       system=prompt, cache_system=True))
+        given = {w.way: w for w in out.ways}
+        if sorted(given) != list(range(1, len(counts) + 1)) and len(out.ways) == len(counts):
+            given = {k: w for k, w in enumerate(out.ways, start=1)}  # numbered from 0 or repeated: take them in order
+        fitted = {}
+        for k, n in enumerate(counts, start=1):
+            by = fit_verdicts(given[k].steps, n) if k in given else None
+            if by is not None:
+                fitted[k] = by
+        if fitted:
+            return out, fitted
+    return None, None
+
+
+async def mark_way(steps, by, student_finals: List[str], strictness: str = "standard") -> dict:
+    """One way's marks from the model's verdicts, with the algebra's second opinion and the final-answer check."""
     # Algebra second opinion on the steps the model took marks from
     doubtful = [i for i in range(len(steps)) if by[i + 1].verdict in ("wrong", "follow_through")]
     checks = await asyncio.gather(*(_equivalent(steps[i].text or "", by[i + 1].wrote) for i in doubtful))
@@ -255,25 +338,27 @@ async def judge(steps, pages: List[bytes], page_media, examples: str = "", stric
     # The final answer by algebra, not by the model: the share of the teacher's final values the student got
     final = None
     disagreement = False
-    if out.student_finals:
-        final = await finals_match(steps[-1].text or "", out.student_finals)
+    if student_finals:
+        final = await finals_match(steps[-1].text or "", student_finals)
     if final is not None:
         last, pts = rows[-1], float(steps[-1].points)
         model_full = last["verdict"] in FULL
-        disagreement = (model_full and final < 1.0) or (not model_full and final >= 1.0 and last["verdict"] != "unreadable")
+        # Flagged only when the model called the last step right and the algebra is sure a value is not.
+        # The other way round (every value right by algebra, the model unsure) is settled by the algebra,
+        # quietly: equal numbers are not a matter of judgement, and flagging them only held papers back.
+        disagreement = model_full and final < 1.0
         mark = final_mark(pts, final)
         note = f"Final answer checked by algebra: {final:.0%} of the teacher's values. "
-        carried = await carried_final_credit(steps, rows, out.student_finals, strictness) if final < 1.0 else None
+        carried = await carried_final_credit(steps, rows, student_finals, strictness) if final < 1.0 else None
         if carried is not None and carried > mark:
             mark = carried
             note += "It has the form of the teacher's answer with numbers carried from an earlier mistake: follow-through credit. "
         last["awarded"] = mark
         last["status"] = "correct" if mark >= pts else ("partially_correct" if mark > 0 else "incorrect")
         last["reason"] = note + last["reason"]
-        if last["verdict"] == "unreadable":
+        if last["verdict"] == "unreadable" or (final >= 1.0 and not model_full):
             last["verdict"] = "correct" if mark >= pts else "wrong"  # its final values were read and checked after all
     score = sum(r["awarded"] for r in rows)
     unsure = sum(1 for r in rows if r["verdict"] == "unreadable")
     return {"steps": rows, "score": score, "final": final, "unreadable": unsure, "algebra_upgrades": len(upgraded),
-            "carried_steps": carried_steps, "final_disagreement": disagreement, "student_finals": list(out.student_finals),
-            "lines": [l for l in out.lines if l.strip()]}
+            "carried_steps": carried_steps, "final_disagreement": disagreement}

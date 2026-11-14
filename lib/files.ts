@@ -11,20 +11,29 @@ export type FileStore = {
   list(prefix: string, fresh?: boolean): Promise<string[]>;
 };
 
+/** المسار الكامل لملف داخل المجلد، أو null إذا الاسم يطلع برّا المجلد ("../x"، "..\x"، مسار كامل).
+ *  الشرطة المعكوسة تنحسب فاصل على كل نظام: على لينكس هي حرف عادي، فبدون هذا الفحص يعدّي "..\x" */
+export function insideRoot(root: string, ref: string): string | null {
+  const base = path.resolve(root);
+  const full = path.resolve(base, String(ref ?? "").replace(/\\/g, "/"));
+  return full === base || full.startsWith(base + path.sep) ? full : null;
+}
+
 export function localStore(root: string): FileStore {
   return {
     async read(ref) {
-      const f = path.join(root, ref);
-      return fs.existsSync(f) ? fs.readFileSync(f) : null;
+      const f = insideRoot(root, ref);
+      return f && fs.existsSync(f) && fs.statSync(f).isFile() ? fs.readFileSync(f) : null;
     },
     async write(ref, body) {
-      const f = path.join(root, ref);
+      const f = insideRoot(root, ref);
+      if (!f) throw new Error("ملف برّا مجلد المحتوى");
       fs.mkdirSync(path.dirname(f), { recursive: true });
       fs.writeFileSync(f, body);
     },
     async list(prefix) {
-      const dir = path.join(root, prefix);
-      if (!fs.existsSync(dir)) return [];
+      const dir = insideRoot(root, prefix);
+      if (!dir || !fs.existsSync(dir)) return [];
       return fs.readdirSync(dir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile())
         .map((e) => path.relative(root, path.join(e.parentPath, e.name)).replace(/\\/g, "/"));
     },

@@ -69,11 +69,23 @@ def _same(a: Dict, b: Dict) -> bool:
     return False
 
 
+def _near(a: Dict, b: Dict) -> bool:
+    """
+    Not the same value, but within one unit of the last digit the student wrote: 1.984 for 1.9834,
+    0.4 for 1/3, 4.9 for 5. A student who rounded along the way lands here, and so does a small
+    slip. The algebra cannot tell which, so it gives no verdict and the grader's own stands.
+    """
+    unit = float(b.get("tol") or 0.0)
+    if not (0.0 < unit < 1.0) or "value" not in a or "value" not in b:
+        return False
+    return all(abs(x - y) <= unit * (1 + 1e-9) for x, y in zip(a["value"], b["value"]))
+
+
 def _distinct(solutions: List[Dict]) -> List[Dict]:
     """The same root written twice ("x = ±2" and then "x = 2") is one answer, not a guess."""
     out: List[Dict] = []
     for sol in solutions:
-        if not any(_same(sol, kept) for kept in out):
+        if not any(_same(sol, kept) or _same(kept, sol) for kept in out):
             out.append(sol)
     return out
 
@@ -83,11 +95,48 @@ def values(text: str) -> Optional[List[Dict]]:
     return final_values(text or "")
 
 
+def _name(solution: Dict) -> str:
+    """The unknown a value was given to, without its number: "x" for x1, "" when it has none."""
+    return str(solution.get("name") or "").lower().rstrip("0123456789").rstrip("_")
+
+
+def _teacher_sets(t: List[Dict]) -> List[List[Dict]]:
+    """
+    The sets of values a student may match in full. Normally one: everything the teacher's line states.
+    A line of several statements that are not all the same unknown restates its result
+    ("dh/dt = -1 ; rate of decrease 1", "V = 36π ; = 113.1"): any one statement is then a full answer.
+    The same unknown on every statement ("x = 2 ; x = -2") is its roots, and stays one set.
+    """
+    segments = sorted({v["seg"] for v in t if v.get("seg") is not None})
+    if len(segments) < 2 or len({_name(v) for v in t}) == 1:
+        return [_distinct(t)]
+    return [_distinct(t)] + [_distinct([v for v in t if v.get("seg") == k]) for k in segments]
+
+
+def _share(t: List[Dict], s: List[Dict]) -> Optional[float]:
+    """Share of the values in t the student got, minus wrong extras. None when a value is a near miss."""
+    left = list(s)
+    hit, undecided = 0, False
+    for a in t:
+        j = next((k for k, b in enumerate(left) if _same(a, b)), None)
+        if j is not None:
+            hit += 1
+            left.pop(j)
+        elif any(_near(a, b) for b in left):
+            undecided = True
+    if undecided:
+        return None
+    extra = max(0, len(s) - len(t))
+    return max(0.0, (hit - extra) / len(t))
+
+
 def match(teacher: str, student: List[str]) -> Optional[float]:
     """
     Share of the teacher's final values the student got (0..1), minus wrong extra values,
-    or None when either side cannot be read as values (the model's verdict then stands).
+    or None when the algebra has no firm verdict (the model's verdict then stands): either side
+    cannot be read as values, or the student's value is within one unit of its last digit.
     One right and one wrong: half. Writing more values than the answer has costs the extras.
+    A value the student gave to another quantity (r = 3 beside the answer h = 6) is not an extra.
     """
     t = values(teacher)
     if not t:
@@ -102,18 +151,25 @@ def match(teacher: str, student: List[str]) -> Optional[float]:
         s += v
     if not s:
         return 0.0
-    s = _distinct(s)
     if {("vars" in x) for x in t} != {("vars" in x) for x in s}:
         return None  # pairs on one side, single values on the other: not comparable
-    left = list(s)
-    hit = 0
-    for a in t:
-        j = next((k for k, b in enumerate(left) if _same(a, b)), None)
-        if j is not None:
-            hit += 1
-            left.pop(j)
-    extra = max(0, len(s) - len(t))
-    return max(0.0, (hit - extra) / len(t))
+    # Only the values given to the teacher's unknown count, when the student named theirs
+    wanted = {_name(v) for v in t} - {""}
+    if wanted:
+        named = [b for b in s if not _name(b) or _name(b) in wanted]
+        s = named or s
+    s = _distinct(s)
+    shares = [_share(group, s) for group in _teacher_sets(t)]
+    firm = [x for x in shares if x is not None]
+    if any(x >= 1.0 for x in firm):
+        return 1.0
+    if len(firm) < len(shares):
+        return None
+    return max(firm)
+
+
+async def amatch(teacher: str, student: List[str]) -> Optional[float]:
+    return await asyncio.to_thread(match, teacher, student)
 
 
 def _shape(solution: Dict) -> tuple:
@@ -145,10 +201,6 @@ def same_format(teacher: str, student: List[str]) -> bool:
         s += v
     t, s = _distinct(t), _distinct(s)
     return bool(s) and sorted(map(repr, map(_shape, t))) == sorted(map(repr, map(_shape, s)))
-
-
-async def amatch(teacher: str, student: List[str]) -> Optional[float]:
-    return await asyncio.to_thread(match, teacher, student)
 
 
 async def asame_format(teacher: str, student: List[str]) -> bool:

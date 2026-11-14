@@ -62,3 +62,26 @@ test("Cloud Storage: القائمة تنحفظ مؤقتاً، والرفع ال�
   await s.list("ch1/");
   assert.equal(f.lists, 3);
 });
+
+// الشرطة المعكوسة على لينكس حرف عادي بالاسم: "..\x" كان يعدّي فحص المجلد وبعدين ينقرا "../x" من برّاه
+test("مخزن القرص ما يقرا ولا يكتب برّا مجلده، بأي فاصل", async () => {
+  const { insideRoot } = await import("../lib/files.ts");
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-root-"));
+  const root = path.join(top, "content");
+  fs.mkdirSync(path.join(root, "ch1"), { recursive: true });
+  fs.writeFileSync(path.join(top, "secret.png"), "secret");
+  fs.writeFileSync(path.join(root, "ch1", "q1.png"), "inside");
+  const store = localStore(root);
+
+  assert.equal((await store.read("ch1/q1.png"))?.toString(), "inside");
+  assert.equal((await store.read("ch1\\q1.png"))?.toString(), "inside");        // نفس الملف بفاصل ويندوز
+  for (const evil of ["../secret.png", "..\\secret.png", "ch1/../../secret.png", "ch1\\..\\..\\secret.png", path.join(top, "secret.png")]) {
+    assert.equal(await store.read(evil), null, evil);
+    assert.equal(insideRoot(root, evil), null, evil);
+    await assert.rejects(store.write(evil, Buffer.from("x"), "image/png"), /برّا مجلد المحتوى/, evil);
+  }
+  assert.equal(fs.readFileSync(path.join(top, "secret.png"), "utf8"), "secret");  // ما انكتب فوگه
+  assert.deepEqual(await store.list("../"), []);
+  assert.equal(await store.read("ch1"), null);                                    // مجلد مو ملف
+  fs.rmSync(top, { recursive: true, force: true });
+});

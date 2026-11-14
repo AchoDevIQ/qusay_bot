@@ -43,6 +43,11 @@ logger = logging.getLogger("qmath.bot")
 
 MAX_IMAGES = 12
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
+# A student's answer is never refused over its photos (decode_answer_pages): up to this many pages are read,
+# each up to this size (the router shrinks them for the model anyway); anything else is left out and reported
+MAX_ANSWER_PAGES = 20
+MAX_ANSWER_IMAGE_BYTES = 25 * 1024 * 1024
+MAX_ANSWER_ENTRIES = 60
 MAX_PDF_BYTES = 25 * 1024 * 1024
 MAX_PDF_PAGES = 20
 MAX_RENDER_EDGE = 2400  # PDF pages are rendered at ~130 dpi, never past this many pixels
@@ -136,7 +141,7 @@ class Example(BaseModel):
 class GradeReq(BaseModel):
     max_points: float = Field(gt=0, le=1000)
     steps: List[Step] = Field(min_length=1, max_length=MAX_STEPS)
-    images: List[str] = Field(default_factory=list, max_length=MAX_IMAGES)  # base64 pages of the student's answer
+    images: List[str] = Field(default_factory=list, max_length=MAX_ANSWER_ENTRIES)  # base64 pages of the student's answer
     strictness: Strictness = "standard"
     examples: List[Example] = Field(default_factory=list, max_length=8)
     review: bool = True  # classic engine only: second look at the steps that lost marks
@@ -145,6 +150,10 @@ class GradeReq(BaseModel):
     # (otherwise taken from "f(x) = ..." / "y = ..." in the rubric), checked exactly against the student's sketch
     figure: Optional[Literal["graph", "geometry"]] = None
     figure_function: Optional[str] = Field(default=None, max_length=300)
+    # The teacher's other ways to solve the question (الطريقة الثانية), each a complete list of steps worth the
+    # full marks. The rubric engine compares the student's work with every way in one model call and grades
+    # against the way that fits best; the response's `method` says which (1 = steps, 2 = alternatives[0] ...)
+    alternatives: List[List[Step]] = Field(default_factory=list, max_length=8)
     feedback: bool = True  # False: skip the student-facing wording (hidden comparison runs)
     lang: Lang = "ar"  # the student's track: feedback is written in this language
 
@@ -198,6 +207,38 @@ def decode_images(raw: List[str]) -> List[bytes]:
             raise HTTPException(status_code=400, detail="bad image: send JPEG, PNG, WEBP or GIF")
         out.append(b)
     return out
+
+
+def decode_answer_pages(raw: List[str]) -> tuple:
+    """
+    The student's pages for /bot/grade, as (pages, notices). Unlike decode_images this never refuses the
+    request: a paper is always graded with whatever can be read. An entry that is not a JPEG, PNG, WEBP
+    or GIF, cannot be decoded, or is larger than MAX_ANSWER_IMAGE_BYTES is left out and reported, and so
+    are pages beyond MAX_ANSWER_PAGES. The rest of the checks stay: nothing but a real image reaches a model.
+    """
+    pages, skipped = [], []
+    for k, s in enumerate(raw, start=1):
+        if len(pages) >= MAX_ANSWER_PAGES:
+            break
+        b = None
+        if len(s) <= MAX_ANSWER_IMAGE_BYTES * 4 // 3 + 200:
+            try:
+                b = _b64(s)
+            except Exception:
+                b = None
+        if b and len(b) <= MAX_ANSWER_IMAGE_BYTES and _is_image(b):
+            pages.append(b)
+        else:
+            skipped.append(k)
+    notices = []
+    if skipped:
+        notices.append(notice("image_skipped", pages=", ".join(str(k) for k in skipped)))
+    extra = len(raw) - len(pages) - len(skipped)
+    if extra > 0:
+        notices.append(notice("too_many_images", used=len(pages), extra=extra))
+    if raw and not pages:
+        notices.append(notice("no_readable_image"))
+    return pages, notices
 
 
 # Photo check. It never refuses a paper: every photo is graded. A page that is close to black, or so
@@ -367,6 +408,17 @@ DOUBT = {
     "figure_unreadable": "صورة الرسم ما تنقرا",
 }
 
+# Things a paper ran into that did not stop it being graded. Shown to the teacher (Arabic UI).
+NOTICE = {
+    "image_skipped": "صورة ما انقرت وما دخلت بالتصحيح (الصورة {pages})",
+    "too_many_images": "انقرت أول {used} صورة بس، والباقي ({extra}) ما دخل بالتصحيح",
+    "no_readable_image": "ولا صورة من صور الجواب انقرت، فالسؤال انحسب صفر وينراد صورة ثانية",
+}
+
+
+def notice(code: str, **details) -> dict:
+    return {"code": code, "message": NOTICE[code].format(**details)}
+
 
 class FinalsOut(BaseModel):
     teacher_final: str = Field(description="The final answer of the teacher's solution, plain math (e.g. x = 1/2 or a^2 = 1/4); empty if none")
@@ -470,14 +522,30 @@ async def second_look(req: "GradeReq", pages: List[bytes], steps: list) -> dict:
 
 @app.post("/bot/grade", dependencies=[Depends(check_key)])
 async def bot_grade(req: GradeReq):
+    """
+    Always answers with a grade. Nothing about the photos refuses a paper: what cannot be used is left out
+    and listed in `notices`, a dark or blurred page is listed in `photo_quality`, and doubt about the
+    grading is in `review_reason`. `requires_review` means "tell someone", never "this was not graded".
+    The one error left is 503: the model itself could not be reached, so there is no grade to give yet.
+    """
     bucket = start_usage()
-    pages = decode_images(req.images)
-    # Every paper is graded, whatever its photos look like. A dark or blurred page is only reported
-    # (one entry per page, in page order), so the bot can tell the teacher which page to look at
-    quality = await asyncio.gather(*(asyncio.to_thread(photo_quality, b) for b in pages)) if pages and photo_gate_on() else []
-    out = await grade_pages(req, bucket, pages)
+    pages, notices = decode_answer_pages(req.images)
+    # Measured while the paper is being graded, not before it: it decides nothing, so it costs no time
+    measuring = (asyncio.gather(*(asyncio.to_thread(photo_quality, b) for b in pages))
+                 if pages and photo_gate_on() else None)
+    if req.images and not pages:
+        # Nothing readable was sent. Still a result, with no model call: every step asks for another image
+        out = await finish(req, bucket, [], 0.0, 0.0, "", [], {"changed": 0, "final": None}, "none", all_failed=True)
+    else:
+        out = await grade_pages(req, bucket, pages)
+    quality = list(await measuring) if measuring is not None else []
     if any(q["problem"] for q in quality):
-        out["photo_quality"] = list(quality)
+        # One entry per page, in page order, so the bot can tell the teacher which page to look at
+        out["photo_quality"] = quality
+    grading = [{"code": "grading", "message": m} for m in (out.get("review_reason") or "").split(" | ") if m]
+    out["notices"] = grading + notices
+    out["review_reason"] = " | ".join(n["message"] for n in out["notices"])
+    out["requires_review"] = bool(out["notices"])
     return out
 
 
@@ -512,7 +580,8 @@ async def grade_pages(req: GradeReq, bucket: list, pages: List[bytes]) -> dict:
         # Rubric engine: the model gives one verdict per step from the photo, the code and the algebra give the marks
         r = None
         try:
-            r = await judge(req.steps, pages, page_media, examples_text(req), strictness=req.strictness)
+            r = await judge(req.steps, pages, page_media, examples_text(req), strictness=req.strictness,
+                            alternatives=[w for w in req.alternatives if w])
         except Exception:
             logger.exception("rubric engine failed; falling back to the classic engine")
             r = None
@@ -524,32 +593,46 @@ async def grade_pages(req: GradeReq, bucket: list, pages: List[bytes]) -> dict:
             if r["final_disagreement"]:
                 doubts.append(DOUBT["final"])
             confidence = 1.0 - (0.5 if r["unreadable"] else 0.0) - (0.25 if r["final_disagreement"] else 0.0)
+            way = ([req.steps] + [w for w in req.alternatives if w])[r["method"] - 1]
             look = {"changed": 0, "final": r["final"], "algebra_upgrades": r["algebra_upgrades"], "carried_steps": r["carried_steps"],
-                    "final_answer": final_evidence(req, r["student_finals"], r["final"])}
+                    "final_answer": final_evidence(req, r["student_finals"], r["final"], way),
+                    "method": r["method"], "methods": r["methods"]}
             return await finish(req, bucket, r["steps"], score, confidence, " | ".join(doubts), r["lines"], look, "rubric")
 
     lines = await extract_student_steps_from_pages(pages) if pages else []
     texts = [l.get("text", "") for l in lines if (l.get("text") or "").strip()]
     confidences = [c for c in (ocr_label_score(l.get("confidence")) for l in lines if (l.get("text") or "").strip()) if c is not None]
     ocr_failed = any(l.get("ocr_error") for l in lines)
-    # Same answer written another way is fully correct (1 = x for x = 1, terms reordered, equivalent or simplified fractions)
-    question = {
-        "max_points": req.max_points,
-        "steps": [{**s.model_dump(), "objective": (s.objective or s.text) + EQUIV_NOTE} for s in req.steps],
-    }
     # A grading error is a hiccup (timeout, busy model), not doubt about the answer: try again
     photo = req.engine == "photo" and bool(pages)
     imgs = [(b, page_media(b), f"Student's answer, page {k + 1}") for k, b in enumerate(pages)] if photo else None
 
-    async def grade_once():
-        return await grade_single_question(question, texts, req.strictness, ocr_confidences=confidences,
-                                           submitted_pages=len(pages), images=imgs)
+    async def grade_way(way_steps):
+        # Same answer written another way is fully correct (1 = x for x = 1, terms reordered, equivalent or simplified fractions)
+        question = {
+            "max_points": req.max_points,
+            "steps": [{**s.model_dump(), "objective": (s.objective or s.text) + EQUIV_NOTE} for s in way_steps],
+        }
+        out = None
+        for _ in range(3):
+            out = await grade_single_question(question, texts, req.strictness, ocr_confidences=confidences,
+                                              submitted_pages=len(pages), images=imgs)
+            if out.get("success", False):
+                break
+        return out
 
-    res = await grade_once()
-    for _ in range(2):
-        if res.get("success", False):
-            break
-        res = await grade_once()
+    # The page is read once; when the teacher solved the question in several ways, each way is graded on that
+    # reading and the best one is kept, as the rubric engine does in its single call
+    ways = [req.steps] + [w for w in req.alternatives if w]
+    results = [await grade_way(ways[0])]
+    if results[0].get("success", False) and float(results[0].get("score") or 0) < float(req.max_points) - 1e-6:
+        for way in ways[1:]:
+            results.append(await grade_way(way))
+    graded = [k for k, r in enumerate(results) if r.get("success", False)]
+    method = max(graded, key=lambda k: (float(results[k].get("score") or 0), -k)) + 1 if graded else 1
+    res = results[method - 1]
+    if method > 1:
+        req = req.model_copy(update={"steps": ways[method - 1]})  # the second look and the feedback use that way
     if not res.get("success", False) and not ocr_failed:
         # Still failing: tell the bot to retry the paper later instead of handing it to a human
         logger.error(f"grading failed after retries: {res.get('error')}")
@@ -585,13 +668,14 @@ async def grade_pages(req: GradeReq, bucket: list, pages: List[bytes]) -> dict:
         for s in res.get("steps", [])
     ]
     # Second look with the photos at the steps that lost marks: fixes page-reading slips and other valid routes
-    look = {"changed": 0, "final": None}
+    look = {"changed": 0, "final": None, "method": method,
+            "methods": [{"method": k + 1, "score": float(r.get("score") or 0)} for k, r in enumerate(results) if r.get("success", False)]}
     if photo and res.get("success", False) and steps:
         # The final answer by algebra, as in the rubric engine: the share of the teacher's final values the student got
         look["final"] = await photo_final(req, imgs, steps)
         score = max(0.0, min(sum(float(st["awarded"]) for st in steps), float(req.max_points)))
     elif not photo and req.review and not ocr_failed and res.get("success", False) and score < float(req.max_points):
-        look = await second_look(req, pages, steps)
+        look = {**look, **await second_look(req, pages, steps)}
         if look["changed"]:
             score = max(0.0, min(sum(float(st["awarded"]) for st in steps), float(req.max_points)))
     # The page could not be read at all: every step tells the student to send another image
@@ -628,11 +712,12 @@ async def photo_final(req: "GradeReq", imgs: list, steps: list) -> Optional[floa
     return share
 
 
-def final_evidence(req: "GradeReq", student_finals: list, share: Optional[float]) -> Optional[dict]:
+def final_evidence(req: "GradeReq", student_finals: list, share: Optional[float], way=None) -> Optional[dict]:
     """The final answers side by side, for the teacher's review screen. None when the student stated none."""
     if not student_finals:
         return None
-    return {"expected": req.steps[-1].text, "student": [str(v) for v in student_finals][:12], "share": share,
+    steps = way or req.steps
+    return {"expected": steps[-1].text, "student": [str(v) for v in student_finals][:12], "share": share,
             "checked_by_algebra": share is not None}
 
 
@@ -901,6 +986,10 @@ async def finish(req: "GradeReq", bucket: list, steps: list, score: float, confi
         "final_ok": look.get("final"),
         "algebra_upgrades": look.get("algebra_upgrades", 0),
         "carried_steps": look.get("carried_steps", 0),
+        # The teacher's way the marks were given against (1 = steps, 2 = alternatives[0] ...), and each way's score
+        "method": look.get("method", 1),
+        "methods_checked": len(look.get("methods") or [1]),
+        **({"methods": look["methods"]} if len(look.get("methods") or []) > 1 else {}),
         # What a reviewing teacher needs to see at a glance: both final answers and what the algebra made of them
         "final_answer": look.get("final_answer"),
         "engine": engine,
@@ -1146,7 +1235,7 @@ async def bot_rubric_check(req: RubricCheckReq):
 class ObjectionReq(BaseModel):
     max_points: float = Field(gt=0, le=1000)
     steps: List[Step] = Field(min_length=1, max_length=MAX_STEPS)  # the teacher's marking steps
-    images: List[str] = Field(min_length=1, max_length=MAX_IMAGES)  # base64 pages of the student's answer
+    images: List[str] = Field(min_length=1, max_length=MAX_ANSWER_ENTRIES)  # base64 pages of the student's answer
     old_score: float = Field(ge=0)
     old_steps: str = Field(default="", max_length=20_000)  # JSON of the AI's earlier per-step marking
     objection: str = Field(min_length=1, max_length=2000)  # what the student wrote
@@ -1184,7 +1273,12 @@ LANGUAGE_NAME = {"ar": "Arabic", "en": "English"}
 @app.post("/bot/objection", dependencies=[Depends(check_key)])
 async def bot_objection(req: ObjectionReq):
     bucket = start_usage()
-    pages = decode_images(req.images)
+    # As in grading, a file that is not a usable image is left out rather than failing the objection
+    pages, notices = decode_answer_pages(req.images)
+    if not pages:
+        # Nothing to look at: the mark stands, and the student is told why
+        return {"accept": False, "new_score": round(float(req.old_score), 1),
+                "reason": ANALYSIS_FAILED[req.lang], "notices": notices, "usage": usage_report(bucket)}
     rubric = "\n".join(f"{i + 1}. [{s.points}] {s.text}" for i, s in enumerate(req.steps))
     objection = req.objection.replace("OBJECTION>>>", "").replace("<<<OBJECTION", "")
     out = await complete_vision_json(
@@ -1197,7 +1291,7 @@ async def bot_objection(req: ObjectionReq):
     new = max(0.0, min(float(out.get("new_score") or 0), float(req.max_points)))
     accept = bool(out.get("accept")) and abs(new - req.old_score) >= 0.5
     return {"accept": accept, "new_score": round(new if accept else req.old_score, 1),
-            "reason": tex_to_plain(str(out.get("reason") or "").strip()), "usage": usage_report(bucket)}
+            "reason": tex_to_plain(str(out.get("reason") or "").strip()), "notices": notices, "usage": usage_report(bucket)}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
