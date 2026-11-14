@@ -77,7 +77,8 @@ test("رفع الملزمة لصاحب البوت بس، والبحث: المح�
   // موجود بالمحاضرة اللي اختارها
   reply = (b) => (b.mode === "find" && b.context.includes("8i") ? { found: true, solution: "$x+yi=\\sqrt{8i}$" } : { found: false, solution: "" });
   ai.length = 0;
-  const a1 = await qa.qaAnswer({ text: "جد جذور 8i" }, 1, await tidOf("الجذور التربيعية"), 1, "ar");
+  // «وتحقق» طلب زايد مو بسؤال الملزمة: مو نفس السؤال بالضبط، فيروح للذكاء يدور
+  const a1 = await qa.qaAnswer({ text: "جد جذور 8i وتحقق" }, 1, await tidOf("الجذور التربيعية"), 1, "ar");
   assert.deepEqual(a1, { source: "lecture", solution: "$x+yi=\\sqrt{8i}$" });
   assert.equal(ai.length, 1);
   assert.ok(!ai[0].body.context.includes("اوسع مجال"));   // موضوع ثاني ما يدخل
@@ -140,9 +141,108 @@ test("أسئلة الامتحانات: تنقرا مرة وحدة كتابة و�
   const tid = await tidOf("الجذور التربيعية");
   assert.equal((await qa.examQas(tid)).length, 1);
   // ما بالمحاضرة، بس جاي بالامتحان: يلگاه بالبحث بالموضوع
+  // نفس سؤال الامتحان: حله المحفوظ نفسه ببلاش، بلا طلب
+  ai.length = 0;
   const a = await qa.qaAnswer({ text: "جذور 5-12i" }, 1, tid, 1, "ar");
-  assert.deepEqual(a, { source: "topic", solution: "حل الامتحان" });
+  assert.deepEqual(a, { source: "topic", solution: "x^{2}-y^{2}=5" });
+  assert.equal(ai.length, 0);
+  // بطلب ثاني («اثبت»): يدور بيه الذكاء
+  const a2 = await qa.qaAnswer({ text: "اثبت ان 5-12i عدد مركب" }, 1, tid, 1, "ar");
+  assert.deepEqual(a2, { source: "topic", solution: "حل الامتحان" });
   // مرة ثانية ما يعيد قراءته
   assert.match(((await qa.qaAction({ initData: sign(1), action: "exams" })) as any).notice, /كل أسئلة الامتحانات انقرت/);
   assert.equal(((await qa.qaAction({ initData: sign(1), action: "list" })) as any).exams.done, 1);
+});
+
+// ---------- الجواب المجاني من ملزمة الأستاذ: نص حقيقي من ملازم Word (2027) مثل ما ينقرا
+const REAL = JSON.parse(fs.readFileSync(new URL("./fixtures/qa-booklets.json", import.meta.url), "utf8")) as Record<string, string[]>;
+const partsOf = (lines: string[]) => qa.splitLectures(lines).map((l) => ({ kind: "main", l }));
+
+test("الملزمة الحقيقية تتقسم أسئلة: كل سؤال ويا حله، والواجبات بلا حل ما تدخل، وخطوات الحل «1) 2)» مو فروع", () => {
+  const lec = qa.splitLectures(REAL.ar2);
+  const l1 = qa.bookQuestions(lec[0].text, 1);
+  const q8 = l1.find((b) => b.q.includes("y^{2} = -8x"))!;
+  assert.ok(q8.sol.some((x) => x.includes("p=2")));
+  assert.ok(!q8.sol.some((x) => x.includes("3x^{2}-24y")));   // حل السؤال اللي بعده ما يدخل
+  // سؤالين ورا بعض وبعدين حلهم: ثنينهم ياخذون الحل ويا السؤالين
+  const st = l1.filter((b) => b.stack);
+  assert.equal(st.length, 2);
+  assert.ok(st[0].stack!.some((x) => x.includes("(0,5)")) && st[0].stack!.some((x) => x.includes("y=7")));
+  // واجبات المحاضرة الثانية (س 1، س 2، س 3 بلا حل) ما تطلع
+  const l2 = qa.bookQuestions(lec[1].text, 2);
+  assert.ok(l2.length >= 4);
+  assert.ok(!l2.some((b) => /^س\s*\d/.test(b.q)));
+  // الفصل الثالث: «1) بما إن الدالة…» خطوة بالحل، مو فرع جديد
+  const r3 = qa.bookQuestions(qa.splitLectures(REAL.ar3)[0].text, 1);
+  assert.equal(r3.length, 2);   // الفرع 1 والفرع 2، مو كل خطوة فرع
+  assert.ok(r3[0].sol.some((x) => x.includes("f '(x)= 3x^{2} - 9")) && !r3[0].sol.some((x) => x.includes("4x(x^{2} – 3)")));
+  // الفصل الأول: فروع «1/ 2/ 3/» تحت «ضع بالصيغة العادية كل مما يأتي»، كل فرع ويا حله
+  const c1 = qa.bookQuestions(qa.splitLectures(REAL.ar1)[0].text, 2);
+  assert.ok(c1.length >= 5);
+  assert.ok(c1[0].sol.some((x) => x.includes("7-13i-9-4i")) && !c1[0].sol.some((x) => x.includes("(2-7i)")));
+});
+
+test("نفس سؤال الملزمة بالضبط: حل الأستاذ نفسه. نفس الأرقام بطلب ثاني ما يطابق", () => {
+  const ar = partsOf(REAL.ar2), T = ["القطع المكافئ", "Parabola"];
+  const hit = qa.exactMatch("جد البؤرة ومعادلة الدليل للقطع المكافئ y²=-8x", ar, T);
+  assert.ok(hit && hit.lecture === 1 && hit.solution.includes("p=2") && !hit.solution.includes("28y"));
+  assert.equal(qa.exactMatch("ارسم القطع المكافئ y^2=-8x", ar, T), null);   // ارسم غير جد
+  assert.equal(qa.exactMatch("اثبت ان القطع المكافئ y^2=-8x بؤرته على السينات", ar, T), null);
+  assert.equal(qa.exactMatch("جد معادلة القطع المكافئ الذي رأسه (3,0)", ar, T), null);   // بالملزمة (3,0) هي البؤرة
+  assert.ok(qa.exactMatch("جد معادلة القطع المكافئ ومعادلة المحور والرأس اذا كانت البؤرة (3,0)", ar, T)?.solution.includes("12x"));
+  assert.equal(qa.exactMatch("جد البؤرة ومعادلة الدليل للقطع المكافئ y^2=-12x", ar, T), null);   // أرقام ثانية
+  // سؤال من سؤالين ورا بعض: يطلع وياه السؤال الثاني حتى يعرف أي حل حله
+  assert.match(qa.exactMatch("جد معادلة القطع المكافئ اذا علمت ان بؤرته (0,5) ورأسه نقطة الأصل", ar, T)!.solution, /^📌[^\n]*\n❓[^\n]*\(0,5\)/);
+  // الملزمة الإنگليزية
+  assert.ok(qa.exactMatch("Find the focus and the directrix of the parabola y^2 = -8x", partsOf(REAL.en2), T)?.solution.includes("p = 2"));
+  // فرع من «كل مما يأتي» بالفصل الأول
+  assert.ok(qa.exactMatch("ضع بالصيغة العادية (7-13i)-(9+4i)", partsOf(REAL.ar1), ["قبل x & y"])?.solution.includes("7-13i-9-4i"));
+  // الرياضيات بأي شكل كتبها الطالب
+  assert.equal(qa.exactKey(String.raw`$y=\frac{1}{8}x$`), qa.exactKey("y = 1/8 x"));
+  assert.equal(qa.exactKey(String.raw`(\sqrt{3},0)`), qa.exactKey("(√3, 0)"));
+  assert.equal(qa.exactKey("x^{2 }= +4py"), qa.exactKey("x²=4py"));
+});
+
+test("حل الملزمة ينظف حتى ينكتب زين: الرياضيات بين $ $، الكلام يطلع من المعادلة، والجدول نقاط", () => {
+  const ar = partsOf(REAL.ar2), T = ["القطع المكافئ"];
+  // كلام عربي داخل معادلة Word («م.ق ال معادلة») يطلع برا وبترتيبه
+  const def = qa.exactMatch("باستخدام التعريف جد معادلة القطع المكافئ الذي بؤرته (7,0) والراس في نقطة الأصل", ar, T)!.solution;
+  assert.ok(def.includes("معادلة ال ق.م") && def.includes("بتربيع الطرفين") && !def.includes("م.ق ال"));
+  // جدول الرسم: نقاط، مو أرقام متفرقة
+  const sk = qa.exactMatch("ارسم ال ق.م الذي معادلته y^{2}=4x", ar, T)!.solution;
+  assert.ok(sk.includes(String.raw`النقاط من الجدول: $(0,0)\quad (1,2)\quad (1,-2)$`));
+  assert.ok(!sk.split("\n").includes("0"));
+  // سطر بيه كلام: ولا رمز LaTeX يبقى برا $ $
+  for (const p of ar) for (const b of qa.bookQuestions(p.l.text, p.l.lecture)) {
+    for (const line of qa.cleanSolution(b.sol).split("\n")) {
+      if (/[؀-ۿ]/.test(line)) assert.ok(!/\^\{|\\frac|\\sqrt/.test(line.replace(/\$[^$]*\$/g, "")), line);
+    }
+  }
+  assert.equal(qa.cleanLine("x^{2}=8y صادي م + د - ب +"), "$x^{2}=8y$ صادي م + د - ب +");
+  assert.equal(qa.cleanLine(String.raw`4p=8 → p= $\frac{8}{4}$ → p=2`), String.raw`4p=8 → p= \frac{8}{4} → p=2`);   // كله رياضيات: ينكتب معادلة
+  assert.equal(qa.cleanLine(String.raw`$\begin{matrix}- \\ +\end{matrix} \sqrt{2}$`), String.raw`\mp \sqrt{2}`);
+});
+
+test("سؤال الطالب نفس سؤال الملزمة: الجواب بلا أي طلب للذكاء وينحسب ببلاش. سؤال ثاني يمشي مثل قبل", async () => {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const book = docx(`<w:document ${W}><w:body>${REAL.ar2.map((l) => p(esc(l))).join("")}</w:body></w:document>`);
+  const f = new FormData(); f.set("initData", sign(1)); f.set("action", "upload"); f.set("chapter", "2"); f.set("lang", "ar"); f.set("kind", "main"); f.set("file", new File([book], "ch2.docx"));
+  await qa.qaAction(f);
+  const tid = await tidOf("القطع المكافئ");
+  const before: any = (await qa.qaAction({ initData: sign(1), action: "list" })).qa;
+  ai.length = 0;
+  reply = () => ({ found: false, solution: "" });
+  const a = await qa.qaAnswer({ text: "جد البؤرة ومعادلة الدليل للقطع المكافئ y^2=-8x" }, 2, tid, 1, "ar");
+  assert.equal(ai.length, 0);
+  assert.equal(a!.source, "lecture");
+  assert.ok(a!.solution.includes("p=2"));
+  assert.equal((await qa.qaAnswer({ text: "جد البؤرة ومعادلة الدليل للقطع المكافئ y^2=-8x" }, 2, tid, 2, "ar"))!.solution, a!.solution);   // المحفوظ
+  // نفس الأرقام بس «ارسم»: يروح للذكاء مثل قبل
+  reply = (b) => (b.mode === "solve" ? { found: true, solution: "رسم" } : { found: false, solution: "" });
+  const s = await qa.qaAnswer({ text: "ارسم القطع المكافئ y^2=-8x" }, 2, tid, 1, "ar");
+  assert.ok(ai.length > 0);
+  assert.equal(s!.source, "ai");
+  const after: any = (await qa.qaAction({ initData: sign(1), action: "list" })).qa;
+  assert.equal(after.free - before.free, 1);
+  assert.equal(after.fromBook - before.fromBook, 1);
 });

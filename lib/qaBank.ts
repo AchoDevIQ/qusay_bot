@@ -15,7 +15,8 @@ export const QA_KIND: Record<QaKind, string> = { main: "الملزمة", extra: 
 type Lecture = { topic: string; lecture: number; text: string };
 /** tid: موضوع البوت اللي ينربط بيه موضوع الملزمة (الأسماء تختلف: «ديموافر» = «الصيغة القطبية وديموافر»). null يعني ما ينربط */
 export type QaBook = { id: string; chapter: number; lang: "ar" | "en"; kind: QaKind; name: string; topics: { topic: string; lectures: number[]; tid?: number | null }[]; chars: number; created: string };
-export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; inTok: number; outTok: number };
+/** free: من fromBook، اللي انطى حل الملزمة نفسه بلا ذكاء (نفس السؤال بالضبط) */
+export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; free?: number; inTok: number; outTok: number };
 const BOOKS = "qa_books", CFG = "qa_cfg";
 const DEF: QaCfg = { on: false, direct: true, asked: 0, fromBook: 0, solved: 0, inTok: 0, outTok: 0 };
 // Haiku 5.5: 0.10$ داخل و0.50$ طالع لكل مليون توكن
@@ -309,12 +310,18 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
     const hit = JSON.parse((await kvGet(ck)) ?? "null");
     if (hit?.solution) { const c = await qaCfg(); c.cached = (c.cached ?? 0) + 1; await saveCfg(c); return { source: hit.source, solution: hit.solution }; }
   } catch { /* نكمل */ }
-  // ٣. البوت نفسه يدور بالملزمة (ببلاش) على أقرب الأسئلة، ويدز للذكاء هذني بس، مو المحاضرة والموضوع كله
+  const save = async (r: QaResult) => { await kvSet(ck, JSON.stringify(r)); return r; };
+  // ٣. نفس سؤال الملزمة بالضبط (نفس الرياضيات ونفس الطلب، وسؤال واحد بس يطابق): حل الأستاذ نفسه ببلاش، بلا ذكاء
+  const ex = exactMatch(text, mine, [...names, ...new Set(mine.map((x) => x.l.topic))]);
+  if (ex) {
+    const c = await qaCfg(); c.free = (c.free ?? 0) + 1; await saveCfg(c);
+    return save(await done(ex.lecture === lecture && lecture ? "lecture" : "topic", ex.solution));
+  }
+  // ٤. البوت نفسه يدور بالملزمة (ببلاش) على أقرب الأسئلة، ويدز للذكاء هذني بس، مو المحاضرة والموضوع كله
   const blocks = splitBlocks(mine);
   const ranked = blocks.map((b) => ({ b, s: blockScore(text, b, lecture) })).sort((x, y) => y.s - x.s);
   const top = ranked.slice(0, TOP_BLOCKS).filter((x) => x.s > 0);
   const ask: QaAsk = { text };
-  const save = async (r: QaResult) => { await kvSet(ck, JSON.stringify(r)); return r; };
   const close = top.length && top[0].s >= CLOSE;
   if (close) {
     const r = await call("find", blocksCtx(top.map((x) => x.b)), ask, lang);
@@ -327,7 +334,7 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
       if (r.found && r.solution) return save(await done("lecture", r.solution));
     }
   }
-  // ٤. ما موجود: يحله على طريقة الأستاذ، والأمثلة أقرب أسئلة محلولة (أو محاضرته إذا ماكو قريب)
+  // ٥. ما موجود: يحله على طريقة الأستاذ، والأمثلة أقرب أسئلة محلولة (أو محاضرته إذا ماكو قريب)
   const examples = top.length ? blocksCtx(top.map((x) => x.b)) : joinCtx(lecture ? mine.filter((x) => x.l.lecture === lecture) : mine, LECTURE_MAX);
   const s = await call("solve", examples || joinCtx(mine, LECTURE_MAX), ask, lang);
   return s.solution ? save(await done("ai", s.solution)) : null;
@@ -365,6 +372,224 @@ export function blockScore(question: string, b: { head: string; lecture: number 
   for (const x of a) if (h.has(x)) hit++;
   if (!hit) return 0;
   return hit / a.size + (lecture && b.lecture === lecture ? 0.05 : 0);
+}
+// ---------- الجواب المجاني: سؤال الطالب سؤال محلول بالملزمة. الملزمة تتقسم أسئلة (كل سؤال يبدي بـ «جد/ارسم/اثبت…»،
+// أو فرع «1/ …» تحت «جد كل مما يأتي»)، وحل كل سؤال الأسطر اللي بعده لحد السؤال اللي بعده.
+// يطابق إذا: نفس الرياضيات، ونفس الطلب (جد غير ارسم غير اثبت)، والكلمة اللي گبل الأرقام نفسها («بؤرته (3,0)» غير «رأسه (3,0)»)
+const AR = /[؀-ۿ]/;
+const FN = new Set(["sin", "cos", "tan", "sec", "csc", "cot", "log", "ln", "lim", "sqrt", "frac", "pi", "theta", "omega", "infty"]);
+const FILL = new Set(["اذا", "علمت", "علم", "علما", "ان", "الذي", "التي", "هي", "هو", "في", "من", "على", "كل", "مما", "ياتي", "الي", "الى", "انه", "عندما", "حيث", "ذي", "ذات", "تكون", "يكون", "كان", "لها", "له", "عن", "بان", "the", "of", "an", "is", "are", "if", "that", "whose", "which", "knowing", "given", "its", "and", "at", "in", "with", "for", "to", "by", "from", "be", "it", "this", "has", "have", "then", "following", "each"]);
+const VERB: Record<string, string> = { جد: "find", اوجد: "find", احسب: "find", find: "find", calculate: "find", evaluate: "find", determine: "find", ارسم: "sketch", sketch: "sketch", draw: "sketch", اثبت: "prove", برهن: "prove", بين: "prove", prove: "prove", show: "prove", verify: "prove", تحقق: "prove", حل: "solve", solve: "solve", اكتب: "write", ضع: "write", write: "write", put: "write", express: "write" };
+const isWord = (t: string) => /^[A-Za-z']{3,}[.,:;?!]*$/.test(t) && !FN.has(t.replace(/[^A-Za-z]/g, "").toLowerCase());
+const stem = (w: string) => w.replace(/^(لل|بال|فال|كال)(?=\S{3,})/, "");
+/** كلمات السؤال بدون رياضيات وبدون كلمات الموضوع («القطع المكافئ»، «ق.م») والكلمات الفاضية */
+function qWords(s: string, topic: Set<string>) {
+  const plain = s.replace(/\$[^$]*\$/g, " ").split(/\s+/).flatMap((t) => t.split(/([؀-ۿ]+)/)).filter((t) => AR.test(t) || isWord(t)).join(" ");
+  return norm(plain).map(stem).filter((w) => w.length >= 3 && !FILL.has(w) && !topic.has(w));
+}
+/** الطلب: أول فعل بأول 4 كلمات (جد، ارسم، اثبت…). "" إذا ماكو */
+function verbOf(s: string) {
+  const w = norm(s.replace(/^\s*(مثال|example|ex|س|سؤال|q|question)?\s*\d*\s*[:/：)\-]*\s*/i, "").replace(/^(باستخدام التعريف|(by )?using the definition)[.,]?\s*/i, "")).slice(0, 4);
+  for (const x of w) if (VERB[x]) return VERB[x];
+  return "";
+}
+/** الرياضيات بشكل واحد للمقارنة: \frac{1}{8} = 1/8، √3 = \sqrt{3}، ² = ^{2}، المسافات والأقواس الزايدة تنشال */
+export function exactKey(m: string) {
+  let s = m.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[–—−]/g, "-").replace(/×|\\times|\\cdot/g, "*").replace(/÷/g, "/")
+    .replace(/²/g, "^{2}").replace(/³/g, "^{3}").replace(/\\(left|right|quad|,|;|!)/g, "").replace(/\$/g, "");
+  for (let i = 0; i < 4; i++) s = s.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "($1)/($2)").replace(/\\sqrt\s*\{([^{}]*)\}/g, "sqrt($1)");
+  s = s.replace(/√/g, "sqrt").replace(/\\/g, "").replace(/[{}\s]/g, "").toLowerCase();
+  for (let i = 0; i < 3; i++) s = s.replace(/\(([a-z0-9.]+)\)(?=[/^])/g, "$1").replace(/(?<=[/]|sqrt)\(([a-z0-9.]+)\)/g, "$1");
+  return s.replace(/([=(,])\+/g, "$1").replace(/^\+/, "").replace(/[.,:;…]+$/, "");
+}
+/** قطع الرياضيات بالسؤال بالترتيب، وكل قطعة ويا الكلمة اللي گبلها («بؤرته (0,5)») */
+export function mathPieces(s: string, topic: Set<string> = new Set()) {
+  const out: { key: string; before: string }[] = [];
+  let run: string[] = [], last = "";
+  const flush = () => { const m = exactKey(run.join("")); run = []; if (/\d/.test(m) || /[a-z]=/.test(m)) out.push({ key: m, before: last }); };
+  for (const t of s.match(/\$[^$]*\$|[^\s$]+/g) ?? []) {
+    if (t.startsWith("$")) { run.push(t); continue; }
+    for (const part of t.split(/([؀-ۿ][؀-ۿ.]*)/).filter(Boolean)) {
+      if (AR.test(part) || isWord(part)) { if (run.length) flush(); const w = qWords(part, topic).at(-1); if (w) last = w; }
+      else if (/[0-9A-Za-z=^_\\(){}]/.test(part)) run.push(part);
+      else if (run.length && /^[+\-*/=,()–—−×]+$/.test(part)) run.push(part);
+      else if (run.length) flush();
+    }
+  }
+  if (run.length) flush();
+  return out;
+}
+const VERB_LINE = /^\s*(?:(?:مثال|example|ex)\s*\d*\s*[:/：.)\-]?\s*)?(?:(?:باستخدام التعريف|(?:by )?using the definition)[.,]?\s*)?(جد|اوجد|أوجد|ارسم|اثبت|أثبت|برهن|بين|حل|اكتب|ضع|احسب|find|prove|show|sketch|draw|solve|write|calculate|evaluate|determine)(?![\p{L}])/iu;
+const NUM_Q = /^\s*(?:س|سؤال|Q|question)\s*\d+\s*[:/：.)\-]/i;
+const ITEM = /^\s*\(?(\d{1,2})\s*(?:[/)]\s+|[/)](?=\s*[(\[$A-Za-z؀-ۿ]))/;
+const HW = /^\s*\S{0,3}\s*(واجب|homework)/i;
+const SOL_END = /^\s*(شرح|ملاحظ|نلاحظ|استنتاج|قاعد|تعريف|في هذه المحاضر|لا\s?توجد واجبات|note|rule|definition|remember)/i;
+export type BookQ = { q: string; verb: string; text: string; lecture: number; sol: string[]; stack?: string[] };
+/** أسئلة المحاضرة المحلولة: السؤال، طلبه، وأسطر حله. الواجبات (بلا حل) ما تدخل */
+export function bookQuestions(text: string, lecture = 0): BookQ[] {
+  const out: BookQ[] = [];
+  let cur: BookQ | null = null, group: BookQ[] = [], header = "", hw = false, item = 0, first = "";
+  const close = () => {
+    const c = cur as BookQ | null;
+    if (c?.sol.length) for (const g of group) out.push({ ...g, sol: first ? [first, ...c.sol] : c.sol, stack: group.length > 1 ? group.map((x) => x.text) : undefined });
+    cur = null; group = []; first = "";
+  };
+  for (const raw of text.split("\n")) {
+    const l = raw.trim();
+    if (!l) continue;
+    if (HW.test(l)) { close(); hw = true; header = ""; continue; }
+    if (hw) continue;
+    if (VERB_LINE.test(l) || NUM_Q.test(l)) {
+      const q: BookQ = { q: l, verb: verbOf(l), text: l, lecture, sol: [] };
+      if (!mathPieces(l).length ||/:\s*$|مما ي[اأ]تي|التالي|الآتي|الاتي|following/i.test(l) && !ITEM.test(l)) { close(); header = l; item = 0; continue; }
+      // سؤالين ورا بعض وبعدين حلهم: الحل لثنينهم
+      if (cur && !cur.sol.length) { group.push(q); cur = q; cur.sol = []; continue; }
+      close(); header = ""; cur = q; group = [q]; continue;
+    }
+    const it = ITEM.exec(l);
+    // فرع جديد: رقمه اللي بعد الفرع اللي گبله، ويبدي برياضيات (خطوة الحل «1) بما إن…» مو فرع)
+    const rest = it ? l.slice(it[0].length) : "";
+    if (it && header && Number(it[1]) === item + 1 && !AR.test(rest.trim()[0] ?? "") && /\d|=/.test(rest)) {
+      item++;
+      if (/\s\(?\d{1,2}\s*[/)]\s/.test(rest)) { close(); continue; }   // فروع كثيرة بسطر واحد (واجب، بلا حل)
+      close();
+      // سؤال الفرع: رياضياته لحد أول كلمة أو سهم، والطلب من العنوان
+      const pre = /^[^؀-ۿ→⇒]*/.exec(rest)![0].split(/\s+/);
+      const cut = pre.findIndex(isWord);
+      const m = (cut < 0 ? pre : pre.slice(0, cut)).join(" ").trim();
+      // السطر بيه بس السؤال (واجب بلا حل): ينحسب حل بس إذا بعده أسطر
+      const q: BookQ = { q: `${header} ${m}`, verb: verbOf(header), text: `${header}\n${l}`, lecture, sol: [] };
+      cur = q; group = [q];
+      if (rest.trim().length > m.length + 2) q.sol.push(rest); else first = rest;
+      continue;
+    }
+    if (SOL_END.test(l)) { close(); header = ""; continue; }
+    if (cur) cur.sol.push(l);
+  }
+  close();
+  return out.filter((x) => x.sol.length <= 80);
+}
+type Hit = { lecture: number; solution: string; words: string[] };
+/** سؤال الطالب نفس سؤال محلول بالملزمة؟ يرجع حله (منظف) أو null. إذا أكثر من سؤال يطابق بحلول مختلفة وماكو واحد أقرب: null */
+export function exactMatch(question: string, parts: { kind: string; l: { lecture: number; text: string; topic: string } }[], topicNames: string[]): { lecture: number; solution: string } | null {
+  const topic = new Set(topicNames.flatMap((n) => norm(n).map(stem)));
+  const sq = mathPieces(question, topic);
+  if (!sq.length) return null;
+  const sv = verbOf(question), sw = qWords(question, topic);
+  const has = (list: string[], w: string) => list.some((x) => like(x, w));
+  const hits: Hit[] = [];
+  for (const p of parts) {
+    const qs: BookQ[] = p.kind === "tests"
+      ? (() => { const m = /^السؤال: ([\s\S]*?)\nالحل:\n([\s\S]*)$/.exec(p.l.text); return m ? [{ q: m[1], verb: verbOf(m[1]), text: m[1], lecture: 0, sol: m[2].split("\n") }] : []; })()
+      : bookQuestions(p.l.text, p.l.lecture);
+    for (const b of qs) {
+      const bq = mathPieces(b.q, topic);
+      if (bq.length !== sq.length || bq.some((x, i) => x.key !== sq[i].key)) continue;
+      if (sv && b.verb && sv !== b.verb) continue;
+      const bw = qWords(b.q, topic);
+      // الكلمة اللي گبل كل رقم: لازم تكون بالسؤال الثاني هم
+      if (bq.some((x, i) => (x.before && sw.length && !has(sw, x.before)) || (sq[i].before && !has(bw, sq[i].before)))) continue;
+      // الطالب طلب شي ما بسؤال الملزمة («ثم ارسم»)
+      if (sw.some((w) => VERB[w] && !has(bw, w))) continue;
+      const head = b.stack ? [p.kind === "tests" ? "" : "📌 هذا السؤال بالملزمة وياه سؤال ثاني، وحلهم ورا بعض:", ...b.stack.map((x) => `❓ ${x}`)] : [];
+      hits.push({ lecture: b.lecture, solution: cleanSolution([...head, ...b.sol].filter(Boolean)), words: bw });
+    }
+  }
+  const sols = [...new Map(hits.map((h) => [h.solution, h])).values()];
+  if (sols.length === 1) return sols[0];
+  if (!sols.length) return null;
+  // أكثر من حل: الأقرب بالكلام، إذا واحد بس أقرب من الباقي
+  const score = (h: Hit) => { const a = sw.filter((w) => has(h.words, w)).length, b = h.words.filter((w) => has(sw, w)).length; return (a + b) / Math.max(1, sw.length + h.words.length); };
+  const ranked = sols.map((h) => ({ h, s: score(h) })).sort((x, y) => y.s - x.s);
+  return ranked[0].s > ranked[1].s + 0.05 ? ranked[0].h : null;
+}
+
+// ---------- تنظيف حل الملزمة حتى ينكتب زين بصفحة الحل
+/** الكلام العربي اللي انكتب داخل معادلة Word ينگلب ترتيبه («م.ق ال معادلة»): يطلع برا المعادلة ويرجع ترتيبه */
+const flipAr = (s: string) => s.trim().split(/\s+/).reverse().map((w) => (w.includes(".") ? [...w].reverse().join("") : w)).join(" ");
+const MATHY = /[\^_\\]|[A-Za-z0-9)]\s*=|=\s*[-+A-Za-z0-9(]/;
+/** مصفوفة Word (جدول الإشارات «- + / c s»، أو ± فوك بعض) تصير شي ينرسم: \overset، أو \pm */
+function matrixTex(body: string) {
+  const rows = body.split(/\\\\/).map((r) => r.split("&").map((c) => c.trim()).filter(Boolean));
+  if (rows.every((r) => r.length === 1) && rows.length === 2 && rows.every((r) => /^[+-]$/.test(r[0]))) return rows[0][0] === "-" ? "\\mp " : "\\pm ";
+  const line = rows.map((r) => r.join("\\;"));
+  // بدون «;»: صفحة الحل تقسم السطر عليها
+  const rows2 = rows.map((r) => r.join("\\quad "));
+  return rows2.length === 2 ? `\\overset{${rows2[0]}}{${rows2[1]}}` : rows2.join(",\\quad ");
+}
+export function cleanLine(line: string): string {
+  // الحرف العربي الصغير تحت أو فوك (C_{ز}، a_{ن}) يبقى بالمعادلة كتابة: ينحفظ على جنب لحد الآخر
+  const keep: string[] = [];
+  line = line.replace(/[​-‏⁠﻿]/g, "").replace(/\^\{\s*\}|_\{\s*\}/g, "").replace(/\\;/g, "\\,")
+    .replace(/\\begin\{matrix\}([\s\S]*?)\\end\{matrix\}/g, (_, b: string) => matrixTex(b))
+    .replace(/([_^])\s*\{\s*([؀-ۿ][؀-ۿ\s.]*?)\s*\}/g, (_, op: string, a: string) => { keep.push(a.trim()); return `${op}{\\text{@${keep.length - 1}@}}`; });
+  const out = cleanBody(line);
+  // سطر كله رياضيات بس بيه حرف عربي صغير: ينحط كله بين $ $ (صفحة الحل تكتب السطر العربي نص)
+  const wrap = keep.length && !out.includes("$") && !AR.test(out) && !/[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(out.replace(/\\[a-z]+/gi, ""));
+  return (wrap ? `$${out.replace(/→/g, "\\to ")}$` : out).replace(/@(\d+)@/g, (_, k: string) => keep[Number(k)]);
+}
+const EN_PHRASE = /(?:^|[^\\A-Za-z])[A-Za-z]{3,}(?:[\s,.]+[A-Za-z]{2,})+/;
+const EN_SPLIT = /((?:(?<![\\A-Za-z])[A-Za-z]{3,}(?![{(])[\s,.]*){2,})/;
+function cleanBody(line: string): string {
+  // ١. داخل $ $: الكلام العربي يطلع برا
+  let s = line.replace(/\$([^$]*)\$/g, (_, m: string) => {
+    // كلام إنگليزي انكتب داخل المعادلة («$squaring both sides$»): يطلع برا كلام
+    if (!AR.test(m) && EN_PHRASE.test(m)) return m.split(EN_SPLIT).filter((x) => x.trim()).map((x) => (EN_PHRASE.test(x) ? ` ${x.trim()} ` : ` $${x.trim()}$ `)).join("");
+    if (!AR.test(m)) return `$${m.replace(/[–—−]/g, "-")}$`;
+    return m.split(/([؀-ۿ][؀-ۿ\s.،]*)/).filter((x) => x.trim()).map((x) => (AR.test(x) ? ` ${flipAr(x)} ` : ` $${x.trim()}$ `)).join("").replace(/\s+/g, " ").trim();
+  }).replace(/\s+/g, " ").trim();
+  const words = AR.test(s) || /[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(s.replace(/\$[^$]*\$/g, " "));
+  // ٢. سطر كله رياضيات: ينكتب معادلة وحده (بدون $)
+  if (!words) return s.replace(/\$/g, " ").replace(/\s+/g, " ").trim();
+  // ٣. رياضيات بنص الكلام بدون $ (x^{2}=8y): تنحط بين $ $ حتى تنكتب مثل الكتاب
+  return s.split(/(\$[^$]*\$)/).map((seg) => {
+    if (seg.startsWith("$")) return seg;
+    // «بدلy^{2}قيمته»: الكلام والرياضيات لاصگين، ينفصلون
+    const toks = seg.replace(/([؀-ۿ])(?=[A-Za-z0-9\\(])/g, "$1 ").replace(/([A-Za-z0-9})])(?=[؀-ۿ])/g, "$1 ").split(/(\s+)/);
+    const out: string[] = [];
+    let run: string[] = [];
+    const flush = () => {
+      if (!run.length) return;
+      const m = run.join("").trim();
+      out.push(MATHY.test(m) ? ` $${m.replace(/→/g, "\\to ").replace(/[–—−]/g, "-")}$ ` : run.join(""));
+      run = [];
+    };
+    for (const t of toks) {
+      const math = /^\s+$/.test(t) ? run.length > 0 : !AR.test(t) && !isWord(t) && /[0-9A-Za-z=^_\\(){}+\-→]/.test(t);
+      if (math) run.push(t); else { flush(); out.push(t); }
+    }
+    flush();
+    return out.join("");
+  }).join("").replace(/\$\s*\$/g, " ").replace(/\s+/g, " ").trim();   // «$a$ $b$» ورا بعض: معادلة وحدة
+}
+/** الحل كله: الجدول يصير نقاط، وأسماء الرسم (أسطر قصيرة كثيرة ورا بعض) تنجمع بسطر واحد */
+export function cleanSolution(lines: string[]): string {
+  const out: string[] = [];
+  // اسم على الرسم: سطر قصير مو خطوة حل (ما بيه أس ولا كسر) ومو عنوان الجدول
+  const short = (l: string) => l.length <= 14 && !/[؀-ۿ]{4,}\s+[؀-ۿ]{3,}/.test(l) && !/[\^_\\]/.test(l) && !/^(الجدول|table)/i.test(l);
+  const cell = (l: string) => /^[\s$\\a-z{}0-9+\-–−.,()]*\d[\s$\\a-z{}0-9+\-–−.,()]*$/i.test(l) && l.length <= 16;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (!l || /^[.…،,_\s-]+$/.test(l)) continue;   // نقاط، وسطور فارغة «_ _ _» للكتابة
+    if (/^(الجدول|table)\s*:?$/i.test(l)) {
+      const cells: string[] = [];
+      while (i + 1 < lines.length && cell(lines[i + 1].trim())) cells.push(lines[++i].trim().replace(/\$/g, "").replace(/\s+/g, ""));
+      if (cells.length >= 2 && cells.length % 2 === 0) {
+        // جدول Word بالعربي ينقرا من اليمين: y بعدين x
+        const rtl = lines.some((x) => AR.test(x));
+        const pts = [];
+        for (let k = 0; k < cells.length; k += 2) pts.push(rtl ? `(${cells[k + 1]},${cells[k]})` : `(${cells[k]},${cells[k + 1]})`);
+        out.push(`${rtl ? "النقاط من الجدول" : "Table points"}: $${pts.join("\\quad ")}$`);
+      } else if (cells.length) out.push(`${l}: ${cells.join("  ·  ")}`);
+      continue;
+    }
+    // أسطر قصيرة كثيرة ورا بعض (أسماء الرسم): سطر واحد
+    let j = i;
+    while (j < lines.length && short(lines[j].trim())) j++;
+    if (j - i >= 4) { out.push(lines.slice(i, j).map((x) => cleanLine(x.trim())).filter(Boolean).map((x) => (AR.test(x) || x.includes("$") ? x : `$${x}$`)).join("  ·  ")); i = j - 1; continue; }
+    out.push(cleanLine(l));
+  }
+  return out.filter(Boolean).join("\n");
 }
 function blocksCtx(list: Block[]) {
   return list.map((b) => b.kind === "tests" ? `### أسئلة الامتحانات — ${b.topic}\n${b.text}` : `### ${QA_KIND[b.kind as QaKind]} — ${b.topic} المحاضرة ${b.lecture}\n${b.text}`).join("\n\n");
@@ -404,7 +629,7 @@ async function pageData() {
   const list = (await qaBooks()).sort((a, b) => a.chapter - b.chapter || a.lang.localeCompare(b.lang) || a.kind.localeCompare(b.kind));
   const botTopics: Record<number, { id: number; ar: string }[]> = {};
   for (const n of new Set(list.map((b) => b.chapter))) botTopics[n] = (await chapterTopics(n)).map((t) => ({ id: t.id, ar: t.ar }));
-  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, linked: aiLinked(), asked: cfg.asked, fromBook: cfg.fromBook, solved: cfg.solved, cost, books: list, botTopics } };
+  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, linked: aiLinked(), asked: cfg.asked, fromBook: cfg.fromBook, free: cfg.free ?? 0, solved: cfg.solved, cost, books: list, botTopics } };
 }
 const DOCX_MAX = 60 * 1024 * 1024;
 export async function qaAction(raw: Row | FormData) {

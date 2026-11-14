@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Book = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; topics: { topic: string; lectures: number[]; tid?: number | null }[]; chars: number; created: string };
-type Data = { exams?: { left: number; done: number; total: number; failed: string[] }; qa: { on: boolean; direct: boolean; linked: boolean; asked: number; fromBook: number; solved: number; cost: number; books: Book[]; botTopics: Record<number, { id: number; ar: string }[]> }; notice: string };
+type Data = { exams?: { left: number; done: number; total: number; failed: string[] }; qa: { on: boolean; direct: boolean; linked: boolean; asked: number; fromBook: number; free?: number; solved: number; cost: number; books: Book[]; botTopics: Record<number, { id: number; ar: string }[]> }; notice: string };
 const KIND: Record<Book["kind"], string> = { main: "الملزمة", extra: "الاثرائيات", exams: "الوزاريات" };
 
 export default function QaCard() {
@@ -26,7 +26,7 @@ export default function QaCard() {
       <div className="card">
         <h2>📗 الأسئلة العلمية من ملازم Word (كتابة)</h2>
         <div className="form">
-          <div className="exhint">الطالب يختار الفصل والموضوع والمحاضرة ويسأل. البوت يدور بالمحاضرة، وإذا ما لگاه يدور بالموضوع بس. إذا لگاه يدزله حلك نفسه، وإذا ما لگاه نظام الذكاء يحله على طريقتك. الحل يوصل كتابة، والرياضيات مكتوبة مثل الكتاب.</div>
+          <div className="exhint">الطالب يختار الفصل والموضوع والمحاضرة ويسأل. إذا سؤاله نفس سؤال محلول بملزمتك (نفس الأرقام ونفس الطلب)، يدزله حلك نفسه ببلاش بلا ذكاء. وإلا البوت يدور بالمحاضرة، وإذا ما لگاه يدور بالموضوع بس. إذا لگاه يدزله حلك نفسه، وإذا ما لگاه نظام الذكاء يحله على طريقتك. الحل يوصل كتابة، والرياضيات مكتوبة مثل الكتاب.</div>
           {!qa && !error && <div className="empty">جاري التحميل...</div>}
           {error && !qa && <div className="exbad">⚠️ {error}</div>}
           {qa && (
@@ -34,7 +34,7 @@ export default function QaCard() {
               {!qa.linked && <div className="exbad">⚠️ خدمة الذكاء مو مربوطة بالسيرفر.</div>}
               <label className="adcheck adflat"><input type="checkbox" checked={qa.on} disabled={busy} onChange={(e) => void call({ action: "settings", on: e.target.checked })} /><span>شغّل الجواب من ملازم Word</span></label>
               <label className="adcheck adflat"><input type="checkbox" checked={qa.direct} disabled={busy} onChange={(e) => void call({ action: "settings", direct: e.target.checked })} /><span>السؤال اللي ما موجود بالملزمة: الحل على طريقتك يوصل للطالب مباشرة (إذا مطفي: السؤال يوصلك إنت)</span></label>
-              <div className="exhint">انسأل {qa.asked} سؤال: {qa.fromBook} من الملازم، {qa.solved} انحل على طريقتك · الكلفة <b dir="ltr">${qa.cost}</b></div>
+              <div className="exhint">انسأل {qa.asked} سؤال: {qa.fromBook} من الملازم (منها <b>{qa.free ?? 0}</b> ببلاش: نفس سؤالك بالملزمة، حلك نفسه بلا ذكاء)، {qa.solved} انحل على طريقتك · الكلفة <b dir="ltr">${qa.cost}</b></div>
               <div className="exlabel">📝 أسئلة الامتحانات وحلولها</div>
               <div className="exhint">الطالب ممكن يسأل سؤال جاي بامتحان. هذا الزر يقرا كل أسئلة الامتحانات وحلولها مرة وحدة ويحفظها كتابة ويا موضوعها، وبعدها البوت يدور بيها ويا الملزمة. الحل ياخذه من خطوات التصحيح المحفوظة، وإذا ماكو من صورة الحل. إذا أضفت امتحانات جديدة، دوسه مرة ثانية ويقرا الجديدة بس.</div>
               {data?.exams && <div className="exhint">انقرت <b>{data.exams.done}</b> من {data.exams.total || data.exams.done} سؤال{data.exams.left ? ` · ⏳ باقي ${data.exams.left} (كل دقيقة 6)` : ""}</div>}
