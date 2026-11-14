@@ -323,7 +323,7 @@ body.grwide .grtop{padding-left:104px}
 .ntlist{display:flex;flex-direction:column;gap:8px;padding:10px}
 .nt{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:#26303f;color:#fff;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .ntbar{flex:none;display:flex;align-items:center;gap:6px;padding:6px 8px;background:#0f1a2e}
-.ntcolors{justify-content:center}
+.ntcolors{justify-content:center;flex-wrap:wrap;gap:6px}.ntcolors .gk-dot{width:28px;height:28px}
 .nttools{gap:4px}.nttools .gk-ic{flex:1 1 0;min-width:0;max-width:46px;padding-left:0;padding-right:0}.nttools .ntgap{flex:0 0 4px}
 .ntgap{flex:1}
 .nttitle{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:center;font-size:14px}

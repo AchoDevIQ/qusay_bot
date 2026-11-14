@@ -3,11 +3,12 @@
 // الصفحة ترتسم على canvas، فما بيها صورة ينضغط عليها حتى تنحفظ
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deviceId, deviceNow, haptic, platform } from "../shared";
+import { COLORS } from "../grade/pens";
 
 type Book = { id: number; title: string; chapter: string; pages: number; saved?: number };
 type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
-type Tool = "hand" | "pen" | "mark" | "erase" | "note";
+type Tool = "hand" | "pen" | "mark" | "ruler" | "erase" | "note";
 /** ملاحظة لاصقة على الصفحة: مكانها (من 0 لـ 1) ونصها */
 type Ink = { p: number[]; c?: string };
 type Note = { x: number; y: number; t: string; s?: Ink[]; c?: string; b?: string };
@@ -16,8 +17,9 @@ const NOTE_COLORS: [string, string][] = [["y", "أصفر"], ["p", "وردي"], [
 const NOTE_BGS: [string, string, string][] = [["plain", "▫️", "سادة"], ["lines", "☰", "مسطّرة"], ["grid", "▦", "مربعات"], ["dots", "⁘", "نقاط"]];
 const NOTE_INKS = ["#1e3a8a", "#111111", "#e53935", "#1f9d55", "#8e24aa"];
 
-const PENS = ["#111111", "#1e5bd8", "#e53935", "#1f9d55", "#8e24aa", "#fb8c00", "#6d4c41", "#00acc1"];
-const MARKS = ["#ffe600", "#7dff6b", "#ff9de2", "#7fd3ff", "#ffb74d", "#c39bff"];
+// كل ألوان صفحة التصحيح، للقلم وللتظليل (التظليل نفس اللون بس شفاف)، ويا 🎨 أي لون ثاني
+const PENS = COLORS;
+const MARKS = ["#ffe600", ...COLORS.filter((c) => c !== "#ffffff")];
 const ZOOMS = [1, 1.5, 2, 3];
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
 
@@ -181,18 +183,18 @@ function Reader({ book, onClose }: { book: Book; onClose: (saved: number) => voi
         <small className={pending ? "ntwait" : "ntok"}>{err ? "⚠️" : pending ? "⏳ يحفظ" : "✅ محفوظ"}</small>
       </div>
       <div className="ntbar nttools">
-        {pick("hand", "👆", "تحريك الصفحة")}{pick("pen", "✏️", "قلم")}{pick("mark", "🖍️", "تظليل")}{pick("erase", "🧽", "ممحاة")}{pick("note", "📝", "ملاحظة")}
+        {pick("hand", "👆", "تحريك الصفحة")}{pick("pen", "✏️", "قلم")}{pick("ruler", "📏", "مسطرة: خط مستقيم")}{pick("mark", "🖍️", "تظليل")}{pick("erase", "🧽", "ممحاة")}{pick("note", "📝", "ملاحظة")}
         <button type="button" className="gk-ic" title="تراجع" aria-label="تراجع" onClick={back}>↶</button>
         <span className="ntgap" />
         <button type="button" className="gk-ic" aria-label="تصغير" disabled={zoom === ZOOMS[0]} onClick={() => zoomTo(ZOOMS[ZOOMS.indexOf(zoom) - 1])}>－</button>
         <button type="button" className="gk-ic" aria-label="تكبير" disabled={zoom === ZOOMS[ZOOMS.length - 1]} onClick={() => zoomTo(ZOOMS[ZOOMS.indexOf(zoom) + 1])}>＋</button>
       </div>
-      {(tool === "pen" || tool === "mark") && (
+      {(tool === "pen" || tool === "ruler" || tool === "mark") && (
         <div className="ntbar ntcolors">
-          {(tool === "pen" ? PENS : MARKS).map((c) => <button type="button" key={c} aria-label="لون" className={"gk-dot" + ((tool === "pen" ? pen : mark) === c ? " on" : "")} style={{ background: c }} onClick={() => (tool === "pen" ? setPen(c) : setMark(c))} />)}
+          {(tool !== "mark" ? PENS : MARKS).map((c) => <button type="button" key={c} aria-label="لون" className={"gk-dot" + ((tool !== "mark" ? pen : mark) === c ? " on" : "")} style={{ background: c }} onClick={() => (tool !== "mark" ? setPen(c) : setMark(c))} />)}
           {/* 🎨 أي لون يريده */}
-          <label className={"gk-dot ntanycolor" + (!(tool === "pen" ? PENS : MARKS).includes(tool === "pen" ? pen : mark) ? " on" : "")} title="لون ثاني" aria-label="اختار أي لون" style={{ background: !(tool === "pen" ? PENS : MARKS).includes(tool === "pen" ? pen : mark) ? (tool === "pen" ? pen : mark) : undefined }}>
-            <input type="color" value={tool === "pen" ? pen : mark} onChange={(e) => (tool === "pen" ? setPen(e.target.value) : setMark(e.target.value))} />
+          <label className={"gk-dot ntanycolor" + (!(tool !== "mark" ? PENS : MARKS).includes(tool !== "mark" ? pen : mark) ? " on" : "")} title="لون ثاني" aria-label="اختار أي لون" style={{ background: !(tool !== "mark" ? PENS : MARKS).includes(tool !== "mark" ? pen : mark) ? (tool !== "mark" ? pen : mark) : undefined }}>
+            <input type="color" value={tool !== "mark" ? pen : mark} onChange={(e) => (tool !== "mark" ? setPen(e.target.value) : setMark(e.target.value))} />
           </label>
         </div>
       )}
@@ -314,13 +316,15 @@ function Sheet({ n, book, top, side, w, h, dpr, tool, color, marks, sending, pla
       notesRef.current = next; setNotes(next); setEditing(next.length - 1); onPlaced();
       return;
     }
-    live.current = tool === "mark" ? { c: color, w: 22, h: 1, p: [x, y] } : { c: color, w: 2.5, p: [x, y] };
+    // 📏 المسطرة: خط مستقيم من مكان الدوسة لمكان الرفع، بلون القلم
+    live.current = tool === "mark" ? { c: color, w: 22, h: 1, p: [x, y] } : tool === "ruler" ? { c: color, w: 2.5, p: [x, y, x, y] } : { c: color, w: 2.5, p: [x, y] };
     redraw(strokesRef.current);
   }
   function move(e: React.PointerEvent) {
     if (tool === "hand" || !(e.buttons & 1)) return;
     const [x, y] = pt(e);
     if (tool === "erase") { erase(x, y); return; }
+    if (live.current && tool === "ruler") { live.current.p.splice(2, 2, x, y); redraw(strokesRef.current); return; }
     if (live.current) { live.current.p.push(x, y); redraw(strokesRef.current); }
   }
   function up() { const s = live.current; if (s) { live.current = null; change([...strokesRef.current, s]); } }
