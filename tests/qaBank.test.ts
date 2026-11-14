@@ -246,3 +246,30 @@ test("سؤال الطالب نفس سؤال الملزمة: الجواب بلا 
   assert.equal(after.free - before.free, 1);
   assert.equal(after.fromBook - before.fromBook, 1);
 });
+
+test("سؤال موجود بـ«📝 الراصد» اللي بملازمي: يوصله «الحل النموذجي» مال صفحته ويا أزرار فيديوهاتها، ببلاش، وبس للمشترك بالفصل", async () => {
+  const R = await import("../lib/rasidQa.ts");
+  const { files } = await import("../lib/files.ts");
+  const F = JSON.parse(fs.readFileSync(new URL("./fixtures/rasid-ch3.json", import.meta.url), "utf8"));
+  // الراصد مرفوع بملازمي (الفهرس محفوظ ويا ملفه، مثل ما ينحسب أول مرة)
+  const book = await insert("note_books", { title: "الراصد الفصل 3 عربي", chapter: "الفصل الثالث", lang: "ar", file: "rasidtest", pages: F.pages.length, kind: "rasid", created: "2026-11-15" });
+  await files().write("notes/rasidtest.qa.json", Buffer.from(JSON.stringify(R.buildIndex(F.pages, F.toc))), "application/json");
+  await insert("note_marks", { book_id: book, page: 2, y: 0.2, label: "س 2", solution: "https://youtu.be/abcdefghijk" });
+  assert.equal(await qa.qaReady(3), true);   // ماكو ملزمة Word للفصل الثالث، بس الراصد موجود
+  const tid = await tidOf("المعدلات الزمنية");
+  ai.length = 0;
+  // صاحب البوت يشوف كل الملازم (مثل الطالب المشترك)
+  const r = await qa.qaAnswer({ text: F.words.q2 }, 3, tid, 0, "ar", 1);
+  assert.equal(ai.length, 0);
+  assert.equal(r!.source, "rasid");
+  assert.deepEqual(r!.rasid, { book, page: 2, topic: "المعدلات الزمنية", q: "س 2" });
+  const id = await qa.saveAnswer(1, F.words.q2, r!, "المعدلات الزمنية");
+  const v: any = await qa.answerView({ token: homeToken(1), id });
+  assert.equal(v.rasid.page, 2);
+  assert.deepEqual(v.rasid.marks.map((m: any) => [m.page, m.solution, m.q]), [[2, true, "س2"]]);
+  // طالب مو مشترك بالفصل: ما يوصله الراصد (حتى من المحفوظ)، وماكو ملزمة Word، فيروح للأستاذ مثل قبل
+  assert.equal(await qa.qaAnswer({ text: F.words.q2 }, 3, tid, 0, "ar", 70), null);
+  // سؤال مو بالراصد: نفس الطريق القديم (هنا ماكو ملزمة Word للفصل الثالث، فيروح للأستاذ)
+  assert.equal(await qa.qaAnswer({ text: "جد معدل تغير حجم كرة نصفها 7 يتمدد بمعدل 9" }, 3, tid, 0, "ar", 1), null);
+  assert.equal(ai.length, 0);
+});

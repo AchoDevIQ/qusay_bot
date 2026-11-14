@@ -548,7 +548,8 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60))
 
 /** يشغل جوّا الملزمة: فيديو الحل من يوتيوب (yt) أو الفيديو التوضيحي من البوت (src)، بنفس الأزرار */
 type Ctl = { play(): void; pause(): void; seek(s: number): void; time(): number; dur(): number; rate(r: number): void };
-function VideoBox({ title, yt, src, onClose, onFail, onChat }: { title: string; yt?: string; src?: string; onClose: () => void; onFail: (code: string) => void; onChat?: () => void }) {
+/** back: كتابة زر السد (صفحة الحل تكتب «ارجع للحل») */
+export function VideoBox({ title, yt, src, onClose, onFail, onChat, back = "✖ سد وارجع للملزمة" }: { title: string; yt?: string; src?: string; onClose: () => void; onFail: (code: string) => void; onChat?: () => void; back?: string }) {
   // إذا ما اشتغل: رمز الخطأ يطلع للطالب وينكتب بسجل البوت، حتى نعرف السبب
   const fail = (code: string) => { setErr(`هذا الفيديو ما يشتغل هسه (رمز ${code}). بلغ الأستاذ`); onFail(code); };
   const box = useRef<HTMLDivElement>(null);
@@ -595,7 +596,7 @@ function VideoBox({ title, yt, src, onClose, onFail, onChat }: { title: string; 
   return (
     <div className="ntyt" ref={box} onContextMenu={(e) => e.preventDefault()}>
       <div className="ntytbar">
-        <button type="button" className="gk-btn" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); }}>✖ سد وارجع للملزمة</button>
+        <button type="button" className="gk-btn" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); }}>{back}</button>
         <b>{title}</b>
       </div>
       <div className="ntytbox">
