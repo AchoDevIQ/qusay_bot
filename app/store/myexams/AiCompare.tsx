@@ -14,7 +14,7 @@ export type AiQ = { n: number; score: number; max: number; note: string; photos:
 
 
 /** خطوة رياضيات: كل سطر (مفصول بـ ;) ينكتب مثل الكتاب. السطر اللي بيه كلام عربي ينكتب نص.
- *  السطر الطويل ما ينقطع بنص المعادلة: ينزل سطر جديد بس عند «⇒» أو «→»، وكل قطعة كاملة بسطرها */
+ *  ما يطلع شريط سحب: السطر الطويل ينزل سطر جديد عند «⇒» أو «→»، والقطعة اللي ما تساع تنكسر عند = و+ و- */
 const ARROW = /\s*(?:=>|⇒|⟹|->|→|\\Rightarrow|\\to)\s*/;
 export function MathText({ text }: { text: string }) {
   const parts = String(text ?? "").split(/\s*;\s*/).filter(Boolean);

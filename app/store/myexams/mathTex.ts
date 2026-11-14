@@ -49,7 +49,22 @@ export function toTex(p: string) {
     .replace(/=>|⇒|⟹/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ").replace(/−/g, "-").replace(/×/g, "\\times ");
   const re = new RegExp(`${OPERAND}\\s*/\\s*${OPERAND}`);
   for (let i = 0; i < 12 && re.test(t); i++) t = t.replace(re, (_, x: string, y: string) => `\\frac{${unwrap(x)}}{${unwrap(y)}}`);
-  return t;
+  return wordsAsText(t);
+}
+
+/** أسماء الدوال والرموز اللي تبقى رياضيات حتى لو حروفها 3 أو أكثر */
+const MATH_WORDS = new Set(["sin", "cos", "tan", "sec", "csc", "cot", "sinh", "cosh", "tanh", "arcsin", "arccos", "arctan", "log", "ln", "exp", "lim", "max", "min", "det", "arg", "mod", "gcd", "lcm", "sqrt", "frac", "pi", "theta", "alpha", "beta", "gamma", "delta", "omega", "infty", "inf"]);
+/** الكلمات الإنجليزية (square root both sides) بالرياضيات: KaTeX يشيل المسافات بين الحروف فتلتصق
+ *  «squarerootbothsides». الكلمة (4 حروف أو أكثر) أو الكلام (كلمتين أو أكثر) يصير \text{...} بمسافاته.
+ *  الحرف الوحيد أو الحرفين (x، dx، xy) واسم الدالة (sin، log) يبقى رياضيات */
+export function wordsAsText(t: string): string {
+  if (/\\(?:text|mathrm|textbf|operatorname)\b/.test(t)) return t;
+  return t.replace(/(?<![\\A-Za-z])[A-Za-z]{3,}(?:\s+[A-Za-z]{3,})*(?![A-Za-z])/g, (m) => {
+    const words = m.split(/\s+/);
+    if (words.every((w) => MATH_WORDS.has(w.toLowerCase()))) return m;
+    if (words.length === 1 && m.length < 4) return m;
+    return `\\text{ ${m} }`;
+  });
 }
 
 export const escapeHtml = (s: string) =>

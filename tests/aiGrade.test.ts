@@ -902,3 +902,35 @@ test("⚖️ شدة التصحيح لكل موضوع: الأصل متساهل (�
   await setChapterScope("c4s", [e4], 0);
   assert.equal(await strictOf(e4), "strict");
 });
+
+test("⚖️ تبديل الشدة ما يعيد قراءة الورقة: نفس القراءة، ودرجات كل شدة منها (المتساهل ما ينزل تحت العادي)", async () => {
+  const { tryGrade, atLevel } = await import("../lib/aiGrade.ts");
+  const e3 = await insert("bank_exams", { slug: "c3l", chapter: "فصل القراءة", ord: 1, title: "قراءة وحدة", minutes: 60, pos: 3 });
+  const v3 = await insert("bank_versions", { exam_id: e3, model: "A", kind: "mandatory", ok: 1 });
+  const l3 = await insert("bank_questions", { version_id: v3, n: 1, max_mark: 8, q_file: "none/q.png", a_files: "[]" });
+  await saveRubric(l3, [{ text: "x^2 = 4", points: 4 }, { text: "x = ±2", points: 4 }], 1);
+  const by = { lenient: { score: 7, method: 1, awarded: [4, 3] }, standard: { score: 6, method: 1, awarded: [4, 2] }, strict: { score: 4, method: 1, awarded: [4, 0] } };
+  aiReply = (route, body) => route === "/bot/grade"
+    ? Response.json({ score: by[body.strictness as "lenient"].score, by_strictness: by, requires_review: false, review_reason: "", student_lines: [], usage: [], methods_checked: 1,
+        steps: [{ status: "correct", awarded: 4, possible: 4 }, { status: "partially_correct", awarded: by[body.strictness as "lenient"].awarded[1], possible: 4 }] })
+    : Response.json({});
+  const img = [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 3, 3])];
+  const before = process.env.AI_CACHE;
+  process.env.AI_CACHE = "1";
+  try {
+    ai.length = 0;
+    const a = await tryGrade(l3, img);                    // موضوع بلا شدة مختارة: متساهل
+    await setChapterScope("c3l", [e3], 0, { [e3]: "strict" });
+    const b = await tryGrade(l3, img);
+    await setChapterScope("c3l", [e3], 0, { [e3]: "standard" });
+    const c = await tryGrade(l3, img);
+    assert.equal(ai.filter((x) => x.route === "/bot/grade").length, 1);   // انقرت مرة وحدة بس
+    assert.deepEqual([a.score, b.score, c.score], [7, 4, 6]);
+    assert.deepEqual([a.steps[1].awarded, b.steps[1].awarded, c.steps[1].awarded], [3, 0, 2]);
+  } finally {
+    if (before === undefined) delete process.env.AI_CACHE; else process.env.AI_CACHE = before;
+  }
+  // نتيجة بلا درجات الشدات (محرك الرسم أو خدمة قديمة) تبقى مثل ما هي
+  const plain = { n: 1, score: 5, max: 8, review: false, reason: "", lines: [], steps: [], level: "standard" as const };
+  assert.equal(atLevel(plain, "strict"), plain);
+});

@@ -62,6 +62,9 @@ def final_mark(points: float, share: float) -> float:
     return min(mark, max(0.0, float(points) - 0.5))
 
 
+LEVELS = ("lenient", "standard", "strict")
+
+
 def share_for(verdict: str, strictness: str = "standard") -> float:
     if verdict in FULL:
         return 1.0
@@ -269,24 +272,37 @@ async def judge(steps, pages: List[bytes], page_media, examples: str = "", stric
         out, by = await ask_model(prompt, JudgeOut, imgs, len(steps))
         if by is None:
             return None
-        result = await mark_way(steps, by, out.student_finals, strictness)
-        return {**result, "method": 1, "methods": [{"method": 1, "score": result["score"]}],
-                "student_finals": list(out.student_finals), "lines": [l for l in out.lines if l.strip()]}
+        fitted, followed = {1: by}, 1
+    else:
+        prompt = (JUDGE_PROMPT.replace("Teacher's solution steps (number, marks, expected result):",
+                                       "Teacher's solution, in more than one way (number, marks, expected result):")
+                  .replace("{rubric}", ways_lines(ways)).replace("{examples}", WAYS_NOTE + examples))
+        out, fitted = await ask_ways(prompt, imgs, [len(w) for w in ways])
+        if fitted is None:
+            return None
+        followed = out.followed if out.followed in fitted else min(fitted)
 
-    prompt = (JUDGE_PROMPT.replace("Teacher's solution steps (number, marks, expected result):",
-                                   "Teacher's solution, in more than one way (number, marks, expected result):")
-              .replace("{rubric}", ways_lines(ways)).replace("{examples}", WAYS_NOTE + examples))
-    out, fitted = await ask_ways(prompt, imgs, [len(w) for w in ways])
-    if fitted is None:
-        return None
-    marked = {}
-    for k, by in fitted.items():
-        marked[k] = await mark_way(ways[k - 1], by, out.student_finals, strictness)
-    followed = out.followed if out.followed in marked else min(marked)
-    best = max(marked, key=lambda k: (round(marked[k]["score"], 6), k == followed, -k))
+    # One reading of the page, marked at every strictness level. The level only changes the share a carried
+    # error earns, so on the same paper lenient >= standard >= strict always holds. The bot keeps this one
+    # reading and takes the marks of the level the teacher picked from by_strictness, instead of asking the
+    # model again per level (a second reading can differ, which made one level look harsher than another).
+    async def at_level(level: str):
+        marked = {}
+        for k, by in fitted.items():
+            marked[k] = await mark_way(ways[k - 1], by, out.student_finals, level)
+        best = max(marked, key=lambda k: (round(marked[k]["score"], 6), k == followed, -k))
+        return marked, best
+
+    asked = strictness if strictness in LEVELS else "standard"
+    levels = dict(zip(LEVELS, await asyncio.gather(*(at_level(level) for level in LEVELS))))
+    marked, best = levels[asked]
+    by_strictness = {level: {"score": round(m[b]["score"], 2), "method": b, "awarded": [r["awarded"] for r in m[b]["steps"]]}
+                     for level, (m, b) in levels.items()}
     return {**marked[best], "method": best,
             "methods": [{"method": k, "score": marked[k]["score"]} for k in sorted(marked)],
-            "followed": followed, "student_finals": list(out.student_finals), "lines": [l for l in out.lines if l.strip()]}
+            **({"followed": followed} if len(ways) > 1 else {}),
+            "student_finals": list(out.student_finals), "lines": [l for l in out.lines if l.strip()],
+            "by_strictness": by_strictness}
 
 
 async def ask_ways(prompt: str, imgs: list, counts: List[int], complete=None):

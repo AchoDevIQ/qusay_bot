@@ -46,3 +46,16 @@ test("خطوة ما تنرسم تطلع رسالة «أرسل صورة ثاني�
   assert.equal(canRender("x = 2 يهمل"), true);          // سطر عربي ينكتب نص
   assert.equal(canRender("\\frac{1}{2"), false);        // ما ينرسم: الصفحة تطلع الرسالة
 });
+
+test("الكلام الإنجليزي بالرياضيات ما يلتصق: «square root both sides» تبقى بمسافاتها، والدوال والحروف تبقى رياضيات", async () => {
+  const { toTex, renderTex, wordsAsText } = await import("../app/store/myexams/mathTex.ts");
+  assert.equal(toTex("square root both sides"), String.raw`\text{ square root both sides }`);
+  assert.match(toTex("x^2 = 4 => square root both sides"), /\\text\{ square root both sides \}/);
+  // KaTeX يكتب المسافات بداخل \text مسافات ثابتة (nbsp): الكلمات مفصولة على الشاشة
+  assert.ok(renderTex("x^2 = 4 => square root both sides")!.replace(/<[^>]+>/g, "").replace(/ /g, " ").includes("square root both sides"));
+  assert.equal(wordsAsText("sin x + cos x = 1"), "sin x + cos x = 1");
+  assert.equal(wordsAsText("dx + xy + abc = 0"), "dx + xy + abc = 0");
+  assert.equal(wordsAsText(String.raw`\sqrt{x} \Rightarrow \frac{1}{2}`), String.raw`\sqrt{x} \Rightarrow \frac{1}{2}`);
+  assert.equal(wordsAsText(String.raw`\text{area} = 4`), String.raw`\text{area} = 4`);
+  assert.equal(wordsAsText("area = 36"), String.raw`\text{ area } = 36`);
+});

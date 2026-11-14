@@ -410,7 +410,12 @@ export type AiQuestion = { n: number; score: number; max: number; review: boolea
   /** طريقة الحل اللي انحسبت بيها الدرجة إذا مو الأولى (2 = الطريقة الثانية بالحل النموذجي) */
   method?: number;
   /** كم طريقة حل قارنت الخدمة بطلب واحد (ما يجي من خدمة قديمة) */
-  ways?: number };
+  ways?: number;
+  /** نفس القراءة مصححة بكل شدة (من الخدمة): الدرجة وطريقة الحل ودرجة كل خطوة. الشدة تختار منها، ما تنعاد القراءة */
+  levels?: Partial<Record<Strictness, Level>>;
+  /** الشدة اللي انحسبت بيها هاي النتيجة */
+  level?: Strictness };
+export type Level = { score: number; method: number; awarded: number[] };
 /** صورة معتمة أو مهزوزة بجواب سؤال: رقم الصورة بالسؤال (من 1) وشنو بيها. ما توگف التصحيح، بس الأستاذ يتبلغ */
 export type PhotoFlag = { page: number; problem: "dark" | "blurred" };
 export const PHOTO_PERM = "aiphoto";
@@ -496,11 +501,10 @@ async function engineVersion(): Promise<string> {
   engineSeen = { at: Date.now(), version };
   return version;
 }
-const cacheKey = (steps: RubricStep[], imgs: Buffer[], version = "", alts: RubricStep[][] = [], strict: Strictness = "standard") => {
+const cacheKey = (steps: RubricStep[], imgs: Buffer[], version = "", alts: RubricStep[][] = []) => {
   const h = createHash("sha256").update(engineTag(ENGINE, version)).update(JSON.stringify(steps));
   if (alts.length) h.update(JSON.stringify(alts));
-  // نفس الورقة بشدة ثانية درجتها تختلف. العادي ما يدخل بالمفتاح حتى النتائج المحفوظة قبل تبقى تشتغل
-  if (strict !== "standard") h.update("strictness:" + strict);
+  // الشدة ما تدخل بالمفتاح: الورقة تنقرا مرة وحدة، وكل شدة تاخذ درجاتها من نفس القراءة (levels)
   for (const b of imgs) h.update(b);
   return `ai_cache_${h.digest("hex").slice(0, 40)}`;
 };
@@ -508,10 +512,11 @@ const cacheKey = (steps: RubricStep[], imgs: Buffer[], version = "", alts: Rubri
 async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], examples: Example[] = [], alts: RubricStep[][] = [], strict: Strictness = "standard"): Promise<AiQuestion> {
   const max = Number(q.max_mark);
   const useCache = process.env.AI_CACHE !== "0";
-  const key = cacheKey(steps, imgs, useCache ? await engineVersion() : "", alts, strict);
+  const key = cacheKey(steps, imgs, useCache ? await engineVersion() : "", alts);
   if (useCache) {
     const hit = await readJson<AiQuestion | null>(key, null);
-    if (hit && typeof hit.score === "number") return { ...hit, n: q.n, usage: [] };
+    // نفس القراءة: تاخذ درجات الشدة المطلوبة منها. نتيجة بلا درجات الشدات تنفع بس لنفس شدتها
+    if (hit && typeof hit.score === "number" && (hit.levels?.[strict] || hit.level === strict)) return { ...atLevel(hit, strict), n: q.n, usage: [] };
   }
   const r = await svc("/bot/grade", {
     max_points: max,
@@ -530,9 +535,30 @@ async function gradeQuestion(q: Row, steps: RubricStep[], imgs: Buffer[], exampl
   // كم طريقة قارنت الخدمة، وأي وحدة انحسبت (خدمة قديمة ما ترجعهم)
   if (typeof r.methods_checked === "number") res.ways = r.methods_checked;
   if (Number(r.method) > 1) res.method = Number(r.method);
+  res.level = strict;
+  const levels = levelsOf(r.by_strictness);
+  if (levels) res.levels = levels;
   // ما نحفظ نتيجة ما متأكد منها: المرة الجاية تنصحح من جديد
   if (useCache && !res.review) await kvSet(key, JSON.stringify({ ...res, usage: [] }));
   return res;
+}
+/** درجات كل شدة من رد الخدمة (by_strictness)، أو undefined إذا الخدمة ما رجعتها (محرك ثاني أو خدمة قديمة) */
+export function levelsOf(raw: unknown): Partial<Record<Strictness, Level>> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: Partial<Record<Strictness, Level>> = {};
+  for (const k of STRICTNESS) {
+    const v = (raw as any)[k];
+    if (v && Number.isFinite(Number(v.score)) && Array.isArray(v.awarded)) out[k] = { score: Number(v.score), method: Number(v.method) || 1, awarded: v.awarded.map(Number) };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+/** النتيجة بدرجات شدة ثانية من نفس القراءة: الدرجة، وطريقة الحل، ودرجة كل خطوة. نفسها إذا ماكو درجات لهاي الشدة */
+export function atLevel(res: AiQuestion, strict: Strictness): AiQuestion {
+  const l = res.levels?.[strict];
+  if (!l || res.level === strict) return res;
+  const steps = l.awarded.length === res.steps.length ? res.steps.map((s, i) => ({ ...s, awarded: l.awarded[i] })) : res.steps;
+  const { method: _m, ...rest } = res;
+  return { ...rest, score: Math.max(0, Math.min(res.max, Math.round(l.score))), steps, ...(l.method > 1 ? { method: l.method } : {}), level: strict };
 }
 /** الطالب يحل بطريقة وحدة من طرق الحل النموذجي. كل الطرق تروح للخدمة بطلب واحد: تقارن جوابه بكل طريقة
  *  وتصحح على الأقرب له (أعلى درجة). method يگول بأي طريقة انحسبت (حتى الاعتراض وعرض الحل يمشون عليها).

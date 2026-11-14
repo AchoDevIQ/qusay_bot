@@ -596,7 +596,7 @@ async def grade_pages(req: GradeReq, bucket: list, pages: List[bytes]) -> dict:
             way = ([req.steps] + [w for w in req.alternatives if w])[r["method"] - 1]
             look = {"changed": 0, "final": r["final"], "algebra_upgrades": r["algebra_upgrades"], "carried_steps": r["carried_steps"],
                     "final_answer": final_evidence(req, r["student_finals"], r["final"], way),
-                    "method": r["method"], "methods": r["methods"]}
+                    "method": r["method"], "methods": r["methods"], "by_strictness": r.get("by_strictness")}
             return await finish(req, bucket, r["steps"], score, confidence, " | ".join(doubts), r["lines"], look, "rubric")
 
     lines = await extract_student_steps_from_pages(pages) if pages else []
@@ -999,6 +999,8 @@ async def finish(req: "GradeReq", bucket: list, steps: list, score: float, confi
         "usage": usage_report(bucket),
         "steps": steps,
         **({"figure": look["figure"]} if look.get("figure") else {}),
+        # The same reading marked at every strictness level (rubric engine): {level: {score, method, awarded[]}}
+        **({"by_strictness": look["by_strictness"]} if look.get("by_strictness") else {}),
     }
 
 
