@@ -26,16 +26,22 @@ export function loose(s: string) {
 
 /** نص كل صفحة بالراصد (بدون الهيدر): الأسطر من فوك لجوة، وكل سطر من اليمين */
 export async function pageTexts(pdf: Buffer): Promise<string[]> {
+  return (await pageRows(pdf, HEADER)).map((rows) => rows.map((r) => r.t).join("\n"));
+}
+/** سطر من الصفحة: y مكانه (0 فوك، 1 جوة)، t كتابته */
+export type Row2 = { y: number; t: string };
+/** أسطر كل صفحة بمكانها. top: نقاط من فوك ما تنقرا (هيدر الراصد) */
+export async function pageRows(pdf: Buffer, top = 0): Promise<Row2[][]> {
   const pdfjs = await pdfjsLib();
   const task = pdfjs.getDocument({ data: new Uint8Array(pdf), verbosity: 0 });
   try {
     const doc = await task.promise;
-    const out: string[] = [];
+    const out: Row2[][] = [];
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const H = page.getViewport({ scale: 1 }).height;
       const items = ((await page.getTextContent()).items as any[]).filter((it) => String(it.str ?? "").trim())
-        .map((it) => ({ s: String(it.str), x: Number(it.transform[4]), w: Number(it.width) || 0, y: H - Number(it.transform[5]), h: Number(it.height) || 10 })).filter((it) => it.y > HEADER);
+        .map((it) => ({ s: String(it.str), x: Number(it.transform[4]), w: Number(it.width) || 0, y: H - Number(it.transform[5]), h: Number(it.height) || 10 })).filter((it) => it.y > top);
       // السطر: الكتابة الكبيرة أول، والصغيرة (الأس ³ والنقاط المنفصلة) تنضم لأقرب سطر تحتها أو بمستواها
       // (حرف منفصل بلا عرض = نقطة أو ياء نهاية انفصلت). الفروع المخفية ممكن تكون 4 نقاط بس فوك الفرع الظاهر، فالسطر ضيق
       const small = (it: (typeof items)[number]) => it.h < 11 || it.w < 0.5;
@@ -53,17 +59,18 @@ export async function pageTexts(pdf: Buffer): Promise<string[]> {
       }
       lines.sort((a, b) => a.y - b.y);
       // فروع جنب بعض بنفس السطر («1 … 2 …»): كل عمود سطر وحده، من الفراغ بينهم
-      const rows: string[] = [];
+      const rows: Row2[] = [];
       for (const l of lines) {
         const sorted = l.it.sort((a, b) => b.x - a.x);
+        const y = Math.round((l.y / H) * 1000) / 1000;
         let cur: string[] = [], left = Infinity;
         for (const it of sorted) {
-          if (cur.length && left - (it.x + it.w) > 28) { rows.push(cur.join(" ")); cur = []; }
+          if (cur.length && left - (it.x + it.w) > 28) { rows.push({ y, t: cur.join(" ") }); cur = []; }
           cur.push(it.s); left = Math.min(left, it.x);
         }
-        if (cur.length) rows.push(cur.join(" "));
+        if (cur.length) rows.push({ y, t: cur.join(" ") });
       }
-      out.push(rows.join("\n"));
+      out.push(rows);
       page.cleanup();
     }
     return out;
@@ -151,4 +158,97 @@ export function rasidFind(text: string, index: RasidPage[], sameTopic: (t: strin
   if (qs.length > 1 && qs[0].s - qs[1].s < 0.15) return null;
   const best = hits.filter((h) => h.p.loose === qs[0].p.loose)[0].p;
   return { page: best.page, topic: best.topic, q: best.q };
+}
+
+// ---------- «دفتر المحاضرات» بملازمي: أسئلته تبدي من أزرار الفيديو (كل «س / مثال» إله زر بمكانه)
+// سؤال الطالب يطابق إذا أرقامه كلها هي أرقام أول أسطر بعد الزر (السؤال نفسه، گبل ما يبدي الحل)، وكلامه بيها
+export type NoteMark = { id: number; page: number; y: number; label?: string | null };
+export type BookHit = { page: number; pages: number[]; y: number; mark: number; q: string };
+const multiset = (xs: string[]) => { const m = new Map<string, number>(); for (const x of xs) m.set(x, (m.get(x) ?? 0) + 1); return m; };
+/** a جزء من b (بالعدد) */
+const within = (a: Map<string, number>, b: Map<string, number>) => [...a].every(([k, n]) => (b.get(k) ?? 0) >= n);
+/** بداية سؤال بالدفتر: «س :» «س1 /» «مثال» (كثير من أسئلة الدفتر «س :» بلا رقم، فما عليها زر تلقائي) */
+const Q_START = /^\s*(?:(?:س|Q)\s*\d*\s*[:/：.\-]|(?:مثال|Example)(?![\p{L}]))/iu;
+type Anchor = { page: number; y: number; mark: number; label: string };
+/** بدايات الأسئلة: الأزرار، وأسطر «س :» و«مثال». كل بداية ويا زرها (إذا بقربها زر) */
+export function anchors(rows: Row2[][], marks: NoteMark[]): Anchor[] {
+  const out: Anchor[] = [];
+  rows.forEach((list, i) => { for (const r of list) if (Q_START.test(r.t)) out.push({ page: i + 1, y: r.y, mark: 0, label: r.t.slice(0, 40) }); });
+  for (const m of marks) {
+    const a = out.find((x) => x.page === m.page && Math.abs(x.y - Number(m.y)) < 0.06);
+    if (a) { if (!a.mark) a.mark = m.id; } else out.push({ page: m.page, y: Number(m.y), mark: m.id, label: String(m.label ?? "").slice(0, 40) });
+  }
+  out.sort((a, b) => a.page - b.page || a.y - b.y);
+  // بدايتين بنفس المكان تقريباً: وحدة
+  return out.filter((a, i) => !(i && out[i - 1].page === a.page && a.y - out[i - 1].y < 0.02 && (out[i - 1].mark ||= a.mark, true)));
+}
+export function bookFind(text: string, rows: Row2[][], marks: NoteMark[], inTopic: (page: number) => boolean, words: string[]): BookHit | null {
+  const nums = numsOf(text);
+  if (nums.length < 2) return null;
+  const want = multiset(nums), key = nums.join(",");
+  const ws = words.map(loose).filter((w) => w.length >= 3);
+  const need = nums.length === 2 ? 0.6 : 0.4;
+  const list = anchors(rows, marks);
+  const hits: { a: Anchor; next?: Anchor; s: number; body: string }[] = [];
+  list.forEach((a, i) => {
+    if (!inTopic(a.page)) return;
+    const next = list[i + 1];
+    // أسطر السؤال وحله: من بدايته لحد السؤال اللي بعده (أكثر شي ثلاث صفحات)
+    const region: string[] = [];
+    for (let p = a.page; p <= Math.min(a.page + 2, rows.length); p++) {
+      for (const r of rows[p - 1] ?? []) {
+        if (p === a.page && r.y < a.y - 0.005) continue;
+        if (next && (p > next.page || (p === next.page && r.y >= next.y - 0.005))) break;
+        region.push(r.t);
+      }
+      if (next && p >= next.page) break;
+    }
+    // السؤال: أول أسطر، لحد ما أرقامها تصير أرقام سؤال الطالب بالضبط. رقم زايد = مو سؤاله (أو بدا الحل)
+    const got: string[] = [];
+    for (let k = 0; k < region.length; k++) {
+      got.push(...numsOf(region[k]));
+      if (!within(multiset(got), want)) return;
+      if (got.length !== nums.length || [...got].sort().join(",") !== key) continue;
+      const rest = region.slice(k + 1);
+      // واجب بلا حل (بس «Ans»): مو حل
+      if (rest.length < 3 || (rest.length < 6 && rest.some((x) => /\bAns\b/i.test(x)))) return;
+      const lb = loose(region.slice(0, k + 1).join("\n"));
+      const s = ws.length ? ws.filter((w) => lb.includes(w)).length / ws.length : 1;
+      if (s >= need) hits.push({ a, next, s, body: lb });
+      return;
+    }
+  });
+  if (!hits.length) return null;
+  const qs = [...new Map(hits.map((h) => [h.body, h])).values()].sort((x, y) => y.s - x.s);
+  if (qs.length > 1 && qs[0].s - qs[1].s < 0.15) return null;
+  const { a, next } = qs[0];
+  // صفحات الحل: من صفحة السؤال لحد صفحة السؤال اللي بعده (إذا بيها حل گبل بدايته)، أكثر شي ثلاث
+  const last = next ? (next.y > 0.15 ? next.page : next.page - 1) : a.page;
+  const pages: number[] = [];
+  for (let p = a.page; p <= Math.max(a.page, Math.min(last, a.page + 2)); p++) pages.push(p);
+  return { page: a.page, pages, y: a.y, mark: a.mark, q: a.label };
+}
+const rowsMem = new Map<string, Row2[][]>();
+/** أسطر دفتر المحاضرات بمكانها: تنقرا مرة وحدة وتنحفظ ويا ملفه */
+export async function bookRows(b: Row): Promise<Row2[][]> {
+  const key = String(b.file);
+  if (rowsMem.has(key)) return rowsMem.get(key)!;
+  const ref = `notes/${key}.rows.json`;
+  let list: Row2[][] | null = null;
+  const cached = await files().read(ref);
+  if (cached) { try { list = JSON.parse(cached.toString("utf8")); } catch { list = null; } }
+  if (!list) {
+    const pdf = await files().read(`notes/${key}.pdf`);
+    if (!pdf) return [];
+    list = await pageRows(pdf);
+    await files().write(ref, Buffer.from(JSON.stringify(list)), "application/json");
+  }
+  rowsMem.set(key, list);
+  return list;
+}
+/** صفحات كل موضوع بالدفتر من فهرسه («المحاضرة الأولى : المعدلات الزمنية»): من صفحته لحد الموضوع اللي بعده */
+export function topicPages(toc: TocItem[], pages: number, same: (t: string) => boolean): ((p: number) => boolean) | null {
+  const starts = toc.map((t) => ({ t: t.t, p: Math.min(t.p, ...(t.items ?? []).map((i) => i.p)) })).sort((a, b) => a.p - b.p);
+  const ranges = starts.map((s, i) => ({ ...s, end: (starts[i + 1]?.p ?? pages + 1) - 1 })).filter((r) => same(r.t));
+  return ranges.length ? (p) => ranges.some((r) => p >= r.p && p <= r.end) : null;
 }

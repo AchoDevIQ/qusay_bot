@@ -11,7 +11,8 @@ import { isAdmin } from "./data.ts";
 import { authed, need } from "./webApi.ts";
 import { myBooks } from "./notes.ts";
 import { marksFor } from "./noteMarks.ts";
-import { rasidFind, rasidIndex, type RasidHit } from "./rasidQa.ts";
+import { bookFind, bookRows, rasidFind, rasidIndex, topicPages, type BookHit, type RasidHit } from "./rasidQa.ts";
+import { bookToc } from "./noteToc.ts";
 
 export type QaKind = "main" | "extra" | "exams";
 export const QA_KIND: Record<QaKind, string> = { main: "الملزمة", extra: "الاثرائيات", exams: "الوزاريات" };
@@ -129,7 +130,8 @@ async function lecturesOf(b: QaBook): Promise<Lecture[]> {
 export async function qaReady(chapter: number) {
   if (!aiLinked() || !(await qaCfg()).on) return false;
   if ((await qaBooks()).some((b) => b.chapter === chapter)) return true;
-  if ((await find("note_books")).some((b) => b.kind === "rasid" && chapterNum(b.chapter) === chapter)) return true;
+  // الراصد أو دفتر المحاضرات بملازمي
+  if ((await find("note_books")).some((b) => chapterNum(b.chapter) === chapter)) return true;
   return (await examState()).done > 0;
 }
 /** رقم الفصل من اسمه بالملازم («الفصل الثالث» = 3) */
@@ -137,7 +139,7 @@ export const chapterNum = (label: unknown) => ORD.findIndex((w) => norm(String(l
 /** «📝 الراصد» مال فصل الطالب بملازمي: بس إذا الطالب مشترك بالفصل (محاضرات أو امتحانات) */
 async function rasidsOf(uid: number | undefined, chapter: number) {
   if (!uid) return [];
-  return (await myBooks(uid)).filter((b) => b.kind === "rasid" && chapterNum(b.chapter) === chapter);
+  return (await myBooks(uid)).filter((b) => chapterNum(b.chapter) === chapter);
 }
 
 // ---------- أسئلة الامتحانات وحلولها: تنقرا مرة وحدة كتابة، وتنحفظ ويا موضوعها، والطالب يدور بيها ويا الملزمة
@@ -250,7 +252,8 @@ export async function examQueueTick(limit = EXAM_PER_TICK) {
 
 export type QaAsk = { text?: string; image?: Buffer };
 /** rasid: الحل صفحة «📘 الحل النموذجي» من الراصد اللي بملازمي (book رقم الملزمة، page رقم الصفحة) */
-export type QaResult = { source: "lecture" | "topic" | "ai" | "rasid"; solution: string; rasid?: { book: number } & RasidHit };
+/** notebook: الحل صفحات «دفتر المحاضرات» بملازمي من بداية السؤال (y مكانه بأول صفحة)، ويا زر فيديوهاته (mark) */
+export type QaResult = { source: "lecture" | "topic" | "ai" | "rasid" | "notebook"; solution: string; rasid?: { book: number } & RasidHit; notebook?: { book: number; where: string } & BookHit };
 type Part = { kind: QaKind | "tests"; l: Lecture };
 const joinCtx = (list: Part[], max: number) => {
   let s = "";
@@ -324,21 +327,37 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
   try {
     const hit = JSON.parse((await kvGet(ck)) ?? "null");
     // صفحة الراصد المحفوظة: بس للطالب اللي الراصد بملازمه
-    const okRasid = !hit?.rasid || rasids.some((b) => b.id === hit.rasid.book);
-    if ((hit?.solution || hit?.rasid) && okRasid) { const c = await qaCfg(); c.cached = (c.cached ?? 0) + 1; await saveCfg(c); return { source: hit.source, solution: hit.solution ?? "", ...(hit.rasid ? { rasid: hit.rasid } : {}) }; }
+    const ref = hit?.rasid ?? hit?.notebook;
+    const okRasid = !ref || rasids.some((b) => b.id === ref.book);
+    if ((hit?.solution || ref) && okRasid) { const c = await qaCfg(); c.cached = (c.cached ?? 0) + 1; await saveCfg(c); return { source: hit.source, solution: hit.solution ?? "", ...(hit.rasid ? { rasid: hit.rasid } : {}), ...(hit.notebook ? { notebook: hit.notebook } : {}) }; }
   } catch { /* نكمل */ }
   const save = async (r: QaResult) => { await kvSet(ck, JSON.stringify(r)); return r; };
   // ٢.٥ نفس سؤال بالراصد: «📘 الحل النموذجي» مال صفحته نفسها، ببلاش
   const topicSet = new Set(names.flatMap((n) => norm(n).map(stem)));
   const sameT = (x: string) => names.some((n) => sameTopic(n, x)) || bestTopic(x, [{ id: tid, ar: names[0] ?? "", en: names[1] ?? "" }]) === tid;
-  for (const b of rasids) {
+  const free = async () => { const c = await qaCfg(); c.free = (c.free ?? 0) + 1; await saveCfg(c); };
+  for (const b of rasids.filter((x) => x.kind === "rasid")) {
     let h: RasidHit | null = null;
     try { h = rasidFind(text, await rasidIndex(b), sameT, qWords(text, topicSet)); } catch (e) { console.error("qa rasid", e); }
-    if (h) {
-      const c = await qaCfg(); c.free = (c.free ?? 0) + 1; await saveCfg(c);
-      const r = await done("rasid", "");
-      return save({ ...r, rasid: { book: Number(b.id), ...h } });
-    }
+    if (h) { await free(); return save({ ...await done("rasid", ""), rasid: { book: Number(b.id), ...h } }); }
+  }
+  // ٢.٦ نفس سؤال بـ«دفتر المحاضرات» بملازمي: صفحاته نفسها من بداية السؤال، ويا فيديوهاته، ببلاش
+  for (const b of rasids.filter((x) => x.kind !== "rasid")) {
+    let h: BookHit | null = null;
+    let where = "";
+    try {
+      const toc = await bookToc(b);
+      const inTopic = topicPages(toc, Number(b.pages), sameT) ?? (() => true);
+      const marks = (await find("note_marks", { book_id: b.id })).map((m) => ({ id: Number(m.id), page: Number(m.page), y: Number(m.y), label: m.label }));
+      h = bookFind(text, await bookRows(b), marks, inTopic, qWords(text, topicSet));
+      // وين: الموضوع والمحاضرة من فهرس الدفتر
+      if (h) {
+        const t = [...toc].filter((x) => x.p <= h!.page).sort((x, y) => y.p - x.p)[0];
+        const l = [...(t?.items ?? [])].filter((x) => x.p <= h!.page).sort((x, y) => y.p - x.p)[0];
+        where = [t?.t, l?.t].filter(Boolean).join(" · ");
+      }
+    } catch (e) { console.error("qa notebook", e); }
+    if (h) { await free(); return save({ ...await done("notebook", ""), notebook: { book: Number(b.id), where, ...h } }); }
   }
   if (!mine.length) return null;
   // ٣. نفس سؤال الملزمة بالضبط (نفس الرياضيات ونفس الطلب، وسؤال واحد بس يطابق): حل الأستاذ نفسه ببلاش، بلا ذكاء
@@ -639,7 +658,7 @@ async function done(source: QaResult["source"], solution: string): Promise<QaRes
 // ---------- الجواب المحفوظ للطالب (صفحة الحل)
 export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar") {
   const id = randomUUID().replace(/-/g, "").slice(0, 16);
-  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.rasid ? { rasid: r.rasid } : {}), lang, at: new Date().toISOString() }));
+  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), lang, at: new Date().toISOString() }));
   return id;
 }
 export async function answerView(body: Row) {
@@ -651,7 +670,9 @@ export async function answerView(body: Row) {
   need(a && (a.uid === uid || await isAdmin(uid!)), "الحل غير موجود", 404);
   // الراصد: رقم الصفحة، وأزرار فيديو الحل والتوضيح اللي على صفحتها (الصورة والفيديو ينفتحن بنفس شروط ملازمي)
   const rasid = a.rasid ? { ...a.rasid, marks: (await marksFor(Number(a.rasid.book))).filter((m) => m.page === Number(a.rasid.page)) } : undefined;
-  return { question: a.question, where: a.where, source: a.source, solution: a.solution, lang: a.lang === "en" ? "en" : "ar", ...(rasid ? { rasid } : {}) };
+  // الدفتر: صفحاته، وأزرار فيديو هذا السؤال بس
+  const notebook = a.notebook ? { ...a.notebook, marks: a.notebook.mark ? (await marksFor(Number(a.notebook.book))).filter((m) => m.id === Number(a.notebook.mark)) : [] } : undefined;
+  return { question: a.question, where: a.where, source: a.source, solution: a.solution, lang: a.lang === "en" ? "en" : "ar", ...(rasid ? { rasid } : {}), ...(notebook ? { notebook } : {}) };
 }
 
 // ---------- صفحة صاحب البوت

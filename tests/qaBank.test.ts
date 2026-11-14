@@ -273,3 +273,24 @@ test("سؤال موجود بـ«📝 الراصد» اللي بملازمي: ي�
   assert.equal(await qa.qaAnswer({ text: "جد معدل تغير حجم كرة نصفها 7 يتمدد بمعدل 9" }, 3, tid, 0, "ar", 1), null);
   assert.equal(ai.length, 0);
 });
+
+test("سؤال محلول بـ«دفتر المحاضرات» اللي بملازمي: صفحاته من بداية السؤال ويا زر فيديوه، ببلاش", async () => {
+  const { files } = await import("../lib/files.ts");
+  const N = JSON.parse(fs.readFileSync(new URL("./fixtures/notebook-ch3.json", import.meta.url), "utf8"));
+  const book = await insert("note_books", { title: "دفتر محاضرات الفصل الثالث", chapter: "الفصل الثالث", lang: "ar", file: "nbtest", pages: N.rows.length, kind: "book", created: "2026-11-15" });
+  // أسطر الدفتر وفهرسه محفوظين ويا ملفه (مثل ما ينحسبن أول مرة)
+  await files().write("notes/nbtest.rows.json", Buffer.from(JSON.stringify(N.rows)), "application/json");
+  await files().write("notes/nbtest.toc.json", Buffer.from(JSON.stringify([{ t: "المعدلات الزمنية", p: 1, items: [{ t: "المحاضرة 4", p: 24 }] }])), "application/json");
+  const mark = await insert("note_marks", { book_id: book, page: 24, y: 0.07, label: "س :", video_id: null, solution: "https://youtu.be/abcdefghijk" });
+  const tid = await tidOf("المعدلات الزمنية");
+  const LADDER = "سلم طوله (10)m يستند طرفه الاسفل على أرض افقيه وطرفه العلوي على حائط رأسي فإذا انزلق الطرف الأسفل مبتعدا عن الحائط بمعدل (2) m/s جد معدل انزلاق الطرف العلوي عندما يكون الطرف الأسفل على بعد (8)m عن الحائط";
+  ai.length = 0;
+  const r = await qa.qaAnswer({ text: LADDER }, 3, tid, 0, "ar", 1);
+  assert.equal(ai.length, 0);
+  assert.equal(r!.source, "notebook");
+  assert.deepEqual({ book: r!.notebook!.book, page: r!.notebook!.page, pages: r!.notebook!.pages, mark: r!.notebook!.mark, where: r!.notebook!.where }, { book, page: 24, pages: [24], mark, where: "المعدلات الزمنية · المحاضرة 4" });
+  const v: any = await qa.answerView({ token: homeToken(1), id: await qa.saveAnswer(1, LADDER, r!, "المعدلات الزمنية") });
+  assert.deepEqual(v.notebook.marks.map((m: any) => [m.id, m.solution]), [[mark, true]]);
+  // طالب مو مشترك بالفصل: ما يوصله
+  assert.equal(await qa.qaAnswer({ text: LADDER }, 3, tid, 0, "ar", 70), null);
+});

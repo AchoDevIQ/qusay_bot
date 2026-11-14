@@ -9,58 +9,75 @@ import { deviceId, haptic, platform } from "../shared";
 type Mark = { id: number; page: number; video: boolean; solution: boolean; q?: string };
 /** rasid: سؤاله موجود بالراصد اللي بملازمه: صفحة الحل النموذجي نفسها، وأزرار فيديو الحل والتوضيح اللي عليها */
 type Rasid = { book: number; page: number; topic: string; q: string; marks: Mark[] };
-type Ans = { question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid };
+/** notebook: سؤاله محلول بدفتر المحاضرات: صفحاته من بداية السؤال (y مكانه بأول صفحة)، وأزرار فيديوهاته */
+type Notebook = { book: number; page: number; pages: number[]; y: number; q: string; where: string; marks: Mark[] };
+type Ans = { question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid" | "notebook"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid; notebook?: Notebook };
 
 const tgPlatform = () => (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "";
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
 
-/** «📘 الحل النموذجي» من الراصد: نفس الصفحة اللي يشوفها بالراصد (الهيدر والسؤال كامل والحل)، وتحتها فيديو الحل والتوضيح */
-function RasidSolution({ r }: { r: Rasid }) {
+/** صفحة من ملازمي (بنفس شروطها: جهازه، فصوله، اسمه عليها). sol: صفحة الحل النموذجي بالراصد */
+function NotePageImg({ book, page, sol, mark }: { book: number; page: number; sol?: boolean; mark?: number }) {
   const [src, setSrc] = useState("");
   const [err, setErr] = useState("");
-  const [msg, setMsg] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [yt, setYt] = useState("");
-  const [clip, setClip] = useState("");
-  const [clipMark, setClipMark] = useState<Mark | null>(null);
   useEffect(() => {
     let url = "";
     void (async () => {
       try {
-        const res = await fetch(`/api/notes/page?t=${encodeURIComponent(token())}&book=${r.book}&page=${r.page}&sol=1&pf=${encodeURIComponent(await platform())}&d=${encodeURIComponent(await deviceId())}`);
+        const res = await fetch(`/api/notes/page?t=${encodeURIComponent(token())}&book=${book}&page=${page}${sol ? "&sol=1" : ""}&pf=${encodeURIComponent(await platform())}&d=${encodeURIComponent(await deviceId())}`);
         if (!res.ok) { setErr(await res.text().catch(() => "") || "ما انفتحت صفحة الحل"); return; }
         url = URL.createObjectURL(await res.blob());
         setSrc(url);
       } catch { setErr("ماكو اتصال، حاول مرة ثانية"); }
     })();
     return () => { if (url) URL.revokeObjectURL(url); };
-  }, [r.book, r.page]);
+  }, [book, page, sol]);
+  if (err) return <div className="exbad">⚠️ {err}</div>;
+  if (!src) return <div className="empty">جاري فتح الحل...</div>;
+  return (
+    <div style={{ position: "relative" }}>
+      <img src={src} alt="الحل" style={{ width: "100%", display: "block", borderRadius: 10, border: "1px solid #cbd5e1", background: "#fff" }} onContextMenu={(e) => e.preventDefault()} draggable={false} />
+      {/* بداية سؤاله بالصفحة: خط برتقالي */}
+      {mark !== undefined && (
+        <div style={{ position: "absolute", left: 0, right: 0, top: `${Math.max(0, mark * 100)}%`, borderTop: "3px solid #e67e22", pointerEvents: "none" }}>
+          <span style={{ position: "absolute", top: -14, right: 6, background: "#e67e22", color: "#fff", fontSize: 12, borderRadius: 8, padding: "1px 8px" }}>👇 سؤالك من هنا</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** حل السؤال من ملازمي: الراصد («📘 الحل النموذجي» نفسه) أو دفتر المحاضرات (صفحاته من بداية السؤال)، وتحته فيديو الحل والتوضيح */
+function BookSolution({ book, title, hint, pages, sol, y, marks }: { book: number; title: string; hint: string; pages: number[]; sol?: boolean; y?: number; marks: Mark[] }) {
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [yt, setYt] = useState("");
+  const [clip, setClip] = useState("");
+  const [clipMark, setClipMark] = useState<Mark | null>(null);
   async function play(m: Mark, kind: "video" | "solution" | "chat") {
     haptic(); setBusy(true); setMsg("⏳ دا يفتح الفيديو...");
     try {
-      const res = await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token(), device: await deviceId(), pf: await platform(), action: "play", book: r.book, mark: m.id, kind }) });
+      const res = await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token(), device: await deviceId(), pf: await platform(), action: "play", book, mark: m.id, kind }) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error ?? "صار خطأ، حاول مرة ثانية");
       if (j.yt) { setYt(j.yt); setMsg(""); }
-      else if (j.clip) { setClipMark(m); setClip(`/api/notes/video?t=${encodeURIComponent(token())}&book=${r.book}&mark=${m.id}&pf=${encodeURIComponent(tgPlatform())}&d=${encodeURIComponent(await deviceId())}`); setMsg(""); }
+      else if (j.clip) { setClipMark(m); setClip(`/api/notes/video?t=${encodeURIComponent(token())}&book=${book}&mark=${m.id}&pf=${encodeURIComponent(tgPlatform())}&d=${encodeURIComponent(await deviceId())}`); setMsg(""); }
       else setMsg(`${j.notice}.`);
     } catch (e) { setMsg(`⚠️ ${(e as Error).message}`); } finally { setBusy(false); }
   }
   // الفيديو ما اشتغل: رمز الخطأ ينكتب بسجل البوت (مثل الملزمة)
   const fail = (kind: string) => (code: string) => void (async () => {
-    await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token(), device: await deviceId(), pf: await platform(), action: "videoError", book: r.book, kind, code }) });
+    await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token(), device: await deviceId(), pf: await platform(), action: "videoError", book, kind, code }) });
   })().catch(() => undefined);
+  const vids = marks.filter((m) => m.solution || m.video);
   return (
     <div className="card">
-      <h2>📝 الحل النموذجي من الراصد</h2>
-      <div className="expad">
-        <div className="exhint">{r.topic}{r.q ? ` · ${r.q}` : ""}</div>
-        {err ? <div className="exbad">⚠️ {err}</div>
-          : src ? <img src={src} alt="الحل النموذجي" style={{ width: "100%", display: "block", borderRadius: 10, border: "1px solid #cbd5e1", background: "#fff" }} onContextMenu={(e) => e.preventDefault()} draggable={false} />
-          : <div className="empty">جاري فتح الحل...</div>}
-        {r.marks.some((m) => m.solution || m.video) && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-            {r.marks.map((m) => (
+      <h2>{title}</h2>
+      <div className="expad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {hint && <div className="exhint">{hint}</div>}
+        {vids.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {vids.map((m) => (
               <span key={m.id} style={{ display: "contents" }}>
                 {m.solution && <button type="button" className="btn" disabled={busy} onClick={() => void play(m, "solution")}>🎬 فيديو الحل{m.q ? ` ${m.q}` : ""}</button>}
                 {m.video && <button type="button" className="btn" disabled={busy} onClick={() => void play(m, "video")}>▶️ فيديو التوضيح{m.q ? ` ${m.q}` : ""}</button>}
@@ -68,7 +85,8 @@ function RasidSolution({ r }: { r: Rasid }) {
             ))}
           </div>
         )}
-        {msg && <div className="exhint" style={{ marginTop: 8 }}>{msg}</div>}
+        {msg && <div className="exhint">{msg}</div>}
+        {pages.map((p, i) => <NotePageImg key={p} book={book} page={p} sol={sol} mark={i === 0 && y !== undefined && y > 0.05 ? y : undefined} />)}
       </div>
       {yt && <VideoBox title="🎬 فيديو حل السؤال" yt={yt} back="✖ سد وارجع للحل" onClose={() => setYt("")} onFail={fail("solution")} />}
       {clip && <VideoBox title="▶️ فيديو توضيح السؤال" src={clip} back="✖ سد وارجع للحل" onClose={() => setClip("")} onChat={clipMark ? () => { setClip(""); void play(clipMark, "chat"); } : undefined} onFail={fail("video")} />}
@@ -121,7 +139,8 @@ export default function AnswerClient() {
                 {a.question ? <div className="ansq">{a.question}</div> : <div className="exhint">{t.photo}</div>}
               </div>
             </div>
-            {a.rasid ? <RasidSolution r={a.rasid} /> : (
+            {a.rasid ? <BookSolution book={a.rasid.book} title="📝 الحل النموذجي من الراصد" hint={`${a.rasid.topic}${a.rasid.q ? ` · ${a.rasid.q}` : ""}`} pages={[a.rasid.page]} sol marks={a.rasid.marks} />
+              : a.notebook ? <BookSolution book={a.notebook.book} title="📘 حل الأستاذ من دفتر المحاضرات" hint={`${a.notebook.where ? `${a.notebook.where} · ` : ""}صفحة ${a.notebook.page}`} pages={a.notebook.pages} y={a.notebook.y} marks={a.notebook.marks} /> : (
               <div className="card">
                 <h2>{a.source === "ai" ? t.ai : t.book}</h2>
                 <div className="expad anssol">

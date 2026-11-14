@@ -120,14 +120,16 @@ async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean)
   await kvSet(`qauto_${uid}`, JSON.stringify({ mid: m.message_id, t: data.t, l: data.l || 0 }));
   await setSession(uid, "", {});
   const kb: Kb = [[{ text: en ? "📘 Open the solution" : "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }], [btn(en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]];
-  const msg = r.source === "rasid"
+  const msg = r.source === "notebook"
+    ? (en ? "📘 <b>Your question is solved in the teacher's lecture notebook</b>\nTap the button to see his solution." : "📘 <b>سؤالك محلول بدفتر المحاضرات</b>\nدوس الزر تشوف حل الأستاذ.")
+    : r.source === "rasid"
     ? (en ? "📝 <b>Your question is in the teacher's Rasid</b>\nTap the button to see his model solution." : "📝 <b>سؤالك موجود بالراصد</b>\nدوس الزر تشوف الحل النموذجي مال الأستاذ.")
     : en
     ? (r.source === "ai" ? "🤖 <b>Your question is solved the teacher's way</b>\nTap the button to see the solution step by step." : "📘 <b>Your question is solved in the teacher's booklet</b>\nTap the button to see the solution step by step.")
     : (r.source === "ai" ? "🤖 <b>حليت سؤالك على طريقة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة." : "📘 <b>سؤالك محلول بملزمة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة.");
   await send(chat, msg, { kb });
   await send(chat, "👆", { replyKb: await mainKb(uid) });
-  await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : r.source === "rasid" ? `📝 وصله الحل النموذجي من الراصد (${r.rasid?.topic ?? where} ${r.rasid?.q ?? ""})` : `📘 وصله حل سؤاله من الملزمة (${where})`);
+  await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : r.source === "rasid" ? `📝 وصله الحل النموذجي من الراصد (${r.rasid?.topic ?? where} ${r.rasid?.q ?? ""})` : r.source === "notebook" ? `📘 وصله حل سؤاله من دفتر المحاضرات (${r.notebook?.where || where} ص${r.notebook?.page ?? ""})` : `📘 وصله حل سؤاله من الملزمة (${where})`);
   return true;
 }
 
