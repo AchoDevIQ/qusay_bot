@@ -169,6 +169,9 @@ async function onCallback(q: Row) {
     note = await reviewCb(chat, uid, mid, d);
   } else if (d.startsWith("ek:")) {
     note = await exceptionCb(chat, uid, mid, d);
+  } else if (["pv:", "pk:", "pb:", "pr:"].some((p) => d.startsWith(p))) {
+    const { pollCb } = await import("./polls.ts");
+    note = await pollCb(chat, uid, mid, d);
   } else if (d === "me:edit") {
     note = "لتغيير معلوماتك تواصل ويا قصي العميري";
     if (!await student(uid)) await startReg(chat, uid, null);

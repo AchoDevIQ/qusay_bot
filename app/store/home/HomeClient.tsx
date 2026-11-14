@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { closeApp, haptic, openOutside, deviceId } from "../shared";
 
-type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[] };
+type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[] };
 type Reply = List & { url?: string; close?: boolean; error?: string };
 
 const svg = (body: ReactNode) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{body}</svg>;
@@ -14,6 +14,7 @@ const ICONS: Record<string, ReactNode> = {
   me: svg(<><circle cx="12" cy="8.500" r="3.700" /><path d="M4.500 20c1-3.700 4-5.200 7.500-5.200s6.500 1.500 7.500 5.200" /></>),
   pass: svg(<><circle cx="8" cy="15.500" r="4.200" /><path d="M11 12.500l8.500-8.500M16 7.500l2.500 2.500M13.500 10l1.800 1.800" /></>),
   notes: svg(<><path d="M12 6.500C10 5 7 4.500 4 5v14c3-.5 6 0 8 1.500 2-1.500 5-2 8-1.500V5c-3-.5-6 0-8 1.500z" /><path d="M12 6.500v14" /></>),
+  vote: svg(<><path d="M4 13.500h16v7H4z" /><path d="M8.500 13.500V6.500l3-3 5 5-5 5" /><path d="M9.500 17h5" /></>),
   exams: svg(<><path d="M7 3.500h7.500L19 8v12.500H7a1.500 1.500 0 0 1-1.500-1.500V5A1.500 1.500 0 0 1 7 3.500z" /><path d="M14.500 3.500V8H19" /><path d="M9 12.500h6M9 16h6" /></>),
 };
 
@@ -90,6 +91,8 @@ export default function HomeClient() {
     { key: "me", title: "معلوماتي" },
     ...(data?.exams ? [{ key: "exams", title: "امتحاناتي" }] : []),
     ...(data?.notes ? [{ key: "notes", title: "ملازمي" }] : []),
+    // التصويت يطلع بس إذا أكو تصويت مفتوح إله وبعده ما صوت
+    ...(data?.vote ? [{ key: "vote", title: "التصويت", note: data.vote > 1 ? `${data.vote} تصويتات تنتظر صوتك` : "تصويت ينتظر صوتك" }] : []),
     // مربع «طلب كلمة مرور جديدة» (key: "pass") مخفي لحد ما نربط التطبيق، بطلب المستخدم
   ] as { key: string; title: string; note?: string; main?: boolean }[];
 

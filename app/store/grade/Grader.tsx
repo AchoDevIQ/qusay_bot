@@ -106,11 +106,12 @@ function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: n
 }
 
 /** صفحة وحدة: الصورة جوة والرسم فوكها */
-function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, locked, onAdd, onErase, onTap, onMove }: {
-  page: Page; ink: Ink; zoom: number; tool: Tool; color: string; width: number; sticker: number; fitH: number; locked: boolean;
+function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, locked, aspect, onAdd, onErase, onTap, onMove, onEdit, onPenDown }: {
+  page: Page; ink: Ink; zoom: number; tool: Tool; color: string; width: number; sticker: number; fitH: number; locked: boolean; aspect: { current: number };
   onAdd: (it: Item) => void; onErase: (x: number, y: number) => void; onTap: (x: number, y: number) => void; onMove: (i: number, x: number, y: number) => void;
+  onEdit: (i: number) => void; onPenDown: () => void;
 }) {
-  const drag = useRef<{ i: number; dx: number; dy: number } | { pan: true; x: number; y: number } | null>(null);
+  const drag = useRef<{ i: number; dx: number; dy: number; sx: number; sy: number } | { pan: true; x: number; y: number } | null>(null);
   const [moving, setMoving] = useState<{ i: number; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const bg = useRef<HTMLCanvasElement>(null);
@@ -145,6 +146,7 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, locked, onA
   // 100% يعني الورقة كلها تبين بالشاشة بدون نزول، والتكبير فوكها
   const fit = Math.min(boxW, fitH > 120 ? (fitH * iw) / ih : boxW);
   const w = Math.round(fit * zoom), h = Math.round((w * ih) / iw);
+  aspect.current = ih / iw;
   const dpr = typeof window === "undefined" ? 1 : Math.min(window.devicePixelRatio || 1, 2);
   useEffect(() => {
     const c = bg.current; if (!c || !img) return;
@@ -184,10 +186,10 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, locked, onA
     // التحريك بالإيد، وأداة التعليق هم تسحب التعليق المكتوب مباشرة بدون ما تروح للإيد
     if (tool === "hand" || tool === "text") {
       const i = locked ? -1 : hit(x, y);
-      if (i >= 0 && (tool === "hand" || ink.items[i].t === "x")) { const it = ink.items[i] as { x: number; y: number }; drag.current = { i, dx: x - it.x, dy: y - it.y }; setMoving({ i, x: it.x, y: it.y }); return; }
+      if (i >= 0 && (tool === "hand" || ink.items[i].t === "x")) { const it = ink.items[i] as { x: number; y: number }; drag.current = { i, dx: x - it.x, dy: y - it.y, sx: it.x, sy: it.y }; setMoving({ i, x: it.x, y: it.y }); return; }
       if (tool === "hand") { drag.current = { pan: true, x: e.clientX, y: e.clientY }; return; }
     }
-    if (tool === "pen") { live.current = { t: "s", c: color, w: width, p: [x, y] }; redraw(); }
+    if (tool === "pen") { onPenDown(); live.current = { t: "s", c: color, w: width, p: [x, y] }; redraw(); }
     if (tool === "eraser") onErase(x, y);
   }
   function move(e: React.PointerEvent) {
@@ -207,7 +209,11 @@ function Sheet({ page, ink, zoom, tool, color, width, sticker, fitH, locked, onA
   }
   function up(e: React.PointerEvent) {
     if (drag.current || tool === "hand") {
-      if (moving) onMove(moving.i, +moving.x.toFixed(4), +moving.y.toFixed(4));
+      const d = drag.current;
+      // أداة التعليق: دوسة على تعليق مكتوب بدون سحب تفتحه للتعديل
+      const tapped = !!d && !("pan" in d) && (!moving || Math.hypot(moving.x - d.sx, moving.y - d.sy) < 0.006);
+      if (tapped && tool === "text" && d && !("pan" in d)) onEdit(d.i);
+      else if (moving) onMove(moving.i, +moving.x.toFixed(4), +moving.y.toFixed(4));
       drag.current = null; setMoving(null);
       return;
     }
@@ -266,12 +272,12 @@ function TrimmedImage({ src, alt }: { src: string; alt: string }) {
 }
 
 const ICON: Record<Tool, string> = { hand: "👆", pen: "🖊️", eraser: "🧽", text: "💬", stamp: "✅", wrong: "❌", sticker: "🖼" };
-const TIP: Record<Tool, string> = { hand: "تحريك: اسحب الكتابة أو الختم أو الملصق لمكان ثاني، أو اسحب الصفحة", pen: "القلم", eraser: "الممحاة", text: "تعليق: كتابة أو فويس. والتعليق المكتوب تسحبه وتحركه بنفس الأداة", stamp: "ختم صح", wrong: "ختم خطأ", sticker: "ملصق" };
+const TIP: Record<Tool, string> = { hand: "تحريك: اسحب الكتابة أو الختم أو الملصق لمكان ثاني، أو اسحب الصفحة", pen: "القلم", eraser: "الممحاة", text: "تعليق: كتابة أو فويس. والتعليق المكتوب تسحبه وتحركه بنفس الأداة، وتدوس عليه دوسة حتى تعدله", stamp: "ختم صح", wrong: "ختم خطأ", sticker: "ملصق" };
 
 const SHOWQ_KEY = "gradeShowQuestion";
 const PEN_KEY = "gradePen";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers }: {
-  paper: Paper; url: (r: string) => string; busy: boolean; stickers: Sticker[];
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers, penText: penTextStart = false, onPenText }: {
+  paper: Paper; url: (r: string) => string; busy: boolean; stickers: Sticker[]; penText?: boolean; onPenText?: (on: boolean) => void;
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null; errors?: string[] } | null>;
   onClose: () => void; onSkip: () => void; onRescan: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
   onDecide: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>, rejects: Record<number, string>, accepted: number) => void;
@@ -299,6 +305,22 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const setColor = (c: string) => { setColorState(c); keepPen(c, width); };
   const setWidth = (w: number) => { setWidthState(w); keepPen(color, w); };
   const [penBox, setPenBox] = useState(false);
+  // كتابة القلم: تبقى قلم، أو تتحول نص بعد ما يوقف المصحح عن الكتابة شوية (إعداده لنفسه، ينحفظ بالسيرفر)
+  const [penText, setPenTextState] = useState(penTextStart);
+  const [penTextErr, setPenTextErr] = useState("");
+  async function setPenText(on: boolean) {
+    const was = penText; setPenTextState(on); setPenTextErr("");
+    try {
+      const res = await fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "penText", on }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "");
+      onPenText?.(on);
+    } catch (e) { setPenTextState(was); setPenTextErr((e as Error).message || "ما انحفظ الاختيار، تأكد من النت"); }
+  }
+  const aspect = useRef(1.4);
+  const group = useRef<{ page: number; strokes: Item[] } | null>(null);
+  const groupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [conv, setConv] = useState<{ page: number; strokes: Item[]; text: string; busy: boolean; err: string } | null>(null);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [overlay, setOverlay] = useState<"" | "model" | "question">("");
   const [objVoice, setObjVoice] = useState<Blob | null>(null);
@@ -398,15 +420,86 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   useEffect(() => () => { void flush(); }, [flush]);
 
   const ink = inks[at] ?? { rot: 0, items: [] };
-  function change(next: Ink, keep = true) {
+  function change(next: Ink, keep = true, pg = at) {
     if (locked) return;
-    if (keep) { (undo.current[at] ??= []).push(ink.items); redo.current[at] = []; }
-    setInks((x) => ({ ...x, [at]: next }));
-    dirty.current.add(at);
+    const before = pg === at ? ink.items : inksRef.current[pg]?.items ?? [];
+    if (keep) { (undo.current[pg] ??= []).push(before); redo.current[pg] = []; }
+    setInks((x) => ({ ...x, [pg]: next }));
+    dirty.current.add(pg);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush(), 1200);
   }
   const addItem = (it: Item) => change({ ...ink, items: [...ink.items, it] });
+  /** خط قلم جديد: إذا المصحح مختار «تتحول نص»، الخطوط تتجمع ولما يوقف ثانية ونص تنقرا */
+  function addStroke(it: Item) {
+    addItem(it);
+    if (!penText || it.t !== "s") return;
+    if (!group.current || group.current.page !== at) group.current = { page: at, strokes: [] };
+    group.current.strokes.push(it);
+    if (groupTimer.current) clearTimeout(groupTimer.current);
+    groupTimer.current = setTimeout(() => void convertGroup(), 1500);
+  }
+  function penDown() { if (groupTimer.current) { clearTimeout(groupTimer.current); groupTimer.current = null; } }
+  /** حدود الخطوط (من 0 لـ 1 بعرض وطول الصفحة) */
+  function boundsOf(strokes: Item[]) {
+    let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+    for (const s of strokes) if (s.t === "s") for (let i = 0; i < s.p.length; i += 2) { x0 = Math.min(x0, s.p[i]); x1 = Math.max(x1, s.p[i]); y0 = Math.min(y0, s.p[i + 1]); y1 = Math.max(y1, s.p[i + 1]); }
+    return { x0, y0, x1, y1 };
+  }
+  /** صورة الكتابة بالأسود على أبيض، مكبرة حتى تنقرا زين */
+  function strokesPng(strokes: Item[]) {
+    const r = aspect.current, b = boundsOf(strokes);
+    const bw = Math.max(b.x1 - b.x0, 0.01), bh = Math.max((b.y1 - b.y0) * r, 0.01);
+    const W = Math.min(4000, 1400 / Math.max(bw, bh)), pad = 24;
+    const c = document.createElement("canvas");
+    c.width = Math.ceil(bw * W + pad * 2); c.height = Math.ceil(bh * W + pad * 2);
+    const ctx = c.getContext("2d")!;
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.strokeStyle = "#000"; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (const s of strokes) {
+      if (s.t !== "s") continue;
+      ctx.lineWidth = Math.max(2, (s.w * W) / 800);
+      ctx.beginPath();
+      for (let i = 0; i < s.p.length; i += 2) { const x = (s.p[i] - b.x0) * W + pad, y = (s.p[i + 1] - b.y0) * r * W + pad; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      if (s.p.length === 2) ctx.lineTo((s.p[0] - b.x0) * W + pad + 0.5, (s.p[1] - b.y0) * r * W + pad);
+      ctx.stroke();
+    }
+    return c.toDataURL("image/png");
+  }
+  async function convertGroup() {
+    groupTimer.current = null;
+    const g = group.current; group.current = null;
+    if (!g?.strokes.length) return;
+    // الخطوط اللي انمسحت قبل القراية ما تنحسب
+    const alive = g.strokes.filter((s) => inksRef.current[g.page]?.items.includes(s));
+    if (!alive.length) return;
+    setConv({ page: g.page, strokes: alive, text: "", busy: true, err: "" });
+    try {
+      const res = await fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "inkText", id: paper.id, image: strokesPng(alive) }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "");
+      setConv((c) => (c ? { ...c, busy: false, text: String(j.text ?? "") } : c));
+    } catch (e) { setConv((c) => (c ? { ...c, busy: false, err: (e as Error).message || "ما گدرت أقرا الكتابة، تأكد من النت" } : c)); }
+  }
+  /** الكتابة تصير نص بنفس مكانها وحجمها تقريباً، ولونها لون القلم */
+  function placeConverted() {
+    if (!conv) return;
+    const v = conv.text.trim();
+    if (!v) { setConv(null); return; }
+    const cur = inksRef.current[conv.page] ?? { rot: 0, items: [] };
+    const b = boundsOf(conv.strokes), r = aspect.current, lines = v.split("\n").length;
+    const z = Math.min(0.06, Math.max(0.022, ((b.y1 - b.y0) * r) / (lines * 1.25)));
+    const col = conv.strokes[0].t === "s" ? conv.strokes[0].c : color;
+    const item: Item = { t: "x", c: col, x: +b.x1.toFixed(4), y: +Math.min(0.98, b.y0 + z / (2 * r)).toFixed(4), s: v, z: +z.toFixed(4) };
+    change({ ...cur, items: [...cur.items.filter((it) => !conv.strokes.includes(it)), item] }, true, conv.page);
+    setConv(null);
+  }
+  /** دوسة على تعليق مكتوب بأداة التعليق: ينفتح حتى يتعدل */
+  function editText(i: number) {
+    const it = ink.items[i];
+    if (!it || it.t !== "x" || /^🎙\d+$/.test(it.s)) return;
+    setEditIdx(i); setKind("text"); setText(it.s); setKeepErr(false); setTextAt({ x: it.x, y: it.y });
+  }
   const moveItem = (i: number, x: number, y: number) => change({ ...ink, items: ink.items.map((it, j) => (j === i && it.t !== "s" ? { ...it, x, y } : it)) });
   function erase(x: number, y: number) {
     const r = 0.025;
@@ -424,6 +517,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   }
   function go(i: number) {
     if (!pages || i < 0 || i >= pages.length) return;
+    // كتابة تنتظر تتحول نص: تنقرا هسه قبل ما تتبدل الصفحة
+    if (groupTimer.current) { clearTimeout(groupTimer.current); void convertGroup(); }
     void flush(); setAt(i); setPenBox(false);
     const on = pages[i].qs;
     if (on && !on.includes(qSel)) setQSel(on.find((n) => marks[n] === null || marks[n] === undefined) ?? on[0]);
@@ -468,7 +563,11 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   }
   function addText(value = text) {
     const v = value.trim();
-    if (textAt && v) addItem({ t: "x", c: color, x: textAt.x, y: textAt.y, s: v, z: 0.032 });
+    if (editIdx !== null) {
+      // تعديل تعليق موجود: يتبدل نصه، وإذا انمسح كله ينشال
+      const old = ink.items[editIdx];
+      if (old?.t === "x") change({ ...ink, items: v ? ink.items.map((it, j) => (j === editIdx ? { ...old, s: v } : it)) : ink.items.filter((_, j) => j !== editIdx) });
+    } else if (textAt && v) addItem({ t: "x", c: color, x: textAt.x, y: textAt.y, s: v, z: 0.032 });
     if (v && keepErr && !errors.includes(v)) void errAct({ action: "saveError", text: v });
     setTextAt(null); setText(""); setKeepErr(false);
   }
@@ -563,6 +662,13 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
               <div className="gk-colors">{COLORS.map((c) => <button type="button" key={c} aria-label="لون" className={"gk-dot" + (color === c ? " on" : "")} style={{ background: c }} onClick={() => setColor(c)} />)}</div>
               <label className="gk-custom">🎨 لون ثاني <input type="color" value={color} onChange={(e) => setColor(e.target.value)} /></label>
               <div className="gk-tools">{WIDTHS.map((w) => <button type="button" key={w} className={"gk-w" + (width === w ? " on" : "")} onClick={() => setWidth(w)}><span style={{ height: w }} /></button>)}</div>
+              <div className="gk-lbl">الكتابة بالقلم</div>
+              <div className="gk-kind gk-pentext">
+                <button type="button" className={!penText ? "on" : ""} onClick={() => void setPenText(false)}>🖊 تبقى قلم</button>
+                <button type="button" className={penText ? "on" : ""} onClick={() => void setPenText(true)}>🔤 تتحول نص</button>
+              </div>
+              {penText && <div className="gk-pthint">اكتب ووقف ثانية ونص: تطلعلك كتابتك نص تعدله وتحطه</div>}
+              {penTextErr && <div className="gk-err">⚠️ {penTextErr}</div>}
               <button type="button" className="gk-btn" onClick={() => setPenBox(false)}>تم</button>
             </div>
           )}
@@ -624,16 +730,16 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         {!pages && <div className="gk-empty">جاري تجهيز الورقة...</div>}
         {pages && !pages.length && <div className="gk-empty">⚠️ ماكو صفحات بهذي الورقة.</div>}
         {page && showQ && q && !page.pen && <div className="gk-qtop" ref={qtop}><b>س{q.n}</b><TrimmedImage src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
-        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={fitH} locked={locked} onAdd={addItem} onErase={erase} onMove={moveItem} onTap={(x, y) => { setTextAt({ x, y }); setText(""); }} />}
+        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={fitH} locked={locked} aspect={aspect} onAdd={addStroke} onErase={erase} onMove={moveItem} onEdit={editText} onPenDown={penDown} onTap={(x, y) => { setEditIdx(null); setTextAt({ x, y }); setText(""); }} />}
       </div>
       {textAt && (
         <div className="gk-modal" onClick={() => !recOn && !voiceBusy && setTextAt(null)}>
           <div className="gk-dialog" onClick={(e) => e.stopPropagation()}>
-            <b>إضافة تعليق</b>
-            <div className="gk-kind">
+            <b>{editIdx !== null ? "تعديل التعليق" : "إضافة تعليق"}</b>
+            {editIdx === null && <div className="gk-kind">
               <button type="button" className={kind === "text" ? "on" : ""} disabled={recOn} onClick={() => setKind("text")}>✍️ كتابة</button>
               <button type="button" className={kind === "voice" ? "on" : ""} onClick={() => setKind("voice")}>🎙 فويس</button>
-            </div>
+            </div>}
             {kind === "voice" ? (
               <>
                 <VoiceRec value={voiceBlob} onChange={setVoiceBlob} onRecording={setRecOn} label="🎙 سجل تعليقك (أكثر شي 5 دقايق). يوصل للطالب ويا ورقته المصححة" />
@@ -679,8 +785,23 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
                 ))}
               </div>
             )}
-            <div className="gk-tools"><button type="button" className="gk-finish" onClick={() => addText()}>إضافة</button><button type="button" className="gk-btn" onClick={() => setTextAt(null)}>إلغاء</button></div>
+            <div className="gk-tools"><button type="button" className="gk-finish" onClick={() => addText()}>{editIdx !== null ? "حفظ التعديل" : "إضافة"}</button><button type="button" className="gk-btn" onClick={() => setTextAt(null)}>إلغاء</button></div>
             </>)}
+          </div>
+        </div>
+      )}
+      {conv && (
+        <div className="gk-modal">
+          <div className="gk-dialog">
+            <b>🔤 كتابتك صارت نص</b>
+            {conv.busy ? <div className="gk-empty">جاري قراية الكتابة...</div> : conv.err ? <div className="gk-err">⚠️ {conv.err}</div> : (
+              <textarea autoFocus rows={3} value={conv.text} onChange={(e) => setConv({ ...conv, text: e.target.value })} />
+            )}
+            {!conv.busy && !conv.err && <div className="gk-pthint">عدل النص إذا بي غلط، وبعدها دوس «حطها نص»</div>}
+            <div className="gk-tools">
+              {!conv.busy && !conv.err && <button type="button" className="gk-finish" disabled={!conv.text.trim()} onClick={placeConverted}>✅ حطها نص</button>}
+              <button type="button" className="gk-btn" onClick={() => setConv(null)}>🖊 خليها قلم</button>
+            </div>
           </div>
         </div>
       )}

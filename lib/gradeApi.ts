@@ -23,8 +23,9 @@ import { plainMath, stamp, todayStr } from "./util.ts";
 import { gradeCardPng } from "./documents.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { adminPageLink } from "./keyboards.ts";
-import { authed, need } from "./webApi.ts";
+import { ApiError, authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
+import { penTextOn, readInk, setPenText } from "./inkText.ts";
 
 export const GRADE_PERM = "grade";
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -87,7 +88,7 @@ async function listData(uid: number) {
     objections: await objectionPapers(uid),
     groups: await examGroups(waiting),
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
-    owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid),
+    owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid), penText: await penTextOn(uid),
     stickers: (await find("stickers", {})).sort((a, b) => a.lo - b.lo || a.id - b.id).map((s) => ({ id: s.id, name: s.name, lo: s.lo, hi: s.hi })),
     today: papers.filter((p) => p.grader_id === uid && String(p.graded_at ?? "").startsWith(stamp().slice(0, 10))).length,
   };
@@ -383,6 +384,16 @@ export async function gradeAction(body: Row) {
     try { need(Array.isArray(JSON.parse(ink || "[]").items ?? []), "رسم غير مفهوم"); } catch { need(false, "رسم غير مفهوم"); }
     await put("paper_ink", { item_id: it.id, page, ink });
     return { ok: true };
+  }
+  if (a === "penText") {
+    // إعداد المصحح لنفسه: كتابة القلم تبقى قلم أو تتحول نص
+    await setPenText(uid, !!body.on);
+    return { ok: true, penText: !!body.on };
+  }
+  if (a === "inkText") {
+    // قراية كتابة القلم وتحويلها لنص يعدله المصحح قبل ما ينحط
+    await workPaper(uid, body.id);
+    try { return { ok: true, text: await readInk(body.image) }; } catch (e) { throw new ApiError(400, (e as Error).message || "ما گدرت أقرا الكتابة"); }
   }
   if (a === "saveError" || a === "delError") {
     const text = String(body.text ?? "").trim().slice(0, 300);

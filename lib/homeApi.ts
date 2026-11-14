@@ -10,6 +10,7 @@ import { examsMenu } from "./exams.ts";
 import { adminPageLink, homeLink, mainKb, regLink, storeLink } from "./keyboards.ts";
 import { issuePassword } from "./password.ts";
 import { hasBooks } from "./notes.ts";
+import { openFor, sendPollTo } from "./polls.ts";
 import { scheduleChapters } from "./schedApi.ts";
 import { askStart, myQuestions } from "./questions.ts";
 import { onStoreOrder, saveStudent, showMe, studentFromForm } from "./student.ts";
@@ -66,7 +67,7 @@ export async function homeAction(body: Row) {
     const needLink = await needsGuardian(id);
     return {
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
-      name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id),
+      name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id), vote: (await openFor(id)).length,
       link: needLink ? await guardianLink(id) : null,
       // نفس رسالة المحادثة بالضبط، باسمه الكامل
       linkText: needLink ? guardianText(String(s.name).trim()) : null,
@@ -113,6 +114,14 @@ export async function homeAction(body: Row) {
     return { url: adminPageLink("myexams", id) };
   }
   if (a === "notes") return { url: adminPageLink("notes", id) };
+  if (a === "vote") {
+    // التصويتات المفتوحة إله توصله بالمحادثة، ويصوت من هناك
+    const list = await openFor(id);
+    if (!list.length) await send(id, "🗳 ماكو تصويت ينتظر صوتك هسه.");
+    for (const p of list) await sendPollTo(p, id);
+    await logActivity(id, "🗳 فتح التصويت");
+    return { close: true };
+  }
   if (a === "ask") {
     await setSession(id, "", {});
     await askStart(id, id);

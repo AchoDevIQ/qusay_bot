@@ -93,6 +93,8 @@ async function init() {
     CREATE TABLE IF NOT EXISTS note_videos(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, lang TEXT, file TEXT, tg TEXT, size INTEGER, created TEXT);
     CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, what TEXT, created TEXT);
     CREATE TABLE IF NOT EXISTS guardians(guardian_id INTEGER, student_id INTEGER, created TEXT, PRIMARY KEY(guardian_id, student_id));
+    CREATE TABLE IF NOT EXISTS polls(id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT, options TEXT, centers TEXT, gender TEXT, status TEXT, created TEXT, by_id INTEGER, closed_at TEXT, shown INTEGER);
+    CREATE TABLE IF NOT EXISTS poll_votes(poll_id INTEGER, user_id INTEGER, choice INTEGER, at TEXT, PRIMARY KEY(poll_id, user_id));
     CREATE TABLE IF NOT EXISTS company_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, from_id INTEGER, to_id INTEGER, n INTEGER, gross INTEGER, fees INTEGER, net INTEGER, created TEXT);
   `);
   await addColumn("orders", "curr", "TEXT");

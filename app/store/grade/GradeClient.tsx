@@ -14,7 +14,7 @@ type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand:
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
 type Only = { exams: { id: number; slug: string; chapter: string; title: string }[]; graders: { id: number; name: string }[]; rules: { exam: number; title: string; until: string; names: string[] }[] };
 type FoundPaper = { id: number; name: string; title: string; chapter: string; model: string; total: number; graded: string };
-type Data = { canEdit?: boolean; found?: FoundPaper[]; only?: Only; groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[] };
+type Data = { canEdit?: boolean; found?: FoundPaper[]; only?: Only; groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -31,6 +31,8 @@ function useWide(on: boolean) {
 }
 
 export default function GradeClient({ only }: { only?: "obj" } = {}) {
+  // اختيار المصحح «تبقى قلم / تتحول نص» بعد ما يبدله، حتى الورقة الجاية تفتح بيه
+  const [penNow, setPenNow] = useState<boolean | null>(null);
   const { data, error, busy, call } = useAdminApi<Data>("/api/grade", only ? "✋ الاعتراضات" : "✍️ التصحيح");
   const [paper, setPaper] = useState<Paper | null>(null);
   const [allDone, setAllDone] = useState(false);
@@ -125,7 +127,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
         {data && paper && (
-          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
+          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
             onClose={() => { setPaper(null); setSavedNow(0); group.current = null; void call({ action: "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onRescan={async () => { skipped.current.add(paper.id); await next(await call({ action: "rescan", id: paper.id })); }}
