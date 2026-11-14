@@ -771,7 +771,6 @@ const minutesLeft = (closeAt: string, nowAt: string, since: number) => {
 function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Room) => void; call: (b: Record<string, unknown>) => Promise<Info | null>; leave: () => void }) {
   const [since] = useState(() => Date.now());
   const [tick, setTick] = useState(0);
-  const [open, setOpen] = useState(room.questions[0]?.n ?? 0);
   const [draft, setDraft] = useState<{ q: number; file: File; url: string; turns: number } | null>(null);
   const [scan, setScan] = useState(scanDefault);
   // صور كثيرة مرة وحدة (أو صفحات PDF): كل وحدة تطلع للمعاينة وتندز، وبعدها اللي وراها
@@ -780,6 +779,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     const [f, ...rest] = files;
     setMore(rest);
     if (f) setDraft({ q, file: f, url: await previewUrl(f, scan), turns: 0 }); else setDraft(null);
+    // الصورة تطلع بمربع سؤالها، فننزل لهناك حتى يشوفها بمكانها
+    if (f) requestAnimationFrame(() => document.getElementById(`exq-${q}`)?.scrollIntoView({ block: "start", behavior: "smooth" }));
   }
   async function toggleScan() { const on = !scan; setScan(on); rememberScan(on); if (draft) setDraft({ ...draft, url: await previewUrl(draft.file, on) }); }
   const [busy, setBusy] = useState(false);
@@ -862,16 +863,20 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
           <div className="exhint">تنفتح ورقة لكل سؤال، وفوگ أرقام الأسئلة. كل ما تخلص ورقة دوس «✅ تم» ويصير رقمها أخضر، وبالأخير «📤 أرسل الأجوبة» مرة وحدة.</div>
         </div>
         <div className="form">
-          {room.questions.map((q) => (
-            <div key={q.n}>
-              <button type="button" className={"exqhead" + (open === q.n ? " on" : "")} onClick={() => setOpen(q.n)}><span>السؤال {q.n}</span><span>{q.answers.length ? "✅ انحفظ جوابه" : "بعده ما جاوبته"}</span></button>
-              {open === q.n && (
-                <div className="exqbody">
-                  {q.answers.map((a) => (
-                    <div key={a.id}><img className="eximg" src={fileUrl(room.id, a.file)} alt={`جواب ${q.n}`} /><button type="button" className="exbtn" disabled={busy} onClick={async () => { setBusy(true); const r = await call({ action: "delAnswer", item: room.id, answer: a.id }); if (r?.room) setRoom(r.room); setBusy(false); }}>🗑 احذف هاي الصورة</button></div>
+          {/* كل سؤال بمربع وحده: عنوانه فوك، وصوره وأزراره جوه بس، وبين سؤال وسؤال خط فاصل.
+              حتى الطالب يعرف الصورة لأي سؤال راحت */}
+          {room.questions.map((q, qi) => (
+            <Fragment key={q.n}>
+              {qi > 0 && <div className="exqsep" aria-hidden="true" />}
+              <section id={`exq-${q.n}`} className={"exqblk" + (q.answers.length ? " done" : "") + (draft?.q === q.n ? " now" : "")}>
+                <div className="exqtitle"><b>السؤال {q.n}</b><span>{q.answers.length ? `✅ ${q.answers.length === 1 ? "صورة وحدة" : `${q.answers.length} صور`}` : "بعده ما جاوبته"}</span></div>
+                <div className="exqin">
+                  {q.answers.map((a, ai) => (
+                    <div key={a.id}><div className="exqtag">📷 صورة {ai + 1} · السؤال {q.n}</div><img className="eximg" src={fileUrl(room.id, a.file)} alt={`جواب ${q.n}`} /><button type="button" className="exbtn" disabled={busy} onClick={async () => { setBusy(true); const r = await call({ action: "delAnswer", item: room.id, answer: a.id }); if (r?.room) setRoom(r.room); setBusy(false); }}>🗑 احذف هاي الصورة</button></div>
                   ))}
                   {draft?.q === q.n ? (
                     <div>
+                      <div className="exqtag now">📌 هاي الصورة الجديدة راح تنحفظ لـ «السؤال {q.n}»</div>
                       {more.length > 0 && <div className="exhint">باقي {more.length} صورة وراها</div>}
                       <div className="exhint exbad">⚠️ لازم الصورة عدلة مو مگلوبة، عداها الورقة ما تتصحح.</div>
                       <img className="eximg mxdraft" src={draft.url} alt="معاينة" style={{ transform: `rotate(${draft.turns * 90}deg)` }} />
@@ -898,8 +903,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
                     </>
                   )}
                 </div>
-              )}
-            </div>
+              </section>
+            </Fragment>
           ))}
           {error && <div className="err">⚠️ {error}</div>}
           {answered >= need
