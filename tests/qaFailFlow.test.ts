@@ -128,3 +128,17 @@ test("الأستاذ جاوب قبل ما يرجع الذكاء: ما ينعاد
   assert.ok(!calls.some((c) => c.p.chat_id === 2));
   assert.equal((await qaFails()).length, 0);
 });
+
+test("صاحب البوت خفّى «❓ بعدني ما فهمت»: الحل يوصل بزر «📘 افتح الحل» بس", async () => {
+  down = false;
+  await qa.qaAction({ initData: sign(1), action: "settings", teacherBtn: false });
+  const t = (await find("topics")).find((x) => x.ar === "الجذور التربيعية")!;
+  const ch = (await find("chapters")).sort((a, b) => a.ord - b.ord)[0];
+  await msg(2, "❓ سؤال علمي"); await cb(2, `qc:${ch.id}`); await cb(2, `qt:${t.id}`); await cb(2, `ql:${t.id}:1`);
+  calls.length = 0;
+  await msg(2, "جد الجذور التربيعية للعدد 9-40i");
+  const m = calls.find((c) => c.p.chat_id === 2 && /حليت سؤالك/.test(String(c.p.text)))!;
+  assert.equal(m.p.reply_markup.inline_keyboard.length, 1);
+  assert.match(m.p.reply_markup.inline_keyboard[0][0].text, /افتح الحل/);
+  await qa.qaAction({ initData: sign(1), action: "settings", teacherBtn: true });
+});

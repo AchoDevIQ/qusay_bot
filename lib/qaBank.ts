@@ -19,8 +19,10 @@ export const QA_KIND: Record<QaKind, string> = { main: "الملزمة", extra: 
 type Lecture = { topic: string; lecture: number; text: string };
 /** tid: موضوع البوت اللي ينربط بيه موضوع الملزمة (الأسماء تختلف: «ديموافر» = «الصيغة القطبية وديموافر»). null يعني ما ينربط */
 export type QaBook = { id: string; chapter: number; lang: "ar" | "en"; kind: QaKind; name: string; topics: { topic: string; lectures: number[]; tid?: number | null }[]; chars: number; created: string };
-/** free: من fromBook، اللي انطى حل الملزمة نفسه بلا ذكاء (نفس السؤال بالضبط) */
-export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; free?: number; inTok: number; outTok: number };
+/** free: من fromBook، اللي انطى حل الملزمة نفسه بلا ذكاء (نفس السؤال بالضبط)
+ *  stepBtn: زر «🤔 ما فهمت خطوة» بصفحة الحل (طافي من البداية). teacherBtn: زر «❓ بعدني ما فهمت» يوصل السؤال للأستاذ (شغال من البداية)
+ *  explained: كم خطوة انشرحت */
+export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; free?: number; inTok: number; outTok: number; stepBtn?: boolean; teacherBtn?: boolean; explained?: number };
 const BOOKS = "qa_books", CFG = "qa_cfg";
 const DEF: QaCfg = { on: false, direct: true, asked: 0, fromBook: 0, solved: 0, inTok: 0, outTok: 0 };
 // Haiku 5.5: 0.10$ داخل و0.50$ طالع لكل مليون توكن
@@ -264,8 +266,8 @@ const joinCtx = (list: Part[], max: number) => {
   }
   return s;
 };
-async function call(mode: "find" | "solve", context: string, q: QaAsk, lang: "ar" | "en") {
-  const r = await svc("/bot/qa", { mode, context, question: (q.text ?? "").slice(0, 4000), image: q.image?.toString("base64"), lang }, 180_000);
+async function call(mode: "find" | "solve" | "explain", context: string, q: QaAsk, lang: "ar" | "en", shown = "") {
+  const r = await svc("/bot/qa", { mode, context, question: (q.text ?? "").slice(0, 4000), image: q.image?.toString("base64"), lang, ...(shown ? { shown } : {}) }, 180_000);
   const cfg = await qaCfg();
   for (const u of r.usage ?? []) { cfg.inTok += Number(u.input) || 0; cfg.outTok += Number(u.output) || 0; }
   await saveCfg(cfg);
@@ -275,16 +277,16 @@ async function call(mode: "find" | "solve", context: string, q: QaAsk, lang: "ar
 /** جواب سؤال الطالب: من المحاضرة، أو من الموضوع، أو حل على طريقة الأستاذ. null إذا ماكو ملازم لهذا الموضوع */
 /** tid: موضوع البوت اللي اختاره الطالب. مواضيع الملزمة المربوطة بيه بس تدخل */
 /** uid: الطالب اللي سأل، حتى الراصد مال فصله يدخل بالبحث */
-export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: number, lang: "ar" | "en", uid?: number): Promise<QaResult | null> {
+/** أجزاء الملازم المربوطة بموضوع البوت هذا (منهج الطالب أول)، وأسئلة امتحاناته */
+async function partsFor(chapter: number, tid: number, lang: "ar" | "en") {
   const t = await one("topics", { id: tid });
   const names = [String(t?.ar ?? ""), String(t?.en ?? "")].filter(Boolean);
-  // موضوع الملزمة مربوط بهذا الموضوع، أو (ملزمة قديمة بلا ربط) اسمه يشبهه
   const linked = (b: QaBook, name: string) => {
     const e = b.topics.find((x) => x.topic === name);
     return e && e.tid !== undefined ? e.tid === tid : names.some((n) => sameTopic(n, name));
   };
+  // موضوع الملزمة مربوط بهذا الموضوع، أو (ملزمة قديمة بلا ربط) اسمه يشبهه
   const all = (await qaBooks()).filter((b) => b.chapter === chapter);
-  // ملازم منهج الطالب أول. إذا الموضوع ما بيها، ملازم المنهج الثاني، والحل ينكتب بلغة الطالب
   const pick = async (books: QaBook[]) => {
     const out: Part[] = [];
     for (const b of books) for (const l of await lecturesOf(b)) if (linked(b, l.topic)) out.push({ kind: b.kind, l });
@@ -292,8 +294,16 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
   };
   let mine = await pick(all.filter((b) => b.lang === lang));
   if (!mine.length) mine = await pick(all.filter((b) => b.lang !== lang));
-  // أسئلة الامتحانات مال هذا الموضوع: تدخل بالبحث بالموضوع (مو بالمحاضرة)
   for (const x of await examQas(tid)) mine.push({ kind: "tests", l: { topic: `${x.exam} نموذج ${x.model} سؤال ${x.n}`, lecture: 0, text: `السؤال: ${x.question}\nالحل:\n${x.solution}` } });
+  return mine;
+}
+
+export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: number, lang: "ar" | "en", uid?: number): Promise<QaResult | null> {
+  const t = await one("topics", { id: tid });
+  const names = [String(t?.ar ?? ""), String(t?.en ?? "")].filter(Boolean);
+  // ملازم منهج الطالب أول (إذا الموضوع ما بيها، المنهج الثاني، والحل ينكتب بلغة الطالب)، وأسئلة الامتحانات مال الموضوع
+  const mine = await partsFor(chapter, tid, lang);
+  const all = (await qaBooks()).filter((b) => b.chapter === chapter);
   const rasids = await rasidsOf(uid, chapter);
   if (!mine.length && !rasids.length) return null;
   const cfg = await qaCfg(); cfg.asked++; await saveCfg(cfg);
@@ -657,10 +667,52 @@ async function done(source: QaResult["source"], solution: string): Promise<QaRes
 }
 
 // ---------- الجواب المحفوظ للطالب (صفحة الحل)
-export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar") {
+export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar", ctx: { chapter?: number; tid?: number; lecture?: number } = {}) {
   const id = randomUUID().replace(/-/g, "").slice(0, 16);
-  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), lang, at: new Date().toISOString() }));
+  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), lang, ...ctx, at: new Date().toISOString() }));
   return id;
+}
+/** «🤔 ما فهمت خطوة»: كم مرة على نفس الحل، وكم مرة باليوم للطالب (حتى الكلفة تبقى صغيرة) */
+export const EXPLAIN_PER_ANSWER = 5, EXPLAIN_PER_DAY = 20;
+type Explained = { ask: string; text: string; at: string };
+const canExplain = (a: Row, cfg: QaCfg) => !!cfg.stepBtn && aiLinked() && ["lecture", "topic", "ai"].includes(a.source) && !!String(a.solution ?? "").trim();
+/** الطالب ما فهم نقطة بالحل اللي شافه: الذكاء يشرحها على طريقة الأستاذ، من شرحه بالملزمة */
+export async function qaExplain(body: Row) {
+  const uid = verifyHomeToken(body?.token);
+  need(uid !== null, "الرابط قديم. افتح الحل من رسالة البوت", 401);
+  const id = String(body.id ?? "");
+  need(/^[a-f0-9]{16}$/.test(id), "الحل غير موجود", 404);
+  const key = `qa_ans_${id}`;
+  const a = JSON.parse((await kvGet(key)) ?? "null");
+  need(a && a.uid === uid, "الحل غير موجود", 404);
+  const en = a.lang === "en";
+  const cfg = await qaCfg();
+  need(canExplain(a, cfg), en ? "This button is off" : "هذا الزر طافي");
+  const ask = String(body.ask ?? "").replace(/\s+/g, " ").trim();
+  need(ask.length >= 3, en ? "Write what you did not understand" : "اكتب شنو ما فهمت");
+  need(ask.length <= 500, en ? "Too long: write it shorter" : "طويل هواية، اكتبه أقصر");
+  const ex: Explained[] = Array.isArray(a.ex) ? a.ex : [];
+  need(ex.length < EXPLAIN_PER_ANSWER, en ? "You asked about this solution enough times. If it is still not clear, send it to the teacher" : "سألت هواية على هذا الحل. إذا بعدك ما فهمت، وصّله للأستاذ");
+  const dayKey = `qa_ex_day_${uid}_${new Date().toISOString().slice(0, 10)}`;
+  const today = Number(await kvGet(dayKey)) || 0;
+  need(today < EXPLAIN_PER_DAY, en ? "That is enough for today, try again tomorrow" : "خلصت أسئلة اليوم، ارجع باچر");
+  // شرح الأستاذ من ملزمته: المحاضرة اللي انحل منها السؤال أول، بعدها الموضوع
+  let context = "";
+  if (a.chapter && a.tid) {
+    const parts = await partsFor(Number(a.chapter), Number(a.tid), en ? "en" : "ar");
+    const lec = a.lecture ? parts.filter((x) => x.l.lecture === Number(a.lecture)) : [];
+    context = joinCtx([...lec, ...parts.filter((x) => !lec.includes(x))], LECTURE_MAX);
+  }
+  const shown = `${a.question ? `السؤال: ${a.question}\n\n` : ""}الحل:\n${a.solution}`;
+  let text = "";
+  try { text = (await call("explain", context || "(لا توجد ملزمة لهذا الموضوع)", { text: ask }, en ? "en" : "ar", shown)).solution; }
+  catch (e) { console.error("qa explain", e); need(false, en ? "Could not explain it now, try again later" : "ما گدرت أشرحها هسه، حاول بعد شوية"); }
+  need(text, en ? "Could not explain it now, try again later" : "ما گدرت أشرحها هسه، حاول بعد شوية");
+  await kvSet(dayKey, String(today + 1));
+  const next = [...ex, { ask, text, at: new Date().toISOString() }];
+  await kvSet(key, JSON.stringify({ ...a, ex: next }));
+  const c = await qaCfg(); c.explained = (c.explained ?? 0) + 1; await saveCfg(c);
+  return { ex: next, left: EXPLAIN_PER_ANSWER - next.length };
 }
 export async function answerView(body: Row) {
   const uid = verifyHomeToken(body?.token);
@@ -673,7 +725,12 @@ export async function answerView(body: Row) {
   const rasid = a.rasid ? { ...a.rasid, marks: (await marksFor(Number(a.rasid.book))).filter((m) => m.page === Number(a.rasid.page)) } : undefined;
   // الدفتر: صفحاته، وأزرار فيديو هذا السؤال بس
   const notebook = a.notebook ? { ...a.notebook, marks: a.notebook.mark ? (await marksFor(Number(a.notebook.book))).filter((m) => m.id === Number(a.notebook.mark)) : [] } : undefined;
-  return { question: a.question, where: a.where, source: a.source, solution: a.solution, lang: a.lang === "en" ? "en" : "ar", ...(rasid ? { rasid } : {}), ...(notebook ? { notebook } : {}) };
+  const cfg = await qaCfg();
+  const ex: Explained[] = Array.isArray(a.ex) ? a.ex : [];
+  return {
+    question: a.question, where: a.where, source: a.source, solution: a.solution, lang: a.lang === "en" ? "en" : "ar", ...(rasid ? { rasid } : {}), ...(notebook ? { notebook } : {}),
+    ex, explain: canExplain(a, cfg) && a.uid === uid ? EXPLAIN_PER_ANSWER - ex.length : 0, teacher: cfg.teacherBtn !== false,
+  };
 }
 
 // ---------- صفحة صاحب البوت
@@ -683,7 +740,7 @@ async function pageData() {
   const list = (await qaBooks()).sort((a, b) => a.chapter - b.chapter || a.lang.localeCompare(b.lang) || a.kind.localeCompare(b.kind));
   const botTopics: Record<number, { id: number; ar: string }[]> = {};
   for (const n of new Set(list.map((b) => b.chapter))) botTopics[n] = (await chapterTopics(n)).map((t) => ({ id: t.id, ar: t.ar }));
-  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, linked: aiLinked(), asked: cfg.asked, fromBook: cfg.fromBook, free: cfg.free ?? 0, solved: cfg.solved, cost, books: list, botTopics } };
+  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, stepBtn: !!cfg.stepBtn, teacherBtn: cfg.teacherBtn !== false, explained: cfg.explained ?? 0, linked: aiLinked(), asked: cfg.asked, fromBook: cfg.fromBook, free: cfg.free ?? 0, solved: cfg.solved, cost, books: list, botTopics } };
 }
 const DOCX_MAX = 60 * 1024 * 1024;
 export async function qaAction(raw: Row | FormData) {
@@ -739,6 +796,8 @@ export async function qaAction(raw: Row | FormData) {
     const cfg = await qaCfg();
     if (body.on !== undefined) cfg.on = body.on === true || body.on === "1";
     if (body.direct !== undefined) cfg.direct = body.direct === true || body.direct === "1";
+    if (body.stepBtn !== undefined) cfg.stepBtn = body.stepBtn === true || body.stepBtn === "1";
+    if (body.teacherBtn !== undefined) cfg.teacherBtn = body.teacherBtn === true || body.teacherBtn === "1";
     await saveCfg(cfg);
     notice = "✅ انحفظ";
   } else need(a === "list", "أمر غير معروف");

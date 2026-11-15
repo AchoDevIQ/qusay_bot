@@ -126,9 +126,12 @@ async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean)
 async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: number, en: boolean, text: string, qid = 0) {
   const where = `${t.ar}${l ? ` — المحاضرة ${l}` : ""}`;
   const shown = en ? `${t.en || t.ar}${l ? ` — Lecture ${l}` : ""}` : where;
-  const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar");
+  // موضوعه ومحاضرته ينحفظن ويا الحل، حتى «🤔 ما فهمت خطوة» ياخذ شرح الأستاذ من نفس الملزمة
+  const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar", { chapter: await chapterNo(t.chapter_id), tid: Number(t.id), lecture: l });
   const more = en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ";
-  const kb: Kb = [[{ text: en ? "📘 Open the solution" : "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }], [btn(more, qid ? `qf:${qid}` : "qx:go")]];
+  const kb: Kb = [[{ text: en ? "📘 Open the solution" : "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }]];
+  // صاحب البوت يگدر يخفي «❓ بعدني ما فهمت»
+  if ((await qaCfg()).teacherBtn !== false) kb.push([btn(more, qid ? `qf:${qid}` : "qx:go")]);
   const msg = r.source === "notebook"
     ? (en ? "📘 <b>Your question is solved in the teacher's lecture notebook</b>\nTap the button to see his solution." : "📘 <b>سؤالك محلول بدفتر المحاضرات</b>\nدوس الزر تشوف حل الأستاذ.")
     : r.source === "rasid"
@@ -213,7 +216,7 @@ async function autoAnswer(chat: number, uid: number, m: Row, data: Row, en: bool
   await kvSet(`qauto_${uid}`, JSON.stringify({ mid: m.message_id, t: data.t, l: data.l || 0 }));
   await setSession(uid, "", {});
   const caption = replyText((await bookletCfg()).reply);
-  const kb = [[btn("❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]];
+  const kb = (await qaCfg()).teacherBtn !== false ? [[btn("❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]] : [];
   if (!await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", r.image, "answer.jpg", "image/jpeg")) return false;
   await send(chat, "👆", { replyKb: await mainKb(uid) });
   await logActivity(uid, `📘 وصله حل سؤاله من الملزمة (${r.match.booklet.name})`);

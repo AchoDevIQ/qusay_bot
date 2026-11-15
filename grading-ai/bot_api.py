@@ -1301,9 +1301,10 @@ async def bot_objection(req: ObjectionReq):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class QaReq(BaseModel):
-    mode: str = Field(pattern="^(find|solve)$")
+    mode: str = Field(pattern="^(find|solve|explain)$")
     context: str = Field(min_length=1, max_length=400_000)  # booklet text of the chosen lecture or topic (math in $...$)
-    question: str = Field(default="", max_length=4000)  # the student's question as typed
+    question: str = Field(default="", max_length=4000)  # the student's question as typed (explain: what he did not understand)
+    shown: str = Field(default="", max_length=30_000)  # explain: the question and the solution the student already saw
     image: Optional[str] = None  # or a photo of it (base64)
     lang: Lang = "ar"  # the student's track: the answer is written in this language
 
@@ -1344,6 +1345,16 @@ QA_SOLVE_TASK = """The student asks the question {how}. It is not solved in the 
 Solve it exactly the way the teacher solves this kind of question in the booklet: the same method, the same order of steps, the same Arabic phrases and notation.
 Do not use any method that does not appear in the booklet. Check the arithmetic carefully; the answer must be correct.
 If the question is not a math question of this topic, or cannot be read, say so in one short line."""
+
+QA_EXPLAIN_TASK = """The student already got this solution of his question:
+=== WHAT HE SAW ===
+{shown}
+=== END ===
+He did not understand a point in it and asks {how}.
+Explain only that point to him, the way the teacher explains in the booklet: his method, his Arabic phrases and notation, short and clear, one idea per line.
+If the booklet explains this idea (a rule, a law, why a sign changes...), use the teacher's own explanation. Show the small step he missed with the numbers of this solution.
+Do not solve the whole question again and do not change the answer. If the solution he saw has a real mistake at that point, say so plainly and give the right step.
+If what he asks is not about this solution or this topic, say so in one short line."""
 
 EN_TRACK = ("\nThe student studies the ENGLISH track: write the whole solution in English (steps, words and explanations), "
             "translating the teacher's Arabic words if the booklet is in Arabic. Keep his method and his order of steps.")
@@ -1400,7 +1411,12 @@ async def bot_qa(req: QaReq):
     if not req.image and not q:
         raise HTTPException(status_code=400, detail="empty question")
     system = QA_SYSTEM.replace("{context}", context)
-    task = (QA_FIND_TASK if req.mode == "find" else QA_SOLVE_TASK).replace("{how}", how)
+    if req.mode == "explain":
+        if not q:
+            raise HTTPException(status_code=400, detail="empty question")
+        task = QA_EXPLAIN_TASK.replace("{shown}", req.shown.strip()[:20_000] or "(not given)").replace("{how}", how)
+    else:
+        task = (QA_FIND_TASK if req.mode == "find" else QA_SOLVE_TASK).replace("{how}", how)
     if req.lang == "en":
         task += EN_TRACK
     schema = QaFind if req.mode == "find" else QaSolve

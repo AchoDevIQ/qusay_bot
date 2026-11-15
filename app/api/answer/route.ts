@@ -1,7 +1,8 @@
-import { answerView } from "../../../lib/qaBank.ts";
+import { answerView, qaExplain } from "../../../lib/qaBank.ts";
 import { apiResponse, ensure } from "../../../lib/webApi.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const POST = (req: Request) => apiResponse(async () => { await ensure(); return await answerView(await req.json()); });
+// «🤔 ما فهمت خطوة»: action explain، وإلا الحل نفسه
+export const POST = (req: Request) => apiResponse(async () => { await ensure(); const b = await req.json(); return b?.action === "explain" ? await qaExplain(b) : await answerView(b); });

@@ -294,3 +294,52 @@ test("سؤال محلول بـ«دفتر المحاضرات» اللي بملا�
   // طالب مو مشترك بالفصل: ما يوصله
   assert.equal(await qa.qaAnswer({ text: LADDER }, 3, tid, 0, "ar", 70), null);
 });
+
+test("«🤔 ما فهمت خطوة»: طافي من البداية، يشرح النقطة من شرح الأستاذ بالملزمة، وإله حد. وزر «❓ بعدني ما فهمت» يتخفى", async () => {
+  const tid = await tidOf("الجذور التربيعية");
+  const r = { source: "ai" as const, solution: "$x^{2}-y^{2}=3$\n$2xy=-4$" };
+  const id = await qa.saveAnswer(80, "جد جذور 3-4i", r, "الجذور التربيعية — المحاضرة 1", "ar", { chapter: 1, tid, lecture: 1 });
+  const ask = (uid: number, text: string) => qa.qaExplain({ token: homeToken(uid), id, ask: text }) as Promise<any>;
+  // طافي: ماكو زر
+  let v: any = await qa.answerView({ token: homeToken(80), id });
+  assert.equal(v.explain, 0);
+  assert.equal(v.teacher, true);
+  await assert.rejects(ask(80, "ليش صارت سالب؟"), /طافي/);
+  await qa.qaAction({ initData: sign(1), action: "settings", stepBtn: true });
+  v = await qa.answerView({ token: homeToken(80), id });
+  assert.equal(v.explain, qa.EXPLAIN_PER_ANSWER);
+  // الشرح: الحل اللي شافه والسؤال، وملزمة نفس المحاضرة
+  ai.length = 0;
+  reply = (b) => (b.mode === "explain" ? { solution: "لأن $i^{2}=-1$" } : { found: false, solution: "" });
+  const out = await ask(80, "ليش  صارت\nسالب؟");
+  assert.equal(ai.length, 1);
+  assert.equal(ai[0].body.mode, "explain");
+  assert.equal(ai[0].body.question, "ليش صارت سالب؟");
+  assert.ok(ai[0].body.shown.includes("جد جذور 3-4i") && ai[0].body.shown.includes("2xy=-4"));
+  assert.ok(ai[0].body.context.includes("8i"));
+  assert.deepEqual(out.ex.map((x: any) => [x.ask, x.text]), [["ليش صارت سالب؟", "لأن $i^{2}=-1$"]]);
+  assert.equal(out.left, qa.EXPLAIN_PER_ANSWER - 1);
+  // ينحفظ ويرجع إذا فتح الحل مرة ثانية
+  v = await qa.answerView({ token: homeToken(80), id });
+  assert.equal(v.ex.length, 1);
+  // طالب ثاني ما يگدر، والكلام القصير ما ينبعث
+  await assert.rejects(ask(81, "ليش صارت سالب؟"), (e: any) => e.status === 404);
+  await assert.rejects(ask(80, "ل"), /اكتب شنو ما فهمت/);
+  // حد الحل الواحد
+  for (let i = 1; i < qa.EXPLAIN_PER_ANSWER; i++) await ask(80, `سؤال رقم ${i}`);
+  await assert.rejects(ask(80, "مرة زيادة"), /سألت هواية/);
+  // الحل من الراصد أو الدفتر (صفحات): ماكو زر
+  const page = await qa.saveAnswer(80, "x", { source: "rasid", solution: "", rasid: { book: 1, page: 2, topic: "x", q: "س1" } as any }, "x");
+  assert.equal(((await qa.answerView({ token: homeToken(80), id: page })) as any).explain, 0);
+  // الذكاء واقف: رسالة مفهومة، وما تنحسب
+  const id2 = await qa.saveAnswer(80, "جد جذور 5-12i", r, "x", "ar", { chapter: 1, tid, lecture: 1 });
+  reply = () => { throw new Error("down"); };
+  await assert.rejects(qa.qaExplain({ token: homeToken(80), id: id2, ask: "ليش هيك؟" }), /ما گدرت أشرحها هسه/);
+  assert.equal(((await qa.answerView({ token: homeToken(80), id: id2 })) as any).ex.length, 0);
+  // زر «❓ بعدني ما فهمت»: صاحب البوت يخفيه
+  await qa.qaAction({ initData: sign(1), action: "settings", teacherBtn: false });
+  assert.equal(((await qa.answerView({ token: homeToken(80), id })) as any).teacher, false);
+  const p: any = await qa.qaAction({ initData: sign(1), action: "list" });
+  assert.deepEqual([p.qa.stepBtn, p.qa.teacherBtn, p.qa.explained], [true, false, qa.EXPLAIN_PER_ANSWER]);
+  await qa.qaAction({ initData: sign(1), action: "settings", teacherBtn: true, stepBtn: false });
+});

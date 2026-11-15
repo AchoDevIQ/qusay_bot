@@ -11,7 +11,9 @@ type Mark = { id: number; page: number; video: boolean; solution: boolean; q?: s
 type Rasid = { book: number; page: number; topic: string; q: string; marks: Mark[] };
 /** notebook: سؤاله محلول بدفتر المحاضرات: صفحاته من بداية السؤال (y مكانه بأول صفحة)، وأزرار فيديوهاته */
 type Notebook = { book: number; page: number; pages: number[]; y: number; q: string; where: string; marks: Mark[] };
-type Ans = { question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid" | "notebook"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid; notebook?: Notebook };
+/** ex: الشروح اللي طلبها على هذا الحل. explain: كم مرة بعد يگدر يسأل (0: الزر ما يطلع). teacher: زر «❓ بعدني ما فهمت» شغال */
+type Explained = { ask: string; text: string; at: string };
+type Ans = { question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid" | "notebook"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid; notebook?: Notebook; ex?: Explained[]; explain?: number; teacher?: boolean };
 
 const tgPlatform = () => (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "";
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
@@ -95,14 +97,58 @@ function BookSolution({ book, title, hint, pages, sol, y, marks }: { book: numbe
 }
 
 const TXT = {
-  ar: { title: "📘 حل سؤالك", q: "❓ سؤالك", photo: "📷 سؤالك بالصورة اللي دزيتها", ai: "🤖 الحل على طريقة الأستاذ", book: "📘 حل الأستاذ من الملزمة", aiNote: "هذا السؤال ما موجود بالملزمة، فانحل بنفس طريقة الأستاذ.", help: "إذا بعدك ما فهمت، ارجع للبوت ودوس «❓ بعدني ما فهمت» ويوصل سؤالك للأستاذ.", loading: "جاري التحميل...", net: "ماكو اتصال، حاول مرة ثانية", err: "صار خطأ" },
-  en: { title: "📘 Your solution", q: "❓ Your question", photo: "📷 Your question is in the photo you sent", ai: "🤖 Solved the teacher's way", book: "📘 The teacher's solution from the booklet", aiNote: "This question is not in the booklet, so it was solved with the teacher's method.", help: "Still not clear? Go back to the bot and tap «❓ Still not clear» to send your question to the teacher.", loading: "Loading...", net: "No connection, try again", err: "Something went wrong" },
+  ar: { title: "📘 حل سؤالك", q: "❓ سؤالك", photo: "📷 سؤالك بالصورة اللي دزيتها", ai: "🤖 الحل على طريقة الأستاذ", book: "📘 حل الأستاذ من الملزمة", aiNote: "هذا السؤال ما موجود بالملزمة، فانحل بنفس طريقة الأستاذ.", help: "إذا بعدك ما فهمت، ارجع للبوت ودوس «❓ بعدني ما فهمت» ويوصل سؤالك للأستاذ.", step: "🤔 ما فهمت خطوة", stepHint: "اكتب شنو ما فهمت بالحل، مثلاً: «ليش صارت سالب بالسطر الثالث؟»", send: "اشرحلي", wait: "⏳ دا يشرحها...", you: "❓ سألت", left: (n: number) => `باقي ${n} مرة على هذا الحل`, loading: "جاري التحميل...", net: "ماكو اتصال، حاول مرة ثانية", err: "صار خطأ" },
+  en: { title: "📘 Your solution", q: "❓ Your question", photo: "📷 Your question is in the photo you sent", ai: "🤖 Solved the teacher's way", book: "📘 The teacher's solution from the booklet", aiNote: "This question is not in the booklet, so it was solved with the teacher's method.", help: "Still not clear? Go back to the bot and tap «❓ Still not clear» to send your question to the teacher.", step: "🤔 I didn't get a step", stepHint: "Write what you did not understand, e.g. «why did it become negative in line 3?»", send: "Explain", wait: "⏳ Explaining...", you: "❓ You asked", left: (n: number) => `${n} more on this solution`, loading: "Loading...", net: "No connection, try again", err: "Something went wrong" },
 };
 
 /** سطر الحل: إذا كله رياضيات بدون $ ينكتب معادلة، وإذا بيه كلام وبين $ $ رياضيات ينكتب جملة */
 function Line({ text, rtl }: { text: string; rtl: boolean }) {
   if (text.includes("$") || /[؀-ۿ]/.test(text) || /[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(text)) return <div className="ansline" dir={rtl ? "rtl" : "ltr"}><Inline text={text} /></div>;
   return <div className="ansline"><MathText text={text} /></div>;
+}
+
+/** «🤔 ما فهمت خطوة»: يكتب شنو ما فهم، والشرح ينكتب تحت الحل (وينحفظ، يرجع إذا فتح الحل مرة ثانية) */
+function StepHelp({ a, t, rtl, onDone }: { a: Ans; t: (typeof TXT)["ar"]; rtl: boolean; onDone: (ex: Explained[], left: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [ask, setAsk] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const ex = a.ex ?? [];
+  async function send() {
+    if (ask.trim().length < 3 || busy) return;
+    haptic(); setBusy(true); setErr("");
+    try {
+      const q = new URLSearchParams(location.search);
+      const res = await fetch("/api/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: q.get("t") ?? "", id: q.get("a") ?? "", action: "explain", ask }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? t.err);
+      onDone(j.ex, j.left); setAsk(""); setOpen(false);
+    } catch (e) { setErr((e as Error).message || t.net); } finally { setBusy(false); }
+  }
+  if (!ex.length && !a.explain) return null;
+  return (
+    <>
+      {ex.map((x, i) => (
+        <div key={i} className="card">
+          <h2>{t.you}: «{x.ask}»</h2>
+          <div className="expad anssol">{x.text.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l, k) => <Line key={k} text={l} rtl={rtl} />)}</div>
+        </div>
+      ))}
+      {!!a.explain && (
+        <div className="card">
+          {!open ? <button type="button" className="btn" style={{ width: "100%" }} onClick={() => { haptic(); setOpen(true); }}>{t.step}</button> : (
+            <div className="expad" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div className="exhint">{t.stepHint}</div>
+              <textarea value={ask} maxLength={500} rows={3} dir={rtl ? "rtl" : "ltr"} disabled={busy} onChange={(e) => setAsk(e.target.value)} style={{ width: "100%", boxSizing: "border-box", fontSize: 16, padding: 8, borderRadius: 8 }} />
+              <button type="button" className="btn" disabled={busy || ask.trim().length < 3} onClick={() => void send()}>{busy ? t.wait : t.send}</button>
+              {err && <div className="exbad">⚠️ {err}</div>}
+              <div className="exhint">{t.left(a.explain)}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
 }
 
 export default function AnswerClient() {
@@ -149,7 +195,8 @@ export default function AnswerClient() {
                 {a.source === "ai" && <div className="expad exhint">{t.aiNote}</div>}
               </div>
             )}
-            <div className="exhint" style={{ textAlign: "center", margin: "6px 0 18px" }}>{t.help}</div>
+            {!a.rasid && !a.notebook && <StepHelp a={a} t={t} rtl={rtl} onDone={(ex, left) => setA({ ...a, ex, explain: left })} />}
+            {a.teacher !== false && <div className="exhint" style={{ textAlign: "center", margin: "6px 0 18px" }}>{t.help}</div>}
           </>
         )}
       </div>
