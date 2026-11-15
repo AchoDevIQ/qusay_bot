@@ -299,6 +299,7 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
   const cfg = await qaCfg(); cfg.asked++; await saveCfg(cfg);
   // ١. صورة السؤال تنقرا كتابة مرة وحدة (طلب صغير)، ونفس الصورة ما تنقرا مرتين
   let text = (q.text ?? "").trim();
+  let readErr: unknown = null;
   if (q.image) {
     const ik = `qa_img_${sha(q.image)}`;
     let read = (await kvGet(ik)) ?? "";
@@ -308,12 +309,12 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
         await addUsage(r.usage);
         read = String(r.question ?? "").trim();
         if (read) await kvSet(ik, read);
-      } catch (e) { console.error("qa read", e); }
+      } catch (e) { console.error("qa read", e); readErr = e; }
     }
     text = [read, text].filter(Boolean).join("\n");
   }
   // ما انقرت الصورة: الطريقة القديمة على المحاضرة بس (مو الموضوع كله)
-  if (!text && !mine.length) return null;
+  if (!text && !mine.length) { if (readErr) throw readErr; return null; }
   if (!text) {
     const lec = lecture ? mine.filter((x) => x.l.lecture === lecture) : mine;
     const r = await call("find", joinCtx(lec, LECTURE_MAX), q, lang);

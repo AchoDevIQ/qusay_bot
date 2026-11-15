@@ -15,6 +15,7 @@ import { finishByAi, paperName, aiObjectionsTick } from "./gradeApi.ts";
 import { fillAllVersions, schedSettings } from "./schedApi.ts";
 import { fixLectureTitles } from "./examBank.ts";
 import { sweepMakeup } from "./makeup.ts";
+import { qaFailTick, qaRetryTick } from "./questions.ts";
 import { ApiError, ensure } from "./webApi.ts";
 import { cronKey } from "./webAuth.ts";
 
@@ -43,6 +44,7 @@ export async function cronTick(key: unknown) {
     await step("examTitlesEn", async () => (await import("./examTitlesEn.ts")).fillEnTitles());
     await step("versionsFill", () => fillAllVersions());
     await step("makeup", () => sweepMakeup());
+    await step("qaFails", () => qaFailTick());
   } finally {
     await kvSet(LOCK, "0");
   }
@@ -54,6 +56,7 @@ export async function cronTick(key: unknown) {
     await step("ai", () => aiGradeTick(finishByAi, paperName));
     await step("aiDraft", () => draftQueueTick(ADMIN_IDS[0] ?? 0));
     await step("qaExams", () => examQueueTick());
+    await step("qaRetry", () => qaRetryTick());
     await step("aiObjections", () => aiObjectionsTick());
   } finally {
     await kvSet(AI_LOCK, "0");

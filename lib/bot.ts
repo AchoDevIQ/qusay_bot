@@ -14,7 +14,7 @@ import { api, answerCb, send } from "./telegram.ts";
 import { btn, esc } from "./util.ts";
 import { adminMenuFor, onAdminCb, onAdminText } from "./admin.ts";
 import { joinOfficeByCode, officeCb, officeMenu, onPosSale, quickSearch } from "./office.ts";
-import { askStart, finishQuestion, myQuestions, onGroupMessage, qCb, qFollowMessage, qNewMessage } from "./questions.ts";
+import { askStart, finishQuestion, myQuestions, onGroupMessage, qCb, qFollowMessage, qNewMessage, qaRetryNow } from "./questions.ts";
 import {
   onRegForm, onStoreOrder, onStudentCb, onStudentText, openShop, orderCancelCb, regCb, regText, sendBanner, showMe, startReg,
 } from "./student.ts";
@@ -157,6 +157,8 @@ async function onCallback(q: Row) {
       const qq = await question(Number(d.slice(3)));
       note = qq ? await finishQuestion(qq) : "✅ اختفى السؤال";
     } else note = "ما عندك صلاحية";
+  } else if (d === "qr:go") {
+    note = await can(uid, "qafail") ? await qaRetryNow(uid) : "ما عندك صلاحية";
   } else if (["qc:", "qb:", "qt:", "ql:", "qf:", "qok:", "qx:"].some((p) => d.startsWith(p))) {
     note = await qCb(chat, uid, mid, d);
   } else if (["oc:", "ocy:", "ocn:"].some((p) => d.startsWith(p))) {

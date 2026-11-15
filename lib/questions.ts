@@ -4,9 +4,10 @@ import { find, insert, kvGet, kvSet, one, remove, setSession, type Row } from ".
 import { canAsk, logActivity } from "./access.ts";
 import { ADMIN_IDS, BTN_ASK, BTN_MYQ, TOKEN } from "./config.ts";
 import { answerFromBooklets, autoReady, bookletCfg, replyText } from "./booklets.ts";
-import { qaAnswer, qaCfg, qaReady, saveAnswer } from "./qaBank.ts";
+import { qaAnswer, qaCfg, qaReady, saveAnswer, type QaResult } from "./qaBank.ts";
+import { QA_FAIL_PERM, backAlert, failAlertDue, failWhy, noteQaFail, retryFails, type QaFail } from "./qaFails.ts";
 import {
-  can, centerName, chLabel, chapters, groupId, hoursText, qHours, qOpenNow, qWhere, question, setQ, student, topic, topics,
+  can, centerName, chLabel, chapters, groupId, hoursText, qHours, qOpenNow, qWhere, question, setQ, staffIds, student, topic, topics,
 } from "./data.ts";
 import { HOME_PAGE, adminPageLink, flowKb, mainKb } from "./keyboards.ts";
 import { api, edit, send, upload, type Kb } from "./telegram.ts";
@@ -110,16 +111,24 @@ async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean)
   await api("sendChatAction", { chat_id: chat, action: "typing" });
   let r = null;
   try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined }, n, Number(t.id), Number(data.l) || 0, en ? "en" : "ar", uid); }
-  catch (e) { console.error("qa", e); }
+  catch (e) { console.error("qa", e); data.aiFail = failWhy(e); }   // الذكاء واقف: السؤال يروح للأستاذ، وصاحب البوت يتبلغ
   if (!r) return false;
   // حل نظام الذكاء (مو من الملزمة): إذا صاحب البوت يريد يشوفه أول، السؤال يروح للأستاذ مثل العادة
   if (r.source === "ai" && !(await qaCfg()).direct) return false;
-  const where = `${t.ar}${data.l ? ` — المحاضرة ${data.l}` : ""}`;
-  const shown = en ? `${t.en || t.ar}${data.l ? ` — Lecture ${data.l}` : ""}` : where;
-  const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar");
   await kvSet(`qauto_${uid}`, JSON.stringify({ mid: m.message_id, t: data.t, l: data.l || 0 }));
   await setSession(uid, "", {});
-  const kb: Kb = [[{ text: en ? "📘 Open the solution" : "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }], [btn(en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", "qx:go")]];
+  await deliverQa(chat, uid, r, t, Number(data.l) || 0, en, text);
+  await send(chat, "👆", { replyKb: await mainKb(uid) });
+  return true;
+}
+
+/** يوصل للطالب زر «📘 افتح الحل». qid: سؤاله اللي بالمجموعة (الذكاء جاوبه بعد ما رجع يشتغل)، فـ«بعدني ما فهمت» يرجع لنفس السؤال */
+async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: number, en: boolean, text: string, qid = 0) {
+  const where = `${t.ar}${l ? ` — المحاضرة ${l}` : ""}`;
+  const shown = en ? `${t.en || t.ar}${l ? ` — Lecture ${l}` : ""}` : where;
+  const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar");
+  const more = en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ";
+  const kb: Kb = [[{ text: en ? "📘 Open the solution" : "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }], [btn(more, qid ? `qf:${qid}` : "qx:go")]];
   const msg = r.source === "notebook"
     ? (en ? "📘 <b>Your question is solved in the teacher's lecture notebook</b>\nTap the button to see his solution." : "📘 <b>سؤالك محلول بدفتر المحاضرات</b>\nدوس الزر تشوف حل الأستاذ.")
     : r.source === "rasid"
@@ -127,10 +136,64 @@ async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean)
     : en
     ? (r.source === "ai" ? "🤖 <b>Your question is solved the teacher's way</b>\nTap the button to see the solution step by step." : "📘 <b>Your question is solved in the teacher's booklet</b>\nTap the button to see the solution step by step.")
     : (r.source === "ai" ? "🤖 <b>حليت سؤالك على طريقة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة." : "📘 <b>سؤالك محلول بملزمة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة.");
-  await send(chat, msg, { kb });
-  await send(chat, "👆", { replyKb: await mainKb(uid) });
-  await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : r.source === "rasid" ? `📝 وصله الحل النموذجي من الراصد (${r.rasid?.topic ?? where} ${r.rasid?.q ?? ""})` : r.source === "notebook" ? `📘 وصله حل سؤاله من دفتر المحاضرات (${r.notebook?.where || where} ص${r.notebook?.page ?? ""})` : `📘 وصله حل سؤاله من الملزمة (${where})`);
+  const head = qid ? (en ? `💬 <b>About your question #${qid}</b>\n` : `💬 <b>بخصوص سؤالك #${qid}</b>\n`) : "";
+  await send(chat, head + msg, { kb });
+  await logActivity(uid, (qid ? `🔁 #${qid} بعد ما رجع الذكاء: ` : "") + (r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : r.source === "rasid" ? `📝 وصله الحل النموذجي من الراصد (${r.rasid?.topic ?? where} ${r.rasid?.q ?? ""})` : r.source === "notebook" ? `📘 وصله حل سؤاله من دفتر المحاضرات (${r.notebook?.where || where} ص${r.notebook?.page ?? ""})` : `📘 وصله حل سؤاله من الملزمة (${where})`));
+}
+
+// ---------- الذكاء ما جاوب (الرصيد خلص أو الخدمة واقفة): تنبيه لصاحب البوت، والبوت يرجع يجرب وحده
+const RETRY_NOW = "qa_retry_now";
+async function tellFail(text: string, o: { only?: number; retry?: boolean } = {}) {
+  const ids = o.only ? [o.only] : await staffIds(QA_FAIL_PERM);
+  for (const id of ids) await send(id, text, o.retry ? { kb: [[btn("🔁 جربهم هسه", "qr:go")]] } : {}).catch((e) => console.error("qa fail alert", id, e));
+}
+/** للمؤقت كل دقيقة: تنبيه بالطلاب اللي ما جاوبهم الذكاء (يتجمعون، نص ساعة بين تنبيه وتنبيه) */
+export async function qaFailTick() {
+  const msg = await failAlertDue();
+  if (msg) await tellFail(msg, { retry: true });
+  return msg ? 1 : 0;
+}
+/** زر «🔁 جربهم هسه»: التجربة نفسها بالدكة الجاية (تاخذ دقايق، والزر لازم يرد بسرعة) */
+export async function qaRetryNow(uid = 0) {
+  await kvSet(RETRY_NOW, String(uid || 1));
+  return "⏳ خلال دقيقة يجربهم، ويوصلك تنبيه بالنتيجة";
+}
+/** يجاوب طالب ما جاوبه الذكاء قبل: true وصله الحل، false الذكاء ما لگاله حل (يبقى للأستاذ)، ويرمي خطأ إذا بعده واقف */
+async function retryOne(f: QaFail) {
+  const t = await topic(f.t);
+  const n = await chapterNo(t?.chapter_id);
+  if (!t || !n) return false;
+  const image = f.photo ? await photoOf({ photo: [{ file_id: f.photo }] }) : null;
+  if (f.photo && !image) return false;
+  const r = await qaAnswer({ text: f.text || undefined, image: image ?? undefined }, n, Number(t.id), f.l, f.en ? "en" : "ar", f.uid);
+  if (!r || (r.source === "ai" && !(await qaCfg()).direct)) return false;
+  await deliverQa(f.uid, f.uid, r, t, f.l, f.en, f.text, f.qid);
+  // موضوع السؤال بالمجموعة: انجاوب، ما يحتاج الأستاذ يجاوب
+  await setQ(f.qid, { status: "answered" });
+  const q = await question(f.qid);
+  const g = await groupId();
+  if (g && q?.thread_id) {
+    await api("editForumTopic", { chat_id: g, message_thread_id: q.thread_id, name: await topicTitle(q, true) });
+    await api("sendMessage", {
+      chat_id: g, message_thread_id: q.thread_id, parse_mode: "HTML",
+      text: "🤖 <b>رجع الذكاء يشتغل، وجاوب الطالب هسه.</b>\nما تحتاج تجاوب هذا السؤال. إذا الطالب بعده ما فهم، يرجعلك هنا.",
+      reply_markup: { inline_keyboard: [[btn("✅ تم — خلصت هذا السؤال", `qh:${q.id}`)]] },
+    });
+  }
   return true;
+}
+/** للمؤقت: يرجع يجرب أسئلة الطلاب اللي ما جاوبهم الذكاء (كل 10 دقايق، أو هسه إذا انداس الزر) */
+export async function qaRetryTick() {
+  const by = Number(await kvGet(RETRY_NOW)) || 0;
+  if (by) await kvSet(RETRY_NOW, "0");
+  const open = async (f: QaFail) => { const q = await question(f.qid); return !!q && q.status === "open"; };
+  const res = await retryFails(open, retryOne, { force: !!by });
+  if (res.answered.length) await tellFail(backAlert(res.answered, res.left));
+  else if (by) {
+    await tellFail(res.why ? `⚠️ <b>بعده الذكاء ما يشتغل</b>\nالسبب: ${esc(res.why)}\n${res.left} سؤال بعدهم ينتظرون، ويتجربون وحدهم كل 10 دقايق.`
+      : res.left ? `ℹ️ ${res.left} سؤال بعدهم ينتظرون، ويتجربون بالدكة الجاية.` : "ℹ️ ماكو أسئلة تنتظر الذكاء: كلها انجاوبت.", { only: by > 1 ? by : 0, retry: !!res.why });
+  }
+  return { answered: res.answered.length, left: res.left };
 }
 
 async function autoAnswer(chat: number, uid: number, m: Row, data: Row, en: boolean) {
@@ -249,6 +312,13 @@ export async function qNewMessage(chat: number, uid: number, m: Row, data: Row) 
   await api("sendMessage", { chat_id: g, message_thread_id: tid, text: head, parse_mode: "HTML" });
   await api("copyMessage", { chat_id: g, from_chat_id: chat, message_id: m.message_id, message_thread_id: tid });
   await logMsg(qid, "q", chat, m.message_id);
+  if (data.aiFail) {
+    await api("sendMessage", { chat_id: g, message_thread_id: tid, parse_mode: "HTML", text: `🤖 الذكاء ما گدر يجاوب هذا السؤال (${esc(String(data.aiFail))}).\nإذا رجع يشتغل خلال يومين، يجاوب الطالب وحده ويكتبلك هنا. وإذا تريد تجاوبه إنت، جاوب عادي.` });
+    await noteQaFail({
+      qid, uid, name: words(s.name).slice(0, 3).join(" "), where: await qWhere(q), t: Number(data.t), l: Number(data.l) || 0, en: s.curr === "إنجليزي",
+      text: String(m.text ?? m.caption ?? "").trim(), photo: String((m.photo as Row[] | undefined)?.at(-1)?.file_id ?? ""), why: String(data.aiFail),
+    });
+  }
   await logActivity(uid, `❓ سأل سؤال علمي #${qid}`);
   await setSession(uid, "q:sent", mg ? { qid, mg } : {});
   await send(chat, `✅ <b>وصل سؤالك</b> (رقم <b>#${qid}</b>)\n📍 ${esc(await qWhere(q, s.curr === "إنجليزي"))}\n\nراح يوصلك الجواب هنا بالبوت. وتگدر تشوف أسئلتك من «${BTN_MYQ}».`, { replyKb: await mainKb(uid) });
