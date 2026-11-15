@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { deviceId, deviceNow, haptic, platform } from "../shared";
 import { COLORS } from "../grade/pens";
 
-type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; section?: string; saved?: number };
+type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; section?: string; sol?: boolean; saved?: number };
 type Toc = { t: string; p: number; items?: Toc[] };
 type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean; q?: string };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
@@ -247,8 +247,8 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
         <b className="nttitle">{book.title}</b>
         <small className={pending ? "ntwait" : "ntok"}>{err ? "⚠️" : pending ? "⏳ يحفظ" : "✅ محفوظ"}</small>
       </div>
-      {/* 📝 الراصد: الزرين بشريط لحالهم فوك الأدوات، بعيد عن هدر الصفحة */}
-      {book.kind === "rasid" && (
+      {/* 📝 الراصد والوزارية والإثرائية: الزرين بشريط لحالهم فوك الأدوات، بعيد عن هدر الصفحة */}
+      {(book.sol || book.kind === "rasid") && (
         <div className="ntbar ntrasid">
           <button type="button" className={"gk-btn" + (sol ? "" : " on")} onClick={() => setSol(0)}>📝 حلي</button>
           <button type="button" className={"gk-btn" + (sol ? " on" : "")} onClick={() => { haptic(); setSol(page); }}>📘 الحل النموذجي</button>

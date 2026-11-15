@@ -137,11 +137,85 @@ async function pageLines(pdf: Buffer) {
   return out;
 }
 
+// ---------- الملزمة تبدلت بنسخة جديدة وصفحاتها تحركت: كل سطر بالقديمة نلگاه بالجديدة، فالأزرار وكتابة الطلاب تمشي وياه
+type Line = { page: number; y: number; text: string };
+const lineKey = (t: string) => t.replace(/\s+/g, "");
+/** لكل سطر بالملزمة القديمة: رقمه بالجديدة (أو -1 إذا انشال). السطور اللي ما تتكرر بالملفين هي المراسي،
+ *  وبين كل مرساتين نطابق نفس الكلام بنفس الترتيب */
+export function alignLines(oldL: Line[], newL: Line[]): number[] {
+  const count = (l: Line[]) => { const m = new Map<string, number[]>(); l.forEach((x, i) => { const k = lineKey(x.text); if (k) m.set(k, [...(m.get(k) ?? []), i]); }); return m; };
+  const a = count(oldL), b = count(newL);
+  const pairs: [number, number][] = [];
+  for (const [k, is] of a) { const js = b.get(k); if (is.length === 1 && js?.length === 1) pairs.push([is[0], js[0]]); }
+  pairs.sort((x, y) => x[0] - y[0]);
+  // أطول تسلسل يمشي بنفس الترتيب بالملفين (سطر انقلب مكانه ما يصير مرساة)
+  const tails: number[] = [], prev: number[] = new Array(pairs.length).fill(-1);
+  pairs.forEach(([, j], i) => {
+    let lo = 0, hi = tails.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (pairs[tails[mid]][1] < j) lo = mid + 1; else hi = mid; }
+    if (lo) prev[i] = tails[lo - 1];
+    tails[lo] = i;
+  });
+  const anchors: [number, number][] = [];
+  for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = prev[i]) anchors.unshift(pairs[i]);
+  const out = new Array(oldL.length).fill(-1);
+  const bounds: [number, number][] = [[-1, -1], ...anchors, [oldL.length, newL.length]];
+  for (let s = 0; s + 1 < bounds.length; s++) {
+    const [i0, j0] = bounds[s], [i1, j1] = bounds[s + 1];
+    if (i0 >= 0) out[i0] = j0;
+    // بين المرساتين: نفس الكلام بالترتيب
+    let j = j0 + 1;
+    for (let i = i0 + 1; i < i1; i++) {
+      const k = lineKey(oldL[i].text);
+      for (let t = j; t < j1; t++) if (lineKey(newL[t].text) === k) { out[i] = t; j = t + 1; break; }
+    }
+  }
+  return out;
+}
+/** الصفحة القديمة ← الصفحة الجديدة: وين راحت أغلب سطورها. صفحة بلا سطور تمشي ويا اللي قبلها */
+export function pageMap(oldL: Line[], newL: Line[], oldPages: number, newPages: number, idx = alignLines(oldL, newL)): Map<number, number> {
+  const votes = new Map<number, Map<number, number>>();
+  oldL.forEach((l, i) => { if (idx[i] < 0) return; const v = votes.get(l.page) ?? new Map(); const p = newL[idx[i]].page; v.set(p, (v.get(p) ?? 0) + 1); votes.set(l.page, v); });
+  const map = new Map<number, number>();
+  let last = 0, lastOld = 0;
+  for (let p = 1; p <= oldPages; p++) {
+    const v = votes.get(p);
+    const best = v ? [...v].sort((x, y) => y[1] - x[1])[0][0] : Math.min(newPages, Math.max(1, last + (p - lastOld)));
+    map.set(p, best);
+    if (v) { last = best; lastOld = p; }
+  }
+  return map;
+}
+/** الأزرار تمشي ويا سؤالها للنسخة الجديدة، والتلقائية تنعاد عليها. يرجع خريطة الصفحات حتى كتابة الطلاب تمشي هم */
+export async function relocateMarks(book: Row, oldPdf: Buffer, newPdf: Buffer, newPages: number) {
+  const [oldL, newL] = [await pageLines(oldPdf), await pageLines(newPdf)];
+  const idx = alignLines(oldL, newL);
+  const map = pageMap(oldL, newL, Number(book.pages) || 0, newPages, idx);
+  const marks = await find("note_marks", { book_id: book.id });
+  let moved = 0, lost = 0;
+  for (const m of marks) {
+    // السطر اللي الزر عليه بالقديمة (أقرب سطر بنفس الصفحة)، ووينه بالجديدة
+    let best = -1;
+    oldL.forEach((l, i) => { if (l.page === m.page && (best < 0 || Math.abs(l.y - Number(m.y)) < Math.abs(oldL[best].y - Number(m.y)))) best = i; });
+    const j = best >= 0 ? idx[best] : -1;
+    const to = j >= 0 ? { page: newL[j].page, y: Math.max(0, Math.min(1, newL[j].y + Number(m.y) - oldL[best].y)) } : { page: map.get(m.page) ?? Math.min(m.page, newPages), y: m.y };
+    if (j < 0) lost++;
+    if (to.page !== m.page || Math.abs(Number(to.y) - Number(m.y)) > 0.001) { await update("note_marks", { id: m.id }, to); moved++; }
+  }
+  // كان بيها أزرار: التلقائية تنعاد على الجديدة، فالأسئلة الجديدة تاخذ أزرار هم
+  const autoBefore = marks.filter((m) => m.auto === 1).length;
+  const auto = marks.length ? await autoMarks({ ...book, pages: newPages }, newL) : null;
+  return { map, moved, lost, added: Math.max(0, (auto?.marks ?? 0) - autoBefore) };
+}
+
 /** يحط الأزرار وحدها. الأزرار اللي عدلها صاحب البوت تبقى، والتلقائية تنعاد. يرجع عدد الأزرار والفيديوهات اللي انربطت */
-export async function autoMarks(book: Row) {
-  const pdf = await files().read(`notes/${book.file}.pdf`);
-  need(pdf, "ملف الملزمة مو موجود");
-  const lines = await pageLines(pdf!);
+export async function autoMarks(book: Row, given?: Line[]) {
+  let lines = given;
+  if (!lines) {
+    const pdf = await files().read(`notes/${book.file}.pdf`);
+    need(pdf, "ملف الملزمة مو موجود");
+    lines = await pageLines(pdf!);
+  }
   const en = book.lang === "en";
   await remove("note_marks", { book_id: book.id, auto: 1 });
   const kept = await find("note_marks", { book_id: book.id });

@@ -151,3 +151,29 @@ test("📚 ملازمي: أقسام الفصل الأربعة بترتيبها،
   const fifth = (await myBooks(1)).filter((b) => b.chapter === "الفصل الخامس").map((b) => b.title);
   assert.deepEqual(fifth, ["ك", "و", "إ", "ر", "قديمة"]);
 });
+
+test("📚 نسخة جديدة صفحاتها تحركت: السطور تنلگى، والصفحات تمشي، وكتابة الطلاب ويا صفحتها وما تنمسح", async () => {
+  const { alignLines, pageMap } = await import("../lib/noteMarks.ts");
+  const { moveInk } = await import("../lib/notes.ts");
+  const L = (page: number, ...t: string[]) => t.map((text, i) => ({ page, y: 0.1 + i * 0.1, text }));
+  // القديمة: 3 صفحات. الجديدة: صفحة جديدة انضافت بعد الأولى، و«مثال :» يتكرر
+  const oldL = [...L(1, "المحاضرة 1", "س1 / جد المشتقة", "مثال :"), ...L(2, "س2 / ارسم الدالة", "مثال :"), ...L(3, "س3 / اثبت ان", "مثال :")];
+  const newL = [...L(1, "المحاضرة 1", "س1 / جد المشتقة", "مثال :"), ...L(2, "ملاحظة جديدة"), ...L(3, "س2 / ارسم الدالة", "مثال :"), ...L(4, "س3 / اثبت ان", "مثال :")];
+  const idx = alignLines(oldL, newL);
+  assert.deepEqual(idx.map((j) => (j < 0 ? -1 : newL[j].page)), [1, 1, 1, 3, 3, 4, 4]);
+  const map = pageMap(oldL, newL, 3, 4, idx);
+  assert.deepEqual([...map], [[1, 1], [2, 3], [3, 4]]);
+  // كتابة طالب بصفحة 2 و3 تروح لـ 3 و4. الصفحة اللي وصلها تمشي هم
+  const id = await insert("note_books", { title: "نقل", chapter: "الفصل السادس", lang: "ar", file: "mv", pages: 3, created });
+  await put("note_ink", { user_id: 50, book_id: id, page: 2, ink: JSON.stringify({ items: [{ c: "#000", w: 2, p: [0.1, 0.1] }], notes: [] }) });
+  await put("note_ink", { user_id: 50, book_id: id, page: 3, ink: JSON.stringify({ items: [{ c: "#f00", w: 2, p: [0.2, 0.2] }], notes: [] }) });
+  await put("note_bookmarks", { user_id: 50, book_id: id, page: 3, at: created });
+  await moveInk(id, map, 4);
+  const { find } = await import("../lib/db.ts");
+  assert.deepEqual((await find("note_ink", { book_id: id })).map((r) => [r.page, JSON.parse(r.ink).items[0].c]).sort(), [[3, "#000"], [4, "#f00"]]);
+  assert.equal((await one("note_bookmarks", { user_id: 50, book_id: id }))?.page, 4);
+  // صفحتين صاروا وحدة: الكتابتين سوية
+  await moveInk(id, new Map([[1, 1], [2, 2], [3, 3], [4, 3]]), 3);
+  const one3 = (await find("note_ink", { book_id: id })).find((r) => r.page === 3);
+  assert.equal(JSON.parse(one3!.ink).items.length, 2);
+});
