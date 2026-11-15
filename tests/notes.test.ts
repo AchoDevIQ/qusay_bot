@@ -177,3 +177,24 @@ test("📚 نسخة جديدة صفحاتها تحركت: السطور تنلگ�
   const one3 = (await find("note_ink", { book_id: id })).find((r) => r.page === 3);
   assert.equal(JSON.parse(one3!.ink).items.length, 2);
 });
+
+test("📍 وصل لمحاضرة بالكتاب: الوزارية من نفس الفصل تنفتح على نفس المحاضرة، وإذا علامته بيها أحدث ما تتغير", async () => {
+  const { spotFor } = await import("../lib/notes.ts");
+  const ch = "الفصل التاسع";
+  const bk = await insert("note_books", { title: "كتاب", chapter: ch, lang: "ar", file: "sp1", pages: 40, kind: "book", section: "book", created });
+  const wz = await insert("note_books", { title: "وزاري", chapter: ch, lang: "ar", file: "sp2", pages: 30, kind: "book", section: "wz", sol: 1, created });
+  const toc = (f: string, t: unknown) => files().write(`notes/${f}.toc2.json`, Buffer.from(JSON.stringify(t)), "application/json");
+  await toc("sp1", [{ t: "Square roots", p: 1, items: [{ t: "Lecture 1", p: 1 }, { t: "Lecture 2", p: 10 }] }, { t: "x,y", p: 20, items: [{ t: "Lecture 1", p: 20 }] }]);
+  await toc("sp2", [{ t: "Square roots · Lecture 1", p: 1 }, { t: "Square roots · Lecture 2", p: 5 }, { t: "x,y · Lecture 1", p: 12 }]);
+  const b = (id: number) => one("note_books", { id });
+  // صاحب البوت يشوف كل الملازم: نجربه بيه (رقم 1)
+  await put("note_bookmarks", { user_id: 1, book_id: bk, page: 12, at: "2026-03-01T10:00:00.000Z" });
+  assert.deepEqual(await spotFor(1, (await b(wz))!), { page: 5, where: "Square roots · المحاضرة 2", from: "كتاب" });
+  // علامته بالوزارية بنفس المحاضرة (صفحة 7) وأقدم: يرجع لصفحته هو
+  await put("note_bookmarks", { user_id: 1, book_id: wz, page: 7, at: "2026-02-01T10:00:00.000Z" });
+  assert.equal((await spotFor(1, (await b(wz))!)).page, 7);
+  // بالوزارية وصل لـ x,y بعدها: الكتاب ينفتح على x,y، والوزارية تبقى على علامتها
+  await put("note_bookmarks", { user_id: 1, book_id: wz, page: 13, at: "2026-03-02T10:00:00.000Z" });
+  assert.deepEqual(await spotFor(1, (await b(wz))!), {});
+  assert.equal((await spotFor(1, (await b(bk))!)).page, 20);
+});

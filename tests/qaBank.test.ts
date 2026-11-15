@@ -280,7 +280,7 @@ test("سؤال محلول بـ«دفتر المحاضرات» اللي بملا�
   const book = await insert("note_books", { title: "دفتر محاضرات الفصل الثالث", chapter: "الفصل الثالث", lang: "ar", file: "nbtest", pages: N.rows.length, kind: "book", created: "2026-11-15" });
   // أسطر الدفتر وفهرسه محفوظين ويا ملفه (مثل ما ينحسبن أول مرة)
   await files().write("notes/nbtest.rows.json", Buffer.from(JSON.stringify(N.rows)), "application/json");
-  await files().write("notes/nbtest.toc.json", Buffer.from(JSON.stringify([{ t: "المعدلات الزمنية", p: 1, items: [{ t: "المحاضرة 4", p: 24 }] }])), "application/json");
+  await files().write("notes/nbtest.toc2.json", Buffer.from(JSON.stringify([{ t: "المعدلات الزمنية", p: 1, items: [{ t: "المحاضرة 4", p: 24 }] }])), "application/json");
   const mark = await insert("note_marks", { book_id: book, page: 24, y: 0.07, label: "س :", video_id: null, solution: "https://youtu.be/abcdefghijk" });
   const tid = await tidOf("المعدلات الزمنية");
   const LADDER = "سلم طوله (10)m يستند طرفه الاسفل على أرض افقيه وطرفه العلوي على حائط رأسي فإذا انزلق الطرف الأسفل مبتعدا عن الحائط بمعدل (2) m/s جد معدل انزلاق الطرف العلوي عندما يكون الطرف الأسفل على بعد (8)m عن الحائط";

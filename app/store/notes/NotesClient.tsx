@@ -211,6 +211,15 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
 
   // الورقة بعرض الشاشة كله: أزرار الفيديو بشريط تحت الشاشة، برا الملزمة
   const w = Math.round(boxW * zoom), h = Math.round(w * ratio), step = h + GAP;
+  // عرض الشاشة ينعرف بعد ما تنفتح الملزمة (وحجم الورقة بعد أول صفحة): إذا تغير ارتفاع الصفحات، يبقى على نفس الصفحة.
+  // بدونها القفزة لصفحة (📑 أو 📍) كانت توگف صفحتين أو أربعة بعدها
+  const stepRef = useRef(step); stepRef.current = step;
+  const lastStep = useRef(step);
+  useEffect(() => {
+    if (lastStep.current === step) return;
+    lastStep.current = step;
+    if (pageRef.current > 1) stage.current?.scrollTo({ top: (pageRef.current - 1) * step });
+  }, [step]);
   // الصفحة اللي قدامه: اللي تغطي ثلث الشاشة من فوك. تتحدث من يوگف السحب، فالسحب السريع ما يحمل كل الصفحات اللي يمر عليها
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
   function onScroll() {
@@ -223,11 +232,27 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
   // فتح من «📑 المواضيع»: يروح للصفحة المختارة أول ما تنفتح الملزمة
   const opened = useRef(false);
   useEffect(() => { if (!opened.current && start > 1) { opened.current = true; requestAnimationFrame(() => go(start)); } });
+  // 📍 وصل لمحاضرة بملزمة ثانية من نفس الفصل: هاي تنفتح وحدها على نفس الموضوع والمحاضرة. وهو يقلب لغيرها براحته
+  const [jumped, setJumped] = useState(0);
+  useEffect(() => {
+    if (start > 1) return;
+    post({ action: "spot", book: book.id }).then((j) => {
+      const n = Number(j.page);
+      if (!(n > 1) || pageRef.current !== 1 || opened.current) return;
+      opened.current = true;
+      requestAnimationFrame(() => {
+        go(n); setJumped(n);
+        setMsg(`📍 فتحتها على ${j.where}، نفس المكان اللي وصلته بـ«${j.from}». تگدر تقلب لغيرها براحتك`);
+      });
+    }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book.id]);
   const [toc, setToc] = useState(false);
   function go(n: number) {
     if (!Number.isInteger(n) || n < 1 || n > book.pages) { setMsg(`⚠️ اكتب رقم صفحة من 1 لحد ${book.pages}`); return; }
     haptic(); setMsg("");
-    stage.current?.scrollTo({ top: (n - 1) * step });
+    // الارتفاع الحالي (القفزة تنطلب من requestAnimationFrame قبل ما ينعرف عرض الشاشة)
+    stage.current?.scrollTo({ top: (n - 1) * stepRef.current });
     setPage(n);
   }
   // التكبير يبقيه على نفس الصفحة
@@ -290,6 +315,7 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
       )}
       {err && <div className="ntbad">⚠️ {err}</div>}
       {bookmark > 1 && page === 1 && <button type="button" className="ntbookmark" onClick={() => go(bookmark)}>🔖 آخر مرة وصلت لصفحة {bookmark}. دوس هنا حتى تروح لها</button>}
+      {bookmark > 1 && jumped > 1 && page === jumped && bookmark !== jumped && <button type="button" className="ntbookmark" onClick={() => { setJumped(0); go(bookmark); }}>🔖 بهاي الملزمة نفسها وصلت لصفحة {bookmark}. دوس هنا حتى ترجع لها</button>}
       {msg && <div className="ntmsg" onClick={() => setMsg("")}>{msg}</div>}
       <div className="ntstage" ref={stage} onScroll={onScroll}>
         <div className="ntscroll" style={{ width: w, height: book.pages * step - GAP }}>

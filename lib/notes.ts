@@ -2,6 +2,7 @@
 // الطالب يكتب فوك الصفحات وكتابته تنحفظ إله بس. ملف الـ PDF ما يوصل للطالب أبد: كل صفحة تطلع صورة عليها اسمه ورقمه،
 // وتنفتح بس من تلگرام الموبايل وعلى جهازه، وتنقفل وقت الامتحان
 import { bookToc } from "./noteToc.ts";
+import { matchPage, sameSpot } from "./noteSpot.ts";
 import { pdfjsLib } from "./pdfjs.ts";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -106,6 +107,8 @@ export async function noteAction(body: Row) {
     await put("note_bookmarks", { user_id: uid, book_id: b.id, page, at: new Date().toISOString() });
     return { saved: page };
   }
+  // 📍 وصل لمحاضرة بملزمة ثانية من نفس الفصل (بعد آخر مرة فتح هاي): هاي تنفتح على نفس المحاضرة
+  if (a === "spot") return await spotFor(uid, b);
   if (a === "open") { await logActivity(uid, `📘 فتح ملزمة ${b.title}`); return { ok: true, marks: await marksFor(b.id) }; }
   if (a === "marks") return { marks: await marksFor(b.id) };
   // الفيديو ما اشتغل عند الطالب: رمز الخطأ ينكتب بسجل السيرفر حتى نعرف السبب
@@ -130,6 +133,23 @@ export async function noteAction(body: Row) {
   if ((items as unknown[]).length || (notes as unknown[]).length) await put("note_ink", { ...key, ink });
   else await remove("note_ink", key);
   return { ok: true };
+}
+
+/** وين تنفتح الملزمة b: نفس الموضوع والمحاضرة اللي وصلها آخر مرة بملزمة ثانية من نفس الفصل.
+ *  إذا علامته بهاي الملزمة نفسها أحدث، أو ما ينعرف المكان، ما يتغير شي ({}) */
+export async function spotFor(uid: number, b: Row): Promise<Row> {
+  const others = new Map((await myBooks(uid)).filter((x) => x.chapter === b.chapter && x.id !== b.id).map((x) => [x.id as number, x]));
+  const marks = await find("note_bookmarks", { user_id: uid });
+  const own = marks.find((m) => m.book_id === b.id);
+  const last = marks.filter((m) => others.has(m.book_id as number) && String(m.at ?? "") > String(own?.at ?? "")).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
+  if (!last) return {};
+  const from = others.get(last.book_id as number)!;
+  const toToc = await bookToc(b);
+  const m = matchPage(await bookToc(from), Number(last.page), toToc);
+  if (!m || m.page > Number(b.pages)) return {};
+  // علامته بهاي الملزمة جوة نفس المحاضرة: يرجع لصفحته هو بالضبط
+  const page = own && Number(own.page) <= Number(b.pages) && sameSpot(toToc, Number(own.page), m.page) ? Number(own.page) : m.page;
+  return { page, where: m.label, from: from.title };
 }
 
 /** صورة الصفحة بدون العلامة: تنرسم من الـ PDF أول مرة، وبعدها جاهزة */

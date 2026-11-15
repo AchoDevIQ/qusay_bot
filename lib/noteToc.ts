@@ -4,6 +4,7 @@
 import { files } from "./files.ts";
 import { pdfjsLib } from "./pdfjs.ts";
 import type { Row } from "./db.ts";
+import { key, lectureNo } from "./noteSpot.ts";
 
 export type TocItem = { t: string; p: number; items?: TocItem[] };
 export type TextItem = { s: string; x: number; y: number };
@@ -36,6 +37,46 @@ export function tocFromText(pages: TextItem[][], H: number): TocItem[] {
     if (section && section.length < 40 && !l.items!.some((x) => x.t === section)) l.items!.push({ t: section, p: page });
   });
   for (const t of toc) for (const l of t.items ?? []) if (!l.items?.length) delete l.items;
+  return toc.length ? toc : tocFromLecturer(pages);
+}
+
+const AR = /[؀-ۿ]/;
+const HEAD_A = /^(.*?)[\s\[(]*(?:lectur\w*|المحاضر[ةه])\s*[(\[]?\s*([0-9٠-٩]+)\s*[)\]]?(.*)$/i;
+const HEAD_B = /^(.*?)[(\[]\s*([0-9٠-٩]+)\s*[)\]]\s*(?:lectur\w*|المحاضر[ةه])(.*)$/i;
+const trim = (s: string) => s.replace(/^[\s()\[\]:·\-]+|[\s()\[\]:·\-]+$/g, "").replace(/\s+/g, " ").trim();
+/** شكل ثاني: عنوان المحاضرة بأي مكان بالصفحة، «Square roots lecturer 1» أو «(1) lecturer الاساسيات»
+ *  أو «Cubic Roots ω [ lecturer 1]». الموضوع هو باقي السطر، واللي ما عليه اسم يكمل الموضوع اللي قبله */
+export function tocFromLecturer(pages: TextItem[][]): TocItem[] {
+  const toc: TocItem[] = [];
+  let cur: TocItem | null = null, last = 0;
+  pages.forEach((items, i) => {
+    const lines: TextItem[][] = [];
+    for (const it of [...items].sort((a, b) => b.y - a.y)) {
+      const l = lines.find((x) => Math.abs(x[0].y - it.y) <= 3);
+      if (l) l.push(it); else lines.push([it]);
+    }
+    for (const l of lines) {
+      const rtl = l.some((it) => AR.test(it.s));
+      const text = l.sort((a, b) => (rtl ? b.x - a.x : a.x - b.x)).map((it) => it.s.trim()).join(" ").replace(/\s+/g, " ").trim();
+      if (text.length > 90 || !/lectur|المحاضر[ةه]/i.test(text)) continue;
+      const m = HEAD_B.exec(text) ?? HEAD_A.exec(text);
+      if (!m) continue;
+      const lec = lectureNo(m[2]);
+      if (!lec) continue;
+      const topic = trim(`${m[1]} ${m[3]}`);
+      if (topic.length > 50) continue;
+      const en = !rtl || /lectur/i.test(text);
+      const name = en ? `Lecture ${lec}` : `المحاضرة ${lec}`;
+      // موضوع جديد: اسم ثاني، أو الترقيم رجع من جديد بلا اسم
+      // «اسا سيات» = «الاساسيات»: نفس الموضوع إذا الترقيم يكمل
+      const same = !!cur && !!topic && key(topic) === key(cur.t) && lec > last;
+      if (!cur || (topic && topic !== cur.t && !same) || (!topic && lec <= last)) {
+        cur = { t: topic || cur?.t || (en ? "Lectures" : "المحاضرات"), p: i + 1, items: [] }; toc.push(cur);
+      }
+      if (!cur.items!.some((x) => x.t === name)) cur.items!.push({ t: name, p: i + 1 });
+      last = lec;
+    }
+  });
   return toc;
 }
 
@@ -78,7 +119,8 @@ async function fromPdf(pdf: Buffer): Promise<TocItem[]> {
 
 /** فهرس الملزمة، محفوظ ويّا ملفها. فارغ إذا ما بيها عناوين */
 export async function bookToc(b: Row): Promise<TocItem[]> {
-  const ref = `notes/${b.file}.toc.json`;
+  // toc2: الفهرس ينقرا هم من شكل «Square roots lecturer 1»، فالمحفوظ قبل ينحسب من جديد
+  const ref = `notes/${b.file}.toc2.json`;
   const cached = await files().read(ref);
   if (cached) { try { return JSON.parse(cached.toString("utf8")); } catch { /* ينحسب من جديد */ } }
   const pdf = await files().read(`notes/${b.file}.pdf`);
