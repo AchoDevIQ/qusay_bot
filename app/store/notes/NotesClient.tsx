@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { deviceId, deviceNow, haptic, platform } from "../shared";
 import { COLORS } from "../grade/pens";
 
-type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; saved?: number };
+type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; section?: string; saved?: number };
 type Toc = { t: string; p: number; items?: Toc[] };
 type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean; q?: string };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
@@ -51,6 +51,7 @@ export default function NotesClient() {
   const [open, setOpen] = useState<Book | null>(null);
   const [start, setStart] = useState(1);
   const [tocOf, setTocOf] = useState<Book | null>(null);
+  const [chapter, setChapter] = useState("");
   useEffect(() => { post({ action: "list" }).then((j) => setBooks(j.books)).catch((e) => setError((e as Error).message)); }, []);
   // الشاشة كلها للملزمة، والضغط المطول ما يطلع قائمة حفظ
   useEffect(() => {
@@ -61,30 +62,49 @@ export default function NotesClient() {
   if (open) return <Reader book={open} start={start} onClose={(saved) => { setBooks((l) => l?.map((b) => (b.id === open.id ? { ...b, saved } : b)) ?? l); setOpen(null); setStart(1); }} />;
   if (tocOf) return <TocPanel book={tocOf} onClose={() => setTocOf(null)} onPick={(n) => { void post({ action: "open", book: tocOf.id }).catch(() => undefined); setStart(n); setOpen(tocOf); setTocOf(null); }} />;
   const chapters = [...new Set((books ?? []).map((b) => b.chapter))];
+  // فصل واحد: يفتح أقسامه مباشرة. أكثر من فصل: يختار الفصل أول
+  const ch = chapter || (chapters.length === 1 ? chapters[0] : "");
   return (
     <>
-      <header><img src="/logo.png" alt="" /><h1>قصي العميري</h1><p>📘 ملازمي</p></header>
+      <header><img src="/logo.png" alt="" /><h1>قصي العميري</h1><p>📘 ملازمي{ch ? ` · ${ch}` : ""}</p></header>
       <div className="wrap">
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!books && !error && <div className="empty">جاري التحميل...</div>}
         {books && !books.length && <div className="empty">ماكو ملازم لفصولك بعد.</div>}
-        {chapters.map((c) => (
-          <div className="card" key={c}>
-            <h2>{c}</h2>
+        {!ch && !!chapters.length && (
+          <div className="card">
+            <h2>اختار الفصل</h2>
+            <div className="ntlist">{chapters.map((c) => <button type="button" key={c} className="btn" onClick={() => { haptic(); setChapter(c); }}>📚 {c}</button>)}</div>
+          </div>
+        )}
+        {ch && (
+          <div className="card">
+            {chapters.length > 1 && <button type="button" className="gk-btn" onClick={() => setChapter("")}>⬅️ الفصول</button>}
+            <h2>{ch}</h2>
             <div className="ntlist">
-              {books!.filter((b) => b.chapter === c).map((b) => (
-                <div key={b.id} className="ntbook">
-                  <button type="button" className="exbtn" onClick={() => { haptic(); void post({ action: "open", book: b.id }).catch(() => undefined); setOpen(b); }}>{b.kind === "rasid" ? "📝" : "📘"} {b.title} <small>({b.pages} صفحة{b.saved ? ` · 🔖 وصلت ص${b.saved}` : ""})</small></button>
-                  <button type="button" className="exbtn ntindex" onClick={() => { haptic(); setTocOf(b); }}>📑 المواضيع</button>
-                </div>
-              ))}
+              {books!.filter((b) => b.chapter === ch).map((b) => {
+                const sec = SECTION_NAMES[b.section ?? ""];
+                return (
+                  <div key={b.id} className="ntbook">
+                    <button type="button" className="exbtn" onClick={() => { haptic(); void post({ action: "open", book: b.id }).catch(() => undefined); setOpen(b); }}>{sec ? sec[0] : b.kind === "rasid" ? "📝" : "📘"} {sec ? sec[1] : b.title} <small>({b.pages} صفحة{b.saved ? ` · 🔖 وصلت ص${b.saved}` : ""})</small></button>
+                    <button type="button" className="exbtn ntindex" onClick={() => { haptic(); setTocOf(b); }}>📑 المواضيع</button>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        ))}
+        )}
       </div>
     </>
   );
 }
+/** أسماء أقسام الفصل (نفس lib/notes.ts SECTIONS) */
+const SECTION_NAMES: Record<string, [string, string]> = {
+  book: ["📘", "دفتر المحاضرات (أسئلة وأمثلة الكتاب)"],
+  wz: ["📗", "دفتر المحاضرات (الأسئلة الوزارية)"],
+  ith: ["📙", "دفتر المحاضرات (الأسئلة الإثرائية)"],
+  rasid: ["📝", "الدفتر الامتحاني (الراصد)"],
+};
 
 // الملزمة صفحات ورا بعض مثل ملف PDF: الطالب يسحب للأسفل ويقلب، ويكتب برقم الصفحة حتى يروح لها.
 // بس الصفحات القريبة من اللي يشوفها تنرسم (الباقي مربع فارغ بنفس الحجم)، حتى الموبايل ما يثقل والسيرفر ما ينضغط

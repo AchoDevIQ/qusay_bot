@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { boughtCourse, guardianOf, logActivity } from "./access.ts";
-import { find, insert, one, put, remove, type Row } from "./db.ts";
+import { find, insert, one, put, remove, update, type Row } from "./db.ts";
 import { isAdmin, student } from "./data.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
@@ -42,7 +42,18 @@ export async function ownedChapters(uid: number): Promise<string[]> {
   }
   return [...out];
 }
-const byOrder = (a: Row, b: Row) => (a.ord ?? a.id) - (b.ord ?? b.id) || a.id - b.id;
+/** أقسام كل فصل بملازمي، بهذا الترتيب. كل قسم بكل منهج إله ملزمة وحدة: الجديدة تتبدل مكان القديمة */
+export const SECTIONS = [
+  { key: "book", title: "دفتر المحاضرات (أسئلة وأمثلة الكتاب)", icon: "📘", word: "main" },
+  { key: "wz", title: "دفتر المحاضرات (الأسئلة الوزارية)", icon: "📗", word: "exams" },
+  { key: "ith", title: "دفتر المحاضرات (الأسئلة الإثرائية)", icon: "📙", word: "extra" },
+  { key: "rasid", title: "الدفتر الامتحاني (الراصد)", icon: "📝", word: "" },
+] as const;
+export type SectionKey = (typeof SECTIONS)[number]["key"];
+/** قسم الملزمة: الراصد قسمه الدفتر الامتحاني. الملازم اللي انرفعت قبل الأقسام ما إلها قسم ("") وتطلع باسمها */
+export const sectionOf = (b: Row): SectionKey | "" => (b.kind === "rasid" ? "rasid" : SECTIONS.some((s) => s.key === b.section) ? b.section : "");
+const sectionRank = (b: Row) => { const i = SECTIONS.findIndex((s) => s.key === sectionOf(b)); return i < 0 ? SECTIONS.length : i; };
+const byOrder = (a: Row, b: Row) => sectionRank(a) - sectionRank(b) || (a.ord ?? a.id) - (b.ord ?? b.id) || a.id - b.id;
 /** ملازم الطالب حسب فصوله ومنهجه. صاحب البوت يشوف كلها حتى يجرب */
 export async function myBooks(uid: number): Promise<Row[]> {
   const all = (await find("note_books")).sort(byOrder);
@@ -82,7 +93,7 @@ export async function noteAction(body: Row) {
   if (a === "list") {
     const books = await myBooks(uid);
     const marks = new Map((await find("note_bookmarks", { user_id: uid })).map((m) => [m.book_id as number, m.page as number]));
-    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages, kind: b.kind ?? "book", saved: marks.get(b.id) ?? 0 })) };
+    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages, kind: b.kind ?? "book", section: sectionOf(b), saved: marks.get(b.id) ?? 0 })) };
   }
   const b = await myBook(uid, body.book);
   // 📑 المواضيع: الموضوع، وبعده المحاضرة (أو السؤال بالراصد)، ويا رقم صفحتها
@@ -225,7 +236,7 @@ async function adminData(uid: number, notice = "") {
   for (const e of exams) if (e.chapter) seen.add(String(e.chapter));
   const books = (await find("note_books")).sort(byOrder);
   for (const b of books) seen.add(String(b.chapter));
-  return { chapters: [...seen], books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang, pages: b.pages, kind: b.kind ?? "book", created: b.created })), videos: await videoList(), link: `/store/notes?t=${encodeURIComponent(homeToken(uid))}`, notice };
+  return { chapters: [...seen], books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang, pages: b.pages, kind: b.kind ?? "book", section: sectionOf(b), created: b.created })), videos: await videoList(), link: `/store/notes?t=${encodeURIComponent(homeToken(uid))}`, notice };
 }
 export async function noteAdmin(raw: Row | FormData) {
   const body: Row = raw instanceof FormData ? Object.fromEntries([...raw.entries()]) : raw;
@@ -236,11 +247,13 @@ export async function noteAdmin(raw: Row | FormData) {
     const f = body.file;
     need(f instanceof Blob && f.size > 0, "اختار ملف PDF");
     need((f as Blob).size <= PDF_MAX, "الملف كبير، أكثر شي 30 ميگا");
-    const title = String(body.title ?? "").trim().slice(0, 80);
-    need(title, "اكتب اسم الملزمة");
     const chapter = String(body.chapter ?? "");
     need(chapter.startsWith("الفصل"), "اختار الفصل");
     const lang = ["ar", "en", "all"].includes(String(body.lang)) ? String(body.lang) : "all";
+    // 📚 ملازمي: كل قسم إله مكانه، والاسم اسم القسم. ملزمة بنفس الفصل والمنهج والقسم تتبدل بالجديدة
+    const sec = SECTIONS.find((s) => s.key === body.section);
+    const title = sec ? sec.title : String(body.title ?? "").trim().slice(0, 80);
+    need(title, "اكتب اسم الملزمة");
     const buf = Buffer.from(await (f as Blob).arrayBuffer());
     need(buf.subarray(0, 4).toString() === "%PDF", "لازم ملف PDF");
     // إذا ما انقرا الملف، السبب يطلع بالشاشة بدل «صار خطأ»
@@ -252,7 +265,7 @@ export async function noteAdmin(raw: Row | FormData) {
       await task.destroy();
     } catch (e) { console.error("note upload:", e); need(false, `ما گدرت أقرا ملف الـ PDF (${String((e as Error)?.message ?? e).slice(0, 160)}). صور هاي الرسالة ودزها`); }
     // 📝 الراصد: ويا ملف الصفحات ملف الحلول النموذجية، بنفس عدد الصفحات (حل كل صفحة بنفس رقمها)
-    const kind = body.kind === "rasid" ? "rasid" : "book";
+    const kind = sec ? (sec.key === "rasid" ? "rasid" : "book") : body.kind === "rasid" ? "rasid" : "book";
     let sol: Buffer | null = null;
     if (kind === "rasid") {
       const s = body.sol;
@@ -268,7 +281,14 @@ export async function noteAdmin(raw: Row | FormData) {
     const file = randomUUID().slice(0, 12);
     await files().write(`notes/${file}.pdf`, buf, "application/pdf");
     if (sol) await files().write(`notes/${file}.sol.pdf`, sol, "application/pdf");
-    await insert("note_books", { title, chapter, lang, file, pages, kind, created: stamp() });
+    // نفس المكان: نفس الملزمة بملف جديد. كتابة الطلاب وأزرار الفيديو تبقى على نفس أرقام الصفحات
+    const old = sec ? (await find("note_books", { chapter, lang })).find((b) => sectionOf(b) === sec.key) : undefined;
+    if (old) {
+      await update("note_books", { id: old.id }, { title, file, pages, kind, section: sec!.key, created: stamp() });
+      const gone = old.pages > pages ? ` · ⚠️ الجديدة أقصر (${old.pages} ← ${pages} صفحة)` : "";
+      return await adminData(uid, `✅ تبدلت «${title}» بالجديدة: ${pages} صفحة. كتابة الطلاب وأزرار الفيديو بقت على نفس أرقام الصفحات${gone}`);
+    }
+    await insert("note_books", { title, chapter, lang, file, pages, kind, section: sec?.key ?? null, created: stamp() });
     return await adminData(uid, `✅ انرفع${kind === "rasid" ? " الراصد" : "ت"} «${title}»: ${pages} صفحة`);
   }
   if (a === "videoUpload") {

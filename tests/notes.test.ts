@@ -136,3 +136,18 @@ test("📝 الراصد: صفحته عليها اسم الطالب بالهدر�
   const [book] = (await myBooks(10)).filter((x) => x.kind !== "rasid");
   await assert.rejects(notePage(homeToken(10), book.id, 1, "android", dev(10), true), (e: any) => e.status === 404);
 });
+
+test("📚 ملازمي: أقسام الفصل الأربعة بترتيبها، والقديمة بلا قسم تطلع بعدها", async () => {
+  const { SECTIONS, sectionOf } = await import("../lib/notes.ts");
+  assert.deepEqual(SECTIONS.map((s) => s.title), ["دفتر المحاضرات (أسئلة وأمثلة الكتاب)", "دفتر المحاضرات (الأسئلة الوزارية)", "دفتر المحاضرات (الأسئلة الإثرائية)", "الدفتر الامتحاني (الراصد)"]);
+  assert.equal(sectionOf({ kind: "rasid" }), "rasid");
+  assert.equal(sectionOf({ kind: "book", section: "wz" }), "wz");
+  assert.equal(sectionOf({ kind: "book", section: null }), "");
+  await insert("note_books", { title: "ر", chapter: "الفصل الخامس", lang: "ar", file: "s4", pages: 1, kind: "rasid", created });
+  await insert("note_books", { title: "إ", chapter: "الفصل الخامس", lang: "ar", file: "s3", pages: 1, kind: "book", section: "ith", created });
+  await insert("note_books", { title: "ك", chapter: "الفصل الخامس", lang: "ar", file: "s1", pages: 1, kind: "book", section: "book", created });
+  await insert("note_books", { title: "قديمة", chapter: "الفصل الخامس", lang: "ar", file: "s0", pages: 1, kind: "book", created });
+  await insert("note_books", { title: "و", chapter: "الفصل الخامس", lang: "ar", file: "s2", pages: 1, kind: "book", section: "wz", created });
+  const fifth = (await myBooks(1)).filter((b) => b.chapter === "الفصل الخامس").map((b) => b.title);
+  assert.deepEqual(fifth, ["ك", "و", "إ", "ر", "قديمة"]);
+});

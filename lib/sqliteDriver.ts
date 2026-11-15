@@ -101,6 +101,7 @@ async function init() {
   await addColumn("schedules", "hol", "TEXT");
   await addColumn("bank_questions", "q_text", "TEXT");
   await addColumn("note_books", "kind", "TEXT");
+  await addColumn("note_books", "section", "TEXT");
   await addColumn("note_marks", "link", "INTEGER");
   await addColumn("bank_questions", "q_text_en", "TEXT");
   await addColumn("bank_exams", "title_en", "TEXT");
