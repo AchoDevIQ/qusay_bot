@@ -4,6 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { kvGet, kvSet } from "./db.ts";
 import { MODEL, hasKey } from "./booklets.ts";
+import { addSpend } from "./aiSpend.ts";
 
 const key = (uid: number) => `pen_text_${uid}`;
 /** هذا المصحح مختار كتابته تتحول نص؟ */
@@ -51,6 +52,7 @@ export async function readInk(dataUrl: unknown): Promise<string> {
   const cost = (((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) * 0.1 + (u.output_tokens ?? 0) * 0.5) / 1_000_000;
   const was = await penTextUsage();
   await kvSet(USAGE, JSON.stringify({ used: was.used + 1, cost: Math.round((was.cost + cost) * 1e6) / 1e6 }));
+  await addSpend("pen", cost);
   if (res.stop_reason === "refusal") throw new Error("ما گدرت أقرا الكتابة");
   let j: { ok?: boolean; text?: string } = {};
   try { j = JSON.parse(res.content.map((b) => (b.type === "text" ? b.text : "")).join("")); } catch { /* مو مفهوم */ }

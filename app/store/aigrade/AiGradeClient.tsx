@@ -3,6 +3,7 @@
 // مو متأكد منها، يحفظ خطوات حل كل سؤال، ويشوف سجله وشگد صرف
 import { useEffect, useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
+import SpendCard from "../SpendCard";
 import PhotoPick from "../PhotoPick";
 import Thumbs from "../Thumbs";
 
@@ -54,6 +55,7 @@ export default function AiGradeClient() {
               {data.on && <div className="fdok">🤖 شغال: كل دقيقة ياخذ أوراق المواضيع المأشرة ويصححها.</div>}
             </div>
             <Money data={data} />
+            <SpendCard />
             <Calib key={data.calib.n} calib={data.calib} busy={busy} call={call} />
             <Compare c={data.compare} />
             <AiStudents st={data.aiStudents} busy={busy} call={call} />

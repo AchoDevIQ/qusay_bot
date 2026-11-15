@@ -13,6 +13,7 @@ import { myBooks } from "./notes.ts";
 import { marksFor } from "./noteMarks.ts";
 import { bookFind, bookRows, rasidFind, rasidIndex, topicPages, type BookHit, type RasidHit } from "./rasidQa.ts";
 import { bookToc } from "./noteToc.ts";
+import { addSpend } from "./aiSpend.ts";
 
 export type QaKind = "main" | "extra" | "exams";
 export const QA_KIND: Record<QaKind, string> = { main: "الملزمة", extra: "الاثرائيات", exams: "الوزاريات" };
@@ -236,6 +237,7 @@ export async function examQueueTick(limit = EXAM_PER_TICK) {
     for (const u of g.usage) { cfg.inTok += Number(u.input) || 0; cfg.outTok += Number(u.output) || 0; }
   }
   await saveCfg(cfg);
+  await addSpend("qa", usdOf(got.flatMap((g) => g.usage)));
   const now = await readExamQ();
   const tries = { ...now.tries }, failed = [...now.failed];
   const drop = new Set(got.map((g) => g.row.qid));
@@ -268,9 +270,7 @@ const joinCtx = (list: Part[], max: number) => {
 };
 async function call(mode: "find" | "solve" | "explain", context: string, q: QaAsk, lang: "ar" | "en", shown = "") {
   const r = await svc("/bot/qa", { mode, context, question: (q.text ?? "").slice(0, 4000), image: q.image?.toString("base64"), lang, ...(shown ? { shown } : {}) }, 180_000);
-  const cfg = await qaCfg();
-  for (const u of r.usage ?? []) { cfg.inTok += Number(u.input) || 0; cfg.outTok += Number(u.output) || 0; }
-  await saveCfg(cfg);
+  await addUsage(r.usage ?? []);
   return { found: !!r.found, solution: String(r.solution ?? "").trim() };
 }
 
@@ -658,7 +658,12 @@ async function addUsage(usage: any[] = []) {
   const cfg = await qaCfg();
   for (const u of usage) { cfg.inTok += Number(u.input) || 0; cfg.outTok += Number(u.output) || 0; }
   await saveCfg(cfg);
+  await addSpend("qa", usdOf(usage));
 }
+/** كلفة طلب بالدولار (نفس حساب الكارت: التوكنات الداخلة والطالعة) */
+const usdOf = (usage: any[] = []) => usage.reduce((t, u) => t + ((Number(u.input) || 0) * PRICE_IN + (Number(u.output) || 0) * PRICE_OUT) / 1_000_000, 0);
+/** كل صرفية الأسئلة العلمية من البداية (بالدولار) */
+export const qaSpentAll = async () => { const c = await qaCfg(); return (c.inTok * PRICE_IN + c.outTok * PRICE_OUT) / 1_000_000; };
 async function done(source: QaResult["source"], solution: string): Promise<QaResult> {
   const cfg = await qaCfg();
   if (source === "ai") cfg.solved++; else cfg.fromBook++;

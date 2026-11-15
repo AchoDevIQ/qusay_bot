@@ -6,6 +6,7 @@ import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 import NotesCard from "./NotesCard";
 import MarksCard from "./MarksCard";
 import QaCard from "./QaCard";
+import SpendCard from "../SpendCard";
 
 type Lecture = { from: number; to: number; topic: string; lecture: number };
 type Booklet = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; pages: number; lectures: Lecture[]; created: string; pdf?: boolean };
@@ -27,6 +28,7 @@ export default function BookletsClient() {
             <NotesCard />
             <MarksCard />
             <QaCard />
+            <SpendCard />
             <details className="card cpch"><summary><b>📕 الطريقة القديمة: صور من PDF الملازم</b></summary>
             <AutoCard data={data} busy={busy} call={call} />
             <Upload busy={busy} call={call} />
