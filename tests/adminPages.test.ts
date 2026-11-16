@@ -86,11 +86,17 @@ test("صفحات المدير ممنوعة على المساعد والطالب"
 });
 
 test("الفصول الإلكترونية", async () => {
-  assert.deepEqual((await online({ action: "list" })).chapters, [{ label: "الفصل الأول", on: false }]);
+  assert.deepEqual((await online({ action: "list" })).chapters, [{ label: "الفصل الأول", on: false, stage: null, now: "" }]);
   assert.equal((await online({ action: "toggle", label: "الفصل الأول" })).chapters[0].on, true);
   assert.equal(await kvGet("online_only"), JSON.stringify(["الفصل الأول"]));
   assert.equal((await online({ action: "toggle", label: "الفصل الأول" })).chapters[0].on, false);
   await assert.rejects(online({ action: "toggle", label: "الفصل التاسع" }), /الفصل/);
+  // مواعيد الفصل: بداية وأيام التعويض والإلكتروني فقط
+  const st = (await online({ action: "stage", label: "الفصل الأول", start: "2020-01-01", makeup: "5", online: "10" })).chapters[0];
+  assert.deepEqual(st.stage, { start: "2020-01-01", makeup: 5, online: 10 });
+  assert.equal(st.now, "online");
+  await assert.rejects(online({ action: "stage", label: "الفصل الأول", start: "" }), /تاريخ/);
+  assert.equal((await online({ action: "stage", label: "الفصل الأول", clear: true })).chapters[0].stage, null);
 });
 
 test("أوقات الأسئلة", async () => {

@@ -10,7 +10,7 @@ import { REFUND_SENTENCE, chaptersInOrder, firstRoundOnly, termSentenceFor } fro
 type Gate = "" | "a1" | "a2" | "aw" | "many" | "t1" | "tw";
 type Item = [number, string, number];
 type Data = {
-  c: [string, Item[]][]; g: string[]; f: number[]; w?: string[];
+  c: [string, Item[]][]; g: string[]; f: number[]; w?: string[]; mk?: string[];
   p?: { n?: string; cu?: string; g?: string; s?: string; a?: string; p1?: string; p2?: string };
   tk?: string;
 };
@@ -130,7 +130,8 @@ function Store({ D }: { D: Data }) {
 
         <section className={!gate && page === 1 ? "" : "hide"}>
           {!D.c.length && <div className="empty">لا توجد منتجات حاليا.</div>}
-          {!!D.w?.length && <div className="card warn">⚠️ <b>تنبيه:</b> امتحانات <b>{D.w.join("، ")}</b> <b>إلكترونية فقط</b>.</div>}
+          {!!D.w?.length && <div className="card warn">⚠️ <b>تنبيه:</b> امتحانات <b>{D.w.join("، ")}</b> <b>إلكترونية فقط</b>، لأن فاتك هواية من المادة وما تلحق حضوري.</div>}
+          {!!D.mk?.length && <div className="card warn">⚠️ <b>تنبيه:</b> <b>{D.mk.join("، ")}</b> بدا من فترة. إذا تشتريه، نسويلك <b>جدول تعويضي مكثف إلكتروني</b> للمادة اللي فاتتك، وبعدها ترجع تمتحن ويا جماعتك.</div>}
           {D.c.map(([cname, items]) => (
             <div className="card" key={cname}>
               <h2>📂 {cname}</h2>

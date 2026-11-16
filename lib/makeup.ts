@@ -15,12 +15,16 @@ const REPORTED = "makeup_reported";
 const REPORT_AT = "09:00";
 export const MAKEUP_PERM = "signups";
 
-/** الفصول التعويضية: الفصل ← من وكت صار تعويضي */
-export async function makeupChapters(): Promise<Record<string, string>> {
+/** الفصول اللي أشّرها صاحب البوت تعويضية بيده: الفصل ← من وكت */
+async function manualMakeup(): Promise<Record<string, string>> {
   try { const j = JSON.parse(await kvGet(KEY) ?? "{}"); return j && typeof j === "object" ? j : {}; } catch { return {}; }
 }
+/** الفصول التعويضية: اليدوية، واللي عدّت «أيام التعويض» من بدايتها. الفصل ← من وكت صار تعويضي */
+export async function makeupChapters(): Promise<Record<string, string>> {
+  return { ...await (await import("./chapterStages.ts")).autoMakeup(), ...await manualMakeup() };
+}
 export async function setMakeup(chapter: string, on: boolean) {
-  const m = await makeupChapters();
+  const m = await manualMakeup();
   if (on) m[chapter] = m[chapter] ?? stamp(); else delete m[chapter];
   await kvSet(KEY, JSON.stringify(m));
 }

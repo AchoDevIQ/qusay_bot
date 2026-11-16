@@ -7,8 +7,13 @@ import { chapterLabel } from "./orderRules.ts";
 import { b64urlEncode, btn, chunk } from "./util.ts";
 
 export { chapterLabel };
-export async function onlineOnly(): Promise<string[]> {
+/** الفصول اللي أشّرها صاحب البوت «إلكتروني فقط» بيده */
+export async function manualOnlineOnly(): Promise<string[]> {
   try { return JSON.parse(await kvGet("online_only") || "[]"); } catch { return []; }
+}
+/** إلكتروني فقط: اليدوي، واللي عدّت «أيام الإلكتروني فقط» من بدايته */
+export async function onlineOnly(): Promise<string[]> {
+  return [...new Set([...await manualOnlineOnly(), ...await (await import("./chapterStages.ts")).autoOnline()])].sort();
 }
 async function modeOk(p: Row, s: Row | null) {
   const m = p.mode || "both";
@@ -44,6 +49,14 @@ export async function storeLink(uid?: number) {
     const labels = [...new Set(c.flatMap((ct) => (ct[1] as unknown[][]).map((p) => chapterLabel(p[1] as string))))]
       .filter((l): l is string => l !== null && oo.includes(l)).sort();
     if (labels.length) d.w = labels;
+  }
+  // الفصول اللي صارت تعويضية (وما صارت إلكترونية فقط عنده): تنبيه إن اللي يشتريها ياخذ جدول مكثف للي فاته
+  {
+    const oo = s?.exam === "حضوري" ? new Set(await onlineOnly()) : new Set<string>();
+    const mk = Object.keys(await (await import("./makeup.ts")).makeupChapters()).filter((l) => !oo.has(l));
+    const here = new Set(c.flatMap((ct) => (ct[1] as unknown[][]).map((p) => chapterLabel(p[1] as string))));
+    const list = mk.filter((l) => here.has(l)).sort();
+    if (list.length) d.mk = list;
   }
   if (s) d.p = { n: s.name, cu: s.curr, g: s.gov, s: s.side || "", a: s.area, p1: s.phone1, p2: s.phone2 };
   if (uid && HOME_PAGE) d.tk = homeToken(uid);

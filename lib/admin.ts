@@ -5,7 +5,7 @@ import {
   allCats, can, cat, centerName, chapters, govMode, groupId, hoursText, isAdmin, newOrdersCount, orderItems, ordersByIds, placeOf, product, products, profileText, qHours, qWhere,
   searchStudents, setGraderView, setStudentView, staffAccount, staffName, staffRow, student, topics,
 } from "./data.ts";
-import { adminPageLink, chapterLabel, flowKb, mainKb, onlineOnly, posKb, regKb } from "./keyboards.ts";
+import { adminPageLink, chapterLabel, flowKb, mainKb, manualOnlineOnly, onlineOnly, posKb, regKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
 import { EXAM_PERM, examBankCb } from "./examBank.ts";
 import { readyExtras } from "./exams.ts";
@@ -335,7 +335,7 @@ export async function onAdminCb(chat: number, uid: number, mid: number, d: strin
     const v = await onlineOnlyView();
     if (d.startsWith("a:oo:")) {
       const l = v[2][Number(d.slice(5))];
-      const oo = new Set(await onlineOnly());
+      const oo = new Set(await manualOnlineOnly());
       if (oo.has(l)) oo.delete(l); else oo.add(l);
       await kvSet("online_only", JSON.stringify([...oo].sort()));
       const nv = await onlineOnlyView();

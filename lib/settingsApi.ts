@@ -2,30 +2,40 @@
 import { find, kvSet, saveCurriculum, type Row } from "./db.ts";
 import { DAYS, DAY_ORDER, toLatinDigits } from "./config.ts";
 import { chapters, groupId, products, qHours, qWhere, student, topics } from "./data.ts";
-import { chapterLabel, onlineOnly } from "./keyboards.ts";
+import { chapterLabel, manualOnlineOnly } from "./keyboards.ts";
+import { chapterStages, cleanStage, setChapterStage, stageNow } from "./chapterStages.ts";
 import { authed, need } from "./webApi.ts";
 
-// ---------- فصول امتحانها إلكتروني فقط
+// ---------- مراحل الفصول: تاريخ البداية، أيام التعويض، أيام الإلكتروني فقط، والمفتاح اليدوي
 async function onlineData() {
   const labels: string[] = [];
   for (const p of await products()) {
     const l = chapterLabel(p.name);
     if (l && !labels.includes(l)) labels.push(l);
   }
-  const on = await onlineOnly();
-  return { chapters: labels.map((label) => ({ label, on: on.includes(label) })) };
+  const manual = await manualOnlineOnly(), stages = await chapterStages();
+  return { chapters: labels.map((label) => ({ label, on: manual.includes(label), stage: stages[label] ?? null, now: stageNow(stages[label]) })) };
 }
 export async function onlineAction(body: Row) {
   await authed(body?.initData, "online");
+  const data = await onlineData();
+  const label = String(body.label ?? "");
+  let notice = "";
   if (body.action === "toggle") {
-    const data = await onlineData();
-    const label = String(body.label);
     need(data.chapters.some((c) => c.label === label), "الفصل غير موجود");
-    const set = new Set(await onlineOnly());
+    const set = new Set(await manualOnlineOnly());
     if (set.has(label)) set.delete(label); else set.add(label);
     await kvSet("online_only", JSON.stringify([...set].sort()));
+  } else if (body.action === "stage") {
+    need(data.chapters.some((c) => c.label === label), "الفصل غير موجود");
+    if (body.clear) { await setChapterStage(label, null); notice = "🗑 انشالت مواعيد الفصل"; }
+    else {
+      need(cleanStage(body), "اختار تاريخ بداية الفصل");
+      await setChapterStage(label, body);
+      notice = "✅ انحفظت مواعيد " + label;
+    }
   } else need(body.action === "list", "أمر غير معروف");
-  return await onlineData();
+  return { ...await onlineData(), notice };
 }
 
 // ---------- أوقات استقبال الأسئلة
