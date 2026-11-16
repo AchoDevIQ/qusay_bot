@@ -32,7 +32,7 @@ export const inTarget = (p: Poll, s: Row | null | undefined) =>
 const targets = async (p: Poll) => (await find("students")).filter((s) => inTarget(p, s));
 
 /** أسماء المراكز (ويا منطقتها إذا الاسم ما بي المنطقة) */
-async function centerNames() {
+export async function centerNames() {
   const areas = new Map((await find("areas")).map((a) => [a.id as number, String(a.name ?? "")]));
   const out = new Map<number, string>([[NO_CENTER, "الإلكتروني (بدون مركز)"]]);
   for (const c of await find("centers")) {

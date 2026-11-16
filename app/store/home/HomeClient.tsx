@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { closeApp, haptic, openOutside, deviceId } from "../shared";
 
-type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[] };
+type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[]; show?: string[] };
 type Reply = List & { url?: string; close?: boolean; error?: string };
 
 const svg = (body: ReactNode) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{body}</svg>;
@@ -94,7 +94,8 @@ export default function HomeClient() {
     // التصويت يطلع بس إذا أكو تصويت مفتوح إله وبعده ما صوت
     ...(data?.vote ? [{ key: "vote", title: "التصويت", note: data.vote > 1 ? `${data.vote} تصويتات تنتظر صوتك` : "تصويت ينتظر صوتك" }] : []),
     // مربع «طلب كلمة مرور جديدة» (key: "pass") مخفي لحد ما نربط التطبيق، بطلب المستخدم
-  ] as { key: string; title: string; note?: string; main?: boolean }[];
+    // البوت احتياط للتطبيق: يطلع بس المربع اللي فتحه صاحب البوت لهذا الطالب
+  ].filter((t) => !data?.show || data.show.includes(t.key)) as { key: string; title: string; note?: string; main?: boolean }[];
 
   return (
     <>
@@ -113,7 +114,10 @@ export default function HomeClient() {
           </div>
         )}
         {data?.link && <GuardianGate link={data.link} text={data.linkText ?? ""} copyText={data.linkCopy ?? data.link} recheck={() => void recheck()} busy={busy === "check"} />}
-        {data && !data.link && !data.children && (
+        {data && !data.link && !data.children && !tiles.length && (
+          <div className="card"><div className="who">📱 كل خدماتنا صارت بتطبيق قصي العميري. درجاتك توصلك هنا بالمحادثة.</div></div>
+        )}
+        {data && !data.link && !data.children && !!tiles.length && (
           <div className="hmgrid">
             {tiles.map((t) => (
               <button type="button" key={t.key} className={"hmtile" + (t.main ? " main" : "")} disabled={!!busy} onClick={() => void open(t.key)}>

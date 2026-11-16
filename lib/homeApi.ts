@@ -16,6 +16,7 @@ import { askStart, myQuestions } from "./questions.ts";
 import { onStoreOrder, saveStudent, showMe, studentFromForm } from "./student.ts";
 import { api, send } from "./telegram.ts";
 import { loadTerms, termsRev } from "./terms.ts";
+import { visibleTiles } from "./studentVis.ts";
 import { stamp } from "./util.ts";
 import { ensure, need } from "./webApi.ts";
 import { verifyHomeToken } from "./webAuth.ts";
@@ -54,6 +55,9 @@ export async function homeAction(body: Row) {
   need(allowUpdate(id), "ضغطت هوايا، انتظر شوية", 429);
   await checkDevice(id, body.device);
   const a = String(body.action ?? "");
+  // البوت احتياط للتطبيق: المربع اللي ما فتحه صاحب البوت لهذا الطالب ما يشتغل (طلب المتجر يتبع المتجر)
+  const tile = a === "order" ? "shop" : a;
+  if (["shop", "ask", "myq", "me", "exams", "notes", "vote"].includes(tile)) need((await visibleTiles(id)).has(tile as never), "هذا القسم مو مفتوح هسه", 403);
   // سلّم أول امتحان وبعده ما ربط ولي أمره: كلشي مقفول لحد ما يربطه
   if (a === "ask" || a === "exams" || a === "notes") need(!await needsGuardian(id), "🔒 اربط ولي أمرك أول، من القائمة الرئيسية");
   if (a === "list") {
@@ -61,11 +65,13 @@ export async function homeAction(body: Row) {
     if (!s) {
       const kids = await childrenOf(id);
       if (kids.length) return { name: "", exams: false, ask: false, myq: false, children: await Promise.all(kids.map(async (k) => (await student(k.student_id))?.name ?? "—")) };
-      return { name: "", exams: false, ask: true, myq: false, fresh: true };
+      return { name: "", exams: false, ask: true, myq: false, fresh: true, show: [...await visibleTiles(id)] };
     }
     // ورا أول امتحان: لازم يربط ولي أمره قبل كل شي
     const needLink = await needsGuardian(id);
     return {
+      // المربعات المفتوحة لهذا الطالب (البوت احتياط للتطبيق)
+      show: [...await visibleTiles(id)],
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
       name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id), vote: (await openFor(id)).length,
       link: needLink ? await guardianLink(id) : null,
