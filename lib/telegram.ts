@@ -43,6 +43,8 @@ export async function api<T = any>(method: string, params: Record<string, unknow
   await (await appChat()).afterTelegram(method, params, r).catch((e) => console.error("app chat mirror", e));
   return r;
 }
+/** طلب لتليگرام مباشرة بدون محادثة التطبيق (تستعمله محادثة التطبيق نفسها) */
+export const apiRaw = <T = any>(method: string, params: Record<string, unknown> = {}) => apiTelegram<T>(method, params);
 async function apiTelegram<T = any>(method: string, params: Record<string, unknown> = {}, tries = 2): Promise<T | null> {
   const owner = await toOwner(method, params.chat_id);
   if (owner) { params = { ...params, chat_id: owner, protect_content: false }; const rm = innerOnly(params.reply_markup); if (rm) params.reply_markup = rm; else delete params.reply_markup; }

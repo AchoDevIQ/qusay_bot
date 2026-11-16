@@ -54,6 +54,8 @@ export async function beforeTelegram(method: string, p: Row): Promise<{ result: 
     answers.set(String(p.callback_query_id), String(p.text ?? ""));
     return { result: true };
   }
+  const copied = await copyForApp(method, p);
+  if (copied) return copied;
   if (p.chat_id === undefined) return null;
   const uid = Number(p.chat_id);
   const mode = await chatMode(uid);
@@ -117,7 +119,7 @@ export async function chatList(uid: number, after = 0) {
   const kb = parse(await kvGet(`app_kb_${uid}`)) ?? [];
   return {
     msgs: rows.map((r) => ({ id: Number(r.id), mid: Number(r.tg), dir: r.dir, text: r.text ?? "", html: !!r.html, kb: parse(r.kb) ?? null, media: parse(r.media) ?? [], at: r.created, edited: r.edited ?? "" })),
-    kb, last: rows.reduce((m, r) => Math.max(m, Number(r.id)), after),
+    kb, last: rows.reduce((m, r) => Math.max(m, Number(r.id)), after), voice: await voiceAllowed(uid),
   };
 }
 /** رسالة الطالب نفسه تنحفظ حتى تطلع بالصفحة مثل المحادثة */
@@ -136,4 +138,66 @@ export async function albumForApp(chat: unknown, photos: Buffer[], caption: stri
   if (mode === "tg") return mode;
   await uploadForApp("sendMediaGroup", { chat_id: chat, caption, parse_mode: "HTML" }, photos.map((b, i) => ({ b, name: `p${i}.jpg`, type: "image/jpeg", kind: "photo" })), true);
   return mode;
+}
+
+// ---------- نسخ الرسائل (copyMessage / forwardMessage) لطالب التطبيق ومنه
+// رسائل الطالب من التطبيق ما موجودة بتليگرام، فأرقامها من FAKE وفوك (FAKE + رقمها بجدول المحادثة)
+export const FAKE_MID = 2_000_000_000;
+const raw = async () => (await import("./telegram.ts")).apiRaw;
+async function storageChat() { const g = await kvGet("q_group"); return g ? Number(g) : Number(String(process.env.ADMIN ?? "").split(",")[0]) || 0; }
+
+/** محتوى رسالة تليگرام كاملة: نصها وملفاتها */
+function contentOf(m: any): { text: string; media: Media[] } {
+  const text = String(m?.text ?? m?.caption ?? "");
+  const media: Media[] = [];
+  if (m?.photo) media.push({ t: "photo", f: m.photo.at(-1).file_id });
+  for (const k of ["video", "animation", "voice", "audio", "video_note", "document", "sticker"]) if (m?.[k]?.file_id) media.push({ t: k, f: m[k].file_id, n: m[k].file_name });
+  return { text, media };
+}
+/** رسالة كتبها الطالب بالتطبيق (رقمها وهمي)، لو null */
+async function appInMessage(fromChat: unknown, mid: unknown) {
+  const id = Number(mid) - FAKE_MID;
+  if (!(id > 0) || await chatMode(fromChat) === "tg") return null;
+  const r = await one("app_msgs", { id, uid: Number(fromChat), dir: "in" });
+  return r ? { text: String(r.text ?? ""), media: (parse(r.media) as Media[] | null) ?? [] } : null;
+}
+/** يرجع نتيجة النسخ إذا انعالج هنا، أو null حتى يروح لتليگرام عادي */
+export async function copyForApp(method: string, p: Row): Promise<{ result: unknown } | null> {
+  if (method !== "copyMessage" && method !== "forwardMessage") return null;
+  const toMode = await chatMode(p.chat_id);
+  const fromApp = await appInMessage(p.from_chat_id, p.message_id);
+  if (!fromApp && toMode !== "app") return null;
+  // 1) رسالة من الطالب (التطبيق) لمجموعة الأسئلة أو لأي محادثة بتليگرام: ندزها من جديد بمحتواها
+  if (fromApp && toMode !== "app") {
+    const send = await raw();
+    const base: Row = { chat_id: p.chat_id, ...(p.message_thread_id ? { message_thread_id: p.message_thread_id } : {}), ...(p.reply_markup ? { reply_markup: p.reply_markup } : {}) };
+    const m = fromApp.media[0];
+    const cap = fromApp.text ? { caption: fromApp.text } : {};
+    let r: any = null;
+    if (!m || !m.f) r = await send("sendMessage", { ...base, text: fromApp.text || "📎" });
+    else if (m.t === "photo") r = await send("sendPhoto", { ...base, photo: m.f, ...cap });
+    else if (m.t === "voice") r = await send("sendVoice", { ...base, voice: m.f, ...cap });
+    else if (m.t === "audio") r = await send("sendAudio", { ...base, audio: m.f, ...cap });
+    else r = await send("sendDocument", { ...base, document: m.f, ...cap });
+    return { result: r ? { message_id: r.message_id } : null };
+  }
+  // 2) لطالب التطبيق بس: من تليگرام (جواب الأستاذ بالمجموعة، فيديو القناة) نجيب محتواها بتحويلها لمكان مخفي وتنمسح
+  const uid = Number(p.chat_id);
+  let content = fromApp;
+  if (!content) {
+    const send = await raw(), store = await storageChat();
+    const fwd: any = store ? await send("forwardMessage", { chat_id: store, from_chat_id: p.from_chat_id, message_id: p.message_id, disable_notification: true }) : null;
+    if (!fwd) return { result: null };
+    void send("deleteMessage", { chat_id: store, message_id: fwd.message_id });
+    content = contentOf(fwd);
+  }
+  const mid = await saveOut(uid, "copyMessage", { text: content.text, reply_markup: p.reply_markup }, null, content.media);
+  return { result: { message_id: mid, chat: { id: uid, type: "private" } } };
+}
+
+/** الرسائل الصوتية بالمحادثة: صاحب البوت يفتحها لكل الطلاب أو لطلاب بأسمائهم (صفحة «شنو يشوف الطالب»). من البداية مسدودة */
+export async function voiceAllowed(uid: number) {
+  const { visRules, inRule } = await import("./studentVis.ts");
+  const r = (await visRules()).voice;
+  return !!r && await inRule(r, uid, await one("students", { user_id: uid }));
 }

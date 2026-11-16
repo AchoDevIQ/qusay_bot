@@ -6,7 +6,7 @@ import { appKey } from "../shared";
 type Btn = { text: string; callback_data?: string; url?: string; web_app?: { url: string }; copy_text?: { text: string } };
 type Media = { t: string; n?: string };
 type Msg = { id: number; mid: number; dir: "in" | "out"; text: string; html: boolean; kb: Btn[][] | null; media: Media[]; at: string; edited: string };
-type List = { msgs: Msg[]; kb: Btn[][]; last: number; answer?: string; error?: string };
+type List = { msgs: Msg[]; kb: Btn[][]; last: number; answer?: string; error?: string; voice?: boolean };
 
 const ALLOWED = new Set(["B", "STRONG", "I", "EM", "U", "INS", "S", "STRIKE", "DEL", "CODE", "PRE", "A", "BLOCKQUOTE", "TG-SPOILER", "SPAN", "BR"]);
 /** HTML تليگرام بس (عريض، مائل، كود، رابط...)، وأي شي ثاني يصير نص */
@@ -31,6 +31,9 @@ export default function ChatClient() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
+  const [voice, setVoice] = useState(false);
+  const [rec, setRec] = useState(0);
+  const recorder = useRef<MediaRecorder | null>(null);
   const last = useRef(0), loaded = useRef(false), bottom = useRef<HTMLDivElement>(null);
   const auth = () => ({ token: new URLSearchParams(location.search).get("t") ?? sessionStorage.getItem("qm_t") ?? "", app: appKey() });
 
@@ -41,6 +44,7 @@ export default function ChatClient() {
       return [...m.values()].sort((a, b) => a.id - b.id);
     });
     setKb(r.kb ?? []);
+    setVoice(!!r.voice);
     if (r.last > last.current) { last.current = r.last; setTimeout(() => bottom.current?.scrollIntoView({ behavior: loaded.current ? "smooth" : "auto" }), 50); }
     if (r.answer) { setToast(r.answer); setTimeout(() => setToast(""), 3500); }
   }
@@ -90,6 +94,26 @@ export default function ChatClient() {
     } catch { setError("ماكو اتصال، ما انرسلت الصورة"); }
     setBusy(false);
   }
+  // فويس: دوسة تبدي التسجيل، ودوسة ثانية توقفه وتدزه (أكثر شي 3 دقايق)
+  async function toggleRec() {
+    if (recorder.current) { recorder.current.stop(); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const type = ["audio/ogg;codecs=opus", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((t) => MediaRecorder.isTypeSupported?.(t)) ?? "";
+      const r = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      const parts: Blob[] = [];
+      const started = Date.now();
+      const tick = setInterval(() => { const sec = Math.floor((Date.now() - started) / 1000); setRec(sec || 1); if (sec >= 180) r.stop(); }, 500);
+      r.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
+      r.onstop = () => {
+        clearInterval(tick); stream.getTracks().forEach((t) => t.stop()); recorder.current = null; setRec(0);
+        const t = (r.mimeType || type || "audio/webm").split(";")[0];
+        const blob = new Blob(parts, { type: t });
+        if (blob.size > 1000) void sendFile(new File([blob], `voice.${t.includes("ogg") ? "ogg" : t.includes("mp4") ? "m4a" : "webm"}`, { type: t }));
+      };
+      recorder.current = r; r.start(); setRec(1);
+    } catch { setError("ما گدرت أفتح المايك. اسمح للتطبيق يستعمل المايك وجرب مرة ثانية"); }
+  }
   const fileUrl = (m: Msg, k: number) => { const a = auth(); return `/api/chat/file?t=${encodeURIComponent(a.token)}&app=${a.app}&m=${m.id}&k=${k}`; };
 
   return (
@@ -127,6 +151,7 @@ export default function ChatClient() {
         )}
         <div className="chatinput">
           <label className="cam">📷<input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void sendFile(f); }} /></label>
+          {voice && <button type="button" className={"cam" + (rec ? " recon" : "")} disabled={busy} onClick={() => void toggleRec()}>{rec ? `⏹ ${Math.floor(rec / 60)}:${String(rec % 60).padStart(2, "0")}` : "🎤"}</button>}
           <textarea rows={1} value={text} placeholder="اكتب رسالة..." onChange={(e) => setText(e.target.value)} />
           <button type="button" className="send" disabled={busy || !text.trim()} onClick={() => void sendText(text)}>{busy ? "⏳" : "➤"}</button>
         </div>
@@ -162,6 +187,7 @@ const CSS = `
 .chatinput textarea{flex:1;resize:none;max-height:120px;border-radius:12px;border:1px solid var(--line,#2c4460);background:#14263b;color:var(--txt,#fff);padding:10px;font-family:inherit;font-size:15px}
 .chatinput .cam,.chatinput .send{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;background:#c9a227;color:#111;border:none;cursor:pointer;flex:none}
 .chatinput .send:disabled{opacity:.5}
+.chatinput .cam.recon{width:auto;padding:0 12px;border-radius:22px;background:#d9534f;color:#fff;font-size:15px}
 .chattoast{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:12px;z-index:9;max-width:90%;text-align:center}
 .chaterr{color:#ff8a8a;text-align:center;padding:4px}
 `;

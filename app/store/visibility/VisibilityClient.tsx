@@ -27,9 +27,11 @@ function Form({ data, busy, onSave }: { data: Data; busy: boolean; onSave: (r: R
   const [rules, setRules] = useState(data.rules);
   const [names, setNames] = useState(new Map(data.names.map((n) => [n.id, n.name])));
   const set = (k: string, r: Partial<Rule>) => setRules({ ...rules, [k]: { ...rules[k], ...r } });
-  const allOn = data.tiles.every((t) => rules[t.key].mode === "all");
-  const allOff = data.tiles.every((t) => rules[t.key].mode === "off");
-  const setAll = (mode: Mode) => setRules(Object.fromEntries(data.tiles.map((t) => [t.key, { ...rules[t.key], mode }])));
+  // الطوارئ تفتح وتسد مربعات البوت بس، والفويس يبقى مثل ما هو
+  const menu = data.tiles.filter((t) => t.key !== "voice");
+  const allOn = menu.every((t) => rules[t.key].mode === "all");
+  const allOff = menu.every((t) => rules[t.key].mode === "off");
+  const setAll = (mode: Mode) => setRules({ ...rules, ...Object.fromEntries(menu.map((t) => [t.key, { ...rules[t.key], mode }])) });
   return (
     <>
       <div className="card">

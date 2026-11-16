@@ -1,7 +1,7 @@
 // صفحة المحادثة بالتطبيق: تجيب رسائل البوت، وتوصّل كتابة الطالب وصوره ودوسات الأزرار للبوت كأنها من تليگرام.
 // بس من التطبيق (مفتاح التطبيق ويا رابط الطالب)
 import { ADMIN_IDS } from "./config.ts";
-import { chatList, mediaRow, saveIn, takeAnswer, type Media } from "./appChat.ts";
+import { FAKE_MID, chatList, mediaRow, saveIn, takeAnswer, voiceAllowed, type Media } from "./appChat.ts";
 import { handleUpdate } from "./bot.ts";
 import { groupId, student } from "./data.ts";
 import { files } from "./files.ts";
@@ -24,10 +24,10 @@ const chat = (uid: number) => ({ id: uid, type: "private" });
 let seq = Date.now();
 
 /** صورة من الطالب: ترتفع لتليگرام (لمجموعة الأسئلة أو لصاحب البوت بصمت، وتنمسح فوراً) حتى ياخذ البوت رقمها */
-async function telegramFileId(b: Buffer, name: string, type: string, kind: "photo" | "voice" | "document") {
+async function telegramFileId(b: Buffer, name: string, type: string, kind: "photo" | "voice" | "audio" | "document") {
   const to = (await groupId()) ?? ADMIN_IDS[0];
   need(to, "ما گدرنا نرفع الصورة هسه", 503);
-  const method = kind === "photo" ? "sendPhoto" : kind === "voice" ? "sendVoice" : "sendDocument";
+  const method = kind === "photo" ? "sendPhoto" : kind === "voice" ? "sendVoice" : kind === "audio" ? "sendAudio" : "sendDocument";
   const r: any = await upload(method, { chat_id: String(to), disable_notification: "true", protect_content: "false" }, kind, b, name, type);
   need(r, "ما ارتفعت الصورة، حاول مرة ثانية", 502);
   void api("deleteMessage", { chat_id: to, message_id: r.message_id });
@@ -43,8 +43,8 @@ export async function chatAction(body: any) {
   if (a === "text") {
     const text = String(body.text ?? "").trim();
     need(text && text.length <= 4000, "اكتب رسالتك");
-    if (!body.hidden) await saveIn(uid, text);
-    await handleUpdate({ update_id: ++seq, message: { message_id: ++seq, from: await from(uid), chat: chat(uid), date: now, text } });
+    const inId = body.hidden ? 0 : await saveIn(uid, text);
+    await handleUpdate({ update_id: ++seq, message: { message_id: inId ? FAKE_MID + inId : ++seq, from: await from(uid), chat: chat(uid), date: now, text } });
   } else if (a === "cb") {
     const id = `app:${uid}:${++seq}`;
     await handleUpdate({ update_id: ++seq, callback_query: { id, from: await from(uid), chat_instance: "app", data: String(body.data ?? ""), message: { message_id: Number(body.mid), chat: chat(uid), date: now, text: "" } } });
@@ -61,7 +61,9 @@ export async function chatUpload(f: FormData) {
   need(file instanceof File && file.size > 0, "اختار صورة");
   need((file as File).size <= 15_000_000, "الملف كبير، أكثر شي 15 ميگا");
   const type = (file as File).type || "image/jpeg";
-  const kind = type.startsWith("image/") ? "photo" : type.startsWith("audio/") ? "voice" : "document";
+  // الفويس: تليگرام ياخذ ogg فويس، وغيره (تسجيل الآيفون mp4) ملف صوت
+  const kind = type.startsWith("image/") ? "photo" : type.includes("ogg") ? "voice" : type.startsWith("audio/") ? "audio" : "document";
+  if (kind === "voice" || kind === "audio") need(await voiceAllowed(uid), "الرسائل الصوتية مو مفتوحة إلك", 403);
   const b = Buffer.from(await (file as File).arrayBuffer());
   const caption = String(f.get("caption") ?? "").trim().slice(0, 1000);
   const got = await telegramFileId(b, (file as File).name || "photo.jpg", type, kind);
@@ -69,9 +71,9 @@ export async function chatUpload(f: FormData) {
   const ref = `appchat/${uid}/in-${Date.now()}-${kind}`;
   await files().write(ref, b, type);
   const media: Media[] = [{ t: kind, s: ref, f: fid }];
-  await saveIn(uid, caption, media);
+  const inId = await saveIn(uid, caption, media);
   const now = Math.floor(Date.now() / 1000);
-  const msg: any = { message_id: ++seq, from: await from(uid), chat: chat(uid), date: now, ...(caption ? { caption } : {}) };
+  const msg: any = { message_id: FAKE_MID + inId, from: await from(uid), chat: chat(uid), date: now, ...(caption ? { caption } : {}) };
   msg[kind] = got;
   await handleUpdate({ update_id: ++seq, message: msg });
   return await chatList(uid, Number(f.get("after")) || 0);

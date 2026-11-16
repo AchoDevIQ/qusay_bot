@@ -20,6 +20,9 @@ export const VIS_TILES = [
   { key: "vote", title: "🗳 التصويت" },
 ] as const;
 export type TileKey = (typeof VIS_TILES)[number]["key"];
+/** شغلات التطبيق مو مربعات: الرسائل الصوتية بالمحادثة. من البداية مسدودة */
+export const VIS_EXTRA = [{ key: "voice", title: "🎤 الرسائل الصوتية بمحادثة التطبيق" }] as const;
+export type RuleKey = TileKey | (typeof VIS_EXTRA)[number]["key"];
 const KEYS = new Set<string>(VIS_TILES.map((t) => t.key));
 const CURRS = ["عربي", "إنجليزي"];
 
@@ -31,14 +34,15 @@ const emptyRule = (mode: Rule["mode"]): Rule => ({ mode, centers: [], gender: ""
 /** قبل ما يحفظ صاحب البوت أي اختيار: البوت الحقيقي يبدي كلشي مخفي (احتياط)، والتجربة والفحوصات تبدي كلشي ظاهر */
 const startMode = (): Rule["mode"] => (process.env.NODE_ENV === "production" ? "off" : "all");
 
-export async function visRules(): Promise<Record<TileKey, Rule>> {
+export async function visRules(): Promise<Record<RuleKey, Rule>> {
   const raw = await kvGet(KV);
   let saved: Record<string, Partial<Rule>> = {};
   try { saved = JSON.parse(raw ?? "{}"); } catch { saved = {}; }
   // بعد أول حفظ، المربع اللي ما بيه اختيار ينحسب مخفي
   const fallback = raw === null ? startMode() : "off";
-  const out = {} as Record<TileKey, Rule>;
+  const out = {} as Record<RuleKey, Rule>;
   for (const t of VIS_TILES) out[t.key] = clean(saved[t.key], fallback);
+  for (const t of VIS_EXTRA) out[t.key] = clean(saved[t.key], "off");
   return out;
 }
 function clean(r: Partial<Rule> | undefined, fallback: Rule["mode"]): Rule {
@@ -99,7 +103,7 @@ export async function visAction(body: Row) {
   if (a === "save") {
     const rules = body.rules && typeof body.rules === "object" ? body.rules as Record<string, Partial<Rule>> : {};
     const out: Record<string, Rule> = {};
-    for (const t of VIS_TILES) out[t.key] = clean(rules[t.key], "off");
+    for (const t of [...VIS_TILES, ...VIS_EXTRA]) out[t.key] = clean(rules[t.key], "off");
     await kvSet(KV, JSON.stringify(out));
     const open = VIS_TILES.filter((t) => out[t.key].mode !== "off").length;
     notice = open ? `✅ انحفظ. ${open} مربع مفتوح للطلاب` : "✅ انحفظ. كل المربعات مخفية عن الطلاب";
@@ -112,7 +116,7 @@ export async function visAction(body: Row) {
   const rules = await visRules();
   const ids = [...new Set(Object.values(rules).flatMap((r) => r.students))];
   return {
-    tiles: VIS_TILES, rules, notice,
+    tiles: [...VIS_TILES, ...VIS_EXTRA], rules, notice,
     centers: [...(await centerNames()).entries()].map(([id, name]) => ({ id, name })),
     genders: GENDERS, currs: CURRS, chapters: await chapterList(), names: await studentNames(ids),
   };

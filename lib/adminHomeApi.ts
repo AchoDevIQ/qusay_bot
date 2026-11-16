@@ -18,7 +18,7 @@ import { ensure, need } from "./webApi.ts";
 import { verifyInitData } from "./webAuth.ts";
 
 type Tile = { page: string; icon: string; title: string; note?: string; hot?: boolean };
-const openTiles = async () => Object.values(await visRules()).filter((r) => r.mode !== "off").length;
+const openTiles = async () => Object.entries(await visRules()).filter(([k, r]) => k !== "voice" && r.mode !== "off").length;
 async function homeData(uid: number) {
   const groups: { title: string; tiles: Tile[] }[] = [];
   const shop: Tile[] = [], people: Tile[] = [], setup: Tile[] = [];

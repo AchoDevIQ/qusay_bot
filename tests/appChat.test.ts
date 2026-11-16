@@ -78,3 +78,46 @@ test("من الصفحة: بس بمفتاح التطبيق، والكتابة ت�
   assert.ok(r.msgs.some((m: any) => m.dir === "out" && m.id > mine.at(-1).id), "البوت رد");
   assert.equal(calls.filter((c) => c.body?.chat_id === APP).length, 0, "ولا رسالة لتليگرام");
 });
+
+test("السؤال العلمي: رسالة الطالب من التطبيق تنعاد للمجموعة، وجواب الأستاذ يوصله بمحتواه", async () => {
+  const { saveIn, FAKE_MID } = await import("../lib/appChat.ts");
+  const { kvSet } = await import("../lib/db.ts");
+  await kvSet("q_group", "-100777");
+  const inId = await saveIn(APP, "شلون أحل هذا؟", [{ t: "photo", s: "x", f: "PHOTO_ID" }]);
+  calls.length = 0;
+  const r: any = await api("copyMessage", { chat_id: -100777, from_chat_id: APP, message_id: FAKE_MID + inId, message_thread_id: 9 });
+  assert.ok(r?.message_id);
+  const sent = calls.find((c) => c.method === "sendPhoto");
+  assert.equal(sent?.body.photo, "PHOTO_ID");
+  assert.equal(sent?.body.caption, "شلون أحل هذا؟");
+  assert.equal(sent?.body.message_thread_id, 9);
+  assert.ok(!calls.some((c) => c.method === "copyMessage"), "ما ينطلب نسخ من تليگرام");
+  // جواب الأستاذ من المجموعة لطالب التطبيق: يتحول لمكان مخفي حتى نعرف محتواه، وينمسح
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    const method = String(url).split("/").pop()!;
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    calls.push({ method, body });
+    const result = method === "forwardMessage" ? { message_id: 77, text: "الجواب: x = 3", chat: { id: body.chat_id } } : true;
+    return new Response(JSON.stringify({ ok: true, result }), { headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    calls.length = 0;
+    await api("copyMessage", { chat_id: APP, from_chat_id: -100777, message_id: 55, reply_markup: { inline_keyboard: [[{ text: "✅ فهمت", callback_data: "qok:1" }]] } });
+    assert.ok(calls.some((c) => c.method === "forwardMessage" && c.body.chat_id === -100777));
+    assert.ok(calls.some((c) => c.method === "deleteMessage" && c.body.message_id === 77));
+    const last = (await chatList(APP)).msgs.at(-1)!;
+    assert.equal(last.text, "الجواب: x = 3");
+    assert.deepEqual(last.kb, [[{ text: "✅ فهمت", callback_data: "qok:1" }]]);
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test("الفويس مسدود من البداية، وينفتح من صفحة «شنو يشوف الطالب»", async () => {
+  const { voiceAllowed } = await import("../lib/appChat.ts");
+  const { kvSet } = await import("../lib/db.ts");
+  assert.equal(await voiceAllowed(APP), false);
+  await kvSet("student_vis", JSON.stringify({ voice: { mode: "some", students: [APP] } }));
+  assert.equal(await voiceAllowed(APP), true);
+  assert.equal(await voiceAllowed(TG), false);
+  assert.equal((await chatList(APP)).voice, true);
+});
