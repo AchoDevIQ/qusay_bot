@@ -18,7 +18,8 @@ await ensure();
 const created = "2026-01-01 10:00:00";
 const dev = (u: number) => "dev-" + String(u).padStart(14, "0");
 const act = (u: number, action: string, x: object = {}) => noteAction({ token: homeToken(u), device: dev(u), pf: "android", action, ...x });
-const stud = (id: number, curr = "عربي") => put("students", { user_id: id, name: "طالب " + id, curr, exam: "إلكتروني", created });
+// كل طالب مختار أوقاته (جدول ويا الطلاب)، حتى قفل «اختار أوقاتك أول» ما يدخل بهاي الفحوصات
+const stud = async (id: number, curr = "عربي") => { await put("students", { user_id: id, name: "طالب " + id, curr, exam: "إلكتروني", created }); await put("schedules", { user_id: id, mode: "general", center_id: 0, picks: "{}", created }); };
 const order = (u: number, name: string, printed: number) => insert("orders", { user_id: u, items: JSON.stringify([{ name, qty: 1 }]), printed, created: "2026-02-01 10:00:00" });
 const guardian = (u: number) => put("guardians", { guardian_id: 1000 + u, student_id: u, created });
 

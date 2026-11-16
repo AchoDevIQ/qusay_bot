@@ -1331,3 +1331,12 @@ export async function resetSchedule(uid: number) {
   await send(uid, `🗓 <b>تگدر تعيد ترتيب جدول امتحاناتك.</b> افتح امتحاناتي ورتبه.`);
 }
 export const setPerDay = async (uid: number, n: number) => await kvSet(`sched_perday_${uid}`, String(n));
+
+/** اشترى شي بيه امتحانات وبعده ما اختار أوقاته (ويا الطلاب أو جدول خاص): كلشي يبقى مقفول لحد ما يختار.
+ *  اللي اشترى محاضرات بس ما ينقفل. طلاب التجربة هم ينقفلون، حتى صاحب البوت يشوف نفس اللي يشوفه الطالب */
+export async function needsSchedule(uid: number) {
+  if (!uid || !await student(uid)) return false;
+  if (await one("schedules", { user_id: uid })) return false;
+  return (await scheduleChapters(uid)).length > 0;
+}
+export const SCHED_FIRST = "🗓 اختار أوقات امتحاناتك أول من «امتحاناتي»، وبعدها ينفتحلك كلشي";

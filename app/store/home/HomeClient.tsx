@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { closeApp, haptic, openOutside, deviceId } from "../shared";
 
-type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[]; show?: string[] };
+type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[]; show?: string[]; needSched?: boolean };
 type Reply = List & { url?: string; close?: boolean; error?: string };
 
 const svg = (body: ReactNode) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{body}</svg>;
@@ -114,6 +114,9 @@ export default function HomeClient() {
           </div>
         )}
         {data?.link && <GuardianGate link={data.link} text={data.linkText ?? ""} copyText={data.linkCopy ?? data.link} recheck={() => void recheck()} busy={busy === "check"} />}
+        {data?.needSched && !data.link && (
+          <div className="card warn"><div className="who">🗓 قبل كل شي اختار أوقات امتحاناتك من «امتحاناتي»، وبعدها ينفتحلك كلشي.</div></div>
+        )}
         {data && !data.link && !data.children && !tiles.length && (
           <div className="card"><div className="who">📱 كل خدماتنا صارت بتطبيق قصي العميري. درجاتك توصلك هنا بالمحادثة.</div></div>
         )}

@@ -156,3 +156,13 @@ export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: u
   if (page === "store") { const u = new URL(await storeLink(uid)); return `${u.pathname}${u.search}&${auth}`; }
   return `/store/${page}?v=${Math.floor(Date.now() / 1000)}&${auth}`;
 }
+
+/** حالة الطالب للتطبيق نفسه (قبل ما يفتح صفحاته): لازم يختار أوقات امتحاناته أول؟ */
+export async function appState(form: { id?: unknown }) {
+  const fu = await verifyAppIdToken(form.id);
+  if (!fu) return null;
+  const link = await one("app_links", { fu });
+  if (!link) return { needSchedule: false };
+  const { needsSchedule } = await import("./schedApi.ts");
+  return { needSchedule: await needsSchedule(Number(link.uid)) };
+}

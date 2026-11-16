@@ -64,6 +64,7 @@ test("🔍 الأزرار تنحط على الأسئلة، والفيديو ال
   await put("students", { user_id: 20, name: "طالب", curr: "إنجليزي", exam: "إلكتروني", created: "2026-01-01" });
   await put("guardians", { guardian_id: 1020, student_id: 20, created: "1" });
   await put("exam_access", { user_id: 20, chapter: "الفصل الثالث", created: "1" });
+  await put("schedules", { user_id: 20, mode: "general", center_id: 0, picks: "{}", created: "1" });
   const act = (action: string, x: object = {}) => noteAction({ token: homeToken(20), device: "dev-00000000000020", pf: "android", action, book, ...x });
   // 🔖 الصفحة اللي وصلها: تنحفظ، وتطلع بقائمة الملازم، والصفحة الغلط تنرفض
   assert.equal((await act("list")).books.find((b: any) => b.id === book).saved, 0);

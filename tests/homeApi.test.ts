@@ -63,6 +63,11 @@ test("القائمة ترجع اسمه، وامتحاناتي تطلع بس لم
   assert.equal(r.exams, false);
   await run("INSERT INTO exam_access (user_id, chapter) VALUES (2, 'الفصل الأول')");
   assert.equal(((await act("list")) as any).exams, true);
+  // اشترى امتحانات وما اختار أوقاته: امتحاناتي بس، والباقي مقفول
+  assert.equal(((await act("list")) as any).needSched, true);
+  await assert.rejects(act("me"), /اختار أوقات امتحاناتك/);
+  await run("INSERT INTO schedules (user_id, mode, center_id, picks, created) VALUES (2, 'general', 0, '{}', 'x')");
+  assert.equal(((await act("list")) as any).needSched, false);
 });
 
 test("كل مربع يوصل الطالب لمكانه بالمحادثة", async () => {

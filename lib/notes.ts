@@ -77,6 +77,9 @@ async function studentUid(token: unknown, pf: unknown) {
   await checkPhone(uid!, pf);
   need(!await examInProgress(uid!), LOCK_TEXT, 423);
   if (!await isAdmin(uid!)) need(!await boughtCourse(uid!) || await guardianOf(uid!), "اربط ولي أمرك أول، من القائمة الرئيسية", 403);
+  // اشترى امتحانات وما اختار أوقاته: الملازم مقفولة لحد ما يختار
+  const { needsSchedule, SCHED_FIRST } = await import("./schedApi.ts");
+  need(!await needsSchedule(uid!), SCHED_FIRST, 409);
   return uid!;
 }
 async function myBook(uid: number, id: unknown) {

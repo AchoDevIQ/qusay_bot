@@ -11,7 +11,7 @@ import { adminPageLink, homeLink, mainKb, regLink, storeLink } from "./keyboards
 import { issuePassword } from "./password.ts";
 import { hasBooks } from "./notes.ts";
 import { openFor, sendPollTo } from "./polls.ts";
-import { scheduleChapters } from "./schedApi.ts";
+import { SCHED_FIRST, needsSchedule, scheduleChapters } from "./schedApi.ts";
 import { askStart, myQuestions } from "./questions.ts";
 import { onStoreOrder, saveStudent, showMe, studentFromForm } from "./student.ts";
 import { api, send } from "./telegram.ts";
@@ -63,6 +63,8 @@ export async function homeAction(body: Row) {
   if (["shop", "ask", "myq", "me", "exams", "notes", "vote"].includes(tile)) need((await shown()).has(tile as never), "هذا القسم مو مفتوح هسه", 403);
   // سلّم أول امتحان وبعده ما ربط ولي أمره: كلشي مقفول لحد ما يربطه
   if (a === "ask" || a === "exams" || a === "notes") need(!await needsGuardian(id), "🔒 اربط ولي أمرك أول، من القائمة الرئيسية");
+  // اشترى امتحانات وما اختار أوقاته: ما ينفتح شي غير امتحاناتي
+  if (["shop", "order", "ask", "myq", "me", "notes", "vote"].includes(a)) need(!await needsSchedule(id), SCHED_FIRST, 409);
   if (a === "list") {
     const s = await student(id);
     if (!s) {
@@ -72,9 +74,11 @@ export async function homeAction(body: Row) {
     }
     // ورا أول امتحان: لازم يربط ولي أمره قبل كل شي
     const needLink = await needsGuardian(id);
+    const needSched = await needsSchedule(id);
     return {
-      // المربعات المفتوحة لهذا الطالب (البوت احتياط للتطبيق)
-      show: [...await shown()],
+      // المربعات المفتوحة لهذا الطالب (البوت احتياط للتطبيق). قبل ما يختار أوقاته: امتحاناتي بس
+      show: [...await shown()].filter((k) => !needSched || k === "exams"),
+      needSched,
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
       name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id), vote: (await openFor(id)).length,
       link: needLink ? await guardianLink(id) : null,
