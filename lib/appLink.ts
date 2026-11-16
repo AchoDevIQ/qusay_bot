@@ -3,7 +3,7 @@
 // معلومات الطالب والفصول اللي شاريها، فما نحتاج أي سر مشترك ويا سيرفر التطبيق.
 // الطالب اللي مربوط بتلگرام بالتطبيق ياخذ نفس حسابه بالبوت (رقم تلگرامه). غيره ياخذ رقم جديد من 10^13 وفوك
 import { createPublicKey, createVerify } from "node:crypto";
-import { find, kvGet, kvSet, one, put, tx, type Row } from "./db.ts";
+import { find, insertIgnore, kvGet, kvSet, one, put, tx, type Row } from "./db.ts";
 import { student } from "./data.ts";
 import { stamp } from "./util.ts";
 import { appKey, homeToken } from "./webAuth.ts";
@@ -14,6 +14,7 @@ export type AppEnv = "staging" | "prod";
 const SERVICE: Record<AppEnv, string> = { staging: "qmath-iq-staging-service", prod: "qmath-iq-service" };
 const FIRESTORE_DB: Record<AppEnv, string> = { staging: "staging", prod: "(default)" };
 const APP_UID_BASE = 10_000_000_000_000;
+const ONLINE = "إلكتروني";
 const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس"];
 export const chapterOf = (n: number) => (ORD[n] ? `الفصل ${ORD[n]}` : "");
 export const isAppUid = (uid: number) => uid >= APP_UID_BASE;
@@ -72,31 +73,36 @@ async function accessDoc(env: AppEnv, idToken: string, fu: string): Promise<Row>
 }
 const strings = (f: Row | undefined): string[] => ((f?.arrayValue?.values ?? []) as Row[]).map((v) => String(v.stringValue ?? "")).filter(Boolean);
 
-export type AppStudent = { fu: string; telegramId: string; name: string; phone: string; parentPhone: string; province: string; grade: string; lang: "ar" | "en"; gender: string; birth: string; chapters: string[] };
+export type AppStudent = { fu: string; telegramId: string; name: string; phone: string; parentPhone: string; province: string; grade: string; lang: "ar" | "en"; gender: string; birth: string; chapters: string[]; examChapters: string[] };
 
-/** معلومات الطالب من التطبيق وفصوله المشتراة (محاضرات أو امتحانات). الفصول التجريبية ما تنحسب */
+/** معلومات الطالب من التطبيق وفصوله المشتراة: chapters محاضرات أو امتحانات (للملازم)، examChapters امتحانات بس. الفصول التجريبية ما تنحسب */
 export async function readAppStudent(env: AppEnv, idToken: string, fu: string): Promise<AppStudent | null> {
   const st = ((await dcQuery(env, idToken, "GetStudent", { firebaseUid: fu })).students as Row[] | undefined)?.[0];
   if (!st) return null;
   const doc = await accessDoc(env, idToken, fu);
-  const owned = new Set([...strings(doc.lessonChapterIds), ...strings(doc.examChapterIds)].map((s) => s.toLowerCase()));
-  const chapters: string[] = [];
+  const lower = (a: string[]) => new Set(a.map((x) => x.toLowerCase()));
+  const exams = lower(strings(doc.examChapterIds)), owned = lower([...strings(doc.lessonChapterIds), ...exams]);
+  const chapters: string[] = [], examChapters: string[] = [];
   if (owned.size && st.curriculum?.id) {
     const list = ((await dcQuery(env, idToken, "GetChaptersByCurriculum", { curriculumId: st.curriculum.id })).chapters ?? []) as Row[];
     for (const c of list) {
-      const label = chapterOf(Number(c.orderPosition));
-      if (label && !c.isTestChapter && owned.has(String(c.id).toLowerCase()) && !chapters.includes(label)) chapters.push(label);
+      const label = chapterOf(Number(c.orderPosition)), id = String(c.id).toLowerCase();
+      if (!label || c.isTestChapter) continue;
+      if (owned.has(id) && !chapters.includes(label)) chapters.push(label);
+      if (exams.has(id) && !examChapters.includes(label)) examChapters.push(label);
     }
   }
   return {
     fu, telegramId: String(st.telegramId ?? "").trim(), name: String(st.fullName ?? ""), phone: String(st.phone ?? ""), parentPhone: String(st.parentPhone ?? ""),
     province: String(st.province ?? ""), grade: String(st.gradeLevel ?? ""), lang: st.curriculumLanguage === "en" ? "en" : "ar",
-    gender: String(st.gender ?? ""), birth: String(st.birthDate ?? ""), chapters,
+    gender: String(st.gender ?? ""), birth: String(st.birthDate ?? ""), chapters, examChapters,
   };
 }
 
 // ---------- ربط حساب التطبيق بحساب البوت
-/** رقم الطالب بالبوت: نفس رقم تلگرامه إذا مربوط، وإلا رقم جديد ينحفظ بأول دخول */
+/** رقم الطالب بالبوت: نفس رقم تلگرامه إذا مربوط، وإلا رقم جديد ينحفظ بأول دخول.
+ *  طلاب التطبيق امتحانهم إلكتروني (قرار الأستاذ)، إلا اللي عنده نوع امتحان بالبوت من قبل.
+ *  امتحانات الفصول اللي شاريها بالتطبيق تنفتحله هنا، ولا تنسحب منه */
 export async function linkAppStudent(env: AppEnv, s: AppStudent): Promise<number> {
   return await tx(async () => {
     const old = await one("app_links", { fu: s.fu });
@@ -104,12 +110,14 @@ export async function linkAppStudent(env: AppEnv, s: AppStudent): Promise<number
     let uid = Number(old?.uid ?? 0);
     if (!uid) uid = tg || await nextAppUid();
     await put("app_links", { fu: s.fu, uid, env, chapters: JSON.stringify(s.chapters), created: old?.created ?? stamp(), updated: stamp() });
-    if (!(await student(uid))) {
+    const st = await student(uid);
+    if (!st) {
       await put("students", {
         user_id: uid, username: "", name: s.name, curr: s.lang === "en" ? "إنجليزي" : "عربي", grade: s.grade, gov: s.province, side: "", area: "",
-        phone1: s.phone, phone2: s.parentPhone, exam: null, center_id: null, gender: s.gender || null, birth: s.birth || null, created: stamp(), updated: stamp(),
+        phone1: s.phone, phone2: s.parentPhone, exam: ONLINE, center_id: null, gender: s.gender || null, birth: s.birth || null, created: stamp(), updated: stamp(),
       });
-    }
+    } else if (!st.exam) await put("students", { ...st, exam: ONLINE, center_id: null, updated: stamp() });
+    for (const ch of s.examChapters) await insertIgnore("exam_access", { user_id: uid, chapter: ch }, { order_id: null, created: stamp() });
     return uid;
   });
 }
@@ -128,7 +136,7 @@ export async function appChapters(uid: number): Promise<string[]> {
 }
 
 // ---------- الدخول: التطبيق يفتح /api/app/enter بطلب POST فيه رمز الطالب، ويرجع له تحويل لصفحة البوت
-const PAGES = new Set(["notes"]);
+const PAGES = new Set(["notes", "myexams"]);
 export const APP_ERR = "ما گدرنا نفتح الصفحة. سد التطبيق وافتحه من جديد. إذا تكررت، تواصل ويا الإدارة.";
 
 /** يرجع رابط الصفحة (نسبي) لطالب التطبيق، أو null إذا الرمز أو الحساب مو صالح */

@@ -9,7 +9,7 @@ import path from "node:path";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "qmath-app-"));
 Object.assign(process.env, { DB_PATH: ":memory:", TOKEN: "1:test", ADMIN: "1", STORE_URL: "https://x.test", PDF_DIR: tmp, CONTENT_DIR: tmp, SETTINGS_FILE: path.join(tmp, "none") });
 
-const { insert, one } = await import("../lib/db.ts");
+const { find, insert, one } = await import("../lib/db.ts");
 const { ensure } = await import("../lib/webApi.ts");
 const { appKey, verifyHomeToken } = await import("../lib/webAuth.ts");
 const { verifyAppIdToken, linkAppStudent, appChapters, chapterOf, enterFromApp, isAppUid } = await import("../lib/appLink.ts");
@@ -47,13 +47,14 @@ test("أرقام الفصول بالتطبيق تصير أسماء فصول ال
   assert.equal(chapterOf(9), "");
 });
 
-const base = { telegramId: "", name: "طالب تطبيق", phone: "07700000000", parentPhone: "07800000000", province: "بغداد", grade: "السادس", lang: "ar" as const, gender: "ذكر", birth: "2008-01-01", chapters: ["الفصل الأول"] };
+const base = { telegramId: "", name: "طالب تطبيق", phone: "07700000000", parentPhone: "07800000000", province: "بغداد", grade: "السادس", lang: "ar" as const, gender: "ذكر", birth: "2008-01-01", chapters: ["الفصل الأول"], examChapters: [] as string[] };
 
 test("المربوط بتلگرام ياخذ نفس حسابه بالبوت، وغيره رقم جديد ثابت", async () => {
-  await insert("students", { user_id: 555000111, name: "قديم بالبوت", curr: "إنجليزي", created: "2026-01-01 10:00:00" });
+  await insert("students", { user_id: 555000111, name: "قديم بالبوت", curr: "إنجليزي", exam: "حضوري", center_id: 3, created: "2026-01-01 10:00:00" });
   const a = await linkAppStudent("prod", { ...base, fu: "fuA", telegramId: "555000111" });
   assert.equal(a, 555000111);
   assert.equal((await one("students", { user_id: a }))?.name, "قديم بالبوت", "معلوماته بالبوت ما تتغير");
+  assert.equal((await one("students", { user_id: a }))?.exam, "حضوري", "نوع امتحانه بالبوت يبقى");
   const b = await linkAppStudent("prod", { ...base, fu: "fuB" });
   assert.ok(isAppUid(b));
   assert.equal(await linkAppStudent("prod", { ...base, fu: "fuB", chapters: ["الفصل الثالث"] }), b, "نفس الحساب بكل دخول");
@@ -62,7 +63,15 @@ test("المربوط بتلگرام ياخذ نفس حسابه بالبوت، و
   const st = await one("students", { user_id: c });
   assert.equal(st?.curr, "إنجليزي");
   assert.equal(st?.phone1, "07700000000");
+  assert.equal(st?.exam, "إلكتروني", "طالب التطبيق امتحانه إلكتروني");
   assert.deepEqual(await appChapters(b), ["الفصل الثالث"], "الفصول تتحدث كل دخول");
+});
+
+test("امتحانات الفصل المشتراة بالتطبيق تنفتح، وما تنسحب", async () => {
+  const d = await linkAppStudent("prod", { ...base, fu: "fuE", examChapters: ["الفصل الأول", "الفصل الثاني"] });
+  assert.deepEqual((await find("exam_access", { user_id: d })).map((r) => r.chapter).sort(), ["الفصل الأول", "الفصل الثاني"]);
+  await linkAppStudent("prod", { ...base, fu: "fuE", examChapters: ["الفصل الأول"] });
+  assert.equal((await find("exam_access", { user_id: d })).length, 2);
 });
 
 test("فصل التطبيق يفتح ملازم نفس الفصل ونفس المنهج", async () => {
@@ -96,13 +105,13 @@ test("الدخول من التطبيق: يقرا الطالب وفصوله وي�
     if (u.includes("firestore.googleapis.com")) {
       assert.match(u, /databases\/staging\/documents\/student_access\/fuD$/);
       assert.equal((init?.headers as Record<string, string>).Authorization, `Bearer ${tok}`);
-      return json({ fields: { lessonChapterIds: { arrayValue: { values: [{ stringValue: "C3" }, { stringValue: "T1" }] } } } });
+      return json({ fields: { lessonChapterIds: { arrayValue: { values: [{ stringValue: "C3" }, { stringValue: "T1" }] } }, examChapterIds: { arrayValue: { values: [{ stringValue: "C5" }] } } } });
     }
     const body = JSON.parse(String(init?.body));
     assert.match(u, /services\/qmath-iq-staging-service\/connectors\/main:executeQuery$/);
     assert.equal((init?.headers as Record<string, string>)["X-Firebase-Auth-Token"], tok);
     if (body.operationName === "GetStudent") return json({ data: { students: [{ fullName: "طالب جديد", phone: "07711111111", curriculumLanguage: "ar", telegramId: null, curriculum: { id: "cur" } }] } });
-    if (body.operationName === "GetChaptersByCurriculum") return json({ data: { chapters: [{ id: "c3", orderPosition: 3 }, { id: "t1", orderPosition: 6, isTestChapter: true }, { id: "c4", orderPosition: 4 }] } });
+    if (body.operationName === "GetChaptersByCurriculum") return json({ data: { chapters: [{ id: "c3", orderPosition: 3 }, { id: "t1", orderPosition: 6, isTestChapter: true }, { id: "c4", orderPosition: 4 }, { id: "c5", orderPosition: 5 }] } });
     return json({}, 404);
   }) as typeof fetch;
   const tok = good("fuD");
@@ -113,7 +122,11 @@ test("الدخول من التطبيق: يقرا الطالب وفصوله وي�
     const uid = verifyHomeToken(q.get("t"));
     assert.ok(uid && isAppUid(uid));
     assert.equal(q.get("app"), appKey(uid!));
-    assert.deepEqual(await appChapters(uid!), ["الفصل الثالث"]);
+    assert.deepEqual(await appChapters(uid!), ["الفصل الثالث", "الفصل الخامس"]);
+    assert.deepEqual((await find("exam_access", { user_id: uid! })).map((r) => r.chapter), ["الفصل الخامس"], "الامتحانات بس من examChapterIds");
+    const ex = await enterFromApp({ id: tok, env: "staging", page: "myexams" });
+    assert.ok(ex?.startsWith("/store/myexams?"));
+    assert.ok((await enterFromApp({ id: tok, env: "staging", page: "admin" }))?.startsWith("/store/notes?"), "صفحة غير مسموحة ترجع لملازمي");
     assert.equal(await enterFromApp({ id: good("fuD", { aud: "x" }), env: "staging" }), null);
   } finally {
     globalThis.fetch = realFetch;
