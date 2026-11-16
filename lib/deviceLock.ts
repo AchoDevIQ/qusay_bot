@@ -4,6 +4,7 @@ import { one, put, remove } from "./db.ts";
 import { logActivity } from "./access.ts";
 import { isStaff, student } from "./data.ts";
 import { stamp } from "./util.ts";
+import { isAppKey } from "./webAuth.ts";
 import { need } from "./webApi.ts";
 
 export const LOCKED_TEXT = "🔒 حسابك مفتوح على جهاز ثاني. الحساب يشتغل على جهاز واحد بس. إذا بدلت جهازك تواصل ويا قصي العميري حتى يفك القفل.";
@@ -16,6 +17,8 @@ export const PHONE_TEXT = "📱 هاي الصفحة تنفتح بس من تلگ�
 const PHONES = new Set(["android", "android_x", "ios"]);
 export async function checkPhone(uid: number, pf: unknown) {
   if (uid < 0 || await isStaff(uid)) return;
+  // من التطبيق: التطبيق يمنع تصوير الشاشة ويقفل الحساب على جهاز واحد
+  if (typeof pf === "string" && pf.startsWith("app.") && isAppKey(uid, pf.slice(4))) return;
   need(PHONES.has(String(pf ?? "")), PHONE_TEXT, 403);
 }
 
@@ -23,6 +26,7 @@ export async function checkDevice(uid: number, raw: unknown) {
   // طلاب التجربة (أرقام سالبة) يفتحهم صاحب البوت من أي جهاز، مثل checkPhone
   if (uid < 0 || await isStaff(uid) || !await student(uid)) return;
   const dev = String(raw ?? "").trim();
+  if (dev.startsWith("app-") && isAppKey(uid, dev.slice(4))) return;
   need(DEVICE_RE.test(dev), "حدّث تلگرام وافتح الصفحة من جديد", 400);
   const row = await one("student_devices", { user_id: uid });
   if (!row) { await put("student_devices", { user_id: uid, device: dev, at: stamp(), tried: null }); return; }

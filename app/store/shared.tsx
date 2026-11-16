@@ -179,9 +179,27 @@ export function PhoneInput({ id, value, onChange, errs, setErrs }: {
   );
 }
 
-/** نوع الجهاز مثل ما يگوله تلگرام (android / ios / tdesktop / web ...). السكربت يتحمل بعد الصفحة فننتظره شوية */
+/** مفتاح باب التطبيق: الصفحة اللي انفتحت من تطبيق قصي يجيها ?app=، وينحفظ للصفحات اللي بعدها بنفس الجلسة */
+export function appKey(): string {
+  try {
+    const q = new URLSearchParams(location.search).get("app") ?? "";
+    if (/^[0-9a-f]{32}$/.test(q)) { sessionStorage.setItem("qm_app", q); return q; }
+    return sessionStorage.getItem("qm_app") ?? "";
+  } catch { return ""; }
+}
+/** نوع الجهاز هسه، للروابط: من تلگرام، أو app.<مفتاح> إذا الصفحة جوه التطبيق */
+export function platformNow(): string {
+  const k = appKey();
+  if (k) return `app.${k}`;
+  return (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "";
+}
+
+/** نوع الجهاز مثل ما يگوله تلگرام (android / ios / tdesktop / web ...). السكربت يتحمل بعد الصفحة فننتظره شوية.
+ *  جوه التطبيق: app.<مفتاح> */
 let platformPromise: Promise<string> | null = null;
 export function platform(): Promise<string> {
+  const k = appKey();
+  if (k) return Promise.resolve(`app.${k}`);
   platformPromise ??= new Promise((ok) => {
     let tries = 0;
     const read = () => (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "";
@@ -199,6 +217,9 @@ let deviceKnown = "";
 export const deviceNow = () => deviceKnown;
 export function deviceId(): Promise<string> {
   if (devicePromise) return devicePromise;
+  // جوه التطبيق: التطبيق نفسه يقفل الحساب على جهاز واحد، فنرسل مفتاحه بدل رقم الجهاز
+  const ak = appKey();
+  if (ak) { deviceKnown = `app-${ak}`; return (devicePromise = Promise.resolve(deviceKnown)); }
   devicePromise = (async () => {
     const KEY = "qm_device";
     const ds = (window as unknown as { Telegram?: { WebApp?: { DeviceStorage?: Store } } }).Telegram?.WebApp?.DeviceStorage;

@@ -2,7 +2,7 @@
 // ملازمي: الطالب يشوف ملازم فصوله، يقلب صفحاتها، ويكتب فوكها بالقلم أو يظلل. كتابته تنحفظ وحدها.
 // الصفحة ترتسم على canvas، فما بيها صورة ينضغط عليها حتى تنحفظ
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deviceId, deviceNow, haptic, platform } from "../shared";
+import { deviceId, deviceNow, haptic, platform, platformNow } from "../shared";
 import { COLORS } from "../grade/pens";
 
 type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; section?: string; sol?: boolean; saved?: number };
@@ -338,7 +338,7 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
   );
 }
 
-const tgPlatform = () => (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "";
+const tgPlatform = platformNow;
 const pageSrc = (book: number, n: number) => `/api/notes/page?t=${encodeURIComponent(token())}&book=${book}&page=${n}&pf=${encodeURIComponent(tgPlatform())}&d=${encodeURIComponent(deviceNow())}`;
 
 /** صفحة وحدة: صورتها، كتابة الطالب فوكها (تنحفظ وحدها)، وأزرار الفيديو يم أسئلتها */

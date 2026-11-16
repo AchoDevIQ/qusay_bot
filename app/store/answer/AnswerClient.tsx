@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { Inline, MathText } from "../myexams/AiCompare";
 import { VideoBox } from "../notes/NotesClient";
-import { deviceId, haptic, platform } from "../shared";
+import { deviceId, haptic, platform, platformNow } from "../shared";
 
 type Mark = { id: number; page: number; video: boolean; solution: boolean; q?: string };
 /** rasid: سؤاله موجود بالراصد اللي بملازمه: صفحة الحل النموذجي نفسها، وأزرار فيديو الحل والتوضيح اللي عليها */
@@ -15,7 +15,7 @@ type Notebook = { book: number; page: number; pages: number[]; y: number; q: str
 type Explained = { ask: string; text: string; at: string };
 type Ans = { question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid" | "notebook"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid; notebook?: Notebook; ex?: Explained[]; explain?: number; teacher?: boolean };
 
-const tgPlatform = () => (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "";
+const tgPlatform = platformNow;
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
 
 /** صفحة من ملازمي (بنفس شروطها: جهازه، فصوله، اسمه عليها). sol: صفحة الحل النموذجي بالراصد */

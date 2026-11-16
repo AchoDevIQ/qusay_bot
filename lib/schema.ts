@@ -44,6 +44,8 @@ export const SCHEMA: Record<string, Table> = {
   student_stops: { key: "id", auto: true, cols: nulls("user_id", "chapter", "block", "score", "max", "need", "absent", "reason", "lectures", "created", "lifted", "lifted_by") },
   checkpoint_done: { key: ["user_id", "chapter", "block"], cols: nulls("passed", "score", "absent", "created", "band", "seen", "image") },
   student_devices: { key: "user_id", cols: nulls("device", "at", "tried") },
+  // طالب التطبيق: حسابه بالتطبيق (fu) ورقمه بالبوت. chapters: الفصول اللي شاريها بالتطبيق (نص JSON)، تتحدث كل دخول
+  app_links: { key: "fu", cols: nulls("uid", "env", "chapters", "created", "updated") },
   grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters", "exams_off", "places") },
   grader_settlements: { key: "id", auto: true, cols: nulls("user_id", "n_mand", "n_opt", "n_obj", "amount", "forgiven", "created", "by_id") },
   objections: { key: "id", auto: true, cols: nulls("item_id", "user_id", "q", "text", "voice", "status", "old_mark", "new_mark", "reason", "created", "decided_at", "decided_by", "paid_id") },

@@ -1,6 +1,7 @@
 // ملازم الطلاب: صاحب البوت يرفع PDF (أكثر من ملزمة للفصل)، واللي اشترى الفصل (محاضرات أو امتحانات) تطلعله.
 // الطالب يكتب فوك الصفحات وكتابته تنحفظ إله بس. ملف الـ PDF ما يوصل للطالب أبد: كل صفحة تطلع صورة عليها اسمه ورقمه،
 // وتنفتح بس من تلگرام الموبايل وعلى جهازه، وتنقفل وقت الامتحان
+import { appChapters } from "./appLink.ts";
 import { bookToc } from "./noteToc.ts";
 import { matchPage, sameSpot } from "./noteSpot.ts";
 import { pdfjsLib } from "./pdfjs.ts";
@@ -30,7 +31,8 @@ const OLD_LINK = "هذا الرابط قديم. اكتب /start بالبوت و�
 export async function ownedChapters(uid: number): Promise<string[]> {
   const st = await student(uid);
   if (!st) return [];
-  const out = new Set<string>();
+  // اللي شراه بتطبيق قصي يفتحله نفس الفصل هنا
+  const out = new Set<string>(await appChapters(uid));
   for (const r of await find("exam_access", { user_id: uid })) for (const c of labelChapters(String(r.chapter))) out.add(c);
   const orders = await find("orders", { user_id: uid }, { where: (o) => (o.printed === 1 || o.printed === 3) && String(o.created) >= String(st.created) });
   for (const o of orders) {

@@ -64,6 +64,15 @@ export function verifyHomeToken(t: unknown, now = Date.now() / 1000): number | n
   return got.length === want.length && timingSafeEqual(got, want) ? uid : null;
 }
 
+// مفتاح باب التطبيق: يطلع بس لصفحة انفتحت من التطبيق بعد ما تحققنا من حسابه. بي تتجاوز الصفحة قفل الجهاز
+// وشرط تلگرام الموبايل، لأن التطبيق نفسه يقفل الحساب على جهاز واحد
+const appSig = (uid: number) => hmac(hmac("QMathApp", TOKEN), String(uid)).toString("hex").slice(0, 32);
+export const appKey = (uid: number) => appSig(uid);
+export function isAppKey(uid: number, k: unknown) {
+  if (typeof k !== "string" || !TOKEN || k.length !== 32) return false;
+  return timingSafeEqual(Buffer.from(k), Buffer.from(appSig(uid)));
+}
+
 // رابط ولي الأمر: رقم الطالب وتوقيعه، حتى ما ينربط أحد بطالب غيره بتخمين الرقم
 const parentSig = (sid: number) => hmac(hmac("QMathParent", TOKEN), String(sid)).toString("hex").slice(0, 20);
 export const guardianCode = (sid: number) => `${sid}_${parentSig(sid)}`;
