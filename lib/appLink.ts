@@ -7,6 +7,8 @@ import { find, insertIgnore, kvGet, kvSet, one, put, tx, type Row } from "./db.t
 import { student } from "./data.ts";
 import { stamp } from "./util.ts";
 import { appKey, homeToken } from "./webAuth.ts";
+import { forgetMode } from "./appChat.ts";
+import { storeLink } from "./keyboards.ts";
 
 const PROJECT = "qmath-iq";
 const REGION = "europe-west4";
@@ -136,7 +138,7 @@ export async function appChapters(uid: number): Promise<string[]> {
 }
 
 // ---------- الدخول: التطبيق يفتح /api/app/enter بطلب POST فيه رمز الطالب، ويرجع له تحويل لصفحة البوت
-const PAGES = new Set(["notes", "myexams"]);
+const PAGES = new Set(["notes", "myexams", "home", "chat", "store"]);
 export const APP_ERR = "ما گدرنا نفتح الصفحة. سد التطبيق وافتحه من جديد. إذا تكررت، تواصل ويا الإدارة.";
 
 /** يرجع رابط الصفحة (نسبي) لطالب التطبيق، أو null إذا الرمز أو الحساب مو صالح */
@@ -148,5 +150,9 @@ export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: u
   const s = await readAppStudent(env, String(form.id), fu);
   if (!s) return null;
   const uid = await linkAppStudent(env, s);
-  return `/store/${page}?v=${Math.floor(Date.now() / 1000)}&t=${encodeURIComponent(homeToken(uid))}&app=${appKey(uid)}`;
+  forgetMode(uid);
+  const auth = `t=${encodeURIComponent(homeToken(uid))}&app=${appKey(uid)}`;
+  // المتجر رابطه بيه المنتجات والأسعار، فيطلع من storeLink
+  if (page === "store") { const u = new URL(await storeLink(uid)); return `${u.pathname}${u.search}&${auth}`; }
+  return `/store/${page}?v=${Math.floor(Date.now() / 1000)}&${auth}`;
 }

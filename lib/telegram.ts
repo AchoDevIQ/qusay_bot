@@ -34,7 +34,16 @@ const innerOnly = (rm: unknown) => {
 // منو حاظر البوت: رسالة إله فشلت بـ 403. ولي الأمر يتابعها (guardianWatch)
 const blocked = new Map<string, number>();
 export const wasBlocked = (chat: unknown) => blocked.has(String(chat));
+const appChat = () => import("./appChat.ts");
 export async function api<T = any>(method: string, params: Record<string, unknown> = {}, tries = 2): Promise<T | null> {
+  // طالب التطبيق: رسائله تنحفظ لمحادثة التطبيق، واللي ما عنده تليگرام ما تروح لتليگرام أبد
+  const viaApp = await (await appChat()).beforeTelegram(method, params);
+  if (viaApp) return viaApp.result as T;
+  const r = await apiTelegram<T>(method, params, tries);
+  await (await appChat()).afterTelegram(method, params, r).catch((e) => console.error("app chat mirror", e));
+  return r;
+}
+async function apiTelegram<T = any>(method: string, params: Record<string, unknown> = {}, tries = 2): Promise<T | null> {
   const owner = await toOwner(method, params.chat_id);
   if (owner) { params = { ...params, chat_id: owner, protect_content: false }; const rm = innerOnly(params.reply_markup); if (rm) params.reply_markup = rm; else delete params.reply_markup; }
   if (await shouldProtect(method, params.chat_id, params.protect_content)) params = { ...params, protect_content: true };
@@ -48,7 +57,7 @@ export async function api<T = any>(method: string, params: Record<string, unknow
     const wait = Number(j?.parameters?.retry_after);
     if (j?.error_code === 429 && wait > 0 && wait <= 30 && tries > 1) {
       await new Promise((ok) => setTimeout(ok, wait * 1000));
-      return api<T>(method, params, tries - 1);
+      return apiTelegram<T>(method, params, tries - 1);
     }
     if (j?.error_code === 403 && /blocked by the user|user is deactivated/i.test(String(j.description ?? "")) && params.chat_id !== undefined) blocked.set(String(params.chat_id), Date.now());
     else if (j?.ok && params.chat_id !== undefined) blocked.delete(String(params.chat_id));
@@ -79,6 +88,9 @@ export async function sendMany<T>(list: T[], one: (x: T) => Promise<unknown>, pe
 /** رفع ملف (صورة/PDF) */
 export async function upload(method: string, fields: Record<string, string>, fileField: string,
   file: string | Buffer, fname = typeof file === "string" ? path.basename(file) : "file", ctype = "application/octet-stream") {
+  const kind = ({ sendPhoto: "photo", sendDocument: "document", sendVideo: "video", sendVoice: "voice", sendAudio: "audio", sendAnimation: "animation" } as Record<string, string>)[method] ?? "document";
+  const local = await (await appChat()).uploadForApp(method, fields, [{ b: typeof file === "string" ? fs.readFileSync(file) : file, name: fname, type: ctype, kind }]);
+  if (local) return local;
   const fd = new FormData();
   const owner = await toOwner(method, fields.chat_id);
   if (owner) { fields = { ...fields, chat_id: String(owner), protect_content: "false" }; const rm = innerOnly(fields.reply_markup); if (rm) fields.reply_markup = String(rm); else delete fields.reply_markup; }
@@ -89,6 +101,7 @@ export async function upload(method: string, fields: Record<string, string>, fil
     const r = await fetch(base() + method, { method: "POST", body: fd, signal: AbortSignal.timeout(120_000) });
     const j: any = await r.json();
     if (!j.ok) console.error("Telegram error:", method, j.description);
+    await (await appChat()).afterTelegram(method, fields, j.ok ? j.result : null).catch((e) => console.error("app chat mirror", e));
     return j.ok ? j.result : null;
   } catch (e) { console.error("Connection problem:", method, e); return null; }
 }
@@ -133,6 +146,8 @@ export async function sendImage(chat: number | string, filePath: string, key: st
 /** ألبوم صور: كل 10 برسالة، والكلام على أول صورة. يرجع عدد الرسائل اللي وصلت */
 export async function sendAlbum(chat: number | string, photos: Buffer[], caption: string, protect = true) {
   let sent = 0;
+  // طالب التطبيق: الألبوم ينحفظ لمحادثة التطبيق، واللي ما عنده تليگرام ما ينرسله شي هناك
+  if (await (await appChat()).albumForApp(chat, photos, caption) === "app") return Math.ceil(photos.length / 10);
   const owner = await toOwner("sendMediaGroup", chat);
   if (owner) { chat = owner; protect = false; }
   for (let i = 0; i < photos.length; i += 10) {

@@ -19,7 +19,7 @@ import { loadTerms, termsRev } from "./terms.ts";
 import { visibleTiles } from "./studentVis.ts";
 import { stamp } from "./util.ts";
 import { ensure, need } from "./webApi.ts";
-import { verifyHomeToken } from "./webAuth.ts";
+import { isAppKey, verifyHomeToken } from "./webAuth.ts";
 
 /** يسجل الطالب من الصفحة، ويرجع كلمة مروره ووين يروح بعد زر المتابعة */
 async function registerFromPage(id: number, body: Row) {
@@ -56,8 +56,11 @@ export async function homeAction(body: Row) {
   await checkDevice(id, body.device);
   const a = String(body.action ?? "");
   // البوت احتياط للتطبيق: المربع اللي ما فتحه صاحب البوت لهذا الطالب ما يشتغل (طلب المتجر يتبع المتجر)
+  // من التطبيق كلشي مفتوح: الإخفاء لتليگرام بس
+  const fromApp = typeof body.device === "string" && body.device.startsWith("app-") && isAppKey(id, body.device.slice(4));
+  const shown = async () => (fromApp ? new Set(["shop", "ask", "myq", "me", "exams", "notes", "vote"]) : await visibleTiles(id));
   const tile = a === "order" ? "shop" : a;
-  if (["shop", "ask", "myq", "me", "exams", "notes", "vote"].includes(tile)) need((await visibleTiles(id)).has(tile as never), "هذا القسم مو مفتوح هسه", 403);
+  if (["shop", "ask", "myq", "me", "exams", "notes", "vote"].includes(tile)) need((await shown()).has(tile as never), "هذا القسم مو مفتوح هسه", 403);
   // سلّم أول امتحان وبعده ما ربط ولي أمره: كلشي مقفول لحد ما يربطه
   if (a === "ask" || a === "exams" || a === "notes") need(!await needsGuardian(id), "🔒 اربط ولي أمرك أول، من القائمة الرئيسية");
   if (a === "list") {
@@ -65,13 +68,13 @@ export async function homeAction(body: Row) {
     if (!s) {
       const kids = await childrenOf(id);
       if (kids.length) return { name: "", exams: false, ask: false, myq: false, children: await Promise.all(kids.map(async (k) => (await student(k.student_id))?.name ?? "—")) };
-      return { name: "", exams: false, ask: true, myq: false, fresh: true, show: [...await visibleTiles(id)] };
+      return { name: "", exams: false, ask: true, myq: false, fresh: true, show: [...await shown()] };
     }
     // ورا أول امتحان: لازم يربط ولي أمره قبل كل شي
     const needLink = await needsGuardian(id);
     return {
       // المربعات المفتوحة لهذا الطالب (البوت احتياط للتطبيق)
-      show: [...await visibleTiles(id)],
+      show: [...await shown()],
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
       name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id), vote: (await openFor(id)).length,
       link: needLink ? await guardianLink(id) : null,

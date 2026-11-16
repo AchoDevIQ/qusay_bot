@@ -103,6 +103,14 @@ export function openOutside(url: string) {
   window.open(url, "_blank");
 }
 export function closeApp() {
+  // جوه التطبيق ماكو «سد»: نرجع لمحادثة البوت، وهناك تطلع رسائله (تأكيد الطلب وغيره)
+  const k = appKey();
+  if (k) {
+    let t = "";
+    try { t = new URLSearchParams(location.search).get("t") ?? sessionStorage.getItem("qm_t") ?? ""; } catch { /* */ }
+    location.href = `/store/chat?t=${encodeURIComponent(t)}&app=${k}`;
+    return;
+  }
   try { (tg() as unknown as { close?: () => void } | undefined)?.close?.(); } catch { /* مو مدعوم */ }
 }
 export function sendToBot(o: unknown) {

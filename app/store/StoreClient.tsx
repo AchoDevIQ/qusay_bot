@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import {
-  AR_NAME_ERR, CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanName, cleanPhone, closeApp, fmt, haptic, nameOk, phoneErr, scrollToFirst, sendToBot, useBotData,
+  AR_NAME_ERR, CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanName, cleanPhone, closeApp, fmt, haptic, nameOk, phoneErr, scrollToFirst, sendToBot, useBotData, deviceId,
 } from "./shared";
 import { AgreeNotice, WordOrder } from "./agreeSteps";
 import { REFUND_SENTENCE, chaptersInOrder, firstRoundOnly, termSentenceFor } from "../../lib/orderRules.ts";
@@ -94,7 +94,7 @@ function Store({ D }: { D: Data }) {
     setSending(true);
     setSendErr("");
     try {
-      const res = await fetch("/api/home", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: D.tk, action: "order", order }) });
+      const res = await fetch("/api/home", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: D.tk, action: "order", order, device: await deviceId() }) });
       const j = await res.json();
       if (res.ok) { closeApp(); return; }
       setSendErr(j.error ?? "ما انرسل الطلب، حاول مرة ثانية");
