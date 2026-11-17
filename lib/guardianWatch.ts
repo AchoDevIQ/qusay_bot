@@ -129,3 +129,9 @@ export async function onMemberUpdate(u: any) {
   if (status === "kicked") await guardianBlocked(uid);
   else if (status === "member") await guardianBack(uid);
 }
+
+/** الدرجات اللي ولي الأمر بعده ما داس عليها «✅ استلمت» (اللي وصلته واللي تنتظر) */
+export async function pendingSeen(sid: number) {
+  const w = await load(sid);
+  return [...new Set([...w.unseen, ...w.held])];
+}

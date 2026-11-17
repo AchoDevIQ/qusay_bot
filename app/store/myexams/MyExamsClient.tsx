@@ -15,7 +15,7 @@ type Item = { id: number; status?: string; exam?: number; skippable?: boolean; o
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[]; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; canDrop?: { exam: number; title: string }[]; toPlan?: { exam: number; title: string; chapter: string; skip: boolean }[]; perWeekMax?: number; pace?: Pace; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
@@ -152,6 +152,12 @@ export default function MyExamsClient() {
         {!info && !error && <div className="empty">جاري التحميل...</div>}
         {info?.repick && <Picker info={info} busy={busy} call={call} />}
         {info && info.late.length > 0 && <LateAsk info={info} busy={busy} call={call} />}
+        {info?.guardWait && (info.guardWait.pending.length > 0 || info.guardWait.old) && (
+          <div className="card"><div className="hmlink">
+            <div>✍️ <b>ولي أمرك بعده ما استلم {info.guardWait.pending.length > 1 ? `${info.guardWait.pending.length} درجات` : "درجتك"}.</b> الورقة المصححة والاعتراض ينفتحن ورا ما يدوس «✅ استلمت». {info.guardWait.old ? "ولأن مرت 3 أيام، المتجر والتصويت والمنافسة مقفولين هسه. الدراسة والامتحانات مفتوحة دايماً." : "إذا مرت 3 أيام وما استلم، المتجر والتصويت والمنافسة ينقفلن."}</div>
+            {info.guardWait.travel ? <div className="exhint">✈️ القفل مأجّل لحد {info.guardWait.travel}</div> : <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "askTravel" })}>✈️ ولي أمري مسافر</button>}
+          </div></div>
+        )}
         {info?.needsChoice && <Choice info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
         {info && info.mode !== "general" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}

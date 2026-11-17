@@ -61,6 +61,7 @@ export async function submitObjection(form: FormData) {
   await checkDevice(uid!, form.get("device"));
   await checkPhone(uid!, form.get("pf"));
   const it = await gradedItem(uid!, form.get("item"));
+  await (await import("./guardianLock.ts")).needSeenPaper(uid!, it.id);
   const qs = new Map((await find("bank_questions", { version_id: it.version_id })).map((q) => [q.n as number, q]));
   const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
   const done = new Set((await find("objections", { item_id: it.id })).map((o) => o.q));

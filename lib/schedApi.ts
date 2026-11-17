@@ -56,6 +56,13 @@ async function hasMakeup(late: Row[]) {
   const mk = await (await import("./makeup.ts")).makeupChapters();
   return late.some((e) => labelChapters(String(e.chapter ?? "")).some((c) => mk[c]));
 }
+async function guardWaitOf(uid: number) {
+  const g = await import("./guardianLock.ts");
+  const { pendingSeen } = await import("./guardianWatch.ts");
+  const { guardianOf } = await import("./access.ts");
+  if (!await guardianOf(uid)) return null;
+  return { pending: await pendingSeen(uid), old: await g.oldUnseen(uid), travel: await g.travelUntil(uid) };
+}
 const allowedHours = (s: SchedSettings) => Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= s.fromHour && h <= s.toHour);
 /** حد الامتحانات باليوم: الخاص بالطالب إذا موجود، وإلا العام */
 export async function perDayFor(uid: number, s: SchedSettings) { return Number(await kvGet(`sched_perday_${uid}`)) || s.perDay; }
@@ -510,6 +517,8 @@ async function studentInfo(uid: number) {
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
     // فصل صار تعويضي: يطلعله جدول تعويضي مكثف بدل «تنحسب فايتة»
     catchup: late.length > 0 && await hasMakeup(late), catchHours: allowedHours(s),
+    // ولي الأمر ما استلم: الدرجات اللي تنتظره، والقفل بعد 3 أيام، وتأجيل السفر
+    guardWait: await guardWaitOf(uid),
     items: [...(await itemsView(uid, s)).map((i) => ({ ...i, title: enTitle(i.exam, i.title), skippable: !general && !!sched && i.status === "waiting" && !i.optional && i.state === "locked" && skip.has(i.exam) && !kept.has(i.exam) })), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
     week: DAY_ORDER.map((i) => ({ i, name: DAYS[i] })), hours: allowedHours(s), offDays: s.offDays,
     holiday: s.holidayStart && s.holidayDays ? { start: s.holidayStart, days: s.holidayDays } : null,
@@ -775,6 +784,7 @@ export async function myExamAction(body: Row) {
     }
     return await studentInfo(id);
   }
+  if (a === "compCreate" || a === "compJoin") await (await import("./guardianLock.ts")).needNoOld(id);
   if (a === "compCreate" || a === "compJoin" || a === "compLeave") {
     if (a === "compCreate") await createGroup(id, body.name);
     else if (a === "compJoin") await joinGroup(id, body.code);
@@ -870,6 +880,11 @@ export async function myExamAction(body: Row) {
     await askException(id, body.item, body.reason, await schedSettings());
     return { ...await studentInfo(id), notice: "📨 وصل طلبك. من يوافقون ينفتحلك الامتحان وتوصلك رسالة" };
   }
+  if (a === "askTravel") {
+    await (await import("./guardianLock.ts")).askTravel(id);
+    return { ...await studentInfo(id), notice: "✈️ وصل طلبك للإدارة" };
+  }
+  if (a === "paper" || a === "objInfo") await (await import("./guardianLock.ts")).needSeenPaper(id, body.item);
   if (a === "paper") {
     need(!await examInProgress(id), LOCK_TEXT, 423);
     return { ...await studentInfo(id), paper: await myPaper(id, body.item) };

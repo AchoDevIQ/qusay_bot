@@ -5,7 +5,7 @@ import { examBankMessage } from "./examBank.ts";
 import { examCb, examsMenu, redeemCode } from "./exams.ts";
 import { exceptionCb } from "./lateRequest.ts";
 import { invitePrompt, inviteCb, reviewCb } from "./competition.ts";
-import { allowed, can, isStaff, myOffice, noteFail, question, searchStudents, setGraderView, setStudentView, student, tooManyFails, viewingAsGrader, viewingAsStudent } from "./data.ts";
+import { allowed, can, isAdmin, isStaff, myOffice, noteFail, question, searchStudents, setGraderView, setStudentView, student, tooManyFails, viewingAsGrader, viewingAsStudent } from "./data.ts";
 import { ADMIN_IDS, WEBHOOK_SECRET } from "./config.ts";
 import { guardianSeen, onMemberUpdate } from "./guardianWatch.ts";
 import { isGuardian, linkGuardian, notForChatText } from "./access.ts";
@@ -146,6 +146,11 @@ async function onCallback(q: Row) {
       // الدرجة اللي كانت تنتظر هذا الاستلام توصل هسه
       try { const it = await one("sched_items", { id: Number(d.slice(3)) }); const { releaseHeld } = await import("./gradeApi.ts"); if (it) await releaseHeld(Number(it.user_id)); } catch (e) { console.error(e); }
     }
+  } else if (d.startsWith("gtr:")) {
+    // صاحب البوت يقرر طلب «ولي أمري مسافر»
+    const [, sid, days] = d.split(":");
+    note = await isAdmin(uid) ? await (await import("./guardianLock.ts")).decideTravel(Number(sid), Number(days)) : "ما عندك صلاحية";
+    if (mid && await isAdmin(uid)) await api("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [[{ text: note, callback_data: "gs:done" }]] } });
   } else if (d.startsWith("a:")) {
     note = await allowed(uid, d) ? await onAdminCb(chat, uid, mid, d) : "ما عندك صلاحية";
   } else if (["rc:", "rg:", "rv:", "rd:", "rx:", "ra:", "rb:", "rn:", "rs:"].includes(d.slice(0, 3))) {

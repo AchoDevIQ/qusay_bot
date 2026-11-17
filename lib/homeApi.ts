@@ -65,6 +65,8 @@ export async function homeAction(body: Row) {
   if (a === "ask" || a === "exams" || a === "notes") need(!await needsGuardian(id), "🔒 اربط ولي أمرك أول، من القائمة الرئيسية");
   // اشترى امتحانات وما اختار أوقاته: ما ينفتح شي غير امتحاناتي
   if (["shop", "order", "ask", "myq", "me", "notes", "vote"].includes(a)) need(!await needsSchedule(id), SCHED_FIRST, 409);
+  // ولي الأمر ما استلم درجة من 3 أيام: المتجر والتصويت مقفولين (الدراسة لا)
+  if (["shop", "order", "vote"].includes(a)) await (await import("./guardianLock.ts")).needNoOld(id);
   if (a === "list") {
     const s = await student(id);
     if (!s) {
