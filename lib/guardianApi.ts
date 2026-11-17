@@ -2,7 +2,7 @@
 import { chatList, mediaRow, takeAnswer } from "./appChat.ts";
 import { handleUpdate } from "./bot.ts";
 import { files } from "./files.ts";
-import { openWithPin, pinGuardian, pinState, setPin, verifyGuardToken } from "./guardianPin.ts";
+import { openWithFace, openWithPin, pinGuardian, pinState, setFace, setPin, verifyGuardToken } from "./guardianPin.ts";
 import { api } from "./telegram.ts";
 import { TOKEN } from "./config.ts";
 import { student } from "./data.ts";
@@ -25,9 +25,11 @@ export async function guardianAction(body: any) {
   if (a === "state") return { ...await pinState(sid), name: String((await student(sid))?.name ?? "") };
   if (a === "setPin") { await setPin(sid, body.pin, body.pin2); return { ...await pinState(sid), gtoken: await openWithPin(sid, body.pin) }; }
   if (a === "open") return { gtoken: await openWithPin(sid, body.pin) };
+  if (a === "faceOpen") return { gtoken: await openWithFace(sid, body.desc, body.photo) };
   // من هنا: ولي الأمر فاتح برمزه
   need(verifyGuardToken(body.gtoken) === sid, "اكتب رمزك مرة ثانية", 401);
   const gid = pinGuardian(sid);
+  if (a === "faceSet") { await setFace(sid, body.desc, body.photo); return { ...await pinState(sid), notice: "✅ انسجل وجهك. من هسه تگدر تفتح بوجهك أو برمزك" }; }
   if (a === "list") return await chatList(gid, Number(body.after) || 0);
   if (a === "cb") {
     const id = `app:${gid}:${++seq}`;

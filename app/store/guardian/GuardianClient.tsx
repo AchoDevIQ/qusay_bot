@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { appKey } from "../shared";
 import { CHAT_CSS, safeHtml } from "../chat/ChatClient";
+import FaceCheck from "./FaceCheck";
 
 type Btn = { text: string; callback_data?: string };
 type Msg = { id: number; mid: number; dir: string; text: string; html: boolean; kb: Btn[][] | null; media: { t: string }[]; at: string };
 type List = { msgs: Msg[]; last: number; answer?: string };
 
 export default function GuardianClient() {
-  const [state, setState] = useState<{ hasPin: boolean; name: string } | null>(null);
+  const [state, setState] = useState<{ hasPin: boolean; hasFace?: boolean; name: string } | null>(null);
+  const [face, setFace] = useState<"" | "set" | "open">("");
+  const [notice, setNotice] = useState("");
   const [g, setG] = useState("");
   const [pin, setPin] = useState(""), [pin2, setPin2] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -63,14 +66,29 @@ export default function GuardianClient() {
           <button type="button" className="btn" disabled={busy || pin.length !== 4 || pin2.length !== 4} onClick={() => void call({ action: "setPin", pin, pin2 }).then((r) => { if (r) { setState({ ...state, hasPin: true }); setG(r.gtoken); setPin(""); setPin2(""); } })}>🔐 احفظ رمزي</button>
         </div></div></div>
       )}
-      {state?.hasPin && !g && (
+      {face && (
+        <div className="wrap"><FaceCheck onCancel={() => setFace("")} onDone={(r) => {
+          const mode = face; setFace("");
+          if (mode === "set") void call({ action: "faceSet", gtoken: g, ...r }).then((x) => { if (x) { setState({ ...state!, hasFace: true }); setNotice(x.notice); } });
+          else void call({ action: "faceOpen", ...r }).then((x) => { if (x) setG(x.gtoken); });
+        }} /></div>
+      )}
+      {notice && <div className="wrap"><div className="card"><div className="form"><div className="exhint">{notice}</div></div></div></div>}
+      {state?.hasPin && !g && !face && (
         <div className="wrap"><div className="card"><div className="form">
+          {state.hasFace && <button type="button" className="btn" disabled={busy} onClick={() => setFace("open")}>📸 افتح بوجهي</button>}
           <div className="exhint">ولي الأمر يكتب رمزه حتى يشوف الدرجات ويستلمها.</div>
           <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(digits(e.target.value))} placeholder="••••" />
           <button type="button" className="btn" disabled={busy || pin.length !== 4} onClick={() => void call({ action: "open", pin }).then((r) => { if (r) { setG(r.gtoken); setPin(""); } })}>🔓 افتح</button>
         </div></div></div>
       )}
-      {g && (
+      {g && !face && state && !state.hasFace && (
+        <div className="wrap"><div className="card"><div className="form">
+          <div className="exhint">تگدر تسجّل وجهك، حتى تفتح الصفحة بوجهك بدل الرمز. الأحسن تسجّله بحضور المساعد بالمركز. صورة كل توقيع تنحفظ مشفرة، والإدارة بس تشوفها.</div>
+          <button type="button" className="btn ghost" disabled={busy} onClick={() => setFace("set")}>📸 سجّل وجهي للتوقيع</button>
+        </div></div></div>
+      )}
+      {g && !face && (
         <div className="chatlist">
           {!msgs.length && <div className="empty">ماكو درجات بعد. كل درجة جديدة تطلع هنا.</div>}
           {msgs.map((m) => (

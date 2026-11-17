@@ -269,6 +269,10 @@ export async function studentAction(body: Row) {
   } else if (a === "unlockDevice") {
     await unlockDevice(id);
     notice = "🔓 انفك قفل الجهاز. أول جهاز يفتح صفحاته ينقفل عليه";
+  } else if (a === "signPhotos") {
+    // صور توقيع ولي الأمر بوجهه (مشفرة)، لصاحب البوت يراجعها
+    const { signPhotos } = await import("./guardianPin.ts");
+    return { photos: await signPhotos(id) };
   } else if (a === "resetPin") {
     const { resetPin } = await import("./guardianPin.ts");
     await resetPin(id);

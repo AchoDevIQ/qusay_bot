@@ -62,3 +62,23 @@ test("صاحب البوت يصفّر الرمز: ينفك الربط، وولي 
   await act("setPin", { pin: "5937", pin2: "5937" });
   assert.equal((await act("state")).hasPin, true);
 });
+
+test("الوجه: بصمة مشفرة، القريب يفتح والبعيد يرفض، والصور تنحفظ مشفرة وصاحب البوت يشوفها", async () => {
+  const { setFace, openWithFace, signPhotos } = await import("../lib/guardianPin.ts");
+  const { one } = await import("../lib/db.ts");
+  const face = Array.from({ length: 128 }, (_, i) => Math.sin(i) * 0.1);
+  const near = face.map((x) => x + 0.01);
+  const far = face.map((x, i) => x + (i % 2 ? 0.2 : -0.2));
+  const jpg = "data:image/jpeg;base64," + Buffer.from("fake-jpeg").toString("base64");
+  await assert.rejects(setFace(SID, [1, 2, 3], jpg), /الوجه/);
+  await setFace(SID, face, jpg);
+  const row = await one("guardian_pins", { user_id: SID });
+  assert.ok(String(row?.face).startsWith("v1."), "البصمة مشفرة");
+  assert.ok(!String(row?.face).includes("0.0841"), "ما تنقرا بدون المفتاح");
+  assert.equal(verifyGuardToken(await openWithFace(SID, near, jpg)), SID);
+  await assert.rejects(openWithFace(SID, far, jpg), /ما تطابق/);
+  const photos = await signPhotos(SID);
+  assert.ok(photos.length >= 2);
+  assert.ok(photos.some((p) => p.kind === "تسجيل الوجه"));
+  assert.equal(Buffer.from(photos[0].src.split(",")[1], "base64").toString(), "fake-jpeg");
+});

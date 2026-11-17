@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import VoiceRec from "../VoiceRec";
 import PhotoPick from "../PhotoPick";
 import Thumbs from "../Thumbs";
-import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
+import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import { CURR_OPTS, DateInput, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; pin?: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
@@ -303,6 +303,7 @@ function Form({ s, data, close, busy, call, inFile }: { s: S; data: Data; close:
             <Confirm label={`📱 مقفول على جهاز من ${s.device.at.slice(0, 10)}: فك القفل`} disabled={busy} onYes={() => void call({ action: "unlockDevice", id: s.id })} />
           </>
         ) : <span className="exhint">📱 لسه ما فتح صفحاته من أي جهاز</span>}
+        {s.pin && <SignPhotos id={s.id} />}
         {s.pin && <Confirm label="🔐 ولي أمره بالرمز على تطبيق ابنه: صفّر الرمز" disabled={busy} onYes={() => void call({ action: "resetPin", id: s.id })} />}
         {s.guardian ? <Confirm label="👨‍👧 مربوط بولي أمر: فك الربط" disabled={busy} onYes={() => void call({ action: "unlink", id: s.id })} /> : <span className="exhint">ولي الأمر غير مربوط</span>}
         {s.gw?.blockedAt && <span className="exhint exbad">⛔ ولي الأمر سوى بلوك للبوت من {s.gw.blockedAt.slice(0, 10)}</span>}
@@ -662,5 +663,27 @@ function PapersPanel({ papers, canEdit }: { papers: NonNullable<Data["papers"]>;
         </details>
       ))}
     </div>
+  );
+}
+
+/** صور توقيع ولي الأمر بوجهه (تنحفظ مشفرة 30 يوم): صاحب البوت يتأكد إنه هو ولي الأمر مو الطالب */
+function SignPhotos({ id }: { id: number }) {
+  const [list, setList] = useState<{ at: string; kind: string; src: string }[] | null>(null);
+  const [err, setErr] = useState("");
+  async function load() {
+    setErr("");
+    try {
+      const r = await fetch("/api/students", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "signPhotos", id, initData: pageAuth() }) });
+      const j = await r.json();
+      if (!r.ok) setErr(j.error ?? "صار خطأ"); else setList(j.photos ?? []);
+    } catch { setErr("ماكو اتصال"); }
+  }
+  return (
+    <>
+      <button type="button" className="exbtn" onClick={() => void load()}>📸 صور توقيع ولي الأمر بوجهه</button>
+      {err && <span className="exhint exbad">{err}</span>}
+      {list && !list.length && <span className="exhint">ماكو صور. ولي الأمر بعده ما سجل وجهه أو ما وقّع بيه.</span>}
+      {list && !!list.length && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{list.map((p) => <figure key={p.at + p.kind} style={{ margin: 0, width: 110 }}><img src={p.src} alt="" style={{ width: 110, borderRadius: 10 }} /><figcaption className="exhint">{p.kind} · {p.at}</figcaption></figure>)}</div>}
+    </>
   );
 }
