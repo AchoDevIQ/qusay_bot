@@ -71,6 +71,8 @@ const busy = new Set<string>();
 
 export async function appRegAction(body: Row) {
   await ensure();
+  // «نسيت الرمز» يشتغل حتى لو التسجيل الجديد مطفي
+  if (body?.action === "forgot") return await forgotPassword(body.phone);
   need(await appRegOn(), "التسجيل الجديد من هنا مسدود هسه. ارجع وسجل من التطبيق", 403);
   const env: AppEnv = body.env === "staging" ? "staging" : "prod";
   const phone = String(body.phone ?? "").replace(/[\s-]/g, "");
@@ -157,4 +159,68 @@ async function register(env: AppEnv, phone: string, r: Row, district: string) {
     }
     throw e;
   }
+}
+
+// ---------- «نسيت الرمز السري» (قرار الأستاذ 2026-11-17: الطالب يطلب، وصاحب البوت يرسله)
+/** الطالب بشاشة الدخول: طلبه يوصل لصفحة «🔑 طلبات كلمة المرور». الجواب نفسه دايماً حتى ما ينعرف الرقم مسجل لو لا */
+export async function forgotPassword(phoneRaw: unknown) {
+  const phone = String(phoneRaw ?? "").replace(/[\s-]/g, "");
+  need(/^07\d{9}$/.test(phone), "رقم الهاتف غير صالح");
+  const { find } = await import("./db.ts");
+  const linked = new Set((await find("app_links")).map((l) => Number(l.uid)));
+  const s = (await find("students")).find((x) => linked.has(Number(x.user_id)) && String(x.phone1 ?? "") === phone);
+  const notice = "✅ وصل طلبك للإدارة. راح يتواصلون وياك ويدزولك رمز جديد.";
+  if (!s) {
+    // رقم ما موجود بالبوت (طالب ما فتح التطبيق الجديد): الإدارة تنبلغ مرة باليوم، وتغيره من لوحة التطبيق
+    const k = `forgot_${phone}`, today = stamp().slice(0, 10);
+    if ((await kvGet(k)) !== today) {
+      await kvSet(k, today);
+      try {
+        const { send } = await import("./telegram.ts");
+        for (const a of ADMIN_IDS) await send(a, `🔑 الرقم ${phone} نسى رمزه السري بالتطبيق، وما موجود بالبوت. غيّره من لوحة التطبيق.`);
+      } catch (e) { console.error(e); }
+    }
+    return { notice };
+  }
+  const uid = Number(s.user_id);
+  if (await one("pass_requests", { user_id: uid })) return { notice };
+  await put("pass_requests", { user_id: uid, created: stamp() });
+  const { logActivity } = await import("./access.ts");
+  await logActivity(uid, "🔑 طلب رمز سري جديد من شاشة الدخول بالتطبيق");
+  try {
+    const { send } = await import("./telegram.ts");
+    const { staffIds } = await import("./data.ts");
+    for (const a of new Set([...ADMIN_IDS, ...await staffIds("students")])) await send(a, `🔑 <b>${s.name}</b> نسى رمزه السري بالتطبيق.\nلوحة التحكم ← 🔑 طلبات كلمة المرور`);
+  } catch (e) { console.error(e); }
+  return { notice };
+}
+
+/** رمز جديد لطالب التطبيق: يتغير بحساب التطبيق نفسه (يحتاج صلاحية على مشروع التطبيق)، وينحفظ بالبوت، ويوصله بمحادثته */
+export async function resetAppPassword(uid: number) {
+  const link = await one("app_links", { uid });
+  need(link?.fu, "هذا الطالب ما مربوط بالتطبيق", 404);
+  const { newPassword } = await import("./password.ts");
+  const password = newPassword();
+  const { GoogleAuth } = await import("google-auth-library");
+  const token = await new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] }).getAccessToken().catch(() => null);
+  need(token, "ما گدرنا نغير الرمز هسه، حاول بعد شوية", 503);
+  const url = "https://identitytoolkit.googleapis.com/v1/projects/qmath-iq/accounts:update";
+  const body = JSON.stringify({ localId: String(link!.fu), password });
+  let r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body });
+  if (r.status === 403) r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-goog-user-project": "qmath-iq" }, body });
+  if (!r.ok) {
+    console.error("app password reset", r.status, await r.text().catch(() => ""));
+    need(false, r.status === 403 ? "ما گدرنا نغير الرمز: البوت بعده ما عنده صلاحية تغيير الرموز على مشروع التطبيق" : "ما گدرنا نغير الرمز، حاول مرة ثانية", r.status === 403 ? 403 : 502);
+  }
+  const { remove } = await import("./db.ts");
+  await put("student_pass", { user_id: uid, hash: hashPassword(password), created: stamp() });
+  await remove("pass_requests", { user_id: uid });
+  const { logActivity } = await import("./access.ts");
+  await logActivity(uid, "🔑 انعمله رمز سري جديد");
+  try {
+    const { send } = await import("./telegram.ts");
+    await send(uid, `🔑 <b>رمزك السري الجديد</b>\n\n<code>${password}</code>\n\nادخل بيه للتطبيق ويا رقمك. الرمز القديم ما يشتغل بعد.`);
+  } catch (e) { console.error(e); }
+  const s = await student(uid);
+  return { id: uid, name: String(s?.name ?? ""), phone: String(s?.phone1 ?? ""), password };
 }

@@ -60,3 +60,17 @@ test("مشغّل: يسوي الحساب بالتطبيق وبالبوت، وإذ
   assert.equal((await one("students", { user_id: uid }))!.name, "علي حسن محمد كاظم");
   assert.ok(verifyPassword("pass1234", String((await one("student_pass", { user_id: uid }))!.hash)));
 });
+test("نسيت الرمز: طلبه يوصل للإدارة، والجواب نفسه حتى لو الرقم مو مسجل", async () => {
+  await setAppReg(false);
+  const r: any = await appRegAction({ action: "forgot", phone });
+  assert.match(r.notice, /وصل طلبك/);
+  const uid = Number((await one("app_links", { fu: "fuNEW" }))!.uid);
+  assert.ok(await one("pass_requests", { user_id: uid }));
+  const other: any = await appRegAction({ action: "forgot", phone: "07999999999" });
+  assert.equal(other.notice, r.notice);
+  await assert.rejects(appRegAction({ action: "forgot", phone: "123" }), /غير صالح/);
+  const { passAction } = await import("../lib/passApi.ts");
+  const { homeToken } = await import("../lib/webAuth.ts");
+  const list: any = await passAction({ initData: `tk:${homeToken(1)}`, action: "list" });
+  assert.deepEqual(list.requests.map((x: any) => [x.id, x.app]), [[uid, true]]);
+});
