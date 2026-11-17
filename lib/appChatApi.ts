@@ -45,6 +45,7 @@ export async function chatAction(body: any) {
   await ensure();
   await allowDoor(body?.token);
   const uid = who(body?.token, body?.app);
+  await import("./appPush.ts").then((m) => m.noteChatIn(uid)).catch(() => 0);
   const a = String(body?.action ?? "list");
   if (a === "list") { const r = await chatList(uid, Number(body.after) || 0); await markChatSeen(uid, r.last); return r; }
   const now = Math.floor(Date.now() / 1000);
@@ -66,6 +67,7 @@ export async function chatUpload(f: FormData) {
   await ensure();
   await allowDoor(f.get("token"));
   const uid = who(f.get("token"), f.get("app"));
+  await import("./appPush.ts").then((m) => m.noteChatIn(uid)).catch(() => 0);
   const file = f.get("file");
   need(file instanceof File && file.size > 0, "اختار صورة");
   need((file as File).size <= 15_000_000, "الملف كبير، أكثر شي 15 ميگا");

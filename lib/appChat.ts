@@ -62,6 +62,8 @@ async function saveOut(uid: number, method: string, p: Row, tg: number | null, m
   // كادر بباب بدون تليگرام: إشعار لجهازه
   if (uid < 500_000_000_000_000 || uid >= 600_000_000_000_000) void one("door_links", { user_id: uid }).then((r) => r ? import("./doorLink.ts").then((m) => m.notifyDoor(uid, text)) : 0).catch((e) => console.error("door push", e));
   if (uid >= 500_000_000_000_000 && uid < 600_000_000_000_000) void import("./guardianPush.ts").then((m) => m.notifyGuardian(uid, text)).catch((e) => console.error("guardian push", e));
+  // طالب التجربة بالتطبيق: إشعار على شاشة تلفونه
+  if (uid < 500_000_000_000_000) await import("./appPush.ts").then((m) => m.chatPush(uid, text)).catch((e) => console.error("app push", e));
   return tg ?? id;
 }
 const fakeResult = (uid: number, mid: number, p: Row) => ({ message_id: mid, chat: { id: uid, type: "private" }, date: Math.floor(Date.now() / 1000), text: p.text });

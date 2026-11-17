@@ -120,8 +120,14 @@ export async function announceAction(input: Row | FormData) {
       image = `notices/${randomUUID()}.jpg`;
       await files().write(image, b, "image/jpeg");
     }
-    await insert("notices", { kind, text, image, aud, rule: rule ? JSON.stringify(rule) : null, by_id: uid, created: stamp(), del: 0 });
+    const n = { kind, text, image, aud, rule: rule ? JSON.stringify(rule) : null, by_id: uid, created: stamp(), del: 0 };
+    await insert("notices", n);
     notice = kind === "temp" ? "✅ انرسل إشعار مؤقت: يختفي من عند الطالب بعد ما يقراه" : "✅ انرسل إشعار دائمي: يبقى لحد ما تمسحه";
+    // إشعار على شاشة تلفون طلاب التجربة اللي يوصلهم
+    const { noticePush } = await import("./appPush.ts");
+    const sent = await noticePush(text, async (sid) => forMe(n, sid, await student(sid), true)).catch((e) => { console.error("notice push", e); return 0; });
+    if (sent) notice += `
+📱 طلع على شاشة تلفون ${sent} طالب`;
   } else if (a === "del") {
     const id = Number(get("id"));
     need(await one("notices", { id }), "الإشعار غير موجود", 404);

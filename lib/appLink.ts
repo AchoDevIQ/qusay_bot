@@ -170,7 +170,7 @@ export async function setPilot(uid: number, on: boolean) {
 
 /** حالة الطالب للتطبيق نفسه (أول ما ينفتح): يجرب الجديد؟ ولازم يختار أوقاته أول؟
  *  أول مرة ينربط حسابه هنا، حتى يطلع بصفحة الطلاب وصاحب البوت يگدر يختاره */
-export async function appState(form: { id?: unknown; env?: unknown }) {
+export async function appState(form: { id?: unknown; env?: unknown; push?: unknown }) {
   const fu = await verifyAppIdToken(form.id);
   if (!fu) return null;
   let link = await one("app_links", { fu });
@@ -185,6 +185,8 @@ export async function appState(form: { id?: unknown; env?: unknown }) {
   const pilot = await isPilot(uid);
   const { needsSchedule } = await import("./schedApi.ts");
   if (!pilot) return { pilot, needSchedule: false };
+  // رمز تلفونه حتى يوصله إشعار على الشاشة (رسالة بالمحادثة أو إشعار جديد)
+  if (form.push) await import("./appPush.ts").then((m) => m.savePushToken(uid, form.push)).catch((e) => console.error("push token", e));
   // علامات العدد فوك: إشعارات ما قراها، ورسائل بالمحادثة ما شافها
   const { unreadNotices } = await import("./notices.ts");
   const { unreadChat } = await import("./appChat.ts");
