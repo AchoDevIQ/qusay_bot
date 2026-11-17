@@ -62,3 +62,33 @@ test("صاحب البوت يحفظ التوزيع، والصفحة تنرفع م
   assert.equal(row(back, vid), null);
   assert.deepEqual(row(back, vB), [[1, 2], [3]]);
 });
+test("A3: الطالب ترك صفحة بيضاء: تنحسب بمكانها وما تنرفع، وسؤالها يروح بدون جواب", () => {
+  const { good, problems } = assignPages([hit(1), { ...hit(2), blank: true }, hit(3)], new Map([[1, item()]]));
+  assert.deepEqual(good.map((h) => h.qs), [[1], [4]]);
+  assert.match(problems.join(), /السؤال 2 و3 بيضاء/);
+  assert.doesNotMatch(problems.join(), /ناقصة/);
+});
+test("السكانر يمسح ظهر الورقة الأبيض: ينشال والعدد يطابق بدونه", () => {
+  const { good, problems } = assignPages([hit(1), { ...hit(2), blank: true }, hit(3), hit(4)], new Map([[1, item()]]));
+  assert.deepEqual(problems, []);
+  assert.deepEqual(good.map((h) => h.qs), [[1], [2, 3], [4]]);
+});
+test("صفحة زايدة (ورقة إضافية): تنضاف لآخر سؤال وتطلع ملاحظة", () => {
+  const { good, problems } = assignPages([hit(1), hit(2), hit(3), hit(4)], new Map([[1, item()]]));
+  assert.deepEqual(good.map((h) => h.qs), [[1], [2, 3], [4], [4]]);
+  assert.match(problems[0], /صفحة زايدة/);
+});
+test("A4 الليبل بس على أول صفحة وبدون توزيع: سؤال بكل صفحة بالترتيب", () => {
+  const items = new Map([[1, item({ map: null, qs: [3, 1, 2] })]]);
+  const ok = assignPages([hit(1), hit(2), hit(3)], items);
+  assert.deepEqual(ok.problems, []);
+  assert.deepEqual(ok.good.map((h) => h.q), [1, 2, 3]);
+  const short = assignPages([hit(1), hit(2)], items);
+  assert.equal(short.good.length, 0);
+  assert.match(short.problems[0], /سؤال بكل صفحة/);
+});
+test("صفحات زايدة هواية (ليبل ما انقرا): ما تنرفع حتى ما تروح ورقة طالب لغيره", () => {
+  const { good, problems } = assignPages([1, 2, 3, 4, 5].map((n) => hit(n)), new Map([[1, item()]]));
+  assert.equal(good.length, 0);
+  assert.match(problems[0], /ليبل الطالب اللي بعده/);
+});

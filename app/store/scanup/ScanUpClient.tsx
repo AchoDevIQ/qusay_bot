@@ -10,7 +10,7 @@ import { assignPages, type PageItem } from "./assign";
 import { pdfClient } from "../pdfClient";
 
 type Src = { file: File; page: number };           // page = رقم صفحة الـ PDF، أو 0 للصورة
-type Hit = { src: Src; flip: boolean; item: number; q: number; seq: number; qs?: number[]; label: string };
+type Hit = { src: Src; flip: boolean; item: number; q: number; seq: number; qs?: number[]; label: string; blank?: boolean };
 type Item = PageItem;
 type Plan = { hits: Hit[]; items: Map<number, Item>; problems: string[]; blank: number };
 
@@ -113,7 +113,7 @@ export default function ScanUpClient() {
     const hits: Hit[] = [], problems: string[] = [];
     let cur = 0, lastQ = 0, blank = 0;
     const seq = new Map<number, number>();   // رقم صفحة كل طالب بعد ليبله
-    const add = (src: Src, flip: boolean, label: string) => { const n = (seq.get(cur) ?? 0) + 1; seq.set(cur, n); hits.push({ src, flip, item: cur, q: lastQ, seq: n, label }); };
+    const add = (src: Src, flip: boolean, label: string, blank = false) => { const n = (seq.get(cur) ?? 0) + 1; seq.set(cur, n); hits.push({ src, flip, item: cur, q: lastQ, seq: n, label, blank }); };
     for (let i = 0; i < srcs.length; i++) {
       setProg([i + 1, srcs.length]);
       const src = srcs[i], label = src.page ? `${src.file.name} ص${src.page}` : src.file.name;
@@ -122,7 +122,8 @@ export default function ScanUpClient() {
         const empty = !codes.length && isBlank(await draw(src, 400));
         if (!codes.length && !empty) { const k = codesOf(await draw(src, DETECT_W, true)); if (k.length) { flip = true; codes = k; } }
         if (!codes.length) {
-          if (empty) { blank++; continue; }
+          // صفحة بيضاء: ما تنرفع، بس تنحسب بمكانها إذا الطالب ترك صفحة من ورقة A3
+          if (empty) { blank++; if (cur) add(src, flip, label, true); continue; }
           // صفحة بيها كتابة بدون كود: تكملة جواب الصفحة اللي قبلها
           if (cur) add(src, flip, label);
           else problems.push(`${label}: ما بيها كود، وما معروف لمن`);
