@@ -3,7 +3,7 @@
 // الليبل أو ورقة الطالب تعرّف الطالب، وكود الصفحة يعرّف السؤال، والصفحات اللي وراه إله لحد الطالب الجاي.
 // الصفحات البيضاء تنشال، والمشاكل تطلع بقائمة. بعدها كل صفحة تنرفع لطالبها، والأوراق تروح للتصحيح
 import jsQR from "jsqr";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import RescanList, { type Rescan } from "../attend/RescanList";
 import { AdminHeader, pageAuth } from "../adminPage";
 import { assignPages, type PageItem } from "./assign";
@@ -78,9 +78,15 @@ async function post(body: Record<string, unknown>) {
 
 export default function ScanUpClient() {
   const [srcs, setSrcs] = useState<Src[]>([]);
+  const srcsState = srcs;
   const [step, setStep] = useState<"pick" | "read" | "check" | "send" | "done">("pick");
   const [prog, setProg] = useState([0, 0]);
   const [plan, setPlan] = useState<Plan | null>(null);
+  const planState = plan;
+  // مراقبة مجلد السكانر (كروم بالحاسبة): كل ملف جديد يحفظه السكانر ينقرا وينرفع وحده
+  const [watching, setWatching] = useState("");
+  const [watchLog, setWatchLog] = useState<string[]>([]);
+  const busyRef = useRef(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
   const [rescan, setRescan] = useState<Rescan[]>([]);
@@ -88,7 +94,7 @@ export default function ScanUpClient() {
   const loadRescan = () => post({ action: "list" }).then((r) => setRescan(r.rescan ?? [])).catch(() => undefined);
   useEffect(() => { void loadRescan(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function pick(list: FileList | null) {
+  async function pick(list: FileList | File[] | null) {
     setError("");
     const fs = [...(list ?? [])].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     const out: Src[] = [];
@@ -98,9 +104,11 @@ export default function ScanUpClient() {
       } else if (f.type.startsWith("image/")) out.push({ file: f, page: 0 });
     }
     setSrcs(out); setPlan(null); setStep("pick");
+    return out;
   }
 
-  async function read() {
+  async function read(srcs0?: Src[]): Promise<Plan | null> {
+    const srcs = srcs0 ?? srcsState;
     setStep("read"); setError("");
     const hits: Hit[] = [], problems: string[] = [];
     let cur = 0, lastQ = 0, blank = 0;
@@ -138,11 +146,14 @@ export default function ScanUpClient() {
       const r = await post({ action: "items", items: ids });
       const items = new Map<number, Item>((r.items as Item[]).map((x) => [x.id, x]));
       const r2 = assignPages(hits, items);
-      setPlan({ hits: r2.good, items, problems: [...problems, ...r2.problems], blank }); setStep("check");
-    } catch (e) { setError(e instanceof Error ? e.message : "صار خطأ"); setStep("pick"); }
+      const p = { hits: r2.good, items, problems: [...problems, ...r2.problems], blank };
+      setPlan(p); setStep("check");
+      return p;
+    } catch (e) { setError(e instanceof Error ? e.message : "صار خطأ"); setStep("pick"); return null; }
   }
 
-  async function send() {
+  async function send(plan0?: Plan | null) {
+    const plan = plan0 ?? planState;
     if (!plan) return;
     setStep("send"); setError("");
     const fails: string[] = [];
@@ -166,12 +177,56 @@ export default function ScanUpClient() {
     void loadRescan();
   }
 
+  async function watchFolder() {
+    const w = window as unknown as { showDirectoryPicker?: (o?: object) => Promise<FileSystemDirectoryHandle> };
+    if (!w.showDirectoryPicker) { setError("افتح الصفحة بمتصفح كروم أو إيدج بالحاسبة حتى تشتغل مراقبة المجلد"); return; }
+    let dir: FileSystemDirectoryHandle;
+    try { dir = await w.showDirectoryPicker({ mode: "read" }); } catch { return; }
+    setWatching(dir.name);
+    const KEY = `qm_scan_seen_${dir.name}`;
+    const seen = new Set<string>((() => { try { return JSON.parse(localStorage.getItem(KEY) ?? "[]") as string[]; } catch { return []; } })());
+    // الملفات اللي موجودة هسه تنحسب قديمة، وبس الجديدة تنرفع
+    const first = !seen.size;
+    const sizes = new Map<string, number>();
+    const tick = async () => {
+      if (busyRef.current) return;
+      const fresh: File[] = [];
+      for await (const h of (dir as unknown as { values(): AsyncIterable<FileSystemHandle> }).values()) {
+        if (h.kind !== "file" || !/.(pdf|jpe?g|png)$/i.test(h.name)) continue;
+        const file = await (h as FileSystemFileHandle).getFile();
+        const key = `${h.name}|${file.lastModified}`;
+        if (seen.has(key)) continue;
+        if (first && !sizes.size && Date.now() - file.lastModified > 60_000) { seen.add(key); continue; }
+        // السكانر بعده يكتب الملف: ننتظر لحد ما حجمه يثبت
+        if (sizes.get(key) !== file.size) { sizes.set(key, file.size); continue; }
+        fresh.push(file); seen.add(key);
+      }
+      try { localStorage.setItem(KEY, JSON.stringify([...seen].slice(-2000))); } catch { /* */ }
+      if (!fresh.length) return;
+      busyRef.current = true;
+      try {
+        const out = await pick(fresh);
+        const p = out.length ? await read(out) : null;
+        if (p && p.hits.length) await send(p);
+        setWatchLog((l) => [`${new Date().toLocaleTimeString("ar-IQ")}: ${fresh.map((x) => x.name).join("، ")}: ${p ? `${p.hits.length} صفحة لـ${new Set(p.hits.map((h) => h.item)).size} طالب${p.problems.length ? `، و${p.problems.length} تحتاج تشوفها` : ""}` : "ما انقرت"}`, ...l].slice(0, 30));
+      } finally { busyRef.current = false; }
+    };
+    void tick();
+    setInterval(() => void tick(), 4000);
+  }
+
   const students = plan ? [...plan.items.values()].filter((x) => x.ok) : [];
   return (
     <>
       <AdminHeader title="📤 أوراق السكانر" />
       <div className="wrap">
         <RescanList list={rescan} />
+        <div className="card expad">
+          <div className="exlabel">📂 تلقائي: راقب مجلد السكانر</div>
+          <div className="exhint">بالحاسبة اللي عليها السكانر (كروم أو إيدج): دوس الزر واختار المجلد اللي يحفظ بيه السكانر (مثلاً سطح المكتب). خلي الصفحة مفتوحة، وكل ملف جديد يسكنه السكانر ينقرا وينرفع للتصحيح وحده.</div>
+          {watching ? <div className="exhint">👀 دا أراقب «{watching}». خلي هاي الصفحة مفتوحة.</div> : <button type="button" className="btn agbtn adtop" onClick={() => void watchFolder()}>📂 اختار مجلد السكانر</button>}
+          {!!watchLog.length && <div className="atlog adtop">{watchLog.map((l, i) => <div key={i}>{l}</div>)}</div>}
+        </div>
         {/* تيليجرام بالحاسبة أحياناً ما يفتح نافذة اختيار الملفات: تسحب الملف من الفولدر وتذبه هنا */}
         <div className="card expad" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (step !== "read" && step !== "send") void pick(e.dataTransfer.files); }}>
           <div className="exlabel">1. اختار صور السكانر</div>
