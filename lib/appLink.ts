@@ -190,7 +190,10 @@ export async function appState(form: { id?: unknown; env?: unknown; push?: unkno
   // علامات العدد فوك: إشعارات ما قراها، ورسائل بالمحادثة ما شافها
   const { unreadNotices } = await import("./notices.ts");
   const { unreadChat } = await import("./appChat.ts");
-  return { pilot, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid) };
+  // «يهمك هسه»: بطاقات الرئيسية
+  const { nowCards } = await import("./appNow.ts");
+  const now = await nowCards(uid).catch((e) => { console.error("now cards", e); return []; });
+  return { pilot, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid), now };
 }
 
 // ---------- مشاهدات المحاضرات (طلب الأستاذ 2026-11-17): التطبيق يبلغ البوت لما الطالب يفتح محاضرة ولوين وصل منها.
