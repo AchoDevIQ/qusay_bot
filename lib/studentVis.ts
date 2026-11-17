@@ -122,6 +122,11 @@ export async function visAction(body: Row) {
     if (Array.isArray(body.sos)) await kvSet(SOS, JSON.stringify([...new Set((body.sos as unknown[]).map(Number).filter(Number.isSafeInteger))]));
     const open = VIS_TILES.filter((t) => out[t.key].mode !== "off").length;
     notice = open ? `✅ انحفظ. ${open} مربع مفتوح للطلاب` : "✅ انحفظ. كل المربعات مخفية عن الطلاب";
+  } else if (a === "appReg") {
+    // التسجيل الجديد بالتطبيق: طريقة البوت لو القديمة
+    const { setAppReg } = await import("./appReg.ts");
+    await setAppReg(!!body.on);
+    notice = body.on ? "📝 الطالب الجديد هسه يسجل بالتطبيق بطريقة البوت" : "↩️ الطالب الجديد يسجل بالتطبيق بالطريقة القديمة";
   } else if (a === "find") {
     const q = String(body.q ?? "").trim();
     need(q.length >= 2, "اكتب حرفين أو أكثر");
@@ -134,6 +139,6 @@ export async function visAction(body: Row) {
   return {
     tiles: [...VIS_TILES, ...VIS_EXTRA], rules, notice,
     centers: [...(await centerNames()).entries()].map(([id, name]) => ({ id, name })),
-    genders: GENDERS, currs: CURRS, chapters: await chapterList(), names: await studentNames(ids), sos,
+    genders: GENDERS, currs: CURRS, chapters: await chapterList(), names: await studentNames(ids), sos, appReg: await (await import("./appReg.ts")).appRegOn(),
   };
 }

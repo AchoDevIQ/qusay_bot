@@ -6,7 +6,7 @@ import { AdminHeader, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 
 type Mode = "off" | "all" | "some";
 type Rule = { mode: Mode; centers: number[]; gender: string; curr: string; chapters: string[]; students: number[] };
-type Data = { tiles: { key: string; title: string }[]; rules: Record<string, Rule>; notice: string; centers: { id: number; name: string }[]; genders: string[]; currs: string[]; chapters: string[]; names: { id: number; name: string }[]; sos: number[] };
+type Data = { tiles: { key: string; title: string }[]; rules: Record<string, Rule>; notice: string; centers: { id: number; name: string }[]; genders: string[]; currs: string[]; chapters: string[]; names: { id: number; name: string }[]; sos: number[]; appReg: boolean };
 
 export default function VisibilityClient() {
   const { data, error, busy, call } = useAdminApi<Data>("/api/visibility", "👁 شنو يشوف الطالب");
@@ -16,6 +16,18 @@ export default function VisibilityClient() {
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
+        {data && (
+          <div className="card">
+            <h2>📝 التسجيل الجديد بالتطبيق</h2>
+            <div className="form">
+              <div className="exhint">مشغّل: الطالب الجديد يسجل بالتطبيق بطريقة البوت (الشروط وترتيب كلماتها، والمعلومات، والرمز السري)، وحسابه ينعمل بالتطبيق وبالبوت سوه. مطفي: يسجل بالطريقة القديمة مال التطبيق. الطلاب المسجلين ما يتأثرون.</div>
+              <div className="seg">
+                <button type="button" className={data.appReg ? "on" : ""} disabled={busy} onClick={() => void call({ action: "appReg", on: true })}>✅ مشغّل</button>
+                <button type="button" className={!data.appReg ? "on" : ""} disabled={busy} onClick={() => void call({ action: "appReg", on: false })}>⏸ مطفي</button>
+              </div>
+            </div>
+          </div>
+        )}
         {data && <Form key={JSON.stringify([data.rules, data.sos])} data={data} busy={busy} onSave={(rules, sos) => void call({ action: "save", rules, sos })} />}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />

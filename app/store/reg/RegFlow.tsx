@@ -52,8 +52,12 @@ function Foot({ children }: { children: ReactNode }) {
   return <div className="rgfoot"><div className="rgfootin">{children}</div></div>;
 }
 
-export default function RegFlow({ D }: { D: RegData }) {
-  const token = D.tk!;
+/** بالتطبيق (طالب جديد بدون حساب): api يحچي ويا تسجيل التطبيق، phone رقمه اللي دخل بيه (ثابت)، districts مناطق بغداد،
+ * وonFinish يدخله للتطبيق بعد ما يشوف رمزه */
+export type AppMode = { api: <T>(body: Record<string, unknown>) => Promise<T>; phone: string; districts: string[]; onFinish: (d: { password: string }) => void };
+export default function RegFlow({ D, app }: { D: RegData; app?: AppMode }) {
+  const token = D.tk ?? "";
+  const call = <T,>(body: Record<string, unknown>) => (app ? app.api<T>(body) : homeCall<T>(token, body));
   const [info, setInfo] = useState<Info | null>(null);
   const [loadErr, setLoadErr] = useState("");
   const [step, setStep] = useState(-1);   // التعريف، بعدها الشروط، وبعدها المعلومات والدراسة
@@ -61,15 +65,15 @@ export default function RegFlow({ D }: { D: RegData }) {
   const [making, setMaking] = useState(false);
   const [sendErr, setSendErr] = useState("");
   const [done, setDone] = useState<Done | null>(null);
-  const [f, setF] = useState<Record<string, string>>({});
+  const [f, setF] = useState<Record<string, string>>(app ? { p1: app.phone } : {});
   const [carea, setCarea] = useState(0);
   const [center, setCenter] = useState(0);
   const [errs, setErrs] = useState<Errs>({});
   const set = (k: string, v: string) => { setF((x) => ({ ...x, [k]: v })); setErrs((e) => ({ ...e, [k]: "" })); };
 
   useEffect(() => {
-    homeCall<Info>(token, { action: "regInfo" }).then(setInfo).catch((e: Error) => setLoadErr(e.message));
-  }, [token]);
+    call<Info>({ action: "regInfo" }).then(setInfo).catch((e: Error) => setLoadErr(e.message));
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const page = (n: number) => { setStep(n); window.scrollTo(0, 0); };
   const gov = f.gov ?? "";
@@ -87,7 +91,7 @@ export default function RegFlow({ D }: { D: RegData }) {
   if (info.registered && !done) return <div className="rg"><Top title="التسجيل" step={1} total={1} /><div className="rgbody"><div className="rgcard">🔒 معلوماتك محفوظة. لتغيير أي معلومة تواصل ويا قصي العميري.</div></div></div>;
 
   const T = info.terms.length;
-  if (done) return <Success done={done} />;
+  if (done) return <Success done={done} onFinish={app?.onFinish} />;
   if (making) {
     return (
       <div className="rg">
@@ -129,6 +133,7 @@ export default function RegFlow({ D }: { D: RegData }) {
     if (b) e.p2 = b; else if (p1 === p2) e.p2 = "رقم ولي الأمر لازم يختلف عن رقمك";
     if (!gov) e.gov = "اختر المحافظة";
     if (gov === "بغداد" && !f.side) e.side = "اختر الرصافة أو الكرخ";
+    if (gov === "بغداد" && app && !f.dz) e.dz = "اختر منطقتك";
     if ((f.area ?? "").trim().length < 3) e.area = "اكتب العنوان بالتفصيل";
     setErrs(e);
     if (!scrollToFirst(e)) page(T + 1);
@@ -148,8 +153,8 @@ export default function RegFlow({ D }: { D: RegData }) {
     setMaking(true);
     window.scrollTo(0, 0);
     const n = NAME_PARTS.map((p) => (f[p.key] ?? "").trim().replace(/\s+/g, " ")).join(" ");
-    const form = { n, cu: f.curr, gr: f.grade, g: gov, s: gov === "بغداد" ? f.side : "", a: (f.area ?? "").trim(), p1: cleanPhone(f.p1 ?? ""), p2: cleanPhone(f.p2 ?? ""), e: exam, c: exam === "حضوري" ? center : 0, sx: f.sx, b: `${f.by}-${f.bm}-${f.bd}` };
-    try { setDone(await homeCall<Done>(token, { action: "register", rev: info!.rev, form })); }
+    const form = { n, cu: f.curr, gr: f.grade, g: gov, s: gov === "بغداد" ? f.side : "", a: (f.area ?? "").trim(), p1: cleanPhone(f.p1 ?? ""), p2: cleanPhone(f.p2 ?? ""), e: exam, c: exam === "حضوري" ? center : 0, sx: f.sx, b: `${f.by}-${f.bm}-${f.bd}`, dz: gov === "بغداد" ? f.dz ?? "" : "" };
+    try { setDone(await call<Done>({ action: "register", rev: info!.rev, form })); }
     catch (err) { setSendErr((err as Error).message); }
     setMaking(false);
   }
@@ -186,7 +191,7 @@ export default function RegFlow({ D }: { D: RegData }) {
           </div>
           <div className="rgcard">
             <label>رقم هاتفك <i>*</i></label>
-            <PhoneInput id="p1" value={f.p1 ?? ""} onChange={(v) => set("p1", v)} errs={errs} setErrs={setErrs} />
+            {app ? <input value={app.phone} readOnly dir="ltr" /> : <PhoneInput id="p1" value={f.p1 ?? ""} onChange={(v) => set("p1", v)} errs={errs} setErrs={setErrs} />}
             <label>رقم هاتف ولي الأمر <i>*</i></label>
             <PhoneInput id="p2" value={f.p2 ?? ""} onChange={(v) => set("p2", v)} errs={errs} setErrs={setErrs} />
           </div>
@@ -202,6 +207,16 @@ export default function RegFlow({ D }: { D: RegData }) {
                 <label>الجانب <i>*</i></label>
                 <Seg options={SIDE_OPTS} value={f.side ?? ""} onPick={(v) => set("side", v)} />
                 <Err id="side" errs={errs} />
+                {app && (
+                  <>
+                    <label>المنطقة <i>*</i></label>
+                    <select value={f.dz ?? ""} onChange={(e) => set("dz", e.target.value)}>
+                      <option value="">اختر منطقتك</option>
+                      {app.districts.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <Err id="dz" errs={errs} />
+                  </>
+                )}
               </>
             )}
             <label>العنوان التفصيلي <i>*</i></label>
@@ -287,7 +302,7 @@ function TermStep({ term, n, total, last, agreed, onBack, onOk }: { term: Term; 
   );
 }
 
-function Success({ done }: { done: Done }) {
+function Success({ done, onFinish }: { done: Done; onFinish?: (d: Done) => void }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     try { await navigator.clipboard.writeText(done.password); }
@@ -317,7 +332,7 @@ function Success({ done }: { done: Done }) {
         <div className="rgalert">⚠️ احفظ كلمة المرور هذه في مكان آمن، لأنها لن تظهر مجدداً. تحتاجها حتى تدخل للتطبيق وتشاهد المحاضرات.</div>
       </div>
       <Foot>
-        <button type="button" className="rgbtn" onClick={() => { if (done.url) location.href = done.url; else closeApp(); }}>متابعة</button>
+        <button type="button" className="rgbtn" onClick={() => { if (onFinish) onFinish(done); else if (done.url) location.href = done.url; else closeApp(); }}>{onFinish ? "ادخل للتطبيق" : "متابعة"}</button>
       </Foot>
     </div>
   );

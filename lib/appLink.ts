@@ -10,7 +10,7 @@ import { appKey, homeToken } from "./webAuth.ts";
 import { forgetMode } from "./appChat.ts";
 import { storeLink } from "./keyboards.ts";
 
-const PROJECT = "qmath-iq";
+export const PROJECT = "qmath-iq";
 const REGION = "europe-west4";
 export type AppEnv = "staging" | "prod";
 const SERVICE: Record<AppEnv, string> = { staging: "qmath-iq-staging-service", prod: "qmath-iq-service" };
@@ -55,7 +55,7 @@ export async function verifyAppIdToken(tok: unknown, now = Date.now() / 1000, ke
 }
 
 // ---------- القراءة من التطبيق بصلاحية الطالب نفسه
-async function dcQuery(env: AppEnv, idToken: string, operationName: string, variables: Row): Promise<Row> {
+export async function dcQuery(env: AppEnv, idToken: string, operationName: string, variables: Row): Promise<Row> {
   const name = `projects/${PROJECT}/locations/${REGION}/services/${SERVICE[env]}/connectors/main`;
   const r = await fetch(`https://firebasedataconnect.googleapis.com/v1/${name}:executeQuery`, {
     method: "POST",
@@ -123,7 +123,7 @@ export async function linkAppStudent(env: AppEnv, s: AppStudent): Promise<number
     return uid;
   });
 }
-async function nextAppUid() {
+export async function nextAppUid() {
   const n = Number((await kvGet("app_uid_seq")) ?? 0) + 1;
   await kvSet("app_uid_seq", String(n));
   return APP_UID_BASE + n;

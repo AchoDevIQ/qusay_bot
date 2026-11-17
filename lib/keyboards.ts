@@ -67,11 +67,15 @@ export const storeKb = async (uid?: number) => ({
   keyboard: [[{ text: BTN_OPEN, web_app: { url: await storeLink(uid) } }], [{ text: BTN_CANCEL }]], resize_keyboard: true,
 });
 
-export async function regLink(uid: number, adminFor?: number | null) {
+/** المحافظات ونوع امتحان كل وحدة والمراكز: لصفحة التسجيل (بتليگرام وبالتطبيق) */
+export async function regFormData(): Promise<Row> {
   const modes = Object.fromEntries((await find("govmode")).map((r) => [r.gov, r.mode]));
   const areas = await Promise.all((await areasWithCenters()).map(async (a) => [a.id, a.gov, a.name,
     (await find("centers", { area_id: a.id, active: 1 }, { order: ["id"] })).map((x) => (HOME_PAGE ? [x.id, x.name, x.gender ?? ""] : [x.id, x.name]))]));
-  const d: Row = { g: GOVS, m: GOVS.map((g) => modes[g] ?? "online"), a: areas };
+  return { g: GOVS, m: GOVS.map((g) => modes[g] ?? "online"), a: areas };
+}
+export async function regLink(uid: number, adminFor?: number | null) {
+  const d: Row = await regFormData();
   const s = await student(adminFor || uid);
   if (s) d.p = { n: s.name, cu: s.curr, gr: s.grade, g: s.gov, s: s.side || "", a: s.area, p1: s.phone1, p2: s.phone2, e: s.exam || "", c: s.center_id || 0 };
   if (adminFor) d.adm = adminFor;

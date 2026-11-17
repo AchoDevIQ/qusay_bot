@@ -17,6 +17,10 @@ env:
   - variable: VAPID_PRIVATE_KEY
     secret: VAPID_PRIVATE_KEY
     availability: [RUNTIME]
+  # مفتاح الويب العام لمشروع التطبيق (qmath-iq): البوت يدخل بيه حساب الطالب الجديد اللي سجل بطريقة البوت
+  - variable: APP_WEB_API_KEY
+    value: "AIzaSyBDbCAr5_cdq_2Sam843s9IE_L6h-WVE0M"
+    availability: [RUNTIME]
   - variable: VAPID_PUBLIC_KEY
     value: "BKKOaDnMGMn632seoXj-8E9_fbBMinuuAMqSk2PoYTRAWgCLTCWGLqmhOtZEhd2fTIP5S6uJYYfySvMQPmy3kK4"
     availability: [RUNTIME]
