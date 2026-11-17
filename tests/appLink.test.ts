@@ -132,3 +132,20 @@ test("الدخول من التطبيق: يقرا الطالب وفصوله وي�
     globalThis.fetch = realFetch;
   }
 });
+
+test("تجربة التطبيق الجديد: بس للي يختارهم صاحب البوت، والتطبيق يعرف من حالته", async () => {
+  const { setPilot, isPilot, appState } = await import("../lib/appLink.ts");
+  const b = Number((await one("app_links", { fu: "fuB" }))?.uid);
+  assert.equal(await isPilot(b), false);
+  await setPilot(b, true);
+  assert.equal(await isPilot(b), true);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify(KEYS), { headers: { "Content-Type": "application/json" } })) as typeof fetch;
+  try {
+    const st = await appState({ id: good("fuB") });
+    assert.equal(st?.pilot, true);
+    await setPilot(b, false);
+    assert.equal((await appState({ id: good("fuB") }))?.pilot, false);
+    assert.equal(await appState({ id: "bad" }), null);
+  } finally { globalThis.fetch = realFetch; }
+});

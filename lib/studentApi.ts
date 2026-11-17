@@ -44,7 +44,7 @@ export async function sendStudentsPdf(chat: number, fifth: boolean) {
 }
 const view = async (s: Row) => ({
   id: s.user_id, username: s.username ?? "", name: s.name, curr: s.curr, grade: s.grade, gov: s.gov, side: s.side ?? "", area: s.area,
-  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), pin: !!await one("guardian_pins", { user_id: s.user_id }), gw: await guardianOf(s.user_id) ? await guardianState(s.user_id) : null, wa: whatsappOf(s.phone2), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
+  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), pilot: await (await import("./appLink.ts")).isPilot(s.user_id), app: !!await one("app_links", { uid: s.user_id }), pin: !!await one("guardian_pins", { user_id: s.user_id }), gw: await guardianOf(s.user_id) ? await guardianState(s.user_id) : null, wa: whatsappOf(s.phone2), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
 });
 
 type Filters = { curr?: string; grade?: string; exam?: string; gov?: string };
@@ -269,6 +269,12 @@ export async function studentAction(body: Row) {
   } else if (a === "unlockDevice") {
     await unlockDevice(id);
     notice = "🔓 انفك قفل الجهاز. أول جهاز يفتح صفحاته ينقفل عليه";
+  } else if (a === "pilot") {
+    // يجرب التطبيق الجديد (البوت داخل التطبيق)، والباقين يبقى عدهم القديم
+    const { setPilot } = await import("./appLink.ts");
+    const n = await setPilot(id, !!body.on);
+    await logActivity(id, body.on ? "🧪 صار يجرب التطبيق الجديد" : "🧪 رجع للتطبيق القديم");
+    notice = body.on ? `🧪 صار يجرب التطبيق الجديد. يطلعله من يفتح التطبيق مرة ثانية. عدد اللي يجربون: ${n}` : `↩️ رجع للتطبيق القديم. عدد اللي يجربون: ${n}`;
   } else if (a === "signPhotos") {
     // صور توقيع ولي الأمر بوجهه (مشفرة)، لصاحب البوت يراجعها
     const { signPhotos } = await import("./guardianPin.ts");

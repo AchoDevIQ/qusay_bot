@@ -157,12 +157,32 @@ export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: u
   return `/store/${page}?v=${Math.floor(Date.now() / 1000)}&${auth}`;
 }
 
-/** حالة الطالب للتطبيق نفسه (قبل ما يفتح صفحاته): لازم يختار أوقات امتحاناته أول؟ */
-export async function appState(form: { id?: unknown }) {
+// ---------- تجربة التطبيق الجديد على طلاب يختارهم صاحب البوت (من صفحة الطلاب). الباقين يبقى عدهم التطبيق القديم
+const PILOT = "app_pilot";
+export async function pilotIds(): Promise<number[]> { try { const j = JSON.parse((await kvGet(PILOT)) ?? "[]"); return Array.isArray(j) ? j.map(Number) : []; } catch { return []; } }
+export const isPilot = async (uid: number) => (await pilotIds()).includes(uid);
+export async function setPilot(uid: number, on: boolean) {
+  const set = new Set(await pilotIds());
+  if (on) set.add(uid); else set.delete(uid);
+  await kvSet(PILOT, JSON.stringify([...set]));
+  return set.size;
+}
+
+/** حالة الطالب للتطبيق نفسه (أول ما ينفتح): يجرب الجديد؟ ولازم يختار أوقاته أول؟
+ *  أول مرة ينربط حسابه هنا، حتى يطلع بصفحة الطلاب وصاحب البوت يگدر يختاره */
+export async function appState(form: { id?: unknown; env?: unknown }) {
   const fu = await verifyAppIdToken(form.id);
   if (!fu) return null;
-  const link = await one("app_links", { fu });
-  if (!link) return { needSchedule: false };
+  let link = await one("app_links", { fu });
+  if (!link) {
+    const env: AppEnv = form.env === "staging" ? "staging" : "prod";
+    const s = await readAppStudent(env, String(form.id), fu).catch(() => null);
+    if (!s) return { needSchedule: false, pilot: false };
+    await linkAppStudent(env, s);
+    link = await one("app_links", { fu });
+  }
+  const uid = Number(link?.uid);
+  const pilot = await isPilot(uid);
   const { needsSchedule } = await import("./schedApi.ts");
-  return { needSchedule: await needsSchedule(Number(link.uid)) };
+  return { pilot, needSchedule: pilot && await needsSchedule(uid) };
 }

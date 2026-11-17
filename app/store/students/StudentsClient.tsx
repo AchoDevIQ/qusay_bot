@@ -7,7 +7,7 @@ import Thumbs from "../Thumbs";
 import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import { CURR_OPTS, DateInput, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
-type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; pin?: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
+type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; pin?: boolean; pilot?: boolean; app?: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type TestStudent = { id: number; name: string; papers: number; graded: number; chapters?: string[]; link: string };
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
@@ -303,6 +303,12 @@ function Form({ s, data, close, busy, call, inFile }: { s: S; data: Data; close:
             <Confirm label={`📱 مقفول على جهاز من ${s.device.at.slice(0, 10)}: فك القفل`} disabled={busy} onYes={() => void call({ action: "unlockDevice", id: s.id })} />
           </>
         ) : <span className="exhint">📱 لسه ما فتح صفحاته من أي جهاز</span>}
+        {s.app ? (
+          <label className="adcheck adflat">
+            <input type="checkbox" checked={!!s.pilot} disabled={busy} onChange={(e) => void call({ action: "pilot", id: s.id, on: e.target.checked })} />
+            <span>🧪 يجرب التطبيق الجديد (البوت داخل التطبيق)</span>
+          </label>
+        ) : <span className="exhint">📱 بعده ما فتح التطبيق بعد التحديث، فما يگدر يجرب الجديد</span>}
         {s.pin && <SignPhotos id={s.id} />}
         {s.pin && <Confirm label="🔐 ولي أمره بالرمز على تطبيق ابنه: صفّر الرمز" disabled={busy} onYes={() => void call({ action: "resetPin", id: s.id })} />}
         {s.guardian ? <Confirm label="👨‍👧 مربوط بولي أمر: فك الربط" disabled={busy} onYes={() => void call({ action: "unlink", id: s.id })} /> : <span className="exhint">ولي الأمر غير مربوط</span>}
