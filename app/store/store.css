@@ -458,3 +458,5 @@ html[data-qapp] header p,html[data-qapp] header .sub{color:#FFFFFF}
 html[data-qapp] .card{box-shadow:none}
 html[data-qapp] .warn{background:#FFFFFF;border:1.5px solid #FFC947;color:#141F33}
 html[data-qapp] .hmicon{background:#141F33;border-color:#141F33;color:#FFC947}
+/* جدول التعويض: أيام الأسبوع والاختيارات مربعات صغيرة جنب بعض */
+label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8px 12px;border:1px solid var(--line);border-radius:12px;color:var(--txt);font-weight:700}.expad>label.chk{display:flex}label.chk input{width:18px;height:18px;margin:0}

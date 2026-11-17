@@ -149,6 +149,8 @@ async function init() {
   for (const c of ["exc_state", "exc_reason", "exc_at"]) await addColumn("sched_items", c, "TEXT");
   await addColumn("sched_items", "exc_by", "INTEGER");
   await addColumn("sched_items", "fixed", "TEXT");
+  await addColumn("sched_items", "absent_told", "TEXT");
+  await addColumn("sched_items", "catch_place", "TEXT");
   for (const c of ["band", "seen", "image"]) await addColumn("checkpoint_done", c, "TEXT");
   await addColumn("sched_items", "retake_of", "INTEGER");
   await addColumn("grader_pay", "exams_off", "TEXT");

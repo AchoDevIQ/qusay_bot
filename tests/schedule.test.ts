@@ -257,8 +257,11 @@ test("الوقت لكل يوم مستقل، ومواعيد المكان توصل
   const j84 = await act(184, "joinPlace", { picks });
   assert.equal(j84.late.length, 1);
   assert.equal(j84.catchup, true);
-  await assert.rejects(act(184, "lateCatchup", { hour: 3 }), /الساعة|ساعة/);
-  const c84 = await act(184, "lateCatchup", { hour: j84.catchHours[0] });
+  // يختار كم امتحان بالأسبوع وبيا أيام (ما محدد بداية الفصل الجاي: كله مكثف)
+  const day84 = j84.catchPlan.week[0].d;
+  await assert.rejects(act(184, "lateCatchup", { hour: j84.catchHours[0] }), /كم امتحان بالأسبوع/);
+  await assert.rejects(act(184, "lateCatchup", { hour: 3, per1: 1, days1: [day84] }), /الساعة|ساعة/);
+  const c84 = await act(184, "lateCatchup", { hour: j84.catchHours[0], per1: 1, days1: [day84] });
   assert.equal(c84.late.length, 0);
   const cu = await find("sched_items", { user_id: 184, kind: "catchup" });
   assert.equal(cu.length, 1);
@@ -524,9 +527,11 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   const toStudent = calls.find((c) => c.p.chat_id === 90)?.p.text ?? "";
   const toOwner = calls.find((c) => c.p.chat_id === 1)?.p.text ?? "";
   assert.match(toStudent, /طلعت من صفحة الامتحان/);
+  // الطالب: تنحسب محاولة غش عليه (طلب الأستاذ 2026-11-17). الأستاذ: الخبر بس، «ما نعرف السبب»
+  assert.match(toStudent, /محاولة غش/);
   assert.match(toOwner, /طلع من صفحة الامتحان/);
   assert.match(toOwner, /ما نعرف السبب/);
-  assert.doesNotMatch(toOwner + toStudent, /غش/);
+  assert.doesNotMatch(toOwner, /غش/);
   calls.length = 0;
   assert.equal((await act(90, "examLeft", { item, phase: "left" })).n, 2);
   assert.equal(calls.length, 0);

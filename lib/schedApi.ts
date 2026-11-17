@@ -35,21 +35,63 @@ async function placeFor(uid: number) {
   return { inPerson, centerId, label: inPerson ? await centerName(st?.center_id) || "مركزك" : "الامتحان الإلكتروني" };
 }
 /** ساعات الطالب الخاص الإلكتروني: من الساعة اللي تحددها الإدارة إلى الساعة */
-/** جدول تعويضي مكثف: الامتحانات اللي فاتته بترتيبها، كل يوم أكثر شي «حد الامتحانات باليوم»، من باچر بالساعة اللي يختارها
- *  (الثاني بنفس اليوم ورا ساعتين). أيام العطلة الأسبوعية تنعبر، واللي يطلع برا ساعات الامتحان يروح لليوم الجاي.
- *  امتحاناته إلكترونية حتى لو هو حضوري، وورا ما يخلصها يرجع ويا مجموعته */
-export function catchupPlan(late: { id: number; at: string }[], s: SchedSettings, hour: number, from: string) {
+/** جدول التعويض (اتفاق الأستاذ 2026-11-17): الامتحانات اللي فاتته بترتيبها، بالأيام اللي اختارها الطالب.
+ *  لحد ما يبدي الفصل اللي بعد فصل التعويض (phase2، من «مراحل الفصول») بأيام days1 (أكثر شي 4 بالأسبوع)،
+ *  ومن بدايته يخف لأيام days2 (امتحان أو امتحانين بالأسبوع) ويمشي ويا جماعته بالفصل الجديد.
+ *  اليوم اللي ما ينفع (عطلة، أو بيه امتحان ويا جماعته) ينعبر. الوقت لكل يوم من timeOf */
+export type CatchPick = { days1: number[]; days2: number[]; timeOf: (weekday: number) => string };
+export function catchupPlan(late: { id: number; at: string }[], pick: CatchPick, from: string, phase2: string | null, dayOk: (d: string) => boolean) {
   const out: { examId: number; at: string }[] = [];
-  const per = Math.max(1, s.perDay || 1);
-  let day = from, k = 0;
-  for (const e of [...late].sort((a, b) => a.at.localeCompare(b.at))) {
-    while (s.offDays.includes(weekdayOf(day))) day = addDays(day, 1);
-    let h = hour + k * 2;
-    if (h > s.toHour) { day = addDays(day, 1); while (s.offDays.includes(weekdayOf(day))) day = addDays(day, 1); k = 0; h = hour; }
-    out.push({ examId: e.id, at: `${day} ${String(h).padStart(2, "0")}:00` });
-    if (++k >= per) { k = 0; day = addDays(day, 1); }
+  const list = [...late].sort((a, b) => a.at.localeCompare(b.at));
+  let d = from;
+  for (let guard = 0; out.length < list.length && guard < 900; guard++, d = addDays(d, 1)) {
+    const wd = weekdayOf(d);
+    const days = phase2 && d >= phase2 ? pick.days2 : pick.days1;
+    if (!days.includes(wd) || !dayOk(d)) continue;
+    out.push({ examId: list[out.length].id, at: `${d} ${pick.timeOf(wd)}` });
   }
   return out;
+}
+/** أيام التعويض صحيحة؟ بالعدد اللي اختاره، من الأيام المسموحة، و«يوم بين يوم»: ما يصير يومين ورا بعض
+ *  (بالأسبوع 7 أيام، فالـ4 لازم بيهن يومين ورا بعض مرة وحدة بس). يرجع رسالة الغلط أو "" */
+export function catchDaysError(days: number[], per: number, allowed: number[], label: string) {
+  const set = [...new Set(days)];
+  if (set.length !== days.length || set.length !== per) return `اختار ${per} أيام بالضبط ${label}`;
+  if (set.some((d) => !allowed.includes(d))) return `بعض الأيام ${label} مو من أيام الامتحان`;
+  const pairs = set.filter((d) => set.includes((d + 1) % 7)).length;
+  if (pairs > Math.max(0, per - 3)) return per >= 4 ? `${label}: ما يصير أكثر من يومين ورا بعض مرة وحدة` : `${label}: خلي يوم بين يوم، لا تختار يومين ورا بعض`;
+  return "";
+}
+/** فصل التعويض: يوم يبدي الفصل اللي بعده (من «مراحل الفصول»)، ومنه يخف التعويض. null إذا ما محدد */
+async function catchPhase2(late: Row[]): Promise<string | null> {
+  const order = await allChapters();
+  const idx = late.flatMap((e) => labelChapters(String(e.chapter ?? ""))).map((c) => order.indexOf(c)).filter((i) => i >= 0);
+  if (!idx.length) return null;
+  const next = order[Math.min(...idx) + 1];
+  const { chapterStages } = await import("./chapterStages.ts");
+  const st = next ? (await chapterStages())[next]?.start : null;
+  return st && validDay(st) ? st : null;
+}
+/** يوم ينفع للتعويض: مو عطلة الإدارة ولا مستثنى ولا عطلة مكانه، وما بيه امتحان ويا جماعته */
+async function catchDayOk(uid: number, sc: Row, s: SchedSettings) {
+  const busy = new Set<string>();
+  const days = await placeDays(sc.center_id), picks = picksOf(sc);
+  for (const e of await boughtExams(uid)) { const day = days.get(e.id); const at = day ? pickedAt(day, picks) : null; if (at) busy.add(at.slice(0, 10)); }
+  for (const i of await find("sched_items", { user_id: uid, status: "waiting" })) busy.add(String(i.at).slice(0, 10));
+  const ranges = (await holidays()).filter((h) => !h.insert).flatMap((h) => h.places.filter((p) => p.center === sc.center_id || p.center === 0));
+  return (d: string) => !busy.has(d) && !inHoliday(d, s) && !s.excluded.includes(d) && !s.offDays.includes(weekdayOf(d)) && !ranges.some((r) => inRange(d, r));
+}
+/** شنو يختار الطالب لجدول تعويضه */
+async function catchView(uid: number, late: Row[], s: SchedSettings) {
+  const tomorrow = addDays(todayStr(), 1);
+  const phase2 = await catchPhase2(late);
+  const place = await placeFor(uid);
+  return {
+    phase2, light: !!phase2 && phase2 <= tomorrow, maxHeavy: 4, maxLight: 2,
+    week: DAY_ORDER.filter((d) => !s.offDays.includes(d)).map((d) => ({ d, name: DAYS[d] })),
+    // الحضوري: بمركزه بس، بأيامه وأوقاته، بالآيباد
+    center: place.inPerson ? { name: place.label, days: daysView(await placeSlots(place.centerId)).filter((x) => !s.offDays.includes(x.d)) } : null,
+  };
 }
 /** بالامتحانات الفايتة امتحان من فصل صار تعويضي (باليد أو بالأيام)؟ */
 async function hasMakeup(late: Row[]) {
@@ -446,7 +488,10 @@ async function itemsView(uid: number, s: SchedSettings) {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
-    return { id: i.id, exam: i.exam_id as number, optional: i.kind === "optional", catchup: i.kind === "catchup", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of, state: i.kind === "catchup" ? state : ipad ? ipadState(i.status, state) : inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
+    return { id: i.id, exam: i.exam_id as number, optional: i.kind === "optional", catchup: i.kind === "catchup", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of,
+      // بالآيباد بالمركز: ينتظر الحضور، ومن ينسجل تنفتح أسئلته (التعويض الحضوري هم)
+      ipad: i.kind === "catchup" ? i.catch_place === "ipad" : ipad,
+      state: i.kind === "catchup" ? (i.catch_place === "ipad" ? ipadState(i.status, state) : state) : ipad ? ipadState(i.status, state) : inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
   });
 }
 /** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
@@ -517,6 +562,7 @@ async function studentInfo(uid: number) {
     late: late.map((e) => ({ title: e.title, at: e.at })), lateText: LATE_TEXT, closedText: CLOSED_TEXT,
     // فصل صار تعويضي: يطلعله جدول تعويضي مكثف بدل «تنحسب فايتة»
     catchup: late.length > 0 && await hasMakeup(late), catchHours: allowedHours(s),
+    catchPlan: late.length > 0 && await hasMakeup(late) ? await catchView(uid, late, s) : null,
     // ولي الأمر ما استلم: الدرجات اللي تنتظره، والقفل بعد 3 أيام، وتأجيل السفر
     guardWait: await guardWaitOf(uid),
     items: [...(await itemsView(uid, s)).map((i) => ({ ...i, title: enTitle(i.exam, i.title), skippable: !general && !!sched && i.status === "waiting" && !i.optional && i.state === "locked" && skip.has(i.exam) && !kept.has(i.exam) })), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
@@ -751,7 +797,7 @@ export async function myExamAction(body: Row) {
   if (a === "openExam" || a === "delAnswer" || a === "submitExam" || a === "oath") {
     const s = await schedSettings();
     // الغرفة أول: تحديث المواعيد يعيد كتابة الامتحانات اللي لسه ما بدت
-    if (a === "openExam") { const room = await openRoom(id, body.item, s); return { ...await studentInfo(id), room }; }
+    if (a === "openExam") { const room = await openRoom(id, body.item, s, body.tablet); return { ...await studentInfo(id), room }; }
     if (a === "oath") { const room = await takeOath(id, body.item, s, body.text); return { ...await studentInfo(id), room }; }
     if (a === "delAnswer") { const room = await deleteAnswer(id, body.item, body.answer, s); return { ...await studentInfo(id), room }; }
     await submitRoom(id, body.item, s);
@@ -763,12 +809,49 @@ export async function myExamAction(body: Row) {
     const s = await schedSettings();
     const late = await lateExams(id, sc!, s);
     need(late.length, "ماكو امتحانات فايتة تحتاج تعويض");
-    const hour = Number(body.hour);
-    need(allowedHours(s).includes(hour), "اختار ساعة من الأوقات المسموحة");
-    const plan = catchupPlan(late.map((e) => ({ id: e.id, at: String(e.at) })), s, hour, addDays(todayStr(), 1));
-    for (const x of plan) await insert("sched_items", { user_id: id, exam_id: x.examId, at: x.at, status: "waiting", kind: "catchup", fixed: 1 });
-    await logActivity(id, `📅 أخذ جدول تعويضي مكثف: ${plan.length} امتحان إلكتروني من ${plan[0].at.slice(0, 10)}، وبعدها يرجع ويا مجموعته`);
-    return { ...await studentInfo(id), notice: "✅ انثبت جدولك التعويضي. ورا ما تخلصه ترجع تمتحن ويا مجموعتك" };
+    const tomorrow = addDays(todayStr(), 1);
+    const phase2 = await catchPhase2(late);
+    const heavy = !(phase2 && phase2 <= tomorrow);
+    const place = await placeFor(id);
+    // حضوري: بمركزه هو بس (إيجاره مدفوع هناك)، بأوقات مركزه، وبالآيباد والقلم (ما ينطبعله شي)
+    const ipad = body.mode === "ipad";
+    if (ipad) {
+      need(place.inPerson, "التعويض الحضوري لطالب المركز بس");
+      need(body.kit === true, "أشّر إن عندك آيباد وقلم، وإنترنت شغال وياك بالمركز");
+    }
+    const slots = ipad ? await placeSlots(place.centerId) : [];
+    const allowed = (ipad ? [...new Set(slots.map((x) => x.d))] : [0, 1, 2, 3, 4, 5, 6]).filter((d) => !s.offDays.includes(d));
+    const nums = (v: unknown) => (Array.isArray(v) ? v.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : []);
+    const days1 = heavy ? nums(body.days1) : [], days2 = phase2 ? nums(body.days2) : [];
+    if (heavy) {
+      const per1 = Number(body.per1);
+      need(Number.isInteger(per1) && per1 >= 1 && per1 <= 4, "اختار كم امتحان بالأسبوع (من 1 إلى 4)");
+      const err = catchDaysError(days1, per1, allowed, phase2 ? "لحد ما يبدي الفصل الجاي" : "");
+      need(!err, err);
+    }
+    if (phase2) {
+      const per2 = Number(body.per2);
+      need(per2 === 1 || per2 === 2, "اختار امتحان أو امتحانين بالأسبوع من يبدي الفصل الجاي");
+      const err = catchDaysError(days2, per2, allowed, "من يبدي الفصل الجاي");
+      need(!err, err);
+    }
+    let timeOf: (wd: number) => string;
+    if (ipad) {
+      const times = (body.times && typeof body.times === "object" ? body.times : {}) as Record<string, unknown>;
+      for (const wd of new Set([...days1, ...days2])) need(slots.some((x) => x.d === wd && x.t === times[String(wd)]), `اختار وقت يوم ${DAYS[wd]} من أوقات مركزك`);
+      timeOf = (wd) => String(times[String(wd)]);
+    } else {
+      const hour = Number(body.hour);
+      need(allowedHours(s).includes(hour), "اختار ساعة من الأوقات المسموحة");
+      timeOf = () => `${String(hour).padStart(2, "0")}:00`;
+    }
+    const plan = catchupPlan(late.map((e) => ({ id: e.id, at: String(e.at) })), { days1, days2, timeOf }, tomorrow, phase2, await catchDayOk(id, sc!, s));
+    need(plan.length === late.length, "ما گدرنا نرتب كل امتحاناتك بهالأيام، اختار أيام ثانية");
+    for (const x of plan) await insert("sched_items", { user_id: id, exam_id: x.examId, at: x.at, status: "waiting", kind: "catchup", fixed: 1, catch_place: ipad ? "ipad" : null });
+    const how = ipad ? `حضوري بالآيباد بـ${place.label}` : "إلكتروني";
+    const pace = [heavy && `${days1.length} بالأسبوع${phase2 ? ` لحد ${prettyDay(phase2)}` : ""}`, phase2 && `${days2.length} بالأسبوع${heavy ? " بعدها" : ""}`].filter(Boolean).join("، ");
+    await logActivity(id, `📅 أخذ جدول تعويض: ${plan.length} امتحان ${how} من ${prettyDay(plan[0].at.slice(0, 10))} إلى ${prettyDay(plan[plan.length - 1].at.slice(0, 10))} (${pace})`);
+    return { ...await studentInfo(id), notice: `✅ انثبت جدول تعويضك: ${plan.length} امتحان، آخرها ${prettyDay(plan[plan.length - 1].at.slice(0, 10))}. الامتحان اللي يفوتك ينحسب غياب وصفر.` };
   }
   if (a === "lateKeep" || a === "latePrivate") {
     const sc = await one("schedules", { user_id: id });

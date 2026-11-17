@@ -16,7 +16,8 @@ globalThis.fetch = (async (url: string, init: any) => {
     // أول مرة لهذا الطالب تليجرام يكول «انتظر ثانية»
     if (busyOnce.has(p.chat_id)) { busyOnce.delete(p.chat_id); return new Response(JSON.stringify({ ok: false, error_code: 429, parameters: { retry_after: 1 } })); }
     if (p.chat_id === 999) return new Response(JSON.stringify({ ok: false, error_code: 403, description: "blocked" }));
-    sent.push({ chat: p.chat_id, at: Date.now() });
+    // تقرير التسجيلات اليومي لصاحب البوت (بالليل) مو جزء من هذا الفحص
+    if (p.chat_id !== 1) sent.push({ chat: p.chat_id, at: Date.now() });
   }
   return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }));
 }) as typeof fetch;

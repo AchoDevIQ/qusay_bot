@@ -36,6 +36,7 @@ export async function cronTick(key: unknown) {
   try {
     await step("started", async () => notifyStarted(key, await schedSettings()));
     await step("checked", () => sweepCheckpoints());
+    await step("absences", async () => (await import("./absences.ts")).sweepAbsences());
     await step("graders", () => notifyGraders());
     await step("sessions", () => sweepSessions());
     await step("signups", () => sweepSignups());

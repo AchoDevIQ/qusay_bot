@@ -11,11 +11,12 @@ import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import PenPage, { hasPenDraft, type PenHead } from "./PenPage";
 import { donePicking, pickingNow } from "../picking";
 
-type Item = { id: number; status?: string; exam?: number; skippable?: boolean; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
+type Item = { id: number; status?: string; exam?: number; skippable?: boolean; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; ipad?: boolean; catchup?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[]; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[];
+  catchPlan?: CatchPlan | null; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; canDrop?: { exam: number; title: string }[]; toPlan?: { exam: number; title: string; chapter: string; skip: boolean }[]; perWeekMax?: number; pace?: Pace; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
@@ -99,19 +100,20 @@ export default function MyExamsClient() {
     void (o ? openObj(o).then(() => undefined) : pp ? openPaper(pp).then(() => undefined) : call({ action: "info" }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function enterOptional(exam: number) { const r = await call({ action: "openOptional", exam }); if (r?.room) setRoom(r.room); }
-  async function enter(item: number) { const r = await call({ action: "openExam", item }); if (r?.room) setRoom(r.room); }
+  // الآيباد: الشاشة عريضة (أصغر جهة 600 أو أكثر)، والتلفون ضيق. امتحان المركز بالآيباد ما ينفتح من التلفون
+  async function enter(item: number) { const r = await call({ action: "openExam", item, tablet: isTablet() }); if (r?.room) setRoom(r.room); }
   // الحضوري بالآيباد: يوم امتحانه الصفحة تسأل كل شوية، ومن يسجلون حضوره تنفتح أسئلته وحدها (مرة وحدة لكل امتحان)
   const autoIn = useRef(new Set<number>());
   const today = info?.today ?? "";
-  const waitingToday = !!info?.ipad && !room && info.items.some((i) => i.state === "center" && String(i.at).startsWith(today));
+  const waitingToday = !room && !!info?.items.some((i) => i.ipad && i.state === "center" && String(i.at).startsWith(today));
   useEffect(() => {
     if (!waitingToday) return;
     const t = setInterval(() => { void call({ action: "info" }); }, 8000);
     return () => clearInterval(t);
   }, [waitingToday]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!info?.ipad || room) return;
-    const it = info.items.find((i) => i.state === "open" && !autoIn.current.has(i.id));
+    if (!info || room) return;
+    const it = info.items.find((i) => i.ipad && i.state === "open" && !autoIn.current.has(i.id));
     if (it) { autoIn.current.add(it.id); void enter(it.id); }
   }, [info, room]); // eslint-disable-line react-hooks/exhaustive-deps
   if (obj) return <Objection obj={obj} first={firstQ} setObj={setObj} leave={() => { const back = paper?.id; setObj(null); void (back ? openPaper(back) : call({ action: "info" })); }} />;
@@ -173,24 +175,92 @@ export default function MyExamsClient() {
   );
 }
 
-/** اشترى متأخر وبعض مواعيد مجموعته فاتت */
-function LateAsk({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+/** جدول التعويض: شنو يختار الطالب. phase2 يوم يبدي الفصل الجاي (منه يخف)، light: بدا وما بقى غير الخفيف */
+type CatchPlan = { phase2: string | null; light: boolean; maxHeavy: number; maxLight: number; week: { d: number; name: string }[];
+  center: { name: string; days: { d: number; name: string; times: { t: string; label: string }[] }[] } | null };
+/** الآيباد: الشاشة عريضة (أصغر جهة 600 أو أكثر)، والتلفون ضيق */
+const isTablet = () => { try { return Math.min(window.screen.width, window.screen.height) >= 600; } catch { return false; } };
+/** «يوم بين يوم»: نفس فحص البوت، حتى يبين الغلط قبل ما يدوس */
+function daysErr(days: number[], per: number) {
+  if (days.length !== per) return `اختار ${per === 1 ? "يوم واحد" : `${per} أيام`}`;
+  const pairs = days.filter((d) => days.includes((d + 1) % 7)).length;
+  if (pairs > Math.max(0, per - 3)) return per >= 4 ? "ما يصير أكثر من يومين ورا بعض مرة وحدة" : "خلي يوم بين يوم، لا تختار يومين ورا بعض";
+  return "";
+}
+function DaysPick({ title, max, per, setPer, days, setDays, week }: { title: string; max: number; per: number; setPer: (n: number) => void; days: number[]; setDays: (d: number[]) => void; week: { d: number; name: string }[] }) {
+  const err = daysErr(days, per);
+  return (
+    <div className="expad">
+      <b>{title}</b>
+      <label>كم امتحان بالأسبوع؟</label>
+      <select value={per} onChange={(e) => { setPer(Number(e.target.value)); setDays([]); }}>{Array.from({ length: max }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n === 1 ? "امتحان واحد" : n === 2 ? "امتحانين" : `${n} امتحانات`}</option>)}</select>
+      <label>بيا أيام؟</label>
+      <div className="exline">{week.map((w) => (
+        <label key={w.d} className="chk"><input type="checkbox" checked={days.includes(w.d)} disabled={!days.includes(w.d) && days.length >= per}
+          onChange={(e) => setDays(e.target.checked ? [...days, w.d] : days.filter((x) => x !== w.d))} /> {w.name}</label>
+      ))}</div>
+      {err && <div className="exhint exbad">{err}</div>}
+    </div>
+  );
+}
+function CatchupAsk({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+  const cp = info.catchPlan!;
   const hours = info.catchHours ?? [];
+  const [mode, setMode] = useState<"online" | "ipad">("online");
+  const [kit, setKit] = useState(false);
   const [hour, setHour] = useState(hours.includes(17) ? 17 : hours[0] ?? 17);
-  // الفصل صار تعويضي: جدول مكثف إلكتروني للي فاته، وبعدها يرجع ويا مجموعته. ما يبقى خيار «تنحسب فايتة»
-  if (info.catchup) return (
+  const [per1, setPer1] = useState(3);
+  const [days1, setDays1] = useState<number[]>([]);
+  const [per2, setPer2] = useState(2);
+  const [days2, setDays2] = useState<number[]>([]);
+  const [times, setTimes] = useState<Record<string, string>>({});
+  const ipad = mode === "ipad" && !!cp.center;
+  const week = ipad ? cp.center!.days.map((x) => ({ d: x.d, name: x.name })) : cp.week;
+  const heavy = !cp.light, light = !!cp.phase2;
+  const chosen = [...new Set([...(heavy ? days1 : []), ...(light ? days2 : [])])];
+  const ready = (!heavy || !daysErr(days1, per1)) && (!light || !daysErr(days2, per2)) && (!ipad || (kit && chosen.every((d) => times[String(d)])));
+  const pickMode = (m: "online" | "ipad") => { setMode(m); setDays1([]); setDays2([]); setTimes({}); };
+  return (
     <div className="card">
-      <h2>📅 جدولك التعويضي المكثف</h2>
+      <h2>📅 جدول تعويضك</h2>
       <div className="hmlink">
-        <div>اشتريت الفصل وجماعتك ماشين بالمادة. هاي الامتحانات فاتتك، فنسويلك جدول مكثف إلكتروني من باچر، وورا ما تخلصه ترجع تمتحن ويا جماعتك:</div>
+        <div>هاي الامتحانات فاتتك، فنرتبلك جدول تعويض بالأيام اللي تختارها. امتحاناتك ويا جماعتك تبقى مثل ما هي، ويوم امتحانك ويا جماعتك وأيام العطل ما ينحط بيها تعويض:</div>
         <ul className="hmsteps">{info.late.map((e) => <li key={e.title}>{e.title}</li>)}</ul>
-        <label>الساعة اللي تناسبك</label>
-        <select value={hour} onChange={(e) => setHour(Number(e.target.value))}>{hours.map((h) => <option key={h} value={h}>{ampm(`${String(h).padStart(2, "0")}:00`)}</option>)}</select>
-        <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "lateCatchup", hour })}>📅 سويلي الجدول التعويضي</button>
+        {cp.center && (
+          <div className="expad">
+            <b>وين تمتحن؟</b>
+            <label className="chk"><input type="radio" checked={mode === "online"} onChange={() => pickMode("online")} /> 💻 إلكتروني من البيت</label>
+            <label className="chk"><input type="radio" checked={mode === "ipad"} onChange={() => pickMode("ipad")} /> 🏫 حضوري بـ{cp.center.name} بالآيباد</label>
+            {ipad && <>
+              <div className="exhint">بالمركز ما تنطبعلك أسئلة: تحل على آيبادك بالقلم. من يسجلون حضورك تنفتح أسئلتك بالآيباد بس، مو بالتلفون.</div>
+              <label className="chk"><input type="checkbox" checked={kit} onChange={(e) => setKit(e.target.checked)} /> ✅ عندي آيباد وقلم، وإنترنت شغال وياي بالمركز</label>
+            </>}
+          </div>
+        )}
+        {heavy && <DaysPick title={cp.phase2 ? `لحد ${prettyDay(cp.phase2)} (من يبدون جماعتك الفصل الجاي)` : "أيام تعويضك"} max={cp.maxHeavy} per={per1} setPer={setPer1} days={days1} setDays={setDays1} week={week} />}
+        {light && <DaysPick title={heavy ? `من ${prettyDay(cp.phase2!)}: تمشي ويا جماعتك بالفصل الجاي، والتعويض يخف` : "تعويضك ويا الفصل الجديد"} max={cp.maxLight} per={per2} setPer={setPer2} days={days2} setDays={setDays2} week={week} />}
+        {ipad ? chosen.map((d) => {
+          const day = cp.center!.days.find((x) => x.d === d);
+          return day ? (
+            <div key={d}><label>وقت يوم {day.name}</label>
+              <select value={times[String(d)] ?? ""} onChange={(e) => setTimes({ ...times, [String(d)]: e.target.value })}><option value="">اختار</option>{day.times.map((t) => <option key={t.t} value={t.t}>{t.label}</option>)}</select></div>
+          ) : null;
+        }) : <>
+          <label>الساعة اللي تناسبك</label>
+          <select value={hour} onChange={(e) => setHour(Number(e.target.value))}>{hours.map((h) => <option key={h} value={h}>{ampm(`${String(h).padStart(2, "0")}:00`)}</option>)}</select>
+        </>}
+        <div className="exhint exbad">الامتحان اللي يفوتك وما تدخله ينحسب غياب وصفر، ويدخل بحساب السيطرة، ويوصل خبر لولي أمرك.</div>
+        <button type="button" className="btn" disabled={busy || !ready} onClick={() => void call({ action: "lateCatchup", mode: ipad ? "ipad" : "online", kit, hour, times, per1, days1, per2, days2 })}>📅 سويلي جدول التعويض</button>
         <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "latePrivate" })}>👤 لا، أريد كل امتحاناتي جدول خاص بأيامي</button>
       </div>
     </div>
   );
+}
+
+/** اشترى متأخر وبعض مواعيد مجموعته فاتت */
+function LateAsk({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+  // الفصل صار تعويضي: جدول تعويض بالأيام اللي يختارها، وما يبقى خيار «تنحسب فايتة»
+  if (info.catchup && info.catchPlan) return <CatchupAsk info={info} busy={busy} call={call} />;
   return (
     <div className="card">
       <h2>⏰ بعض الامتحانات فات موعدها</h2>
@@ -871,6 +941,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     <div className="wrap">
       <ExamTimer left={left} minutes={room.minutes} extra={room.extra} />
       <div className="card"><h2>📝 {room.title}</h2></div>
+      {/* طلب الأستاذ 2026-11-17: أول ما ينفتح الامتحان نبلغه إن الطلعة من الصفحة تنحسب غش */}
+      <div className="card"><div className="exhint exbad">⚠️ ما يصير تطلع من صفحة الامتحان لأي صفحة أو تطبيق ثاني (غير الكاميرا والاستوديو لصور جوابك). ما دام إنت بالامتحان، أي طلعة من الصفحة تنحسب محاولة غش عليك، ويوصل خبر بوقتها لأستاذك ولولي أمرك وللمراقب.</div></div>
       {/* رقم الطالب فوك كل صفحة: إذا أحد صورها ونشرها نعرف منو */}
       {!room.sworn ? (
         <TileOath key={room.id} sentence={room.oath} busy={busy}

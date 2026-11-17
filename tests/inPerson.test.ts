@@ -140,11 +140,33 @@ test("الحضوري بالآيباد: يختاره بنفسه، ما ينطبع
   assert.equal(r.card.print, "ipad");
   assert.ok(!r.card.queued);
   assert.equal((await me(82, "info")).items.find((i: any) => i.id === it82).state, "open");
-  const opened = await me(82, "openExam", { item: it82 });
+  // من التلفون (شاشة ضيقة) ما ينفتح: بالآيباد بس
+  await assert.rejects(me(82, "openExam", { item: it82 }), /الآيباد بس/);
+  const opened = await me(82, "openExam", { item: it82, tablet: true });
   assert.equal(opened.room.id, it82);
   const row = (await one("sched_items", { id: it82 }))!;
   assert.equal(row.status, "started");
   assert.ok(row.started_at && row.started_at >= row.attended_at);
   // يرجع للورقة
   assert.equal((await me(82, "ipadExam", { on: false })).ipad, false);
+});
+
+test("التعويض الحضوري بالآيباد (طالب ورقة): ما ينطبعله شي، ينفتح بعد الحضور ومن الآيباد بس. والتعويض الإلكتروني ينفتح عادي", async () => {
+  const c3 = await insert("centers", { area_id: area, name: "معهد ثالث", active: 1 });
+  await put("students", { user_id: 83, name: "تعويض حضوري", exam: "حضوري", center_id: c3, created: "2026-01-01 00:00" });
+  await put("guardians", { guardian_id: 9083, student_id: 83, created: "x" });
+  const me = (uid: number, action: string, x: object = {}) => myExamAction({ token: homeToken(uid), pf: "ios", device: "dev-" + String(uid).padStart(14, "0"), action, ...x }) as Promise<any>;
+  const cu = await insert("sched_items", { user_id: 83, exam_id: ex, at: stamp(), status: "waiting", kind: "catchup", fixed: 1, catch_place: "ipad" });
+  let item = (await me(83, "info")).items.find((i: any) => i.id === cu);
+  assert.deepEqual([item.ipad, item.state], [true, "center"]);
+  await assert.rejects(me(83, "openExam", { item: cu, tablet: true }), /من يسجلون حضورك/);
+  const r = await at(40, "scan", { code: ip.studentCode(83) });
+  assert.equal(r.card.print, "ipad");
+  item = (await me(83, "info")).items.find((i: any) => i.id === cu);
+  assert.equal(item.state, "open");
+  await assert.rejects(me(83, "openExam", { item: cu }), /الآيباد بس/);
+  assert.equal((await me(83, "openExam", { item: cu, tablet: true })).room.id, cu);
+  // تعويض إلكتروني لنفس طالب الورقة: من البيت، بدون حضور
+  const on = await insert("sched_items", { user_id: 83, exam_id: ex, at: stamp(), status: "waiting", kind: "catchup", fixed: 1 });
+  assert.equal((await me(83, "info")).items.find((i: any) => i.id === on).ipad, false);
 });

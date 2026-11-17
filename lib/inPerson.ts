@@ -197,7 +197,7 @@ async function itemCard(it: Row) {
   return {
     item: it.id as number, uid: it.user_id as number, name: st?.name ?? "طالب", exam: e?.title ?? "امتحان", at: it.at as string,
     // طالب الآيباد ما ينطبعله شي: لا ليبل ولا ورقة
-    center: await centerName(st?.center_id) || "", print: await ipadExam(it.user_id) ? "ipad" as const : cfg.print, attendedAt: it.attended_at ?? "", printed: !!await kvGet(labelKey(it.id)),
+    center: await centerName(st?.center_id) || "", print: (it.kind === "catchup" ? it.catch_place === "ipad" : await ipadExam(it.user_id)) ? "ipad" as const : cfg.print, attendedAt: it.attended_at ?? "", printed: !!await kvGet(labelKey(it.id)),
     label: printToken("l", it.id), paper: printToken("i", it.id),
   };
 }

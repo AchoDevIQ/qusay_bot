@@ -45,7 +45,9 @@ export async function closeFinished(uid: number, s: SchedSettings) {
     if (now >= addMinutes(it.opened_at, s.excWindow)) await update("sched_items", { id: it.id }, { status: "missed" });
   }
   // طالب الآيباد سجلوا حضوره وما فتح الأسئلة لحد ما خلص الوقت: فايت
-  if (await ipadExam(uid)) for (const it of await find("sched_items", { user_id: uid, status: "attended" })) {
+  const ipadAll = await ipadExam(uid);
+  for (const it of await find("sched_items", { user_id: uid, status: "attended" })) {
+    if (it.kind === "catchup" ? it.catch_place !== "ipad" : !ipadAll) continue;
     const e = await one("bank_exams", { id: it.exam_id });
     if (it.attended_at && now >= answersClose(it.attended_at, e?.minutes ?? 75, s.extra)) await update("sched_items", { id: it.id }, { status: "missed" });
   }
@@ -117,16 +119,19 @@ async function ownItem(uid: number, id: unknown) {
   return it!;
 }
 /** يدخل الطالب: أول مرة تنحدد نسخته ويبدي وقته */
-export async function openRoom(uid: number, id: unknown, s: SchedSettings) {
-  // الجدول التعويضي المكثف إلكتروني حتى لطالب الحضوري
-  const catchup = (await one("sched_items", { id: Number(id), user_id: uid }))?.kind === "catchup";
-  const ipad = !catchup && await ipadExam(uid);
+export async function openRoom(uid: number, id: unknown, s: SchedSettings, tablet?: unknown) {
+  // التعويض إلكتروني حتى لطالب الحضوري، إلا اللي اختار يعوض حضوري بمركزه بالآيباد
+  const row = await one("sched_items", { id: Number(id), user_id: uid });
+  const catchup = row?.kind === "catchup";
+  const ipad = catchup ? row?.catch_place === "ipad" : await ipadExam(uid);
   need(catchup || (await student(uid))?.exam !== "حضوري" || ipad || await photosAllowed(uid), "امتحانك حضوري، ينقدم بالمركز");
   await closeFinished(uid, s);
   let it = await ownItem(uid, id);
   if (ipad) {
     // الحضوري بالآيباد: الأسئلة تنفتح بس بعد ما يسجلون حضوره بالمركز، والوقت يبدي من هسه
     need(["attended", "started", "done"].includes(String(it.status)), "أسئلتك تنفتح بالآيباد من يسجلون حضورك بالمركز");
+    // بالمركز ينفتح من الآيباد بس: الصفحة تقيس الشاشة (التلفون ضيق، الآيباد عريض)
+    if (it.status === "attended") need(tablet === true || tablet === "1", "📱 امتحانك بالمركز ينفتح من الآيباد بس، مو من التلفون. افتحه من الآيباد", 403);
     if (it.status === "attended") {
       const now = stamp();
       await update("sched_items", { id: it.id }, { status: "started", started_at: now, opened_at: now });
@@ -179,8 +184,12 @@ export async function examLeft(uid: number, id: unknown, s: SchedSettings, phase
   const st = await student(uid);
   const name = esc(st?.name ?? `طالب #${uid}`), when = ampm(stamp().slice(11, 16)), g = await guardianOf(uid);
   const tell = async (to: number, text: string) => { try { await send(to, text); } catch (x) { console.error(x); } };
-  await tell(uid, `⚠️ <b>طلعت من صفحة الامتحان</b>\nوصل إشعار ${g ? "لأستاذك ولولي أمرك" : "لأستاذك"} إنك طلعت من الامتحان وإنت تمتحن. ارجع للامتحان هسه وكمّل.`);
-  for (const a of await staffIds("leave")) await tell(a, `🚪 <b>${name} طلع من صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nطلع من التطبيق وهو يمتحن، وما نعرف السبب.`);
+  // بالمركز (الآيباد): المراقب اللي سجل حضوره يعرف هم
+  const watcher = Number(it.attended_by) || 0;
+  await tell(uid, `⚠️ <b>طلعت من صفحة الامتحان</b>\nهاي تنحسب محاولة غش عليك. وصل إشعار ${["لأستاذك", g && "لولي أمرك", watcher && "للمراقب"].filter(Boolean).join(" و")} إنك طلعت من الامتحان وإنت تمتحن. ارجع للامتحان هسه وكمّل.`);
+  const leaveStaff = await staffIds("leave");
+  if (watcher && !leaveStaff.includes(watcher)) await tell(watcher, `🚪 <b>${name} طلع من صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nهو يمتحن بالآيباد بالمركز، وإنت سجلت حضوره. شوفه.`);
+  for (const a of leaveStaff) await tell(a, `🚪 <b>${name} طلع من صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nطلع من التطبيق وهو يمتحن، وما نعرف السبب.`);
   if (g) await tell(Number(g.guardian_id), `السلام عليكم 🌷\nنحب نبلغكم إن <b>${name}</b> طلع من صفحة الامتحان وهو يمتحن (${esc(title)}) الساعة ${when}، وما نعرف السبب.`);
   return { ok: true, n };
 }
