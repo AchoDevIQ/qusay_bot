@@ -15,7 +15,7 @@ type Item = { id: number; status?: string; exam?: number; skippable?: boolean; o
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[]; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; canDrop?: { exam: number; title: string }[]; toPlan?: { exam: number; title: string; chapter: string; skip: boolean }[]; perWeekMax?: number; pace?: Pace; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
@@ -169,6 +169,22 @@ export default function MyExamsClient() {
 
 /** اشترى متأخر وبعض مواعيد مجموعته فاتت */
 function LateAsk({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+  const hours = info.catchHours ?? [];
+  const [hour, setHour] = useState(hours.includes(17) ? 17 : hours[0] ?? 17);
+  // الفصل صار تعويضي: جدول مكثف إلكتروني للي فاته، وبعدها يرجع ويا مجموعته. ما يبقى خيار «تنحسب فايتة»
+  if (info.catchup) return (
+    <div className="card">
+      <h2>📅 جدولك التعويضي المكثف</h2>
+      <div className="hmlink">
+        <div>اشتريت الفصل وجماعتك ماشين بالمادة. هاي الامتحانات فاتتك، فنسويلك جدول مكثف إلكتروني من باچر، وورا ما تخلصه ترجع تمتحن ويا جماعتك:</div>
+        <ul className="hmsteps">{info.late.map((e) => <li key={e.title}>{e.title}</li>)}</ul>
+        <label>الساعة اللي تناسبك</label>
+        <select value={hour} onChange={(e) => setHour(Number(e.target.value))}>{hours.map((h) => <option key={h} value={h}>{ampm(`${String(h).padStart(2, "0")}:00`)}</option>)}</select>
+        <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "lateCatchup", hour })}>📅 سويلي الجدول التعويضي</button>
+        <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "latePrivate" })}>👤 لا، أريد كل امتحاناتي جدول خاص بأيامي</button>
+      </div>
+    </div>
+  );
   return (
     <div className="card">
       <h2>⏰ بعض الامتحانات فات موعدها</h2>

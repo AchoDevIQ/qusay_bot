@@ -118,8 +118,10 @@ async function ownItem(uid: number, id: unknown) {
 }
 /** يدخل الطالب: أول مرة تنحدد نسخته ويبدي وقته */
 export async function openRoom(uid: number, id: unknown, s: SchedSettings) {
-  const ipad = await ipadExam(uid);
-  need((await student(uid))?.exam !== "حضوري" || ipad || await photosAllowed(uid), "امتحانك حضوري، ينقدم بالمركز");
+  // الجدول التعويضي المكثف إلكتروني حتى لطالب الحضوري
+  const catchup = (await one("sched_items", { id: Number(id), user_id: uid }))?.kind === "catchup";
+  const ipad = !catchup && await ipadExam(uid);
+  need(catchup || (await student(uid))?.exam !== "حضوري" || ipad || await photosAllowed(uid), "امتحانك حضوري، ينقدم بالمركز");
   await closeFinished(uid, s);
   let it = await ownItem(uid, id);
   if (ipad) {

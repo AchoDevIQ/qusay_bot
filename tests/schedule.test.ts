@@ -249,6 +249,23 @@ test("الوقت لكل يوم مستقل، ومواعيد المكان توصل
   assert.equal((await find("sched_items", { user_id: 82, status: "missed" })).length, 1);
   await assert.rejects(act(82, "joinPlace", { picks }), /مثبت/);
   await assert.rejects(act(82, "preview", form()), /مثبت/);
+  // فصل صار تعويضي: بدل «تنحسب فايتة» ياخذ جدول تعويضي مكثف إلكتروني، وبعدها يبقى ويا مجموعته
+  const { setMakeup } = await import("../lib/makeup.ts");
+  await setMakeup("الفصل الأول", true);
+  await student(184);
+  await put("exam_access", { user_id: 184, chapter: "الفصل الأول", order_id: 1, created: "1" });
+  const j84 = await act(184, "joinPlace", { picks });
+  assert.equal(j84.late.length, 1);
+  assert.equal(j84.catchup, true);
+  await assert.rejects(act(184, "lateCatchup", { hour: 3 }), /الساعة|ساعة/);
+  const c84 = await act(184, "lateCatchup", { hour: j84.catchHours[0] });
+  assert.equal(c84.late.length, 0);
+  const cu = await find("sched_items", { user_id: 184, kind: "catchup" });
+  assert.equal(cu.length, 1);
+  assert.equal(Number(cu[0].fixed), 1);
+  assert.ok(String(cu[0].at) > todayStr(), "من باچر");
+  assert.ok((await act(184, "info")).items.some((i: any) => i.catchup), "يطلع بجدوله وما ينمسح");
+  await setMakeup("الفصل الأول", false);
 
   calls.length = 0;
   const wed2 = addDays(wed, 7);
