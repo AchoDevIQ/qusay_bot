@@ -7,7 +7,7 @@ import Thumbs from "../Thumbs";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 import { CURR_OPTS, DateInput, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
-type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
+type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; pin?: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type TestStudent = { id: number; name: string; papers: number; graded: number; chapters?: string[]; link: string };
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
@@ -303,6 +303,7 @@ function Form({ s, data, close, busy, call, inFile }: { s: S; data: Data; close:
             <Confirm label={`📱 مقفول على جهاز من ${s.device.at.slice(0, 10)}: فك القفل`} disabled={busy} onYes={() => void call({ action: "unlockDevice", id: s.id })} />
           </>
         ) : <span className="exhint">📱 لسه ما فتح صفحاته من أي جهاز</span>}
+        {s.pin && <Confirm label="🔐 ولي أمره بالرمز على تطبيق ابنه: صفّر الرمز" disabled={busy} onYes={() => void call({ action: "resetPin", id: s.id })} />}
         {s.guardian ? <Confirm label="👨‍👧 مربوط بولي أمر: فك الربط" disabled={busy} onYes={() => void call({ action: "unlink", id: s.id })} /> : <span className="exhint">ولي الأمر غير مربوط</span>}
         {s.gw?.blockedAt && <span className="exhint exbad">⛔ ولي الأمر سوى بلوك للبوت من {s.gw.blockedAt.slice(0, 10)}</span>}
         {s.gw && !s.gw.blockedAt && <span className={s.gw.unseen >= 3 ? "exhint exbad" : "exhint"}>✅ آخر مرة استلم درجة: {s.gw.lastSeen ? s.gw.lastSeen.slice(0, 16) : "بعده ما داس استلمت"}{s.gw.unseen ? ` · ${s.gw.unseen} درجة ما فتحها` : ""}</span>}

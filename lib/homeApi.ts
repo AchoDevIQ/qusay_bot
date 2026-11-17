@@ -79,6 +79,8 @@ export async function homeAction(body: Row) {
       // المربعات المفتوحة لهذا الطالب (البوت احتياط للتطبيق). قبل ما يختار أوقاته: امتحاناتي بس
       show: [...await shown()].filter((k) => !needSched || k === "exams"),
       needSched,
+      // من التطبيق: ولي الأمر يربط برمزه على هذا التلفون (صفحة «👨‍👧 ولي الأمر»)، مو برابط تليگرام
+      appGuard: fromApp,
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
       name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id), vote: (await openFor(id)).length,
       link: needLink ? await guardianLink(id) : null,

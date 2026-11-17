@@ -10,7 +10,7 @@ type List = { msgs: Msg[]; kb: Btn[][]; last: number; answer?: string; error?: s
 
 const ALLOWED = new Set(["B", "STRONG", "I", "EM", "U", "INS", "S", "STRIKE", "DEL", "CODE", "PRE", "A", "BLOCKQUOTE", "TG-SPOILER", "SPAN", "BR"]);
 /** HTML تليگرام بس (عريض، مائل، كود، رابط...)، وأي شي ثاني يصير نص */
-function safeHtml(src: string) {
+export function safeHtml(src: string) {
   const doc = new DOMParser().parseFromString(`<div>${src}</div>`, "text/html");
   const walk = (n: Node): string => {
     if (n.nodeType === Node.TEXT_NODE) return (n.textContent ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
@@ -118,7 +118,7 @@ export default function ChatClient() {
 
   return (
     <div className="chatpage">
-      <style>{CSS}</style>
+      <style>{CHAT_CSS}</style>
       <div className="chatlist">
         {!msgs.length && !error && <div className="empty">جاري التحميل...</div>}
         {msgs.map((m) => (
@@ -160,7 +160,7 @@ export default function ChatClient() {
   );
 }
 
-const CSS = `
+export const CHAT_CSS = `
 .chatpage{display:flex;flex-direction:column;height:100dvh;background:var(--ink)}
 .chatlist{flex:1;overflow-y:auto;padding:12px 10px 4px}
 .chatrow{display:flex;flex-direction:column;margin:6px 0;max-width:88%}

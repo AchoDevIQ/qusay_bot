@@ -138,7 +138,7 @@ export async function appChapters(uid: number): Promise<string[]> {
 }
 
 // ---------- الدخول: التطبيق يفتح /api/app/enter بطلب POST فيه رمز الطالب، ويرجع له تحويل لصفحة البوت
-const PAGES = new Set(["notes", "myexams", "home", "chat", "store"]);
+const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian"]);
 export const APP_ERR = "ما گدرنا نفتح الصفحة. سد التطبيق وافتحه من جديد. إذا تكررت، تواصل ويا الإدارة.";
 
 /** يرجع رابط الصفحة (نسبي) لطالب التطبيق، أو null إذا الرمز أو الحساب مو صالح */

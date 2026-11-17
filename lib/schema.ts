@@ -48,6 +48,8 @@ export const SCHEMA: Record<string, Table> = {
   app_links: { key: "fu", cols: nulls("uid", "env", "chapters", "created", "updated") },
   // رسائل محادثة البوت لطالب التطبيق (out من البوت، in منه). tg: رقم الرسالة بتليگرام، أو رقمها هنا لطالب التطبيق بس
   app_msgs: { key: "id", auto: true, cols: nulls("uid", "dir", "text", "html", "kb", "media", "tg", "created", "edited", "del") },
+  // رمز ولي الأمر على تطبيق ابنه (بدل تليگرام): الرمز مشفر، والمحاولات الغلط تقفله نص ساعة
+  guardian_pins: { key: "user_id", cols: nulls("hash", "method", "fails", "locked_until", "created") },
   grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters", "exams_off", "places") },
   grader_settlements: { key: "id", auto: true, cols: nulls("user_id", "n_mand", "n_opt", "n_obj", "amount", "forgiven", "created", "by_id") },
   objections: { key: "id", auto: true, cols: nulls("item_id", "user_id", "q", "text", "voice", "status", "old_mark", "new_mark", "reason", "created", "decided_at", "decided_by", "paid_id") },
