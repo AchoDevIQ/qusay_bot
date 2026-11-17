@@ -47,3 +47,22 @@ test("رابط جديد يبطل القديم، والإبطال يسد البا
   await revokeDoor(uid);
   await assert.rejects(doorAction({ d: d2, action: "state" }), /انتهى/);
 });
+
+test("صاحب المكتبة من رابطه: الوصل ينفتح صفحة وتنطبع بطابعة الجهاز، وبس بيعات مكتبته", async () => {
+  const { insert } = await import("../lib/db.ts");
+  const { homeToken } = await import("../lib/webAuth.ts");
+  const { GET } = await import("../app/api/receipt/route.ts");
+  const off = Number(await insert("offices", { name: "مكتبة النور", lim: 0, active: 1 }));
+  const other = Number(await insert("offices", { name: "مكتبة ثانية", lim: 0, active: 1 }));
+  const seller = 7_005_000;
+  await put("office_users", { user_id: seller, office_id: off, name: "أبو علي" });
+  const mine = Number(await insert("orders", { user_id: 50, name: "طالب", items: JSON.stringify([{ name: "دفتر", qty: 1, price: 5000 }]), subtotal: 5000, fee: 0, total: 5000, created: "2026-11-17 10:00", printed: 3, office_id: off }));
+  const theirs = Number(await insert("orders", { user_id: 50, name: "طالب", items: "[]", subtotal: 0, fee: 0, total: 0, created: "2026-11-17 10:00", printed: 3, office_id: other }));
+  const t = homeToken(seller);
+  const ok = await GET(new Request(`https://x.test/api/receipt?t=${encodeURIComponent(t)}&id=${mine}`));
+  assert.equal(ok.status, 200);
+  const html = await ok.text();
+  assert.ok(html.includes("window.print()") && html.includes("اطبع الوصل"));
+  assert.equal((await GET(new Request(`https://x.test/api/receipt?t=${encodeURIComponent(t)}&id=${theirs}`))).status, 404, "بيعة مكتبة ثانية");
+  assert.equal((await GET(new Request(`https://x.test/api/receipt?t=bad&id=${mine}`))).status, 401);
+});

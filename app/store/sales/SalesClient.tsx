@@ -2,7 +2,7 @@
 // بيع بالمكتب أو المكتبة، وسجل المبيعات. صاحب المكتبة يشوف بيعها بس، وهاي صفحته الرئيسية
 import { useState } from "react";
 import { partsLine, type MoneyParts, type PriceLine } from "../../../lib/orderRules.ts";
-import { AdminHeader, MoneyBreakdown, PriceReport, StatusBar, useAdminApi } from "../adminPage";
+import { AdminHeader, MoneyBreakdown, PriceReport, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 
 type Sale = { id: number; time: string; name: string; total: number; seller: string; items: string };
 type St = { id: number; name: string; phone: string; gov: string };
@@ -17,6 +17,18 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
 function Receipts({ id, busy, call, big }: { id: number; busy: boolean; call: Call; big?: boolean }) {
   const btn = big ? "btn agbtn" : "exbtn";
+  // بدون تليجرام (رابط ورمز): الوصل ينفتح بالصفحة نفسها وينطبع مباشرة بطابعة الجهاز
+  const auth = typeof window === "undefined" ? "" : pageAuth();
+  if (auth.startsWith("tk:")) {
+    const open = (kind: string) => { location.href = `/api/receipt?t=${encodeURIComponent(auth.slice(3))}&id=${id}&kind=${kind}`; };
+    return (
+      <div className={big ? "adform" : "adreceipts"}>
+        <button type="button" aria-label="اطبع الوصل" className={btn} onClick={() => open("paper")}>🖨{big ? " اطبع الوصل بطابعة الجهاز" : ""}</button>
+        <button type="button" aria-label="وصل بإطار" className={btn} onClick={() => open("framed")}>📄{big ? " وصل بإطار للطابعة الكبيرة" : ""}</button>
+        {!big && <button type="button" aria-label="وصل ملون" className={btn} disabled={busy} onClick={() => void call({ action: "receipt", id, kind: "color" })}>🖼</button>}
+      </div>
+    );
+  }
   return (
     <div className={big ? "adform" : "adreceipts"}>
       <button type="button" aria-label="وصل طابعة POS عرض 58" className={btn} disabled={busy} onClick={() => void call({ action: "receipt", id, kind: "paper" })}>🧾{big ? " وصل طابعة POS (عرض 58)" : ""}</button>

@@ -493,3 +493,13 @@ async function trimBottom(png: Buffer): Promise<Buffer> {
   out.getContext("2d").drawImage(im, 0, 0, im.width, h, 0, 0, im.width, h);
   return Buffer.from(await out.encode("png"));
 }
+
+/** الوصل كصفحة تنطبع من المتصفح (جهاز البيع بطابعته، أو أي طابعة): نفس وصل عرض 58 أو الوصل بإطار، ويا زر طباعة يفتح طباعة الجهاز */
+export async function receiptPage(oid: number, framed = false): Promise<string | null> {
+  const o = await one("orders", { id: oid, printed: 3 });
+  if (!o) return null;
+  const html = framed ? await receiptFramedHtml(o, orderItems(o)) : await receiptPaperHtml(o, orderItems(o));
+  const bar = `<div class="noprint" style="position:sticky;top:0;background:#141F33;padding:10px;text-align:center;z-index:9"><button onclick="window.print()" style="font:700 20px Cairo,sans-serif;padding:12px 28px;border:0;border-radius:12px;background:#FFC947;color:#141F33">🖨 اطبع الوصل</button> <button onclick="history.back()" style="font:700 16px Cairo,sans-serif;padding:12px 18px;border:0;border-radius:12px;background:#fff;color:#141F33">رجوع</button></div><style>@media print{.noprint{display:none!important}}</style>`;
+  // زر الطباعة فوك الوصل، وتنفتح الطباعة وحدها أول ما تتحمل الصفحة
+  return html.replace(/<body([^>]*)>/i, `<body$1>${bar}`).replace(/<\/body>/i, `<script>setTimeout(function(){try{window.print()}catch(e){}},600)</script></body>`);
+}
