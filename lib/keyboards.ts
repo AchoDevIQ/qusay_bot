@@ -40,7 +40,8 @@ export async function storeLink(uid?: number) {
   const c: unknown[][] = [];
   for (const ct of await cats()) {
     const ps: unknown[][] = [];
-    for (const p of await products(ct.id)) if (!p.hidden && await modeOk(p, s)) ps.push([p.id, p.name, p.price]);
+    // رابع رقم 0: خلص لمنهج هذا الطالب (يطلعله «⏳ خلص» و«🔔 بلّغني»)
+    for (const p of await products(ct.id)) if (!p.hidden && await modeOk(p, s)) ps.push(s && !await (await import("./stock.ts")).available(p.id, s.curr) ? [p.id, p.name, p.price, 0] : [p.id, p.name, p.price]);
     if (ps.length) c.push([ct.name, ps]);
   }
   const d: Row = { c, g: GOVS, f: await Promise.all(GOVS.map(feeOf)) };

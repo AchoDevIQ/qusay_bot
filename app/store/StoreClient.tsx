@@ -8,7 +8,8 @@ import { REFUND_SENTENCE, chaptersInOrder, firstRoundOnly, termSentenceFor } fro
 
 // شاشات التنبيه بالترتيب: موافقتين وترتيب قبل المتجر، وبعد اختيار المنتجات حسب اللي بالسلة
 type Gate = "" | "a1" | "a2" | "aw" | "many" | "t1" | "tw";
-type Item = [number, string, number];
+// رابع رقم 0: خلص لمنهج الطالب
+type Item = [number, string, number, number?];
 type Data = {
   c: [string, Item[]][]; g: string[]; f: number[]; w?: string[]; mk?: string[];
   p?: { n?: string; cu?: string; g?: string; s?: string; a?: string; p1?: string; p2?: string };
@@ -88,6 +89,14 @@ function Store({ D }: { D: Data }) {
     const order = { n, cu: curr, g: gov, s: side, a: area.trim(), p1, p2, i: entries.map(([id, q]) => [id, q]), t: sub + fee, ag: 1, tm: termOk ? 1 : 0, mn: manyFor === chaptersKey ? 1 : 0 };
     if (D.tk) void sendOrder(order); else sendToBot(order);
   }
+  // «🔔 بلّغني لما يتوفر»: ينحفظ اسمه ويوصله خبر أول ما يرجع
+  async function notifyMe(pid: number) {
+    try {
+      const res = await fetch("/api/home", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: D.tk, action: "stockWait", pid, device: await deviceId() }) });
+      const j = await res.json();
+      alert(res.ok ? j.notice : (j.error ?? "صار خطأ"));
+    } catch { alert("ماكو اتصال، حاول مرة ثانية"); }
+  }
   // الطلب يروح للسيرفر مباشرة، لأن الصفحة ممكن تنفتح من القائمة وهناك sendData ما مضمون
   async function sendOrder(order: unknown) {
     if (sending) return;
@@ -137,7 +146,12 @@ function Store({ D }: { D: Data }) {
               <h2>📂 {cname}</h2>
               <table><tbody>
                 <tr><th>المنتج</th><th className="p">السعر</th><th className="q">الكمية</th></tr>
-                {items.map(([id, n, p]) => (
+                {items.map(([id, n, p, ok]) => ok === 0 ? (
+                  <tr key={id}>
+                    <td>{n}<br /><small>⏳ خلص لمنهجك هسه</small></td><td className="p">{fmt(p)}</td>
+                    <td className="q"><button type="button" className="exbtn" onClick={() => void notifyMe(id)}>🔔 بلّغني</button></td>
+                  </tr>
+                ) : (
                   <tr key={id} className={cart[id] ? "sel" : ""}>
                     <td>{n}</td><td className="p">{fmt(p)}</td>
                     <td className="q"><span className="qty">

@@ -59,7 +59,7 @@ export async function homeAction(body: Row) {
   // من التطبيق كلشي مفتوح: الإخفاء لتليگرام بس
   const fromApp = typeof body.device === "string" && body.device.startsWith("app-") && isAppKey(id, body.device.slice(4));
   const shown = async () => (fromApp ? new Set(["shop", "ask", "myq", "me", "exams", "notes", "vote"]) : await visibleTiles(id));
-  const tile = a === "order" ? "shop" : a;
+  const tile = a === "order" || a === "stockWait" ? "shop" : a;
   if (["shop", "ask", "myq", "me", "exams", "notes", "vote"].includes(tile)) need((await shown()).has(tile as never), "هذا القسم مو مفتوح هسه", 403);
   // سلّم أول امتحان وبعده ما ربط ولي أمره: كلشي مقفول لحد ما يربطه
   if (a === "ask" || a === "exams" || a === "notes") need(!await needsGuardian(id), "🔒 اربط ولي أمرك أول، من القائمة الرئيسية");
@@ -104,6 +104,13 @@ export async function homeAction(body: Row) {
     await setSession(id, "store", {});
     await logActivity(id, "🛒 فتح المتجر");
     return { url: await storeLink(id) };
+  }
+  if (a === "stockWait") {
+    // «🔔 بلّغني لما يتوفر» من المتجر
+    const s = await student(id);
+    need(s, "سجل معلوماتك أول");
+    const ok = await (await import("./stock.ts")).waitFor(id, Number(body.pid), s!.curr);
+    return { notice: ok ? "🔔 تمام، أول ما يتوفر يوصلك خبر" : "✅ هذا متوفر هسه، تگدر تطلبه" };
   }
   if (a === "order") {
     need(body.order && typeof body.order === "object", "الطلب ناقص");

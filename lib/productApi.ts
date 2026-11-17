@@ -3,6 +3,7 @@ import { catIdFor, find, insert, modeFromName, one, tx, update, type Row } from 
 import { toLatinDigits } from "./config.ts";
 import { askDefault } from "./access.ts";
 import { allCats } from "./data.ts";
+import { setStock, stockView } from "./stock.ts";
 import { authed, need } from "./webApi.ts";
 
 export const PRODUCTS_PERM = "products";
@@ -61,10 +62,10 @@ export async function bulkAdd(text: string) {
 
 async function productList() {
   const products = await find("products", { active: 1 }, { order: ["id"] });
-  return (await allCats()).map((c) => ({
+  return await Promise.all((await allCats()).map(async (c) => ({
     id: c.id, name: c.name,
-    products: products.filter((p) => p.cat_id === c.id).map((p) => ({ id: p.id, name: p.name, price: p.price, mode: p.mode || "both", hidden: !!p.hidden, ask: askDefault(p) })),
-  }));
+    products: await Promise.all(products.filter((p) => p.cat_id === c.id).map(async (p) => ({ id: p.id, name: p.name, price: p.price, mode: p.mode || "both", hidden: !!p.hidden, ask: askDefault(p), stock: await stockView(Number(p.id)) }))),
+  })));
 }
 
 export async function productAction(body: Row) {
@@ -109,6 +110,10 @@ export async function productAction(body: Row) {
     // هل اللي يشتري هذا المنتج من حقه يسأل أسئلة علمية
     need(await one("products", { id, active: 1 }), "المنتج غير موجود");
     await update("products", { id }, { ask: body.ask ? 1 : 0 });
+  } else if (a === "stock") {
+    // المخزن لكل منهج: متوفر/خلص، والعدد (فارغ = ما نعدّ)، وحد التنبيه
+    need(await one("products", { id, active: 1 }), "المنتج غير موجود");
+    await setStock(id, body.lang, { out: body.out, count: body.count, low: body.low });
   } else if (a === "hideCat") {
     await liveCat(id);
     await update("products", { cat_id: id }, { hidden: body.hidden ? 1 : 0 });

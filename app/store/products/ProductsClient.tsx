@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 
-type Product = { id: number; name: string; price: number; mode: string; hidden: boolean; ask: boolean };
+type Stock = { out: boolean; count: number | null; low: number | null; waiting: number };
+type Product = { id: number; name: string; price: number; mode: string; hidden: boolean; ask: boolean; stock?: Record<string, Stock> };
 type Cat = { id: number; name: string; products: Product[] };
 type Data = { cats: Cat[]; catId?: number; added?: string[]; bad?: string[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -90,12 +91,12 @@ function ProductRows({ p, cats, catId, open, toggle, close, busy, call }: { p: P
   return (
     <>
       <tr className={"exrow" + (open ? " sel" : "") + (p.hidden ? " pdhidden" : "")} onClick={toggle}>
-        <td><b>{p.name}</b><small className="pdmode">{modeLabel(p.mode)}</small></td>
+        <td><b>{p.name}</b><small className="pdmode">{modeLabel(p.mode)}</small>{p.stock && Object.entries(p.stock).filter(([, s]) => s.out || s.count !== null).map(([l, s]) => <small key={l} className="pdmode">{s.out ? `⛔ خلص ${l}` : `📦 ${l}: ${s.count}`}{s.waiting ? ` · 🔔 ${s.waiting} ينتظرون` : ""}</small>)}</td>
         <td className="p">{fmt(p.price)}</td>
         <td className="p"><button type="button" className="exbtn pdeye" disabled={busy} onClick={(e) => { e.stopPropagation(); void call({ action: "hide", id: p.id, hidden: !p.hidden }); }}>{p.hidden ? "🙈 مخفي" : "👁 ظاهر"}</button>
           <button type="button" className="exbtn pdeye pdask" disabled={busy} onClick={(e) => { e.stopPropagation(); void call({ action: "ask", id: p.id, ask: !p.ask }); }}>{p.ask ? "❓ يسأل" : "🚫 ما يسأل"}</button></td>
       </tr>
-      {open && <tr><td colSpan={3} className="expanel"><EditProduct key={`${p.name}|${p.price}|${p.mode}|${catId}`} p={p} cats={cats} catId={catId} close={close} busy={busy} call={call} /></td></tr>}
+      {open && <tr><td colSpan={3} className="expanel"><EditProduct key={`${p.name}|${p.price}|${p.mode}|${catId}`} p={p} cats={cats} catId={catId} close={close} busy={busy} call={call} />{p.stock && <StockEdit key={JSON.stringify(p.stock)} p={p} busy={busy} call={call} />}</td></tr>}
     </>
   );
 }
@@ -170,6 +171,34 @@ function Bulk({ result, busy, call }: { result: Data; busy: boolean; call: Call 
           {!!result.bad?.length && <div className="exbad pdresult">⚠️ هاي السطور ما انفهمت وما انضافت ({result.bad.length}). صلحها بالمربع وضيفها مرة ثانية.</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+/** المخزن لكل منهج: الطالب اللي منهجه خلص يشوف «⏳ خلص لمنهجك» ويگدر يدوس «🔔 بلّغني». العدد اختياري: كل بيعة تنقص،
+ *  ومن يوصل صفر يصير «خلص» وحده، والإلغاء يرجعه. حد التنبيه: يوصلك خبر من يوصل له */
+function StockEdit({ p, busy, call }: { p: Product; busy: boolean; call: Call }) {
+  return (
+    <div className="form adtop">
+      <label>📦 المخزن لكل منهج</label>
+      {Object.entries(p.stock ?? {}).map(([lang, s]) => <StockLang key={lang} id={p.id} lang={lang} s={s} busy={busy} call={call} />)}
+    </div>
+  );
+}
+function StockLang({ id, lang, s, busy, call }: { id: number; lang: string; s: Stock; busy: boolean; call: Call }) {
+  const [count, setCount] = useState(s.count === null ? "" : String(s.count));
+  const [low, setLow] = useState(s.low === null ? "" : String(s.low));
+  return (
+    <div className="cpbox expad adtop">
+      <div className="exline"><b>{lang}</b>
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "stock", id, lang, out: !s.out })}>{s.out ? "⛔ خلص (دوس حتى يصير متوفر)" : "✅ متوفر (دوس حتى يصير خلص)"}</button>
+      </div>
+      {s.waiting > 0 && <div className="exhint">🔔 {s.waiting} طالب ينتظرون يتوفر. أول ما يصير متوفر يوصلهم خبر.</div>}
+      <div className="adtwo">
+        <div><label>العدد بالمخزن (فارغ = ما أعدّ)</label><input inputMode="numeric" value={count} placeholder="مثلاً 1000" onChange={(e) => setCount(e.target.value.replace(/D/g, ""))} /></div>
+        <div><label>نبّهني من يبقى</label><input inputMode="numeric" value={low} placeholder="مثلاً 50" onChange={(e) => setLow(e.target.value.replace(/D/g, ""))} /></div>
+      </div>
+      <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "stock", id, lang, count, low })}>💾 احفظ العدد</button>
     </div>
   );
 }

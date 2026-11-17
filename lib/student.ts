@@ -172,7 +172,9 @@ export async function orderCancelCb(chat: number, uid: number, mid: number, d: s
   } else if (d.startsWith("ocn:")) {
     await edit(chat, mid, `تمام، طلبك #${oid} باقي ✅\n↩️ تگدر تلغيه <b>لحد ما توصلك رسالة «تم تجهيز طلبك»</b>.`, [[btn(`❌ إلغاء الطلب #${oid}`, `oc:${oid}`)]]);
   } else if (d.startsWith("ocy:")) {
-    await update("orders", { id: oid }, { printed: 2 }, { where: (r) => !r.printed });
+    const n0 = await update("orders", { id: oid }, { printed: 2 }, { where: (r) => !r.printed });
+    // الكمية ترجع للمخزن
+    if (n0) await (await import("./stock.ts")).returnStock(JSON.parse(String(o.items || "[]")), o.curr);
     await logActivity(uid, `❌ ألغى الطلب #${oid}`);
     await edit(chat, mid, `❌ تم إلغاء طلبك <b>#${oid}</b>.\nتگدر تطلب من جديد بأي وقت من 🛒 المتجر.`);
     const n = await newOrdersCount();
@@ -276,6 +278,7 @@ async function finalize(chat: number, uid: number, data: Row, items: Row[], sub:
     phone1: data.phone1, phone2: data.phone2, items: JSON.stringify(items), subtotal: sub, fee, total: sub + fee, created: stamp(),
   });
   await createOrderCode(oid, items);
+  await (await import("./stock.ts")).takeStock(items, data.curr);
   await logActivity(uid, `🛒 طلب توصيل #${oid}: ${items.map((i) => `${i.name} ×${i.qty}`).join("، ")}`);
   await setSession(uid, "", {});
   // الكلام مكتوب داخل صورة النجاح، والنص يطلع بس إذا الصورة ما وصلت
@@ -321,6 +324,7 @@ export async function onStoreOrder(chat: number, uid: number, raw: string, user:
     else missing = true;
   }
   if (!Object.keys(cart).length) errs.push("اختر منتج واحد على الأقل");
+  if (cu) { const gone = await (await import("./stock.ts")).outOf(Object.keys(cart).map(Number), cu); if (gone.length) errs.push(`خلص لمنهجك هسه: ${gone.join("، ")}`); }
   if (missing) errs.push("بعض المنتجات تغيرت أو انحذفت");
   if (errs.length) {
     await setSession(uid, "store", data);

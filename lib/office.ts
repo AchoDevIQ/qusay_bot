@@ -53,6 +53,7 @@ export async function posSale(uid: number, o: any): Promise<{ error?: string; ag
     phone1: s.phone1, phone2: s.phone2, items: JSON.stringify(items), subtotal: total, fee: 0, total, created: stamp(), printed: 3, seller: uid, office_id: off ? off.id : null,
   });
   const od = (await one("orders", { id: oid }))!;
+  await (await import("./stock.ts")).takeStock(items, s.curr);
   await setSession(uid, "", {});
   // الوصل الإلكتروني الملون للطالب
   let sent = false;
