@@ -19,7 +19,8 @@ export async function chatMode(chat: unknown): Promise<"app" | "both" | "tg"> {
   if (id >= APP_UID_BASE) return "app";
   const c = modeCache.get(id);
   if (c && Date.now() - c.at < 60_000) return c.m;
-  const m = (await one("app_links", { uid: id }).catch(() => null)) ? "both" : "tg";
+  // طالب مربوط بالتطبيق، أو كادر عنده باب بدون تليگرام: رسائله توصله بالاثنين
+  const m = (await one("app_links", { uid: id }).catch(() => null)) || (await one("door_links", { user_id: id }).catch(() => null)) ? "both" : "tg";
   modeCache.set(id, { m, at: Date.now() });
   return m;
 }
@@ -45,7 +46,9 @@ async function saveOut(uid: number, method: string, p: Row, tg: number | null, m
   }));
   if (tg === null) await update("app_msgs", { id }, { tg: id });
   // صفحة ولي الأمر: إشعار لتلفونه إذا مفعّل
-  if (uid >= 500_000_000_000_000) void import("./guardianPush.ts").then((m) => m.notifyGuardian(uid, text)).catch((e) => console.error("guardian push", e));
+  // كادر بباب بدون تليگرام: إشعار لجهازه
+  if (uid < 500_000_000_000_000 || uid >= 600_000_000_000_000) void one("door_links", { user_id: uid }).then((r) => r ? import("./doorLink.ts").then((m) => m.notifyDoor(uid, text)) : 0).catch((e) => console.error("door push", e));
+  if (uid >= 500_000_000_000_000 && uid < 600_000_000_000_000) void import("./guardianPush.ts").then((m) => m.notifyGuardian(uid, text)).catch((e) => console.error("guardian push", e));
   return tg ?? id;
 }
 const fakeResult = (uid: number, mid: number, p: Row) => ({ message_id: mid, chat: { id: uid, type: "private" }, date: Math.floor(Date.now() / 1000), text: p.text });

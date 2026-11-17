@@ -12,7 +12,7 @@ type Office = {
 type Sale = { id: number; time: string; name: string; total: number; items: string };
 type Data = {
   today: string; offices: Office[]; notice: string; openId?: number;
-  sales?: { officeId: number; title: string; rows: Sale[]; parts: MoneyParts; prices: PriceLine[] }; invite?: { officeId: number; code: string; link: string };
+  sales?: { officeId: number; title: string; rows: Sale[]; parts: MoneyParts; prices: PriceLine[] }; invite?: { officeId: number; code: string; link: string }; door?: { officeId: number; name: string; link: string; qr: string };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -108,10 +108,19 @@ function Panel({ o, data, busy, call }: { o: Office; data: Data; busy: boolean; 
         {o.users.map((u) => (
           <div key={u.id} className="adsale adsplit">
             <span>{u.name}</span>
+            <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "doorUser", user: u.id })}>🔗 بدون تليگرام</button>
             <Confirm label="🗑" disabled={busy} onYes={() => void call({ action: "delUser", user: u.id })} />
           </div>
         ))}
         {!o.users.length && <div className="exhint">ما أكو حساب. ضيف حساب حتى يبيع.</div>}
+        {data.door?.officeId === o.id && (
+          <div style={{ textAlign: "center" }}>
+            <img src={data.door.qr} alt="" style={{ width: 200, background: "#fff", borderRadius: 12 }} />
+            <div className="exhint">رابط دخول {data.door.name} بدون تليگرام: يصوّر الرمز أو تدزله الرابط، ويحط رمز سري.</div>
+            <button type="button" className="exbtn" onClick={() => { const l = data.door!.link; if (navigator.share) void navigator.share({ url: l }).catch(() => undefined); else void navigator.clipboard?.writeText(l); }}>📤 دز الرابط</button>
+          </div>
+        )}
+        <NoTgUser officeId={o.id} busy={busy} call={call} />
         <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "invite", id: o.id })}>🔗 رابط ورمز انضمام جديد</button>
         {invite && (
           <div className="adinvite">
@@ -141,6 +150,17 @@ function Panel({ o, data, busy, call }: { o: Office; data: Data; busy: boolean; 
         </div>
         <Confirm label="🗑 حذف المكتبة" disabled={busy} onYes={() => void call({ action: "del", id: o.id })} />
       </div>
+    </div>
+  );
+}
+
+/** صاحب مكتبة جديد ما عنده تليگرام: ياخذ رابط دخول ورمز */
+function NoTgUser({ officeId, busy, call }: { officeId: number; busy: boolean; call: (b: Record<string, unknown>) => Promise<unknown> }) {
+  const [name, setName] = useState("");
+  return (
+    <div className="exline adtop">
+      <input value={name} placeholder="اسم صاحب حساب بدون تليگرام" onChange={(e) => setName(e.target.value)} />
+      <button type="button" className="exbtn" disabled={busy || !name.trim()} onClick={() => void call({ action: "addUserNoTg", id: officeId, name }).then(() => setName(""))}>➕ ضيفه</button>
     </div>
   );
 }

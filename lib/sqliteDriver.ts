@@ -86,6 +86,8 @@ async function init() {
     CREATE TABLE IF NOT EXISTS guardian_push(user_id INTEGER, endpoint TEXT, keys TEXT, created TEXT, PRIMARY KEY(user_id, endpoint));
     CREATE TABLE IF NOT EXISTS product_stock(product_id INTEGER, lang TEXT, out INTEGER, count INTEGER, low INTEGER, alerted INTEGER, updated TEXT, PRIMARY KEY(product_id, lang));
     CREATE TABLE IF NOT EXISTS stock_wait(product_id INTEGER, lang TEXT, user_id INTEGER, created TEXT, PRIMARY KEY(product_id, lang, user_id));
+    CREATE TABLE IF NOT EXISTS door_links(user_id INTEGER PRIMARY KEY, ver TEXT, hash TEXT, fails INTEGER, locked_until TEXT, label TEXT, created TEXT);
+    CREATE TABLE IF NOT EXISTS door_push(user_id INTEGER, endpoint TEXT, keys TEXT, created TEXT, PRIMARY KEY(user_id, endpoint));
     CREATE TABLE IF NOT EXISTS grader_pay(user_id INTEGER PRIMARY KEY, mandatory INTEGER, optional INTEGER, deduct INTEGER, chapters TEXT, exams_off TEXT, places TEXT);
     CREATE TABLE IF NOT EXISTS grader_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, n_mand INTEGER, n_opt INTEGER, n_obj INTEGER, amount INTEGER, forgiven INTEGER, created TEXT, by_id INTEGER);
     CREATE TABLE IF NOT EXISTS paper_ink(item_id INTEGER, page INTEGER, ink TEXT, PRIMARY KEY(item_id, page));

@@ -55,6 +55,9 @@ export const SCHEMA: Record<string, Table> = {
   // المخزن: توفر كل منتج لكل منهج، والعدد (اختياري)، وحد التنبيه. و«بلّغني لما يتوفر»
   product_stock: { key: ["product_id", "lang"], cols: nulls("out", "count", "low", "alerted", "updated") },
   stock_wait: { key: ["product_id", "lang", "user_id"], cols: { created: null } },
+  // باب الكادر بدون تليگرام: رابط ورمز لكل شخص، واشتراكات إشعاراته
+  door_links: { key: "user_id", cols: nulls("ver", "hash", "fails", "locked_until", "label", "created") },
+  door_push: { key: ["user_id", "endpoint"], cols: nulls("keys", "created") },
   grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters", "exams_off", "places") },
   grader_settlements: { key: "id", auto: true, cols: nulls("user_id", "n_mand", "n_opt", "n_obj", "amount", "forgiven", "created", "by_id") },
   objections: { key: "id", auto: true, cols: nulls("item_id", "user_id", "q", "text", "voice", "status", "old_mark", "new_mark", "reason", "created", "decided_at", "decided_by", "paid_id") },

@@ -51,7 +51,7 @@ async function pageData() {
     chapters: await allChapters(), topics: await allTopics(), tree: await placeTree(),
     perms: Object.entries(PERMS).map(([key, label]) => ({ key, label })),
     staff: await Promise.all(rows.map(async (s) => ({
-      id: s.user_id, name: s.name, perms: String(s.perms ?? "").split(",").filter(Boolean),
+      id: s.user_id, name: s.name, perms: String(s.perms ?? "").split(",").filter(Boolean), door: !!await one("door_links", { user_id: s.user_id }),
       work: graderIds.has(s.user_id) || work.has(s.user_id) ? { today: work.get(s.user_id)?.today ?? 0, last: work.get(s.user_id)?.last ? ago(work.get(s.user_id)!.last) : "" } : null,
       account: await staffAccount(s.user_id),
       // محفظة التصحيح: اللي إله على التصحيح، تطلع برا جنب اسمه ويندفع بضغطة
@@ -98,6 +98,7 @@ export async function staffAction(body: Row) {
   } else if (a === "del") {
     await liveStaff(id);
     await remove("staff", { user_id: id });
+    await (await import("./doorLink.ts")).revokeDoor(id);
     // يختفي زر اللوحة من عنده هسه، مو لحد ما يكتب /start
     await send(id, "ℹ️ انشال حسابك من المساعدين.", { replyKb: await mainKb(id) });
   } else if (a === "pay") {
@@ -114,6 +115,27 @@ export async function staffAction(body: Row) {
   } else if (a === "gradePay" || a === "gradeRate") {
     await liveStaff(id);
     notice = await payAction(me, { ...body, grader: id, action: a === "gradePay" ? "settle" : "setRate" });
+  } else if (a === "addNoTg") {
+    // مساعد ما عنده تليگرام: رقم جديد، وياخذ رابط دخول ورمز
+    const door = await import("./doorLink.ts");
+    const nid = await door.newStaffId();
+    const name = nameOf(body.name);
+    await put("staff", { user_id: nid, name, perms: "q" });
+    await kvSet(`staff_since_${nid}`, stamp());
+    const link = await door.makeDoor(nid, name);
+    const QR = (await import("qrcode")).default;
+    return { ...await pageData(), notice: "✅ انضاف المساعد بصلاحية الأسئلة بس. اختار صلاحياته، ودزله الرابط", door: { id: nid, name, link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
+  } else if (a === "doorMake" || a === "doorMine") {
+    // رابط دخول بدون تليگرام (يبطل القديم). doorMine: لصاحب البوت نفسه
+    const uid = a === "doorMine" ? me : id;
+    if (a === "doorMake") await liveStaff(uid);
+    const name = a === "doorMine" ? "صاحب البوت" : String((await one("staff", { user_id: uid }))?.name ?? "");
+    const link = await (await import("./doorLink.ts")).makeDoor(uid, name);
+    const QR = (await import("qrcode")).default;
+    return { ...await pageData(), notice: "🔗 هذا رابط دخوله الجديد. الرابط القديم (إذا أكو) ما يشتغل بعد", door: { id: uid, name, link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
+  } else if (a === "doorRevoke") {
+    await (await import("./doorLink.ts")).revokeDoor(id);
+    notice = "⛔ انبطل رابط دخوله. ما يگدر يدخل بيه بعد";
   } else need(a === "list", "أمر غير معروف");
   return { ...await pageData(), notice };
 }

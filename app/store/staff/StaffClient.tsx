@@ -11,8 +11,8 @@ type Places = { all: boolean; keys: string[]; private: boolean };
 type Area = { id: number; name: string; centers: { id: number; name: string; slots: { d: number; t: string }[] }[] };
 const DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
 type Grade = { chapters: string[]; off: number[]; places: Places; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
-type Staff = { id: number; name: string; perms: string[]; work: { today: number; last: string } | null; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
-type Data = { chapters: string[]; topics: Topic[]; tree: Area[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string };
+type Staff = { id: number; name: string; perms: string[]; door?: boolean; work: { today: number; last: string } | null; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
+type Data = { chapters: string[]; topics: Topic[]; tree: Area[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string; door?: { id: number; name: string; link: string; qr: string } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -37,7 +37,9 @@ export default function StaffClient() {
                 </tbody></table>
               ) : <div className="empty">لا يوجد مساعدين بعد.</div>}
             </div>
+            {data.door && <DoorCard door={data.door} />}
             <Add busy={busy} call={call} />
+            <NoTg busy={busy} call={call} />
           </>
         )}
       </div>
@@ -128,6 +130,8 @@ function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; per
         </div>
         <button type="button" className="exbtn adtop" disabled={busy} onClick={async () => { if (await call({ action: "viewAs", id: s.id })) location.href = `/store/admin${location.search}`; }}>👁 شوف كمساعد</button>
         <div className="exhint">تشوف لوحة التحكم والبوت مثله بالضبط، بصلاحياته. ترجع من «↩️ ارجع لحسابي».</div>
+        <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void call({ action: "doorMake", id: s.id })}>🔗 {s.door ? "رابط دخول جديد بدون تليگرام" : "رابط دخول بدون تليگرام"}</button>
+        {s.door && <Confirm label="⛔ أبطل رابط دخوله" disabled={busy} onYes={() => void call({ action: "doorRevoke", id: s.id })} />}
         <Confirm label="🗑 حذف المساعد" disabled={busy} onYes={() => void call({ action: "del", id: s.id })} />
       </div>
     </div>
@@ -254,5 +258,30 @@ function Add({ busy, call }: { busy: boolean; call: Call }) {
       <input placeholder="اسمه" value={name} onChange={(e) => setName(e.target.value)} />
       <button type="button" className="btn" disabled={busy || !id.trim() || !name.trim()} onClick={async () => { if (await call({ action: "add", id, name })) { setId(""); setName(""); } }}>إضافة</button>
     </div>
+  );
+}
+
+/** رابط الدخول بدون تليگرام ورمز QR: يصوّره المساعد، أو تدزله الرابط */
+function DoorCard({ door }: { door: { id: number; name: string; link: string; qr: string } }) {
+  return (
+    <div className="card"><div className="form" style={{ textAlign: "center" }}>
+      <h2>🔗 رابط دخول {door.name}</h2>
+      <img src={door.qr} alt="" style={{ width: 220, background: "#fff", borderRadius: 12, margin: "0 auto" }} />
+      <div className="exhint">يصوّر الرمز بكاميرة تلفونه أو الآيباد، أو دزله الرابط. يفتحه ويحط رمز سري من 4 أرقام، وبعدها يدخل صفحاته بدون تليگرام.</div>
+      <button type="button" className="exbtn" onClick={() => { if (navigator.share) void navigator.share({ title: "QMath", url: door.link }).catch(() => undefined); else void navigator.clipboard?.writeText(door.link); }}>📤 دز الرابط</button>
+    </div></div>
+  );
+}
+/** مساعد جديد ما عنده تليگرام، ورابطي أنا */
+function NoTg({ busy, call }: { busy: boolean; call: Call }) {
+  const [name, setName] = useState("");
+  return (
+    <div className="card"><div className="form">
+      <h2>📱 الدخول بدون تليگرام</h2>
+      <label>مساعد أو مصحح جديد ما عنده تليگرام</label>
+      <input value={name} placeholder="اسمه" onChange={(e) => setName(e.target.value)} />
+      <button type="button" className="btn" disabled={busy || !name.trim()} onClick={() => void call({ action: "addNoTg", name }).then((r) => { if (r) setName(""); })}>➕ ضيفه وسويله رابط</button>
+      <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void call({ action: "doorMine" })}>🔗 رابطي أنا: لوحة التحكم بدون تليگرام</button>
+    </div></div>
   );
 }

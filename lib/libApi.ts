@@ -96,10 +96,25 @@ export async function libAction(body: Row) {
     await put("office_users", { user_id: u, office_id: o.id, name: nameOf(body.name, 40, "اكتب اسم صاحب الحساب") });
     await send(u, `✅ تمت إضافتك لـ <b>${esc(o.name)}</b> بالبوت.\nاضغط زر «${BTN_OFFICE}» اللي جوة 👇`, { replyKb: await mainKb(u) });
     extra = { notice: "✅ انضاف الحساب" };
+  } else if (a === "doorUser" || a === "addUserNoTg") {
+    // صاحب المكتبة بدون تليگرام: رابط دخول ورمز. addUserNoTg: حساب جديد ما عنده تليگرام
+    const door = await import("./doorLink.ts");
+    let u = Number(body.user);
+    if (a === "addUserNoTg") {
+      const o = await liveOffice(body.id);
+      u = await door.newStaffId();
+      await put("office_users", { user_id: u, office_id: o.id, name: nameOf(body.name, 40, "اكتب اسم صاحب الحساب") });
+    }
+    const ou = await one("office_users", { user_id: u });
+    need(ou, "الحساب غير موجود");
+    const link = await door.makeDoor(u, String(ou!.name ?? "المكتبة"));
+    const QR = (await import("qrcode")).default;
+    extra = { notice: "🔗 هذا رابط دخوله. القديم ما يشتغل بعد", door: { officeId: ou!.office_id, name: String(ou!.name ?? ""), link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
   } else if (a === "delUser") {
     const u = Number(body.user);
     need(await one("office_users", { user_id: u }), "الحساب غير موجود");
     await remove("office_users", { user_id: u });
+    await (await import("./doorLink.ts")).revokeDoor(u);
     await send(u, "ℹ️ انشال حسابك من المكتبة.", { replyKb: await mainKb(u) });
   } else need(a === "list", "أمر غير معروف");
   return { ...await pageData(), notice: "", ...extra };

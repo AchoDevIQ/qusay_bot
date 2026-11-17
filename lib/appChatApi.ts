@@ -1,6 +1,7 @@
 // صفحة المحادثة بالتطبيق: تجيب رسائل البوت، وتوصّل كتابة الطالب وصوره ودوسات الأزرار للبوت كأنها من تليگرام.
 // بس من التطبيق (مفتاح التطبيق ويا رابط الطالب)
 import { ADMIN_IDS } from "./config.ts";
+import { one } from "./db.ts";
 import { FAKE_MID, chatList, mediaRow, saveIn, takeAnswer, voiceAllowed, type Media } from "./appChat.ts";
 import { handleUpdate } from "./bot.ts";
 import { groupId, student } from "./data.ts";
@@ -13,8 +14,14 @@ import { isAppKey, verifyHomeToken } from "./webAuth.ts";
 function who(token: unknown, app: unknown) {
   const uid = verifyHomeToken(token);
   need(uid !== null, "هذا الرابط قديم. سد الصفحة وافتحها من جديد", 401);
-  need(isAppKey(uid!, app), "هاي الصفحة تنفتح من التطبيق بس", 403);
+  need(isAppKey(uid!, app) || doorUsers.has(uid!), "هاي الصفحة تنفتح من التطبيق بس", 403);
   return uid!;
+}
+/** الكادر اللي دخل من بابه (بدون تليگرام) يشوف رسائله هنا هم */
+const doorUsers = new Set<number>();
+async function allowDoor(token: unknown) {
+  const uid = verifyHomeToken(token);
+  if (uid !== null && await one("door_links", { user_id: uid })) doorUsers.add(uid); else if (uid !== null) doorUsers.delete(uid);
 }
 async function from(uid: number) {
   const name = String((await student(uid))?.name ?? "طالب").split(" ")[0];
@@ -36,6 +43,7 @@ async function telegramFileId(b: Buffer, name: string, type: string, kind: "phot
 
 export async function chatAction(body: any) {
   await ensure();
+  await allowDoor(body?.token);
   const uid = who(body?.token, body?.app);
   const a = String(body?.action ?? "list");
   if (a === "list") return await chatList(uid, Number(body.after) || 0);
@@ -56,6 +64,7 @@ export async function chatAction(body: any) {
 /** صورة أو تسجيل صوتي من الطالب (FormData) */
 export async function chatUpload(f: FormData) {
   await ensure();
+  await allowDoor(f.get("token"));
   const uid = who(f.get("token"), f.get("app"));
   const file = f.get("file");
   need(file instanceof File && file.size > 0, "اختار صورة");
@@ -82,6 +91,7 @@ export async function chatUpload(f: FormData) {
 /** ملف رسالة (صورة، PDF، فويس) للصفحة */
 export async function chatFile(url: URL): Promise<Response> {
   await ensure();
+  await allowDoor(url.searchParams.get("t"));
   const uid = who(url.searchParams.get("t"), url.searchParams.get("app"));
   const m = await mediaRow(uid, Number(url.searchParams.get("m")), Number(url.searchParams.get("k")) || 0);
   if (!m) return new Response("not found", { status: 404 });
