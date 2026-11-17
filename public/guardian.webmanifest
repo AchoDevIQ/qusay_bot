@@ -1,0 +1,11 @@
+{
+  "name": "ولي الأمر - قصي العميري",
+  "short_name": "ولي الأمر",
+  "start_url": "/store/guardian",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#F5F6FA",
+  "theme_color": "#141F33",
+  "icons": [{ "src": "/app-logo.png", "sizes": "1000x1000", "type": "image/png" }]
+}

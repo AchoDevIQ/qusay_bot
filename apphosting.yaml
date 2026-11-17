@@ -13,6 +13,13 @@ env:
   - variable: TOKEN
     secret: TOKEN
     availability: [RUNTIME]
+  # إشعارات المتصفح لأولياء الأمور (ببلاش): المفتاح السري بالخزنة، والعام مو سر
+  - variable: VAPID_PRIVATE_KEY
+    secret: VAPID_PRIVATE_KEY
+    availability: [RUNTIME]
+  - variable: VAPID_PUBLIC_KEY
+    value: "BKKOaDnMGMn632seoXj-8E9_fbBMinuuAMqSk2PoYTRAWgCLTCWGLqmhOtZEhd2fTIP5S6uJYYfySvMQPmy3kK4"
+    availability: [RUNTIME]
   - variable: WEBHOOK_SECRET
     secret: WEBHOOK_SECRET
     availability: [RUNTIME]

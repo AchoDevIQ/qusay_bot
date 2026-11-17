@@ -19,10 +19,14 @@ let seq = Date.now();
 
 export async function guardianAction(body: any) {
   await ensure();
-  const sid = studentOf(body?.token, body?.app);
-  need(await student(sid), "سجل معلوماتك أول");
   const a = String(body?.action ?? "state");
-  if (a === "state") return { ...await pinState(sid), name: String((await student(sid))?.name ?? "") };
+  // من تلفون ولي الأمر نفسه: رابطه الخاص، وبس الفتح والقراءة والإشعارات (الرمز والوجه ينسجلن بتلفون ابنه)
+  const own = body?.d ? await (await import("./guardianPush.ts")).verifyDeviceKey(body.d) : null;
+  if (body?.d) need(own !== null, "هذا الرابط انتهى. خذ رابط جديد من صفحة ولي الأمر بتلفون ابنك", 401);
+  if (own !== null) need(["state", "open", "faceOpen", "list", "cb", "pushSub"].includes(a), "هذا يصير من تلفون ابنك", 403);
+  const sid = own ?? studentOf(body?.token, body?.app);
+  need(await student(sid), "سجل معلوماتك أول");
+  if (a === "state") return { ...await pinState(sid), name: String((await student(sid))?.name ?? ""), own: own !== null, vapid: (await import("./guardianPush.ts")).vapidPublic() };
   if (a === "setPin") { await setPin(sid, body.pin, body.pin2); return { ...await pinState(sid), gtoken: await openWithPin(sid, body.pin) }; }
   if (a === "open") return { gtoken: await openWithPin(sid, body.pin) };
   if (a === "faceOpen") return { gtoken: await openWithFace(sid, body.desc, body.photo) };
@@ -31,6 +35,12 @@ export async function guardianAction(body: any) {
   const gid = pinGuardian(sid);
   if (a === "faceSet") { await setFace(sid, body.desc, body.photo); return { ...await pinState(sid), notice: "✅ انسجل وجهك. من هسه تگدر تفتح بوجهك أو برمزك" }; }
   if (a === "list") return await chatList(gid, Number(body.after) || 0);
+  if (a === "deviceLink") {
+    const link = await (await import("./guardianPush.ts")).deviceLink(sid);
+    const QR = (await import("qrcode")).default;
+    return { link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) };
+  }
+  if (a === "pushSub") { await (await import("./guardianPush.ts")).saveSub(sid, body.sub); return { notice: "🔔 تفعّلت الإشعارات. كل درجة جديدة يوصلك عليها إشعار" }; }
   if (a === "cb") {
     const id = `app:${gid}:${++seq}`;
     await handleUpdate({ update_id: ++seq, callback_query: { id, from: { id: gid, is_bot: false, first_name: "ولي الأمر" }, chat_instance: "app", data: String(body.data ?? ""), message: { message_id: Number(body.mid), chat: { id: gid, type: "private" }, date: Math.floor(Date.now() / 1000), text: "" } } });

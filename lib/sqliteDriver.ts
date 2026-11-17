@@ -83,6 +83,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS app_links(fu TEXT PRIMARY KEY, uid INTEGER, env TEXT, chapters TEXT, created TEXT, updated TEXT);
     CREATE TABLE IF NOT EXISTS app_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, dir TEXT, text TEXT, html INTEGER, kb TEXT, media TEXT, tg INTEGER, created TEXT, edited TEXT, del INTEGER);
     CREATE TABLE IF NOT EXISTS guardian_pins(user_id INTEGER PRIMARY KEY, hash TEXT, method TEXT, fails INTEGER, locked_until TEXT, created TEXT, face TEXT, face_at TEXT);
+    CREATE TABLE IF NOT EXISTS guardian_push(user_id INTEGER, endpoint TEXT, keys TEXT, created TEXT, PRIMARY KEY(user_id, endpoint));
     CREATE TABLE IF NOT EXISTS grader_pay(user_id INTEGER PRIMARY KEY, mandatory INTEGER, optional INTEGER, deduct INTEGER, chapters TEXT, exams_off TEXT, places TEXT);
     CREATE TABLE IF NOT EXISTS grader_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, n_mand INTEGER, n_opt INTEGER, n_obj INTEGER, amount INTEGER, forgiven INTEGER, created TEXT, by_id INTEGER);
     CREATE TABLE IF NOT EXISTS paper_ink(item_id INTEGER, page INTEGER, ink TEXT, PRIMARY KEY(item_id, page));

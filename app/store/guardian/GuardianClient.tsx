@@ -10,7 +10,7 @@ type Msg = { id: number; mid: number; dir: string; text: string; html: boolean; 
 type List = { msgs: Msg[]; last: number; answer?: string };
 
 export default function GuardianClient() {
-  const [state, setState] = useState<{ hasPin: boolean; hasFace?: boolean; name: string } | null>(null);
+  const [state, setState] = useState<{ hasPin: boolean; hasFace?: boolean; name: string; own?: boolean; vapid?: string } | null>(null);
   const [face, setFace] = useState<"" | "set" | "open">("");
   const [notice, setNotice] = useState("");
   const [g, setG] = useState("");
@@ -19,7 +19,14 @@ export default function GuardianClient() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [toast, setToast] = useState("");
   const last = useRef(0);
-  const auth = () => ({ token: new URLSearchParams(location.search).get("t") ?? sessionStorage.getItem("qm_t") ?? "", app: appKey() });
+  // تلفون ولي الأمر نفسه: رابطه الخاص (d) ينحفظ بالتلفون، حتى لو فتحها من الشاشة الرئيسية
+  const auth = (): Record<string, string> => {
+    let d = "";
+    try { d = new URLSearchParams(location.search).get("d") ?? ""; if (d) localStorage.setItem("qm_gd", d); else if (!new URLSearchParams(location.search).get("t")) d = localStorage.getItem("qm_gd") ?? ""; } catch { /* */ }
+    if (d) return { d };
+    return { token: new URLSearchParams(location.search).get("t") ?? sessionStorage.getItem("qm_t") ?? "", app: appKey() };
+  };
+  const [link, setLink] = useState<{ link: string; qr: string } | null>(null);
 
   async function call(body: Record<string, unknown>) {
     setBusy(true); setError("");
@@ -47,6 +54,17 @@ export default function GuardianClient() {
     return () => clearInterval(iv);
   }, [g]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function enablePush() {
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !state?.vapid) { setError("تلفونك ما يدعم الإشعارات هنا. بالآيفون ضيف الصفحة للشاشة الرئيسية أول"); return; }
+      const reg = await navigator.serviceWorker.register("/guardian-sw.js");
+      if ((await Notification.requestPermission()) !== "granted") { setError("لازم تسمح بالإشعارات"); return; }
+      const key = Uint8Array.from(atob(state.vapid.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (state.vapid.length % 4)) % 4)), (c) => c.charCodeAt(0));
+      const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+      const r = await call({ action: "pushSub", gtoken: g, sub: sub.toJSON() });
+      if (r) setNotice(r.notice);
+    } catch { setError("ما گدرنا نفعّل الإشعارات، جرب مرة ثانية"); }
+  }
   const fileUrl = (m: Msg, k: number) => `/api/guardian/file?g=${encodeURIComponent(g)}&m=${m.id}&k=${k}`;
   const digits = (v: string) => v.replace(/[^\d٠-٩]/g, "").slice(0, 4);
 
@@ -82,7 +100,24 @@ export default function GuardianClient() {
           <button type="button" className="btn" disabled={busy || pin.length !== 4} onClick={() => void call({ action: "open", pin }).then((r) => { if (r) { setG(r.gtoken); setPin(""); } })}>🔓 افتح</button>
         </div></div></div>
       )}
-      {g && !face && state && !state.hasFace && (
+      {g && !face && state && !state.own && (
+        <div className="wrap"><div className="card"><div className="form">
+          <div className="exhint">📱 ولي الأمر يگدر يستلم الدرجات على تلفونه هو، ببلاش وبدون تليگرام: صوّر رمز QR بكاميرة تلفونه، أو دزله الرابط.</div>
+          {!link ? <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "deviceLink", gtoken: g }).then((r) => r && setLink(r))}>📱 استلم الدرجات على تلفوني</button> : (
+            <div style={{ textAlign: "center" }}>
+              <img src={link.qr} alt="" style={{ width: 220, background: "#fff", borderRadius: 12 }} />
+              <button type="button" className="btn ghost" onClick={() => { if (navigator.share) void navigator.share({ title: "ولي الأمر", url: link.link }).catch(() => undefined); else void navigator.clipboard?.writeText(link.link); }}>📤 دز الرابط</button>
+            </div>
+          )}
+        </div></div></div>
+      )}
+      {g && !face && state?.own && (
+        <div className="wrap"><div className="card"><div className="form">
+          <div className="exhint">🔔 فعّل الإشعارات حتى يوصلك إشعار بكل درجة. بالآيفون: أول شي دوس «مشاركة» ← «إضافة للشاشة الرئيسية»، وافتحها من هناك.</div>
+          <button type="button" className="btn" disabled={busy} onClick={() => void enablePush()}>🔔 فعّل الإشعارات</button>
+        </div></div></div>
+      )}
+      {g && !face && state && !state.hasFace && !state.own && (
         <div className="wrap"><div className="card"><div className="form">
           <div className="exhint">تگدر تسجّل وجهك، حتى تفتح الصفحة بوجهك بدل الرمز. الأحسن تسجّله بحضور المساعد بالمركز. صورة كل توقيع تنحفظ مشفرة، والإدارة بس تشوفها.</div>
           <button type="button" className="btn ghost" disabled={busy} onClick={() => setFace("set")}>📸 سجّل وجهي للتوقيع</button>

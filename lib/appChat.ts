@@ -44,6 +44,8 @@ async function saveOut(uid: number, method: string, p: Row, tg: number | null, m
     uid, dir: "out", text, html, kb: rm?.inline_keyboard ? JSON.stringify(rm.inline_keyboard) : null, media: media.length ? JSON.stringify(media) : null, tg, created: stamp(), del: 0,
   }));
   if (tg === null) await update("app_msgs", { id }, { tg: id });
+  // صفحة ولي الأمر: إشعار لتلفونه إذا مفعّل
+  if (uid >= 500_000_000_000_000) void import("./guardianPush.ts").then((m) => m.notifyGuardian(uid, text)).catch((e) => console.error("guardian push", e));
   return tg ?? id;
 }
 const fakeResult = (uid: number, mid: number, p: Row) => ({ message_id: mid, chat: { id: uid, type: "private" }, date: Math.floor(Date.now() / 1000), text: p.text });

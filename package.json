@@ -32,7 +32,8 @@
     "puppeteer-core": "^25.16.0",
     "qrcode": "^1.5.4",
     "react": "^19",
-    "react-dom": "^19"
+    "react-dom": "^19",
+    "web-push": "^3.6.7"
   },
   "overrides": {
     "postcss": "^8.5.10"

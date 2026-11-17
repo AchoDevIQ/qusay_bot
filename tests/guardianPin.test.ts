@@ -82,3 +82,22 @@ test("الوجه: بصمة مشفرة، القريب يفتح والبعيد ي�
   assert.ok(photos.some((p) => p.kind === "تسجيل الوجه"));
   assert.equal(Buffer.from(photos[0].src.split(",")[1], "base64").toString(), "fake-jpeg");
 });
+
+test("تلفون ولي الأمر نفسه: رابطه يفتح الصفحة برمزه بس، وينبطل إذا انصفّر الرمز، ويحفظ اشتراك الإشعارات", async () => {
+  const { deviceLink, verifyDeviceKey } = await import("../lib/guardianPush.ts");
+  const { find } = await import("../lib/db.ts");
+  const link = await deviceLink(SID);
+  const d = new URL(link).searchParams.get("d")!;
+  assert.equal(await verifyDeviceKey(d), SID);
+  const own = (action: string, x: object = {}) => guardianAction({ d, action, ...x });
+  const st: any = await own("state");
+  assert.equal(st.own, true);
+  await assert.rejects(own("setPin", { pin: "1357", pin2: "1357" }), /تلفون ابنك/);
+  const o: any = await own("open", { pin: "5937" });
+  await own("pushSub", { gtoken: o.gtoken, sub: { endpoint: "https://push.example/abc", keys: { p256dh: "k", auth: "a" } } });
+  assert.equal((await find("guardian_push", { user_id: SID })).length, 1);
+  await assert.rejects(own("pushSub", { gtoken: o.gtoken, sub: { endpoint: "http://bad", keys: {} } }), /الإشعارات/);
+  await resetPin(SID);
+  assert.equal(await verifyDeviceKey(d), null, "الرابط القديم ينبطل");
+  await assert.rejects(own("state"), /انتهى/);
+});
