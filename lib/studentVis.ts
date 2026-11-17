@@ -83,6 +83,7 @@ export async function setSos(uid: number, on: boolean) {
   const ids = new Set(await sosIds());
   if (on) ids.add(uid); else ids.delete(uid);
   await kvSet(SOS, JSON.stringify([...ids]));
+  (await import("./appChat.ts")).forgetMode(uid);
   return ids.size;
 }
 
@@ -117,6 +118,7 @@ export async function visAction(body: Row) {
     const out: Record<string, Rule> = {};
     for (const t of [...VIS_TILES, ...VIS_EXTRA]) out[t.key] = clean(rules[t.key], "off");
     await kvSet(KV, JSON.stringify(out));
+    (await import("./appChat.ts")).forgetModes();
     if (Array.isArray(body.sos)) await kvSet(SOS, JSON.stringify([...new Set((body.sos as unknown[]).map(Number).filter(Number.isSafeInteger))]));
     const open = VIS_TILES.filter((t) => out[t.key].mode !== "off").length;
     notice = open ? `✅ انحفظ. ${open} مربع مفتوح للطلاب` : "✅ انحفظ. كل المربعات مخفية عن الطلاب";

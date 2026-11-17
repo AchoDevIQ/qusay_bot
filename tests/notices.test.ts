@@ -86,3 +86,15 @@ test("طوارئ لطالب بالاسم: يشوف البوت كله والبا�
   await setSos(61, false);
   assert.equal((await visibleTiles(61)).size, 0);
 });
+test("طالب يستعمل التطبيق: رسائل البوت بالتطبيق بس، وبالطوارئ بالاثنين", async () => {
+  const { chatMode, forgetMode } = await import("../lib/appChat.ts");
+  const { setSos } = await import("../lib/studentVis.ts");
+  await put("app_links", { fu: "fu-tg", uid: 555, env: "staging", chapters: "[]", created: "x", updated: "x" });
+  forgetMode(555);
+  assert.equal(await chatMode(555), "app");
+  await setSos(555, true);
+  assert.equal(await chatMode(555), "both");
+  await setSos(555, false);
+  assert.equal(await chatMode(555), "app");
+  assert.equal(await chatMode(556), "tg", "طالب تليگرام بس يبقى مثل ما هو");
+});

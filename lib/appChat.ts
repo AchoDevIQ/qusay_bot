@@ -19,12 +19,25 @@ export async function chatMode(chat: unknown): Promise<"app" | "both" | "tg"> {
   if (id >= APP_UID_BASE) return "app";
   const c = modeCache.get(id);
   if (c && Date.now() - c.at < 60_000) return c.m;
-  // طالب مربوط بالتطبيق، أو كادر عنده باب بدون تليگرام: رسائله توصله بالاثنين
-  const m = (await one("app_links", { uid: id }).catch(() => null)) || (await one("door_links", { user_id: id }).catch(() => null)) ? "both" : "tg";
+  // طالب يستعمل التطبيق (اتفاق الأستاذ 2026-11-17): رسائل البوت توصله بالتطبيق بس، مو بتليگرام،
+  // إلا إذا صاحب البوت فتحله الطوارئ (إله بالاسم، أو «افتح الكل للكل»): وقتها بالاثنين
+  // الكادر اللي عنده باب بدون تليگرام: بالاثنين
+  let m: "app" | "both" | "tg";
+  if (await one("app_links", { uid: id }).catch(() => null)) m = await emergencyFor(id) ? "both" : "app";
+  else m = (await one("door_links", { user_id: id }).catch(() => null)) ? "both" : "tg";
   modeCache.set(id, { m, at: Date.now() });
   return m;
 }
 export const forgetMode = (uid: number) => modeCache.delete(uid);
+/** الطوارئ تبدلت: كل الطلاب يرجع ينحسب وين توصلهم الرسائل */
+export const forgetModes = () => modeCache.clear();
+/** الطوارئ مفتوحة لهذا الطالب؟ (اسمه بقائمة الطوارئ، أو كل مربعات البوت مفتوحة للكل) */
+async function emergencyFor(uid: number) {
+  const { sosIds, visRules, VIS_TILES } = await import("./studentVis.ts");
+  if ((await sosIds()).includes(uid)) return true;
+  const rules = await visRules();
+  return VIS_TILES.every((t) => rules[t.key].mode === "all");
+}
 
 const parse = (v: unknown) => (typeof v === "string" ? (() => { try { return JSON.parse(v); } catch { return null; } })() : v);
 
