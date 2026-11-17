@@ -79,7 +79,10 @@ export async function openDoor(uid: number, pin: unknown) {
 /** وين يروح: اللوحة للمدير والمساعدين، والمكتبة لصاحبها */
 export async function doorTargets(uid: number) {
   const { isStaff, myOffice } = await import("./data.ts");
-  return { admin: ADMIN_IDS.includes(uid) || await isStaff(uid), office: !!await myOffice(uid) };
+  const admin = ADMIN_IDS.includes(uid) || await isStaff(uid), office = !!await myOffice(uid);
+  // طالب (رابط طوارئ بالمتصفح): قائمته ومحادثته وإشعاراته
+  const { student } = await import("./data.ts");
+  return { admin, office, student: !admin && !office && !!await student(uid) };
 }
 
 /** مساعد جديد ما عنده تليگرام: رقم جديد ثابت */

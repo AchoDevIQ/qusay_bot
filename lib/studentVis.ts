@@ -45,7 +45,7 @@ export async function visRules(): Promise<Record<RuleKey, Rule>> {
   for (const t of VIS_EXTRA) out[t.key] = clean(saved[t.key], "off");
   return out;
 }
-function clean(r: Partial<Rule> | undefined, fallback: Rule["mode"]): Rule {
+export function clean(r: Partial<Rule> | undefined, fallback: Rule["mode"]): Rule {
   if (!r) return emptyRule(fallback);
   const nums = (a: unknown) => (Array.isArray(a) ? [...new Set(a.map(Number).filter(Number.isSafeInteger))] : []);
   return {
@@ -75,10 +75,22 @@ export async function inRule(r: Rule, uid: number, s: Row | null): Promise<boole
   return true;
 }
 
+// ---------- طوارئ لطلاب بأسمائهم (طلب الأستاذ 2026-11-17): مو لازم الكل. الطالب اللي بالقائمة يشوف البوت كله
+// (بتليگرام أو برابط المتصفح)، والباقين مثل ما هم
+const SOS = "student_sos";
+export async function sosIds(): Promise<number[]> { try { const j = JSON.parse((await kvGet(SOS)) ?? "[]"); return Array.isArray(j) ? j.map(Number).filter(Number.isSafeInteger) : []; } catch { return []; } }
+export async function setSos(uid: number, on: boolean) {
+  const ids = new Set(await sosIds());
+  if (on) ids.add(uid); else ids.delete(uid);
+  await kvSet(SOS, JSON.stringify([...ids]));
+  return ids.size;
+}
+
 /** المربعات اللي تطلع لهذا الطالب بالبوت */
 export async function visibleTiles(uid: number): Promise<Set<TileKey>> {
   const all = new Set(VIS_TILES.map((t) => t.key));
   if (uid < 0 || await isStaff(uid) || await isRealStaff(uid)) return all;
+  if ((await sosIds()).includes(uid)) return all;
   const rules = await visRules(), s = await student(uid), out = new Set<TileKey>();
   for (const t of VIS_TILES) if (await inRule(rules[t.key], uid, s)) out.add(t.key);
   return out;
@@ -105,6 +117,7 @@ export async function visAction(body: Row) {
     const out: Record<string, Rule> = {};
     for (const t of [...VIS_TILES, ...VIS_EXTRA]) out[t.key] = clean(rules[t.key], "off");
     await kvSet(KV, JSON.stringify(out));
+    if (Array.isArray(body.sos)) await kvSet(SOS, JSON.stringify([...new Set((body.sos as unknown[]).map(Number).filter(Number.isSafeInteger))]));
     const open = VIS_TILES.filter((t) => out[t.key].mode !== "off").length;
     notice = open ? `✅ انحفظ. ${open} مربع مفتوح للطلاب` : "✅ انحفظ. كل المربعات مخفية عن الطلاب";
   } else if (a === "find") {
@@ -114,10 +127,11 @@ export async function visAction(body: Row) {
     return { found: hits.map((s) => ({ id: Number(s.user_id), name: String(s.name ?? "") })) };
   } else need(a === "list", "أمر غير معروف");
   const rules = await visRules();
-  const ids = [...new Set(Object.values(rules).flatMap((r) => r.students))];
+  const sos = await sosIds();
+  const ids = [...new Set([...Object.values(rules).flatMap((r) => r.students), ...sos])];
   return {
     tiles: [...VIS_TILES, ...VIS_EXTRA], rules, notice,
     centers: [...(await centerNames()).entries()].map(([id, name]) => ({ id, name })),
-    genders: GENDERS, currs: CURRS, chapters: await chapterList(), names: await studentNames(ids),
+    genders: GENDERS, currs: CURRS, chapters: await chapterList(), names: await studentNames(ids), sos,
   };
 }

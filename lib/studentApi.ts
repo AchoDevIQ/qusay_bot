@@ -44,7 +44,7 @@ export async function sendStudentsPdf(chat: number, fifth: boolean) {
 }
 const view = async (s: Row) => ({
   id: s.user_id, username: s.username ?? "", name: s.name, curr: s.curr, grade: s.grade, gov: s.gov, side: s.side ?? "", area: s.area,
-  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), pilot: await (await import("./appLink.ts")).isPilot(s.user_id), app: !!await one("app_links", { uid: s.user_id }), pin: !!await one("guardian_pins", { user_id: s.user_id }), gw: await guardianOf(s.user_id) ? await guardianState(s.user_id) : null, wa: whatsappOf(s.phone2), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
+  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), pilot: await (await import("./appLink.ts")).isPilot(s.user_id), sos: (await (await import("./studentVis.ts")).sosIds()).includes(s.user_id), door: !!await one("door_links", { user_id: s.user_id }), app: !!await one("app_links", { uid: s.user_id }), pin: !!await one("guardian_pins", { user_id: s.user_id }), gw: await guardianOf(s.user_id) ? await guardianState(s.user_id) : null, wa: whatsappOf(s.phone2), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
 });
 
 type Filters = { curr?: string; grade?: string; exam?: string; gov?: string };
@@ -275,6 +275,27 @@ export async function studentAction(body: Row) {
     const n = await setPilot(id, !!body.on);
     await logActivity(id, body.on ? "🧪 صار يجرب التطبيق الجديد" : "🧪 رجع للتطبيق القديم");
     notice = body.on ? `🧪 صار يجرب التطبيق الجديد. يطلعله من يفتح التطبيق مرة ثانية. عدد اللي يجربون: ${n}` : `↩️ رجع للتطبيق القديم. عدد اللي يجربون: ${n}`;
+  } else if (a === "sos") {
+    // طوارئ لهذا الطالب بس: يشوف البوت كله
+    const { setSos } = await import("./studentVis.ts");
+    await setSos(id, !!body.on);
+    await logActivity(id, body.on ? "🚨 انفتحله البوت كله (طوارئ)" : "🚨 انشالت الطوارئ عنه");
+    notice = body.on ? "🚨 انفتحله البوت كله. بتليگرام إذا عنده، أو برابط المتصفح" : "✅ انشالت الطوارئ عنه";
+  } else if (a === "doorMake") {
+    // رابط بالمتصفح للطالب (بدل التطبيق إذا خربان عنده): يبطل القديم، ويفتحله البوت (طوارئ)
+    const { makeDoor } = await import("./doorLink.ts");
+    const { setSos } = await import("./studentVis.ts");
+    const st = await student(id);
+    need(st, "الطالب غير موجود", 404);
+    const link = await makeDoor(id, String(st!.name ?? ""));
+    await setSos(id, true);
+    await logActivity(id, "🔗 انعمله رابط بالمتصفح");
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice: "🔗 انعمل الرابط. انسخه ودزه للطالب (واتساب أو أي طريقة). أول مرة يفتحه يحط رمز سري من 4 أرقام.", doorLink: link, doorFor: id };
+  } else if (a === "doorRevoke") {
+    const { revokeDoor } = await import("./doorLink.ts");
+    await revokeDoor(id);
+    await logActivity(id, "🔗 انبطل رابطه بالمتصفح");
+    notice = "⛔ انبطل الرابط، وما يشتغل بعد. الطوارئ تبقى مثل ما هي، شيلها إذا تريد";
   } else if (a === "signPhotos") {
     // صور توقيع ولي الأمر بوجهه (مشفرة)، لصاحب البوت يراجعها
     const { signPhotos } = await import("./guardianPin.ts");

@@ -6,7 +6,7 @@ import { AdminHeader, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 
 type Mode = "off" | "all" | "some";
 type Rule = { mode: Mode; centers: number[]; gender: string; curr: string; chapters: string[]; students: number[] };
-type Data = { tiles: { key: string; title: string }[]; rules: Record<string, Rule>; notice: string; centers: { id: number; name: string }[]; genders: string[]; currs: string[]; chapters: string[]; names: { id: number; name: string }[] };
+type Data = { tiles: { key: string; title: string }[]; rules: Record<string, Rule>; notice: string; centers: { id: number; name: string }[]; genders: string[]; currs: string[]; chapters: string[]; names: { id: number; name: string }[]; sos: number[] };
 
 export default function VisibilityClient() {
   const { data, error, busy, call } = useAdminApi<Data>("/api/visibility", "👁 شنو يشوف الطالب");
@@ -16,15 +16,16 @@ export default function VisibilityClient() {
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
-        {data && <Form key={JSON.stringify(data.rules)} data={data} busy={busy} onSave={(rules) => void call({ action: "save", rules })} />}
+        {data && <Form key={JSON.stringify([data.rules, data.sos])} data={data} busy={busy} onSave={(rules, sos) => void call({ action: "save", rules, sos })} />}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
   );
 }
 
-function Form({ data, busy, onSave }: { data: Data; busy: boolean; onSave: (r: Record<string, Rule>) => void }) {
+function Form({ data, busy, onSave }: { data: Data; busy: boolean; onSave: (r: Record<string, Rule>, sos: number[]) => void }) {
   const [rules, setRules] = useState(data.rules);
+  const [sos, setSos] = useState(data.sos);
   const [names, setNames] = useState(new Map(data.names.map((n) => [n.id, n.name])));
   const set = (k: string, r: Partial<Rule>) => setRules({ ...rules, [k]: { ...rules[k], ...r } });
   // الطوارئ تفتح وتسد مربعات البوت بس، والفويس يبقى مثل ما هو
@@ -43,6 +44,13 @@ function Form({ data, busy, onSave }: { data: Data; busy: boolean; onSave: (r: R
             <button type="button" className={allOff ? "on" : ""} onClick={() => setAll("off")}>🙈 اخفي الكل</button>
           </div>
           <div className="exhint">«افتح الكل للكل» للطوارئ: إذا التطبيق صار بيه خلل، كل الطلاب يلگون كلشي بالبوت. بعدها ارجع اخفيه.</div>
+        </div>
+      </div>
+      <div className="card">
+        <h2>🚨 طوارئ لطلاب بأسمائهم</h2>
+        <div className="form">
+          <div className="exhint">التطبيق خربان عند جماعة بس؟ ضيفهم هنا: يشوفون البوت كله (بتليگرام أو برابط المتصفح من ملفهم بصفحة الطلاب)، والباقين يبقون مثل ما هم. لما ينحل الخلل شيلهم.</div>
+          <Students ids={sos} names={names} onChange={(ids, more) => { if (more) setNames(new Map([...names, ...more])); setSos(ids); }} />
         </div>
       </div>
       {data.tiles.map((t) => {
@@ -85,14 +93,15 @@ function Form({ data, busy, onSave }: { data: Data; busy: boolean; onSave: (r: R
       })}
       <div className="card">
         <div className="form">
-          <button type="button" className="btn" disabled={busy} onClick={() => onSave(rules)}>{busy ? "جاري الحفظ..." : "💾 احفظ"}</button>
+          <button type="button" className="btn" disabled={busy} onClick={() => onSave(rules, sos)}>{busy ? "جاري الحفظ..." : "💾 احفظ"}</button>
         </div>
       </div>
     </>
   );
 }
 
-function Students({ ids, names, onChange }: { ids: number[]; names: Map<number, string>; onChange: (ids: number[], more?: [number, string][]) => void }) {
+/** طلاب بأسمائهم: يدور بالاسم أو التلفون. تستعمله صفحة الإشعارات هم */
+export function Students({ ids, names, onChange, api = "/api/visibility" }: { ids: number[]; names: Map<number, string>; onChange: (ids: number[], more?: [number, string][]) => void; api?: string }) {
   const [q, setQ] = useState("");
   const [data, setData] = useState<{ found: { id: number; name: string }[] } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -100,7 +109,7 @@ function Students({ ids, names, onChange }: { ids: number[]; names: Map<number, 
   async function call(body: Record<string, unknown>) {
     setBusy(true); setError("");
     try {
-      const res = await fetch("/api/visibility", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, initData: pageAuth() }) });
+      const res = await fetch(api, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, initData: pageAuth() }) });
       const j = await res.json();
       if (!res.ok) setError(j.error ?? "صار خطأ"); else setData(j);
     } catch { setError("ماكو اتصال، حاول مرة ثانية"); } finally { setBusy(false); }

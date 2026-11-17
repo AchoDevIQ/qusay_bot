@@ -128,6 +128,16 @@ test("الدخول من التطبيق: يقرا الطالب وفصوله وي�
     assert.ok(ex?.startsWith("/store/myexams?"));
     assert.ok((await enterFromApp({ id: tok, env: "staging", page: "admin" }))?.startsWith("/store/notes?"), "صفحة غير مسموحة ترجع لملازمي");
     assert.equal(await enterFromApp({ id: good("fuD", { aud: "x" }), env: "staging" }), null);
+    // مشاهدات المحاضرات: كل فتحة تنحسب، والنسبة تبقى أعلى وحدة، وتطلع بملف الطالب
+    const { lectureView } = await import("../lib/appLink.ts");
+    const { studentFile } = await import("../lib/studentFile.ts");
+    await lectureView({ id: tok, lecture: "L1", title: "المحاضرة الأولى", ev: "open" });
+    await lectureView({ id: tok, lecture: "L1", ev: "prog", percent: 70 });
+    await lectureView({ id: tok, lecture: "L1", ev: "open" });
+    await lectureView({ id: tok, lecture: "L1", ev: "prog", percent: 30 });
+    assert.equal(await lectureView({ id: good("fuD", { aud: "x" }), lecture: "L1", ev: "open" }), false);
+    const lec = (await studentFile(uid!)).lectures;
+    assert.deepEqual(lec.map((v) => [v.title, v.times, v.percent]), [["المحاضرة الأولى", 2, 70]]);
   } finally {
     globalThis.fetch = realFetch;
   }

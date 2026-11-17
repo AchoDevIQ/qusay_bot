@@ -14,6 +14,7 @@ import { passRequestsCount } from "./passApi.ts";
 import { send } from "./telegram.ts";
 import { todayStr } from "./util.ts";
 import { VIS_PERM, visRules } from "./studentVis.ts";
+import { NOTICE_PERM } from "./notices.ts";
 import { ensure, need } from "./webApi.ts";
 import { verifyInitData } from "./webAuth.ts";
 
@@ -53,6 +54,7 @@ async function homeData(uid: number) {
     people.push({ page: "signups", icon: "📊", title: "تسجيلات الفصول", note: `اليوم: ${n}` });
   }
   if (await can(uid, "schedule")) people.push({ page: "schedule", icon: "🗓", title: "جدول الامتحانات" });
+  if (await can(uid, NOTICE_PERM)) people.push({ page: "announce", icon: "🔔", title: "إشعارات الطلاب", note: "مؤقت يختفي بعد القراءة، أو دائمي لحد ما تمسحه" });
   if (await can(uid, VIS_PERM)) { const n = await openTiles(); people.push({ page: "visibility", icon: "👁", title: "شنو يشوف الطالب بالبوت", note: n ? `${n} مربع مفتوح للطلاب` : "كل المربعات مخفية", hot: n > 0 }); }
   if (await can(uid, "students")) people.push({ page: "students", icon: "🎓", title: "الطلاب", note: `${await count("students")} مسجل` });
   if (!await can(uid, "attend") && await can(uid, "camup")) people.push({ page: "attend", icon: "📷", title: "تصوير أوراق الحضوري", note: "صور ورقة الطالب سؤال سؤال" });

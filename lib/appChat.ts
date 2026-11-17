@@ -127,6 +127,13 @@ export async function chatList(uid: number, after = 0) {
     kb, last: rows.reduce((m, r) => Math.max(m, Number(r.id)), after), voice: await voiceAllowed(uid),
   };
 }
+/** الطالب فتح المحادثة: كل رسائل البوت لحد هنا انقرت (علامة العدد فوك تنشال) */
+export const markChatSeen = async (uid: number, last: number) => { if (last > Number((await kvGet(`app_seen_${uid}`)) ?? 0)) await kvSet(`app_seen_${uid}`, String(last)); };
+/** رسائل البوت اللي بعده ما شافها */
+export async function unreadChat(uid: number) {
+  const seen = Number((await kvGet(`app_seen_${uid}`)) ?? 0);
+  return (await find("app_msgs", { uid })).filter((r) => r.dir === "out" && !r.del && Number(r.id) > seen).length;
+}
 /** رسالة الطالب نفسه تنحفظ حتى تطلع بالصفحة مثل المحادثة */
 export async function saveIn(uid: number, text: string, media: Media[] = []) {
   return Number(await insert("app_msgs", { uid, dir: "in", text, html: 0, kb: null, media: media.length ? JSON.stringify(media) : null, tg: null, created: stamp(), del: 0 }));

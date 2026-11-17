@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 type State = { hasPin: boolean; label: string; vapid: string };
-type Open = { t: string; admin: boolean; office: boolean };
+type Open = { t: string; admin: boolean; office: boolean; student?: boolean };
 
 export default function DoorClient() {
   const [d, setD] = useState("");
@@ -71,7 +71,9 @@ export default function DoorClient() {
           <div className="card"><div className="form">
             {open.admin && <button type="button" className="btn" onClick={() => go("admin")}>⚙️ لوحة التحكم</button>}
             {open.office && <button type="button" className="btn" onClick={() => go("sales")}>🏪 مكتبتي</button>}
-            <button type="button" className="btn ghost" onClick={() => go("chat")}>💬 رسائلي</button>
+            {open.student && <button type="button" className="btn" onClick={() => go("home")}>🏠 قائمتي</button>}
+            {open.student && <button type="button" className="btn ghost" onClick={() => go("inbox")}>🔔 الإشعارات</button>}
+            <button type="button" className="btn ghost" onClick={() => go("chat")}>💬 {open.student ? "المحادثة" : "رسائلي"}</button>
             <button type="button" className="btn ghost" disabled={busy} onClick={() => void enablePush()}>🔔 فعّل الإشعارات على هذا الجهاز</button>
             <div className="exhint">الدخول يبقى أسبوع، وبعدها تكتب رمزك مرة ثانية. بالآيفون والآيباد: «مشاركة» ← «إضافة للشاشة الرئيسية»، وافتحها من هناك.</div>
           </div></div>

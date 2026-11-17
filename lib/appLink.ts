@@ -138,7 +138,7 @@ export async function appChapters(uid: number): Promise<string[]> {
 }
 
 // ---------- الدخول: التطبيق يفتح /api/app/enter بطلب POST فيه رمز الطالب، ويرجع له تحويل لصفحة البوت
-const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian"]);
+const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo"]);
 export const APP_ERR = "ما گدرنا نفتح الصفحة. سد التطبيق وافتحه من جديد. إذا تكررت، تواصل ويا الإدارة.";
 
 /** يرجع رابط الصفحة (نسبي) لطالب التطبيق، أو null إذا الرمز أو الحساب مو صالح */
@@ -184,5 +184,29 @@ export async function appState(form: { id?: unknown; env?: unknown }) {
   const uid = Number(link?.uid);
   const pilot = await isPilot(uid);
   const { needsSchedule } = await import("./schedApi.ts");
-  return { pilot, needSchedule: pilot && await needsSchedule(uid) };
+  if (!pilot) return { pilot, needSchedule: false };
+  // علامات العدد فوك: إشعارات ما قراها، ورسائل بالمحادثة ما شافها
+  const { unreadNotices } = await import("./notices.ts");
+  const { unreadChat } = await import("./appChat.ts");
+  return { pilot, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid) };
+}
+
+// ---------- مشاهدات المحاضرات (طلب الأستاذ 2026-11-17): التطبيق يبلغ البوت لما الطالب يفتح محاضرة ولوين وصل منها.
+// open: فتحها مرة جديدة (العدد يزيد). prog: وصل لهذي النسبة (تبقى أعلى نسبة)
+export async function lectureView(form: { id?: unknown; lecture?: unknown; title?: unknown; subject?: unknown; ev?: unknown; percent?: unknown }) {
+  const fu = await verifyAppIdToken(form.id);
+  if (!fu) return false;
+  const link = await one("app_links", { fu });
+  const lecture = String(form.lecture ?? "").trim().slice(0, 100);
+  if (!link || !lecture) return false;
+  const uid = Number(link.uid);
+  const old = await one("lecture_views", { user_id: uid, lecture });
+  const pct = Math.max(0, Math.min(100, Math.round(Number(form.percent) || 0)));
+  const title = String(form.title ?? "").trim().slice(0, 200) || String(old?.title ?? "");
+  await put("lecture_views", {
+    user_id: uid, lecture, title, subject: String(form.subject ?? old?.subject ?? "").slice(0, 100),
+    times: Number(old?.times ?? 0) + (form.ev === "open" ? 1 : 0), percent: Math.max(pct, Number(old?.percent ?? 0)),
+    first_at: old?.first_at ?? stamp(), last_at: stamp(),
+  });
+  return true;
 }

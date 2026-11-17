@@ -2,7 +2,7 @@
 // بس من التطبيق (مفتاح التطبيق ويا رابط الطالب)
 import { ADMIN_IDS } from "./config.ts";
 import { one } from "./db.ts";
-import { FAKE_MID, chatList, mediaRow, saveIn, takeAnswer, voiceAllowed, type Media } from "./appChat.ts";
+import { FAKE_MID, chatList, markChatSeen, mediaRow, saveIn, takeAnswer, voiceAllowed, type Media } from "./appChat.ts";
 import { handleUpdate } from "./bot.ts";
 import { groupId, student } from "./data.ts";
 import { files } from "./files.ts";
@@ -46,7 +46,7 @@ export async function chatAction(body: any) {
   await allowDoor(body?.token);
   const uid = who(body?.token, body?.app);
   const a = String(body?.action ?? "list");
-  if (a === "list") return await chatList(uid, Number(body.after) || 0);
+  if (a === "list") { const r = await chatList(uid, Number(body.after) || 0); await markChatSeen(uid, r.last); return r; }
   const now = Math.floor(Date.now() / 1000);
   if (a === "text") {
     const text = String(body.text ?? "").trim();

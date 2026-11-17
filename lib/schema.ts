@@ -58,6 +58,11 @@ export const SCHEMA: Record<string, Table> = {
   // باب الكادر بدون تليگرام: رابط ورمز لكل شخص، واشتراكات إشعاراته
   door_links: { key: "user_id", cols: nulls("ver", "hash", "fails", "locked_until", "label", "created") },
   door_push: { key: ["user_id", "endpoint"], cols: nulls("keys", "created") },
+  // إشعارات الطلاب: مؤقت (يختفي بعد ما يقراه) أو دائمي (يبقى لحد ما ينمسح). aud: all / pilot / some (rule)
+  notices: { key: "id", auto: true, cols: nulls("kind", "text", "image", "aud", "rule", "by_id", "created", "del") },
+  notice_reads: { key: ["notice_id", "user_id"], cols: { read_at: null } },
+  // مشاهدات المحاضرات بالتطبيق: كل طالب وكل محاضرة، كم مرة شافها وكم دقيقة
+  lecture_views: { key: ["user_id", "lecture"], cols: nulls("title", "subject", "times", "percent", "first_at", "last_at") },
   grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters", "exams_off", "places") },
   grader_settlements: { key: "id", auto: true, cols: nulls("user_id", "n_mand", "n_opt", "n_obj", "amount", "forgiven", "created", "by_id") },
   objections: { key: "id", auto: true, cols: nulls("item_id", "user_id", "q", "text", "voice", "status", "old_mark", "new_mark", "reason", "created", "decided_at", "decided_by", "paid_id") },

@@ -172,17 +172,25 @@ export async function orderCancelCb(chat: number, uid: number, mid: number, d: s
   } else if (d.startsWith("ocn:")) {
     await edit(chat, mid, `تمام، طلبك #${oid} باقي ✅\n↩️ تگدر تلغيه <b>لحد ما توصلك رسالة «تم تجهيز طلبك»</b>.`, [[btn(`❌ إلغاء الطلب #${oid}`, `oc:${oid}`)]]);
   } else if (d.startsWith("ocy:")) {
-    const n0 = await update("orders", { id: oid }, { printed: 2 }, { where: (r) => !r.printed });
-    // الكمية ترجع للمخزن
-    if (n0) await (await import("./stock.ts")).returnStock(JSON.parse(String(o.items || "[]")), o.curr);
-    await logActivity(uid, `❌ ألغى الطلب #${oid}`);
-    await edit(chat, mid, `❌ تم إلغاء طلبك <b>#${oid}</b>.\nتگدر تطلب من جديد بأي وقت من 🛒 المتجر.`);
-    const n = await newOrdersCount();
-    for (const a of await staffIds("orders")) {
-      await send(a, `❌ <b>الطالب ${esc(o.name)} ألغى الطلب #${oid}</b>\nلا تجهزه. 🔔 الطلبات الجديدة: <b>${n}</b>`, { replyKb: await mainKb(a) });
-    }
+    await cancelOrder(uid, o, () => edit(chat, mid, `❌ تم إلغاء طلبك <b>#${oid}</b>.
+تگدر تطلب من جديد بأي وقت من 🛒 المتجر.`));
   }
   return null;
+}
+/** الطالب يلغي طلبه (من المحادثة أو من صفحة «طلباتي»): بس إذا بعده ما تجهز. الكمية ترجع للمخزن والإدارة تنبلغ */
+export async function cancelOrder(uid: number, o: Row, told?: () => Promise<unknown>) {
+  const oid = Number(o.id);
+  const n0 = await update("orders", { id: oid }, { printed: 2 }, { where: (r) => !r.printed });
+  if (!n0) return false;
+  await (await import("./stock.ts")).returnStock(JSON.parse(String(o.items || "[]")), o.curr);
+  await logActivity(uid, `❌ ألغى الطلب #${oid}`);
+  if (told) await told();
+  const n = await newOrdersCount();
+  for (const a of await staffIds("orders")) {
+    await send(a, `❌ <b>الطالب ${esc(o.name)} ألغى الطلب #${oid}</b>
+لا تجهزه. 🔔 الطلبات الجديدة: <b>${n}</b>`, { replyKb: await mainKb(a) });
+  }
+  return true;
 }
 
 export async function onStudentCb(chat: number, uid: number, mid: number, d: string, st: string, data: Row, user: Row): Promise<string | null> {

@@ -7,13 +7,13 @@ import Thumbs from "../Thumbs";
 import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import { CURR_OPTS, DateInput, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
-type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; pin?: boolean; pilot?: boolean; app?: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
+type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; pin?: boolean; pilot?: boolean; app?: boolean; sos?: boolean; door?: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
 type TestStudent = { id: number; name: string; papers: number; graded: number; chapters?: string[]; link: string };
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null; skip?: boolean }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
-type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; log: { what: string; created: string }[]; average: number | null };
-type Data = { canMsg?: boolean; file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
+type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; lectures?: { title: string; subject: string; times: number; percent: number; last: string }[]; log: { what: string; created: string }[]; average: number | null };
+type Data = { doorLink?: string; doorFor?: number; canMsg?: boolean; file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -212,6 +212,8 @@ function FileView({ s, file, data, busy, call, close }: { s: S; file: StudentFil
         <div className="card expad">
           <div className="exlabel">⛔ غياباته ({file.absences.length})</div>
           {file.absences.length ? file.absences.map((a) => <div key={a.id} className="adsale">{a.title}<small>{a.chapter}</small><small dir="ltr">{a.at}</small></div>) : <div className="exhint">ماكو غيابات.</div>}
+          <div className="exlabel adtop">🎬 مشاهداته للمحاضرات ({file.lectures?.length ?? 0})</div>
+          {file.lectures?.length ? file.lectures.map((v, i) => <div key={i} className="adsale">{v.title}<small>{v.times > 1 ? `شافها ${v.times} مرات` : "شافها مرة وحدة"} · وصل {v.percent}٪</small><small dir="ltr">{v.last.slice(0, 16)}</small></div>) : <div className="exhint">بعده ما شاف ولا محاضرة بالتطبيق (أو ما يجرب التطبيق الجديد).</div>}
           <div className="exlabel adtop">🎫 حضوره بالمركز ({file.attended.length})</div>
           {file.attended.map((a) => <div key={a.id} className="adsale">{a.title}<small dir="ltr">{a.at}</small></div>)}
           <div className="exlabel adtop">🚦 إيقافات السيطرة ({file.stops.length})</div>
@@ -232,6 +234,34 @@ function FileView({ s, file, data, busy, call, close }: { s: S; file: StudentFil
 }
 
 /** «📩 رسالة»: للطالب أو لولي أمره، كتابة أو فويس أو الاثنين. توصل بالبوت ومحمية ما تنحول */
+/** طوارئ لهذا الطالب بس (يشوف البوت كله)، ورابط بالمتصفح إذا التطبيق خربان عنده. تقدر توقفه بأي وقت */
+function EmergencyBox({ s, busy, call }: { s: S; busy: boolean; call: Call }) {
+  const [link, setLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  async function make() {
+    const r = await call({ action: "doorMake", id: s.id });
+    if (r?.doorLink && r.doorFor === s.id) { setLink(r.doorLink); setCopied(false); }
+  }
+  async function copy() { try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); } }
+  return (
+    <>
+      <label className="adcheck adflat">
+        <input type="checkbox" checked={!!s.sos} disabled={busy} onChange={(e) => void call({ action: "sos", id: s.id, on: e.target.checked })} />
+        <span>🚨 طوارئ: افتحله البوت كله (بتليگرام أو بالرابط)</span>
+      </label>
+      {link ? (
+        <div className="form">
+          <input readOnly value={link} dir="ltr" onFocus={(e) => e.target.select()} />
+          <button type="button" className="exbtn" onClick={() => void copy()}>{copied ? "✅ انتسخ، دزه للطالب" : "📋 انسخ الرابط"}</button>
+        </div>
+      ) : null}
+      {s.door
+        ? <><Confirm label="🔗 عنده رابط بالمتصفح: سويله رابط جديد (القديم يبطل)" disabled={busy} onYes={() => void make()} /><Confirm label="⛔ وقف رابطه بالمتصفح" disabled={busy} onYes={() => { setLink(""); void call({ action: "doorRevoke", id: s.id }); }} /></>
+        : <Confirm label="🔗 سويله رابط بالمتصفح (إذا التطبيق خربان عنده)" disabled={busy} onYes={() => void make()} />}
+    </>
+  );
+}
+
 function MsgPanel({ s, busy }: { s: S; busy: boolean }) {
   const upload = useContext(UploadCtx);
   const [open, setOpen] = useState(false);
@@ -309,6 +339,7 @@ function Form({ s, data, close, busy, call, inFile }: { s: S; data: Data; close:
             <span>🧪 يجرب التطبيق الجديد (البوت داخل التطبيق)</span>
           </label>
         ) : <span className="exhint">📱 بعده ما فتح التطبيق بعد التحديث، فما يگدر يجرب الجديد</span>}
+        <EmergencyBox s={s} busy={busy} call={call} />
         {s.pin && <SignPhotos id={s.id} />}
         {s.pin && <Confirm label="🔐 ولي أمره بالرمز على تطبيق ابنه: صفّر الرمز" disabled={busy} onYes={() => void call({ action: "resetPin", id: s.id })} />}
         {s.guardian ? <Confirm label="👨‍👧 مربوط بولي أمر: فك الربط" disabled={busy} onYes={() => void call({ action: "unlink", id: s.id })} /> : <span className="exhint">ولي الأمر غير مربوط</span>}

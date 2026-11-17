@@ -8,13 +8,14 @@ import { studentPapers } from "./studentPapers.ts";
 const ORDER_STATE: Record<number, string> = { 0: "طلب جديد", 1: "انطبع للتوصيل", 2: "ملغي", 3: "بيعة مكتبة" };
 
 export async function studentFile(uid: number) {
-  const [papers, orders, items, stops, questions, log] = await Promise.all([
+  const [papers, orders, items, stops, questions, log, views] = await Promise.all([
     studentPapers(uid),
     find("orders", { user_id: uid }, { order: ["-id"] }),
     find("sched_items", { user_id: uid }),
     find("student_stops", { user_id: uid }, { order: ["-id"] }),
     find("questions", { user_id: uid }, { order: ["-id"] }),
     activityOf(uid, 300),
+    find("lecture_views", { user_id: uid }),
   ]);
   const exams = new Map<number, Row>();
   for (const it of items) if (!exams.has(it.exam_id)) { const e = await one("bank_exams", { id: it.exam_id }); if (e) exams.set(it.exam_id, e); }
@@ -36,6 +37,8 @@ export async function studentFile(uid: number) {
     stops: stops.map((s) => ({ id: s.id as number, chapter: String(s.chapter ?? ""), score: s.score ?? 0, max: s.max ?? 0, absent: s.absent ?? 0, reason: String(s.reason ?? ""), created: String(s.created ?? ""), lifted: String(s.lifted ?? "") })),
     questions: questions.map((q) => ({ id: q.id as number, status: String(q.status ?? ""), created: String(q.created ?? "") })),
     log,
+    // مشاهداته للمحاضرات بالتطبيق: كم مرة فتحها، ولوين وصل منها
+    lectures: views.sort((a, b) => String(b.last_at).localeCompare(String(a.last_at))).map((v) => ({ title: String(v.title || "محاضرة"), subject: String(v.subject ?? ""), times: Number(v.times ?? 0), percent: Number(v.percent ?? 0), last: String(v.last_at ?? "") })),
     average: graded.length ? Math.round(graded.reduce((t, p) => t + Number(p.total), 0) / graded.length) : null,
   };
 }
