@@ -2,8 +2,9 @@
 // الصفحة الرئيسية للطالب: مربعات بإطارات وألوان QMath
 import { useEffect, useState, type ReactNode } from "react";
 import { closeApp, haptic, openOutside, deviceId } from "../shared";
+import BasicsCard, { type Basics } from "../BasicsCard";
 
-type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[]; show?: string[]; needSched?: boolean; appGuard?: boolean };
+type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[]; show?: string[]; needSched?: boolean; appGuard?: boolean; basics?: Basics | null };
 type Reply = List & { url?: string; close?: boolean; error?: string };
 
 const svg = (body: ReactNode) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{body}</svg>;
@@ -51,11 +52,11 @@ export default function HomeClient() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
-  async function call(action: string): Promise<Reply | null> {
+  async function call(action: string, extra: Record<string, unknown> = {}): Promise<Reply | null> {
     setError("");
     try {
       const t = token || new URLSearchParams(location.search).get("t") || "";
-      const res = await fetch("/api/home", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: t, action, device: await deviceId() }) });
+      const res = await fetch("/api/home", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: t, action, ...extra, device: await deviceId() }) });
       const j: Reply = await res.json();
       if (!res.ok) { setError(j.error ?? "صار خطأ، حاول مرة ثانية"); return null; }
       return j;
@@ -125,6 +126,7 @@ export default function HomeClient() {
           </div></div>
         )}
         {data?.link && !data.appGuard && <GuardianGate link={data.link} text={data.linkText ?? ""} copyText={data.linkCopy ?? data.link} recheck={() => void recheck()} busy={busy === "check"} />}
+        {data?.basics && <BasicsCard need={data.basics} busy={!!busy} save={(b) => { setBusy("basics"); void call("setBasics", b).then(async (r) => { if (r) { const l = await call("list"); if (l) setData(l); } setBusy(""); }); }} />}
         {data?.needSched && !data.link && (
           <div className="card warn"><div className="who">🗓 قبل كل شي اختار أوقات امتحاناتك من «امتحاناتي»، وبعدها ينفتحلك كلشي.</div></div>
         )}

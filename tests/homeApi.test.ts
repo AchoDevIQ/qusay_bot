@@ -47,7 +47,7 @@ test("الرمز: الغلط والمنتهي مرفوضين، ولحساب ثا
 
 test("أسفل المحادثة زر واحد يفتح القائمة برمز صاحبه", async () => {
   await msg(2, { text: "/start" });
-  await msg(2, { web_app_data: { data: JSON.stringify({ k: "reg", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 }) } });
+  await msg(2, { web_app_data: { data: JSON.stringify({ k: "reg", sx: "بنين", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 }) } });
   const kb = (await mainKb(2)).keyboard;
   assert.equal(kb.length, 1);
   const url = new URL(kb[0][0].web_app!.url);

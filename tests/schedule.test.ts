@@ -80,7 +80,7 @@ test("حالة الامتحان حسب الوقت", () => {
   assert.equal(itemState("done", "2027-02-01 16:00", 15, "2027-03-01 16:00"), "done");
 });
 
-const student = (uid: number, exam = "إلكتروني") => put("students", { user_id: uid, username: "", name: "طالب رقم ثلاثة اربعة", curr: "عربي", grade: "السادس العلمي", gov: "البصرة", side: "", area: "ع", phone1: "07701234567", phone2: "07801234567", exam, created: "2026-01-01 10:00" });
+const student = (uid: number, exam = "إلكتروني") => put("students", { user_id: uid, username: "", gender: "بنين", name: "طالب رقم ثلاثة اربعة", curr: "عربي", grade: "السادس العلمي", gov: "البصرة", side: "", area: "ع", phone1: "07701234567", phone2: "07801234567", exam, created: "2026-01-01 10:00" });
 const bank = async (chapter: string, n: number, slug: string) => {
   for (let i = 1; i <= n; i++) {
     const e = await insert("bank_exams", { slug, chapter, ord: i, title: `${chapter} ${i}`, info: "", minutes: 60 });

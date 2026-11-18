@@ -6,6 +6,7 @@ import { createPublicKey, createVerify } from "node:crypto";
 import { find, insertIgnore, kvGet, kvSet, one, put, tx, type Row } from "./db.ts";
 import { student } from "./data.ts";
 import { stamp } from "./util.ts";
+import { addMinutes } from "./scheduleRules.ts";
 import { appKey, homeToken } from "./webAuth.ts";
 import { forgetMode } from "./appChat.ts";
 import { storeLink } from "./keyboards.ts";
@@ -105,7 +106,10 @@ export async function readAppStudent(env: AppEnv, idToken: string, fu: string): 
 /** رقم الطالب بالبوت: نفس رقم تلگرامه إذا مربوط، وإلا رقم جديد ينحفظ بأول دخول.
  *  طلاب التطبيق امتحانهم إلكتروني (قرار الأستاذ)، إلا اللي عنده نوع امتحان بالبوت من قبل.
  *  امتحانات الفصول اللي شاريها بالتطبيق تنفتحله هنا، ولا تنسحب منه */
+/** صف التطبيق («sixth_preparatory») بكلمة البوت */
+const gradeWord = (g: string) => (/fifth|الخامس/i.test(g) ? "الخامس العلمي" : /sixth|السادس/i.test(g) ? "السادس العلمي" : "");
 export async function linkAppStudent(env: AppEnv, s: AppStudent): Promise<number> {
+  const { genderWord } = await import("./basics.ts");
   return await tx(async () => {
     const old = await one("app_links", { fu: s.fu });
     const tg = /^\d{5,15}$/.test(s.telegramId) ? Number(s.telegramId) : 0;
@@ -115,10 +119,18 @@ export async function linkAppStudent(env: AppEnv, s: AppStudent): Promise<number
     const st = await student(uid);
     if (!st) {
       await put("students", {
-        user_id: uid, username: "", name: s.name, curr: s.lang === "en" ? "إنجليزي" : "عربي", grade: s.grade, gov: s.province, side: "", area: "",
-        phone1: s.phone, phone2: s.parentPhone, exam: ONLINE, center_id: null, gender: s.gender || null, birth: s.birth || null, created: stamp(), updated: stamp(),
+        user_id: uid, username: "", name: s.name, curr: s.lang === "en" ? "إنجليزي" : "عربي", grade: gradeWord(s.grade) || s.grade, gov: s.province, side: "", area: "",
+        phone1: s.phone, phone2: s.parentPhone, exam: ONLINE, center_id: null, gender: genderWord(s.gender), birth: s.birth || null, created: stamp(), updated: stamp(),
       });
-    } else if (!st.exam) await put("students", { ...st, exam: ONLINE, center_id: null, updated: stamp() });
+      } else {
+      // الناقص بالبوت ياخذه من التطبيق (بنين لو بنات، الصف، المواليد). اللي محفوظ بالبوت ما يتغير
+      const add: Row = {};
+      if (!st.exam) Object.assign(add, { exam: ONLINE, center_id: null });
+      if (!genderWord(st.gender) && genderWord(s.gender)) add.gender = genderWord(s.gender);
+      if (!gradeWord(String(st.grade ?? "")) && gradeWord(s.grade)) add.grade = gradeWord(s.grade);
+      if (!st.birth && s.birth) add.birth = s.birth;
+      if (Object.keys(add).length) await put("students", { ...st, ...add, updated: stamp() });
+    }
     for (const ch of s.examChapters) await insertIgnore("exam_access", { user_id: uid, chapter: ch }, { order_id: null, created: stamp() });
     return uid;
   });
@@ -170,16 +182,22 @@ export async function setPilot(uid: number, on: boolean) {
 
 /** حالة الطالب للتطبيق نفسه (أول ما ينفتح): يجرب الجديد؟ ولازم يختار أوقاته أول؟
  *  أول مرة ينربط حسابه هنا، حتى يطلع بصفحة الطلاب وصاحب البوت يگدر يختاره */
+const SYNC_MIN = 10;
 export async function appState(form: { id?: unknown; env?: unknown; push?: unknown }) {
   const fu = await verifyAppIdToken(form.id);
   if (!fu) return null;
   let link = await one("app_links", { fu });
+  const env: AppEnv = form.env === "staging" ? "staging" : "prod";
   if (!link) {
-    const env: AppEnv = form.env === "staging" ? "staging" : "prod";
     const s = await readAppStudent(env, String(form.id), fu).catch(() => null);
     if (!s) return { needSchedule: false, pilot: false };
     await linkAppStudent(env, s);
     link = await one("app_links", { fu });
+  } else if (String(link.updated ?? "") < addMinutes(stamp(), -SYNC_MIN)) {
+    // كل ما يفتح التطبيق (أكثر شي مرة كل 10 دقايق): الفصول اللي اشتراها بالتطبيق والمعلومات الناقصة توصل للبوت،
+    // حتى اللي ما يجرب التطبيق الجديد. إذا التطبيق ما رد، يبقى مثل ما هو ويتحدث بالمرة الجاية
+    const s = await readAppStudent(env, String(form.id), fu).catch(() => null);
+    if (s) await linkAppStudent(env, s).catch((e) => console.error("app sync", e));
   }
   const uid = Number(link?.uid);
   const pilot = await isPilot(uid);

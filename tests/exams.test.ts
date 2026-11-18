@@ -41,7 +41,7 @@ const mainButtons = (uid: number) => {
   return c.p.reply_markup.keyboard.flat().map((b: any) => b.text);
 };
 const register = async (uid: number, phone: string) => await webapp(uid, {
-  k: "reg", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "0770" + phone, p2: "0780" + phone, e: "", c: 0,
+  k: "reg", sx: "بنين", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "0770" + phone, p2: "0780" + phone, e: "", c: 0,
 });
 /** طلب توصيل من الصفحة، يرجع رقمه */
 async function order(uid: number, pid: number) {

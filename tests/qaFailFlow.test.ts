@@ -60,7 +60,7 @@ test("الذكاء واقف: السؤال للأستاذ، تنبيه لصاحب
   await qa.qaAction(f);
   await qa.qaAction({ initData: sign(1), action: "settings", on: true });
   await msg(2, "/start");
-  await handleUpdate({ message: { message_id: ++nextId, chat: { id: 2, type: "private" }, from: { id: 2 }, web_app_data: { data: JSON.stringify({ k: "reg", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 }) } } });
+  await handleUpdate({ message: { message_id: ++nextId, chat: { id: 2, type: "private" }, from: { id: 2 }, web_app_data: { data: JSON.stringify({ k: "reg", sx: "بنين", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 }) } } });
   await group(1, "/setgroup");
   const ch = (await find("chapters")).sort((a, b) => a.ord - b.ord)[0];
   const t = (await find("topics")).find((x) => x.ar === "الجذور التربيعية")!;

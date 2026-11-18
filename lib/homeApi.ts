@@ -63,6 +63,9 @@ export async function homeAction(body: Row) {
   if (["shop", "ask", "myq", "me", "exams", "notes", "vote"].includes(tile)) need((await shown()).has(tile as never), "هذا القسم مو مفتوح هسه", 403);
   // سلّم أول امتحان وبعده ما ربط ولي أمره: كلشي مقفول لحد ما يربطه
   if (a === "ask" || a === "exams" || a === "notes") need(!await needsGuardian(id), "🔒 اربط ولي أمرك أول، من القائمة الرئيسية");
+  // بنين لو بنات والصف ناقصات (طالب قديم): بطاقتها فوك بالرئيسية، وامتحاناتي ما يرتبها لحد ما يختار
+  const { missingBasics, setBasics } = await import("./basics.ts");
+  if (a === "setBasics") { await setBasics(id, body); return { ok: true }; }
   // اشترى امتحانات وما اختار أوقاته: ما ينفتح شي غير امتحاناتي
   if (["shop", "order", "ask", "myq", "me", "notes", "vote"].includes(a)) need(!await needsSchedule(id), SCHED_FIRST, 409);
   // ولي الأمر ما استلم درجة من 3 أيام: المتجر والتصويت مقفولين (الدراسة لا)
@@ -74,13 +77,14 @@ export async function homeAction(body: Row) {
       if (kids.length) return { name: "", exams: false, ask: false, myq: false, children: await Promise.all(kids.map(async (k) => (await student(k.student_id))?.name ?? "—")) };
       return { name: "", exams: false, ask: true, myq: false, fresh: true, show: [...await shown()] };
     }
+    const basics = missingBasics(s);
     // ورا أول امتحان: لازم يربط ولي أمره قبل كل شي
     const needLink = await needsGuardian(id);
     const needSched = await needsSchedule(id);
     return {
       // المربعات المفتوحة لهذا الطالب (البوت احتياط للتطبيق). قبل ما يختار أوقاته: امتحاناتي بس
       show: [...await shown()].filter((k) => !needSched || k === "exams"),
-      needSched,
+      needSched, basics,
       // من التطبيق: ولي الأمر يربط برمزه على هذا التلفون (صفحة «👨‍👧 ولي الأمر»)، مو برابط تليگرام
       appGuard: fromApp,
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين

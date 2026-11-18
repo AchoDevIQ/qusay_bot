@@ -45,7 +45,7 @@ const buttons = (c: Call) => (c.p.reply_markup?.inline_keyboard ?? []).flat().ma
 const lastUrl = (c: Call) => c.p.reply_markup.keyboard[0][0].web_app.url as string;
 const pageData = (url: string) => JSON.parse(Buffer.from(new URL(url).searchParams.get("d")!, "base64url").toString("utf8"));
 
-const REG = { k: "reg", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 };
+const REG = { k: "reg", sx: "بنين", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 };
 const register = async (uid: number, over: object = {}) => await webapp(uid, { ...REG, ...over });
 
 test("/start يرحب ويطلب التسجيل بفورمة صفحة /store/reg", async () => {

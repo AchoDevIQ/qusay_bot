@@ -5,6 +5,7 @@ import AiCompare, { type AiQ } from "./AiCompare";
 import PdfPages from "../PdfPages";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { addDays, ampm, prettyAt, prettyDay } from "../../../lib/scheduleRules.ts";
+import BasicsCard, { type Basics } from "../BasicsCard";
 import { DateInput, deviceId, deviceNow, haptic, openOutside, platform, platformNow } from "../shared";
 import QRCode from "qrcode";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
@@ -15,7 +16,7 @@ type Item = { id: number; status?: string; exam?: number; skippable?: boolean; o
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[];
+  basics?: Basics | null; viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[];
   catchPlan?: CatchPlan | null; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; canDrop?: { exam: number; title: string }[]; toPlan?: { exam: number; title: string; chapter: string; skip: boolean }[]; perWeekMax?: number; pace?: Pace; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
@@ -152,7 +153,8 @@ export default function MyExamsClient() {
           </div>
         )}
         {!info && !error && <div className="empty">جاري التحميل...</div>}
-        {info?.repick && <Picker info={info} busy={busy} call={call} />}
+        {info?.basics && !info.viewOnly && <BasicsCard need={info.basics} busy={busy} save={(b) => void call({ action: "setBasics", ...b })} />}
+        {info?.repick && !info.basics && <Picker info={info} busy={busy} call={call} />}
         {info && info.late.length > 0 && <LateAsk info={info} busy={busy} call={call} />}
         {info?.guardWait && (info.guardWait.pending.length > 0 || info.guardWait.old) && (
           <div className="card"><div className="hmlink">
@@ -160,8 +162,8 @@ export default function MyExamsClient() {
             {info.guardWait.travel ? <div className="exhint">✈️ القفل مأجّل لحد {info.guardWait.travel}</div> : <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "askTravel" })}>✈️ ولي أمري مسافر</button>}
           </div></div>
         )}
-        {info?.needsChoice && <Choice info={info} busy={busy} call={call} />}
-        {info && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
+        {info?.needsChoice && !info.basics && <Choice info={info} busy={busy} call={call} />}
+        {info && !info.basics && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
         {info && info.mode !== "general" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}
         {info && info.mode === "general" && !info.repick && <MyTimes info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}

@@ -564,6 +564,8 @@ async function studentInfo(uid: number) {
     attendCode: place.inPerson ? studentCode(uid) : "",
     // الحضوري يختار يمتحن بالآيباد (إذا مركزه ما مفتوحله يصور)
     ipad: place.inPerson && !await photosAllowed(uid) ? await ipadExam(uid) : null,
+    // بنين لو بنات والصف ناقصات: يختارهن قبل ما يرتب
+    basics: (await import("./basics.ts")).missingBasics(st),
     inPerson: place.inPerson, place: place.label, name: st?.name ?? "", remaining: left.length, mode: sched?.mode ?? (sched ? "private" : null),
     needsChoice: !sched && left.length > 0,
     // وهو يرتب جدوله الخاص: الامتحانات اللي يگدر يشيلها من هسه
@@ -763,6 +765,8 @@ export async function myExamAction(body: Row) {
   await checkStopped(id);
   // سلّم أول امتحان: الحساب ينقفل لحد ما يربط ولي أمره
   need(!await needsGuardian(id), "🔒 حسابك مقفول لحد ما تربط ولي أمرك. افتح 🏠 القائمة الرئيسية وسوي الخطوات، أو شوف الرسالة بالمحادثة.");
+  if (["placePreview", "joinPlace", "preview", "confirm", "pace", "movePick", "moveTime", "lateCatchup", "lateKeep", "latePrivate"].includes(String(a))) await (await import("./basics.ts")).needBasics(id);
+  if (a === "setBasics") { await (await import("./basics.ts")).setBasics(id, body); return await studentInfo(id); }
   if (a === "pace") return { ...await studentInfo(id), pace: await paceInfo(id, body) };
   if (a === "preview" || a === "confirm") {
     const info = await studentInfo(id);

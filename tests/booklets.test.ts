@@ -94,7 +94,7 @@ test("صفحة الملازم لصاحب البوت: الملازم.json أول�
 
 test("بدون مفتاح: الطالب يسأل عادي (كتابة)، وسؤاله يروح للأستاذ مثل قبل", async () => {
   await msg(2, "/start");
-  await handleUpdate({ message: { message_id: ++nextId, chat: { id: 2, type: "private" }, from: { id: 2 }, web_app_data: { data: JSON.stringify({ k: "reg", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 }) } } });
+  await handleUpdate({ message: { message_id: ++nextId, chat: { id: 2, type: "private" }, from: { id: 2 }, web_app_data: { data: JSON.stringify({ k: "reg", sx: "بنين", n: "علي حسن محمد كاظم", cu: "عربي", gr: "السادس العلمي", g: "البصرة", s: "", a: "العشار قرب الجسر", p1: "07701234567", p2: "07801234567", e: "", c: 0 }) } } });
   await group(1, "/setgroup");
   const ch = (await get("SELECT id FROM chapters ORDER BY ord LIMIT 1"))!.id;
   const t = (await get("SELECT id FROM topics WHERE chapter_id=? ORDER BY ord LIMIT 1", ch))!.id;
