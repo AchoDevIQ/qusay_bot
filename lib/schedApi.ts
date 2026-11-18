@@ -10,6 +10,7 @@ import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } fr
 import { boughtLectures, logActivity, needsGuardian } from "./access.ts";
 import { PLACE_DAYS, PLACE_SLOTS, SESSIONS, YEAR_START } from "./bookOutline.ts";
 import { DAYS, DAY_ORDER } from "./config.ts";
+import { fullTimes, seatProblem, seatProblems, seatsView, setSeatLimits } from "./seats.ts";
 import { examWith, skippableExams } from "./skipExams.ts";
 import { centerName, isAdmin, student } from "./data.ts";
 import { siteBase } from "./keyboards.ts";
@@ -20,7 +21,7 @@ import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, examLeft, myPaper,
 import { send } from "./telegram.ts";
 import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { esc, stamp, todayStr } from "./util.ts";
-import { authed, ensure, intOf, need } from "./webApi.ts";
+import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken, verifyViewToken } from "./webAuth.ts";
 
 export const SCHED_PERM = "schedule";
@@ -430,8 +431,33 @@ function mergeHolidays<T extends { id: number; exam: number; from: string; to: s
   return out;
 }
 /** أوقات كل يوم من أيام المكان، حتى يختار الطالب وقت لكل يوم */
-function daysView(slots: Slot[]) {
-  return DAY_ORDER.filter((d) => slots.some((x) => x.d === d)).map((d) => ({ d, name: DAYS[d], times: slots.filter((x) => x.d === d).map((x) => x.t).sort().map((t) => ({ t, label: ampm(t) })) }));
+function daysView(slots: Slot[], full?: Set<string>) {
+  return DAY_ORDER.filter((d) => slots.some((x) => x.d === d)).map((d) => ({ d, name: DAYS[d], times: slots.filter((x) => x.d === d).map((x) => x.t).sort().map((t) => ({ t, label: ampm(t), ...(full?.has(`${d}|${t}`) ? { full: true } : {}) })) }));
+}
+/** طالب «ويا الطلاب» يغير وقت يوم من أيامه بكيفه، إذا امتحانه الجاي بهذا اليوم بعده أكثر من 24 ساعة */
+const MOVE_HOURS = 24;
+const hoursUntil = (at: string, now = stamp()) => (Date.parse(`${at.replace(" ", "T")}:00Z`) - Date.parse(`${now.replace(" ", "T")}:00Z`)) / 3_600_000;
+/** يغير وقت جروبه: الطالب بشرط 24 ساعة والعدد، وصاحب البوت بأي وقت (والعدد بعد تنبيه) */
+export async function movePick(uid: number, d: number, t: string, by: "student" | "owner", force = false) {
+  const sc = await one("schedules", { user_id: uid });
+  need(sc?.mode === "general", "هذا لطالب «ويا الطلاب»");
+  const slots = await placeSlots(sc!.center_id);
+  need(slots.some((x) => x.d === d && x.t === t), "اختار من أوقات المكان بهذا اليوم");
+  const picks = picksOf(sc!);
+  const old = picks[String(d)];
+  need(old !== t, "هذا نفس وقتك");
+  const s = await schedSettings();
+  if (by === "student") {
+    const next = (await find("sched_items", { user_id: uid, status: "waiting" })).filter((i) => !i.fixed && i.notified !== "test" && weekdayOf(String(i.at).slice(0, 10)) === d && String(i.at) > stamp())
+      .sort((a, b) => String(a.at).localeCompare(String(b.at)))[0];
+    need(!next || hoursUntil(String(next.at)) >= MOVE_HOURS, next ? `امتحانك الجاي يوم ${prettyDay(String(next.at).slice(0, 10))} الساعة ${ampm(String(next.at).slice(11, 16))} بعده أقل من 24 ساعة، فوقته ما يتغير. تگدر تغير وقت ${DAYS[d]} بعد ما يخلص` : "");
+  }
+  const why = await seatProblem(sc!.center_id, d, t, await student(uid), { except: uid });
+  if (why && !(by === "owner" && force)) throw new ApiError(409, by === "owner" ? `${why.replace(". اختار وقت ثاني", "")}. تريد تضيفه فوك العدد؟` : why, by === "owner" ? { askForce: true } : undefined);
+  await update("schedules", { user_id: uid }, { picks: JSON.stringify({ ...picks, [String(d)]: t }) });
+  await syncGeneral(uid, (await one("schedules", { user_id: uid }))!, s);
+  await logActivity(uid, `🕐 ${by === "owner" ? "الإدارة غيرت" : "غير"} وقت ${DAYS[d]}: من ${old ? ampm(old) : "—"} إلى ${ampm(t)}${why ? " (فوك العدد)" : ""}`);
+  return `✅ صار وقتك يوم ${DAYS[d]} الساعة ${ampm(t)}، وكل امتحاناتك الجاية بهذا اليوم تمشي عليه`;
 }
 /** لازم وقت من أوقات المكان لكل يوم */
 const picksFit = (slots: Slot[], picks: Record<string, string>) => [...new Set(slots.map((x) => x.d))].every((d) => slots.some((x) => x.d === d && x.t === picks[String(d)]));
@@ -550,7 +576,7 @@ async function studentInfo(uid: number) {
     picks: general ? picksOf(sched!) : null,
     schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour, times: sched.picks ? JSON.parse(sched.picks) : null, hol: holOf(sched.hol) ?? null } : null,
     holidays: await myHolidays(uid, sched), midHol: await midHolidayRow(sched, s), gap: s.gap,
-    days: daysView(slots),
+    days: daysView(slots, await fullTimes(place.centerId, slots, st, uid)),
     optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
     // آخر سيطرة عبرها: تومض ويا شخصيتها لحد ما يشوفها
     cp: await checkpointCard(uid),
@@ -748,6 +774,7 @@ export async function myExamAction(body: Row) {
     // الامتحانات اللي «يمكن حذفه» تتعلم بالمعاينة، حتى يعرف من هسه شنو يگدر يشيل بعد التثبيت
     const skip = new Set(await skippableExams());
     if (a === "preview") return { ...await studentInfo(id), preview: { items: plan.items.map((i) => ({ title: titles.get(i.examId), at: i.at, skip: skip.has(i.examId) })), days: plan.days, maxPerDay: plan.maxPerDay, perWeek: plan.perWeek } };
+    { const why = await seatProblems((await placeFor(id)).centerId, plan.items, await student(id), id); need(!why, why); }
     await saveItems(id, f, plan.items);
     for (const x of drop) await insert("sched_items", { user_id: id, exam_id: x, at: stamp(), status: "skipped" });
     await logActivity(id, `🗓 ثبت جدول امتحاناته: ${plan.items.length} امتحان${drop.length ? `، وشال ${drop.length}` : ""}`);
@@ -762,6 +789,8 @@ export async function myExamAction(body: Row) {
     const picks: Record<string, string> = {};
     for (const [k, v] of Object.entries((body.picks ?? {}) as Row)) picks[String(k)] = String(v);
     need(picksFit(slots, picks), "اختار وقت لكل يوم من أوقات مكانك");
+    const me = await student(id);
+    for (const [d, t] of Object.entries(picks)) { const why = await seatProblem(place.centerId, Number(d), t, me, { except: id }); need(!why, why); }
     if (a === "joinPlace") {
       await put("schedules", { user_id: id, mode: "general", center_id: place.centerId, picks: JSON.stringify(picks), created: stamp() });
       await logActivity(id, `🗓 اختار يمشي ويا الطلاب: ${daysView(slots).map((d) => `${d.name} ${ampm(picks[String(d.d)])}`).join("، ")}`);
@@ -847,6 +876,7 @@ export async function myExamAction(body: Row) {
     }
     const plan = catchupPlan(late.map((e) => ({ id: e.id, at: String(e.at) })), { days1, days2, timeOf }, tomorrow, phase2, await catchDayOk(id, sc!, s));
     need(plan.length === late.length, "ما گدرنا نرتب كل امتحاناتك بهالأيام، اختار أيام ثانية");
+    { const why = await seatProblems(place.centerId, plan, await student(id), id); need(!why, why); }
     for (const x of plan) await insert("sched_items", { user_id: id, exam_id: x.examId, at: x.at, status: "waiting", kind: "catchup", fixed: 1, catch_place: ipad ? "ipad" : null });
     const how = ipad ? `حضوري بالآيباد بـ${place.label}` : "إلكتروني";
     const pace = [heavy && `${days1.length} بالأسبوع${phase2 ? ` لحد ${prettyDay(phase2)}` : ""}`, phase2 && `${days2.length} بالأسبوع${heavy ? " بعدها" : ""}`].filter(Boolean).join("، ");
@@ -924,7 +954,7 @@ export async function myExamAction(body: Row) {
     const it = await one("sched_items", { id: Number(body.item), user_id: id });
     need(it?.status === "waiting" && !it.kind && it.notified !== "test", "هذا الامتحان ما يتغير وقته");
     const day = String(it!.at).slice(0, 10);
-    need(day > todayStr(), "وقت الامتحان يتغير لحد اليوم اللي قبله بس. بيوم الامتحان نفسه ما يتغير");
+    need(hoursUntil(String(it!.at)) >= MOVE_HOURS, "وقت الامتحان يتغير قبل 24 ساعة منه بس. بعدها ما يتغير");
     const t = String(body.time ?? "");
     need(/^\d{2}:\d{2}$/.test(t), "اختار الوقت");
     need(t !== String(it!.at).slice(11, 16), "هذا نفس وقته");
@@ -939,12 +969,14 @@ export async function myExamAction(body: Row) {
     const mine = m(`${day} ${t}`);
     const clash = (await find("sched_items", { user_id: id })).find((x) => x.id !== it!.id && String(x.at).slice(0, 10) === day && !["skipped", "missed"].includes(String(x.status))
       && mine < m(String(x.at)) + mins(x) + s.gap && m(String(x.at)) < mine + mins(it!) + s.gap);
+    { const why = await seatProblem(place.centerId, weekdayOf(day), t, await student(id), { date: day, except: id }); need(!why, why); }
     need(!clash, clash ? `⏰ هذا الوقت يتداخل ويا امتحانك الثاني بنفس اليوم (${exams.get(clash.exam_id)?.title ?? ""} ${ampm(String(clash.at).slice(11, 16))}). لازم يبقى ${s.gap} دقيقة بين الامتحانين.` : "");
     await update("sched_items", { id: it!.id }, { at: `${day} ${t}`, notified: null });
     const title = String(exams.get(it!.exam_id)?.title ?? "");
     await logActivity(id, `🕐 غير وقت ${title} يوم ${prettyDay(day)}: من ${ampm(String(it!.at).slice(11, 16))} إلى ${ampm(t)}`);
     return { ...await studentInfo(id), notice: `✅ صار وقت ${title} ${prettyDay(day)} الساعة ${ampm(t)}` };
   }
+  if (a === "movePick") return { ...await studentInfo(id), notice: await movePick(id, Number(body.d), String(body.time ?? ""), "student") };
   if (a === "holidayOff") {
     const list = await holidays();
     // العطلة الطويلة جاية من أكثر من دسة: تنلغي كلها، من الأخيرة للأولى
@@ -1174,6 +1206,11 @@ export async function schedAdminAction(body: Row) {
       const r = await rebuildAll(next);
       notice += `. انعاد جدول ${r.moved} طالب${r.stuck ? `، و${r.stuck} لازم يرتبون جدولهم` : ""}`;
     }
+  } else if (a === "saveSeats") {
+    const center = Number(body.center);
+    need(center === 0 || await one("centers", { id: center }), "المركز غير موجود");
+    await setSeatLimits(center, body.seats);
+    notice = "✅ انحفظ عدد الطلاب بكل وقت";
   } else if (a === "saveSlots") {
     const center = Number(body.center);
     need(center === 0 || await one("centers", { id: center }), "المركز غير موجود");
@@ -1439,6 +1476,8 @@ async function placesPage(center: number) {
     // عطلة نصف السنة بهذا المكان، وهل تختلف عن الباقي
     mid: await midFor(center, await schedSettings()), midOwn: !!(await midPlaces())[String(center)],
     slots: await placeSlots(center), students: (await find("schedules", { mode: "general", center_id: center })).length,
+    // عدد البنين والبنات بكل وقت، والمحجوز منه
+    seats: await seatsView(center, await placeSlots(center)),
     rows: exams.map((e) => {
       const d = dates.get(e.id);
       return { exam: e.id, chapter: e.chapter, title: e.title, date: d?.day ?? "", versions: JSON.parse(d?.versions || "{}"), models: versions.filter((v) => v.exam_id === e.id).map((v) => ({ id: v.id, model: v.model })),
@@ -1456,7 +1495,10 @@ export async function studentSchedule(uid: number) {
   if (sc?.mode === "general") await syncGeneral(uid, sc, s);
   const way = !sc ? "" : sc.mode === "general" ? `ويا الطلاب: ${Object.entries(picksOf(sc)).map(([d, t]) => `${DAYS[Number(d)]} ${ampm(t)}`).join("، ")}` : "جدول خاص";
   const hol = sc && sc.mode !== "general" ? holOf(sc.hol) ?? (s.holidayStart && s.holidayDays ? { from: s.holidayStart, to: addDays(s.holidayStart, s.holidayDays - 1) } : { from: "", to: "" }) : null;
-  return { way, items: await itemsView(uid, s), perDay: Number(await kvGet(`sched_perday_${uid}`)) || 0, general: s.perDay, hol, holReq: (await holRequests()).find((r) => r.uid === uid) ?? null };
+  // «ويا الطلاب»: أوقاته لكل يوم، والمكتمل يتعلم، حتى الإدارة تغيره
+  let times = null;
+  if (sc?.mode === "general") { const slots = await placeSlots(sc.center_id); times = { picks: picksOf(sc), days: daysView(slots, await fullTimes(sc.center_id, slots, await student(uid), uid)) }; }
+  return { way, times, items: await itemsView(uid, s), perDay: Number(await kvGet(`sched_perday_${uid}`)) || 0, general: s.perDay, hol, holReq: (await holRequests()).find((r) => r.uid === uid) ?? null };
 }
 export async function resetSchedule(uid: number) {
   await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });

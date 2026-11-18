@@ -12,7 +12,8 @@ const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; inserted?: number; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
-type Data = { cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; perWeek: number; gap: number; holidayStart: string; holidayDays: number; holidayNote: string; mid: { from: string; to: string } | null; midOwn: boolean; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holReqs?: { uid: number; name: string; want: string; now: string; at: string }[] };
+type Seat = { d: number; t: string; limit: { b: number; g: number }; taken: { b: number; g: number } };
+type Data = { seats?: Seat[]; cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; perWeek: number; gap: number; holidayStart: string; holidayDays: number; holidayNote: string; mid: { from: string; to: string } | null; midOwn: boolean; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holReqs?: { uid: number; name: string; want: string; now: string; at: string }[] };
 type Hol = { id: number; title: string; days: number; reason: string; places: { center: number; text: string }[]; students: number };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
@@ -122,6 +123,7 @@ function Place({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
         </select>
         <div className="exhint">{d.students} طالب ويا الطلاب بهذا المكان. كل طالب يختار وقت لكل يوم بكيفه.</div>
         <Slots key={`${d.center}|${JSON.stringify(d.slots)}`} d={d} busy={busy} act={act} />
+        {!!d.seats?.length && <Seats key={`${d.center}|${JSON.stringify(d.seats)}`} d={d} busy={busy} act={act} />}
         <Dates key={`${d.center}|${JSON.stringify(d.rows)}|${JSON.stringify(d.slots)}`} d={d} busy={busy} act={act} />
         {!!d.holReqs?.length && (
           <div className="card expad">
@@ -141,6 +143,34 @@ function Place({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
         )}
         <Holidays d={d} busy={busy} act={act} />
       </div>
+    </div>
+  );
+}
+
+/** عدد البنين والبنات بكل وقت: من يكمل، الطالب ما يگدر يختار هذا الوقت ولا ينتقل إله */
+function Seats({ d, busy, act }: { d: Data; busy: boolean; act: Act }) {
+  const [lim, setLim] = useState<Record<string, { b: string; g: string }>>(() => Object.fromEntries((d.seats ?? []).map((x) => [`${x.d}|${x.t}`, { b: x.limit.b ? String(x.limit.b) : "", g: x.limit.g ? String(x.limit.g) : "" }])));
+  const nameOf = (i: number) => d.week.find((w) => w.i === i)?.name ?? "";
+  const set = (k: string, f: "b" | "g", v: string) => setLim({ ...lim, [k]: { ...lim[k], [f]: v.replace(/\D/g, "") } });
+  return (
+    <div className="exfoot">
+      <div className="exlabel">🪑 عدد الطلاب بكل وقت</div>
+      <div className="exhint">لكل وقت عدد بنين وعدد بنات. ينحسب كل اللي يمتحنون بهذا الوقت: ويا الطلاب، والجدول الخاص، والتعويض. من يكمل العدد، الطالب ما يگدر يختار هذا الوقت ولا ينتقل إله. فارغ = بدون حد.</div>
+      <table className="extable"><tbody>
+        {(d.seats ?? []).map((x) => {
+          const k = `${x.d}|${x.t}`;
+          return (
+            <tr key={k}>
+              <td><b>{nameOf(x.d)} {ampm(x.t)}</b><small className="pdmode">محجوز: بنين {x.taken.b} · بنات {x.taken.g}</small></td>
+              <td className="p"><div className="exline" style={{ flexWrap: "nowrap" }}>
+                <input inputMode="numeric" className="ltr" style={{ width: 70 }} aria-label={`بنين ${nameOf(x.d)} ${ampm(x.t)}`} placeholder="👦 بنين" value={lim[k]?.b ?? ""} onChange={(e) => set(k, "b", e.target.value)} />
+                <input inputMode="numeric" className="ltr" style={{ width: 70 }} aria-label={`بنات ${nameOf(x.d)} ${ampm(x.t)}`} placeholder="👧 بنات" value={lim[k]?.g ?? ""} onChange={(e) => set(k, "g", e.target.value)} />
+              </div></td>
+            </tr>
+          );
+        })}
+      </tbody></table>
+      <button type="button" className="btn adtop" style={{ width: "auto" }} disabled={busy} onClick={() => void act({ action: "saveSeats", seats: Object.fromEntries(Object.entries(lim).map(([k, v]) => [k, { b: Number(v.b) || 0, g: Number(v.g) || 0 }])) })}>💾 حفظ العدد</button>
     </div>
   );
 }

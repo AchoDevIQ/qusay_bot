@@ -22,7 +22,7 @@ import { moveExam, retakeExam } from "./examMoves.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { studentCode } from "./inPerson.ts";
 import QRCode from "qrcode";
-import { SCHED_PERM, resetSchedule, setPerDay, setStudentHoliday, studentSchedule } from "./schedApi.ts";
+import { SCHED_PERM, movePick, resetSchedule, setPerDay, setStudentHoliday, studentSchedule } from "./schedApi.ts";
 import { authed, intOf, need } from "./webApi.ts";
 
 export const STUDENTS_PERM = "students";
@@ -214,6 +214,14 @@ export async function studentAction(body: Row) {
     const t = await setStudentHoliday(id, { from, to });
     await (await import("./telegram.ts")).send(id, `🏖 <b>تغيرت عطلتك</b>: ${t}، وانعاد جدولك من باجر. افتح امتحاناتي وشوف المواعيد.`);
     notice = `🏖 تغيرت عطلته: ${t}`;
+    return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id), view: `/store/myexams?t=${viewToken(id)}&view=1` } };
+  } else if (a === "schedPick") {
+    // الإدارة تغير وقت يوم من أيام طالب «ويا الطلاب» بأي وقت. إذا الوقت مكتمل، تنبيه وبعدها تگدر تثبته فوك العدد
+    need(await isAdmin(uid) || await can(uid, SCHED_PERM), "ما عندك صلاحية الجدول", 403);
+    const msg = await movePick(id, Number(body.d), String(body.time ?? ""), "owner", body.force === true);
+    await (await import("./telegram.ts")).send(id, `🕐 <b>تغير وقت امتحاناتك</b>
+${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعيد.`);
+    notice = `${msg.replace("وقتك", "وقته").replace("امتحاناتك", "امتحاناته")}، ووصله خبر`;
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id), view: `/store/myexams?t=${viewToken(id)}&view=1` } };
   } else if (a === "examException") {
     await openException(uid, body.item);

@@ -16,7 +16,7 @@ type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; w
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
   viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[];
-  catchPlan?: CatchPlan | null; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string }[] }[]; placePreview?: PlacePreview;
+  catchPlan?: CatchPlan | null; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; canDrop?: { exam: number; title: string }[]; toPlan?: { exam: number; title: string; chapter: string; skip: boolean }[]; perWeekMax?: number; pace?: Pace; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
@@ -163,6 +163,7 @@ export default function MyExamsClient() {
         {info?.needsChoice && <Choice info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
         {info && info.mode !== "general" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}
+        {info && info.mode === "general" && !info.repick && <MyTimes info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} ipad={!!info.ipad} />}
@@ -288,7 +289,7 @@ function Picker({ info, busy, call, back }: { info: Info; busy: boolean; call: (
           <div key={d.d}>
             <label>وقتك يوم {d.name}</label>
             <div className="seg wrap2">
-              {d.times.map((x) => <button type="button" key={x.t} className={picks[String(d.d)] === x.t ? "on" : ""} onClick={() => { haptic(); setSeen(null); setPicks({ ...picks, [String(d.d)]: x.t }); }}>{x.label}</button>)}
+              {d.times.map((x) => <button type="button" key={x.t} disabled={x.full && picks[String(d.d)] !== x.t} className={picks[String(d.d)] === x.t ? "on" : ""} onClick={() => { haptic(); setSeen(null); setPicks({ ...picks, [String(d.d)]: x.t }); }}>{x.label}{x.full ? " · مكتمل" : ""}</button>)}
             </div>
           </div>
         ))}
@@ -297,7 +298,7 @@ function Picker({ info, busy, call, back }: { info: Info; busy: boolean; call: (
           <>
             {seen.items.length ? <table className="extable adtop"><tbody>{seen.items.map((i) => <tr key={i.title + i.at} className={i.locked ? "mxlocked" : ""}><td>{i.locked ? "🔒 " : ""}{i.title}</td><td className="adphone">{prettyAt(i.at)}</td></tr>)}</tbody></table> : <div className="hint adtop">المواعيد لسه ما نزلت.</div>}
             {seen.waiting > 0 && !!seen.items.length && <div className="hint adtop">و{seen.waiting} امتحان موعده ينزل بعدين.</div>}
-            <div className="rgalert adtop">⚠️ بعد التثبيت ما تتغير أوقاتك إلا عن طريق الإدارة.</div>
+            <div className="rgalert adtop">بعد التثبيت تگدر تغير وقت أي يوم بنفسك، إذا بيه مكان، وبشرط امتحانك الجاي بذاك اليوم بعده أكثر من 24 ساعة.</div>
             <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => void call({ action: "joinPlace", picks })}>✅ ثبت أوقاتي</button>
           </>
         )}
@@ -551,13 +552,48 @@ function Build({ info, busy, call }: { info: Info; busy: boolean; call: (b: Reco
   );
 }
 
-/** طالب الجدول الخاص يغير وقت امتحان بنفس يومه، لحد اليوم اللي قبله */
+/** طالب «ويا الطلاب» يغير وقت يوم من أيامه بنفسه: كل امتحاناته الجاية بذاك اليوم تمشي على الوقت الجديد.
+ *  الوقت المكتمل ما ينختار، وإذا امتحانه الجاي بذاك اليوم بعده أقل من 24 ساعة يرفض */
+function MyTimes({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+  const [day, setDay] = useState<number | null>(null);
+  const [t, setT] = useState("");
+  const picks = info.picks ?? {};
+  if (!info.days.length || info.viewOnly) return null;
+  return (
+    <div className="card">
+      <h2>🕐 أوقاتي</h2>
+      <div className="exhint expad">تگدر تغير وقت أي يوم بنفسك، إذا بيه مكان، وبشرط امتحانك الجاي بذاك اليوم بعده أكثر من 24 ساعة.</div>
+      <table className="extable"><tbody>
+        {info.days.map((d) => (
+          <tr key={d.d}>
+            <td><b>{d.name}</b> {picks[String(d.d)] ? ampm(picks[String(d.d)]) : "—"}
+              {day === d.d && (
+                <div className="hint adtop">الوقت الجديد:
+                  <div className="seg wrap2">
+                    {d.times.filter((x) => x.t !== picks[String(d.d)]).map((x) => <button type="button" key={x.t} disabled={x.full} className={t === x.t ? "on" : ""} onClick={() => setT(x.t)}>{x.label}{x.full ? " · مكتمل" : ""}</button>)}
+                  </div>
+                  <div className="exline">
+                    <button type="button" className="exbtn" disabled={busy || !t} onClick={() => void call({ action: "movePick", d: d.d, time: t }).then((r) => { if (r) { setDay(null); setT(""); } })}>💾 احفظ</button>
+                    <button type="button" className="exbtn" onClick={() => { setDay(null); setT(""); }}>رجوع</button>
+                  </div>
+                </div>
+              )}
+            </td>
+            <td className="p">{day !== d.d && d.times.length > 1 && <button type="button" className="exbtn" onClick={() => { setDay(d.d); setT(""); }}>🕐 غير</button>}</td>
+          </tr>
+        ))}
+      </tbody></table>
+    </div>
+  );
+}
+
+/** طالب الجدول الخاص يغير وقت امتحان بنفس يومه، قبل 24 ساعة منه */
 function MoveTime({ info, item, busy, cmd }: { info: Info; item: Item; busy: boolean; cmd: (b: Record<string, unknown>) => Promise<unknown> }) {
   const [open, setOpen] = useState(false);
   const [t, setT] = useState("");
   const day = String(item.at).slice(0, 10), cur = String(item.at).slice(11, 16);
   const wd = (new Date(`${day}T12:00:00`).getDay() + 6) % 7;
-  const options = (info.inPerson ? info.days.find((x) => x.d === wd)?.times.map((x) => x.t) ?? [] : info.hours.map((h) => `${String(h).padStart(2, "0")}:00`)).filter((x) => x !== cur);
+  const options = (info.inPerson ? info.days.find((x) => x.d === wd)?.times.filter((x) => !x.full).map((x) => x.t) ?? [] : info.hours.map((h) => `${String(h).padStart(2, "0")}:00`)).filter((x) => x !== cur);
   if (!options.length) return null;
   if (!open) return <button type="button" className="exbtn adtop" onClick={() => setOpen(true)}>🕐 غير الوقت</button>;
   return (

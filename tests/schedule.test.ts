@@ -864,21 +864,23 @@ test("🗑 امتحان يمكن حذفه: الأصل ما ينحذف، وإذا
   await examAction({ action: "skippable", id: now[0].exam, on: false, initData: admin });
 });
 
-test("🕐 الطالب الخاص يغير وقت امتحان بنفس يومه لحد اليوم اللي قبله، وما يتداخل ويا امتحانه الثاني", async () => {
+test("🕐 الطالب الخاص يغير وقت امتحان بنفس يومه قبل 24 ساعة منه، وما يتداخل ويا امتحانه الثاني", async () => {
   await student(104);
   await put("exam_access", { user_id: 104, chapter: "الفصل الأول", order_id: 1, created: "1" });
   const done = await act(104, "confirm", form({ weekdays: [0, 1, 2, 3, 4, 5, 6], times: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), ["14:00", "18:00"]])) }));
   const items = done.items.filter((i: any) => !i.optional);
-  const [a, b] = items;
+  const [a0, b] = items;
+  const a = { ...a0, at: `${addDays(todayStr(), 3)} 14:00` };   // بعده أكثر من 24 ساعة
+  await update("sched_items", { id: a.id }, { at: a.at });
   await update("sched_items", { id: b.id }, { at: `${a.at.slice(0, 10)} 18:00` });   // امتحانين بنفس اليوم
   const r = await act(104, "moveTime", { item: a.id, time: "15:00" });
   assert.match(r.notice, /3:00 مساءً/);
   assert.equal(r.items.find((i: any) => i.id === a.id).at, `${a.at.slice(0, 10)} 15:00`);
   await assert.rejects(act(104, "moveTime", { item: a.id, time: "17:00" }), /يتداخل/);
   await assert.rejects(act(104, "moveTime", { item: a.id, time: "03:00" }), /بس/);
-  // بيوم الامتحان نفسه ما يتغير
+  // أقل من 24 ساعة قبل الامتحان ما يتغير
   await update("sched_items", { id: b.id }, { at: `${todayStr()} 23:00` });
-  await assert.rejects(act(104, "moveTime", { item: b.id, time: "22:00" }), /اليوم اللي قبله/);
+  await assert.rejects(act(104, "moveTime", { item: b.id, time: "22:00" }), /قبل 24 ساعة/);
 });
 
 test("📚 امتحان يطلع ويا فصل ثاني، و🗑 يشيله وهو يرتب جدوله الخاص", async () => {
