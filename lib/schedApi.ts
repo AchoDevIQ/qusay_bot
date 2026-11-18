@@ -19,7 +19,7 @@ import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, examLeft, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
 import { send } from "./telegram.ts";
-import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyAt, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { esc, stamp, todayStr } from "./util.ts";
 import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken, verifyViewToken } from "./webAuth.ts";
@@ -105,6 +105,82 @@ async function guardWaitOf(uid: number) {
   const { guardianOf } = await import("./access.ts");
   if (!await guardianOf(uid)) return null;
   return { pending: await pendingSeen(uid), old: await g.oldUnseen(uid), travel: await g.travelUntil(uid) };
+}
+// ---------- 🐢 الجدول البطيء (طلب الأستاذ 2026-11-18): طالب الخامس يحط تاريخ ووقت كل امتحان بإيده.
+// بالترتيب، من باچر وطالع، مو بعطلة ولا بيوم ما يمتحنون بيه، ضمن الأوقات (الإلكتروني ساعات الإدارة، الحضوري أوقات مركزه)،
+// وحد الامتحانات باليوم والفاصل بينهم، والعدد بكل وقت. امتحاناته ثابتة (fixed)، فالعطل وإعادة الترتيب ما تحركها
+const SLOW_GRADE = "الخامس العلمي";
+async function slowCheck(uid: number, changes: Map<number, string>) {
+  const s = await schedSettings();
+  const place = await placeFor(uid);
+  const slots = place.inPerson ? await placeSlots(place.centerId) : [];
+  const exams = new Map((await find("bank_exams")).map((e) => [e.id as number, e]));
+  const title = (e: number) => String(exams.get(e)?.title ?? "امتحان");
+  const hours = allowedHours(s), tomorrow = addDays(todayStr(), 1);
+  for (const [e, at] of changes) {
+    need(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at) && validDay(at.slice(0, 10)), `اختار تاريخ ووقت «${title(e)}»`);
+    const day = at.slice(0, 10), t = at.slice(11, 16), wd = weekdayOf(day);
+    need(day >= tomorrow, `«${title(e)}»: التاريخ لازم من باچر وطالع`);
+    need(!s.offDays.includes(wd) && !inHoliday(day, s) && !s.excluded.includes(day), `«${title(e)}»: ${prettyDay(day)} عطلة، اختار يوم ثاني`);
+    if (place.inPerson) need(slots.some((x) => x.d === wd && x.t === t), `«${title(e)}»: اختار من أوقات مركزك يوم ${DAYS[wd]}`);
+    else need(t.endsWith(":00") && hours.includes(Number(t.slice(0, 2))), `«${title(e)}»: الامتحان يبدي من الساعة ${ampm(`${String(s.fromHour).padStart(2, "0")}:00`)} إلى ${ampm(`${String(s.toHour).padStart(2, "0")}:00`)} بس`);
+  }
+  // كل امتحاناته الجاية ويا الجديدة: بالترتيب، وباليوم العدد والفاصل
+  const all = new Map<number, string>();
+  for (const i of await find("sched_items", { user_id: uid, status: "waiting" })) if (i.kind !== "optional" && i.notified !== "test") all.set(i.exam_id as number, String(i.at));
+  for (const [e, at] of changes) all.set(e, at);
+  const seq = (await boughtExams(uid)).map((e) => e.id as number).filter((e) => all.has(e));
+  for (let k = 1; k < seq.length; k++) need(all.get(seq[k])! > all.get(seq[k - 1])!, `«${title(seq[k])}» لازم يجي بعد «${title(seq[k - 1])}»`);
+  const perDay = await perDayFor(uid, s);
+  const byDay = new Map<string, [number, string][]>();
+  for (const [e, at] of all) byDay.set(at.slice(0, 10), [...byDay.get(at.slice(0, 10)) ?? [], [e, at]]);
+  const m = (at: string) => Number(at.slice(11, 13)) * 60 + Number(at.slice(14, 16));
+  for (const [day, list] of byDay) {
+    need(list.length <= perDay, `${prettyDay(day)}: أكثر شي ${perDay} امتحان باليوم`);
+    list.sort((a, b) => a[1].localeCompare(b[1]));
+    for (let k = 1; k < list.length; k++) {
+      const [pe, pat] = list[k - 1];
+      need(m(list[k][1]) >= m(pat) + Number(exams.get(pe)?.minutes ?? 75) + s.gap, `${prettyDay(day)}: «${title(list[k][0])}» لازم يبدي بعد نهاية «${title(pe)}» بـ ${s.gap} دقيقة`);
+    }
+  }
+  const why = await seatProblems(place.centerId, [...changes.values()].map((at) => ({ at })), await student(uid), uid);
+  need(!why, why);
+}
+/** يثبت تواريخ امتحاناته اللي بعدها ما مرتبة (أول مرة، أو فصل جديد اشتراه) */
+async function slowSave(uid: number, raw: unknown) {
+  need((await student(uid))?.grade === SLOW_GRADE, "الجدول البطيء لطلاب الخامس بس");
+  const sc = await one("schedules", { user_id: uid });
+  need(!sc || sc.mode === "slow", "جدولك مثبت. لتغييره تواصل ويا قصي العميري");
+  const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
+  need(left.length, "كل امتحاناتك مرتبة");
+  const given = new Map<number, string>();
+  for (const x of (Array.isArray(raw) ? raw : []) as Row[]) given.set(Number(x.exam), String(x.at ?? "").replace("T", " ").slice(0, 16));
+  const changes = new Map<number, string>();
+  for (const e of left) { need(given.get(e.id), `اختار تاريخ ووقت «${e.title}»`); changes.set(e.id as number, given.get(e.id)!); }
+  await slowCheck(uid, changes);
+  const dates = [...changes.values()].sort();
+  await tx(async () => {
+    if (!sc) await put("schedules", { user_id: uid, mode: "slow", center_id: null, picks: null, start_day: dates[0].slice(0, 10), end_day: dates.at(-1)!.slice(0, 10), weekdays: "[]", hour: 0, created: stamp(), hol: null, pack: null });
+    else await update("schedules", { user_id: uid }, { end_day: [String(sc.end_day ?? ""), dates.at(-1)!.slice(0, 10)].sort().at(-1) });
+    for (const [e, at] of changes) await insert("sched_items", { user_id: uid, exam_id: e, at, status: "waiting", fixed: 1 });
+  });
+  await logActivity(uid, `🐢 رتب جدوله البطيء: ${changes.size} امتحان، من ${prettyDay(dates[0].slice(0, 10))} إلى ${prettyDay(dates.at(-1)!.slice(0, 10))}`);
+  return `✅ انثبت جدولك: ${changes.size} امتحان، آخرها ${prettyDay(dates.at(-1)!.slice(0, 10))}`;
+}
+/** يغير تاريخ ووقت امتحان من جدوله البطيء، قبل 24 ساعة منه */
+async function slowMove(uid: number, item: unknown, raw: unknown) {
+  const sc = await one("schedules", { user_id: uid });
+  need(sc?.mode === "slow", "هذا لطالب الجدول البطيء");
+  const it = await one("sched_items", { id: Number(item), user_id: uid });
+  need(it?.status === "waiting" && !it.kind && it.notified !== "test", "هذا الامتحان ما يتغير موعده");
+  need(hoursUntil(String(it!.at)) >= MOVE_HOURS, "موعد الامتحان يتغير قبل 24 ساعة منه بس. بعدها ما يتغير");
+  const at = String(raw ?? "").replace("T", " ").slice(0, 16);
+  need(at !== String(it!.at), "هذا نفس موعده");
+  await slowCheck(uid, new Map([[it!.exam_id as number, at]]));
+  await update("sched_items", { id: it!.id }, { at, notified: null });
+  const title = String((await one("bank_exams", { id: it!.exam_id }))?.title ?? "");
+  await logActivity(uid, `🐢 غير موعد ${title}: من ${prettyAt(String(it!.at))} إلى ${prettyAt(at)}`);
+  return `✅ صار موعد ${title} ${prettyAt(at)}`;
 }
 const allowedHours = (s: SchedSettings) => Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= s.fromHour && h <= s.toHour);
 /** حد الامتحانات باليوم: الخاص بالطالب إذا موجود، وإلا العام */
@@ -229,7 +305,7 @@ async function planHoliday(exam: number, days: number, centers: number[], onlyFo
   }
   const students: HolStudent[] = [];
   for (const sc of await find("schedules")) {
-    if (sc.mode === "general") continue;
+    if (sc.mode === "general" || sc.mode === "slow") continue;
     const uid = sc.user_id as number;
     if (!centers.includes((await placeFor(uid)).centerId)) continue;
     // الامتحان المضاف: بس اللي مشتري فصله
@@ -564,6 +640,8 @@ async function studentInfo(uid: number) {
     attendCode: place.inPerson ? studentCode(uid) : "",
     // الحضوري يختار يمتحن بالآيباد (إذا مركزه ما مفتوحله يصور)
     ipad: place.inPerson && !await photosAllowed(uid) ? await ipadExam(uid) : null,
+    // 🐢 الجدول البطيء لطلاب الخامس: يحط تاريخ ووقت كل امتحان بإيده
+    slowOk: st?.grade === SLOW_GRADE,
     // بنين لو بنات والصف ناقصات: يختارهن قبل ما يرتب
     basics: (await import("./basics.ts")).missingBasics(st),
     inPerson: place.inPerson, place: place.label, name: st?.name ?? "", remaining: left.length, mode: sched?.mode ?? (sched ? "private" : null),
@@ -628,7 +706,7 @@ const saveHolRequests = (l: HolReq[]) => kvSet(HOL_REQ, JSON.stringify(l));
 export async function setStudentHoliday(uid: number, hol: OwnHol) {
   const s = await schedSettings();
   const sc = await one("schedules", { user_id: uid });
-  need(sc && sc.mode !== "general", "هذا الطالب ما عنده جدول خاص");
+  need(sc && sc.mode !== "general" && sc.mode !== "slow", "هذا الطالب ما عنده جدول خاص");
   await closeMissed(uid, s);
   const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
   const f = { start: addDays(todayStr(), 1), end: sc!.pack ? addDays(todayStr(), PACK_DAYS) : sc!.end_day, pack: !!sc!.pack, weekdays: JSON.parse(sc!.weekdays), hour: sc!.hour, times: sc!.picks ? JSON.parse(sc!.picks) as Record<string, string[]> : undefined, hol };
@@ -765,6 +843,11 @@ export async function myExamAction(body: Row) {
   await checkStopped(id);
   // سلّم أول امتحان: الحساب ينقفل لحد ما يربط ولي أمره
   need(!await needsGuardian(id), "🔒 حسابك مقفول لحد ما تربط ولي أمرك. افتح 🏠 القائمة الرئيسية وسوي الخطوات، أو شوف الرسالة بالمحادثة.");
+  if (a === "slowSave" || a === "slowMove") {
+    await (await import("./basics.ts")).needBasics(id);
+    const notice = a === "slowSave" ? await slowSave(id, body.items) : await slowMove(id, body.item, body.at);
+    return { ...await studentInfo(id), notice };
+  }
   if (["placePreview", "joinPlace", "preview", "confirm", "pace", "movePick", "moveTime", "lateCatchup", "lateKeep", "latePrivate"].includes(String(a))) await (await import("./basics.ts")).needBasics(id);
   if (a === "setBasics") { await (await import("./basics.ts")).setBasics(id, body); return await studentInfo(id); }
   if (a === "pace") return { ...await studentInfo(id), pace: await paceInfo(id, body) };
@@ -1135,7 +1218,7 @@ async function rebuildAll(s: SchedSettings) {
   let moved = 0, stuck = 0;
   const start = addDays(todayStr(), 1);
   for (const sc of await find("schedules")) {
-    if (sc.mode === "general") continue;   // مواعيد المكان بيد الإدارة
+    if (sc.mode === "general" || sc.mode === "slow") continue;   // مواعيد المكان بيد الإدارة، والبطيء بيد الطالب
     const uid = sc.user_id as number;
     await closeMissed(uid, s);
     const left = remaining(await boughtExams(uid), await find("sched_items", { user_id: uid }));
@@ -1497,7 +1580,7 @@ export async function studentSchedule(uid: number) {
   await closeMissed(uid, s);
   const sc = await one("schedules", { user_id: uid });
   if (sc?.mode === "general") await syncGeneral(uid, sc, s);
-  const way = !sc ? "" : sc.mode === "general" ? `ويا الطلاب: ${Object.entries(picksOf(sc)).map(([d, t]) => `${DAYS[Number(d)]} ${ampm(t)}`).join("، ")}` : "جدول خاص";
+  const way = !sc ? "" : sc.mode === "general" ? `ويا الطلاب: ${Object.entries(picksOf(sc)).map(([d, t]) => `${DAYS[Number(d)]} ${ampm(t)}`).join("، ")}` : sc.mode === "slow" ? "🐢 جدول بطيء (يحط تاريخ كل امتحان بإيده)" : "جدول خاص";
   const hol = sc && sc.mode !== "general" ? holOf(sc.hol) ?? (s.holidayStart && s.holidayDays ? { from: s.holidayStart, to: addDays(s.holidayStart, s.holidayDays - 1) } : { from: "", to: "" }) : null;
   // «ويا الطلاب»: أوقاته لكل يوم، والمكتمل يتعلم، حتى الإدارة تغيره
   let times = null;

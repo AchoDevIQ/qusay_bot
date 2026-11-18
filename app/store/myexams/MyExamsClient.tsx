@@ -16,7 +16,7 @@ type Item = { id: number; status?: string; exam?: number; skippable?: boolean; o
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
-  basics?: Basics | null; viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[];
+  slowOk?: boolean; basics?: Basics | null; viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[];
   catchPlan?: CatchPlan | null; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; canDrop?: { exam: number; title: string }[]; toPlan?: { exam: number; title: string; chapter: string; skip: boolean }[]; perWeekMax?: number; pace?: Pace; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
@@ -163,8 +163,9 @@ export default function MyExamsClient() {
           </div></div>
         )}
         {info?.needsChoice && !info.basics && <Choice info={info} busy={busy} call={call} />}
-        {info && !info.basics && !info.needsChoice && info.needsBuild && <Build info={info} busy={busy} call={call} />}
-        {info && info.mode !== "general" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}
+        {info && !info.basics && !info.needsChoice && info.needsBuild && info.mode === "slow" && <SlowBuild info={info} busy={busy} call={call} />}
+        {info && !info.basics && !info.needsChoice && info.needsBuild && info.mode !== "slow" && <Build info={info} busy={busy} call={call} />}
+        {info && info.mode !== "general" && info.mode !== "slow" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}
         {info && info.mode === "general" && !info.repick && <MyTimes info={info} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
@@ -311,7 +312,15 @@ function Picker({ info, busy, call, back }: { info: Info; busy: boolean; call: (
 
 /** أول مرة: ويا الطلاب بمواعيد المكان، لو جدول خاص */
 function Choice({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
-  const [way, setWay] = useState<"" | "general" | "private">(info.days.length ? "" : "private");
+  const [way, setWay] = useState<"" | "general" | "private" | "slow">(info.days.length || info.slowOk ? "" : "private");
+  if (way === "slow") {
+    return (
+      <>
+        <button type="button" className="exbtn adtop" onClick={() => setWay("")}>⬅️ رجوع</button>
+        <SlowBuild info={info} busy={busy} call={call} />
+      </>
+    );
+  }
   if (way === "private") {
     return (
       <>
@@ -326,10 +335,90 @@ function Choice({ info, busy, call }: { info: Info; busy: boolean; call: (b: Rec
       <h2>🗓 شلون تمتحن؟</h2>
       <div className="hmlink">
         <div>عندك <b>{info.remaining}</b> امتحان · {info.place}</div>
-        <button type="button" className="btn" onClick={() => { haptic(); setWay("general"); }}>👥 تريد تمشي ويا الطلاب (جدول عام)</button>
-        <div className="hint">أيام ثابتة ويا الطلاب، وتختار الوقت اللي يناسبك بكل يوم.</div>
+        {!!info.days.length && <button type="button" className="btn" onClick={() => { haptic(); setWay("general"); }}>👥 تريد تمشي ويا الطلاب (جدول عام)</button>}
+        {!!info.days.length && <div className="hint">أيام ثابتة ويا الطلاب، وتختار الوقت اللي يناسبك بكل يوم.</div>}
         <button type="button" className="btn ghost" onClick={() => { haptic(); setWay("private"); }}>👤 تريد تمشي وحدك (جدول خاص)</button>
         <div className="hint">إنت ترتب امتحاناتك: كم امتحان بالأسبوع، وأيامك ووقت كل يوم، وتحذف الامتحانات اللي مو إجبارية.</div>
+        {info.slowOk && <button type="button" className="btn ghost" onClick={() => { haptic(); setWay("slow"); }}>🐢 جدول بطيء (لطلاب الخامس)</button>}
+        {info.slowOk && <div className="hint">إنت تحط تاريخ ووقت كل امتحان بإيدك، على راحتك.</div>}
+      </div>
+    </div>
+  );
+}
+
+/** 🐢 الجدول البطيء (طلاب الخامس): يحط تاريخ ووقت كل امتحان بإيده، بالترتيب */
+function slowTimes(info: Info, day: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+  const wd = (new Date(`${day}T12:00:00`).getDay() + 6) % 7;
+  return info.inPerson ? (info.days.find((x) => x.d === wd)?.times.filter((x) => !x.full).map((x) => x.t) ?? []) : info.hours.map((h) => `${String(h).padStart(2, "0")}:00`);
+}
+function SlowBuild({ info, busy, call }: { info: Info; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+  const list = info.toPlan ?? [];
+  const [at, setAt] = useState<Record<number, { d: string; t: string }>>({});
+  const [every, setEvery] = useState("7");
+  const [from, setFrom] = useState("");
+  const set = (e: number, x: Partial<{ d: string; t: string }>) => setAt((o) => ({ ...o, [e]: { ...(o[e] ?? { d: "", t: "" }), ...x } }));
+  // يملي الكل: امتحان كل كم يوم من تاريخ يختاره، وبعدها يغير اللي يريده
+  const fill = () => {
+    if (!from) return;
+    const out: Record<number, { d: string; t: string }> = {};
+    list.forEach((x, i) => { const d = addDays(from, i * Number(every)); out[x.exam] = { d, t: slowTimes(info, d)[0] ?? "" }; });
+    setAt(out);
+  };
+  const ready = list.every((x) => at[x.exam]?.d && at[x.exam]?.t);
+  return (
+    <div className="card">
+      <h2>🐢 جدولك البطيء</h2>
+      <div className="form">
+        <div className="hint">حط تاريخ ووقت كل امتحان بإيدك. لازم بالترتيب، من باچر وطالع، ومو بيوم عطلة.</div>
+        <div className="exline">
+          <span>املأها: امتحان كل</span>
+          <select value={every} onChange={(e) => setEvery(e.target.value)}>{["3", "5", "7", "10", "14"].map((n) => <option key={n} value={n}>{n} أيام</option>)}</select>
+          <span>من</span>
+          <DateInput label="أول امتحان" min={info.minStart} value={from} onChange={setFrom} />
+          <button type="button" className="exbtn" disabled={!from} onClick={fill}>📅 املأ</button>
+        </div>
+        <table className="extable adtop"><tbody>
+          {list.map((x) => {
+            const v = at[x.exam] ?? { d: "", t: "" }, times = slowTimes(info, v.d);
+            return (
+              <tr key={x.exam}><td><b>{x.title}</b><small className="pdmode">{x.chapter}</small>
+                <div className="exline">
+                  <DateInput label={`تاريخ ${x.title}`} min={info.minStart} value={v.d} onChange={(d) => set(x.exam, { d, t: slowTimes(info, d).includes(v.t) ? v.t : "" })} />
+                  <select aria-label={`وقت ${x.title}`} value={v.t} disabled={!v.d} onChange={(e) => set(x.exam, { t: e.target.value })}>
+                    <option value="">{v.d && !times.length ? "ماكو وقت بهذا اليوم" : "الوقت"}</option>
+                    {times.map((t) => <option key={t} value={t}>{ampm(t)}</option>)}
+                  </select>
+                </div>
+              </td></tr>
+            );
+          })}
+        </tbody></table>
+        <button type="button" className="btn agbtn adtop" disabled={busy || !ready} onClick={() => void call({ action: "slowSave", items: list.map((x) => ({ exam: x.exam, at: `${at[x.exam].d} ${at[x.exam].t}` })) })}>✅ ثبت جدولي</button>
+        <div className="hint">بعد التثبيت تگدر تغير موعد أي امتحان، قبل 24 ساعة منه.</div>
+      </div>
+    </div>
+  );
+}
+/** يغير تاريخ ووقت امتحان من جدوله البطيء، قبل 24 ساعة منه */
+function SlowMove({ info, item, busy, cmd }: { info: Info; item: Item; busy: boolean; cmd: (b: Record<string, unknown>) => Promise<unknown> }) {
+  const [open, setOpen] = useState(false);
+  const [d, setD] = useState("");
+  const [t, setT] = useState("");
+  if (!open) return <button type="button" className="exbtn adtop" onClick={() => setOpen(true)}>📅 غير الموعد</button>;
+  const times = slowTimes(info, d);
+  return (
+    <div className="hint adtop">الموعد الجديد:
+      <div className="exline">
+        <DateInput label="التاريخ الجديد" min={info.minStart} value={d} onChange={(x) => { setD(x); setT(""); }} />
+        <select aria-label="الوقت الجديد" value={t} disabled={!d} onChange={(e) => setT(e.target.value)}>
+          <option value="">الوقت</option>
+          {times.map((x) => <option key={x} value={x}>{ampm(x)}</option>)}
+        </select>
+      </div>
+      <div className="exline">
+        <button type="button" className="exbtn" disabled={busy || !d || !t} onClick={() => void cmd({ action: "slowMove", item: item.id, at: `${d} ${t}` }).then((r) => { if (r) { setOpen(false); setD(""); setT(""); } })}>💾 احفظ</button>
+        <button type="button" className="exbtn" onClick={() => setOpen(false)}>رجوع</button>
       </div>
     </div>
   );
@@ -709,6 +798,7 @@ function List({ info, busy, enter, paper, ask, file, off, cmd }: { info: Info; b
                 </div>
               )}
               {info.mode === "private" && !i.optional && i.status === "waiting" && String(i.at).slice(0, 10) > info.today && <MoveTime info={info} item={i} busy={busy} cmd={cmd} />}
+              {info.mode === "slow" && !i.optional && !i.catchup && i.status === "waiting" && String(i.at).slice(0, 10) > info.today && <SlowMove info={info} item={i} busy={busy} cmd={cmd} />}
               {i.state === "missed" && <Excuse item={i} busy={busy} ask={ask} />}
               {i.state === "done" && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => paper(i.id)}>📂 ورقتي وتصحيحها</button>}
             </td>
