@@ -16,7 +16,8 @@ export type GVoice = { id?: string; name: string; ref: string };
 export type AiQ = { n: number; score: number; max: number; review: boolean; reason: string; lines: string[]; steps: { awarded: number; possible: number; reason: string; expected: string; student: string }[] };
 export type Paper = { editing?: boolean; ai?: AiQ[] | null; errors?: string[]; voices?: GVoice[]; myVoices?: GVoice[]; inPerson?: boolean; id: number; name: string; title: string; chapter: string; model: string; test: boolean; graded: string; total: number | null; answerPdf: string | null; whole: string[]; questions: Q[]; ink: Record<number, string>; slug: string; info: string; lang: "ar" | "en"; sid: number; objections?: Objection[]; answerOnly?: number };
 /** اعتراض الطالب على سؤال: نصه، وتسجيله إذا موجود، ودرجته قبل الاعتراض */
-export type Objection = { q: number; text: string; voice: string | null; old: number };
+// was: رد عليه قبل ورجع فتحه حتى يعدله، فرده السابق يبين والرفض يبقى مأشر بسببه
+export type Objection = { q: number; text: string; voice: string | null; old: number; was?: "accepted" | "rejected"; reason?: string };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
 type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "w"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
 export type Sticker = { id: number; name: string; lo: number; hi: number };
@@ -286,7 +287,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const objs = paper.objections ?? [];
   const objMode = objs.length > 0;
   const objOf = (n: number) => objs.find((o) => o.q === n);
-  const [rejects, setRejects] = useState<Record<number, string>>({});
+  const [rejects, setRejects] = useState<Record<number, string>>(() => Object.fromEntries(objs.filter((o) => o.was === "rejected").map((o) => [o.q, o.reason ?? ""])));
   const [pages, setPages] = useState<Page[] | null>(null);
   const [at, setAt] = useState(0);
   const [inks, setInks] = useState<Record<number, Ink>>(() => Object.fromEntries(Object.entries(paper.ink ?? {}).map(([k, v]) => [Number(k), parseInk(v)])));
@@ -705,6 +706,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
             return (
               <div className="gk-objbody">
                 <div><b>اعتراض الطالب على س{o.q}</b> · درجته كانت <b>{o.old}</b> من {q.max}</div>
+                {o.was && <div className="gk-objwas">✏️ ردك السابق: {o.was === "accepted" ? "انقبل" : "انرفض"}. غيّره وإحفظ، والطالب يوصله الرد الجديد.</div>}
                 {o.text && <div className="gk-objtext">{o.text}</div>}
                 {o.voice && <audio controls preload="none" src={url(o.voice)} />}
                 {changedObj(o) ? <div className="gk-objok">✅ راح ينقبل: {o.old} ← {marks[o.q]}. ترجعه لـ {o.old} إذا غيرت رأيك.</div>

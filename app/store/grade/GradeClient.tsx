@@ -9,12 +9,14 @@ type ObjRow = Row & { qs: number[] };
 type Group = { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; oldest?: string };
 type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
 type History = { day: string; days: { d: string; n: number }[]; prev: string; next: string; due: number | null; count: number; owner: boolean; rows: HistRow[] };
+type ObjQ = { q: number; text: string; old: number; mark: number | null; status: string; reason: string; edited: boolean; by: string; at: string };
+type ObjLog = { q: string; people: { name: string; n: number; ok: number }[]; day: string; days: { d: string; n: number }[]; prev: string; next: string; owner: boolean; count: number; ok: number; no: number; open: number; rows: (Row & { qs: ObjQ[]; at: string; canEdit: boolean; canAnswer: boolean })[] };
 type Rate = { mandatory: number; optional: number; deduct: number };
 type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
 type Only = { exams: { id: number; slug: string; chapter: string; title: string }[]; graders: { id: number; name: string }[]; rules: { exam: number; title: string; until: string; names: string[] }[] };
 type FoundPaper = { id: number; name: string; title: string; chapter: string; model: string; total: number; graded: string };
-type Data = { canEdit?: boolean; found?: FoundPaper[]; only?: Only; groups: Group[]; history?: History; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean };
+type Data = { canEdit?: boolean; found?: FoundPaper[]; only?: Only; groups: Group[]; history?: History; objLog?: ObjLog; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -39,7 +41,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
   const skipped = useRef(new Set<number>());
   // الامتحان اللي فتحه: الأوراق تنفتح منه وحده لحد ما تخلص
   const group = useRef<string | null>(null);
-  const [tab, setTab] = useState<"papers" | "history" | "pay">("papers");
+  const [tab, setTab] = useState<"papers" | "history" | "objlog" | "pay">("papers");
   const inGroup = (x: Row) => group.current === null || `${x.exam}|${x.general}` === group.current;
   const saving = useRef(new Set<number>());
   const [savedNow, setSavedNow] = useState(0);
@@ -74,7 +76,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         if (decide) {
           // رد الاعتراض: إذا انقبل شي توصل الورقة من جديد بالدرجة الجديدة
           let photos: Blob[] = [];
-          if (decide.accepted) { try { photos = await compose(prep); } catch { photos = []; } }
+          if (decide.accepted || p.objections?.some((o) => o.was)) { try { photos = await compose(prep); } catch { photos = []; } }
           const fd = new FormData();
           fd.set("initData", pageAuth()); fd.set("action", "decide"); fd.set("id", String(p.id)); fd.set("rejects", JSON.stringify(decide.rejects));
           photos.forEach((b, i) => fd.append("photo", b, `p${i}.jpg`));
@@ -95,7 +97,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         setBgErr(`⚠️ ورقة ${p.name} ما انحفظت${(e as Error).message ? `: ${(e as Error).message}` : ""}. افتحها من القائمة واحفظها مرة ثانية.`);
       } finally {
         saving.current.delete(p.id); setSavingLeft(saving.current.size);
-        if (decide) void call({ action: "list" });
+        if (decide) void call({ action: tab === "objlog" ? "objLog" : "list" });
       }
     })();
     if (decide) {
@@ -128,7 +130,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
         {data && paper && (
           <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
-            onClose={() => { setPaper(null); setSavedNow(0); group.current = null; void call({ action: "list" }); }}
+            onClose={() => { setPaper(null); setSavedNow(0); group.current = null; void call({ action: tab === "objlog" ? "objLog" : tab === "history" ? "history" : "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onRescan={async () => { skipped.current.add(paper.id); await next(await call({ action: "rescan", id: paper.id })); }}
             onSave={(inkSaved, compose) => saveInBackground(paper, inkSaved, compose)}
@@ -145,13 +147,21 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
           </div>
         )}
         {data && !paper && only && (
-          data.objections.length ? <ObjList data={data} busy={busy} act={act} /> : <div className="empty">👏 ماكو اعتراضات تنتظر</div>
+          <>
+            <div className="seg gktabs">
+              <button type="button" className={tab !== "objlog" ? "on" : ""} onClick={() => { setTab("papers"); void call({ action: "list" }); }}>⏳ تنتظر رد</button>
+              <button type="button" className={tab === "objlog" ? "on" : ""} onClick={() => { setTab("objlog"); void call({ action: "objLog" }); }}>📜 سجل الاعتراضات</button>
+            </div>
+            {tab !== "objlog" && (data.objections.length ? <ObjList data={data} busy={busy} act={act} /> : <div className="empty">👏 ماكو اعتراضات تنتظر</div>)}
+            {tab === "objlog" && data.objLog && <ObjLogTab h={data.objLog} busy={busy} act={act} />}
+          </>
         )}
         {data && !paper && !allDone && !only && (
           <>
             <div className="seg gktabs">
               <button type="button" className={tab === "papers" ? "on" : ""} onClick={() => { setTab("papers"); void call({ action: "list" }); }}>📥 الأوراق</button>
               <button type="button" className={tab === "history" ? "on" : ""} onClick={() => { setTab("history"); void call({ action: "history" }); }}>📜 السجل</button>
+              <button type="button" className={tab === "objlog" ? "on" : ""} onClick={() => { setTab("objlog"); void call({ action: "objLog" }); }}>✋ الاعتراضات</button>
               {!data.owner && <button type="button" className={tab === "pay" ? "on" : ""} onClick={() => { setTab("pay"); void call({ action: "pay" }); }}>💰 حسابي</button>}
             </div>
             {tab === "papers" && data.canEdit && <EditFind found={data.found ?? null} busy={busy} act={act} />}
@@ -161,6 +171,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
               if (p) void act({ action: "open", id: p.id });
             }} />}
             {tab === "history" && data.history && <HistoryTab h={data.history} busy={busy} owner={data.owner} act={act} />}
+            {tab === "objlog" && data.objLog && <ObjLogTab h={data.objLog} busy={busy} act={act} />}
             {tab === "pay" && data.pay && <PayTab pay={data.pay} busy={busy} act={act} />}
           </>
         )}
@@ -291,6 +302,68 @@ function HistoryTab({ h, busy, act }: { h: History; busy: boolean; owner: boolea
           ))}
         </tbody></table>
       ) : <div className="empty">ماكو أوراق مصححة بهذا اليوم.</div>}
+    </div>
+  );
+}
+
+const MONTH_NAMES = ["كانون الثاني", "شباط", "آذار", "نيسان", "أيار", "حزيران", "تموز", "آب", "أيلول", "تشرين الأول", "تشرين الثاني", "كانون الأول"];
+/** سجل الاعتراضات يوم يوم: كل اعتراض ورده، ومنه يرجع للورقة ويعدل رده */
+function ObjLogTab({ h, busy, act }: { h: ObjLog; busy: boolean; act: Call }) {
+  const go = (day: string) => void act({ action: "objLog", day });
+  const [q, setQ] = useState(h.q);
+  const search = (text: string) => { setQ(text); void act({ action: "objLog", day: h.day, q: text }); };
+  const state = (x: ObjQ) => (x.status === "accepted" ? `✅ انقبل: ${x.old} ← ${x.mark}` : x.status === "rejected" ? `❌ انرفض، بقت ${x.old}` : "⏳ ينتظر رد");
+  return (
+    <div className="card">
+      <h2>✋ سجل الاعتراضات</h2>
+      <form className="exline expad" onSubmit={(e) => { e.preventDefault(); search(q.trim()); }}>
+        <input value={q} placeholder="🔍 دوّر باسم الطالب" onChange={(e) => setQ(e.target.value)} />
+        <button type="submit" className="exbtn" disabled={busy || q.trim().length < 2}>بحث</button>
+        {h.q && <button type="button" className="exbtn" disabled={busy} onClick={() => search("")}>✕</button>}
+      </form>
+      {!h.q && !!h.people.length && (
+        <details className="expad">
+          <summary>👥 الطلاب اللي يعترضون بهذا الشهر ({h.people.length})</summary>
+          {h.people.map((x) => <button type="button" key={x.name} className="exbtn gkperson" disabled={busy} onClick={() => search(x.name)}>{x.name} · {x.n} اعتراض{x.ok ? ` · انقبل ${x.ok}` : ""}</button>)}
+        </details>
+      )}
+      {h.q && <div className="exhint expad">كل اعتراضات «{h.q}» بكل الأيام</div>}
+      <div className="expad"><div className="adstats adstats2"><div><b>{h.count}</b>{h.q ? "اعتراض" : "اعتراض بهذا اليوم"}</div><div><b>✅{h.ok} ❌{h.no}{h.open ? ` ⏳${h.open}` : ""}</b>انقبل · انرفض{h.open ? " · ينتظر" : ""}</div></div></div>
+      {!h.q && <><div className="exline expad gkmonth">
+        <button type="button" className="exbtn" disabled={busy} onClick={() => go(h.prev)}>› الشهر اللي قبله</button>
+        <b>{MONTH_NAMES[Number(h.day.slice(5, 7)) - 1]} {h.day.slice(0, 4)}</b>
+        {h.next ? <button type="button" className="exbtn" disabled={busy} onClick={() => go(h.next)}>الشهر اللي بعده ‹</button> : <span />}
+      </div>
+      <div className="gkdays">
+        {h.days.map((x, i) => (
+          <button type="button" key={x.d} className={x.d === h.day ? "on" : ""} disabled={busy} onClick={() => go(x.d)}>
+            <b>{i === 0 && !h.next ? "اليوم" : Number(x.d.slice(8, 10))}</b><small>{x.n ? `${x.n} اعتراض` : "—"}</small>
+          </button>
+        ))}
+      </div></>}
+      {h.rows.length ? (
+        <table className="extable"><tbody>
+          {h.rows.map((p) => (
+            <tr key={p.id}>
+              <td><b>{p.name}</b>{p.test && <span className="adentag">تجربة</span>}
+                <small className="pdmode">{p.title} · الدرجة {p.total}{h.q ? ` · ${String(p.graded).slice(0, 10)}` : ""}{h.owner && p.grader ? ` · صححها ${p.grader}` : ""}</small>
+                {p.qs.map((x) => (
+                  <small key={x.q} className="pdmode gkobjline">
+                    <b>س{x.q}</b> {state(x)}{x.edited ? " ✏️ انعدل" : ""}{x.status !== "open" && x.at ? ` · ${x.at}` : ""}{h.owner && x.by ? ` · ${x.by}` : ""}
+                    {x.reason && <><br />السبب: {x.reason}</>}
+                    {x.text && <><br />الطالب: {x.text}</>}
+                  </small>
+                ))}
+              </td>
+              <td className="p">
+                {p.qs.some((x) => x.status === "open")
+                  ? p.canAnswer && <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "openObj", id: p.id })}>رد</button>
+                  : p.canEdit && <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "reopenObj", id: p.id })}>✏️ عدّل الرد</button>}
+              </td>
+            </tr>
+          ))}
+        </tbody></table>
+      ) : <div className="empty">ماكو اعتراضات بهذا اليوم.</div>}
     </div>
   );
 }

@@ -112,14 +112,14 @@ const OBJ_TRIES = 2;
 async function humanObjections(it: Row) {
   const ai = await aiQuestions(it);
   const out: Row[] = [];
-  for (const o of await openObjections(it.id)) if (!ai.has(o.q) || (Number(await kvGet(objTriesKey(o.id))) || 0) >= OBJ_TRIES) out.push(o);
+  for (const o of await openObjections(it.id)) if (o.reopened || !ai.has(o.q) || (Number(await kvGet(objTriesKey(o.id))) || 0) >= OBJ_TRIES) out.push(o);
   return out;
 }
 /** دكة المؤقت: نظام التصحيح AI يراجع الاعتراضات على أسئلته ويرد على الطالب */
 export async function aiObjectionsTick(limit = 4) {
   const byItem = new Map<number, Row[]>();
   for (const o of await find("objections", { status: "open" }, { order: ["id"] })) {
-    if ((Number(await kvGet(objTriesKey(o.id))) || 0) >= OBJ_TRIES) continue;
+    if (o.reopened || (Number(await kvGet(objTriesKey(o.id))) || 0) >= OBJ_TRIES) continue;
     byItem.set(o.item_id, [...byItem.get(o.item_id) ?? [], o]);
   }
   let done = 0;
@@ -188,7 +188,7 @@ async function paperView(it: Row, withObj = false, editing = false) {
   const answered = answeredOf(answers);
   return {
     ink, errors: await errorsOf(it.exam_id), ...await voicesOf(it), ai: await aiResultOf(it.id), inPerson: (await student(it.user_id))?.exam === "حضوري",
-    objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark })),
+    objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark, ...(o.reopened ? { was: o.new_mark !== null && o.new_mark !== o.old_mark ? "accepted" : "rejected", reason: o.reason ?? "" } : {}) })),
     ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
     whole: answers.filter((a) => !a.q).map((a) => a.file),
     // byAi: صححه نظام التصحيح AI، فالمصحح ما يغيره (يصحح بس الأسئلة اللي حوّلها)
@@ -513,6 +513,18 @@ export async function gradeAction(body: Row) {
     return { ...await listData(uid), paper: null, notice: await payAction(uid, body), pay: await payData(uid) };
   } else if (a === "history") {
     return { ...await listData(uid), paper: null, notice: "", history: await historyOf(uid, body.day) };
+  } else if (a === "objLog") {
+    return { ...await listData(uid), paper: null, notice: "", objLog: await objLogOf(uid, body.day, body.q) };
+  } else if (a === "reopenObj") {
+    // يرجع لاعتراض رد عليه حتى يعدله: ورقة عبرها، أو غلط بالدرجة
+    const it = await one("sched_items", { id: Number(body.id) });
+    need(it?.graded_at, "الورقة غير موجودة");
+    need(await canHandle(uid, it!), "ما عندك صلاحية على هذي الورقة", 403);
+    const mine = await reopenable(uid, it!);
+    need(mine.length, "ماكو رد تگدر تعدله على هذي الورقة");
+    for (const o of mine) await update("objections", { id: o.id }, { status: "open", reopened: 1 });
+    await logActivity(it!.user_id, `✏️ ${await staffName(uid)} فتح رده على اعتراضه بامتحان ${(await paperRow(it!)).title} حتى يعدله`);
+    paper = await paperView(it!, true);
   } else if (a === "only") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     const exam = Number(body.exam);
@@ -682,6 +694,8 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
   let rejects: Record<string, string> = {};
   try { const j = typeof rejectsRaw === "string" ? JSON.parse(rejectsRaw || "{}") : rejectsRaw ?? {}; if (j && typeof j === "object") rejects = j as Record<string, string>; } catch { /* بدون رفض */ }
   const open = (await humanObjections(it)).sort((a, b) => a.q - b.q);
+  const reopened = open.some((o) => o.reopened);
+  const before = Number(it.total ?? 0);
   const changed = (o: Row) => o.new_mark !== null && o.new_mark !== o.old_mark;
   const left = open.filter((o) => !changed(o) && !(String(o.q) in rejects)).map((o) => o.q);
   need(!left.length, `غير الدرجة أو ارفض اعتراض السؤال: ${left.join("، ")}`);
@@ -695,18 +709,20 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
       accepted++;
     } else {
       const reason = String(rejects[String(o.q)] ?? "").trim().slice(0, 500);
+      // چان منقبل وهسه انرفض: الدرجة ترجع مثل ما چانت قبل الاعتراض
+      if (o.reopened) await put("question_marks", { item_id: it.id, q: o.q, mark: o.old_mark });
       await update("objections", { id: o.id }, { status: "rejected", new_mark: o.old_mark, reason: reason || null, decided_at: stamp(), decided_by: uid });
       lines.push(`❌ السؤال ${o.q}: انرفض اعتراضك وبقت درجته ${o.old_mark}${reason ? `\nالسبب: ${esc(reason)}` : ""}`);
     }
   }
   const total = await itemTotal(it);
   await update("sched_items", { id: it.id }, { total });
-  if (accepted) await keepPages(it.id, photos);
+  if (accepted || reopened) await keepPages(it.id, photos);
   const view = await paperRow(it);
-  const text = `✋ <b>رد المصحح على اعتراضك</b>\nامتحان: ${esc(view.title)}\n\n${lines.join("\n")}\n\nدرجتك${accepted ? " الجديدة" : ""}: <b>${total}</b> من 100`;
+  const text = `${reopened ? "✏️ <b>المصحح عدّل رده على اعتراضك</b>" : "✋ <b>رد المصحح على اعتراضك</b>"}\nامتحان: ${esc(view.title)}\n\n${lines.join("\n")}\n\nدرجتك${accepted ? " الجديدة" : ""}: <b>${total}</b> من 100`;
   const deliver = async (chat: number, caption: string) => {
     // تعليق الألبوم أكثر شي 1024 حرف، فالطويل يروح برسالة وراه
-    if (accepted && photos.length) {
+    if ((accepted || reopened) && photos.length) {
       const short = caption.length <= 1000;
       if (await sendAlbum(chat, photos, short ? caption : `📝 ورقتك بعد الاعتراض · الدرجة ${total} من 100`)) { if (!short) await send(chat, caption, { extra: { protect_content: true } }); return; }
     }
@@ -715,10 +731,10 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
   {
     await deliver(it.user_id, text);
     // ولي الأمر: الدرجة الجديدة بس، باسم الطالب الرباعي والامتحان، بدون تفاصيل الاعتراض
-    const g = accepted ? await guardianOf(it.user_id) : null;
+    const g = (reopened ? total !== before : accepted) ? await guardianOf(it.user_id) : null;
     if (g) await send(g.guardian_id, `📝 <b>تعديل درجة بعد اعتراض</b>\nدرجة الطالب <b>${esc(view.name)}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`, { kb: seenButton(it.id), extra: { protect_content: true } });
     if (g) await guardianSent(it.user_id, g.guardian_id, it.id);
-    await logActivity(it.user_id, `✋ رد المصحح على اعتراضه بامتحان ${view.title}: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total}`);
+    await logActivity(it.user_id, `${reopened ? "✏️ المصحح عدّل رده" : "✋ رد المصحح"} على اعتراضه بامتحان ${view.title}: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total}`);
   }
   return `✅ انحفظ الرد: ${accepted} انقبل، ${open.length - accepted} انرفض. الدرجة ${total} من 100`;
 }
@@ -749,6 +765,70 @@ ${esc(text)}` : ""}`;
 }
 
 export const waitingPapers = async (uid: number) => (await waitingFor(uid, await find("sched_items", { status: "done" }))).length;
+
+/** الردود اللي يگدر يرجعلها ويعدلها: صاحب البوت كلها، والمصحح ردوده هو اللي بعده ما انحاسب عليها */
+async function reopenable(uid: number, it: Row) {
+  const owner = await isAdmin(uid);
+  return (await find("objections", { item_id: it.id })).filter((o) => o.status !== "open" && (owner || (o.decided_by === uid && !o.paid_id)));
+}
+
+/** أيام الشهر لحد اليوم (إذا الشهر هو الحالي)، والأشهر اللي قبله كلها، ويا أزرار الشهر اللي قبله واللي بعده */
+function monthOf(rawDay: unknown, count: (month: string) => Map<string, number>) {
+  const today = todayStr();
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(rawDay ?? "")) && String(rawDay) <= today ? String(rawDay) : today;
+  const month = day.slice(0, 7);
+  const counts = count(month);
+  const last = month === today.slice(0, 7) ? Number(today.slice(8, 10)) : new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const days = Array.from({ length: last }, (_, i) => `${month}-${String(last - i).padStart(2, "0")}`).map((d) => ({ d, n: counts.get(d) ?? 0 }));
+  const prev = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+  const next = month < today.slice(0, 7) ? new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1)).toISOString().slice(0, 7) : "";
+  return { day, days, prev: `${prev}-01`, next: next ? (next === today.slice(0, 7) ? today : `${next}-01`) : "" };
+}
+
+/** سجل الاعتراضات يوم يوم (طلب الأستاذ 2026-11-18): المصحح اعتراضات أوراقه، وصاحب البوت الكل ومنو رد.
+ *  الاعتراض ينحسب بيوم الرد عليه، واللي بعده ينتظر بيوم ما اعترض الطالب. ومنه يرجع للاعتراض ويعدل رده */
+async function objLogOf(uid: number, rawDay: unknown, rawQ?: unknown) {
+  const owner = await isAdmin(uid);
+  const papers = new Map((await find("sched_items", { status: "done" })).filter((p) => p.graded_at && (owner || p.grader_id === uid)).map((p) => [p.id as number, p]));
+  const objs = (await find("objections", {})).filter((o) => papers.has(o.item_id));
+  const dayOf = (o: Row) => String(o.decided_at || o.created || "").slice(0, 10);
+  const m = monthOf(rawDay, (month) => {
+    const c = new Map<string, number>();
+    for (const o of objs) { const d = dayOf(o); if (d.startsWith(month)) c.set(d, (c.get(d) ?? 0) + 1); }
+    return c;
+  });
+  // البحث باسم الطالب: كل اعتراضاته بكل الأيام، مو بس هذا اليوم
+  const q = toLatinDigits(String(rawQ ?? "").trim()).toLowerCase();
+  const studentName = new Map<number, string>();
+  for (const o of objs) if (!studentName.has(o.item_id)) studentName.set(o.item_id, await nameOf(papers.get(o.item_id)!));
+  const today = q.length >= 2 ? objs.filter((o) => studentName.get(o.item_id)!.toLowerCase().includes(q)) : objs.filter((o) => dayOf(o) === m.day);
+  // الطلاب اللي يعترضون هواية بهذا الشهر: الأكثر أول
+  const people = new Map<number, { name: string; n: number; ok: number }>();
+  for (const o of objs.filter((x) => dayOf(x).startsWith(m.day.slice(0, 7)))) {
+    const sid = papers.get(o.item_id)!.user_id as number;
+    const x = people.get(sid) ?? { name: studentName.get(o.item_id)!, n: 0, ok: 0 };
+    x.n++; if (o.status === "accepted") x.ok++;
+    people.set(sid, x);
+  }
+  const byItem = new Map<number, Row[]>();
+  for (const o of today) byItem.set(o.item_id, [...byItem.get(o.item_id) ?? [], o]);
+  const names = new Map<number, string>();
+  const nameOfStaff = async (id: number | null) => { if (id == null) return ""; if (!names.has(id)) names.set(id, await staffName(id)); return names.get(id)!; };
+  const rows = await Promise.all([...byItem].map(async ([id, list]) => {
+    const it = papers.get(id)!;
+    const handle = await canHandle(uid, it);
+    const can = handle && (await reopenable(uid, it)).length > 0;
+    const qs = await Promise.all(list.sort((a, b) => a.q - b.q).map(async (o) => ({
+      q: o.q, text: o.text ?? "", old: o.old_mark, mark: o.status === "open" ? null : o.new_mark, status: o.status, reason: o.reason ?? "", edited: !!o.reopened,
+      by: await nameOfStaff(o.decided_by ?? null), at: String(o.decided_at || o.created || "").slice(11, 16),
+    })));
+    return { ...await paperRow(it), qs, at: qs.map((q) => q.at).sort().at(-1) ?? "", canEdit: can, canAnswer: handle };
+  }));
+  rows.sort((a, b) => b.at.localeCompare(a.at));
+  const n = (s: string) => today.filter((o) => o.status === s).length;
+  return { ...m, q: q.length >= 2 ? q : "", owner, count: today.length, ok: n("accepted"), no: n("rejected"), open: n("open"), rows,
+    people: [...people.values()].sort((a, b) => b.n - a.n).slice(0, 30) };
+}
 
 /** سجل التصحيح: المصحح يشوف أوراقه، وصاحب البوت يشوف كل الأوراق ومنو صححها، ويا حالة الاعتراضات */
 /** السجل يوم يوم: أول ما يفوت أوراق اليوم، وفوك أيام هذا الشهر يرجع بيها. والمصحح يشوف المبلغ اللي إله */

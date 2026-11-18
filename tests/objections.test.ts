@@ -147,3 +147,55 @@ test("حتى السؤال اللي أخذ درجته الكاملة ينعترض
   const r = await object(64, full, { qs: "1,2", text_1: "انطيتوني كاملة بس أشوف بيها غلط", text_2: "جوابي صحيح" });
   assert.match(r.notice, /وصل اعتراضك/);
 });
+
+test("سجل الاعتراضات يوم يوم: المصحح اعتراضات أوراقه، وصاحب البوت الكل ومنو رد", async () => {
+  const mine = (await g(30, "objLog")).objLog;
+  const row = mine.rows.find((p: any) => p.id === item);
+  assert.ok(row, "ورقته بالسجل");
+  assert.deepEqual(row.qs.map((x: any) => [x.q, x.status, x.mark]), [[1, "accepted", 45], [2, "rejected", 40]]);
+  assert.equal(row.qs[1].reason, "الخطوة الأخيرة غلط");
+  assert.equal(row.canEdit, true);
+  assert.ok(mine.days[0].n >= 2);
+  await put("staff", { user_id: 31, name: "ثاني", perms: "grade,objections" });
+  assert.equal((await g(31, "objLog")).objLog.rows.length, 0);
+  await assert.rejects(g(31, "reopenObj", { id: item }), (x: any) => x.status === 403);
+  const own = (await g(1, "objLog")).objLog;
+  assert.equal(own.rows.find((p: any) => p.id === item).qs[0].by, "مصحح");
+});
+
+test("يرجع للاعتراض ويعدل رده: اللي انقبل يرجع لدرجته القديمة، والطالب وولي أمره يوصلهم التعديل", async () => {
+  const r = await g(30, "reopenObj", { id: item });
+  assert.deepEqual(r.paper.objections.map((o: any) => [o.q, o.was]), [[1, "accepted"], [2, "rejected"]]);
+  assert.equal(r.paper.objections[1].reason, "الخطوة الأخيرة غلط");
+  // الرد السابق يبين بالورقة: س1 بدرجته الجديدة
+  assert.equal(r.paper.questions[0].mark, 45);
+  assert.ok((await g(30, "list")).objections.some((p: any) => p.id === item));
+  // غير رأيه: س1 يرجع 30 (رفض)، س2 يبقى مرفوض
+  await g(30, "mark", { id: item, q: 1, mark: 30 });
+  calls.length = 0;
+  const done = await g(30, "decide", { id: item, rejects: { 1: "راجعتها، الجواب ناقص", 2: "الخطوة الأخيرة غلط" } });
+  assert.match(done.notice, /0 انقبل، 2 انرفض. الدرجة 70/);
+  assert.equal((await one("question_marks", { item_id: item, q: 1 }))!.mark, 30);
+  assert.equal((await one("sched_items", { id: item }))!.total, 70);
+  assert.ok(calls.some((c) => Number(c.p.chat_id) === 60 && /عدّل رده على اعتراضك/.test(c.p.text ?? c.p.caption ?? "")));
+  assert.ok(calls.some((c) => Number(c.p.chat_id) === 160 && /صارت <b>70<\/b>/.test(c.p.text ?? "")));
+  const log = (await g(30, "objLog")).objLog.rows.find((p: any) => p.id === item);
+  assert.deepEqual(log.qs.map((x: any) => [x.status, x.edited]), [["rejected", true], ["rejected", true]]);
+  assert.ok(!(await g(30, "list")).objections.some((p: any) => p.id === item));
+});
+
+test("الاعتراض اللي انحاسب عليه المصحح ما يرجعله، بس صاحب البوت يگدر", async () => {
+  for (const o of await find("objections", { item_id: item })) await (await import("../lib/db.ts")).update("objections", { id: o.id }, { paid_id: 9 });
+  await assert.rejects(g(30, "reopenObj", { id: item }), /ماكو رد تگدر تعدله/);
+  assert.equal((await g(30, "objLog")).objLog.rows.find((p: any) => p.id === item).canEdit, false);
+  const r = await g(1, "reopenObj", { id: item });
+  assert.equal(r.paper.objections.length, 2);
+});
+
+test("البحث باسم الطالب: كل اعتراضاته بكل الأيام، وقائمة اللي يعترضون بالشهر", async () => {
+  const r = (await g(1, "objLog", { q: "كامل" })).objLog;
+  assert.equal(r.q, "كامل");
+  assert.deepEqual(r.rows.map((p: any) => p.name), ["كامل"]);
+  const all = (await g(1, "objLog")).objLog;
+  assert.ok(all.people.some((x: any) => x.name === "كامل" && x.n === 2));
+});

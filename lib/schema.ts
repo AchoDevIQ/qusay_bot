@@ -65,7 +65,7 @@ export const SCHEMA: Record<string, Table> = {
   lecture_views: { key: ["user_id", "lecture"], cols: nulls("title", "subject", "times", "percent", "first_at", "last_at") },
   grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters", "exams_off", "places") },
   grader_settlements: { key: "id", auto: true, cols: nulls("user_id", "n_mand", "n_opt", "n_obj", "amount", "forgiven", "created", "by_id") },
-  objections: { key: "id", auto: true, cols: nulls("item_id", "user_id", "q", "text", "voice", "status", "old_mark", "new_mark", "reason", "created", "decided_at", "decided_by", "paid_id") },
+  objections: { key: "id", auto: true, cols: nulls("item_id", "user_id", "q", "text", "voice", "status", "old_mark", "new_mark", "reason", "created", "decided_at", "decided_by", "paid_id", "reopened") },
   grade_comments: { key: "id", auto: true, cols: nulls("lo", "hi", "text", "sticker_id", "created") },
   stickers: { key: "id", auto: true, cols: nulls("name", "file", "lo", "hi", "created") },
   comment_sent: { key: ["user_id", "comment_id"], cols: { at: null } },
