@@ -92,6 +92,7 @@ function normalDb(db: Record<string, any[]>) {
       if (t === "products") { delete x.hidden; delete x.ask; }   // الإخفاء من المتجر وحق السؤال ميزات جديدة
       if (t === "students" || t === "centers") { delete x.gender; delete x.birth; }   // بنين وبنات والمواليد ميزات جديدة
       if (t === "orders") { delete x.printed_by; delete x.printed_at; }
+      if (t === "orders") for (const k of ["co_no", "ret", "ret_at", "ret_got", "ret_got_at"]) delete x[k];   // وصل الشركة والراجع ميزة جديدة
       if (t === "orders" && x.items) x.items = JSON.parse(x.items);
       if (t === "sessions" && x.data) x.data = JSON.parse(x.data);
       return normal(x);

@@ -126,6 +126,11 @@ async function init() {
   await addColumn("orders", "settle_id", "INTEGER");
   await addColumn("orders", "printed_by", "INTEGER");
   await addColumn("orders", "printed_at", "TEXT");
+  await addColumn("orders", "co_no", "TEXT");
+  await addColumn("orders", "ret", "INTEGER DEFAULT 0");
+  await addColumn("orders", "ret_at", "TEXT");
+  await addColumn("orders", "ret_got", "INTEGER DEFAULT 0");
+  await addColumn("orders", "ret_got_at", "TEXT");
   await addColumn("products", "ask", "INTEGER");
   await addColumn("products", "cat_id", "INTEGER");
   await addColumn("products", "mode", "TEXT");

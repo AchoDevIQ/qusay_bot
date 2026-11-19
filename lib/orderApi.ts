@@ -15,23 +15,31 @@ const NEW_LIMIT = 60, PRINTED_LIMIT = 100;
 const orderView = async (o: Row) => ({
   id: o.id, created: o.created, name: o.name, curr: o.curr ?? "", place: placeOf(o), area: o.area, phone1: o.phone1, phone2: o.phone2, username: o.username ?? "", userId: o.user_id,
   items: orderItems(o).map((i) => ({ name: i.name, qty: i.qty, price: i.price })), subtotal: o.subtotal, fee: o.fee, total: o.total,
-  printedBy: o.printed_by ? await staffName(o.printed_by) : "", settled: !!o.settle_id,
+  printedBy: o.printed_by ? await staffName(o.printed_by) : "", settled: !!o.settle_id, printed: o.printed ?? 0,
+  coNo: o.co_no ?? "", ret: !!o.ret, retAt: o.ret_at ?? "", retGot: !!o.ret_got, retGotAt: o.ret_got_at ?? "",
 });
 const list = async (rows: Row[]) => await Promise.all(rows.map(orderView));
 
-/** حساب شركة التوصيل: كل الطلبات اللي انسلمت للشركة ولسه ما تحاسبنا عليها */
+/** حساب شركة التوصيل: كل الطلبات اللي انسلمت للشركة ولسه ما تحاسبنا عليها. الراجع ❌ ما ينحسب */
+const RET_GOT_LIMIT = 30;
 async function companyData() {
-  const open = await find("orders", { printed: 1, settle_id: null }, { order: ["id"] });
+  const open = await find("orders", { printed: 1, settle_id: null }, { where: (o) => !o.ret, order: ["id"] });
   const lectures = await lecturePrices();
+  const rets = await find("orders", { printed: 1, ret: 1 }, { order: ["-id"] });
   return {
-    open: open.map((o) => ({ id: o.id, total: o.total, fee: o.fee, parts: orderParts(o, lectures), items: orderItems(o).map((i) => ({ name: i.name, qty: i.qty, price: i.price })) })),
+    open: open.map((o) => ({ id: o.id, coNo: o.co_no ?? "", name: o.name, total: o.total, fee: o.fee, parts: orderParts(o, lectures), items: orderItems(o).map((i) => ({ name: i.name, qty: i.qty, price: i.price })) })),
+    // الراجع اللي بعده عند الشركة كله، واللي استلمته آخر 30
+    returns: await list([...rets.filter((o) => !o.ret_got), ...rets.filter((o) => o.ret_got).slice(0, RET_GOT_LIMIT)]),
+    retWaiting: rets.filter((o) => !o.ret_got).length,
     archive: (await find("company_settlements", {}, { order: ["-id"], limit: 20 })).map((s) => ({ id: s.id, from: s.from_id, to: s.to_id, n: s.n, gross: s.gross, fees: s.fees, net: s.net, created: s.created, parts: savedParts(s) })),
   };
 }
-async function settleCompany(fromRaw: unknown, toRaw: unknown, expect: unknown) {
+async function settleCompany(fromRaw: unknown, toRaw: unknown, expect: unknown, skipRaw: unknown) {
   const from = Number(fromRaw), to = Number(toRaw);
   need(Number.isSafeInteger(from) && Number.isSafeInteger(to) && from <= to, "اكتب رقم أول وصل وآخر وصل صح");
-  const rows = await find("orders", { printed: 1, settle_id: null }, { where: (o) => o.id >= from && o.id <= to, order: ["id"] });
+  // اللي شلت عنه الصح (بعده ما واصل) يبقى للحساب الجاي
+  const skip = new Set(Array.isArray(skipRaw) ? (skipRaw as unknown[]).map(Number) : []);
+  const rows = await find("orders", { printed: 1, settle_id: null }, { where: (o) => o.id >= from && o.id <= to && !o.ret && !skip.has(o.id), order: ["id"] });
   need(rows.length, "ماكو طلبات غير محاسب عليها بهذا المدى");
   const gross = rows.reduce((s, o) => s + o.total, 0), fees = rows.reduce((s, o) => s + o.fee, 0), net = gross - fees;
   need(net === Number(expect), "الأرقام تغيرت. راجع المبلغ واضغط مرة ثانية");
@@ -41,6 +49,75 @@ async function settleCompany(fromRaw: unknown, toRaw: unknown, expect: unknown) 
     for (const o of rows) await update("orders", { id: o.id }, { settle_id: id });
   });
   return `✅ انسجل الحساب: ${rows.length} طلب، استلمت ${num(net)}`;
+}
+
+// ---------- رقم وصل الشركة، البحث، والراجع
+const COMPANY_ONLY = new Set(["settle", "allPrices", "ret", "retGot"]);
+const SHARED = new Set(["list", "search", "coNo"]);
+const SEARCH_LIMIT = 30;
+const AR = "٠١٢٣٤٥٦٧٨٩", FA = "۰۱۲۳۴۵۶۷۸۹";
+/** رقم الوصل: أرقام وحروف بس، بلا مسافات، والأرقام العربية تصير إنجليزية */
+export const cleanCoNo = (raw: unknown) => String(raw ?? "")
+  .replace(/[٠-٩]/g, (d) => String(AR.indexOf(d))).replace(/[۰-۹]/g, (d) => String(FA.indexOf(d)))
+  .replace(/[\s#\-–]/g, "").slice(0, 30);
+const digits = (s: string) => s.replace(/\D/g, "");
+
+/** يدور برقم وصل الشركة، أو رقم وصلنا، أو الاسم، أو الهاتف. طلبات التوصيل بس، مو بيع المكتبات */
+export async function searchOrders(raw: unknown) {
+  const q = String(raw ?? "").trim();
+  need(q, "اكتب رقم الوصل أو الاسم أو الهاتف");
+  const co = cleanCoNo(q), d = digits(co), low = q.toLowerCase();
+  const all = await find("orders", {}, { where: (o) => o.printed !== 3, order: ["-id"] });
+  const score = (o: Row) => {
+    const c = String(o.co_no ?? "");
+    if (co && c === co) return 0;                                  // رقم الشركة بالضبط أول شي
+    if (d && String(o.id) === d) return 1;                          // رقم وصلنا
+    if (co && c && c.includes(co)) return 2;
+    if (d.length >= 4 && [o.phone1, o.phone2].some((p) => digits(String(p ?? "")).includes(d))) return 3;
+    if (!d && String(o.name ?? "").toLowerCase().includes(low)) return 4;
+    return -1;
+  };
+  const hits = all.map((o) => [score(o), o] as const).filter(([s]) => s >= 0).sort((x, y) => x[0] - y[0]).slice(0, SEARCH_LIMIT).map(([, o]) => o);
+  return await list(hits);
+}
+/** طلب انسلم للشركة: مطبوع، مو ملغي ولا بيعة مكتبة */
+async function companyOrder(id: number) {
+  const o = await one("orders", { id });
+  need(o && o.printed !== 3, "الطلب غير موجود");
+  need(o!.printed === 1, o!.printed === 2 ? "هذا الطلب ملغي" : "هذا الطلب بعده ما انطبع، يعني ما انسلم للشركة");
+  return o!;
+}
+async function setCoNo(uid: number, id: number, raw: unknown) {
+  await companyOrder(id);
+  const no = cleanCoNo(raw);
+  if (no) {
+    const other = await one("orders", { co_no: no }, { where: (o) => o.id !== id });
+    need(!other, `هذا الرقم مسجل على وصلنا #${other?.id}. صلح ذاك أول`);
+  }
+  await update("orders", { id }, { co_no: no || null });
+  await logActivity(uid, `🚚 وصل الشركة للطلب #${id}: ${no || "انشال"}`);
+  return no ? `✅ انحفظ: وصلنا #${id} = وصل الشركة ${no}` : `✅ انشال رقم الشركة من وصلنا #${id}`;
+}
+/** ❌ راجع: يطلع من الحساب ويا الشركة، والطلب يبقى محفوظ */
+async function setReturned(uid: number, id: number, on: boolean) {
+  const o = await companyOrder(id);
+  if (on) {
+    need(!o.settle_id, "هذا الوصل انحسب ويا الشركة قبل، ما يصير راجع");
+    if (!o.ret) await update("orders", { id }, { ret: 1, ret_at: stamp() });
+  } else {
+    need(!o.ret_got, "أشرت ✅ إنك استلمت البضاعة. شيل ✅ أول");
+    await update("orders", { id }, { ret: 0, ret_at: null });
+  }
+  await logActivity(uid, `🚚 الطلب #${id}${o.co_no ? ` (الشركة ${o.co_no})` : ""}: ${on ? "❌ راجع" : "شال الراجع"}`);
+  return on ? `❌ وصلنا #${id} صار راجع، وطلع من حساب الشركة` : `↩️ وصلنا #${id} رجع للحساب ويا الشركة`;
+}
+/** ✅ استلمت البضاعة الراجعة من الشركة */
+async function setRetGot(uid: number, id: number, on: boolean) {
+  const o = await companyOrder(id);
+  need(o.ret, "أشر ❌ راجع أول");
+  await update("orders", { id }, on ? { ret_got: 1, ret_got_at: stamp() } : { ret_got: 0, ret_got_at: null });
+  await logActivity(uid, `🚚 الطلب #${id}: ${on ? "✅ استلم البضاعة الراجعة" : "شال ✅ الاستلام"}`);
+  return on ? `✅ وصلنا #${id}: استلمت البضاعة الراجعة` : `↩️ وصلنا #${id}: البضاعة بعدها عند الشركة`;
 }
 
 async function ordersData(uid: number) {
@@ -68,11 +145,16 @@ export async function orderAction(body: Row) {
   const uid = await pageUser(body);
   const a = String(body.action ?? "");
   const company = await can(uid, "company");
-  if (a === "settle" || a === "allPrices") need(company, "ما عندك صلاحية", 403);
-  else need(await can(uid, "orders") || (company && a === "list"), "ما عندك صلاحية", 403);
+  if (COMPANY_ONLY.has(a)) need(company, "ما عندك صلاحية", 403);
+  else need(await can(uid, "orders") || (company && SHARED.has(a)), "ما عندك صلاحية", 403);
   let notice = "";
   let allPrices: PriceLine[] | null = null;
-  if (a === "settle") notice = await settleCompany(body.from, body.to, body.net);
+  let found: Awaited<ReturnType<typeof list>> | null = null;
+  if (a === "settle") notice = await settleCompany(body.from, body.to, body.net, body.skip);
+  else if (a === "search") { /* تحت */ }
+  else if (a === "coNo") notice = await setCoNo(uid, Number(body.id), body.no);
+  else if (a === "ret") notice = await setReturned(uid, Number(body.id), !!body.on);
+  else if (a === "retGot") notice = await setRetGot(uid, Number(body.id), !!body.on);
   else if (a === "pdf") {
     const live = new Set((await find("orders", {}, { where: (o) => !o.printed })).map((o) => o.id));
     const ids = idList(body.ids).filter((i) => live.has(i));
@@ -99,13 +181,16 @@ export async function orderAction(body: Row) {
     const o = await one("orders", { id: Number(body.id) });
     need(o?.printed === 1, "الطلب مو بالمطبوعة");
     need(!o!.settle_id, "هذا الطلب انحسب ويا الشركة، ما يرجع");
+    need(!o!.ret, "هذا الطلب راجع ❌. شيل الراجع أول");
     await update("orders", { id: Number(body.id) }, { printed: 0, printed_by: null, printed_at: null });
     notice = "↩️ رجع للطلبات الجديدة";
   } else if (a === "allPrices") {
     // يقرا كل الطلبات، فما يشتغل إلا لمن تطلبه
     allPrices = priceReport((await find("orders", { printed: 1 }, { order: ["id"] })).map(orderItems) as PriceItems[]);
   } else need(a === "list", "أمر غير معروف");
-  return { ...await ordersData(uid), notice, allPrices };
+  // البحث يبقى مفتوح بعد أي تغيير، حتى تشوف النتيجة الجديدة
+  if (a === "search" || String(body.q ?? "").trim()) found = await searchOrders(body.q);
+  return { ...await ordersData(uid), notice, allPrices, found };
 }
 
 // ---------- مبيعات المكتب والمكتبات
