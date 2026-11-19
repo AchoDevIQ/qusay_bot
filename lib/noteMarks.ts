@@ -13,10 +13,10 @@ import { need } from "./webApi.ts";
 export const VIDEO_MAX = 30 * 1024 * 1024;
 
 /** كل فيديو توضيحي وكلمات سؤاله بالملزمة العربية والإنجليزية (أول سطر يطابق) */
-const CATALOG: { name: string; ar: RegExp; en: RegExp }[] = [
+export const CATALOG: { name: string; ar: RegExp; en: RegExp }[] = [
   { name: "الخزان المتسرب", ar: /خزان.{0,6}شكل متوازي/, en: /Polyhedron tank/i },
-  { name: "متوازي مستطيلات حجمه 640", ar: /القاعدة بمعدل ?\(0\.4\)/, en: /rate of 0\.4 ?cm\/s find the rate of change of height/i },
-  { name: "متوازي مستطيلات حجمه 48", ar: /قاعدته ?بمعدل ?\(0\.5\)|يزداد طول ?ضلع ?قاعدته/, en: /rate of 0\.5 ?cm\/s find the rate of change of height/i },
+  { name: "متوازي مستطيلات حجمه 640", ar: /القاعدة بمعدل ?\(0\.4\)/, en: /increases at a rate of 0\.4 ?cm\/s/i },
+  { name: "متوازي مستطيلات حجمه 48", ar: /قاعدته ?بمعدل ?\(0\.5\)|يزداد طول ?ضلع ?قاعدته/, en: /increases at a rate of 0\.5 ?cm\/s/i },
   { name: "متوازي مستطيلات يتمدد بالحرارة", ar: /يتمدد بالحرارة/, en: /parallel ?piped whose base is square/i },
   { name: "أبعاد قطعة المعدن", ar: /قطعه من المعدن/, en: /piece ?of ?metal in the shape/i },
   { name: "المستطيل والدائرة", ar: /مستطيل مساحته ?30/, en: /rectangle ?whose area 30/i },
@@ -34,12 +34,12 @@ const CATALOG: { name: string; ar: RegExp; en: RegExp }[] = [
   { name: "الفنار وظل السفينة", ar: /فنار ميناء/, en: /light ?house of a Port/i },
   { name: "المصباح والشخص ثلاث مطاليب", ar: /مصباح (?:عىل|على) إرتفاع ?10m/, en: /pole of length \(10 ?m\)/i },
   { name: "راس الرجل والمصباح", ar: /عمود طوله ?\(8\)/, en: /pole of length 8 ?m/i },
-  { name: "المرشح والحنفية", ar: /مرشح (?:عىل|على) شكل مخروط دائري قائم قاعدته افقية/, en: /Q ?29 ?\/ ?A conical filter/i },
+  { name: "المرشح والحنفية", ar: /مرشح (?:عىل|على) شكل مخروط دائري قائم قاعدته افقية/, en: /Q ?29 ?\/ ?A conical filter|A conical filter whose base is horizontal/i },
   { name: "مرشح زاويته الرأسية 60", ar: /مرشح وراسه اىل االسفل|مرشح ?مخروطي محوره شاقولي/, en: /conical filter whose axis is vertical/i },
   { name: "كومة الرمال", ar: /رمال تنهال/, en: /Sand heaped on the ground/i },
-  { name: "مخروط قاعدته تتمدد", ar: /كانت قاعدته الدائرية/, en: /if its circular ba/i },
+  { name: "مخروط قاعدته تتمدد", ar: /كانت قاعدته الدائرية/, en: /if its circular ba|equals 60°\.?\s*if its(?:\s|$)/i },
   { name: "رمل يتساقط من منحدر", ar: /يتساقط رمل من منحدر/, en: /Sand is falling from a cleft/i },
-  { name: "مخروط محيط قاعدته يتغير", ar: /كان محيط قاعدته/, en: /If ?the ?Perimeter ?of its/i },
+  { name: "مخروط محيط قاعدته يتغير", ar: /كان محيط قاعدته/, en: /If ?the ?Perimeter ?of its|equals 60°\.?\s*If the(?:\s|$)/i },
   { name: "كرة مغطاة بالجليد", ar: /كرة صلده قطرها/, en: /solid sphere whose diameter/i },
   { name: "بالون نسبة الحجم إلى القطر", ar: /كانت النسبة بي بالون كروي|يتسرب منه الغاز فإذا كانت النسبة/, en: /which has a hole/i },
   { name: "أسطوانة حجمها ثابت", ar: /أسطوانة دائرية قائمة يزداد ارتفاعها/, en: /circular cylinder its height increases/i },
@@ -63,11 +63,11 @@ const CATALOG: { name: string; ar: RegExp; en: RegExp }[] = [
   { name: "مبرهنة القيمة المتوسطة", ar: /برهن\s*ان\s*ال?دالة.{0,30}1,7\]/, en: /Prove that the function f\(x\)\s*=\s*x/i },
   { name: "سلك يصير دائرة ومربع", ar: /سلك طوله ?60 ?cm/, en: /A wire of length 60 ?cm/i },
   // رسم الدوال: سطور الحل بالملزمة (ما تبدي بـ «س»، فالزر ينحط على السطر نفسه)
-  { name: "رسم الدوال وزاري 1", ar: /^1\) ?f\(x\) ?= ?\( ?x ?- ?1 ?\)$/, en: /^1\) ?f\(x\) ?= ?\( ?x ?- ?1 ?\)$/ },
-  { name: "رسم الدوال وزاري 2", ar: /^2 ?\/ ?f\(x\) ?= ?x ?\+ ?3x$/, en: /^2 ?\/ ?f\(x\) ?= ?x ?\+ ?3x$/ },
-  { name: "رسم الدوال وزاري 3", ar: /^3 ?\/ ?f\(x\) ?= ?6x ?[–-] ?2x$/, en: /^3 ?\/ ?f\(x\) ?= ?6x ?[–-] ?2x$/ },
-  { name: "رسم الدوال وزاري 4", ar: /^4 ?\/ ?f\(x\) ?= ?x ?[–-] ?3x$/, en: /^4 ?\/ ?f\(x\) ?= ?x ?[–-] ?3x$/ },
-  { name: "رسم الدوال وزاري المحاضرة6 1", ar: /^1 ?\/ ?f\(x\) ?=$/, en: /^1 ?\/ ?f\(x\) ?=$/ },
+  { name: "رسم الدوال وزاري 1", ar: /^1\) ?f\(x\) ?= ?\( ?x ?- ?1 ?\)$/, en: /^1\)\s*f\(x\)\s*=\s*\(\s*x2?\s*-\s*1\s*\)2?$/ },
+  { name: "رسم الدوال وزاري 2", ar: /^2 ?\/ ?f\(x\) ?= ?x ?\+ ?3x$/, en: /^2\s*\/\s*f\(x\)\s*=\s*x3?\s*\+\s*3x2?$/ },
+  { name: "رسم الدوال وزاري 3", ar: /^3 ?\/ ?f\(x\) ?= ?6x ?[–-] ?2x$/, en: /^3\s*\/\s*f\(x\)\s*=\s*6x\s*[–-]\s*2x3?$/ },
+  { name: "رسم الدوال وزاري 4", ar: /^4 ?\/ ?f\(x\) ?= ?x ?[–-] ?3x$/, en: /^4\s*\/\s*f\(x\)\s*=\s*x3?\s*[–-]\s*3x$/ },
+  { name: "رسم الدوال وزاري المحاضرة6 1", ar: /^1 ?\/ ?f\(x\) ?=$/, en: /^1\s*\/\s*f\(x\)\s*=(?:\s*1\s*\/\s*f\(x\)\s*=)?$/ },
   // رسم الدوال، الواجب (أسئلة الكتاب): 1–8 كثيرة حدود، 9–15 كسرية
   ...[
     { n: 1, re: /^1 ?\/ ?f\(x\) ?= ?x$/ },
@@ -208,8 +208,13 @@ export async function relocateMarks(book: Row, oldPdf: Buffer, newPdf: Buffer, n
   return { map, moved, lost, added: Math.max(0, (auto?.marks ?? 0) - autoBefore) };
 }
 
+/** ملزمة مركّبة: كل صفحة سؤال، ويّاها ملف حل نموذجي */
+export const isComposed = (b: Row) => b.kind === "rasid" || !!b.sol;
 /** يحط الأزرار وحدها. الأزرار اللي عدلها صاحب البوت تبقى، والتلقائية تنعاد. يرجع عدد الأزرار والفيديوهات اللي انربطت */
 export async function autoMarks(book: Row, given?: Line[]) {
+  // الملازم المركّبة (سؤال بكل صفحة: الوزاريات، الإثرائيات، الراصد) بيها كتابة مخفية من الصفحة الأصلية،
+  // فالتدوير يحط أزرار بمكان غلط. أزرارها تنحط بلصق الملف الجاهز
+  if (isComposed(book)) return { marks: 0, linked: 0, composed: true };
   let lines = given;
   if (!lines) {
     const pdf = await files().read(`notes/${book.file}.pdf`);
@@ -436,35 +441,72 @@ export async function saveMark(book: Row, body: Row) {
   }
   return before ? await spread(m, before) : 0;
 }
-/** روابط حل كثيرة مرة وحدة. كل سطر: «ص22 · 0.196 · اسم السؤال · الرابط».
- *  الرابط يروح للزر اللي بنفس الصفحة وأقرب مكان، وإذا ماكو زر هناك ينضاف زر جديد */
+/** نفس فيديو الحل (يوتيوب أو منشور القناة) يعني نفس السؤال */
+export function solutionKey(link: unknown) {
+  const s = String(link ?? "");
+  const yt = parseYouTube(s);
+  if (yt) return `yt:${yt}`;
+  const l = parseLink(s);
+  return l ? `tg:${l.chat}/${l.msg}` : "";
+}
+/** كل الأزرار بكل الملازم (عربي وإنجليزي، الدفتر والوزاريات والإثرائيات والراصد) اللي بيها نفس فيديو الحل تنربط ببعض،
+ *  فمن يتبدل فيديو واحد منها يتبدل بالكل. يرجع عدد الأزرار اللي انربطت */
+async function joinSameSolution(keys: Set<string>) {
+  if (!keys.size) return 0;
+  const all = await find("note_marks");
+  let n = 0;
+  for (const k of keys) {
+    const same = all.filter((m) => m.solution && solutionKey(m.solution) === k);
+    if (same.length < 2) continue;
+    const groups = new Set(same.map((m) => m.link).filter((x) => x != null));
+    const key = [...groups][0] ?? same[0].id;
+    // المجاميع القديمة (مثل الراصد ويا الدفتر) تمشي كلها ويا المجموعة
+    for (const m of all) {
+      if (!(same.includes(m) || (m.link != null && groups.has(m.link))) || m.link === key) continue;
+      await update("note_marks", { id: m.id }, { link: key });
+      m.link = key;
+      n++;
+    }
+  }
+  return n;
+}
+/** روابط حل كثيرة مرة وحدة. كل سطر: «ص22 · 0.196 · اسم السؤال · الرابط»، أو «ص22 · 0.196 · اسم السؤال · ▶️ اسم الفيديو التوضيحي».
+ *  يروح للزر اللي بنفس الصفحة وأقرب مكان، وإذا ماكو زر هناك ينضاف زر جديد. الأزرار اللي بيها نفس فيديو الحل بكل الملازم تنربط ببعض */
 export async function pasteSolutions(book: Row, text: string) {
   const marks = await find("note_marks", { book_id: book.id });
-  let linked = 0, added = 0, spreadTo = 0;
-  const bad: string[] = [];
+  const videos = await find("note_videos", { lang: book.lang === "en" ? "en" : "ar" });
+  let linked = 0, explained = 0, added = 0, spreadTo = 0;
+  const bad: string[] = [], missing = new Set<string>(), keys = new Set<string>();
   for (const raw of text.split(/\r?\n/)) {
     const s = raw.trim();
     if (!s) continue;
-    const m = /^ص\s*(\d+)\s*·\s*([01](?:\.\d+)?)\s*·\s*(.*?)\s*·\s*(\S+)$/.exec(s);
-    const page = m ? Number(m[1]) : 0, y = m ? Number(m[2]) : -1, link = m?.[4] ?? "";
-    if (!m || page < 1 || page > book.pages || y > 1 || !(parseYouTube(link) || parseLink(link))) { bad.push(s.slice(0, 40)); continue; }
+    const parts = s.split(/\s*·\s*/);
+    const pm = /^ص\s*(\d+)$/.exec(parts[0] ?? "");
+    const page = pm ? Number(pm[1]) : 0, y = /^[01](?:\.\d+)?$/.test(parts[1] ?? "") ? Number(parts[1]) : -1;
+    const target = parts.length >= 4 ? parts[parts.length - 1] : "", label = parts.slice(2, -1).join(" · ");
+    const vm = /^▶️?\s*(.+)$/u.exec(target);
+    const video = vm && !parseYouTube(target) && !parseLink(target) ? videos.find((v) => v.name === vm[1].trim()) : undefined;
+    if (vm && !parseYouTube(target) && !parseLink(target) && !video) { missing.add(vm[1].trim()); continue; }
+    if (!pm || page > book.pages || y < 0 || y > 1 || !(video || parseYouTube(target) || parseLink(target))) { bad.push(s.slice(0, 40)); continue; }
+    const patch: Row = video ? { video_id: video.id } : { solution: target };
     const near = marks.filter((x) => x.page === page && Math.abs(Number(x.y) - y) < 0.03).sort((a, b) => Math.abs(Number(a.y) - y) - Math.abs(Number(b.y) - y))[0];
     if (near) {
       const before = { solution: near.solution, video_id: near.video_id };
-      await update("note_marks", { id: near.id }, { solution: link, auto: 0 });
-      near.solution = link;
+      await update("note_marks", { id: near.id }, { ...patch, auto: 0 });
+      Object.assign(near, patch);
       spreadTo += await spread(near, before);
-    }
-    else {
-      const row: Row = { book_id: book.id, page, y, label: m[3].slice(0, 80), video_id: null, solution: link, auto: 0 };
+    } else {
+      const row: Row = { book_id: book.id, page, y, label: label.slice(0, 80), video_id: null, solution: null, auto: 0, ...patch };
       row.id = await insert("note_marks", row);
       marks.push(row);
       added++;
     }
-    linked++;
+    if (video) explained++;
+    else { linked++; keys.add(solutionKey(target)); }
   }
-  need(linked || bad.length, "الصق الروابط أول");
-  return { linked, added, bad, spread: spreadTo };
+  need(linked || explained || bad.length || missing.size, "الصق الروابط أول");
+  const joined = await joinSameSolution(keys);
+  return { linked, explained, added, bad, spread: spreadTo, joined, missing: [...missing] };
 }
 export async function deleteMark(book: Row, id: number) {
   need(await one("note_marks", { id, book_id: book.id }), "الزر مو موجود");

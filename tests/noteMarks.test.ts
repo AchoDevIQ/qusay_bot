@@ -182,6 +182,44 @@ test("🔗 نفس السؤال بالدفتر والراصد والإنجليز�
   await assert.rejects(admin("markSave", { book: lec, page: 3, y: 0.5, label: "x", link: L.id }), /ملزمة ثانية/);
 });
 
+test("📋 ملف الأزرار الجاهز للملازم الإنجليزية: روابط وفيديوهات توضيحية، ونفس فيديو الحل ينربط ويا العربي وحده", async () => {
+  const one2 = (await import("../lib/db.ts")).one;
+  const ar = await insert("note_books", { title: "دفتر عربي", chapter: "الفصل السابع", lang: "ar", file: "a7", pages: 9, created: "1" });
+  const enBook = await insert("note_books", { title: "Ch7 book", chapter: "الفصل السابع", lang: "en", file: "b7", pages: 9, created: "1", section: "book" });
+  const wz = await insert("note_books", { title: "Ch7 wz", chapter: "الفصل السابع", lang: "en", file: "w7", pages: 9, created: "1", section: "wz", sol: 1 });
+  const vids = (await admin("videoUpload", { file: mp4("البالون_المتصاعد_English_عربي.mp4") })).videos;
+  const balloon = vids.find((v: any) => v.name === "البالون المتصاعد" && v.lang === "en").id;
+  // العربي: نفس السؤال بمكانين (السؤال وصفحة حله)
+  await admin("solutionsPaste", { book: ar, text: `ص2 · 0.300 · المعدلات م2 وزاري س1 · https://youtu.be/Abc123Xyz_0
+ص4 · 0.191 · المعدلات م2 وزاري س1 · https://youtu.be/Abc123Xyz_0` });
+  // الإنجليزي: رابط الحل والفيديو التوضيحي على نفس الزر، والفيديو اللي ما انرفع ينذكر
+  let r = await admin("solutionsPaste", { book: enBook, text: `ص3 · 0.137 · Q1 المعدلات م2 وزاري س1 · https://youtu.be/Abc123Xyz_0
+ص3 · 0.140 · Q1 البالون المتصاعد · ▶️ البالون المتصاعد
+ص5 · 0.2 · Q2 السلم · ▶️ السلم المنزلق` });
+  assert.match(r.notice, /انربط 1 سؤال بفيديو حله، و1 بفيديو توضيحي/);
+  assert.match(r.notice, /1 فيديو توضيحي بعده ما انرفع.*السلم المنزلق/);
+  assert.equal(r.marks.length, 1);
+  assert.deepEqual([r.marks[0].solution, r.marks[0].video, r.marks[0].label], ["https://youtu.be/Abc123Xyz_0", balloon, "Q1 المعدلات م2 وزاري س1"]);
+  // وانربط ويا الزرين العربيين
+  assert.equal(r.marks[0].linked.length, 2);
+  assert.match(r.notice, /انربط 1 زر ويا نفس السؤال/);   // الزرين العربيين انربطوا ببعض من لصق العربي
+  // الوزاريات: «🔍 حط الأزرار وحدها» ما يشتغل بيها (كتابة مخفية)، والملف يحط زرها وينربط ويا الكل
+  r = await admin("autoMarks", { book: wz });
+  assert.match(r.notice, /كل صفحة بيها سؤال/);
+  assert.equal(r.marks.length, 0);
+  r = await admin("solutionsPaste", { book: wz, text: "ص1 · 0.153 · Q1 المعدلات م2 وزاري س1 · https://youtu.be/Abc123Xyz_0" });
+  assert.equal(r.marks[0].linked.length, 3);
+  // تبدّل الفيديو بوحدة: يتبدل بالأربعة
+  const W = r.marks[0];
+  await admin("markSave", { book: wz, id: W.id, page: 1, y: W.y, label: W.label, solution: "https://youtu.be/Abc123Xyz_1" });
+  const arMarks = (await admin("marks", { book: ar })).marks;
+  assert.deepEqual(arMarks.map((m: any) => m.solution), ["https://youtu.be/Abc123Xyz_1", "https://youtu.be/Abc123Xyz_1"]);
+  assert.equal((await one2("note_marks", { id: (await admin("marks", { book: enBook })).marks[0].id }))!.solution, "https://youtu.be/Abc123Xyz_1");
+  // نفس الملف مرتين ما يضاعف الأزرار
+  r = await admin("solutionsPaste", { book: wz, text: "ص1 · 0.153 · Q1 المعدلات م2 وزاري س1 · https://youtu.be/Abc123Xyz_1" });
+  assert.equal(r.marks.length, 1);
+});
+
 test("ملف عامل الـ PDF بـ public مطابق لنسخة المكتبة، والصفحات ما تطلبه من داخل المكتبة", async () => {
   const fs = await import("node:fs");
   for (const f of ["pdf.min.mjs", "pdf.worker.min.mjs"]) assert.ok(fs.readFileSync(`public/${f}`).equals(fs.readFileSync(`node_modules/pdfjs-dist/build/${f}`)), `انسخ node_modules/pdfjs-dist/build/${f} إلى public`);

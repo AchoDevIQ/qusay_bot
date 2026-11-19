@@ -61,10 +61,11 @@ export default function MarksCard() {
             {cur && (
               <>
                 <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "autoMarks", book })}>{busy ? "جاري التدوير بالملزمة..." : "🔍 حط الأزرار وحدها على الأسئلة"}</button>
-                <div className="hint">يدور كل سؤال (س1، Q1، مثال) ويحطله زر، ويربط كل فيديو توضيحي بسؤاله. الأزرار اللي إنت عدلتها تبقى مثل ما هي.</div>
+                <div className="hint">يدور كل سؤال (س1، Q1، مثال) ويحطله زر، ويربط كل فيديو توضيحي بسؤاله. الأزرار اللي إنت عدلتها تبقى مثل ما هي. الوزاريات والإثرائيات والراصد (كل صفحة سؤال) ما تنفع بيها هاي، أزرارها تنحط بملف الأزرار الجاهز.</div>
                 <details className="cpbox expad">
                   <summary><b>📋 الصق روابط الحل كلها مرة وحدة</b></summary>
-                  <div className="exhint">كل سطر: «ص22 · 0.196 · اسم السؤال · الرابط». الرابط يروح للزر اللي بنفس الصفحة ونفس المكان، وإذا ماكو زر هناك ينضاف زر جديد.</div>
+                  <div className="exhint">كل سطر: «ص22 · 0.196 · اسم السؤال · الرابط»، أو «… · ▶️ اسم الفيديو التوضيحي». يروح للزر اللي بنفس الصفحة ونفس المكان، وإذا ماكو زر هناك ينضاف زر جديد. نفس فيديو الحل بأكثر من ملزمة (عربي وإنجليزي) ينربط وحده، فمن تبدّله بوحدة يتبدل بالكل.</div>
+                  <label className="exbtn">📎 اختار ملف الأزرار الجاهز (txt)<input type="file" accept=".txt,text/plain" hidden onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setPaste(await f.text()); }} /></label>
                   <textarea className="exinput" dir="rtl" rows={6} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="ص22 · 0.196 · المعدلات م2 وزاري س1 · https://youtu.be/…" />
                   <button type="button" className="btn" disabled={busy || !paste.trim()} onClick={async () => { if (await call({ action: "solutionsPaste", book, text: paste })) setPaste(""); }}>💾 اربطهن</button>
                 </details>
