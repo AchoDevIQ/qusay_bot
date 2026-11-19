@@ -4,7 +4,7 @@ import {
   AR_NAME_ERR, CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanName, cleanPhone, closeApp, fmt, haptic, nameOk, phoneErr, scrollToFirst, sendToBot, useBotData, deviceId,
 } from "./shared";
 import { AgreeNotice, WordOrder } from "./agreeSteps";
-import { REFUND_SENTENCE, chaptersInOrder, firstRoundOnly, termSentenceFor } from "../../lib/orderRules.ts";
+import { REFUND_SENTENCE, RET_DISC_LABEL, chaptersInOrder, firstRoundOnly, lineTotal, termSentenceFor } from "../../lib/orderRules.ts";
 
 // شاشات التنبيه بالترتيب: موافقتين وترتيب قبل المتجر، وبعد اختيار المنتجات حسب اللي بالسلة
 type Gate = "" | "a1" | "a2" | "aw" | "many" | "t1" | "tw";
@@ -14,6 +14,8 @@ type Data = {
   c: [string, Item[]][]; g: string[]; f: number[]; w?: string[]; mk?: string[];
   p?: { n?: string; cu?: string; g?: string; s?: string; a?: string; p1?: string; p2?: string };
   tk?: string;
+  // خصم طالب العام: [رقم المنتج، سعر أول نسخة بعد الخصم]. السيرفر يحسبه من جديد ويقارن المجموع
+  rd?: [number, number][];
 };
 
 export default function StoreClient() {
@@ -25,6 +27,7 @@ function Store({ D }: { D: Data }) {
   const P = D.p;
   const locked = !!P;   // المسجل: معلوماته مقفولة
   const prod = new Map(D.c.flatMap(([, items]) => items.map(([id, n, p]) => [id, { n, p }] as const)));
+  const disc = new Map(D.rd ?? []);
   const [cart, setCart] = useState<Record<number, number>>({});
   const [page, setPage] = useState(1);
   const [gate, setGate] = useState<Gate>("a1");
@@ -42,7 +45,7 @@ function Store({ D }: { D: Data }) {
   const [errs, setErrs] = useState<Errs>({});
 
   const entries = Object.entries(cart).map(([id, q]) => [Number(id), q] as const);
-  const sub = entries.reduce((s, [id, q]) => s + prod.get(id)!.p * q, 0);
+  const sub = entries.reduce((s, [id, q]) => s + lineTotal(prod.get(id)!.p, q, disc.get(id)), 0);
   const govIdx = D.g.indexOf(gov);
   const fee = govIdx < 0 ? 0 : D.f[govIdx];
 
@@ -140,6 +143,12 @@ function Store({ D }: { D: Data }) {
         <section className={!gate && page === 1 ? "" : "hide"}>
           {!D.c.length && <div className="empty">لا توجد منتجات حاليا.</div>}
           {!!D.w?.length && <div className="card warn">⚠️ <b>تنبيه:</b> امتحانات <b>{D.w.join("، ")}</b> <b>إلكترونية فقط</b>، لأن فاتك هواية من المادة وما تلحق حضوري.</div>}
+          {disc.size > 0 && (
+            <div className="card warn">
+              <b>{RET_DISC_LABEL}</b> 🌷<br />
+              {[...disc].filter(([id]) => prod.has(id)).map(([id, d]) => <div key={id}>• {prod.get(id)!.n}: بدل <s>{fmt(prod.get(id)!.p)}</s> صار <b>{fmt(d)}</b></div>)}
+            </div>
+          )}
           {!!D.mk?.length && <div className="card warn">⚠️ <b>تنبيه:</b> <b>{D.mk.join("، ")}</b> بدا من فترة. إذا تشتريه، نسويلك <b>جدول تعويضي مكثف إلكتروني</b> للمادة اللي فاتتك، وبعدها ترجع تمتحن ويا جماعتك.</div>}
           {D.c.map(([cname, items]) => (
             <div className="card" key={cname}>
@@ -153,7 +162,9 @@ function Store({ D }: { D: Data }) {
                   </tr>
                 ) : (
                   <tr key={id} className={cart[id] ? "sel" : ""}>
-                    <td>{n}</td><td className="p">{fmt(p)}</td>
+                    {disc.has(id)
+                      ? <><td>{n}<br /><small>{RET_DISC_LABEL}</small></td><td className="p"><s>{fmt(p)}</s><br /><b>{fmt(disc.get(id)!)}</b></td></>
+                      : <><td>{n}</td><td className="p">{fmt(p)}</td></>}
                     <td className="q"><span className="qty">
                       <button type="button" onClick={() => chg(id, -1)}>−</button>
                       <b>{cart[id] ?? 0}</b>
@@ -213,7 +224,7 @@ function Store({ D }: { D: Data }) {
             <h2>🧾 ملخص الطلب</h2>
             <table><tbody>
               <tr><th>المنتج</th><th className="p">العدد</th><th className="p">السعر</th></tr>
-              {entries.map(([id, q]) => <tr key={id}><td>{prod.get(id)!.n}</td><td className="p">{q}</td><td className="p">{fmt(prod.get(id)!.p * q)}</td></tr>)}
+              {entries.map(([id, q]) => <tr key={id}><td>{prod.get(id)!.n}{disc.has(id) && <><br /><small>{RET_DISC_LABEL}: بدل {fmt(prod.get(id)!.p)} صار {fmt(disc.get(id)!)}{q > 1 ? " (لنسخة وحدة)" : ""}</small></>}</td><td className="p">{q}</td><td className="p">{fmt(lineTotal(prod.get(id)!.p, q, disc.get(id)))}</td></tr>)}
               <tr><td colSpan={2}>مجموع المنتجات</td><td className="p">{fmt(sub)}</td></tr>
               <tr><td colSpan={2}>التوصيل{gov ? ` (${gov})` : ""}</td><td className="p">{gov ? fmt(fee) : "اختر المحافظة"}</td></tr>
               <tr className="tot"><td colSpan={2}>💰 المبلغ الكلي</td><td className="p">{fmt(sub + fee)}</td></tr>

@@ -60,6 +60,12 @@ export async function storeLink(uid?: number) {
     if (list.length) d.mk = list;
   }
   if (s) d.p = { n: s.name, cu: s.curr, g: s.gov, s: s.side || "", a: s.area, p1: s.phone1, p2: s.phone2 };
+  // خصم طالب العام: [رقم المنتج، سعر أول نسخة بعد الخصم]
+  if (s && uid) {
+    const shown = new Set(c.flatMap((ct) => (ct[1] as unknown[][]).map((p) => p[0] as number)));
+    const rd = (await retDiscPairs(uid)).filter(([id]) => shown.has(id));
+    if (rd.length) d.rd = rd;
+  }
   if (uid && HOME_PAGE) d.tk = homeToken(uid);
   return pageUrl("/store", d);
 }
@@ -89,6 +95,10 @@ export const regKb = async (uid: number, adminFor?: number | null) => ({
   resize_keyboard: true,
 });
 
+async function retDiscPairs(uid: number) {
+  const { discountsFor, discPairs } = await import("./returnDisc.ts");
+  return discPairs(await discountsFor(uid)) as [number, number][];
+}
 export async function posLink(sid: number) {
   const s = await student(sid) ?? {};
   const c: unknown[][] = [];
@@ -96,7 +106,10 @@ export async function posLink(sid: number) {
     const ps = (await products(ct.id)).map((p) => [p.id, p.name, p.price]);
     if (ps.length) c.push([ct.name, ps]);
   }
-  return pageUrl("/store/pos", { c, s: { id: sid, n: s.name ?? "", p: s.phone1 ?? "", g: `${s.grade ?? ""} — ${s.curr ?? ""}` } });
+  const d: Row = { c, s: { id: sid, n: s.name ?? "", p: s.phone1 ?? "", g: `${s.grade ?? ""} — ${s.curr ?? ""}` } };
+  const rd = await retDiscPairs(sid);
+  if (rd.length) d.rd = rd;
+  return pageUrl("/store/pos", d);
 }
 export const posKb = async (sid: number) => ({
   keyboard: [[{ text: "🏪 افتح صفحة البيع", web_app: { url: await posLink(sid) } }], [{ text: BTN_CANCEL }]], resize_keyboard: true,

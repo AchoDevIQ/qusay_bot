@@ -17,7 +17,7 @@ export function chapterLabel(name: string | null | undefined) {
   const m = (name ?? "").match(/الفصل\s+(ال\S+(?:\s+و\S+)?)/);
   return m ? "الفصل " + m[1] : null;
 }
-const chapterKey = (name: string | null | undefined) => chapterLabel(name)?.replace("الاول", "الأول") ?? null;
+export const chapterKey = (name: string | null | undefined) => chapterLabel(name)?.replace("الاول", "الأول") ?? null;
 /** تنبيه الدور الأول: للمحاضرات والامتحانات، مو للملازم والدفاتر الورقية */
 export function firstRoundOnly(name: string | null | undefined) {
   const n = name ?? "";
@@ -83,4 +83,13 @@ export function priceReport(orders: { name?: string | null; price: number; qty: 
 export function chaptersInOrder(names: (string | null | undefined)[]) {
   const labels = names.filter(firstRoundOnly).map(chapterKey);
   return [...new Set(labels.filter((l): l is string => !!l))];
+}
+
+// ---------- خصم طالب العام: أول نسخة من المنتج بسعر الخصم، والباقي بسعره
+/** مجموع سطر بالسلة: disc سعر النسخة الأولى بعد الخصم (إذا عنده خصم) */
+export const lineTotal = (price: number, qty: number, disc?: number | null) => (disc == null || qty <= 0 ? price * qty : disc + price * (qty - 1));
+export const RET_DISC_LABEL = "🎁 اجاك خصم لأنك طالب العام";
+/** اسم المنتج بالوصل: إذا انباع بخصم طالب العام يبين سعره الكامل */
+export function itemLabel(it: { name?: string | null; was?: number | null }) {
+  return (it.name ?? "") + (it.was ? ` (🎁 خصم طالب العام، سعره ${Number(it.was).toLocaleString("en-US")})` : "");
 }

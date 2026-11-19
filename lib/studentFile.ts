@@ -2,7 +2,7 @@
 import { activityOf } from "./access.ts";
 import { find, one, type Row } from "./db.ts";
 import { orderItems } from "./data.ts";
-import { firstRoundOnly } from "./orderRules.ts";
+import { firstRoundOnly, itemLabel } from "./orderRules.ts";
 import { studentPapers } from "./studentPapers.ts";
 
 const ORDER_STATE: Record<number, string> = { 0: "طلب جديد", 1: "انطبع للتوصيل", 2: "ملغي", 3: "بيعة مكتبة" };
@@ -26,7 +26,7 @@ export async function studentFile(uid: number) {
   // المشتريات: المحاضرات والامتحانات بس، بدون الملازم والدفاتر والتوصيل
   const bought = orders.map((o) => {
     const list = orderItems(o).filter((i) => firstRoundOnly(i.name));
-    return { id: o.id as number, created: String(o.created ?? ""), state: ORDER_STATE[o.printed as number] ?? "", cancelled: o.printed === 2, total: list.reduce((t, i) => t + (Number(i.price) || 0) * (Number(i.qty) || 1), 0), items: list.map((i) => `${i.name} ×${i.qty}`) };
+    return { id: o.id as number, created: String(o.created ?? ""), state: ORDER_STATE[o.printed as number] ?? "", cancelled: o.printed === 2, total: list.reduce((t, i) => t + (Number(i.price) || 0) * (Number(i.qty) || 1), 0), items: list.map((i) => `${itemLabel(i)} ×${i.qty}`) };
   }).filter((o) => o.items.length);
   const graded = papers.filter((p) => p.total !== null);
   return {
@@ -41,6 +41,8 @@ export async function studentFile(uid: number) {
     lectures: views.sort((a, b) => String(b.last_at).localeCompare(String(a.last_at))).map((v) => ({ title: String(v.title || "محاضرة"), subject: String(v.subject ?? ""), times: Number(v.times ?? 0), percent: Number(v.percent ?? 0), last: String(v.last_at ?? "") })),
     // أعطال التطبيق بتلفونه (آخر 20)
     crashes: await (await import("./appCrash.ts")).crashesOf(uid),
+    // خصم طالب العام: شنو اشترى السنة اللي فاتت (عليه خصم هالسنة)، وشنو اشترى هالسنة (عليه خصم السنة الجاية)
+    retDisc: await (await import("./returnDisc.ts")).retFileInfo(uid),
     average: graded.length ? Math.round(graded.reduce((t, p) => t + Number(p.total), 0) / graded.length) : null,
   };
 }

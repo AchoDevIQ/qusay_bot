@@ -8,7 +8,7 @@ import {
 } from "./data.ts";
 import { logActivity } from "./access.ts";
 import { HOME_PAGE, flowKb, govKb, mainKb, regKb, storeKb } from "./keyboards.ts";
-import { chaptersInOrder, firstRoundOnly } from "./orderRules.ts";
+import { RET_DISC_LABEL, chaptersInOrder, firstRoundOnly, itemLabel } from "./orderRules.ts";
 import { sendProfileCard } from "./documents.ts";
 import { edit, send, sendImage, type Kb } from "./telegram.ts";
 import { btn, esc, money, num, stamp, toInt, cut, words } from "./util.ts";
@@ -92,18 +92,23 @@ export async function openShop(chat: number, uid: number) {
   await afterAgree(chat, uid, data);
 }
 
-async function summary(data: Row) {
+async function summary(data: Row, uid: number) {
   const cart = await cleanCart(data.cart);
   const lines = ["<b>🧾 ملخص طلبك</b>", "", "<b>المنتجات:</b>"];
-  let sub = 0;
-  const items: Row[] = [];
+  const raw: { id: number; name: string; qty: number; price: number }[] = [];
   for (const [pid, q] of Object.entries(cart)) {
     const p = await product(Number(pid));
-    if (!p) continue;
-    lines.push(`• ${esc(p.name)} × ${q} — ${money(q * p.price)}`);
-    sub += q * p.price;
-    items.push({ name: p.name, qty: q, price: p.price });
+    if (p) raw.push({ id: Number(pid), name: p.name, qty: q, price: p.price });
   }
+  // خصم طالب العام ينحسب هنا بالسيرفر: أول نسخة من المنتج المخصوم سطر لوحده بسعر الخصم
+  const { discountsFor, withDiscounts } = await import("./returnDisc.ts");
+  const items = withDiscounts(raw, await discountsFor(uid));
+  let sub = 0;
+  for (const it of items) {
+    lines.push(`• ${esc(itemLabel(it))} × ${it.qty} — ${money(it.qty * it.price)}`);
+    sub += it.qty * it.price;
+  }
+  if (items.some((it) => it.was)) lines.push("", `<b>${RET_DISC_LABEL}</b>`);
   const fee = await feeOf(data.gov);
   const place = data.gov + (data.side ? " - " + data.side : "");
   lines.push("", `مجموع المنتجات: ${money(sub)}`, `سعر التوصيل (${esc(data.gov)}): ${money(fee)}`, `<b>💰 المبلغ الكلي المطلوب: ${money(sub + fee)}</b>`, "",
@@ -140,7 +145,7 @@ export async function onStudentText(chat: number, uid: number, text: string, st:
     if (ph === data.phone1) { await send(chat, "⚠️ الرقم الثاني لازم يختلف عن الأول."); return; }
     data.phone2 = ph;
     await setSession(uid, "confirm", data);
-    const s = await summary(data);
+    const s = await summary(data, uid);
     if (!s.items.length) {
       await setSession(uid, "", {});
       await send(chat, "سلتك فارغة، ارجع للمتجر واختر منتجات.", { replyKb: await mainKb(uid) });
@@ -234,7 +239,7 @@ export async function onStudentCb(chat: number, uid: number, mid: number, d: str
     Object.assign(data, { name: sp.name ?? "", curr: sp.curr ?? "", gov: sp.gov ?? "بغداد", side: sp.side ?? "", area: sp.area ?? "", phone1: sp.phone1 ?? "", phone2: sp.phone2 ?? "" });
     await setSession(uid, "confirm", data);
     await edit(chat, mid, ["<b>🛒 طلبك</b>", ...(await cartLines(cart)).slice(2)].join("\n"));
-    await send(chat, (await summary(data)).text, { kb: CONFIRM_KB() });
+    await send(chat, (await summary(data, uid)).text, { kb: CONFIRM_KB() });
   } else if (d.startsWith("curr:") && st === "curr") {
     data.curr = CURRS[Number(d.slice(5))];
     await setSession(uid, "gov", data);
@@ -258,7 +263,7 @@ export async function onStudentCb(chat: number, uid: number, mid: number, d: str
     await edit(chat, mid, `📍 المحافظة: <b>بغداد - ${data.side}</b>`);
     await send(chat, "🏘 اكتب اسم المنطقة:");
   } else if (d === "confirm" && st === "confirm") {
-    const s = await summary(data);
+    const s = await summary(data, uid);
     if (!s.items.length) return "سلتك فارغة";
     await edit(chat, mid, s.text.slice(0, s.text.lastIndexOf("\n\n")) + "\n\n✅ <b>تم التأكيد</b>");
     await finalize(chat, uid, data, s.items, s.sub, s.fee, user);
@@ -341,7 +346,7 @@ export async function onStoreOrder(chat: number, uid: number, raw: string, user:
   }
   Object.assign(data, { cart, name, curr: cu, gov: g, area, phone1: p1, phone2: p2 });
   if (sd) data.side = sd; else delete data.side;
-  const s = await summary(data);
+  const s = await summary(data, uid);
   // الصفحة تطلع التنبيهات حسب المنتجات، والسيرفر يتأكد إنها طلعت لنفس هذا الطلب
   const names = s.items.map((i) => i.name);
   if (PAGE_AGREE && ((names.some(firstRoundOnly) && o.tm !== 1) || (chaptersInOrder(names).length > 1 && o.mn !== 1))) { await reopenStore(chat, uid, data); return; }
@@ -360,7 +365,7 @@ export function orderText(o: Row) {
   return [`🆕 <b>طلب جديد #${o.id}</b>  (${o.created})`, "",
     `الاسم: ${esc(o.name)}`, `المنهج: ${esc(o.curr ?? "")}`, `المحافظة: ${esc(placeOf(o))}`, `المنطقة: ${esc(o.area)}`,
     `الهاتف 1: <code>${o.phone1}</code>`, `الهاتف 2: <code>${o.phone2}</code>`, `التليجرام: ${user}`, "", "<b>المنتجات:</b>",
-    ...orderItems(o).map((it) => `• ${esc(it.name)} × ${it.qty} — ${money(it.qty * it.price)}`),
+    ...orderItems(o).map((it) => `• ${esc(itemLabel(it))} × ${it.qty} — ${money(it.qty * it.price)}`),
     "", `مجموع المنتجات: ${money(o.subtotal)}`, `التوصيل: ${money(o.fee)}`, `<b>المبلغ الكلي: ${money(o.total)}</b>`].join("\n");
 }
 /** زر نسخ: يضغطه وينسخ القيمة */

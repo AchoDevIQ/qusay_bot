@@ -5,7 +5,7 @@ import { markPrinted } from "./admin.ts";
 import { can, cats, isAdmin, myOffice, officeUnsettled, lecturePrices, orderItems, orderParts, partsOf, placeOf, products, savedParts, searchStudents, staffName } from "./data.ts";
 import { listPdf, sendColorReceipt, sendOrdersPdf, sendPaperReceipt } from "./documents.ts";
 import { posSale, settleDetail } from "./office.ts";
-import { priceReport, type PriceLine } from "./orderRules.ts";
+import { itemLabel, priceReport, type PriceLine } from "./orderRules.ts";
 import { num, shiftDay, stamp, todayStr } from "./util.ts";
 import { ensure, need } from "./webApi.ts";
 import { verifyInitData } from "./webAuth.ts";
@@ -14,7 +14,7 @@ type PriceItems = Parameters<typeof priceReport>[0][number];
 const NEW_LIMIT = 60, PRINTED_LIMIT = 100;
 const orderView = async (o: Row) => ({
   id: o.id, created: o.created, name: o.name, curr: o.curr ?? "", place: placeOf(o), area: o.area, phone1: o.phone1, phone2: o.phone2, username: o.username ?? "", userId: o.user_id,
-  items: orderItems(o).map((i) => ({ name: i.name, qty: i.qty, price: i.price })), subtotal: o.subtotal, fee: o.fee, total: o.total,
+  items: orderItems(o).map((i) => ({ name: itemLabel(i), qty: i.qty, price: i.price })), subtotal: o.subtotal, fee: o.fee, total: o.total,
   printedBy: o.printed_by ? await staffName(o.printed_by) : "", settled: !!o.settle_id, printed: o.printed ?? 0,
   coNo: o.co_no ?? "", ret: !!o.ret, retAt: o.ret_at ?? "", retGot: !!o.ret_got, retGotAt: o.ret_got_at ?? "",
 });
@@ -254,7 +254,8 @@ async function salesData(uid: number, off: Row | null, rawDay: unknown, q: unkno
     sellers: await Promise.all([...by].map(async ([k, total]) => ({ name: await staffName(k), total }))),
     team: await isAdmin(uid) ? await teamReport(day, rows) : [],
     days: [...days.values()].sort((a, b) => (a.day < b.day ? 1 : -1)).slice(0, 31),
-    results: s ? (await searchStudents(s)).map((x) => ({ id: x.user_id, name: x.name, phone: x.phone1, gov: off ? "" : x.gov })) : [],
+    // rd: خصم طالب العام لكل طالب ([رقم المنتج، سعر أول نسخة])، والسيرفر يحسبه من جديد بالبيع
+    results: s ? await Promise.all((await searchStudents(s)).map(async (x) => ({ id: x.user_id, name: x.name, phone: x.phone1, gov: off ? "" : x.gov, rd: (await import("./returnDisc.ts")).discPairs(await (await import("./returnDisc.ts")).discountsFor(Number(x.user_id))) }))) : [],
     catalog: await Promise.all((await cats()).map(async (c) => ({ name: c.name, items: (await products(c.id)).map((p) => ({ id: p.id, name: p.name, price: p.price })) }))),
   };
 }

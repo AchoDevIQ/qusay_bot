@@ -117,9 +117,15 @@ export async function productAction(body: Row) {
   } else if (a === "hideCat") {
     await liveCat(id);
     await update("products", { cat_id: id }, { hidden: body.hidden ? 1 : 0 });
+  } else if (a === "retDisc") {
+    // خصم طالب العام: تشغيل وإطفاء، النسبة، وبداية السنة الدراسية (شهر-يوم)
+    const { saveRetSettings } = await import("./returnDisc.ts");
+    const lat = (v: unknown) => (v === undefined ? undefined : toLatinDigits(String(v)).trim());
+    const err = await saveRetSettings({ on: body.on, pct: body.pct === undefined ? undefined : Number(lat(body.pct)), start: lat(body.start) });
+    need(!err, err ?? "");
   } else if (a === "bulk") {
     need(String(body.text ?? "").trim(), "اكتب المنتجات");
     extra = await bulkAdd(String(body.text));
   } else need(false, "أمر غير معروف");
-  return { cats: await productList(), ...extra };
+  return { cats: await productList(), ret: await (await import("./returnDisc.ts")).retSettings(), ...extra };
 }

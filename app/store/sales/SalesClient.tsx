@@ -1,11 +1,11 @@
 "use client";
 // بيع بالمكتب أو المكتبة، وسجل المبيعات. صاحب المكتبة يشوف بيعها بس، وهاي صفحته الرئيسية
 import { useState } from "react";
-import { partsLine, type MoneyParts, type PriceLine } from "../../../lib/orderRules.ts";
+import { RET_DISC_LABEL, lineTotal, partsLine, type MoneyParts, type PriceLine } from "../../../lib/orderRules.ts";
 import { AdminHeader, MoneyBreakdown, PriceReport, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 
 type Sale = { id: number; time: string; name: string; total: number; seller: string; items: string };
-type St = { id: number; name: string; phone: string; gov: string };
+type St = { id: number; name: string; phone: string; gov: string; rd?: [number, number][] };
 type Shop = { name: string; open: number; openN: number; openParts: MoneyParts; left: number | null; archive: { id: number; amount: number; n: number; created: string; parts: MoneyParts | null }[] };
 type Team = { id: number; name: string; sold: number; total: number; printed: number; pdfs: number };
 type Data = {
@@ -94,7 +94,8 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
   const [sold, setSold] = useState<{ id: number; name: string } | null>(null);
   const all = data.catalog.flatMap((c) => c.items);
   const lines = Object.entries(cart).map(([id, n]) => ({ id: Number(id), n, p: all.find((x) => x.id === Number(id)) })).filter((x) => x.p);
-  const total = lines.reduce((s, x) => s + x.p!.price * x.n, 0);
+  const disc = new Map(st?.rd ?? []);
+  const total = lines.reduce((s, x) => s + lineTotal(x.p!.price, x.n, disc.get(x.id)), 0);
   const chg = (id: number, d: number) => setCart((c) => {
     const n = Math.max(0, (c[id] ?? 0) + d);
     const next = { ...c };
@@ -130,6 +131,7 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
       <div className="card">
         <h2>👤 {st.name}</h2>
         <div className="who">📞 {st.phone}{st.gov ? ` · ${st.gov}` : ""} <button type="button" className="exbtn" onClick={() => setSt(null)}>تغيير الطالب</button></div>
+        {disc.size > 0 && <div className="who">🎁 <b>طالب العام</b>: عليه خصم، والسعر الجديد مكتوب جوه المنتج</div>}
       </div>
       {data.catalog.map((c) => (
         <div className="card" key={c.name}>
@@ -137,7 +139,9 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
           <table><tbody>
             {c.items.map((p) => (
               <tr key={p.id} className={cart[p.id] ? "sel" : ""}>
-                <td>{p.name}</td><td className="p">{fmt(p.price)}</td>
+                {disc.has(p.id)
+                  ? <><td>{p.name}<br /><small>{RET_DISC_LABEL}</small></td><td className="p"><s>{fmt(p.price)}</s><br /><b>{fmt(disc.get(p.id)!)}</b></td></>
+                  : <><td>{p.name}</td><td className="p">{fmt(p.price)}</td></>}
                 <td className="q"><span className="qty">
                   <button type="button" onClick={() => chg(p.id, -1)}>−</button>
                   <b>{cart[p.id] ?? 0}</b>

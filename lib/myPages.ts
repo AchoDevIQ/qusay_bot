@@ -2,6 +2,7 @@
 import { find, one, type Row } from "./db.ts";
 import { checkDevice } from "./deviceLock.ts";
 import { profileText, student } from "./data.ts";
+import { itemLabel } from "./orderRules.ts";
 import { ensure, need } from "./webApi.ts";
 import { verifyHomeToken } from "./webAuth.ts";
 
@@ -11,7 +12,7 @@ async function myOrders(uid: number) {
   const rows = (await find("orders", { user_id: uid })).sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 50);
   return rows.map((o) => {
     let items: { name: string; qty: number }[] = [];
-    try { items = (JSON.parse(String(o.items || "[]")) as Row[]).map((i) => ({ name: String(i.name ?? ""), qty: Number(i.qty ?? 1) })); } catch { items = []; }
+    try { items = (JSON.parse(String(o.items || "[]")) as Row[]).map((i) => ({ name: itemLabel(i), qty: Number(i.qty ?? 1) })); } catch { items = []; }
     return { id: Number(o.id), at: String(o.created ?? "").slice(0, 16), items, total: Number(o.total ?? 0), status: STATUS(o), cancel: !Number(o.printed) };
   });
 }

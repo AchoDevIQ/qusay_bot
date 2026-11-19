@@ -6,7 +6,7 @@ import {
   can, isAdmin, isStaff, myOffice, noteFail, office, officeUnsettled, orderItems, partsOf, product, sellerLabel, staffAccount, staffName, student, tooManyFails, viewingAsStudent,
 } from "./data.ts";
 import { logActivity } from "./access.ts";
-import { partRows, type MoneyParts } from "./orderRules.ts";
+import { itemLabel, partRows, type MoneyParts } from "./orderRules.ts";
 import { flowKb, mainKb, posKb } from "./keyboards.ts";
 import { listPdf, sendColorReceipt, sendPaperReceipt, sendReceiptImage } from "./documents.ts";
 import { unlockFromSale } from "./exams.ts";
@@ -28,13 +28,16 @@ export async function posSale(uid: number, o: any): Promise<{ error?: string; ag
   const sid = toInt(o.sid || 0) ?? 0;
   const s = await student(sid);
   if (!s) return { error: "⚠️ الطالب غير موجود." };
-  const items: Row[] = [];
+  const raw: { id: number; name: string; price: number; qty: number }[] = [];
   for (const it of Array.isArray(o.i) ? o.i : []) {
     const pid = toInt(it?.[0]), q = toInt(it?.[1]);
     if (pid === null || q === null) continue;
     const p = await product(pid);
-    if (p && q > 0) items.push({ id: pid, name: p.name, price: p.price, qty: Math.min(q, 50) });
+    if (p && q > 0) raw.push({ id: pid, name: p.name, price: p.price, qty: Math.min(q, 50) });
   }
+  // خصم طالب العام بالسيرفر، نفس المتجر
+  const { discountsFor, withDiscounts } = await import("./returnDisc.ts");
+  const items = withDiscounts(raw, await discountsFor(sid), true);
   if (!items.length) return { error: "⚠️ ما اخترت ولا منتج.", againSid: sid };
   const total = items.reduce((t, i) => t + i.qty * i.price, 0);
   if (off) {
@@ -61,7 +64,7 @@ export async function posSale(uid: number, o: any): Promise<{ error?: string; ag
     sent = await sendReceiptImage(sid, od, items, `🧾 <b>وصل شرائك من ${esc(await sellerLabel(od))}</b> (#${oid})\nشكراً لك 🌷`);
   } catch (e) { console.error(e); }
   if (!sent) {
-    const lines = [`🧾 <b>وصل شرائك من ${esc(await sellerLabel(od))}</b> (#${oid})`, "", ...items.map((i) => `• ${esc(i.name)} × ${i.qty} — ${money(i.qty * i.price)}`),
+    const lines = [`🧾 <b>وصل شرائك من ${esc(await sellerLabel(od))}</b> (#${oid})`, "", ...items.map((i) => `• ${esc(itemLabel(i))} × ${i.qty} — ${money(i.qty * i.price)}`),
       "", `💰 المجموع: <b>${money(total)}</b>`, "شكراً لك 🌷"];
     sent = !!await send(sid, lines.join("\n"));
   }

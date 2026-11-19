@@ -9,6 +9,7 @@ import QRCode from "qrcode";
 import { kvSet, one, type Row } from "./db.ts";
 import type { RenderJob } from "./browserRender.ts";
 import { LOGO, PDF_DIR, WORD_CHECK } from "./config.ts";
+import { itemLabel } from "./orderRules.ts";
 import { DEFAULT_FONTS, FONT_STACK, fontsCss, pageFonts, type FontChoice } from "./imgFonts.ts";
 import { btn, esc, fileStamp, money, num, stamp } from "./util.ts";
 import { upload, send, type Kb } from "./telegram.ts";
@@ -94,7 +95,7 @@ async function examQr(oid: number) {
 async function ordersHtml(orders: Row[]) {
   const logo = logoTag();
   const pages = await Promise.all(await Promise.all(orders.map(async (o) => {
-    const rows = orderItems(o).map((it) => `<tr><td>${esc(it.name)}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
+    const rows = orderItems(o).map((it) => `<tr><td>${esc(itemLabel(it))}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
     const en = o.curr === "إنجليزي";
     return `<section class="page ${en ? "en" : "ar"}">
 <div class=currbar>${en ? "ENGLISH — منهج إنجليزي" : "منهج عربي"}</div>
@@ -325,7 +326,7 @@ export async function bubblePng(img: Buffer, type: string, text: string, tag: st
 // ---------- الوصولات
 /** وصل ورقي لطابعة الوصولات (عرض 58 ملم) */
 async function receiptPaperHtml(o: Row, items: Row[]) {
-  const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class="n">${it.qty}</td><td class="n">${num(it.qty * it.price)}</td></tr>`).join("");
+  const rows = items.map((it) => `<tr><td>${esc(itemLabel(it))}</td><td class="n">${it.qty}</td><td class="n">${num(it.qty * it.price)}</td></tr>`).join("");
   const logo = fs.existsSync(LOGO) ? `<img class="logo" src="data:image/png;base64,${b64(LOGO)}">` : "";
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${await pageFonts()}
 @page{size:58mm ${130 + 17 * items.length}mm;margin:0}
@@ -357,7 +358,7 @@ td{padding:1.1mm 0;vertical-align:top;border-bottom:.6px dotted #000}.n{text-ali
 
 /** وصل إلكتروني ملون يوصل للطالب بالبوت */
 async function receiptCardHtml(o: Row, items: Row[]) {
-  const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class="n">× ${it.qty}</td><td class="m">${money(it.qty * it.price)}</td></tr>`).join("");
+  const rows = items.map((it) => `<tr><td>${esc(itemLabel(it))}</td><td class="n">× ${it.qty}</td><td class="m">${money(it.qty * it.price)}</td></tr>`).join("");
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>${await pageFonts()}
 *{box-sizing:border-box}html{background:#101929}html,body{margin:0;width:760px;overflow:hidden}
 body{font-family:${FONT_STACK};color:#F4F1E8;min-height:1600px;padding:24px 30px 40px;
@@ -403,7 +404,7 @@ export async function sendColorReceipt(chat: number, oid: number) {
 
 /** وصل A5 بإطار، للطابعة الكبيرة */
 async function receiptFramedHtml(o: Row, items: Row[]) {
-  const rows = items.map((it) => `<tr><td>${esc(it.name)}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
+  const rows = items.map((it) => `<tr><td>${esc(itemLabel(it))}</td><td class=n>${it.qty}</td><td class=n>${num(it.qty * it.price)}</td></tr>`).join("");
   return `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>${await pageFonts()}
 @page{size:A5;margin:8mm}html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 body{margin:0;font-family:${FONT_STACK};color:#101929}

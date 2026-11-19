@@ -78,6 +78,8 @@ export const SCHEMA: Record<string, Table> = {
   note_videos: { key: "id", auto: true, cols: nulls("name", "lang", "file", "tg", "size", "created") },
   activity: { key: "id", auto: true, cols: nulls("user_id", "what", "created") },
   guardians: { key: ["guardian_id", "student_id"], cols: { created: null } },
+  // مشتريات الطالب من التطبيق لكل سنة دراسية (لخصم طالب العام). kind: exams / lectures
+  year_buys: { key: ["user_id", "year", "chapter", "kind"], cols: nulls("src", "created") },
   // التصويت: options وcenters نص JSON. shown: null ما تقرر، 1 النسب انرسلت للطلاب، 0 لا
   polls: { key: "id", auto: true, cols: nulls("question", "options", "centers", "gender", "status", "created", "by_id", "closed_at", "shown") },
   poll_votes: { key: ["poll_id", "user_id"], cols: nulls("choice", "at") },

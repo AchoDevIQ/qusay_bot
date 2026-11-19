@@ -76,7 +76,7 @@ async function accessDoc(env: AppEnv, idToken: string, fu: string): Promise<Row>
 }
 const strings = (f: Row | undefined): string[] => ((f?.arrayValue?.values ?? []) as Row[]).map((v) => String(v.stringValue ?? "")).filter(Boolean);
 
-export type AppStudent = { fu: string; telegramId: string; name: string; phone: string; parentPhone: string; province: string; grade: string; lang: "ar" | "en"; gender: string; birth: string; chapters: string[]; examChapters: string[] };
+export type AppStudent = { fu: string; telegramId: string; name: string; phone: string; parentPhone: string; province: string; grade: string; lang: "ar" | "en"; gender: string; birth: string; chapters: string[]; examChapters: string[]; lessonChapters?: string[] };
 
 /** معلومات الطالب من التطبيق وفصوله المشتراة: chapters محاضرات أو امتحانات (للملازم)، examChapters امتحانات بس. الفصول التجريبية ما تنحسب */
 export async function readAppStudent(env: AppEnv, idToken: string, fu: string): Promise<AppStudent | null> {
@@ -84,8 +84,8 @@ export async function readAppStudent(env: AppEnv, idToken: string, fu: string): 
   if (!st) return null;
   const doc = await accessDoc(env, idToken, fu);
   const lower = (a: string[]) => new Set(a.map((x) => x.toLowerCase()));
-  const exams = lower(strings(doc.examChapterIds)), owned = lower([...strings(doc.lessonChapterIds), ...exams]);
-  const chapters: string[] = [], examChapters: string[] = [];
+  const exams = lower(strings(doc.examChapterIds)), lessons = lower(strings(doc.lessonChapterIds)), owned = new Set([...lessons, ...exams]);
+  const chapters: string[] = [], examChapters: string[] = [], lessonChapters: string[] = [];
   if (owned.size && st.curriculum?.id) {
     const list = ((await dcQuery(env, idToken, "GetChaptersByCurriculum", { curriculumId: st.curriculum.id })).chapters ?? []) as Row[];
     for (const c of list) {
@@ -93,12 +93,13 @@ export async function readAppStudent(env: AppEnv, idToken: string, fu: string): 
       if (!label || c.isTestChapter) continue;
       if (owned.has(id) && !chapters.includes(label)) chapters.push(label);
       if (exams.has(id) && !examChapters.includes(label)) examChapters.push(label);
+      if (lessons.has(id) && !lessonChapters.includes(label)) lessonChapters.push(label);
     }
   }
   return {
     fu, telegramId: String(st.telegramId ?? "").trim(), name: String(st.fullName ?? ""), phone: String(st.phone ?? ""), parentPhone: String(st.parentPhone ?? ""),
     province: String(st.province ?? ""), grade: String(st.gradeLevel ?? ""), lang: st.curriculumLanguage === "en" ? "en" : "ar",
-    gender: String(st.gender ?? ""), birth: String(st.birthDate ?? ""), chapters, examChapters,
+    gender: String(st.gender ?? ""), birth: String(st.birthDate ?? ""), chapters, examChapters, lessonChapters,
   };
 }
 
@@ -110,7 +111,7 @@ export async function readAppStudent(env: AppEnv, idToken: string, fu: string): 
 const gradeWord = (g: string) => (/fifth|الخامس/i.test(g) ? "الخامس العلمي" : /sixth|السادس/i.test(g) ? "السادس العلمي" : "");
 export async function linkAppStudent(env: AppEnv, s: AppStudent): Promise<number> {
   const { genderWord } = await import("./basics.ts");
-  return await tx(async () => {
+  const uid = await tx(async () => {
     const old = await one("app_links", { fu: s.fu });
     const tg = /^\d{5,15}$/.test(s.telegramId) ? Number(s.telegramId) : 0;
     let uid = Number(old?.uid ?? 0);
@@ -134,6 +135,9 @@ export async function linkAppStudent(env: AppEnv, s: AppStudent): Promise<number
     for (const ch of s.examChapters) await insertIgnore("exam_access", { user_id: uid, chapter: ch }, { order_id: null, created: stamp() });
     return uid;
   });
+  // مشتريات التطبيق لهالسنة الدراسية: السنة الجاية ياخذ عليها خصم طالب العام
+  await (await import("./returnDisc.ts")).recordAppBuys(uid, s.examChapters, s.lessonChapters ?? []);
+  return uid;
 }
 export async function nextAppUid() {
   const n = Number((await kvGet("app_uid_seq")) ?? 0) + 1;

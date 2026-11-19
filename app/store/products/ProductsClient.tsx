@@ -6,7 +6,8 @@ import { AdminHeader, Confirm, useAdminApi } from "../adminPage";
 type Stock = { out: boolean; count: number | null; low: number | null; waiting: number };
 type Product = { id: number; name: string; price: number; mode: string; hidden: boolean; ask: boolean; stock?: Record<string, Stock> };
 type Cat = { id: number; name: string; products: Product[] };
-type Data = { cats: Cat[]; catId?: number; added?: string[]; bad?: string[] };
+type Ret = { on: boolean; pct: number; start: string };
+type Data = { cats: Cat[]; catId?: number; added?: string[]; bad?: string[]; ret?: Ret };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const MODES: [string, string][] = [["both", "🔄 كليهما"], ["in", "🏫 حضوري"], ["online", "💻 إلكتروني"]];
@@ -43,6 +44,7 @@ export default function ProductsClient() {
               ? <CatCard key={cat.id} cat={cat} cats={cats} busy={busy} call={call} />
               : <div className="empty">لسه ماكو أقسام. ضيف قسم حتى تبدي.</div>}
             <Bulk result={data} busy={busy} call={call} />
+            {data.ret && <RetDisc key={JSON.stringify(data.ret)} ret={data.ret} busy={busy} call={call} />}
           </>
         )}
       </div>
@@ -199,6 +201,36 @@ function StockLang({ id, lang, s, busy, call }: { id: number; lang: string; s: S
         <div><label>نبّهني من يبقى</label><input inputMode="numeric" value={low} placeholder="مثلاً 50" onChange={(e) => setLow(e.target.value.replace(/D/g, ""))} /></div>
       </div>
       <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "stock", id, lang, count, low })}>💾 احفظ العدد</button>
+    </div>
+  );
+}
+
+/** خصم طالب العام: اللي اشترى امتحانات أو محاضرات فصل بالسنة الدراسية اللي فاتت، ياخذ نفس الشي هالسنة بخصم */
+function RetDisc({ ret, busy, call }: { ret: Ret; busy: boolean; call: Call }) {
+  const [pct, setPct] = useState(String(ret.pct));
+  const [start, setStart] = useState(ret.start);
+  return (
+    <div className="card expad">
+      <h2>🎁 خصم طالب العام</h2>
+      <div className="exhint">
+        الطالب اللي اشترى <b>امتحانات</b> أو <b>محاضرات</b> فصل بالسنة الدراسية اللي فاتت، يشتري نفس الشي من نفس الفصل هالسنة بخصم.
+        الخصم لكل فصل ولكل نوع: اللي أخذ امتحانات الفصل بس، ياخذ خصم على امتحاناته بس. يطلع بالمتجر وبالبيع بالمكتبة والمكتب وبالوصل.
+      </div>
+      <div className="exline">
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "retDisc", on: !ret.on })}>{ret.on ? "✅ شغّال (دوس حتى يطفى)" : "⛔ مطفي (دوس حتى يشتغل)"}</button>
+      </div>
+      <label className="exlabel adtop">نسبة الخصم (من 1 إلى 100)</label>
+      <div className="exadd">
+        <input inputMode="numeric" value={pct} onChange={(e) => setPct(e.target.value.replace(/[^0-9٠-٩]/g, ""))} />
+        <span>%</span>
+      </div>
+      <label className="exlabel adtop">بداية السنة الدراسية (الشهر-اليوم)</label>
+      <div className="exadd">
+        <input dir="ltr" placeholder="06-01" value={start} onChange={(e) => setStart(e.target.value.trim())} />
+      </div>
+      <div className="exhint">مثلاً 06-01 يعني السنة الدراسية تبدي بأول يوم من الشهر السادس. اللي اشترى قبلها ينحسب على السنة اللي فاتت.</div>
+      <button type="button" className="btn" disabled={busy || (pct === String(ret.pct) && start === ret.start)}
+        onClick={() => void call({ action: "retDisc", pct, start })}>💾 احفظ</button>
     </div>
   );
 }

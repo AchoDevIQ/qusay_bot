@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { fmt, haptic, sendToBot, useBotData } from "../shared";
+import { RET_DISC_LABEL, lineTotal } from "../../../lib/orderRules.ts";
 
 type Item = [number, string, number];
-type Data = { c: [string, Item[]][]; s: { id?: number; n?: string; p?: string; g?: string } };
+type Data = { c: [string, Item[]][]; s: { id?: number; n?: string; p?: string; g?: string }; rd?: [number, number][] };
 
 export default function PosClient() {
   const D = useBotData<Data>({ c: [], s: {} });
@@ -12,11 +13,12 @@ export default function PosClient() {
 
 function Pos({ D }: { D: Data }) {
   const prod = new Map(D.c.flatMap(([, items]) => items.map(([id, n, p]) => [id, { n, p }] as const)));
+  const disc = new Map(D.rd ?? []);
   const [cart, setCart] = useState<Record<number, number>>({});
   const [catIdx, setCatIdx] = useState(-1);
 
   const entries = Object.entries(cart).map(([id, q]) => [Number(id), q] as const);
-  const total = entries.reduce((s, [id, q]) => s + prod.get(id)!.p * q, 0);
+  const total = entries.reduce((s, [id, q]) => s + lineTotal(prod.get(id)!.p, q, disc.get(id)), 0);
 
   function chg(id: number, d: number) {
     setCart((c) => {
@@ -39,6 +41,7 @@ function Pos({ D }: { D: Data }) {
         <div className="card">
           <h2>👤 الطالب</h2>
           <div className="who"><b>{D.s.n ?? ""}</b><br />📞 {D.s.p ?? ""}{D.s.g ? " · " + D.s.g : ""}</div>
+          {disc.size > 0 && <div className="who">🎁 <b>طالب العام</b>: عليه خصم على {[...disc].filter(([id]) => prod.has(id)).map(([id]) => prod.get(id)!.n).join("، ")}</div>}
         </div>
         <div className="chips">
           <button type="button" className={catIdx === -1 ? "on" : ""} onClick={() => setCatIdx(-1)}>الكل</button>
@@ -52,7 +55,9 @@ function Pos({ D }: { D: Data }) {
                 <tr><th>المنتج</th><th className="p">السعر</th><th className="q">العدد</th></tr>
                 {items.map(([id, n, p]) => (
                   <tr key={id} className={cart[id] ? "sel" : ""}>
-                    <td>{n}</td><td className="p">{fmt(p)}</td>
+                    {disc.has(id)
+                      ? <><td>{n}<br /><small>{RET_DISC_LABEL}</small></td><td className="p"><s>{fmt(p)}</s><br /><b>{fmt(disc.get(id)!)}</b></td></>
+                      : <><td>{n}</td><td className="p">{fmt(p)}</td></>}
                     <td className="q"><span className="qty">
                       <button type="button" onClick={() => chg(id, -1)}>−</button>
                       <b>{cart[id] ?? 0}</b>
@@ -69,7 +74,7 @@ function Pos({ D }: { D: Data }) {
             <h2>🧾 الفاتورة</h2>
             <table><tbody>
               <tr><th>المنتج</th><th className="p">العدد</th><th className="p">السعر</th></tr>
-              {entries.map(([id, q]) => <tr key={id}><td>{prod.get(id)!.n}</td><td className="p">{q}</td><td className="p">{fmt(prod.get(id)!.p * q)}</td></tr>)}
+              {entries.map(([id, q]) => <tr key={id}><td>{prod.get(id)!.n}{disc.has(id) && <><br /><small>🎁 خصم طالب العام</small></>}</td><td className="p">{q}</td><td className="p">{fmt(lineTotal(prod.get(id)!.p, q, disc.get(id)))}</td></tr>)}
               <tr className="tot"><td colSpan={2}>💰 المجموع</td><td className="p">{fmt(total)}</td></tr>
             </tbody></table>
           </div>
