@@ -3,6 +3,7 @@
 // PDF يطلع للطالب يكتب فوكه، وWord يقرا منه البوت الأسئلة العلمية. الملف الجديد يتبدل مكان القديم
 import { useState } from "react";
 import { Confirm, StatusBar, useAdminApi } from "../adminPage";
+import { SECTION_TITLE, planPackage, type PkgPlan } from "../../../lib/packageFiles.ts";
 
 type Row = { id: number; title: string; chapter: string; lang: string; pages: number; kind?: string; section?: string; sol?: boolean; created: string };
 type Data = { chapters: string[]; books: Row[]; link: string; notice: string };
@@ -40,9 +41,62 @@ export default function NotesCard() {
     f.set("action", "upload"); f.set("file", file); f.set("chapter", String(n)); f.set("lang", lang); f.set("kind", kind);
     await qa.call(f);
   }
+  // ⬆️ البكج كله: يختار كل ملفات مجلد الفصل، والبوت يوزعها حسب أسمائها
+  const [pkg, setPkg] = useState<{ plan: PkgPlan; files: Map<string, File> } | null>(null);
+  const [pkgStep, setPkgStep] = useState("");
+  const pkgChapter = pkg ? data?.chapters.find((c) => chapterNum(c) === pkg.plan.chapter) ?? "" : "";
+  function pickPackage(list: FileList | null) {
+    const files = new Map([...(list ?? [])].map((f) => [f.name, f]));
+    setPkg({ plan: planPackage([...files.keys()]), files });
+    setPkgStep("");
+  }
+  async function sendPackage() {
+    if (!pkg || !pkgChapter) return;
+    const { plan, files } = pkg;
+    const L = plan.lang ?? lang;
+    setChapter(pkgChapter); setLang(L);
+    const total = plan.pdf.length + plan.word.length;
+    let k = 0, bad = 0;
+    for (const x of plan.pdf) {
+      setPkgStep(`⏳ جاري رفع ${++k} من ${total}: ${SECTION_TITLE[x.section]}`);
+      const f = new FormData();
+      f.set("action", "upload"); f.set("file", files.get(x.file)!); f.set("chapter", pkgChapter); f.set("lang", L); f.set("section", x.section);
+      if (x.sol) f.set("sol", files.get(x.sol)!);
+      if (!await call(f)) bad++;
+    }
+    for (const x of plan.word) {
+      setPkgStep(`⏳ جاري رفع ${++k} من ${total}: Word ${x.file}`);
+      const f = new FormData();
+      f.set("action", "upload"); f.set("file", files.get(x.file)!); f.set("chapter", String(plan.chapter)); f.set("lang", L); f.set("kind", x.kind);
+      if (!await qa.call(f)) bad++;
+    }
+    setPkgStep(bad ? `⚠️ انرفعت ${total - bad} من ${total}. اللي ما انرفع شوف سببه تحت، وارفعه من مربعه.` : `✅ انرفع البكج كله: ${total} ملف. شوف كل مربع تحت مكتوب «✅».`);
+    setPkg(null);
+  }
   return (
     <div className="card">
       <h2>📚 ملازمي</h2>
+      {data && (
+        <div className="cpbox expad">
+          <div className="exlabel">⬆️ ارفع البكج كله</div>
+          <div className="exhint">افتح مجلد الفصل (مثلاً «انكلش 2»)، حدد كل ملفاته مرة وحدة (Ctrl + A)، والبوت يعرف كل ملف من اسمه وين ينحط. الملفات اللي مو للطالب (الأصلية بدون «حلي»، و«جواب») تنعبر وحدها.</div>
+          <label className={"exbtn" + (busy || qa.busy ? " off" : "")}>📂 اختار ملفات الفصل<input type="file" multiple accept=".pdf,.docx" hidden disabled={busy || qa.busy} onChange={(e) => { pickPackage(e.target.files); e.target.value = ""; }} /></label>
+          {pkg && (
+            <div className="adtop">
+              <div><b>{pkgChapter || "فصل ما معروف"} · {pkg.plan.lang ? LANG[pkg.plan.lang] : LANG[lang]}</b></div>
+              {pkg.plan.pdf.map((x) => <div key={x.section} className="exhint">{SECTION_TITLE[x.section]}: {x.file}{x.sol ? ` + ${x.sol}` : ""}</div>)}
+              {pkg.plan.word.map((x) => <div key={x.kind} className="exhint">📝 Word ({x.kind === "main" ? "الكتاب" : x.kind === "exams" ? "الوزارية" : "الإثرائية"}): {x.file}</div>)}
+              {pkg.plan.problems.map((x) => <div key={x} className="exhint exbad">⚠️ {x}</div>)}
+              {!!pkg.plan.skipped.length && <details className="exhint"><summary>ملفات انعبرت ({pkg.plan.skipped.length})</summary>{pkg.plan.skipped.join("، ")}</details>}
+              <div className="exline adtop">
+                <button type="button" className="btn" disabled={busy || qa.busy || !!pkg.plan.problems.length || !pkgChapter} onClick={() => void sendPackage()}>✅ ارفعها كلها ({pkg.plan.pdf.length + pkg.plan.word.length} ملف)</button>
+                <button type="button" className="exbtn" onClick={() => setPkg(null)}>إلغاء</button>
+              </div>
+            </div>
+          )}
+          {pkgStep && <div className="exhint adtop"><b>{pkgStep}</b></div>}
+        </div>
+      )}
       <div className="form">
         <div className="exhint">هنا بس ترفع الملازم. اختار الفصل والمنهج، وكل قسم ارفعله ملفاته. البوت يوزعها وحده: الـ <b>PDF</b> يطلع للطالب بملازمي ويكتب فوكه، والـ <b>Word</b> يقرا منه الأسئلة العلمية. الوزارية والإثرائية والراصد بيهن «📝 حلي» و«📘 الحل النموذجي»، فكل وحدة ملفين PDF: الأسئلة وحلها. إذا صلحت غلط، ارفع الملف الجديد بنفس مكانه ويتبدل بكل مكان. كتابة الطلاب وأزرار الفيديو تبقى على نفس أرقام الصفحات.</div>
         {!data && !error && <div className="empty">جاري التحميل...</div>}
