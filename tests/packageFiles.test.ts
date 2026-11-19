@@ -26,3 +26,10 @@ test("ناقص الحل النموذجي، أو فصلين سوا: ما يرفع
   const ar = planPackage(["الفصل 1 عربي 2027.pdf", "راصد الفصل الاول عربي - حلي.pdf", "راصد الفصل الاول عربي - الحل النموذجي.pdf"]);
   assert.deepEqual([ar.chapter, ar.lang, ar.pdf.length], [1, "ar", 2]);
 });
+
+test("الفصل الرابع والخامس: «ف 4 انكلش 2027» هو الكتاب، والرقم مو من 2027", () => {
+  const p4 = planPackage(["ف 4 انكلش 2027 .pdf", "ف 4 انكلش 2027 .docx", "وزاريات 4 انكلش 2027 - حلي.pdf", "وزاريات 4 انكلش 2027 - الحل النموذجي.pdf", "اثرائيات 4 انكلش 2027.docx"]);
+  assert.deepEqual([p4.chapter, p4.lang, p4.problems], [4, "en", []]);
+  assert.deepEqual(p4.pdf.map((x) => x.section), ["book", "wz"]);
+  assert.equal(planPackage(["ف انكلش 5 2027.pdf", "وزاريات انكلش 5 2027 - حلي.pdf", "وزاريات انكلش 5 2027 - الحل النموذجي.pdf"]).chapter, 5);
+});

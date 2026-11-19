@@ -14,7 +14,8 @@ export const SECTION_TITLE: Record<Section, string> = { book: "📘 الكتاب
 function chapterOf(name: string): number {
   const ord = Object.keys(ORD).find((w) => name.includes(`الفصل ${w}`) || name.includes(`الفصل ال${w.replace(/^ال/, "")}`));
   if (ord) return ORD[ord];
-  const m = name.match(/(?:الفصل|انكلش|انجليزي|انكليزي|عربي|Chapter)\s*_?(\d)/i) ?? name.match(/(?:^|\s)([1-6])(?:\s|$)/);
+  // رقم واحد لوحده (مو أول رقم من 2027): «الفصل 2»، «ف 4 انكلش»، «انكلش 5 2027»، «وزاريات 4 انكلش»
+  const m = name.match(/(?:الفصل|ف|انكلش|انجليزي|انكليزي|عربي|Chapter)\s*_?([1-6])(?!\d)/i) ?? name.match(/(?:^|\s)([1-6])(?=\s|$)/);
   return m ? Number(m[1]) : 0;
 }
 const langOf = (name: string): "ar" | "en" | null => (/انكلش|انجليزي|انكليزي|english/i.test(name) ? "en" : /عربي|arabic/i.test(name) ? "ar" : null);
@@ -22,7 +23,7 @@ function sectionOf(name: string): Section | null {
   if (/وزاري/.test(name)) return "wz";
   if (/[اإ]ثرائي/.test(name)) return "ith";
   if (/راصد|جواب/.test(name)) return "rasid";
-  if (/الفصل/.test(name)) return "book";
+  if (/الفصل|^ف\s/.test(name)) return "book";   // «الفصل 2 انكلش 2027» أو «ف 4 انكلش 2027»
   return null;
 }
 
