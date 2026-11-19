@@ -3,7 +3,7 @@
 // مجاني: يستعمل سماع الكلام اللي بالمتصفح نفسه (كروم أو سفاري)، بدون أي خدمة بفلوس.
 // داخل تليجرام على الأندرويد ما موجود، فالزر ما يطلع وتطلع جملة تشرح ليش
 import { useEffect, useRef, useState } from "react";
-import { pickMark } from "../../../lib/spokenMark.ts";
+import { newSpoken, pickMark } from "../../../lib/spokenMark.ts";
 import { pageAuth } from "../adminPage";
 import { openOutside } from "../shared";
 
@@ -11,6 +11,7 @@ const ON_KEY = "gradeVoiceMark";
 const LANG_KEY = "gradeVoiceLang";
 const AR_KEY = "gradeVoiceAr";
 const HIDE_KEY = "gradeVoiceNoteHidden";
+const KB_KEY = "gradeKeyboardMark";
 
 type Alt = { transcript: string };
 type Result = { isFinal: boolean; length: number; [i: number]: Alt };
@@ -45,6 +46,64 @@ function whyNot(): string {
   if (inAppView()) return "inside";
   if (!ctor()) return "browser";
   return "";
+}
+
+/** الكلام صار درجة؟ إذا إي تنحط (مثل الدوس بالضبط)، وإذا لا يرجع شنو سمع وليش ما انحفظ */
+function judge(alts: string[], { max, blocked, onMark, qn }: { max: number; blocked: string; onMark: (m: number) => void; qn: number }) {
+  const r = pickMark(alts, max);
+  if ("error" in r) return { ok: false, text: r.kind === "unclear" ? (r.heard ? `سمعت «${r.heard}»: مو رقم، ما انحفظ شي` : r.error) : `سمعت «${r.heard}»: ${r.error}، ما انحفظ` };
+  if (blocked) return { ok: false, text: `سمعت ${r.mark}، بس ${blocked}` };
+  onMark(r.mark);
+  return { ok: true, text: `✅ س${qn}: ${r.mark}` };
+}
+
+/** الدرجة بمايك الكيبورد: يشتغل بكل مكان (تليگرام، المتصفح، التطبيق) لأن كيبورد التلفون نفسه يسمع، ببلاش.
+ *  المصحح يدوس المربع ومايك الكيبورد ويحچي، والكلام ينكتب بالمربع: الجديد منه يصير درجة.
+ *  يكدر يكتب الرقم بإيده هم ويدوس «تم» */
+function KeyboardMark({ qn, max, blocked, onMark }: { qn: number; max: number; blocked: string; onMark: (m: number) => void }) {
+  const [on, setOn] = useState(false);
+  const [val, setVal] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const done = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const box = useRef<HTMLInputElement>(null);
+  const live = useRef({ qn, max, blocked, onMark });
+  live.current = { qn, max, blocked, onMark };
+  useEffect(() => { if (read(KB_KEY) === "1") setOn(true); return () => { if (timer.current) clearTimeout(timer.current); }; }, []);
+  function take(text: string) {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const r = newSpoken(text, done.current);
+    done.current = r.done;
+    if (r.seg) setMsg(judge([r.seg], live.current));
+    // المربع ما يطول هواية
+    if (text.length > 120) { setVal(""); done.current = 0; }
+  }
+  function change(v: string) {
+    setVal(v);
+    if (timer.current) clearTimeout(timer.current);
+    // الكيبورد يكتب الكلمة على مراحل: ننتظر يوقف شوية
+    timer.current = setTimeout(() => take(v), 1200);
+  }
+  function toggle() {
+    const v = !on; setOn(v); write(KB_KEY, v ? "1" : "0"); setMsg(null); setVal(""); done.current = 0;
+    if (v) setTimeout(() => box.current?.focus(), 50);
+  }
+  return (
+    <>
+      <button type="button" className={"gk-vm" + (on ? " on" : "")} title="الدرجة بمايك الكيبورد: يشتغل بكل مكان حتى تليگرام" onClick={toggle}>⌨️🎙 {on ? "مايك الكيبورد شغال" : "مايك الكيبورد"}</button>
+      {on && (
+        <div className="gk-vmbar">
+          <input ref={box} className="gk-kbin" dir="auto" value={val} autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="done"
+            placeholder={`دوس هنا، وبعدها 🎙 بالكيبورد، واحچي درجة س${qn}`}
+            onChange={(e) => change(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); take(val); setVal(""); done.current = 0; } }}
+            onBlur={() => { if (timer.current) take(val); }} />
+          <span className="gk-vmtext">{msg ? <span className={msg.ok ? "gk-vmok" : "gk-vmerr"}>{msg.text}</span> : `من 0 إلى ${max}. تكدر تكتب الرقم وتدوس «تم» هم`}</span>
+          <button type="button" className="gk-btn" onClick={toggle}>⏹ إطفاء</button>
+        </div>
+      )}
+    </>
+  );
 }
 
 export default function VoiceMark({ qn, max, blocked, onMark }: {
@@ -107,14 +166,7 @@ export default function VoiceMark({ qn, max, blocked, onMark }: {
     if (r) { r.onend = null; r.onresult = null; r.onerror = null; try { r.abort(); } catch { /* */ } }
   }
 
-  function handle(alts: string[]) {
-    const { max, blocked, onMark, qn } = live.current;
-    const r = pickMark(alts, max);
-    if ("error" in r) { setMsg({ ok: false, text: r.kind === "unclear" ? (r.heard ? `سمعت «${r.heard}»: مو رقم، ما انحفظ شي` : r.error) : `سمعت «${r.heard}»: ${r.error}، ما انحفظ` }); return; }
-    if (blocked) { setMsg({ ok: false, text: `سمعت ${r.mark}، بس ${blocked}` }); return; }
-    setMsg({ ok: true, text: `✅ س${qn}: ${r.mark}` });
-    onMark(r.mark);
-  }
+  function handle(alts: string[]) { setMsg(judge(alts, live.current)); }
 
   function startRec() {
     stopRec();
@@ -160,15 +212,18 @@ export default function VoiceMark({ qn, max, blocked, onMark }: {
   function switchLang() { const v = lang === "ar" ? "en" : "ar"; setLang(v); write(LANG_KEY, v); setMsg(null); }
 
   if (why === null) return null;
+  const kb = <KeyboardMark qn={qn} max={max} blocked={blocked} onMark={onMark} />;
   if (why) {
-    if (noteHidden) return null;
+    if (noteHidden) return kb;
     return (
       <>
-        <button type="button" className="gk-vm-why" onClick={() => setNoteOpen(true)}>{why === "inside" ? "🎤 الدرجة بالصوت: افتحها بالمتصفح" : "🎤 الدرجة بالصوت؟"}</button>
+        {kb}
+        <button type="button" className="gk-vm-why" onClick={() => setNoteOpen(true)}>{why === "inside" ? "🎤 أو افتحها بالمتصفح" : "🎤 ليش ماكو صوت بدون كيبورد؟"}</button>
         {noteOpen && (
           <div className="gk-modal" onClick={() => setNoteOpen(false)}>
             <div className="gk-dialog" onClick={(e) => e.stopPropagation()}>
-              <b>🎤 الدرجة بالصوت ما تشتغل هنا</b>
+              <b>🎤 سماع الكلام بدون كيبورد ما يشتغل هنا</b>
+              <div className="gk-lbl">استعمل «⌨️🎙 مايك الكيبورد»: يشتغل هنا وبكل مكان.</div>
               <div style={{ whiteSpace: "pre-line" }}>{why === "inside"
                 ? "إنت فاتح التصحيح من داخل تطبيق (مثل تليجرام)، وهذا ما بي سماع الكلام. افتح صفحة التصحيح بمتصفح كروم (بالأندرويد) أو سفاري (بالآيفون والآيباد) وراح يطلع زر 🎤."
                 : why === "service"
@@ -180,7 +235,7 @@ export default function VoiceMark({ qn, max, blocked, onMark }: {
               <div className="gk-tools">
                 {why === "inside" && <button type="button" className="gk-finish" disabled={opening} onClick={() => void openInBrowser()}>{opening ? "جاري التجهيز..." : "🌐 افتحها بمتصفح التلفون حتى يشتغل الصوت"}</button>}
                 <button type="button" className="gk-btn" onClick={() => setNoteOpen(false)}>تمام</button>
-                <button type="button" className="gk-btn" onClick={() => { write(HIDE_KEY, "1"); setNoteHidden(true); setNoteOpen(false); }}>لا تطلع هالزر بعد</button>
+                <button type="button" className="gk-btn" onClick={() => { write(HIDE_KEY, "1"); setNoteHidden(true); setNoteOpen(false); }}>لا تطلع هالشرح بعد</button>
               </div>
             </div>
           </div>
@@ -191,6 +246,7 @@ export default function VoiceMark({ qn, max, blocked, onMark }: {
   const listening = on && state === "listening";
   return (
     <>
+      {kb}
       <button type="button" className={"gk-vm" + (on ? " on" : "") + (listening ? " live" : "")} title="الدرجة بالصوت: إحچي الدرجة وتنكتب وتقلب للسؤال اللي بعده" onClick={toggle}>
         🎤 {!on ? "بالصوت" : state === "paused" ? "دوس حتى يسمع" : "يسمع"}
       </button>

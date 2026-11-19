@@ -140,3 +140,10 @@ export function pickMark(alternatives: string[], max: number): SpokenMark {
   if (!tries.length) return { error: "ما سمعت شي، عيدها", heard: "", kind: "unclear" };
   return tries.find((t) => "mark" in t) ?? tries.find((t) => "kind" in t && t.kind !== "unclear") ?? tries[0];
 }
+
+/** مايك الكيبورد يكتب كل الكلام ورا بعض بنفس المربع: الجديد هو اللي بعد آخر شي انحسب.
+ *  إذا الكتابة صارت أقصر (انمسحت أو الكيبورد صححها) نبدي من أولها */
+export function newSpoken(text: string, done: number): { seg: string; done: number } {
+  const from = text.length < done ? 0 : done;
+  return { seg: text.slice(from).trim(), done: text.length };
+}

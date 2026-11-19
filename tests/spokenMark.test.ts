@@ -101,3 +101,16 @@ test("pickMark: أول احتمال صحيح، وإذا ماكو السبب ال
   const e = pickMark([], 20);
   assert.ok("error" in e && e.kind === "unclear");
 });
+
+test("مايك الكيبورد: بس الكلام الجديد ينحسب", async () => {
+  const { newSpoken } = await import("../lib/spokenMark.ts");
+  let r = newSpoken("عشرين", 0);
+  assert.deepEqual(r, { seg: "عشرين", done: 5 });
+  r = newSpoken("عشرين خمسطعش", r.done);
+  assert.equal(r.seg, "خمسطعش");
+  r = newSpoken("عشرين خمسطعش", r.done);
+  assert.equal(r.seg, "");
+  // انمسح المربع: يبدي من جديد
+  r = newSpoken("٧", r.done);
+  assert.deepEqual(r, { seg: "٧", done: 1 });
+});
