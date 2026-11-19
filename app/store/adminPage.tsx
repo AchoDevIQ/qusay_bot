@@ -16,7 +16,7 @@ const webApp = () => {
 
 // زر أسفل المحادثة ما يعطي توقيع تليجرام، فرابطه يحمل رمز موقع. يبقى محفوظ لما ينتقل بين الصفحات
 const TOKEN_KEY = "qmathPageToken";
-function pageToken() {
+export function pageToken() {
   const t = new URLSearchParams(location.search).get("t");
   try {
     if (t) sessionStorage.setItem(TOKEN_KEY, t);

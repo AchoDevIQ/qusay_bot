@@ -9,6 +9,7 @@ import { COLORS, WIDTHS } from "./pens";
 import { postRetry } from "./reliable";
 import VoiceRec from "../VoiceRec";
 import MessageBox from "./MessageBox";
+import VoiceMark from "./VoiceMark";
 import { SKIP, missingQs, paperTotal } from "../../../lib/answerOnly.ts";
 
 export type Q = { n: number; max: number; image: string; answers: string[]; mark: number | null; answered?: boolean; byAi?: boolean };
@@ -668,6 +669,9 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         <div className="gk-row gk-marks">
           {page?.q === null && <div className="gk-qs">{shownQs.filter((x) => !page.qs || page.qs.includes(x.n)).map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] === SKIP ? " · ⏭" : marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
           <span className="gk-q">س{q.n}<small> من {q.max}</small>{q.byAi && <small className="gk-byai"> · 🤖 صححه AI</small>}</span>
+          {/* الدرجة بالصوت: نفس الدوس على الرقم بالضبط، ونفس الشروط */}
+          {!locked && <VoiceMark qn={q.n} max={q.max} onMark={(m) => void press(m)}
+            blocked={busy ? "الصفحة مشغولة، عيدها بعد شوية" : objMode && !objOf(q.n) ? "هذا السؤال ما عليه اعتراض" : !objMode && q.byAi ? "هذا السؤال صححه نظام التصحيح AI" : ""} />}
           <div className="gk-nums" style={{ ["--cols" as string]: q.max + 1 <= 16 ? q.max + 1 : Math.ceil((q.max + 1) / 2) }}>
             {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (
               <button type="button" key={m} className={(marks[q.n] === m ? "on" : "") + (objMode && objOf(q.n)?.old === m ? " gk-was" : "")} disabled={busy || locked || (objMode && !objOf(q.n)) || (!objMode && !!q.byAi)} onClick={() => void press(m)}>{m}</button>
