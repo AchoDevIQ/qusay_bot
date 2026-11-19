@@ -116,15 +116,13 @@ test("الكل: بنات بس، والطالب اللي ما مسجل جنسه �
   assert.equal(r.polls.length, 2);
 });
 
-test("القلم: كل مصحح يختار لنفسه، وبدون مفتاح الكتابة تبقى قلم", async () => {
+test("القلم: تحويل الكتابة لنص انشال لأنه بفلوس، والكتابة تبقى قلم حتى للي جان مختاره", async () => {
   await put("staff", { user_id: 32, name: "مصحح ثاني", perms: "grade" });
-  assert.equal((await gradeAction({ initData: sign(31), action: "penText", on: true }) as any).penText, true);
-  assert.equal(await penTextOn(31), true);
-  assert.equal(await penTextOn(32), false);
-  assert.equal((await gradeAction({ initData: sign(31), action: "list" }) as any).penText, true);
-  assert.equal((await gradeAction({ initData: sign(32), action: "list" }) as any).penText, false);
-  await gradeAction({ initData: sign(31), action: "penText", on: false });
+  await put("kv", { k: "pen_text_31", v: "1" });
+  assert.equal((await gradeAction({ initData: sign(31), action: "list" }) as any).penText, false);
+  await assert.rejects(gradeAction({ initData: sign(31), action: "penText", on: true }), /انشال/);
   assert.equal(await penTextOn(31), false);
+  await assert.rejects(gradeAction({ initData: sign(32), action: "inkText", id: 1, image: "data:image/png;base64,iVBORw0KGgo=" }), /انشال/);
   await assert.rejects(readInk("data:image/png;base64,iVBORw0KGgo="), /مفتاح/);
   await assert.rejects(readInk("not an image"), /ما وصلت/);
 });

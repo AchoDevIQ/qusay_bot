@@ -307,17 +307,9 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const setColor = (c: string) => { setColorState(c); keepPen(c, width); };
   const setWidth = (w: number) => { setWidthState(w); keepPen(color, w); };
   const [penBox, setPenBox] = useState(false);
-  // كتابة القلم: تبقى قلم، أو تتحول نص بعد ما يوقف المصحح عن الكتابة شوية (إعداده لنفسه، ينحفظ بالسيرفر)
-  const [penText, setPenTextState] = useState(penTextStart);
-  const [penTextErr, setPenTextErr] = useState("");
-  async function setPenText(on: boolean) {
-    const was = penText; setPenTextState(on); setPenTextErr("");
-    try {
-      const res = await fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "penText", on }) });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "");
-      onPenText?.(on);
-    } catch (e) { setPenTextState(was); setPenTextErr((e as Error).message || "ما انحفظ الاختيار، تأكد من النت"); }
-  }
+  // كتابة القلم تبقى قلم: التحويل لنص انشال لأنه بفلوس (السيرفر يرجع penText دائماً false)
+  const penText = penTextStart;
+  void onPenText;
   const aspect = useRef(1.4);
   const group = useRef<{ page: number; strokes: Item[] } | null>(null);
   const groupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -667,13 +659,6 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
               <div className="gk-colors">{COLORS.map((c) => <button type="button" key={c} aria-label="لون" className={"gk-dot" + (color === c ? " on" : "")} style={{ background: c }} onClick={() => setColor(c)} />)}</div>
               <label className="gk-custom">🎨 لون ثاني <input type="color" value={color} onChange={(e) => setColor(e.target.value)} /></label>
               <div className="gk-tools">{WIDTHS.map((w) => <button type="button" key={w} className={"gk-w" + (width === w ? " on" : "")} onClick={() => setWidth(w)}><span style={{ height: w }} /></button>)}</div>
-              <div className="gk-lbl">الكتابة بالقلم</div>
-              <div className="gk-kind gk-pentext">
-                <button type="button" className={!penText ? "on" : ""} onClick={() => void setPenText(false)}>🖊 تبقى قلم</button>
-                <button type="button" className={penText ? "on" : ""} onClick={() => void setPenText(true)}>🔤 تتحول نص</button>
-              </div>
-              {penText && <div className="gk-pthint">اكتب ووقف ثانية ونص: تطلعلك كتابتك نص تعدله وتحطه</div>}
-              {penTextErr && <div className="gk-err">⚠️ {penTextErr}</div>}
               <button type="button" className="gk-btn" onClick={() => setPenBox(false)}>تم</button>
             </div>
           )}
