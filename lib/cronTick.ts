@@ -38,6 +38,7 @@ export async function cronTick(key: unknown) {
     await step("checked", () => sweepCheckpoints());
     await step("absences", async () => (await import("./absences.ts")).sweepAbsences());
     await step("appStuck", async () => (await import("./appCrash.ts")).stuckTick());
+    await step("gradeUnsent", async () => (await import("./gradeApi.ts")).unsentTick());
     await step("graders", () => notifyGraders());
     await step("sessions", () => sweepSessions());
     await step("signups", () => sweepSignups());

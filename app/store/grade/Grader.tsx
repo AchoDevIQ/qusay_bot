@@ -6,6 +6,7 @@ import { pageAuth } from "../adminPage";
 import PdfPages, { pdfByQuestion, pdfToImages } from "../PdfPages";
 import { coverImage, loadImage, pageImage, type HeaderInfo } from "./compose";
 import { COLORS, WIDTHS } from "./pens";
+import { postRetry } from "./reliable";
 import VoiceRec from "../VoiceRec";
 import MessageBox from "./MessageBox";
 import { SKIP, missingQs, paperTotal } from "../../../lib/answerOnly.ts";
@@ -408,12 +409,14 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paper.id]);
 
-  const flush = useCallback(async () => {
+  // tries: الأزرار اللي تنتظر الحفظ (القائمة، التخطي) تحاول كم مرة بس؛ الحفظ بالخلفية يبقى يحاول لحد ما يوصل
+  const flush = useCallback(async (tries = 0) => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const list = [...dirty.current]; dirty.current.clear();
     for (const page of list) {
       try {
-        const res = await fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "ink", id: paper.id, page, ink: JSON.stringify(inksRef.current[page] ?? { rot: 0, items: [] }) }) });
+        // النت ضعيف: يعيد وحده لحد ما يوصل (والورقة ما تنرسل للطالب قبل ما يوصل رسمها)
+        const res = await postRetry(() => JSON.stringify({ initData: pageAuth(), action: "ink", id: paper.id, page, ink: JSON.stringify(inksRef.current[page] ?? { rot: 0, items: [] }) }), true, { tries, onWait: () => setSaveErr("📶 الرسم ينتظر النت، ينحفظ وحده من يرجع") });
         if (!res.ok) { dirty.current.add(page); setSaveErr((await res.json().catch(() => ({}))).error ?? "ما انحفظ الرسم"); } else setSaveErr("");
       } catch { dirty.current.add(page); setSaveErr("ما انحفظ الرسم، تأكد من النت"); }
     }
@@ -545,8 +548,9 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     // الدرجة تصير خضرة فوراً، وتبقى شوية حتى المصحح يشوفها، وبعدها ينتقل للسؤال اللي بعده
     setMarks((x) => ({ ...x, [n]: m }));
     setSaveErr("");
-    const sent = fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "mark", id: paper.id, q: n, mark: m }) })
-      .then(async (res) => { if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? ""); })
+    // النت ضعيف: الدرجة تبقى وتعيد وحدها لحد ما توصل. بس إذا السيرفر رفضها ترجع
+    const sent = postRetry(() => JSON.stringify({ initData: pageAuth(), action: "mark", id: paper.id, q: n, mark: m }), true, { onWait: () => setSaveErr(`📶 درجة السؤال ${n} تنتظر النت، تنحفظ وحدها من يرجع`) })
+      .then(async (res) => { if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? ""); setSaveErr(""); })
       .catch((e) => { setMarks((x) => ({ ...x, [n]: old })); setSaveErr(`ما انحفظت درجة السؤال ${n}${(e as Error).message ? `: ${(e as Error).message}` : ""}`); });
     pendingMarks.current.add(sent);
     void sent.finally(() => pendingMarks.current.delete(sent));
@@ -629,10 +633,10 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         </div>
       </div>
       <div className="gk-row gk-info">
-        <button type="button" className="gk-skip" onClick={async () => { await flush(); onClose(); }}>⬅️ القائمة</button>
+        <button type="button" className="gk-skip" onClick={async () => { await flush(3); onClose(); }}>⬅️ القائمة</button>
         <span>الامتحان: {paper.title} · النسخة: {paper.model}</span>
         <span>صححت: <b>{today}</b> | متبقي: <b>{papersLeft}</b>{saveErr && <span className="gk-err"> · ⚠️ {saveErr}</span>}</span>
-        {!locked && !objMode && !paper.editing && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(); onSkip(); }}>⏭ تخطي الورقة</button>}
+        {!locked && !objMode && !paper.editing && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(3); onSkip(); }}>⏭ تخطي الورقة</button>}
         {objMode && <b className="gk-objtag">✋ اعتراض</b>}
       </div>
       <div className="gk-row gk-bar">
@@ -649,7 +653,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         </div>
         {paper.editing && <b className="gk-objtag">✏️ تعديل</b>}
         {!locked && !objMode && !paper.editing && (rescanAsk
-          ? <button type="button" className="gk-clear gk-rescan on" disabled={busy} onClick={async () => { setRescanAsk(false); await flush(); onRescan(); }}>⚠️ متأكد؟ اضغط مرة ثانية</button>
+          ? <button type="button" className="gk-clear gk-rescan on" disabled={busy} onClick={async () => { setRescanAsk(false); await flush(3); onRescan(); }}>⚠️ متأكد؟ اضغط مرة ثانية</button>
           : <button type="button" className="gk-clear gk-rescan" title={paper.inPerson ? "السكنر ما انقرا زين أو الصفحات فارغة: تنمسح كل صفحات الطالب بهذا الامتحان، وتوصل رسالة للي رفعها بالسكنر حتى يعيد رفعها" : "الصور ما واضحة أو فارغة: تنمسح كل صفحات الطالب بهذا الامتحان، وينفتح إله الامتحان حتى يعيد رفعها"} onClick={() => setRescanAsk(true)}>🗑 امسح أوراق الطالب كاملة</button>)}
         {!locked && <div className="gk-tools gk-pens">
           {(["sticker", "wrong", "stamp", "text", "eraser", "pen", "hand"] as Tool[]).map((t) => (

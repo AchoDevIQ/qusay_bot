@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AdminHeader, Confirm, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import Grader, { type Paper, type Prepared, type Sticker } from "./Grader";
+import { allJobs, postRetry, saveJob, sendJob, type SendJob } from "./reliable";
 
 type Row = { id: number; exam: number; general: boolean; optional: boolean; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
 type ObjRow = Row & { qs: number[] };
@@ -16,7 +17,7 @@ type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand:
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
 type Only = { exams: { id: number; slug: string; chapter: string; title: string }[]; graders: { id: number; name: string }[]; rules: { exam: number; title: string; until: string; names: string[] }[] };
 type FoundPaper = { id: number; name: string; title: string; chapter: string; model: string; total: number; graded: string };
-type Data = { canEdit?: boolean; found?: FoundPaper[]; only?: Only; groups: Group[]; history?: History; objLog?: ObjLog; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean };
+type Data = { canEdit?: boolean; found?: FoundPaper[]; only?: Only; groups: Group[]; unsent?: Row[]; history?: History; objLog?: ObjLog; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -47,7 +48,34 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
   const [savedNow, setSavedNow] = useState(0);
   const [bgErr, setBgErr] = useState("");
   const [savingLeft, setSavingLeft] = useState(0);
+  // أوراق تنتظر النت حتى تنرسل (تعيد وحدها)
+  const [netWait, setNetWait] = useState<Set<number>>(new Set());
   useWide(!!paper || allDone);
+  // أوراق بقت محفوظة بالجهاز من مرة قبل (انسدت الصفحة قبل ما توصل): تنرسل وحدها أول ما تنفتح الصفحة
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (!data || resumed.current) return;
+    resumed.current = true;
+    void (async () => {
+      for (const j of await allJobs()) {
+        if (saving.current.has(j.id)) continue;
+        saving.current.add(j.id); setSavingLeft(saving.current.size);
+        setNetWait((x) => new Set(x).add(j.id));
+        const r = await sendJob(j, pageAuth).catch(() => ({ ok: false, error: "" }));
+        if (!r.ok) setBgErr(`⚠️ ورقة ${j.name} ما انرسلت${r.error ? `: ${r.error}` : ""}. افتحها من القائمة واحفظها مرة ثانية.`);
+        saving.current.delete(j.id); setSavingLeft(saving.current.size);
+        setNetWait((x) => { const y = new Set(x); y.delete(j.id); return y; });
+      }
+      void call({ action: "list" });
+    })();
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ورقة بعدها ما وصلت: الصفحة تنبه قبل ما تنسد
+  useEffect(() => {
+    if (!savingLeft) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [savingLeft]);
   const act: Call = async (b) => { const r = await call(b); if (r?.paper) setPaper(r.paper); return r; };
   // جاي من ملف الطالب: تنفتح الورقة للتعديل مباشرة
   const editOpened = useRef(false);
@@ -64,39 +92,27 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
     setSavingLeft(saving.current.size);
     setSavedNow((n) => n + 1);
     void (async () => {
+      // كل خطوة تعيد وحدها إذا النت انقطع، فالمصحح ما يحتاج يرجع للورقة. بس رفض السيرفر يوگف
+      const wait = () => setNetWait((x) => new Set(x).add(p.id));
       try {
         await inkSaved;
-        const post = async (body: BodyInit, json: boolean) => {
-          const res = await fetch("/api/grade", { method: "POST", ...(json ? { headers: { "Content-Type": "application/json" } } : {}), body });
-          const j = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(j.error ?? "");
-          return j;
-        };
-        const prep: Prepared = await post(JSON.stringify({ initData: pageAuth(), action: "prepare", id: p.id }), true);
-        if (decide) {
-          // رد الاعتراض: إذا انقبل شي توصل الورقة من جديد بالدرجة الجديدة
-          let photos: Blob[] = [];
-          if (decide.accepted || p.objections?.some((o) => o.was)) { try { photos = await compose(prep); } catch { photos = []; } }
-          const fd = new FormData();
-          fd.set("initData", pageAuth()); fd.set("action", "decide"); fd.set("id", String(p.id)); fd.set("rejects", JSON.stringify(decide.rejects));
-          photos.forEach((b, i) => fd.append("photo", b, `p${i}.jpg`));
-          await post(fd, false);
-          return;
-        }
-        // الصفحة تركب صور الورقة المصححة، وإذا ما گدرت توصل الدرجة كرسالة بس
+        const res = await postRetry(() => JSON.stringify({ initData: pageAuth(), action: "prepare", id: p.id }), true, { onWait: wait });
+        const prep: Prepared & { error?: string } = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(prep.error ?? "");
+        // الصفحة تركب صور الورقة المصححة (برد الاعتراض: بس إذا انقبل شي أو تعدل الرد)، وإذا ما گدرت توصل الدرجة كرسالة بس
         let photos: Blob[] = [];
-        try { photos = await compose(prep); } catch { photos = []; }
-        if (photos.length) {
-          const fd = new FormData();
-          fd.set("initData", pageAuth()); fd.set("action", "finish"); fd.set("id", String(p.id)); fd.set("comment", String(prep.sent));
-          photos.forEach((b, i) => fd.append("photo", b, `p${i}.jpg`));
-          await post(fd, false);
-        } else await post(JSON.stringify({ initData: pageAuth(), action: "finish", id: p.id, comment: prep.sent }), true);
+        if (!decide || decide.accepted || p.objections?.some((o) => o.was)) { try { photos = await compose(prep); } catch { photos = []; } }
+        // الورقة الجاهزة تنحفظ بالجهاز قبل الإرسال: إذا انسدت الصفحة أو طفى الجهاز، ترجع تنرسل من تنفتح الصفحة
+        const job: SendJob = { key: `${p.id}`, id: p.id, name: p.name, action: decide ? "decide" : "finish", comment: prep.sent, rejects: decide?.rejects, photos, at: Date.now() };
+        await saveJob(job);
+        const r = await sendJob(job, pageAuth, wait);
+        if (!r.ok) throw new Error(r.error ?? "");
       } catch (e) {
         setSavedNow((n) => n - 1);
         setBgErr(`⚠️ ورقة ${p.name} ما انحفظت${(e as Error).message ? `: ${(e as Error).message}` : ""}. افتحها من القائمة واحفظها مرة ثانية.`);
       } finally {
         saving.current.delete(p.id); setSavingLeft(saving.current.size);
+        setNetWait((x) => { const y = new Set(x); y.delete(p.id); return y; });
         if (decide) void call({ action: tab === "objlog" ? "objLog" : "list" });
       }
     })();
@@ -128,6 +144,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
+        {data && netWait.size > 0 && <div className="gk-netwait">📶 {netWait.size} ورقة تنتظر النت حتى توصل للطالب. تنرسل وحدها أول ما يرجع النت، لا تسد الصفحة.</div>}
         {data && paper && (
           <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
             onClose={() => { setPaper(null); setSavedNow(0); group.current = null; void call({ action: tab === "objlog" ? "objLog" : tab === "history" ? "history" : "list" }); }}
@@ -206,6 +223,20 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
   const shown = kind === "general" ? gen : priv;
   return (
     <>
+      {!!data.unsent?.length && (
+        <div className="card warn">
+          <h2>📤 مصححة وما انرسلت: {data.unsent.length}</h2>
+          <div className="exhint expad">صححتها كلها بس ما وصلت للطالب (النت انقطع). الدرجات والرسم محفوظة: افتحها واضغط حفظ.</div>
+          <table className="extable"><tbody>
+            {data.unsent.map((p) => (
+              <tr key={p.id} className="exrow" onClick={() => { if (!busy) void act({ action: "open", id: p.id }); }}>
+                <td><b>{p.name}</b><small className="pdmode">{p.title}</small></td>
+                <td className="p"><span className="exbtn">📤 افتحها</span></td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
       {!!data.objections.length && <ObjList data={data} busy={busy} act={act} />}
       {data.only && <OnlyCard only={data.only} busy={busy} act={act} />}
       <div className="card">

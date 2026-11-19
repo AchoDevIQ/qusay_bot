@@ -222,3 +222,23 @@ test("ورقة طالب التجربة تنحسب بأجر المصحح مثل �
   assert.equal(after.mand, before.mand + 1);
   assert.equal(after.amount, before.amount + after.rate.mandatory);
 });
+
+test("📤 ورقة مصححة كلها وما انرسلت (النت انقطع): تطلع بقائمة المصحح، وبعد 20 دقيقة خبر له ولصاحب البوت مرة وحدة", async () => {
+  const { unsentTick } = await import("../lib/gradeApi.ts");
+  const { addMinutes } = await import("../lib/scheduleRules.ts");
+  const { stamp } = await import("../lib/util.ts");
+  const u = await insert("sched_items", { user_id: 74, exam_id: e2, at: "x", status: "done", version_id: v2, submitted_at: "x" });
+  await g(30, "open", { id: u });
+  assert.ok(!(await g(30, "list")).unsent.some((p: any) => p.id === u));      // بعده ما صحح
+  await g(30, "mark", { id: u, q: 1, mark: 70 });                                // صححها كلها، والإرسال ما وصل
+  assert.ok((await g(30, "list")).unsent.some((p: any) => p.id === u));
+  assert.ok(!(await g(31, "list")).unsent.some((p: any) => p.id === u));
+  calls.length = 0;
+  assert.equal(await unsentTick(), 0);                                           // بعده ما مرت 20 دقيقة
+  assert.equal(await unsentTick(addMinutes(stamp(), 21)), 1);
+  const to = calls.filter((c) => /مصححة كلها وما انرسلت/.test(c.p.text ?? "")).map((c) => Number(c.p.chat_id)).sort();
+  assert.deepEqual(to, [1, 30]);
+  assert.equal(await unsentTick(addMinutes(stamp(), 30)), 0);
+  await g(30, "finish", { id: u });
+  assert.ok(!(await g(30, "list")).unsent.some((p: any) => p.id === u));
+});

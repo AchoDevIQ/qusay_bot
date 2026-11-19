@@ -86,6 +86,8 @@ async function listData(uid: number) {
     canEdit: await can(uid, EDIT_PERM),
     only: await isAdmin(uid) ? await onlyData() : undefined,
     objections: await objectionPapers(uid),
+    // مصححة كلها وما انرسلت (النت انقطع عند المصحح): يفتحها ويضغط حفظ
+    unsent: await Promise.all((await unsentPapers(uid)).map(paperRow)),
     groups: await examGroups(waiting),
     waiting: await Promise.all(waiting.map(paperRow)), done: await Promise.all(mine.map(paperRow)),
     owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid), penText: await penTextOn(uid),
@@ -383,6 +385,7 @@ export async function gradeAction(body: Row) {
     need(ink.length <= MAX_INK, "الرسم كبير هواية على هذي الصفحة");
     try { need(Array.isArray(JSON.parse(ink || "[]").items ?? []), "رسم غير مفهوم"); } catch { need(false, "رسم غير مفهوم"); }
     await put("paper_ink", { item_id: it.id, page, ink });
+    await kvSet(touchKey(it.id), stamp());
     return { ok: true };
   }
   if (a === "penText") {
@@ -464,6 +467,7 @@ export async function gradeAction(body: Row) {
       need(o, "الطالب ما اعترض على هذا السؤال");
       await update("objections", { id: o!.id }, { new_mark: mark });
     } else await put("question_marks", { item_id: it.id, q: q!.n, mark });
+    if (!obj) await kvSet(touchKey(it.id), stamp());
     paper = await paperView(it, obj);
   } else if (a === "rescan") {
     // السكنر طلع غلط: الورقة تنمسح وترجع للي رفعها حتى يعيدها
@@ -762,6 +766,40 @@ ${esc(text)}` : ""}`;
   await deliverMsg(it.user_id, caption, voice, kb);
   await logActivity(it.user_id, `📩 وصلته ${objection ? "رد بالفويس على اعتراضه" : "رسالة من المصحح"} بخصوص ${view.title}`);
   return { ok: true, notice: isTest(it) ? "🧪 وصلت الرسالة إلك إنت، لأنه طالب تجربة" : "✅ وصلت الرسالة للطالب" };
+}
+
+// ---------- ورقة مصححة كلها وما انرسلت للطالب (طلب الأستاذ 2026-11-19: «من ندز الأوراق ما توصل بسبب النت»)
+// صفحة التصحيح تعيد الإرسال وحدها، بس إذا المصحح سد الجهاز أو راح النت طويل: بعد 20 دقيقة من آخر درجة أو رسم،
+// يوصل خبر للمصحح ولصاحب البوت، والورقة تطلع بقائمته بـ «📤 مصححة وما انرسلت» حتى يفتحها ويضغط حفظ
+const touchKey = (item: number) => `grade_touch_${item}`;
+const UNSENT_MIN = 20;
+/** أوراق هذا المصحح (أو الكل لصاحب البوت) اللي كل أسئلتها انصححت وبعدها ما انرسلت */
+async function unsentPapers(uid: number | null) {
+  const out: Row[] = [];
+  for (const p of await find("sched_items", { status: "done" })) {
+    if (p.graded_at || !p.grader_id || isTest(p) || (uid !== null && p.grader_id !== uid)) continue;
+    if (!await kvGet(touchKey(p.id))) continue;
+    const qs = await find("bank_questions", { version_id: p.version_id }, { order: ["n"] });
+    const marks = new Map((await find("question_marks", { item_id: p.id })).map((m) => [m.q, m.mark]));
+    const answered = answeredOf(await find("exam_answers", { item_id: p.id }));
+    const mq: MarkQ[] = qs.map((q) => ({ n: q.n, mark: marks.get(q.n) ?? null, answered: answered(q.n) }));
+    if (qs.length && !missingQs(mq, answerOnlyOf(await one("bank_exams", { id: p.exam_id }))).length) out.push(p);
+  }
+  return out;
+}
+/** دكة المؤقت: ورقة مصححة كلها، وآخر شغل عليها قبل 20 دقيقة، وما انرسلت: خبر مرة وحدة */
+export async function unsentTick(now = stamp()) {
+  let told = 0;
+  for (const p of await unsentPapers(null)) {
+    const last = String(await kvGet(touchKey(p.id)) ?? "");
+    if (!last || last > addMinutes(now, -UNSENT_MIN) || await kvGet(`grade_unsent_told_${p.id}`)) continue;
+    await kvSet(`grade_unsent_told_${p.id}`, now);
+    const v = await paperRow(p);
+    const text = `📤 <b>ورقة مصححة كلها وما انرسلت للطالب</b>\nالطالب: ${esc(v.name)}\nالامتحان: ${esc(v.title)}\nالمصحح: ${esc(v.grader)}\n\nيمكن النت انقطع عند المصحح. الدرجات والرسم محفوظة. افتح ✍️ التصحيح، تلگاها فوك بـ «📤 مصححة وما انرسلت»، افتحها واضغط حفظ.`;
+    for (const id of new Set([p.grader_id as number, ...ADMIN_IDS])) await send(id, text, { kb: [[{ text: "✍️ افتح التصحيح", web_app: { url: adminPageLink("grade") } }]] }).catch((e) => console.error("unsent alert", e));
+    told++;
+  }
+  return told;
 }
 
 export const waitingPapers = async (uid: number) => (await waitingFor(uid, await find("sched_items", { status: "done" }))).length;
