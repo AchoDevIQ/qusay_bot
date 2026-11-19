@@ -33,7 +33,8 @@ export function useAdminApi<T>(url: string, button: string) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function call(body: Record<string, unknown> | FormData): Promise<T | null> {
+  // merge: الجواب يضيف على البيانات اللي عندنا بدل ما يبدلها (مثل فتح ورقة بدون ما ترجع القائمة كلها)
+  async function call(body: Record<string, unknown> | FormData, merge = false): Promise<T | null> {
     setBusy(true);
     setError("");
     try {
@@ -47,7 +48,7 @@ export function useAdminApi<T>(url: string, button: string) {
       }
       const j = await res.json();
       if (!res.ok) { setError(j.error ?? "صار خطأ"); return null; }
-      setData(j);
+      if (merge) setData((d) => ({ ...(d ?? {}), ...j }) as T); else setData(j);
       return j;
     } catch { setError("ماكو اتصال، حاول مرة ثانية"); return null; } finally { setBusy(false); }
   }

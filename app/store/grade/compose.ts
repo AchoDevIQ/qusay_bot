@@ -1,5 +1,5 @@
 // تركيب الورقة المصححة كصور: غلاف بهدر الفصل والدرجة والملصق والمقولة، وبعده صفحات ورقة الطالب بتصحيح المصحح.
-// كل فصل إله هدر بلون ورموز غير، والعربي غير الإنكليزي
+// الهدر نفس شكل ورقة الأسئلة (كحلي وذهبي). ألوان الفصول (themeOf) تبقى لورقة الكتابة بالقلم
 export type Theme = { from: string; to: string; accent: string; symbols: string[] };
 export type HeaderInfo = { slug: string; chapter: string; title: string; info: string; model: string; name: string; total: number; lang: "ar" | "en"; sid: number };
 
@@ -22,7 +22,6 @@ export const EN_NUM = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven"
 const FONT = "QAppEn, QAppAr, Cairo, Tahoma, Arial, sans-serif";
 export const W = 1080;
 
-function seeded(seed: number) { let s = seed || 1; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
 function round(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
@@ -34,48 +33,53 @@ export function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((ok) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => ok(im); im.onerror = () => ok(null); im.src = src; });
 }
 
-/** الهدر: العربي من اليمين بخلفية غامقة، والإنكليزي من اليسار بخلفية فاتحة وشريط ملون */
+// شكل الهدر نفس ورقة الأسئلة اللي يسويها الأستاذ: شريط كحلي بزوايا مدورة وإطار ذهبي رفيع،
+// اللوگو الذهبي بدائرة كحلية، وخط ذهبي تحته. بدون رموز بالخلفية
+const NAVY_L = "#2a3652", NAVY_D = "#111a2d", GOLD = "#d8b04a";
+
+/** الإنكليزي والأرقام بين العربي ينكتبون بترتيبهم الصحيح: بدونها «(1 & 2)» تطلع «(2 & 1)» (انقاس بالمتصفح) */
+export const isolate = (s: string) => s.replace(/[([]*[A-Za-z0-9][A-Za-z0-9 &+\-*/.,=^()[\]]*/g, (m) => {
+  const t = m.replace(/\s+$/, "");
+  return `\u202A${t}\u202C${m.slice(t.length)}`;
+});
+
+/** الهدر: الشريط الكحلي، اللوگو، الفصل والعنوان، اسم الطالب، النسخة، والدرجة. العربي من اليمين والإنكليزي من اليسار */
 /** badge: بدل دائرة الدرجة (مثلاً رقم السؤال بورقة الكتابة بالقلم) */
 export function drawHeader(ctx: CanvasRenderingContext2D, h: number, x: HeaderInfo, logo: HTMLImageElement | null, big = false, badge?: { top: string; sub: string }) {
-  const t = themeOf(x.slug), en = x.lang === "en";
+  const en = x.lang === "en";
   const chapterNo = Number(/(\d+)/.exec(x.slug)?.[1] ?? 0);
   ctx.save();
-  if (en) {
-    ctx.fillStyle = "#f7f8fb"; ctx.fillRect(0, 0, W, h);
-    const g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, t.from); g.addColorStop(1, t.to);
-    ctx.fillStyle = g; ctx.fillRect(0, h - 14, W, 14); ctx.fillRect(0, 0, 20, h);
-  } else {
-    const g = ctx.createLinearGradient(W, 0, 0, h); g.addColorStop(0, t.from); g.addColorStop(1, t.to);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, h);
-    ctx.fillStyle = t.accent; ctx.fillRect(0, h - 8, W, 8);
-  }
-  // رموز الفصل الخفيفة بالخلفية
-  const rnd = seeded(chapterNo * 97 + (en ? 13 : 7));
-  ctx.globalAlpha = en ? 0.07 : 0.1; ctx.fillStyle = en ? t.to : "#ffffff";
-  for (let i = 0; i < 16; i++) { ctx.font = `700 ${22 + rnd() * 30}px ${FONT}`; ctx.fillText(t.symbols[i % t.symbols.length], rnd() * W, 30 + rnd() * (h - 30)); }
-  ctx.globalAlpha = 1;
-  const pad = 34, r = h * 0.3, cy = h / 2;
-  const logoX = en ? pad + r : W - pad - r;
-  ctx.fillStyle = en ? t.from : "rgba(255,255,255,.12)"; ctx.beginPath(); ctx.arc(logoX, cy, r, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = t.accent; ctx.lineWidth = 4; ctx.stroke();
-  if (logo) ctx.drawImage(logo, logoX - r * 0.78, cy - r * 0.78, r * 1.56, r * 1.56);
+  const m = Math.round(h * 0.08), gap = Math.round(h * 0.035), lineH = Math.max(4, Math.round(h * 0.022));
+  const bx = m, by = m, bw = W - 2 * m, bh = h - 2 * m - gap - lineH + Math.round(m * 0.6);
+  const g = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+  g.addColorStop(0, en ? NAVY_D : NAVY_L); g.addColorStop(1, en ? NAVY_L : NAVY_D);
+  ctx.fillStyle = g; round(ctx, bx, by, bw, bh, bh * 0.14); ctx.fill();
+  ctx.strokeStyle = GOLD; ctx.lineWidth = 2.5; round(ctx, bx, by, bw, bh, bh * 0.14); ctx.stroke();
+  // الخط الذهبي تحت الشريط
+  ctx.fillStyle = GOLD; ctx.fillRect(bx + bh * 0.08, by + bh + gap, bw - bh * 0.16, lineH);
+  const cy = by + bh / 2, r = bh * 0.37, edge = bh * 0.16;
+  // اللوگو: دائرة كحلية بحافة ذهبية
+  const logoX = en ? bx + edge + r : bx + bw - edge - r;
+  ctx.fillStyle = NAVY_D; ctx.beginPath(); ctx.arc(logoX, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.stroke();
+  if (logo) { const s = r * 1.3, k = logo.naturalWidth / logo.naturalHeight; ctx.drawImage(logo, logoX - (s * k) / 2, cy - s / 2, s * k, s); }
   // الدرجة بالطرف الثاني
-  const gx = en ? W - pad - r : pad + r, pass = x.total >= 50;
-  ctx.fillStyle = badge ? t.accent : pass ? "#1f9d55" : "#d32f2f"; ctx.beginPath(); ctx.arc(gx, cy, r, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 4; ctx.stroke();
-  ctx.fillStyle = badge ? t.from : "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const gx = en ? bx + bw - edge - r : bx + edge + r, pass = x.total >= 50;
+  ctx.fillStyle = badge ? GOLD : pass ? "#1f9d55" : "#d32f2f"; ctx.beginPath(); ctx.arc(gx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = badge ? "#ffffff" : GOLD; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = badge ? NAVY_D : "#ffffff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.direction = "ltr";
   ctx.font = `900 ${r * 0.78}px ${FONT}`; ctx.fillText(badge ? badge.top : String(x.total), gx, cy - r * 0.12);
-  ctx.font = `700 ${r * 0.26}px ${FONT}`; ctx.fillText(badge ? badge.sub : "/ 100", gx, cy + r * 0.48);
+  ctx.font = `700 ${r * 0.26}px ${FONT}`; ctx.fillText(badge ? badge.sub : "/ 100", gx, cy + r * 0.5);
   // الكتابة بالنص
-  const textL = en ? logoX + r + 26 : gx + r + 26, textR = en ? gx - r - 26 : logoX - r - 26, tw = textR - textL;
+  const textL = en ? logoX + r + 24 : gx + r + 24, textR = en ? gx - r - 24 : logoX - r - 24, tw = textR - textL;
   ctx.direction = en ? "ltr" : "rtl"; ctx.textAlign = en ? "left" : "right";
-  const tx = en ? textL : textR, ink = en ? "#14213d" : "#ffffff", sub = en ? t.to : t.accent;
-  const line1 = en ? `Chapter ${EN_NUM[chapterNo] ?? chapterNo} · ${x.info || x.title}` : `${x.chapter} · ${x.title}`;
+  const tx = en ? textL : textR, k = big ? 1.08 : 1;
+  const line1 = en ? `Chapter ${EN_NUM[chapterNo] ?? chapterNo} · ${x.info || x.title}` : isolate(`${x.chapter} · ${x.title}`);
   // رقم الطالب بالهدر: كل صورة من ورقته تبين لمن
-  const line2 = (en ? `Model ${x.model}` : `النسخة ${x.model}`) + (x.sid ? `  ·  ID ${x.sid}` : "");
-  ctx.fillStyle = ink; fitText(ctx, line1, tw, big ? 46 : 38); ctx.fillText(line1, tx, cy - h * (big ? 0.2 : 0.17));
-  ctx.fillStyle = sub; fitText(ctx, x.name, tw, big ? 40 : 32, 700); ctx.fillText(x.name, tx, cy + h * 0.05);
-  ctx.fillStyle = en ? "#55607a" : "rgba(255,255,255,.8)"; fitText(ctx, line2, tw, big ? 28 : 24, 600); ctx.fillText(line2, tx, cy + h * (big ? 0.26 : 0.27));
+  const line2 = en ? `Model ${x.model}` + (x.sid ? `  ·  ID ${x.sid}` : "") : isolate(`النسخة ${x.model}` + (x.sid ? `  ·  ID ${x.sid}` : ""));
+  ctx.fillStyle = "#ffffff"; fitText(ctx, line1, tw, Math.round(bh * 0.21 * k), 700); ctx.fillText(line1, tx, cy - bh * 0.25);
+  ctx.fillStyle = GOLD; fitText(ctx, x.name, tw, Math.round(bh * 0.19 * k), 700); ctx.fillText(x.name, tx, cy + bh * 0.02);
+  ctx.fillStyle = "rgba(255,255,255,.85)"; fitText(ctx, line2, tw, Math.round(bh * 0.14 * k), 500); ctx.fillText(line2, tx, cy + bh * 0.27);
   ctx.restore();
 }
 
@@ -83,7 +87,7 @@ const toBlob = (c: HTMLCanvasElement) => new Promise<Blob>((ok, no) => c.toBlob(
 
 /** الغلاف: الهدر الكبير، وبعده الملصق والمقولة بإطار */
 export async function coverImage(x: HeaderInfo, quote: string, sticker: HTMLImageElement | null, logo: HTMLImageElement | null) {
-  const t = themeOf(x.slug), en = x.lang === "en";
+  const en = x.lang === "en";
   const headH = 300;
   const stH = sticker ? Math.min(620, (560 * sticker.naturalHeight) / sticker.naturalWidth) : 0;
   const c = document.createElement("canvas");
@@ -93,24 +97,24 @@ export async function coverImage(x: HeaderInfo, quote: string, sticker: HTMLImag
   const qH = quote ? 90 + lines.length * 60 : 0;
   c.width = W; c.height = headH + 40 + (stH ? stH + 40 : 0) + (qH ? qH + 40 : 0) + 60;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = en ? "#ffffff" : "#0f1729"; ctx.fillRect(0, 0, W, c.height);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, c.height);
   drawHeader(ctx, headH, x, logo, true);
   let y = headH + 40;
   if (sticker && stH) {
     const sw = (stH * sticker.naturalWidth) / sticker.naturalHeight;
     ctx.save(); round(ctx, (W - sw) / 2, y, sw, stH, 28); ctx.clip(); ctx.drawImage(sticker, (W - sw) / 2, y, sw, stH); ctx.restore();
-    ctx.strokeStyle = t.accent; ctx.lineWidth = 6; round(ctx, (W - sw) / 2, y, sw, stH, 28); ctx.stroke();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 6; round(ctx, (W - sw) / 2, y, sw, stH, 28); ctx.stroke();
     y += stH + 40;
   }
   if (quote) {
-    ctx.fillStyle = en ? "#f4f6fb" : "rgba(255,255,255,.06)"; round(ctx, 70, y, W - 140, qH, 30); ctx.fill();
-    ctx.strokeStyle = t.accent; ctx.lineWidth = 5; round(ctx, 70, y, W - 140, qH, 30); ctx.stroke();
-    ctx.fillStyle = t.accent; ctx.font = `900 90px Georgia, serif`; ctx.textAlign = "center"; ctx.fillText("❝", W / 2, y + 10);
-    ctx.fillStyle = en ? "#14213d" : "#ffffff"; ctx.font = `700 40px ${FONT}`; ctx.direction = "rtl"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#f6f3ea"; round(ctx, 70, y, W - 140, qH, 30); ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 5; round(ctx, 70, y, W - 140, qH, 30); ctx.stroke();
+    ctx.fillStyle = GOLD; ctx.font = `900 90px Georgia, serif`; ctx.textAlign = "center"; ctx.fillText("❝", W / 2, y + 10);
+    ctx.fillStyle = "#14213d"; ctx.font = `700 40px ${FONT}`; ctx.direction = "rtl"; ctx.textBaseline = "middle";
     lines.forEach((l, i) => ctx.fillText(l, W / 2, y + 70 + i * 60));
     y += qH + 40;
   }
-  ctx.fillStyle = en ? "#8a93a8" : "rgba(255,255,255,.55)"; ctx.font = `600 26px ${FONT}`; ctx.textAlign = "center"; ctx.direction = "rtl";
+  ctx.fillStyle = "#8a93a8"; ctx.font = `600 26px ${FONT}`; ctx.textAlign = "center"; ctx.direction = "rtl";
   ctx.fillText(en ? "Corrected paper on the next pages" : "ورقتك المصححة بالصفحات الجاية", W / 2, c.height - 34);
   return await toBlob(c);
 }
@@ -128,7 +132,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, max: number) {
 export async function pageImage(x: HeaderInfo, page: HTMLImageElement, rot: number, drawInk: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, logo: HTMLImageElement | null) {
   const side = rot % 180 !== 0;
   const iw = side ? page.naturalHeight : page.naturalWidth, ih = side ? page.naturalWidth : page.naturalHeight;
-  const headH = 170, ph = Math.round((W * ih) / iw);
+  const headH = 200, ph = Math.round((W * ih) / iw);
   const c = document.createElement("canvas");
   c.width = W; c.height = headH + ph;
   const ctx = c.getContext("2d")!;

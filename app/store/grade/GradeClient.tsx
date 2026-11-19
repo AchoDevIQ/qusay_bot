@@ -76,7 +76,8 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [savingLeft]);
-  const act: Call = async (b) => { const r = await call(b); if (r?.paper) setPaper(r.paper); return r; };
+  // فتح ورقة: السيرفر يرجع الورقة بس (بدون القائمة كلها)، حتى تنفتح أسرع
+  const act: Call = async (b) => { const light = b.action === "open"; const r = await call(light ? { ...b, light: 1 } : b, light); if (r?.paper) setPaper(r.paper); return r; };
   // جاي من ملف الطالب: تنفتح الورقة للتعديل مباشرة
   const editOpened = useRef(false);
   useEffect(() => {

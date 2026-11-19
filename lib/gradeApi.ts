@@ -178,25 +178,32 @@ async function headerInfo(it: Row) {
   return { slug: e?.slug ?? "", info: st?.curr === "إنجليزي" ? String(e?.title_en || e?.info || "") : e?.info ?? "", lang: st?.curr === "إنجليزي" ? "en" : "ar", sid: it.user_id };
 }
 async function paperView(it: Row, withObj = false, editing = false) {
-  const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
-  const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
-  const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
-  // بالاعتراض: الدرجة اللي غيرها المصحح تبين، وما تنحفظ بالورقة لحد ما يحفظ الرد
-  const objs = withObj ? await humanObjections(it) : [];
+  // كل الطلبات سوا بدل وحدة ورا وحدة، حتى الورقة تنفتح أسرع
+  const [qs, answers, markRows, objs, v, part, inkRows, errors, voices, ai, st, row, header, exam] = await Promise.all([
+    find("bank_questions", { version_id: it.version_id }, { order: ["n"] }),
+    find("exam_answers", { item_id: it.id }, { order: ["id"] }),
+    find("question_marks", { item_id: it.id }),
+    // بالاعتراض: الدرجة اللي غيرها المصحح تبين، وما تنحفظ بالورقة لحد ما يحفظ الرد
+    withObj ? humanObjections(it) : Promise.resolve([] as Row[]),
+    one("bank_versions", { id: it.version_id }),
+    aiPartialOf(it.id),
+    find("paper_ink", { item_id: it.id }),
+    errorsOf(it.exam_id), voicesOf(it), aiResultOf(it.id), student(it.user_id), paperRow(it), headerInfo(it),
+    one("bank_exams", { id: it.exam_id }),
+  ]);
+  const marks = new Map(markRows.map((m) => [m.q, m.mark]));
   for (const o of objs) if (o.new_mark !== null) marks.set(o.q, o.new_mark);
-  const v = await one("bank_versions", { id: it.version_id });
-  const part = await aiPartialOf(it.id);
   const ink: Record<number, string> = {};
-  for (const r of await find("paper_ink", { item_id: it.id })) ink[r.page] = r.ink;
+  for (const r of inkRows) ink[r.page] = r.ink;
   const answered = answeredOf(answers);
   return {
-    ink, errors: await errorsOf(it.exam_id), ...await voicesOf(it), ai: await aiResultOf(it.id), inPerson: (await student(it.user_id))?.exam === "حضوري",
+    ink, errors, ...voices, ai, inPerson: st?.exam === "حضوري",
     objections: objs.sort((a, b) => a.q - b.q).map((o) => ({ q: o.q, text: o.text ?? "", voice: o.voice ?? null, old: o.old_mark, ...(o.reopened ? { was: o.new_mark !== null && o.new_mark !== o.old_mark ? "accepted" : "rejected", reason: o.reason ?? "" } : {}) })),
-    ...await paperRow(it), answerPdf: v?.answer_pdf ?? null, ...await headerInfo(it),
+    ...row, answerPdf: v?.answer_pdf ?? null, ...header,
     whole: answers.filter((a) => !a.q).map((a) => a.file),
     // byAi: صححه نظام التصحيح AI، فالمصحح ما يغيره (يصحح بس الأسئلة اللي حوّلها)
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark, image: q.q_file, answers: answers.filter((a) => a.q === q.n).map((a) => a.file), mark: marks.get(q.n) ?? null, answered: answered(q.n), byAi: !editing && !!part && !part.includes(q.n) })), editing,
-    answerOnly: answerOnlyOf(await one("bank_exams", { id: it.exam_id })),
+    answerOnly: answerOnlyOf(exam),
   };
 }
 /** جاوب على السؤال؟ بس إذا الأجوبة صور لكل سؤال؛ إذا الورقة كاملة (حضوري) ما نعرف */
@@ -475,7 +482,8 @@ export async function gradeAction(body: Row) {
       await update("objections", { id: o!.id }, { new_mark: mark });
     } else await put("question_marks", { item_id: it.id, q: q!.n, mark });
     if (!obj) await kvSet(touchKey(it.id), stamp());
-    paper = await paperView(it, obj);
+    // الدرجة تنحفظ بس: المصحح ما يحتاج الورقة والقائمة ترجعله بكل دوسة (چانت تأخر الحفظ)
+    return { ok: true };
   } else if (a === "rescan") {
     // السكنر طلع غلط: الورقة تنمسح وترجع للي رفعها حتى يعيدها
     const it = await myPaper(uid, body.id);
@@ -547,6 +555,8 @@ export async function gradeAction(body: Row) {
     await setGradeOnly(exam, ids, until);
     notice = ids.length ? `✅ أوراق هذا الامتحان تطلع لـ ${ids.length} مصحح بس${until ? ` لحد ${until}` : ""}` : "✅ رجع لكل المصححين";
   } else need(a === "list", "أمر غير معروف");
+  // فتح ورقة: الورقة بس، والقائمة اللي عند المصحح تبقى (هي اللي چانت تأخر الفتح)
+  if (body.light && a === "open") return { paper, notice };
   return { ...await listData(uid), paper, notice };
 }
 /** صور الورقة المصححة تنحفظ يم صاحب البوت، حتى يشوفها من صفحة الطالب. بعد الاعتراض تتبدل بالجديدة */
