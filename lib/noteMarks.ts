@@ -489,7 +489,8 @@ export async function pasteSolutions(book: Row, text: string) {
     if (vm && !parseYouTube(target) && !parseLink(target) && !video) { missing.add(vm[1].trim()); continue; }
     if (!pm || page > book.pages || y < 0 || y > 1 || !(video || parseYouTube(target) || parseLink(target))) { bad.push(s.slice(0, 40)); continue; }
     const patch: Row = video ? { video_id: video.id } : { solution: target };
-    const near = marks.filter((x) => x.page === page && Math.abs(Number(x.y) - y) < 0.03).sort((a, b) => Math.abs(Number(a.y) - y) - Math.abs(Number(b.y) - y))[0];
+    // قريب كلش (أقل من 1.5% من الصفحة): نفس الزر. الأسئلة القصيرة ورا بعض بينها ربع سطر بس
+    const near = marks.filter((x) => x.page === page && Math.abs(Number(x.y) - y) < 0.015).sort((a, b) => Math.abs(Number(a.y) - y) - Math.abs(Number(b.y) - y))[0];
     if (near) {
       const before = { solution: near.solution, video_id: near.video_id };
       await update("note_marks", { id: near.id }, { ...patch, auto: 0 });
