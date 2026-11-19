@@ -39,6 +39,8 @@ export async function studentFile(uid: number) {
     log,
     // مشاهداته للمحاضرات بالتطبيق: كم مرة فتحها، ولوين وصل منها
     lectures: views.sort((a, b) => String(b.last_at).localeCompare(String(a.last_at))).map((v) => ({ title: String(v.title || "محاضرة"), subject: String(v.subject ?? ""), times: Number(v.times ?? 0), percent: Number(v.percent ?? 0), last: String(v.last_at ?? "") })),
+    // أعطال التطبيق بتلفونه (آخر 20)
+    crashes: await (await import("./appCrash.ts")).crashesOf(uid),
     average: graded.length ? Math.round(graded.reduce((t, p) => t + Number(p.total), 0) / graded.length) : null,
   };
 }

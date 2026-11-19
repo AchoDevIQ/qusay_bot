@@ -62,6 +62,7 @@ export const SCHEMA: Record<string, Table> = {
   notices: { key: "id", auto: true, cols: nulls("kind", "text", "image", "aud", "rule", "by_id", "created", "del") },
   notice_reads: { key: ["notice_id", "user_id"], cols: { read_at: null } },
   // مشاهدات المحاضرات بالتطبيق: كل طالب وكل محاضرة، كم مرة شافها وكم دقيقة
+  app_crashes: { key: "id", auto: true, cols: nulls("install", "uid", "kind", "model", "os", "ver", "screen", "error", "stack", "at", "home_at", "told") },
   lecture_views: { key: ["user_id", "lecture"], cols: nulls("title", "subject", "times", "percent", "first_at", "last_at") },
   grader_pay: { key: "user_id", cols: nulls("mandatory", "optional", "deduct", "chapters", "exams_off", "places") },
   grader_settlements: { key: "id", auto: true, cols: nulls("user_id", "n_mand", "n_opt", "n_obj", "amount", "forgiven", "created", "by_id") },

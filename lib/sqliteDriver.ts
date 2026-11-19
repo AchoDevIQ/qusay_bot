@@ -90,6 +90,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS door_push(user_id INTEGER, endpoint TEXT, keys TEXT, created TEXT, PRIMARY KEY(user_id, endpoint));
     CREATE TABLE IF NOT EXISTS notices(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, text TEXT, image TEXT, aud TEXT, rule TEXT, by_id INTEGER, created TEXT, del INTEGER);
     CREATE TABLE IF NOT EXISTS notice_reads(notice_id INTEGER, user_id INTEGER, read_at TEXT, PRIMARY KEY(notice_id, user_id));
+    CREATE TABLE IF NOT EXISTS app_crashes(id INTEGER PRIMARY KEY AUTOINCREMENT, install TEXT, uid INTEGER, kind TEXT, model TEXT, os TEXT, ver TEXT, screen TEXT, error TEXT, stack TEXT, at TEXT, home_at TEXT, told TEXT);
     CREATE TABLE IF NOT EXISTS lecture_views(user_id INTEGER, lecture TEXT, title TEXT, subject TEXT, times INTEGER, percent INTEGER, first_at TEXT, last_at TEXT, PRIMARY KEY(user_id, lecture));
     CREATE TABLE IF NOT EXISTS grader_pay(user_id INTEGER PRIMARY KEY, mandatory INTEGER, optional INTEGER, deduct INTEGER, chapters TEXT, exams_off TEXT, places TEXT);
     CREATE TABLE IF NOT EXISTS grader_settlements(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, n_mand INTEGER, n_opt INTEGER, n_obj INTEGER, amount INTEGER, forgiven INTEGER, created TEXT, by_id INTEGER);
