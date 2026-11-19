@@ -56,7 +56,7 @@ export default function MarksCard() {
             <label>الملزمة</label>
             <select value={book} onChange={(e) => { const id = Number(e.target.value); setBook(id); if (id) void call({ action: "marks", book: id }); }}>
               <option value={0}>اختار الملزمة...</option>
-              {data.books.map((b) => <option key={b.id} value={b.id}>{b.chapter} · {b.title}</option>)}
+              {data.books.map((b) => <option key={b.id} value={b.id}>{b.chapter} · {LANG[b.lang] ?? "الكل"} · {b.title}</option>)}
             </select>
             {cur && (
               <>
@@ -117,7 +117,7 @@ function MarkRow({ m, book, books, others, videos, busy, call }: { m: Mark; book
       )}
       <select value={linkBook} onChange={(e) => { setLinkBook(Number(e.target.value)); setLink(""); }}>
         <option value={0}>{m.linked.length ? "➕ اربطه بملزمة ثانية بعد..." : "➕ اربطه بنفس السؤال بملزمة ثانية..."}</option>
-        {books.filter((b) => b.id !== book.id && others.some((p) => p.book === b.id)).map((b) => <option key={b.id} value={b.id}>{b.chapter} · {b.title}</option>)}
+        {books.filter((b) => b.id !== book.id && others.some((p) => p.book === b.id)).map((b) => <option key={b.id} value={b.id}>{b.chapter} · {LANG[b.lang] ?? "الكل"} · {b.title}</option>)}
       </select>
       {linkBook > 0 && (
         <select value={link} onChange={(e) => setLink(e.target.value)}>
