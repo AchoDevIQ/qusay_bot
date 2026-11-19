@@ -10,10 +10,14 @@ type Order = {
   coNo: string; ret: boolean; retAt: string; retGot: boolean; retGotAt: string;
 };
 type Open = { id: number; coNo: string; name: string; total: number; fee: number; parts: MoneyParts; items: { name: string; qty: number; price: number }[] };
+type RetLite = { id: number; coNo: string; name: string; retAt: string; retGot: boolean; retGotAt: string; items: string };
 type Company = {
-  open: Open[]; returns: Order[]; retWaiting: number;
-  archive: { id: number; from: number; to: number; n: number; gross: number; fees: number; net: number; created: string; parts: MoneyParts | null }[];
+  open: Open[]; returns: Order[]; retWaiting: number; retAll: RetLite[];
+  last: { id: number; coNo: string; co: number | null } | null;
+  archive: { id: number; from: number; to: number; by: string; rets: number | null; n: number; gross: number; fees: number; net: number; created: string; parts: MoneyParts | null }[];
 };
+/** رقم وصل الشركة كعدد. اللي بيه حروف ما يدخل بالمدى */
+const coNum = (co: string) => /^\d{1,15}$/.test(co) ? Number(co) : NaN;
 type Data = { fresh: Order[]; printed: Order[]; owner: boolean; company: Company | null; notice: string; allPrices?: PriceLine[] | null; found?: Order[] | null };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type RowCtl = { busy: boolean; call: Call; company: boolean; copy: (l: string, v: string) => void };
@@ -102,29 +106,52 @@ export default function OrdersClient() {
 }
 
 function CompanyCard({ c, all, busy, call }: { c: Company; all: PriceLine[] | null; busy: boolean; call: Call }) {
-  const first = c.open[0]?.id, last = c.open.at(-1)?.id;
+  const [by, setBy] = useState<"" | "co">("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [skip, setSkip] = useState<number[]>([]);
   const [show, setShow] = useState(false);
   const [list, setList] = useState(false);
   const [got, setGot] = useState(false);
+  const key = (o: { id: number; coNo: string }) => (by === "co" ? coNum(o.coNo) : o.id);
+  const nums = c.open.map(key).filter((n) => !Number.isNaN(n));
+  const first = nums.length ? Math.min(...nums) : undefined, last = nums.length ? Math.max(...nums) : undefined;
   const a = Number(from || first), b = Number(to || last);
-  const inRange = c.open.filter((o) => o.id >= a && o.id <= b);
+  const within = (o: { id: number; coNo: string }) => { const n = key(o); return n >= a && n <= b; };
+  const inRange = c.open.filter(within).sort((x, y) => key(x) - key(y));
   const rows = inRange.filter((o) => !skip.includes(o.id));
   const gross = rows.reduce((s, o) => s + o.total, 0), fees = rows.reduce((s, o) => s + o.fee, 0), net = gross - fees;
   const flip = (id: number) => setSkip(skip.includes(id) ? skip.filter((x) => x !== id) : [...skip, id]);
+  const rangeRets = c.retAll.filter(within);
+  const noCo = by === "co" ? c.open.filter((o) => Number.isNaN(coNum(o.coNo))).length : 0;
+  // وصولات قبل آخر حساب وبعدها ما محاسبة (شلت عنها الصح وقتها)
+  const behind = c.last ? c.open.filter((o) => o.id < c.last!.id) : [];
   const waiting = c.returns.filter((o) => !o.retGot), back = c.returns.filter((o) => o.retGot);
+  const pickBy = (v: "" | "co") => { setBy(v); setFrom(""); setTo(""); setSkip([]); };
+  const label = (o: { id: number; coNo: string }) => (by === "co" ? `الشركة ${o.coNo || "—"} · وصلنا #${o.id}` : `#${o.id}${o.coNo ? ` · الشركة ${o.coNo}` : ""}`);
   return (
     <div className="card">
       <h2>💰 حساب شركة التوصيل</h2>
-      {c.open.length ? (
-        <div className="expad adtop">
-          <div className="who adnopad">غير محاسب: من وصل <b>#{first}</b> إلى وصل <b>#{last}</b> ({c.open.length} طلب). الراجع ❌ ما ينحسب.</div>
-          <div className="adtwo">
-            <div><label>من وصل</label><input className="ltr" inputMode="numeric" placeholder={String(first)} value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div><label>إلى وصل</label><input className="ltr" inputMode="numeric" placeholder={String(last)} value={to} onChange={(e) => setTo(e.target.value)} /></div>
+      <div className="expad adtop">
+        <div className="who adnopad">
+          {c.last
+            ? <>آخر وصل محاسب: <b>#{c.last.id}</b>{c.last.co !== null ? <> (أكبر رقم شركة محاسب: <b>{c.last.co}</b>)</> : null} · من <b>#{c.last.id + 1}</b> بعدك ما محاسبهم.</>
+            : <>بعدك ما محاسب الشركة ولا مرة.</>}
+          {" "}غير محاسب: <b>{c.open.length}</b> وصل. الراجع ❌ ما ينحسب.
+        </div>
+        {!!behind.length && <div className="exhint">⚠️ وصولات قبل آخر حساب بعدها ما محاسبة: {behind.map((o) => "#" + o.id).join("، ")}</div>}
+      </div>
+      {c.open.length || c.retAll.length ? (
+        <div className="expad">
+          <div className="chips adtabs">
+            <button type="button" className={by === "" ? "on" : ""} onClick={() => pickBy("")}>حسب وصلنا</button>
+            <button type="button" className={by === "co" ? "on" : ""} onClick={() => pickBy("co")}>حسب وصل الشركة</button>
           </div>
+          <div className="adtwo">
+            <div><label>من وصل</label><input className="ltr" inputMode="numeric" placeholder={first === undefined ? "" : String(first)} value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+            <div><label>إلى وصل</label><input className="ltr" inputMode="numeric" placeholder={last === undefined ? "" : String(last)} value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          </div>
+          {!!noCo && <div className="exhint">{noCo} وصل غير محاسب ما عليه رقم الشركة، فما يدخل بالمدى حسب وصل الشركة.</div>}
           <div className="adstats adnopadtop adcompany">
             <div><b>{fmt(gross)}</b>المبلغ الكلي ({rows.length})</div>
             <div><b>{fmt(fees)}</b>توصيل (للشركة)</div>
@@ -138,16 +165,23 @@ function CompanyCard({ c, all, busy, call }: { c: Company; all: PriceLine[] | nu
                 {inRange.map((o) => (
                   <tr key={o.id} className={"exrow" + (skip.includes(o.id) ? "" : " sel")}>
                     <td className="adpick"><input type="checkbox" aria-label={`حساب ${o.id}`} checked={!skip.includes(o.id)} onChange={() => flip(o.id)} /></td>
-                    <td><b>#{o.id}{o.coNo ? ` · الشركة ${o.coNo}` : ""}</b><small className="pdmode">{o.name} · الكلي {fmt(o.total)} · التوصيل {fmt(o.fee)}</small></td>
+                    <td><b>{label(o)}</b><small className="pdmode">{o.name} · الكلي {fmt(o.total)} · التوصيل {fmt(o.fee)}</small></td>
                     <td className="p">{fmt(o.total - o.fee)}</td>
                   </tr>
                 ))}
               </tbody></table>
             </>
           )}
+          <h3 className="adtop">📦 الراجع بهذا المدى ({rangeRets.length})</h3>
+          {rangeRets.length ? rangeRets.map((o) => (
+            <label key={o.id} className="adfield">
+              <input type="checkbox" checked={o.retGot} disabled={busy} onChange={(e) => void call({ action: "retGot", id: o.id, on: e.target.checked })} />
+              <span><b>{label(o)}</b> {o.name}<small className="pdmode">❌ راجع ·{o.retGot ? `✅ استلمته ${o.retGotAt}` : "بعده عند الشركة، أشّر لمن تستلمه"}</small></span>
+            </label>
+          )) : <div className="exhint">ماكو راجع بهذا المدى.</div>}
           <MoneyBreakdown parts={addParts(rows.map((o) => o.parts))} title="اللي لازم يعطوك مقسم (بدون التوصيل)" />
           <PriceReport lines={priceReport(rows.map((o) => o.items))} title="هذا المدى حسب السعر" />
-          <Confirm label={`✅ تم الحساب، استلمت ${fmt(net)}`} disabled={busy || !rows.length} onYes={async () => { if (await call({ action: "settle", from: a, to: b, net, skip })) { setFrom(""); setTo(""); setSkip([]); } }} />
+          <Confirm label={`✅ تم الحساب، استلمت ${fmt(net)}`} disabled={busy || !rows.length} onYes={async () => { if (await call({ action: "settle", by, from: a, to: b, net, skip })) { setFrom(""); setTo(""); setSkip([]); } }} />
         </div>
       ) : <div className="empty">✅ ماكو طلبات غير محاسب عليها ويا الشركة.</div>}
       <div className="expad">
@@ -174,7 +208,7 @@ function CompanyCard({ c, all, busy, call }: { c: Company; all: PriceLine[] | nu
       {!!c.archive.length && (
         <div className="expad">
           <button type="button" className="exbtn" onClick={() => setShow(!show)}>🗂 الحسابات السابقة ({c.archive.length})</button>
-          {show && c.archive.map((s) => <div key={s.id} className="adsale"><b>#{s.from} إلى #{s.to}</b> — استلمت {fmt(s.net)}<small>{s.created} · {s.n} طلب · الكلي {fmt(s.gross)} · التوصيل {fmt(s.fees)}{s.parts ? ` · ${partsLine(s.parts)}` : ""}</small></div>)}
+          {show && c.archive.map((s) => <div key={s.id} className="adsale"><b>{s.by === "co" ? `وصل الشركة ${s.from} إلى ${s.to}` : `#${s.from} إلى #${s.to}`}</b> — استلمت {fmt(s.net)}<small>{s.created} · {s.n} طلب{s.rets ? ` · ${s.rets} راجع` : ""} · الكلي {fmt(s.gross)} · التوصيل {fmt(s.fees)}{s.parts ? ` · ${partsLine(s.parts)}` : ""}</small></div>)}
         </div>
       )}
     </div>

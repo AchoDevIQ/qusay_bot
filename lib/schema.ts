@@ -80,7 +80,7 @@ export const SCHEMA: Record<string, Table> = {
   // التصويت: options وcenters نص JSON. shown: null ما تقرر، 1 النسب انرسلت للطلاب، 0 لا
   polls: { key: "id", auto: true, cols: nulls("question", "options", "centers", "gender", "status", "created", "by_id", "closed_at", "shown") },
   poll_votes: { key: ["poll_id", "user_id"], cols: nulls("choice", "at") },
-  company_settlements: { key: "id", auto: true, cols: nulls("from_id", "to_id", "n", "gross", "fees", "net", "created", "parts") },
+  company_settlements: { key: "id", auto: true, cols: nulls("from_id", "to_id", "n", "gross", "fees", "net", "created", "parts", "basis", "rets") },
 };
 
 export const keyCols = (table: string) => [SCHEMA[table].key].flat();

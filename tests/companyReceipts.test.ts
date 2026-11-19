@@ -100,4 +100,26 @@ test("الحساب: الراجع ما ينحسب، واللي شلت عنه ال
   assert.equal(r.company.archive[0].net, 10000);
   await assert.rejects(coMan({ action: "settle", from: a, to: a, net: 5000 }), /ماكو طلبات/);   // ما ينحسب مرتين
   await assert.rejects(coMan({ action: "ret", id: a, on: true }), /انحسب/);
+  // وين وصلت: آخر وصل محاسب
+  assert.deepEqual(r.company.last, { id: d, coNo: "", co: 5001 });
+});
+
+test("الحساب حسب وصل الشركة: المدى بأرقامهم، والراجع بالمدى ينعد، والسجل يحفظ الطريقة", async () => {
+  const e = await order(1), f = await order(1), g = await order(1), h = await order(1);
+  for (const [id, no] of [[e, "7003"], [f, "7001"], [g, "7002"], [h, "7010"]] as const) await printer({ action: "coNo", id, no });
+  await coMan({ action: "ret", id: g, on: true });
+  let r = await coMan({ action: "list" });
+  assert.ok(r.company.retAll.some((o: any) => o.id === g && o.coNo === "7002" && !o.retGot));
+  // 7001 إلى 7005: وصلين (7001 و7003)، و7002 راجع ما ينحسب، و7010 برا المدى، و c بلا رقم شركة ما يدخل
+  await assert.rejects(coMan({ action: "settle", by: "co", from: 7001, to: 7005, net: 15000 }), /تغيرت/);
+  r = await coMan({ action: "settle", by: "co", from: 7001, to: 7005, net: 10000 });
+  assert.match(r.notice, /2 طلب/);
+  const s = r.company.archive[0];
+  assert.deepEqual([s.by, s.from, s.to, s.n, s.rets, s.net], ["co", 7001, 7005, 2, 1, 10000]);
+  assert.deepEqual(r.company.open.map((o: any) => o.id).sort(), [c, h].sort());
+  assert.equal(r.company.last.id, f);                                   // أكبر وصل محاسب برقمنا
+  assert.equal(r.company.last.co, 7003);
+  // ✅ للراجع من نفس المكان
+  r = await coMan({ action: "retGot", id: g, on: true });
+  assert.ok(r.company.retAll.find((o: any) => o.id === g).retGot);
 });

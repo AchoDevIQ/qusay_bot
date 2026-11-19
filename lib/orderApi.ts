@@ -22,30 +22,45 @@ const list = async (rows: Row[]) => await Promise.all(rows.map(orderView));
 
 /** حساب شركة التوصيل: كل الطلبات اللي انسلمت للشركة ولسه ما تحاسبنا عليها. الراجع ❌ ما ينحسب */
 const RET_GOT_LIMIT = 30;
+/** رقم وصل الشركة كعدد، حتى ينحسب «من وصل إلى وصل» بأرقامهم. اللي بيه حروف ما يدخل بالمدى */
+export const coNum = (co: unknown) => /^\d{1,15}$/.test(String(co ?? "")) ? Number(co) : NaN;
+const retLite = (o: Row) => ({ id: o.id, coNo: o.co_no ?? "", name: o.name, retAt: o.ret_at ?? "", retGot: !!o.ret_got, retGotAt: o.ret_got_at ?? "", items: orderItems(o).map((i) => `${i.name} ×${i.qty}`).join("، ") });
 async function companyData() {
   const open = await find("orders", { printed: 1, settle_id: null }, { where: (o) => !o.ret, order: ["id"] });
   const lectures = await lecturePrices();
   const rets = await find("orders", { printed: 1, ret: 1 }, { order: ["-id"] });
+  // وين وصلت بالحساب: آخر وصل محاسب برقمنا، وأكبر رقم شركة محاسب
+  const done = await find("orders", { printed: 1 }, { where: (o) => !!o.settle_id, order: ["-id"] });
+  const coDone = done.map((o) => coNum(o.co_no)).filter((n) => !Number.isNaN(n));
   return {
+    last: done[0] ? { id: done[0].id, coNo: done[0].co_no ?? "", co: coDone.length ? Math.max(...coDone) : null } : null,
+    // كل الراجع بشكل خفيف، حتى يطلع «الراجع بهذا المدى» لأي مدى تختاره
+    retAll: rets.map(retLite),
     open: open.map((o) => ({ id: o.id, coNo: o.co_no ?? "", name: o.name, total: o.total, fee: o.fee, parts: orderParts(o, lectures), items: orderItems(o).map((i) => ({ name: i.name, qty: i.qty, price: i.price })) })),
     // الراجع اللي بعده عند الشركة كله، واللي استلمته آخر 30
     returns: await list([...rets.filter((o) => !o.ret_got), ...rets.filter((o) => o.ret_got).slice(0, RET_GOT_LIMIT)]),
     retWaiting: rets.filter((o) => !o.ret_got).length,
-    archive: (await find("company_settlements", {}, { order: ["-id"], limit: 20 })).map((s) => ({ id: s.id, from: s.from_id, to: s.to_id, n: s.n, gross: s.gross, fees: s.fees, net: s.net, created: s.created, parts: savedParts(s) })),
+    archive: (await find("company_settlements", {}, { order: ["-id"], limit: 20 })).map((s) => ({ id: s.id, from: s.from_id, to: s.to_id, by: s.basis ?? "", rets: s.rets ?? null, n: s.n, gross: s.gross, fees: s.fees, net: s.net, created: s.created, parts: savedParts(s) })),
   };
 }
-async function settleCompany(fromRaw: unknown, toRaw: unknown, expect: unknown, skipRaw: unknown) {
-  const from = Number(fromRaw), to = Number(toRaw);
+/** الطلب داخل المدى؟ حسب وصلنا، أو حسب وصل الشركة */
+export const inRange = (o: Row, by: string, from: number, to: number) => {
+  const n = by === "co" ? coNum(o.co_no) : Number(o.id);
+  return n >= from && n <= to;
+};
+async function settleCompany(fromRaw: unknown, toRaw: unknown, expect: unknown, skipRaw: unknown, byRaw: unknown) {
+  const from = Number(fromRaw), to = Number(toRaw), by = byRaw === "co" ? "co" : "";
   need(Number.isSafeInteger(from) && Number.isSafeInteger(to) && from <= to, "اكتب رقم أول وصل وآخر وصل صح");
   // اللي شلت عنه الصح (بعده ما واصل) يبقى للحساب الجاي
   const skip = new Set(Array.isArray(skipRaw) ? (skipRaw as unknown[]).map(Number) : []);
-  const rows = await find("orders", { printed: 1, settle_id: null }, { where: (o) => o.id >= from && o.id <= to && !o.ret && !skip.has(o.id), order: ["id"] });
+  const rows = await find("orders", { printed: 1, settle_id: null }, { where: (o) => inRange(o, by, from, to) && !o.ret && !skip.has(o.id), order: ["id"] });
+  const rets = (await find("orders", { printed: 1, ret: 1 }, { where: (o) => inRange(o, by, from, to) })).length;
   need(rows.length, "ماكو طلبات غير محاسب عليها بهذا المدى");
   const gross = rows.reduce((s, o) => s + o.total, 0), fees = rows.reduce((s, o) => s + o.fee, 0), net = gross - fees;
   need(net === Number(expect), "الأرقام تغيرت. راجع المبلغ واضغط مرة ثانية");
   const parts = JSON.stringify(await partsOf(rows));
   await tx(async () => {
-    const id = await insert("company_settlements", { from_id: from, to_id: to, n: rows.length, gross, fees, net, created: stamp(), parts });
+    const id = await insert("company_settlements", { from_id: from, to_id: to, basis: by || null, rets, n: rows.length, gross, fees, net, created: stamp(), parts });
     for (const o of rows) await update("orders", { id: o.id }, { settle_id: id });
   });
   return `✅ انسجل الحساب: ${rows.length} طلب، استلمت ${num(net)}`;
@@ -150,7 +165,7 @@ export async function orderAction(body: Row) {
   let notice = "";
   let allPrices: PriceLine[] | null = null;
   let found: Awaited<ReturnType<typeof list>> | null = null;
-  if (a === "settle") notice = await settleCompany(body.from, body.to, body.net, body.skip);
+  if (a === "settle") notice = await settleCompany(body.from, body.to, body.net, body.skip, body.by);
   else if (a === "search") { /* تحت */ }
   else if (a === "coNo") notice = await setCoNo(uid, Number(body.id), body.no);
   else if (a === "ret") notice = await setReturned(uid, Number(body.id), !!body.on);
