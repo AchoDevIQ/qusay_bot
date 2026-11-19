@@ -3,7 +3,7 @@
 // مجاني: يستعمل سماع الكلام اللي بالمتصفح نفسه (كروم أو سفاري)، بدون أي خدمة بفلوس.
 // داخل تليجرام على الأندرويد ما موجود، فالزر ما يطلع وتطلع جملة تشرح ليش
 import { useEffect, useRef, useState } from "react";
-import { newSpoken, pickMark } from "../../../lib/spokenMark.ts";
+import { newSpoken, pickMark, splitSpoken } from "../../../lib/spokenMark.ts";
 import { pageAuth } from "../adminPage";
 import { openOutside } from "../shared";
 
@@ -62,30 +62,53 @@ function judge(alts: string[], { max, blocked, onMark, qn }: { max: number; bloc
  *  يكدر يكتب الرقم بإيده هم ويدوس «تم» */
 function KeyboardMark({ qn, max, blocked, onMark }: { qn: number; max: number; blocked: string; onMark: (m: number) => void }) {
   const [on, setOn] = useState(false);
-  const [val, setVal] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const done = useRef(0);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const box = useRef<HTMLInputElement>(null);
+  // آخر كتابة شفناها بالمربع ووقتها: الآيفون يكتب الإملاء بطريقة ما تطلع أحداث للصفحة، فنقرا المربع نفسه كل شوية
+  const seen = useRef({ v: "", t: 0 });
+  const queue = useRef<string[]>([]);
+  const busy = useRef(false);
   const live = useRef({ qn, max, blocked, onMark });
   live.current = { qn, max, blocked, onMark };
-  useEffect(() => { if (read(KB_KEY) === "1") setOn(true); return () => { if (timer.current) clearTimeout(timer.current); }; }, []);
+  useEffect(() => { if (read(KB_KEY) === "1") setOn(true); }, []);
+  useEffect(() => {
+    if (!on) return;
+    const t = setInterval(() => {
+      const v = box.current?.value ?? "";
+      const now = Date.now();
+      if (v !== seen.current.v) { seen.current = { v, t: now }; return; }
+      // الكتابة وقفت ثانية وبيها شي جديد
+      if (now - seen.current.t >= 1000 && (v.length !== done.current)) take(v);
+    }, 300);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on]);
+  /** الدرجات تنحط وحدة وحدة: كل وحدة لسؤالها، وننتظر الصفحة تقلب قبل اللي بعدها */
+  function drain() {
+    if (busy.current) return;
+    const next = queue.current.shift();
+    if (next === undefined) return;
+    busy.current = true;
+    const r = judge([next], live.current);
+    setMsg(r);
+    if (!r.ok) queue.current = [];
+    setTimeout(() => { busy.current = false; drain(); }, r.ok ? 800 : 0);
+  }
   function take(text: string) {
-    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const r = newSpoken(text, done.current);
     done.current = r.done;
-    if (r.seg) setMsg(judge([r.seg], live.current));
+    if (r.seg) {
+      const parts = splitSpoken(r.seg);
+      if (parts && parts.length > 1) queue.current.push(...parts);
+      else queue.current.push(r.seg);
+      drain();
+    }
     // المربع ما يطول هواية
-    if (text.length > 120) { setVal(""); done.current = 0; }
-  }
-  function change(v: string) {
-    setVal(v);
-    if (timer.current) clearTimeout(timer.current);
-    // الكيبورد يكتب الكلمة على مراحل: ننتظر يوقف شوية
-    timer.current = setTimeout(() => take(v), 1200);
+    if (text.length > 120 && box.current) { box.current.value = ""; done.current = 0; seen.current = { v: "", t: Date.now() }; }
   }
   function toggle() {
-    const v = !on; setOn(v); write(KB_KEY, v ? "1" : "0"); setMsg(null); setVal(""); done.current = 0;
+    const v = !on; setOn(v); write(KB_KEY, v ? "1" : "0"); setMsg(null); done.current = 0; queue.current = [];
     if (v) setTimeout(() => box.current?.focus(), 50);
   }
   return (
@@ -93,12 +116,10 @@ function KeyboardMark({ qn, max, blocked, onMark }: { qn: number; max: number; b
       <button type="button" className={"gk-vm" + (on ? " on" : "")} title="الدرجة بمايك الكيبورد: يشتغل بكل مكان حتى تليگرام" onClick={toggle}>⌨️🎙 {on ? "مايك الكيبورد شغال" : "مايك الكيبورد"}</button>
       {on && (
         <div className="gk-vmbar">
-          <input ref={box} className="gk-kbin" dir="auto" value={val} autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="done"
+          <input ref={box} className="gk-kbin" dir="auto" defaultValue="" autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="done"
             placeholder={`دوس هنا، وبعدها 🎙 بالكيبورد، واحچي درجة س${qn}`}
-            onChange={(e) => change(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); take(val); setVal(""); done.current = 0; } }}
-            onBlur={() => { if (timer.current) take(val); }} />
-          <span className="gk-vmtext">{msg ? <span className={msg.ok ? "gk-vmok" : "gk-vmerr"}>{msg.text}</span> : `من 0 إلى ${max}. تكدر تكتب الرقم وتدوس «تم» هم`}</span>
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const el = e.currentTarget; take(el.value); el.value = ""; done.current = 0; seen.current = { v: "", t: Date.now() }; } }} />
+          <span className="gk-vmtext">{msg ? <span className={msg.ok ? "gk-vmok" : "gk-vmerr"}>{msg.text}</span> : `من 0 إلى ${max}. احچي درجة وحدة ووقف ثانية، أو كم درجة ورا بعض`}</span>
           <button type="button" className="gk-btn" onClick={toggle}>⏹ إطفاء</button>
         </div>
       )}

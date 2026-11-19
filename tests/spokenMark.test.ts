@@ -114,3 +114,16 @@ test("مايك الكيبورد: بس الكلام الجديد ينحسب", asy
   r = newSpoken("٧", r.done);
   assert.deepEqual(r, { seg: "٧", done: 1 });
 });
+
+test("كم درجة مرة وحدة: تنقسم، والرقم المركب يبقى واحد", async () => {
+  const { splitSpoken } = await import("../lib/spokenMark.ts");
+  assert.deepEqual(splitSpoken("20 20 0"), ["20", "20", "0"]);
+  assert.deepEqual(splitSpoken("٢٠ ٢٠ ٠"), ["20", "20", "0"]);
+  assert.deepEqual(splitSpoken("عشرين"), ["عشرين"]);
+  assert.deepEqual(splitSpoken("خمسه وعشرين عشرين"), ["خمسه وعشرين", "عشرين"]);
+  assert.deepEqual(splitSpoken("twenty five"), ["twenty five"]);
+  assert.deepEqual(splitSpoken("عشرين صفر"), ["عشرين", "صفر"]);
+  assert.deepEqual(splitSpoken("خمسه ونص"), ["خمسه ونص"]);
+  assert.equal(splitSpoken("هلو 20"), null);
+  assert.equal(splitSpoken(""), null);
+});

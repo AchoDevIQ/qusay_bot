@@ -147,3 +147,22 @@ export function newSpoken(text: string, done: number): { seg: string; done: numb
   const from = text.length < done ? 0 : done;
   return { seg: text.slice(from).trim(), done: text.length };
 }
+
+/** الكيبورد ممكن يكتب كم درجة ورا بعض مرة وحدة («20 20 0»): نقسمها لأقل عدد درجات، كل وحدة رقم واضح.
+ *  «خمسة وعشرين» تبقى وحدة. إذا اكو كلمة مو رقم، يرجع null (ما ينحفظ شي) */
+export function splitSpoken(raw: string): string[] | null {
+  const words = normalize(raw).split(" ").filter(Boolean);
+  if (!words.length) return null;
+  const best: (string[] | null)[] = Array(words.length + 1).fill(null);
+  best[0] = [];
+  for (let i = 1; i <= words.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (!best[j]) continue;
+      const chunk = words.slice(j, i).join(" ");
+      if (spokenNumber(chunk) === null) continue;
+      const cand = [...best[j]!, chunk];
+      if (!best[i] || cand.length < best[i]!.length) best[i] = cand;
+    }
+  }
+  return best[words.length];
+}
