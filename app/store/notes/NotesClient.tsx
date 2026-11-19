@@ -318,6 +318,7 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
       {!!sol && (
         <div className="ntsol">
           <div className="ntbar ntrasid">
+            <button type="button" className="gk-btn ntsolback" onClick={() => { haptic(); setSol(0); }}>⬅️ رجوع</button>
             <button type="button" className="gk-btn" onClick={() => setSol(0)}>📝 حلي</button>
             <button type="button" className="gk-btn on">📘 الحل النموذجي · صفحة {sol}</button>
           </div>
