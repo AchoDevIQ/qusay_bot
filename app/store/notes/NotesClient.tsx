@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { deviceId, deviceNow, haptic, platform, platformNow } from "../shared";
 import { COLORS } from "../grade/pens";
 
-type Book = { id: number; title: string; chapter: string; pages: number; kind?: string; section?: string; sol?: boolean; saved?: number };
+type Book = { id: number; title: string; chapter: string; lang?: string; pages: number; kind?: string; section?: string; sol?: boolean; saved?: number };
 type Toc = { t: string; p: number; items?: Toc[] };
 type Mark = { id: number; page: number; y: number; video: boolean; solution: boolean; q?: string };
 type Stroke = { c: string; w: number; h?: 1; p: number[] };
@@ -52,6 +52,8 @@ export default function NotesClient() {
   const [start, setStart] = useState(1);
   const [tocOf, setTocOf] = useState<Book | null>(null);
   const [chapter, setChapter] = useState("");
+  const [viewLang, setViewLang] = useState("en");
+  useEffect(() => { try { const l = localStorage.getItem("ntlang"); if (l) setViewLang(l); } catch { /* ما ينقرا */ } }, []);
   useEffect(() => { post({ action: "list" }).then((j) => setBooks(j.books)).catch((e) => setError((e as Error).message)); }, []);
   // الشاشة كلها للملزمة، والضغط المطول ما يطلع قائمة حفظ
   useEffect(() => {
@@ -61,7 +63,11 @@ export default function NotesClient() {
   }, []);
   if (open) return <Reader book={open} start={start} onClose={(saved) => { setBooks((l) => l?.map((b) => (b.id === open.id ? { ...b, saved } : b)) ?? l); setOpen(null); setStart(1); }} />;
   if (tocOf) return <TocPanel book={tocOf} onClose={() => setTocOf(null)} onPick={(n) => { void post({ action: "open", book: tocOf.id }).catch(() => undefined); setStart(n); setOpen(tocOf); setTocOf(null); }} />;
-  const chapters = [...new Set((books ?? []).map((b) => b.chapter))];
+  // صاحب البوت يشوف ملازم المنهجين: يختار عربي لو إنجليزي، فيطلعله بكل فصل نفس اللي يطلع للطالب
+  const langs = [...new Set((books ?? []).map((b) => b.lang ?? "all").filter((l) => l !== "all"))];
+  const pickLang = langs.length > 1 ? (langs.includes(viewLang) ? viewLang : langs[0]) : "";
+  const shown = (books ?? []).filter((b) => !pickLang || (b.lang ?? "all") === "all" || b.lang === pickLang);
+  const chapters = [...new Set(shown.map((b) => b.chapter))];
   // فصل واحد: يفتح أقسامه مباشرة. أكثر من فصل: يختار الفصل أول
   const ch = chapter || (chapters.length === 1 ? chapters[0] : "");
   return (
@@ -71,6 +77,11 @@ export default function NotesClient() {
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!books && !error && <div className="empty">جاري التحميل...</div>}
         {books && !books.length && <div className="empty">ماكو ملازم لفصولك بعد.</div>}
+        {pickLang && (
+          <div className="card ntlang">
+            {langs.map((l) => <button type="button" key={l} className={"btn" + (l === pickLang ? " on" : "")} onClick={() => { haptic(); setViewLang(l); setChapter(""); try { localStorage.setItem("ntlang", l); } catch { /* ما ينحفظ */ } }}>{l === "en" ? "🇬🇧 إنجليزي" : "🇮🇶 عربي"}</button>)}
+          </div>
+        )}
         {!ch && !!chapters.length && (
           <div className="card">
             <h2>اختار الفصل</h2>
@@ -82,7 +93,7 @@ export default function NotesClient() {
             {chapters.length > 1 && <button type="button" className="gk-btn" onClick={() => setChapter("")}>⬅️ الفصول</button>}
             <h2>{ch}</h2>
             <div className="ntlist">
-              {books!.filter((b) => b.chapter === ch).map((b) => {
+              {shown.filter((b) => b.chapter === ch).map((b) => {
                 const sec = SECTION_NAMES[b.section ?? ""];
                 return (
                   <div key={b.id} className="ntbook">
@@ -103,7 +114,7 @@ const SECTION_NAMES: Record<string, [string, string]> = {
   book: ["📘", "دفتر المحاضرات (أسئلة وأمثلة الكتاب)"],
   wz: ["📗", "دفتر المحاضرات (الأسئلة الوزارية)"],
   ith: ["📙", "دفتر المحاضرات (الأسئلة الإثرائية)"],
-  rasid: ["📝", "الدفتر الامتحاني (الراصد)"],
+  rasid: ["📝", "الراصد (رصد جميع الأسئلة الوزارية)"],
 };
 
 // الملزمة صفحات ورا بعض مثل ملف PDF: الطالب يسحب للأسفل ويقلب، ويكتب برقم الصفحة حتى يروح لها.

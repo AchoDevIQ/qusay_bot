@@ -15,7 +15,7 @@ const SECTIONS = [
   { key: "book", icon: "📘", title: "دفتر المحاضرات (أسئلة وأمثلة الكتاب)", word: "main", sol: false },
   { key: "wz", icon: "📗", title: "دفتر المحاضرات (الأسئلة الوزارية)", word: "exams", sol: true },
   { key: "ith", icon: "📙", title: "دفتر المحاضرات (الأسئلة الإثرائية)", word: "extra", sol: true },
-  { key: "rasid", icon: "📝", title: "الدفتر الامتحاني (الراصد)", word: "", sol: true },
+  { key: "rasid", icon: "📝", title: "الراصد (رصد جميع الأسئلة الوزارية)", word: "", sol: true },
 ] as const;
 const NUM: Record<string, number> = { الأول: 1, الاول: 1, الثاني: 2, الثالث: 3, الرابع: 4, الخامس: 5, السادس: 6 };
 const chapterNum = (c: string) => NUM[c.replace("الفصل", "").trim()] ?? 0;

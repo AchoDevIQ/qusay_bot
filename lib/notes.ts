@@ -50,10 +50,10 @@ export const SECTIONS = [
   { key: "book", title: "دفتر المحاضرات (أسئلة وأمثلة الكتاب)", icon: "📘", word: "main", sol: false },
   { key: "wz", title: "دفتر المحاضرات (الأسئلة الوزارية)", icon: "📗", word: "exams", sol: true },
   { key: "ith", title: "دفتر المحاضرات (الأسئلة الإثرائية)", icon: "📙", word: "extra", sol: true },
-  { key: "rasid", title: "الدفتر الامتحاني (الراصد)", icon: "📝", word: "", sol: true },
+  { key: "rasid", title: "الراصد (رصد جميع الأسئلة الوزارية)", icon: "📝", word: "", sol: true },
 ] as const;
 export type SectionKey = (typeof SECTIONS)[number]["key"];
-/** قسم الملزمة: الراصد قسمه الدفتر الامتحاني. الملازم اللي انرفعت قبل الأقسام ما إلها قسم ("") وتطلع باسمها */
+/** قسم الملزمة: الراصد قسمه الرابع. الملازم اللي انرفعت قبل الأقسام ما إلها قسم ("") وتطلع باسمها */
 export const sectionOf = (b: Row): SectionKey | "" => (b.kind === "rasid" ? "rasid" : SECTIONS.some((s) => s.key === b.section) ? b.section : "");
 /** «📝 حلي / 📘 الحل النموذجي»: الراصد، والوزارية والإثرائية إذا انرفع وياها ملف الحلول */
 export const hasSol = (b: Row) => b.kind === "rasid" || !!b.sol;
@@ -101,7 +101,7 @@ export async function noteAction(body: Row) {
   if (a === "list") {
     const books = await myBooks(uid);
     const marks = new Map((await find("note_bookmarks", { user_id: uid })).map((m) => [m.book_id as number, m.page as number]));
-    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, pages: b.pages, kind: b.kind ?? "book", section: sectionOf(b), sol: hasSol(b), saved: marks.get(b.id) ?? 0 })) };
+    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang ?? "all", pages: b.pages, kind: b.kind ?? "book", section: sectionOf(b), sol: hasSol(b), saved: marks.get(b.id) ?? 0 })) };
   }
   const b = await myBook(uid, body.book);
   // 📑 المواضيع: الموضوع، وبعده المحاضرة (أو السؤال بالراصد)، ويا رقم صفحتها

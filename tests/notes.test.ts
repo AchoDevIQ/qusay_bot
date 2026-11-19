@@ -140,7 +140,7 @@ test("📝 الراصد: صفحته عليها اسم الطالب بالهدر�
 
 test("📚 ملازمي: أقسام الفصل الأربعة بترتيبها، والقديمة بلا قسم تطلع بعدها", async () => {
   const { SECTIONS, sectionOf } = await import("../lib/notes.ts");
-  assert.deepEqual(SECTIONS.map((s) => s.title), ["دفتر المحاضرات (أسئلة وأمثلة الكتاب)", "دفتر المحاضرات (الأسئلة الوزارية)", "دفتر المحاضرات (الأسئلة الإثرائية)", "الدفتر الامتحاني (الراصد)"]);
+  assert.deepEqual(SECTIONS.map((s) => s.title), ["دفتر المحاضرات (أسئلة وأمثلة الكتاب)", "دفتر المحاضرات (الأسئلة الوزارية)", "دفتر المحاضرات (الأسئلة الإثرائية)", "الراصد (رصد جميع الأسئلة الوزارية)"]);
   assert.equal(sectionOf({ kind: "rasid" }), "rasid");
   assert.equal(sectionOf({ kind: "book", section: "wz" }), "wz");
   assert.equal(sectionOf({ kind: "book", section: null }), "");
