@@ -11,6 +11,8 @@ export function verifyInitData(raw: unknown, now = Date.now() / 1000): number | 
   // الصفحة المفتوحة من زر أسفل المحادثة ترسل رمزها الموقع بدل توقيع تليجرام
   if (raw.startsWith("tk:")) {
     // هذا الرمز يدخل لوحة التحكم، فيشتغل أسبوع بس من يوم انعمل. بعدها /start يجدده
+    // جلسة «افتحها بمتصفح التلفون»: 12 ساعة بس
+    if (raw.startsWith("tk:b")) return verifyBrowserToken(raw.slice(4), now);
     const uid = verifyHomeToken(raw.slice(3), now);
     const age = HOME_TTL_S - (Number(raw.slice(3).split(".")[1]) - now);
     return uid !== null && age <= PANEL_TTL_S ? uid : null;
@@ -49,6 +51,21 @@ export function verifyViewToken(t: unknown, now = Date.now() / 1000): number | n
   const uid = Number(u), exp = Number(e);
   if (!Number.isSafeInteger(uid) || !Number.isFinite(exp) || exp < now || !sig) return null;
   const want = Buffer.from(viewSig(uid, exp), "hex"), got = Buffer.from(sig, "hex");
+  return got.length === want.length && timingSafeEqual(got, want) ? uid : null;
+}
+// «🌐 افتحها بمتصفح التلفون» من التصحيح: بعد الرابط اللي يشتغل مرة وحدة، المتصفح ياخذ هذي الجلسة القصيرة
+export const BROWSER_TTL_S = 12 * 3600;
+const browserSig = (uid: number, exp: number) => hmac(hmac("QMathBrowser", TOKEN), `${uid}.${exp}`).toString("hex");
+export function browserToken(uid: number, now = Date.now() / 1000) {
+  const exp = Math.floor(now) + BROWSER_TTL_S;
+  return `b${uid}.${exp}.${browserSig(uid, exp)}`;
+}
+export function verifyBrowserToken(t: unknown, now = Date.now() / 1000): number | null {
+  if (typeof t !== "string" || !TOKEN) return null;
+  const [u, e, sig] = t.split(".");
+  const uid = Number(u), exp = Number(e);
+  if (!Number.isSafeInteger(uid) || !Number.isFinite(exp) || exp < now || exp - now > BROWSER_TTL_S + 60 || !sig) return null;
+  const want = Buffer.from(browserSig(uid, exp), "hex"), got = Buffer.from(sig, "hex");
   return got.length === want.length && timingSafeEqual(got, want) ? uid : null;
 }
 export function homeToken(uid: number, now = Date.now() / 1000) {

@@ -23,8 +23,9 @@ import { plainMath, stamp, todayStr } from "./util.ts";
 import { gradeCardPng } from "./documents.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { adminPageLink } from "./keyboards.ts";
-import { ApiError, authed, need } from "./webApi.ts";
-import { fileToken } from "./webAuth.ts";
+import { ApiError, authed, ensure, need } from "./webApi.ts";
+import { browserToken, fileToken } from "./webAuth.ts";
+import { makeBrowserCode, useBrowserCode } from "./browserLink.ts";
 import { setPenText } from "./inkText.ts";
 
 export const GRADE_PERM = "grade";
@@ -371,9 +372,20 @@ export async function deleteTests() {
   for (const st of (await find("students")).filter((x) => x.user_id < 0)) await remove("students", { user_id: st.user_id });
 }
 
+/** الرابط انفتح بمتصفح التلفون: يتبدل بجلسة 12 ساعة لنفس الحساب، إذا بعده عنده صلاحية التصحيح */
+export async function gradeBrowserOpen(body: Row) {
+  await ensure();
+  const uid = await useBrowserCode(body?.code);
+  need(uid !== null, "هذا الرابط انتهى أو انفتح قبل. ارجع لتليگرام ودوس «🌐 افتحها بمتصفح التلفون» مرة ثانية", 401);
+  need(await can(uid!, GRADE_PERM), "ما عندك صلاحية التصحيح", 403);
+  return { t: browserToken(uid!) };
+}
+
 export async function gradeAction(body: Row) {
   const uid = await authed(body?.initData, GRADE_PERM);
   const a = String(body.action ?? "");
+  // «🌐 افتحها بمتصفح التلفون»: رابط لنفس الحساب، يشتغل مرة وحدة ولمدة دقيقتين
+  if (a === "browserLink") return { code: await makeBrowserCode(uid) };
   let notice = "";
   let paper: Row | null = null;
   if (a === "ink") {

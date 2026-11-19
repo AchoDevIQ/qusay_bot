@@ -94,11 +94,12 @@ export function haptic() {
   try { tg()?.HapticFeedback?.selectionChanged(); } catch { /* مو مدعوم */ }
 }
 /** يفتح رابط واتساب أو تليجرام خارج الصفحة */
-export function openOutside(url: string) {
-  const w = tg() as unknown as { openLink?(u: string): void; openTelegramLink?(u: string): void } | undefined;
+export function openOutside(url: string, phoneBrowser = false) {
+  const w = tg() as unknown as { openLink?(u: string, o?: { try_browser?: string }): void; openTelegramLink?(u: string): void; platform?: string } | undefined;
   try {
     if (url.startsWith("https://t.me/") && w?.openTelegramLink) return w.openTelegramLink(url);
-    if (w?.openLink) return w.openLink(url);
+    // phoneBrowser: بالأندرويد نطلب كروم نفسه، مو متصفح تليگرام الداخلي (الصوت ما يشتغل بيه)
+    if (w?.openLink) return phoneBrowser && /android/.test(w.platform ?? "") ? w.openLink(url, { try_browser: "chrome" }) : w.openLink(url);
   } catch { /* نسخة قديمة */ }
   window.open(url, "_blank");
 }

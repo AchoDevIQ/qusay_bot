@@ -4,7 +4,7 @@
 // داخل تليجرام على الأندرويد ما موجود، فالزر ما يطلع وتطلع جملة تشرح ليش
 import { useEffect, useRef, useState } from "react";
 import { pickMark } from "../../../lib/spokenMark.ts";
-import { pageToken } from "../adminPage";
+import { pageAuth } from "../adminPage";
 import { openOutside } from "../shared";
 
 const ON_KEY = "gradeVoiceMark";
@@ -28,17 +28,21 @@ const ctor = (): RecCtor | null => {
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* بدون حفظ */ } };
 
+/** الصفحة داخل تطبيق (تليگرام ومتصفحه الداخلي وغيره)، مو متصفح كروم أو سفاري:
+ *  بالأندرويد علامته «wv»، وبالآيفون ماكو كلمة سفاري */
+export function inAppView() {
+  const ua = navigator.userAgent;
+  return (/Android/i.test(ua) && /; wv\)/.test(ua)) || (/iPhone|iPad|iPod/.test(ua) && !/Safari\//.test(ua));
+}
+
 /** ليش الصوت ما يشتغل بهذا الجهاز، أو "" إذا يشتغل */
 function whyNot(): string {
-  const ua = navigator.userAgent;
   const tgOf = (w: Window) => (w as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform ?? "";
   let plat = tgOf(window);
   try { if (!plat || plat === "unknown") plat = tgOf(window.parent); } catch { /* */ }
   // داخل تليجرام (أندرويد، آيفون، كمبيوتر): سماع الكلام ما موجود أو يخرب، حتى لو الصفحة تكول موجود
   if (["android", "android_x", "ios", "tdesktop", "macos"].includes(plat)) return "inside";
-  // داخل أي تطبيق ثاني: بالأندرويد علامته «wv»، وبالآيفون ماكو كلمة سفاري
-  if (/Android/i.test(ua) && /; wv\)/.test(ua)) return "inside";
-  if (/iPhone|iPad|iPod/.test(ua) && !/Safari\//.test(ua)) return "inside";
+  if (inAppView()) return "inside";
   if (!ctor()) return "browser";
   return "";
 }
@@ -54,6 +58,18 @@ export default function VoiceMark({ qn, max, blocked, onMark }: {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteHidden, setNoteHidden] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [openErr, setOpenErr] = useState("");
+  /** رابط مرة وحدة لنفس الحساب، وينفتح بمتصفح التلفون (مو داخل تليگرام) */
+  async function openInBrowser() {
+    setOpening(true); setOpenErr("");
+    try {
+      const res = await fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "browserLink" }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.code) { setOpenErr(j.error ?? "صار خطأ، حاول مرة ثانية"); return; }
+      openOutside(`${location.origin}/store/grade?go=${encodeURIComponent(j.code)}`, true);
+    } catch { setOpenErr("ماكو اتصال، حاول مرة ثانية"); } finally { setOpening(false); }
+  }
   const rec = useRef<Rec | null>(null);
   const onRef = useRef(false);
   const restart = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -146,10 +162,9 @@ export default function VoiceMark({ qn, max, blocked, onMark }: {
   if (why === null) return null;
   if (why) {
     if (noteHidden) return null;
-    const tok = pageToken();
     return (
       <>
-        <button type="button" className="gk-vm-why" onClick={() => setNoteOpen(true)}>🎤 الدرجة بالصوت؟</button>
+        <button type="button" className="gk-vm-why" onClick={() => setNoteOpen(true)}>{why === "inside" ? "🎤 الدرجة بالصوت: افتحها بالمتصفح" : "🎤 الدرجة بالصوت؟"}</button>
         {noteOpen && (
           <div className="gk-modal" onClick={() => setNoteOpen(false)}>
             <div className="gk-dialog" onClick={(e) => e.stopPropagation()}>
@@ -159,9 +174,11 @@ export default function VoiceMark({ qn, max, blocked, onMark }: {
                 : why === "service"
                   ? "الجهاز رافض سماع الكلام. بالآيفون والآيباد: شغّل «الإملاء» من الإعدادات ← عام ← لوحة المفاتيح، وافتح الصفحة بسفاري. وبالأندرويد افتحها بكروم."
                   : "هذا المتصفح ما بي سماع الكلام. افتح صفحة التصحيح بمتصفح كروم (بالأندرويد) أو سفاري (بالآيفون والآيباد) وراح يطلع زر 🎤."}</div>
+              {why === "inside" && <div className="gk-lbl">الزر الأخضر يفتح نفس صفحة التصحيح بكروم أو سفاري وإنت داخل بحسابك، بدون رمز. الرابط يشتغل مرة وحدة ولمدة دقيقتين. هناك افتح الورقة ودوس «🎤 بالصوت».</div>}
+              {openErr && <div className="gk-err">⚠️ {openErr}</div>}
               <div className="gk-lbl">الدوس على الدرجات يبقى يشتغل مثل قبل.</div>
               <div className="gk-tools">
-                {tok && <button type="button" className="gk-finish" onClick={() => openOutside(`${location.origin}/store/grade?t=${encodeURIComponent(tok)}`)}>🌐 افتح التصحيح بالمتصفح</button>}
+                {why === "inside" && <button type="button" className="gk-finish" disabled={opening} onClick={() => void openInBrowser()}>{opening ? "جاري التجهيز..." : "🌐 افتحها بمتصفح التلفون حتى يشتغل الصوت"}</button>}
                 <button type="button" className="gk-btn" onClick={() => setNoteOpen(false)}>تمام</button>
                 <button type="button" className="gk-btn" onClick={() => { write(HIDE_KEY, "1"); setNoteHidden(true); setNoteOpen(false); }}>لا تطلع هالزر بعد</button>
               </div>
