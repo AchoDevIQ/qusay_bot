@@ -242,3 +242,14 @@ test("📤 ورقة مصححة كلها وما انرسلت (النت انقطع
   await g(30, "finish", { id: u });
   assert.ok(!(await g(30, "list")).unsent.some((p: any) => p.id === u));
 });
+
+test("مصححين اثنين بنفس اللحظة: كل واحد تنحجزله ورقة غير، والمحجوزة ما تنفتح للثاني", async () => {
+  await put("staff", { user_id: 31, name: "مصحح ثاني", perms: "grade" });
+  await paper(91, v2, e2);
+  const [x, y] = await Promise.all([g(30, "openNext", { light: 1, exam: e2, skip: [] }), g(31, "openNext", { light: 1, exam: e2, skip: [] })]);
+  assert.ok(x.paper && y.paper, "الاثنين لگوا ورقة");
+  assert.notEqual(x.paper.id, y.paper.id, "ما ياخذون نفس الورقة");
+  assert.equal(Number((await one("sched_items", { id: x.paper.id }))!.grader_id), 30);
+  assert.equal(Number((await one("sched_items", { id: y.paper.id }))!.grader_id), 31);
+  await assert.rejects(g(31, "open", { id: x.paper.id }), (e: any) => e.status === 409);
+});

@@ -579,9 +579,14 @@ async function syncGeneral(uid: number, sc: Row, s: SchedSettings) {
   const days = await placeDays(sc.center_id);
   const picks = picksOf(sc);
   const items = await find("sched_items", { user_id: uid });
-  const late = new Set((await lateExams(uid, sc, s)).map((e) => e.id));
+  const lateList = await lateExams(uid, sc, s);
+  const late = new Set(lateList.map((e) => e.id));
+  // فصل تعويضي وبعده ما سوى جدول تعويضه (قاعدة الأستاذ 2026-11-20): ولا امتحان من هذا الفصل ينحط بجدوله،
+  // فما ينحسب غايب. من يسوي جدول التعويض، الجاي من الفصل يرجع ويا الطلاب، والغياب يبدي من بعدها
+  const held = new Set(lateList.length && await hasMakeup(lateList) ? lateList.flatMap((e) => labelChapters(String(e.chapter ?? ""))) : []);
   const wanted: string[] = [];
   for (const e of remaining(await boughtExams(uid), items)) {
+    if (labelChapters(String(e.chapter ?? "")).some((c) => held.has(c))) continue;
     const at = days.has(e.id) && !late.has(e.id) ? pickedAt(days.get(e.id)!, picks) : null;
     if (at) wanted.push(`${e.id}|${at}`);
   }

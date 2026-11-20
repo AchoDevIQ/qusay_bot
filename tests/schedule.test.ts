@@ -256,7 +256,7 @@ test("الوقت لكل يوم مستقل، ومواعيد المكان توصل
   const j83 = await act(183, "joinPlace", { picks });
   assert.equal(j83.late.length, 2);
   assert.equal(j83.catchup, true);
-  assert.equal(j83.items.length, 1);
+  assert.equal(j83.items.length, 0);   // لحد ما يسوي تعويضه ولا امتحان من الفصل بجدوله
   // وبعده ما اختار تعويضه: كلشي غير امتحاناتي مقفول
   const { needsSchedule } = await import("../lib/schedApi.ts");
   assert.equal(await needsSchedule(183), true);
@@ -269,6 +269,8 @@ test("الوقت لكل يوم مستقل، ومواعيد المكان توصل
   const j84 = await act(184, "joinPlace", { picks });
   assert.equal(j84.late.length, 1);
   assert.equal(j84.catchup, true);
+  // لحد ما يسوي جدول تعويضه: ولا امتحان من الفصل التعويضي بجدوله، فما ينحسب غايب
+  assert.equal(j84.items.filter((i: any) => i.at && !String(i.state).startsWith("notbought")).length, 0);
   // يختار كم امتحان بالأسبوع وبيا أيام (ما محدد بداية الفصل الجاي: كله مكثف)
   const day84 = j84.catchPlan.week[0].d;
   await assert.rejects(act(184, "lateCatchup", { hour: j84.catchHours[0] }), /كم امتحان بالأسبوع/);
@@ -279,7 +281,10 @@ test("الوقت لكل يوم مستقل، ومواعيد المكان توصل
   assert.equal(cu.length, 1);
   assert.equal(Number(cu[0].fixed), 1);
   assert.ok(String(cu[0].at) > todayStr(), "من باچر");
-  assert.ok((await act(184, "info")).items.some((i: any) => i.catchup), "يطلع بجدوله وما ينمسح");
+  const after84 = await act(184, "info");
+  assert.ok(after84.items.some((i: any) => i.catchup), "يطلع بجدوله وما ينمسح");
+  // بعد جدول التعويض: الجاي من الفصل يرجع ويا الطلاب
+  assert.ok(after84.items.some((i: any) => !i.catchup && i.state !== "notbought"), "الجاي ويا الطلاب");
   await setMakeup("الفصل الأول", false);
 
   calls.length = 0;

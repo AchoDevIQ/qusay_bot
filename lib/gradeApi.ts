@@ -6,7 +6,7 @@ import { ADMIN_IDS } from "./config.ts";
 import { runCheckpoints } from "./checkpoints.ts";
 import path from "node:path";
 import { addMinutes } from "./scheduleRules.ts";
-import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
 import { can, AI_GRADER, examLabel, isAdmin, staffIds, staffName, staffRow, student } from "./data.ts";
 import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
@@ -43,6 +43,15 @@ async function paperRow(it: Row) {
   const v = it.version_id ? await one("bank_versions", { id: it.version_id }) : null;
   const general = (await one("schedules", { user_id: it.user_id }))?.mode === "general";
   return { id: it.id, exam: it.exam_id, general, optional: it.kind === "optional", out: it.user_id > 0 && outOf(it), name: await nameOf(it), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", submitted: it.submitted_at ?? "", total: it.total ?? null, graded: it.graded_at ?? "", test: isTest(it), grader: it.grader_id ? await staffName(it.grader_id) : "" };
+}
+/** يحجز الورقة لهذا المصحح بنفس اللحظة (معاملة وحدة): إذا مصحح ثاني سبقه، ترجع false وما تنفتح */
+async function claimPaper(uid: number, id: number) {
+  return await tx(async () => {
+    const cur = await one("sched_items", { id });
+    if (!cur || cur.status !== "done" || cur.graded_at || (cur.grader_id && cur.grader_id !== uid)) return false;
+    if (!cur.grader_id) await update("sched_items", { id }, { grader_id: uid });
+    return true;
+  });
 }
 /** الأوراق اللي يگدر يصححها: ما انصححت، وما أخذها غيره، ومن فصوله */
 async function waitingFor(uid: number, papers: Row[]) {
@@ -437,9 +446,25 @@ export async function gradeAction(body: Row) {
     const it = await one("sched_items", { id: Number(body.id) });
     need(it?.status === "done", "الورقة غير موجودة");
     need(!it!.grader_id || it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
-    if (!it!.graded_at) need((await waitingFor(uid, [it!])).length, "هذا الموضوع مو من مواضيعك", 403);
-    if (!it!.grader_id) await update("sched_items", { id: it!.id }, { grader_id: uid });
+    if (!it!.graded_at) {
+      need((await waitingFor(uid, [it!])).length, "هذا الموضوع مو من مواضيعك", 403);
+      need(await claimPaper(uid, it!.id), "هذي الورقة أخذها مصحح ثاني", 409);
+    }
     paper = await paperView((await one("sched_items", { id: it!.id }))!);
+  } else if (a === "openNext") {
+    // الورقة الجاية: السيرفر يختار أول ورقة فاضية ويحجزها بنفس اللحظة، فمصححين اثنين ما ياخذون نفس الورقة
+    const skip = new Set((Array.isArray(body.skip) ? body.skip : []).map(Number));
+    const exam = Number(body.exam) || 0, general = body.general === true || body.general === "true" ? true : body.general === false || body.general === "false" ? false : null;
+    const gen = new Set((await find("schedules", { mode: "general" })).map((x) => x.user_id));
+    const all = (await waitingFor(uid, await find("sched_items", { status: "done" }, { order: ["submitted_at"] })))
+      .filter((p) => !skip.has(p.id) && (!exam || p.exam_id === exam) && (general === null || gen.has(p.user_id) === general));
+    // ورقة حاجزها هو من قبل أول، وبعدها الفاضيات بالترتيب
+    for (const p of [...all.filter((x) => x.grader_id === uid), ...all.filter((x) => !x.grader_id)]) {
+      if (!await claimPaper(uid, p.id)) continue;
+      paper = await paperView((await one("sched_items", { id: p.id }))!);
+      break;
+    }
+    if (!paper) return { paper: null, done: true, notice };
   } else if (a === "find") {
     // البحث عن طالب حتى تتعدل ورقته المصححة
     need(await can(uid, EDIT_PERM), "ما عندك صلاحية تعديل التصحيح", 403);
@@ -564,7 +589,7 @@ export async function gradeAction(body: Row) {
     notice = pick(body.ids).length || Object.keys(chapters).length ? "✅ انحفظ: أوراق الاستثناء والتعويض تروح للمصححين اللي اخترتهم" : "✅ رجعت أوراق الاستثناء والتعويض حسب مركز الطالب";
   } else need(a === "list", "أمر غير معروف");
   // فتح ورقة: الورقة بس، والقائمة اللي عند المصحح تبقى (هي اللي چانت تأخر الفتح)
-  if (body.light && a === "open") return { paper, notice };
+  if (body.light && (a === "open" || a === "openNext")) return { paper, notice };
   return { ...await listData(uid), paper, notice };
 }
 /** صور الورقة المصححة تنحفظ يم صاحب البوت، حتى يشوفها من صفحة الطالب. بعد الاعتراض تتبدل بالجديدة */

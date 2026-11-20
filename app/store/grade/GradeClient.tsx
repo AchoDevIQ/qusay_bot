@@ -69,6 +69,12 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
       void call({ action: "list" });
     })();
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  // القائمة تتحدث كل 20 ثانية وهو بيها: الورقة اللي فتحها مصحح ثاني تختفي
+  useEffect(() => {
+    if (paper || allDone || tab !== "papers" || only) return;
+    const t = setInterval(() => { if (document.visibilityState === "visible") void call({ action: "list" }); }, 20000);
+    return () => clearInterval(t);
+  }, [paper, allDone, tab]); // eslint-disable-line react-hooks/exhaustive-deps
   // ورقة بعدها ما وصلت: الصفحة تنبه قبل ما تنسد
   useEffect(() => {
     if (!savingLeft) return;
@@ -77,7 +83,22 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
     return () => window.removeEventListener("beforeunload", warn);
   }, [savingLeft]);
   // فتح ورقة: السيرفر يرجع الورقة بس (بدون القائمة كلها)، حتى تنفتح أسرع
-  const act: Call = async (b) => { const light = b.action === "open"; const r = await call(light ? { ...b, light: 1 } : b, light); if (r?.paper) setPaper(r.paper); return r; };
+  const act: Call = async (b) => {
+    const light = b.action === "open";
+    const r = await call(light ? { ...b, light: 1 } : b, light);
+    if (r?.paper) setPaper(r.paper);
+    // الورقة أخذها مصحح ثاني قبله: القائمة تتحدث حتى تختفي
+    else if (!r && light) void call({ action: "list" });
+    return r;
+  };
+  /** الورقة الجاية: السيرفر يختارها ويحجزها بنفس اللحظة، فما تطلع لمصححين اثنين */
+  const openNext = async (exclude: number[] = []) => {
+    const [exam, general] = (group.current ?? "").split("|");
+    const r = await call({ action: "openNext", light: 1, exam: group.current ? Number(exam) : 0, general: group.current ? general === "true" : null, skip: [...skipped.current, ...saving.current, ...exclude] }, true);
+    if (r?.paper) setPaper(r.paper);
+    else if (r) { setAllDone(true); void call({ action: "list" }); }
+    return r;
+  };
   // جاي من ملف الطالب: تنفتح الورقة للتعديل مباشرة
   const editOpened = useRef(false);
   useEffect(() => {
@@ -126,17 +147,13 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
     }
     // تعديل ورقة مصححة: يرجع للقائمة، ما تنفتح ورقة ثانية
     if (p.editing) { setPaper(null); setTimeout(() => void call({ action: "list" }), 1500); return; }
-    const nextPaper = data?.waiting.find((x) => x.id !== p.id && inGroup(x) && !skipped.current.has(x.id) && !saving.current.has(x.id));
     setPaper(null);
-    if (nextPaper) void act({ action: "open", id: nextPaper.id });
-    else setAllDone(true);
+    void openNext([p.id]);
   }
   /** بعد ما تتخطى، تنفتح الورقة اللي بعدها وحدها */
-  async function next(r: Data | null) {
-    const p = r?.waiting.find((x) => inGroup(x) && !skipped.current.has(x.id));
+  async function next(_r: Data | null) {
     setPaper(null);
-    if (p) await act({ action: "open", id: p.id });
-    else setAllDone(true);
+    await openNext();
   }
   return (
     <>
@@ -185,8 +202,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
             {tab === "papers" && data.canEdit && <EditFind found={data.found ?? null} busy={busy} act={act} />}
             {tab === "papers" && <List data={data} busy={busy} act={act} openGroup={(g) => {
               group.current = `${g.exam}|${g.general}`; skipped.current.clear();
-              const p = data.waiting.find(inGroup);
-              if (p) void act({ action: "open", id: p.id });
+              void openNext();
             }} />}
             {tab === "history" && data.history && <HistoryTab h={data.history} busy={busy} owner={data.owner} act={act} />}
             {tab === "objlog" && data.objLog && <ObjLogTab h={data.objLog} busy={busy} act={act} />}
