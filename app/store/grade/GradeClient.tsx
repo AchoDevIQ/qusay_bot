@@ -69,10 +69,22 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
       void call({ action: "list" });
     })();
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
-  // القائمة تتحدث كل 20 ثانية وهو بيها: الورقة اللي فتحها مصحح ثاني تختفي
+  // وهو بالقائمة: كل 4 ثواني فحص خفيف، وإذا ورقة انحجزت لمصحح ثاني القائمة تتحدث وتختفي. والأوراق الجديدة كل دقيقة
+  const waitingIds = useRef<number[]>([]);
+  waitingIds.current = (data?.waiting ?? []).map((x) => x.id);
   useEffect(() => {
     if (paper || allDone || tab !== "papers" || only) return;
-    const t = setInterval(() => { if (document.visibilityState === "visible") void call({ action: "list" }); }, 20000);
+    let n = 0;
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (++n % 15 === 0) { void call({ action: "list" }); return; }
+      void fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "free", initData: pageAuth() }) })
+        .then((r) => (r.ok ? r.json() : null)).then((j: { free?: number[] } | null) => {
+          if (!j?.free) return;
+          const free = new Set(j.free);
+          if (waitingIds.current.some((id) => !free.has(id))) void call({ action: "list" });
+        }).catch(() => {});
+    }, 4000);
     return () => clearInterval(t);
   }, [paper, allDone, tab]); // eslint-disable-line react-hooks/exhaustive-deps
   // ورقة بعدها ما وصلت: الصفحة تنبه قبل ما تنسد

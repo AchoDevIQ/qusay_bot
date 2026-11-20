@@ -253,3 +253,11 @@ test("مصححين اثنين بنفس اللحظة: كل واحد تنحجزل�
   assert.equal(Number((await one("sched_items", { id: y.paper.id }))!.grader_id), 31);
   await assert.rejects(g(31, "open", { id: x.paper.id }), (e: any) => e.status === 409);
 });
+
+test("الفحص الخفيف: الورقة اللي حجزها مصحح ثاني ما تطلع بالفاضيات", async () => {
+  const p = await paper(92, v2, e2);
+  assert.ok((await g(31, "free")).free.includes(p));
+  await g(30, "open", { id: p });
+  assert.ok(!(await g(31, "free")).free.includes(p));
+  assert.ok((await g(30, "free")).free.includes(p));
+});

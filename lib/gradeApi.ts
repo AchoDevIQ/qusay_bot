@@ -436,6 +436,11 @@ export async function gradeAction(body: Row) {
     if (a === "voiceUse") await useVoice(it.id, it.exam_id, body.vid); else await dropFromPaper(it.id, body.n);
     return { ok: true, ...await voicesOf(it) };
   }
+  if (a === "free") {
+    // فحص خفيف كل كم ثانية: الأوراق اللي بعدها فاضية (ما انصححت وما أخذها مصحح ثاني)، حتى القائمة تشيل اللي انحجزت
+    const rows = await find("sched_items", { status: "done" });
+    return { free: rows.filter((p) => !p.graded_at && (!p.grader_id || p.grader_id === uid)).map((p) => p.id as number) };
+  }
   if (a === "voiceDel") {
     const it = await one("sched_items", { id: Number(body.id) });
     need(it?.exam_id, "الورقة غير موجودة");
