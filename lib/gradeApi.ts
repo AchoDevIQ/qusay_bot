@@ -94,6 +94,7 @@ async function listData(uid: number) {
   const mine = papers.filter((p) => p.graded_at && (p.grader_id === uid)).slice(-30).reverse();
   return {
     canEdit: await can(uid, EDIT_PERM),
+    canCheck: await can(uid, CHECK_PERM),
     only: await isAdmin(uid) ? await onlyData() : undefined,
     objections: await objectionPapers(uid),
     // مصححة كلها وما انرسلت (النت انقطع عند المصحح): يفتحها ويضغط حفظ
@@ -235,6 +236,51 @@ async function myPaper(uid: number, raw: unknown) {
 }
 // تعديل ورقة مصححة: صاحب الصلاحية يفتحها، وتبقى مفتوحة إله لحد ما يحفظها
 const EDIT_PERM = "editgrade";
+/** فحص المصححين: صاحب البوت أو اللي عنده هاي الصلاحية يشوف أوراق كل مصحح ويقلب بيها عشوائي */
+export const CHECK_PERM = "gcheck";
+const checkedKey = (g: number) => `gcheck_${g}`;
+async function checkedOf(g: number): Promise<Set<number>> {
+  try { const j = JSON.parse(await kvGet(checkedKey(g)) ?? "[]"); return new Set(Array.isArray(j) ? j.map(Number) : []); } catch { return new Set(); }
+}
+const avgOf = (ps: Row[]) => (ps.length ? Math.round(ps.reduce((t, p) => t + (Number(p.total) || 0), 0) / ps.length) : null);
+/** المصححين وكم ورقة صحح كل واحد، وإذا اختار مصحح: مواضيعه ويا معدله ومعدل باقي المصححين بنفس الموضوع */
+export async function checkData(rawGrader?: unknown) {
+  const graded = (await find("sched_items", { status: "done" })).filter((p) => p.graded_at && !isTest(p));
+  const gOf = (p: Row) => Number(p.grader_id) || 0;
+  const by = new Map<number, Row[]>();
+  for (const p of graded) { const g = gOf(p); if (!by.has(g)) by.set(g, []); by.get(g)!.push(p); }
+  const graders = await Promise.all([...by].map(async ([g, ps]) => {
+    const seen = await checkedOf(g);
+    return { id: g, name: g ? await staffName(g) : "بدون مصحح", count: ps.length, checked: ps.filter((p) => seen.has(p.id)).length, last: ps.map((p) => String(p.graded_at)).sort().at(-1) ?? "" };
+  }));
+  graders.sort((a, b) => b.count - a.count);
+  const grader = rawGrader === undefined || rawGrader === null || rawGrader === "" ? null : Number(rawGrader);
+  let topics: Row[] | null = null;
+  if (grader !== null && by.has(grader)) {
+    const seen = await checkedOf(grader);
+    const exams = new Map((await find("bank_exams")).map((e) => [e.id, e]));
+    const per = new Map<number, Row[]>();
+    for (const p of by.get(grader)!) { if (!per.has(p.exam_id)) per.set(p.exam_id, []); per.get(p.exam_id)!.push(p); }
+    topics = [...per].map(([exam, ps]) => ({
+      exam, title: String(exams.get(exam)?.title ?? "امتحان"), chapter: String(exams.get(exam)?.chapter ?? ""), count: ps.length,
+      checked: ps.filter((p) => seen.has(p.id)).length, avg: avgOf(ps), others: avgOf(graded.filter((p) => p.exam_id === exam && gOf(p) !== grader)),
+    })).sort((a, b) => a.chapter.localeCompare(b.chapter) || a.title.localeCompare(b.title));
+  }
+  return { graders, grader: grader !== null && by.has(grader) ? grader : null, name: grader !== null ? graders.find((g) => g.id === grader)?.name ?? "" : "", topics };
+}
+/** ورقة عشوائية من أوراق هذا المصحح (وهذا الموضوع إذا اختاره)، من اللي بعده ما شافها. تنحسب إنه شافها */
+export async function checkRandom(rawGrader: unknown, rawExam: unknown) {
+  const grader = Number(rawGrader) || 0, exam = Number(rawExam) || 0;
+  const ps = (await find("sched_items", { status: "done" })).filter((p) => p.graded_at && !isTest(p) && (Number(p.grader_id) || 0) === grader && (!exam || p.exam_id === exam));
+  need(ps.length, "ماكو أوراق صححها هذا المصحح هنا");
+  const seen = await checkedOf(grader);
+  const fresh = ps.filter((p) => !seen.has(p.id));
+  const pool = fresh.length ? fresh : ps;
+  const it = pool[Math.floor(Math.random() * pool.length)];
+  seen.add(it.id);
+  await kvSet(checkedKey(grader), JSON.stringify([...seen].slice(-3000)));
+  return { it, again: !fresh.length };
+}
 const editKey = (item: number) => `grade_edit_${item}`;
 const isEditing = async (uid: number, item: number) => Number(await kvGet(editKey(item))) === uid && await can(uid, EDIT_PERM);
 /** ورقة يشتغل عليها: قبل الدرجة لازم تكون لهذا المصحح، وبعدها بس إذا عليها اعتراض ينتظر وهو يگدر يرد عليه */
@@ -584,6 +630,14 @@ export async function gradeAction(body: Row) {
     need(!until || until > stamp(), "الوقت لازم يكون جاي، مو فايت");
     await setGradeOnly(exam, ids, until);
     notice = ids.length ? `✅ أوراق هذا الامتحان تطلع لـ ${ids.length} مصحح بس${until ? ` لحد ${until}` : ""}` : "✅ رجع لكل المصححين";
+  } else if (a === "check" || a === "checkRandom") {
+    need(await can(uid, CHECK_PERM), "ما عندك صلاحية فحص المصححين", 403);
+    if (a === "checkRandom") {
+      const { it, again } = await checkRandom(body.grader, body.exam);
+      paper = await paperView(it);
+      if (again) notice = "كل أوراقه هنا شفتها، هاي وحدة منها من جديد";
+    }
+    return { ...await listData(uid), paper, notice, check: await checkData(body.grader) };
   } else if (a === "outSave") {
     // مصححين أوراق الاستثناء والتعويض: لكل الفصول، ولكل فصل إذا يريد غيرهم
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
