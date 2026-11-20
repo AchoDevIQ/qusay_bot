@@ -27,6 +27,7 @@ import { ApiError, authed, ensure, need } from "./webApi.ts";
 import { browserToken, fileToken } from "./webAuth.ts";
 import { makeBrowserCode, useBrowserCode } from "./browserLink.ts";
 import { setPenText } from "./inkText.ts";
+import { qusayHeld } from "./qusayGrade.ts";
 
 export const GRADE_PERM = "grade";
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -58,6 +59,8 @@ async function waitingFor(uid: number, papers: Row[]) {
   const scope = await gradeScope(uid);
   // أوراق ينتظرها نظام التصحيح AI ما تطلع. والورقة اللي حولها لهذا المصحح تطلعله حتى لو مو من فصوله
   const held = await aiHeld(papers);
+  // وأوراق ينتظرها «تصحيح قصي» (دقيقة تقريباً)
+  for (const id of await qusayHeld(papers)) held.add(id);
   // أول أوراق المواضيع اللي يصححها نظام التصحيح: بس لصاحب البوت وللمساعد اللي عنده صلاحية 🎓
   const calib = await aiCalibIds(papers);
   const mayCalib = ADMIN_IDS.includes(uid) || String((await staffRow(uid))?.perms ?? "").split(",").includes(CALIB_PERM);

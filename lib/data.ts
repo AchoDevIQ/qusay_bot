@@ -210,8 +210,11 @@ export async function officeUnsettled(oid: number) {
 }
 /** رقم المصحح الآلي بالأوراق اللي صححها (مو حساب تليجرام) */
 export const AI_GRADER = -7;
+/** رقم «تصحيح قصي» بالأوراق اللي صححها (مصحح الأستاذ الثاني، lib/qusayGrade.ts) */
+export const QUSAY_GRADER = -8;
 export async function staffName(uid: number | null | undefined) {
   if (uid === AI_GRADER) return "🤖 نظام التصحيح AI";
+  if (uid === QUSAY_GRADER) return "🧠 تصحيح قصي";
   if (uid != null && await isAdmin(uid)) return "قصي العميري";
   if (uid == null) return "مساعد";
   const u = await one("office_users", { user_id: uid });

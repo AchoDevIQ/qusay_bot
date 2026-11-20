@@ -58,6 +58,8 @@ export async function cronTick(key: unknown) {
   await kvSet(AI_LOCK, String(Date.now()));
   try {
     await step("ai", () => aiGradeTick(finishByAi, paperName));
+    // «تصحيح قصي»: مصحح الأستاذ الثاني، طافي إلا إذا شغله من صفحته
+    await step("qusay", async () => (await import("./qusayGrade.ts")).qusayTick(finishByAi));
     await step("aiDraft", () => draftQueueTick(ADMIN_IDS[0] ?? 0));
     await step("qaExams", () => examQueueTick());
     await step("qaRetry", () => qaRetryTick());

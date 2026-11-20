@@ -200,6 +200,7 @@ export async function notifyGraders() {
   const all = (await find("sched_items", { status: "done" })).filter((p) => !p.graded_at);
   // أوراق ينتظرها نظام التصحيح AI ما ينبلغ بيها أحد
   const held = await aiHeld(all);
+  for (const id of await (await import("./qusayGrade.ts")).qusayHeld(all)) held.add(id);
   const papers = all.filter((p) => !held.has(p.id));
   if (!papers.length) return 0;
   const now = stamp().slice(0, 16);

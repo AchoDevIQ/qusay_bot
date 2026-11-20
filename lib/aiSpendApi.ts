@@ -22,6 +22,7 @@ export async function spendReport(day = stamp().slice(0, 10)) {
     { key: "grade", label: "📝 التصحيح (نظام التصحيح AI)", today: g(day), month: g(month), all: g("") },
     { key: "qa", label: "❓ الأسئلة العلمية", today: spentIn(d, "qa", day), month: spentIn(d, "qa", month), all: Math.max(await qaSpentAll(), spentIn(d, "qa", "")) },
     { key: "pen", label: "🖊 قلم المصحح (يتحول نص)", today: spentIn(d, "pen", day), month: spentIn(d, "pen", month), all: Math.max((await penTextUsage()).cost, spentIn(d, "pen", "")) },
+    { key: "qusay", label: "🧠 تصحيح قصي", today: spentIn(d, "qusay", day), month: spentIn(d, "qusay", month), all: spentIn(d, "qusay", "") },
   ];
   const rows: SpendRow[] = raw.map((x) => ({ ...x, today: r4(x.today), month: r4(x.month), all: r4(x.all) }));
   const sum = (k: "today" | "month" | "all") => r4(rows.reduce((t, x) => t + x[k], 0));
