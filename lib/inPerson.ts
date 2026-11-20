@@ -184,7 +184,7 @@ async function onTime(it: Row) {
 /** امتحان الطالب: الأقرب لهسه من امتحانات اليوم. وإذا ماكو اليوم، الأقرب من باقي امتحاناته (جاي بغير يومه) */
 async function todayItem(uid: number) {
   const today = todayStr(), now = stamp();
-  const all = (await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional" && LIVE.has(i.status));
+  const all = (await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional" && i.catch_place !== "online" && LIVE.has(i.status));
   const todays = all.filter((i) => String(i.at).startsWith(today));
   const list = todays.length ? todays : all.filter((i) => i.status !== "attended");
   const gap = (at: string) => Math.abs(new Date(at.replace(" ", "T")).getTime() - new Date(now.replace(" ", "T")).getTime());
@@ -197,7 +197,7 @@ async function itemCard(it: Row) {
   return {
     item: it.id as number, uid: it.user_id as number, name: st?.name ?? "طالب", exam: e?.title ?? "امتحان", at: it.at as string,
     // طالب الآيباد ما ينطبعله شي: لا ليبل ولا ورقة
-    center: await centerName(st?.center_id) || "", print: (it.kind === "catchup" ? it.catch_place === "ipad" : await ipadExam(it.user_id)) ? "ipad" as const : cfg.print, attendedAt: it.attended_at ?? "", printed: !!await kvGet(labelKey(it.id)),
+    center: await centerName(st?.center_id) || "", print: (it.catch_place === "ipad" || (it.kind !== "catchup" && it.catch_place !== "online" && await ipadExam(it.user_id))) ? "ipad" as const : cfg.print, attendedAt: it.attended_at ?? "", printed: !!await kvGet(labelKey(it.id)),
     label: printToken("l", it.id), paper: printToken("i", it.id),
   };
 }
@@ -229,7 +229,7 @@ async function lockedItem(st: Row, uid: number, lock: { center: number; exam: nu
   const { boughtExams } = await import("./schedApi.ts");
   if (!(await boughtExams(uid)).some((x) => x.id === lock.exam)) need(false, `⛔ ${st.name} غير مشترك في ${e?.chapter ?? "فصل هذا الامتحان"}`);
   const mine = (await find("sched_items", { user_id: uid, exam_id: lock.exam })).filter((i) => i.kind !== "optional");
-  const live = mine.find((i) => LIVE.has(i.status));
+  const live = mine.find((i) => LIVE.has(i.status) && i.catch_place !== "online");
   if (!live) need(false, mine.some((i) => i.status === "done") ? `⛔ ${st.name} امتحن ${e?.title ?? "هذا الامتحان"} قبل` : `⛔ ${st.name} ما إله موعد بامتحان ${e?.title ?? ""}`);
   return live!;
 }
@@ -252,7 +252,8 @@ async function decideLate(uid: number, item: unknown, allow: boolean) {
   if (!allow) { await logActivity(it!.user_id, `⛔ جا لامتحان ${e?.title ?? ""} بغير وقته وانرفض`); return null; }
   need(await can(uid, EXC_PERM), "ما عندك صلاحية الاستثناء", 403);
   await logActivity(it!.user_id, `🔓 دخل امتحان ${e?.title ?? ""} باستثناء، جا بغير وقته`);
-  return await enterItem(it!, uid);
+  await update("sched_items", { id: it!.id }, { exc_by: uid });
+  return await enterItem((await one("sched_items", { id: it!.id }))!, uid);
 }
 
 // ---------- الطباعة: صفحات HTML تنفتح بالمتصفح وتطبع وحدها

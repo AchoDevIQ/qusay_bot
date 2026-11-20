@@ -13,7 +13,7 @@ type TestStudent = { id: number; name: string; papers: number; graded: number; c
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null; skip?: boolean }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; lectures?: { title: string; subject: string; times: number; percent: number; last: string }[]; crashes?: { at: string; model: string; os: string; ver: string; screen: string; error: string }[]; log: { what: string; created: string }[]; average: number | null; retDisc?: { on: boolean; pct: number; year: string; lastYear: string; last: string[]; now: string[] } };
-type Data = { doorLink?: string; doorFor?: number; canMsg?: boolean; file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean }[]; perDay: number; general: number; times?: { picks: Record<string, string>; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[] } | null; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
+type Data = { doorLink?: string; doorFor?: number; canMsg?: boolean; file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; inPerson?: boolean; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean; away?: boolean; ipad?: boolean }[]; perDay: number; general: number; times?: { picks: Record<string, string>; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[] } | null; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -409,15 +409,23 @@ function Form({ s, data, close, busy, call, inFile }: { s: S; data: Data; close:
   );
 }
 
-/** يختار اليوم والساعة: للإعادة ولتقديم الموعد */
-function AtPicker({ label, busy, onSave }: { label: string; busy: boolean; onSave: (at: string) => void }) {
+/** يختار اليوم والساعة: للإعادة ولتقديم الموعد. الحضوري بالإعادة يختار وين: إلكتروني من بيته لو بمركزه بالآيباد */
+function AtPicker({ label, busy, onSave, places }: { label: string; busy: boolean; onSave: (at: string, where: string) => void; places?: boolean }) {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState("");
+  const [where, setWhere] = useState("");
   if (!open) return <button type="button" className="exbtn adsmall" disabled={busy} onClick={() => setOpen(true)}>{label}</button>;
   return (
     <div className="exadd">
       <input type="datetime-local" className="ltr" aria-label="اليوم والساعة" value={at} onChange={(e) => setAt(e.target.value)} />
-      <button type="button" className="exbtn" disabled={busy || !at} onClick={() => onSave(at)}>💾 حفظ</button>
+      {places && (
+        <select aria-label="وين يمتحن" value={where} onChange={(e) => setWhere(e.target.value)}>
+          <option value="">وين يمتحن؟</option>
+          <option value="online">💻 إلكتروني من بيته</option>
+          <option value="ipad">🏫 بمركزه بالآيباد (آيباد وقلم ونت)</option>
+        </select>
+      )}
+      <button type="button" className="exbtn" disabled={busy || !at || (places && !where)} onClick={() => onSave(at, where)}>💾 حفظ</button>
       <button type="button" className="exbtn" disabled={busy} onClick={() => setOpen(false)}>✖</button>
     </div>
   );
@@ -476,10 +484,10 @@ function SchedPanel({ sched, id, busy, call }: { sched: NonNullable<Data["sched"
         </div>
       )}
       {sched.items.length ? sched.items.map((i) => (
-        <div key={i.id} className="adsale">{i.retake ? "🔁 " : ""}{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}</small>
-          {i.state === "missed" && <Confirm label="🔓 افتحه باستثناء" disabled={busy} onYes={() => void call({ action: "examException", id, item: i.id })} />}
+        <div key={i.id} className="adsale">{i.retake ? "🔁 " : ""}{i.title}<small dir="ltr">{i.at}</small><small>{SCHED_STATE[i.state]}{i.away ? " · 💻 من بيته" : sched.inPerson && i.ipad ? " · 📱 بالآيباد" : ""}</small>
+          {i.state === "missed" && <Confirm label={sched.inPerson ? "🔓 افتحه هسه إلكتروني من بيته" : "🔓 افتحه هسه باستثناء"} disabled={busy} onYes={() => void call({ action: "examException", id, item: i.id })} />}
           {(i.state === "locked" || i.state === "center") && <button type="button" className="exbtn adsmall" disabled={busy} onClick={() => void call({ action: "examNow", id, item: i.id })}>▶️ جربه هسه</button>}
-          {!i.optional && (i.status === "done" || i.status === "missed") && <AtPicker label="🔁 إعادة" busy={busy} onSave={(at) => void call({ action: "examRetake", id, item: i.id, at })} />}
+          {!i.optional && (i.status === "done" || i.status === "missed") && <AtPicker label="🔁 إعادة بموعد" busy={busy} places={sched.inPerson} onSave={(at, where) => void call({ action: "examRetake", id, item: i.id, at, where })} />}
           {i.status === "waiting" && i.state === "locked" && <AtPicker label="⏩ قدّم الموعد" busy={busy} onSave={(at) => void call({ action: "examMove", id, item: i.id, at })} />}
         </div>
       )) : <div className="exhint">ما رتب جدوله بعد.</div>}

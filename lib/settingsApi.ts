@@ -30,7 +30,7 @@ export async function onlineAction(body: Row) {
     need(data.chapters.some((c) => c.label === label), "الفصل غير موجود");
     if (body.clear) { await setChapterStage(label, null); notice = "🗑 انشالت مواعيد الفصل"; }
     else {
-      need(cleanStage(body), "اختار تاريخ بداية الفصل");
+      need(cleanStage(body), "اختار تاريخ بداية الفصل، أو اكتب «تعويضي ورا كم امتحان»");
       await setChapterStage(label, body);
       notice = "✅ انحفظت مواعيد " + label;
     }

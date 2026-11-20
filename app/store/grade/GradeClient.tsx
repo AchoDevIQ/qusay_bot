@@ -15,7 +15,7 @@ type ObjLog = { q: string; people: { name: string; n: number; ok: number }[]; da
 type Rate = { mandatory: number; optional: number; deduct: number };
 type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
-type Only = { exams: { id: number; slug: string; chapter: string; title: string }[]; graders: { id: number; name: string }[]; rules: { exam: number; title: string; until: string; names: string[] }[] };
+type Only = { exams: { id: number; slug: string; chapter: string; title: string }[]; graders: { id: number; name: string }[]; rules: { exam: number; title: string; until: string; names: string[] }[]; out?: { ids: number[]; chapters: Record<string, number[]> } };
 type FoundPaper = { id: number; name: string; title: string; chapter: string; model: string; total: number; graded: string };
 type Data = { canEdit?: boolean; found?: FoundPaper[]; only?: Only; groups: Group[]; unsent?: Row[]; history?: History; objLog?: ObjLog; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -240,6 +240,7 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
       )}
       {!!data.objections.length && <ObjList data={data} busy={busy} act={act} />}
       {data.only && <OnlyCard only={data.only} busy={busy} act={act} />}
+      {data.only && <OutCard only={data.only} busy={busy} act={act} />}
       <div className="card">
         <h2>📥 أوراق تنتظر: {sum(data.groups)}</h2>
         <div className="seg expad gktabs2">
@@ -296,6 +297,34 @@ function OnlyCard({ only, busy, act }: { only: Only; busy: boolean; act: Call })
             <button type="button" className="btn" disabled={busy || !ids.length} onClick={() => void act({ action: "only", exam, ids, until })}>💾 احفظ ({ids.length} مصحح)</button>
           </>
         )}
+      </div>
+    </details>
+  );
+}
+
+/** صاحب البوت: أوراق الاستثناء والتعويض (كل امتحان مو ويا الطلاب بوقتهم) لمصححين يختارهم، ولكل فصل إذا يريد غيرهم */
+function OutCard({ only, busy, act }: { only: Only; busy: boolean; act: Call }) {
+  const saved = only.out ?? { ids: [], chapters: {} };
+  const [ids, setIds] = useState<number[]>(saved.ids);
+  const [chs, setChs] = useState<Record<string, number[]>>(saved.chapters);
+  const chapters = [...new Set(only.exams.map((e) => e.chapter).filter(Boolean))];
+  const flip = (list: number[], id: number, on: boolean) => (on ? [...new Set([...list, id])] : list.filter((x) => x !== id));
+  const name = (id: number) => only.graders.find((g) => g.id === id)?.name ?? String(id);
+  const count = saved.ids.length + Object.keys(saved.chapters).length;
+  return (
+    <details className="card cpch">
+      <summary><b>🔓 أوراق الاستثناء والتعويض</b>{count ? <small className="pdmode"> {saved.ids.length ? saved.ids.map(name).join("، ") : "حسب الفصل"}</small> : <small className="pdmode"> حسب مركز الطالب</small>}</summary>
+      <div className="form">
+        <div className="exhint">كل امتحان مو ويا الطلاب بوقتهم: اللي فتحته إله من ملفه، والإعادة، وتقديم الموعد، والتعويض، واللي جا للمركز بغير وقته ودخل باستثناء. تأشر مصححين لكل الفصول، ولكل فصل تگدر تأشر غيرهم. إذا ما أشرت أحد، الورقة تروح لأي مصحح على مركز الطالب.</div>
+        <b>كل الفصول</b>
+        {only.graders.map((g) => <label key={g.id} className="adcheck adflat"><input type="checkbox" checked={ids.includes(g.id)} onChange={(e) => setIds(flip(ids, g.id, e.target.checked))} /><span>{g.name}</span></label>)}
+        {chapters.map((c) => (
+          <details key={c} className="cpexam">
+            <summary>{c}{chs[c]?.length ? <small className="pdmode"> {chs[c].map(name).join("، ")}</small> : <small className="pdmode"> مثل كل الفصول</small>}</summary>
+            {only.graders.map((g) => <label key={g.id} className="adcheck adflat"><input type="checkbox" checked={(chs[c] ?? []).includes(g.id)} onChange={(e) => setChs({ ...chs, [c]: flip(chs[c] ?? [], g.id, e.target.checked) })} /><span>{g.name}</span></label>)}
+          </details>
+        ))}
+        <button type="button" className="btn" disabled={busy} onClick={() => void act({ action: "outSave", ids, chapters: chs })}>💾 احفظ</button>
       </div>
     </details>
   );

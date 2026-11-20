@@ -227,7 +227,7 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
     await openException(uid, body.item);
     notice = "🔓 انفتح الامتحان للطالب، ووصله الخبر";
   } else if (a === "examRetake") {
-    notice = `🔁 انحطت الإعادة ${prettyAt(await retakeExam(uid, body.item, body.at))}، ووصل الطالب خبر`;
+    notice = `🔁 انحطت الإعادة ${prettyAt(await retakeExam(uid, body.item, body.at, body.where))}، ووصل الطالب خبر`;
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, sched: { id, ...await studentSchedule(id), view: `/store/myexams?t=${viewToken(id)}&view=1` } };
   } else if (a === "examMove") {
     notice = `⏩ صار موعده ${prettyAt(await moveExam(uid, body.item, body.at))}، ووصل الطالب خبر`;

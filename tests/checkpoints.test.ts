@@ -224,3 +224,29 @@ test("بالنسبة لكل السيطرات: نسبة وحدة توقف، ون�
   assert.equal(back.mode, "marks");
   await cp("delCp", { exam: exams[0] });
 });
+
+test("امتحن الامتحان اللي فتحته الإدارة وهو موقوف: يدخله هو بس، ودرجته بمكان الغياب، وإذا عبر الإيقاف ينشال وحده", async () => {
+  const { openException } = await import("../lib/examRoom.ts");
+  const { checkStopped } = await import("../lib/checkpoints.ts");
+  const { one, update } = await import("../lib/db.ts");
+  await put("students", { user_id: 60, name: "غايب", exam: "حضوري", created: "2026-01-01 00:00:00" });
+  await graded(60, 0, 60); await graded(60, 1, 60);
+  const gone = await missed(60, 2);
+  await runCheckpoints(60);
+  assert.equal((await activeStop(60))!.score, 120);
+  // الإدارة تفتحله الامتحان الفايت من ملفه: الحضوري ينفتحله إلكتروني من بيته، وينعلم استثناء
+  await openException(1, gone);
+  const it = (await one("sched_items", { id: gone }))!;
+  assert.equal(it.status, "exception"); assert.equal(it.catch_place, "online"); assert.equal(Number(it.exc_by), 1);
+  await checkStopped(60, gone);   // يدخل هذا
+  await assert.rejects(checkStopped(60, 999), (e: any) => e.status === 423);   // غيره لا
+  // امتحن وانصحح: 60+60+80 = 200 فوك 150 والغياب انشال
+  calls.length = 0;
+  await update("sched_items", { id: gone }, { status: "done", total: 80, graded_at: "y", submitted_at: "y" });
+  await runCheckpoints(60);
+  assert.equal(await activeStop(60), null);
+  const row = (await one("checkpoint_done", { user_id: 60, chapter: "الفصل الأول", block: exams[2] }))!;
+  assert.deepEqual([Number(row.passed), Number(row.score), Number(row.absent)], [1, 200, 0]);
+  assert.match(calls.find((c) => c.p.chat_id === 60)!.p.text, /رجعت الامتحانات/);
+  assert.ok(calls.some((c) => c.p.chat_id === 1 && /انشال إيقاف وحده/.test(c.p.text)));
+});

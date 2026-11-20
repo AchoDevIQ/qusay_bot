@@ -171,7 +171,7 @@ export default function MyExamsClient() {
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} ipad={!!info.ipad} />}
         {info && info.ipad !== null && info.ipad !== undefined && <IpadChoice on={info.ipad} busy={busy} call={call} />}
-        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} ask={(item, reason) => call({ action: "askException", item, reason })} file={(name) => call({ action: "lectureFile", name })} off={(ids) => call({ action: "holidayOff", holidays: ids })} cmd={call} />}
+        {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} file={(name) => call({ action: "lectureFile", name })} off={(ids) => call({ action: "holidayOff", holidays: ids })} cmd={call} />}
         {info?.comp && <CompCard c={info.comp} busy={busy} call={call} />}
         {info && !!info.optional.length && <Optional info={info} busy={busy} enter={enterOptional} />}
       </div>
@@ -763,7 +763,7 @@ function AttendCode({ code, ipad = false }: { code: string; ipad?: boolean }) {
   );
 }
 
-function List({ info, busy, enter, paper, ask, file, off, cmd }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; ask: (item: number, reason: string) => Promise<unknown>; file: (name: string) => Promise<unknown>; off: (ids: number[]) => Promise<unknown>; cmd: (b: Record<string, unknown>) => Promise<unknown> }) {
+function List({ info, busy, enter, paper, file, off, cmd }: { info: Info; busy: boolean; enter: (id: number) => void; paper: (id: number) => void; file: (name: string) => Promise<unknown>; off: (ids: number[]) => Promise<unknown>; cmd: (b: Record<string, unknown>) => Promise<unknown> }) {
   // العطلة تطلع قبل أول امتحان بعدها
   // عطلة نصف السنة سطر بين الامتحانات ويا العطل الثانية
   const hols: Hol[] = [...info.holidays, ...(info.midHol ? [{ id: 0, ids: [], title: "", cancel: false, ...info.midHol }] : [])].sort((a, b) => a.from.localeCompare(b.from));
@@ -799,7 +799,6 @@ function List({ info, busy, enter, paper, ask, file, off, cmd }: { info: Info; b
               )}
               {info.mode === "private" && !i.optional && i.status === "waiting" && String(i.at).slice(0, 10) > info.today && <MoveTime info={info} item={i} busy={busy} cmd={cmd} />}
               {info.mode === "slow" && !i.optional && !i.catchup && i.status === "waiting" && String(i.at).slice(0, 10) > info.today && <SlowMove info={info} item={i} busy={busy} cmd={cmd} />}
-              {i.state === "missed" && <Excuse item={i} busy={busy} ask={ask} />}
               {i.state === "done" && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => paper(i.id)}>📂 ورقتي وتصحيحها</button>}
             </td>
             <td className="adphone">{prettyAt(i.at)}</td>
@@ -808,23 +807,7 @@ function List({ info, busy, enter, paper, ask, file, off, cmd }: { info: Info; b
         ))}
         {holLast.map((h) => <HolRow key={h.id} h={h} busy={busy} off={off} keep={(ids) => cmd({ action: "holidayKeep", holidays: ids })} />)}
       </tbody></table>
-      {!info.inPerson && <div className="expad exhint adtop">تگدر تدخل الامتحان خلال {info.window} دقيقة من موعده. الامتحان اللي يفوت وقته ما يرجع، إلا إذا عندك عذر ووافقت عليه الإدارة.</div>}
-    </div>
-  );
-}
-
-/** الامتحان الفايت: الطالب يكتب عذره ويطلب فتحه، ويشوف وين وصل طلبه */
-function Excuse({ item, busy, ask }: { item: Item; busy: boolean; ask: (item: number, reason: string) => Promise<unknown> }) {
-  const [open, setOpen] = useState(false);
-  const [why, setWhy] = useState("");
-  if (item.exc === "asked") return <small className="pdmode">⏳ طلبك وصل، ننتظر الموافقة</small>;
-  if (item.exc === "rejected") return <small className="pdmode exbad">❌ انرفض طلبك</small>;
-  if (item.exc) return null;
-  if (!open) return <button type="button" className="exbtn adtop" disabled={busy} onClick={() => setOpen(true)}>📨 عندي عذر</button>;
-  return (
-    <div className="adtop">
-      <textarea className="stfield" rows={3} maxLength={500} placeholder="اكتب عذرك هنا" value={why} onChange={(e) => setWhy(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }} />
-      <button type="button" className="btn agbtn adtop" disabled={busy || why.trim().length < 3} onClick={() => void ask(item.id, why)}>📨 دز الطلب</button>
+      {!info.inPerson && <div className="expad exhint adtop">تگدر تدخل الامتحان خلال {info.window} دقيقة من موعده. الامتحان اللي يفوت وقته ما يرجع.</div>}
     </div>
   );
 }

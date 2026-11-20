@@ -4,7 +4,7 @@ import { answerOnlyOf } from "./answerOnly.ts";
 import { sameOath } from "./oathText.ts";
 import { ipadExam, photosAllowed } from "./inPerson.ts";
 import { notifyGraders } from "./graderPay.ts";
-import { activeStop, checkStopped } from "./checkpoints.ts";
+import { activeStop, allowWhileStopped, checkStopped } from "./checkpoints.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
@@ -23,7 +23,7 @@ import { aiPartialOf, aiResultOf, methodSteps, rubricFull } from "./aiGrade.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken } from "./webAuth.ts";
 
-export const LATE_TEXT = "فات وقت الدخول لهذا الامتحان. إذا عندك عذر اطلب فتحه من زر «📨 عندي عذر» بجدول امتحاناتك.";
+export const LATE_TEXT = "فات وقت الدخول لهذا الامتحان.";
 export const CLOSED_TEXT = "انتهى وقت الامتحان المحدد، وأعطيناك وقت إضافي، ولم ترسل الإجابة.";
 const MAX_UPLOAD = 15 * 1024 * 1024;
 
@@ -47,7 +47,7 @@ export async function closeFinished(uid: number, s: SchedSettings) {
   // طالب الآيباد سجلوا حضوره وما فتح الأسئلة لحد ما خلص الوقت: فايت
   const ipadAll = await ipadExam(uid);
   for (const it of await find("sched_items", { user_id: uid, status: "attended" })) {
-    if (it.kind === "catchup" ? it.catch_place !== "ipad" : !ipadAll) continue;
+    if (!(it.catch_place === "ipad" || (it.kind !== "catchup" && it.catch_place !== "online" && ipadAll))) continue;
     const e = await one("bank_exams", { id: it.exam_id });
     if (it.attended_at && now >= answersClose(it.attended_at, e?.minutes ?? 75, s.extra)) await update("sched_items", { id: it.id }, { status: "missed" });
   }
@@ -123,8 +123,10 @@ export async function openRoom(uid: number, id: unknown, s: SchedSettings, table
   // التعويض إلكتروني حتى لطالب الحضوري، إلا اللي اختار يعوض حضوري بمركزه بالآيباد
   const row = await one("sched_items", { id: Number(id), user_id: uid });
   const catchup = row?.kind === "catchup";
-  const ipad = catchup ? row?.catch_place === "ipad" : await ipadExam(uid);
-  need(catchup || (await student(uid))?.exam !== "حضوري" || ipad || await photosAllowed(uid), "امتحانك حضوري، ينقدم بالمركز");
+  // «💻 إلكتروني من بيته»: الإدارة فتحتله هذا الامتحان إلكتروني حتى لو هو حضوري
+  const online = row?.catch_place === "online";
+  const ipad = online ? false : row?.catch_place === "ipad" ? true : catchup ? false : await ipadExam(uid);
+  need(catchup || online || (await student(uid))?.exam !== "حضوري" || ipad || await photosAllowed(uid), "امتحانك حضوري، ينقدم بالمركز");
   await closeFinished(uid, s);
   let it = await ownItem(uid, id);
   if (ipad) {
@@ -216,7 +218,7 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   need(uid !== null, "هذا الرابط قديم. اكتب /start بالبوت وافتح القائمة من جديد", 401);
   await checkDevice(uid!, form.get("device"));
   await checkPhone(uid!, form.get("pf"));
-  await checkStopped(uid!);
+  await checkStopped(uid!, form.get("item"));
   const it = await liveRoom(uid!, form.get("item"), s);
   need(await kvGet(oathKey(it.id)), "كمل جملة القسم أول، وبعدها تنفتح الكاميرا");
   const q = Number(form.get("q"));
@@ -329,7 +331,10 @@ export async function openException(admin: number, itemId: unknown) {
   need(await can(admin, "exception"), "ما عندك صلاحية الاستثناء", 403);
   const it = await one("sched_items", { id: Number(itemId) });
   need(it?.status === "missed", "هذا الامتحان مو فايت");
-  await update("sched_items", { id: it!.id }, { status: "exception", opened_at: stamp(), started_at: null });
+  // الحضوري: الفتح هسه يصير إلكتروني من بيته (يصور أجوبته). وينعلم إنه استثناء حتى يروح لمصححين الاستثناء
+  const away = (await student(it!.user_id))?.exam === "حضوري";
+  await update("sched_items", { id: it!.id }, { status: "exception", opened_at: stamp(), started_at: null, exc_by: admin, ...(away ? { catch_place: "online" } : {}) });
+  await allowWhileStopped(it!.user_id, it!.id);
   const e = await one("bank_exams", { id: it!.exam_id });
   await logActivity(it!.user_id, `🔓 الإدارة فتحت له امتحان ${e?.title ?? ""} باستثناء`);
   await send(it!.user_id, `🔓 <b>انفتح إلك امتحان ${e?.title ?? ""}</b>. ادخل عليه هسه من امتحاناتي.`, { kb: roomButton(it!.user_id) });

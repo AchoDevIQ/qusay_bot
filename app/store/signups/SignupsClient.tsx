@@ -7,7 +7,38 @@ import VoiceRec from "../VoiceRec";
 type Student = { id: number; name: string; at: string; source: string };
 type Chapter = { chapter: string; total: number; students: Student[] };
 type Buyer = { oid: number; uid: number; name: string; phone: string; phone2: string; username: string; source: string; library: boolean; at: string; activated: boolean; chapters: string[] };
-type Data = { date: string; days: string[]; chapters: Chapter[]; makeup: { chapters: { chapter: string; since: string }[]; buyers: Buyer[] }; notice: string };
+type Waiting = { uid: number; name: string; phone: string; phone2: string; wa: string; tg: string; username: string; chapters: string[]; since: string; why: "none" | "late"; late: number };
+type Data = { date: string; days: string[]; chapters: Chapter[]; makeup: { chapters: { chapter: string; since: string }[]; buyers: Buyer[] }; waiting?: Waiting[]; notice: string };
+
+/** اشتروا امتحانات وما سووا جدول: كلشي مقفول عليهم لحد ما يسوونه. أرقامهم حتى نراسلهم */
+function WaitingCard({ list }: { list: Waiting[] }) {
+  return (
+    <div className="card">
+      <h2>⏳ ما سووا جدول ({list.length})</h2>
+      <div className="exhint expad">اشتروا امتحانات وبعدهم ما رتبوا جدولهم، أو جدول تعويض الامتحانات اللي فاتتهم قبل ما يسجلون. كلشي مقفول عليهم، حتى المحاضرات، لحد ما يسوونه. كل يوم الساعة 10 الصبح يوصلهم تذكير، ويوصلك تنبيه بأسمائهم.</div>
+      {!list.length && <div className="empty">✅ كلهم سووا جداولهم.</div>}
+      {!!list.length && (
+        <table className="extable"><tbody>
+          {list.map((w) => (
+            <tr key={w.uid}>
+              <td>
+                <b>{w.name}</b>
+                <span className="adentag" style={{ background: w.why === "late" ? "#7a5a00" : "#8a1f1f" }}>{w.why === "late" ? `تعويض ${w.late} امتحان` : "ما رتب جدوله"}</span>
+                <small className="pdmode">📘 {w.chapters.join("، ") || "—"} · من {w.since.slice(0, 10)}</small>
+                <div className="exline">
+                  {w.phone && <a className="exbtn" href={`tel:${w.phone}`}>📞 {w.phone}</a>}
+                  {w.phone2 && <a className="exbtn" href={`tel:${w.phone2}`}>📞 ولي الأمر {w.phone2}</a>}
+                  {w.wa && <a className="exbtn" href={w.wa} target="_blank" rel="noreferrer">💬 واتساب ولي الأمر</a>}
+                  <a className="exbtn" href={w.tg}>✈️ {w.username ? `@${w.username}` : "تليگرامه"}</a>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody></table>
+      )}
+    </div>
+  );
+}
 type Call = (b: Record<string, unknown> | FormData) => Promise<Data | null>;
 
 export default function SignupsClient() {
@@ -29,6 +60,7 @@ export default function SignupsClient() {
               <div><b>{n}</b>سجلوا بهذا اليوم</div>
               <div><b>{data.chapters.filter((c) => c.students.length).length}</b>فصل</div>
             </div></div>
+            {data.waiting && <WaitingCard list={data.waiting} />}
             <Makeup d={data} busy={busy} call={call} />
             {!data.chapters.length && <div className="empty">بعد ماكو تسجيلات.</div>}
             {data.chapters.map((c) => <ChapterCard key={`${c.chapter}|${data.date}`} c={c} date={data.date} busy={busy} call={call} />)}

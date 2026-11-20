@@ -61,7 +61,9 @@ async function pageData(date: string) {
   const m = await makeupChapters();
   const exams = (await find("bank_exams")).sort((a, b) => String(a.slug).localeCompare(String(b.slug)));
   const makeup = { chapters: [...new Set(exams.map((e) => String(e.chapter)))].map((c) => ({ chapter: c, since: m[c] ?? "" })), buyers: await lateBuyers() };
-  return { date, days: [0, 1, 2, 3, 4, 5, 6].map((k) => addDays(today, -k)), chapters: await chaptersOn(date), makeup, notice: "" };
+  // ⏳ اشتروا امتحانات وما سووا جدول (أو جدول تعويضهم): أرقامهم حتى نراسلهم
+  const waiting = await (await import("./noSchedule.ts")).waitingSchedule();
+  return { date, days: [0, 1, 2, 3, 4, 5, 6].map((k) => addDays(today, -k)), chapters: await chaptersOn(date), makeup, waiting, notice: "" };
 }
 
 /** منو توصله الرسالة: اللي سجلوا باليوم، لو كل طلاب الفصل، لو المحددين */

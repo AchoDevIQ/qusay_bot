@@ -13,7 +13,7 @@ import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
 import { deliverMsg, voiceOf } from "./directMsg.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, openObjections, testObjection } from "./objections.ts";
-import { balanceOf, gradeOnly, gradeScope, payAction, payData, setGradeOnly } from "./graderPay.ts";
+import { balanceOf, gradeOnly, gradeScope, outCfg, outOf, payAction, payData, setGradeOnly, setOutCfg } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
@@ -42,7 +42,7 @@ async function paperRow(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });
   const v = it.version_id ? await one("bank_versions", { id: it.version_id }) : null;
   const general = (await one("schedules", { user_id: it.user_id }))?.mode === "general";
-  return { id: it.id, exam: it.exam_id, general, optional: it.kind === "optional", name: await nameOf(it), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", submitted: it.submitted_at ?? "", total: it.total ?? null, graded: it.graded_at ?? "", test: isTest(it), grader: it.grader_id ? await staffName(it.grader_id) : "" };
+  return { id: it.id, exam: it.exam_id, general, optional: it.kind === "optional", out: it.user_id > 0 && outOf(it), name: await nameOf(it), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", model: v?.model ?? "", submitted: it.submitted_at ?? "", total: it.total ?? null, graded: it.graded_at ?? "", test: isTest(it), grader: it.grader_id ? await staffName(it.grader_id) : "" };
 }
 /** الأوراق اللي يگدر يصححها: ما انصححت، وما أخذها غيره، ومن فصوله */
 async function waitingFor(uid: number, papers: Row[]) {
@@ -77,7 +77,7 @@ async function onlyData() {
   const ids = (await staffIds(GRADE_PERM)).filter((id) => !ADMIN_IDS.includes(id));
   const graders = await Promise.all(ids.map(async (id) => ({ id, name: await staffName(id) })));
   const rules = Object.entries(await gradeOnly()).map(([exam, r]) => ({ exam: Number(exam), title: String(exams.find((e) => e.id === Number(exam))?.title ?? ""), until: r.until, names: r.ids.map((i) => graders.find((g) => g.id === i)?.name ?? String(i)) }));
-  return { exams: exams.map((e) => ({ id: e.id as number, slug: String(e.slug), chapter: String(e.chapter ?? ""), title: String(e.title ?? "") })), graders, rules };
+  return { exams: exams.map((e) => ({ id: e.id as number, slug: String(e.slug), chapter: String(e.chapter ?? ""), title: String(e.title ?? "") })), graders, rules, out: await outCfg() };
 }
 async function listData(uid: number) {
   const papers = await find("sched_items", { status: "done" }, { order: ["submitted_at"] });
@@ -554,6 +554,14 @@ export async function gradeAction(body: Row) {
     need(!until || until > stamp(), "الوقت لازم يكون جاي، مو فايت");
     await setGradeOnly(exam, ids, until);
     notice = ids.length ? `✅ أوراق هذا الامتحان تطلع لـ ${ids.length} مصحح بس${until ? ` لحد ${until}` : ""}` : "✅ رجع لكل المصححين";
+  } else if (a === "outSave") {
+    // مصححين أوراق الاستثناء والتعويض: لكل الفصول، ولكل فصل إذا يريد غيرهم
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const allowed = new Set(await staffIds(GRADE_PERM));
+    const pick = (v: unknown) => (Array.isArray(v) ? [...new Set(v.map(Number))].filter((i) => allowed.has(i)) : []);
+    const chapters = Object.fromEntries(Object.entries((body.chapters && typeof body.chapters === "object" ? body.chapters : {}) as Record<string, unknown>).map(([c, v]) => [c, pick(v)]).filter(([, v]) => (v as number[]).length));
+    await setOutCfg({ ids: pick(body.ids), chapters });
+    notice = pick(body.ids).length || Object.keys(chapters).length ? "✅ انحفظ: أوراق الاستثناء والتعويض تروح للمصححين اللي اخترتهم" : "✅ رجعت أوراق الاستثناء والتعويض حسب مركز الطالب";
   } else need(a === "list", "أمر غير معروف");
   // فتح ورقة: الورقة بس، والقائمة اللي عند المصحح تبقى (هي اللي چانت تأخر الفتح)
   if (body.light && a === "open") return { paper, notice };

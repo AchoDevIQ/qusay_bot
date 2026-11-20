@@ -15,11 +15,10 @@ import { examWith, skippableExams } from "./skipExams.ts";
 import { centerName, isAdmin, student } from "./data.ts";
 import { siteBase } from "./keyboards.ts";
 import { chapterLabel } from "./orderRules.ts";
-import { askException } from "./lateRequest.ts";
 import { createGroup, joinGroup, leaveGroup, studentComp } from "./competition.ts";
 import { CLOSED_TEXT, LATE_TEXT, closeFinished, deleteAnswer, examLeft, myPaper, openRoom, roomState, submitRoom, takeOath } from "./examRoom.ts";
 import { send } from "./telegram.ts";
-import { DEFAULT_SETTINGS, addDays, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyAt, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
+import { DEFAULT_SETTINGS, addDays, addMinutes, advanceDays, buildPlan, daysLost, inHoliday, itemState, labelChapters, pickOptional, pickedAt, remapByOrder, slotDays, ampm, prettyAt, prettyDay, validDay, weekdayOf, type PlanExam, type Slot, type SchedSettings } from "./scheduleRules.ts";
 import { esc, stamp, todayStr } from "./util.ts";
 import { ApiError, authed, ensure, intOf, need } from "./webApi.ts";
 import { cronKey, verifyHomeToken, verifyViewToken } from "./webAuth.ts";
@@ -94,11 +93,31 @@ async function catchView(uid: number, late: Row[], s: SchedSettings) {
     center: place.inPerson ? { name: place.label, days: daysView(await placeSlots(place.centerId)).filter((x) => !s.offDays.includes(x.d)) } : null,
   };
 }
-/** بالامتحانات الفايتة امتحان من فصل صار تعويضي (باليد أو بالأيام)؟ */
+/** ياخذ جدول تعويض؟ بالامتحانات الفايتة امتحان من فصل صار تعويضي (باليد أو بالأيام)، أو فاته من الفصل
+ *  «تعويضي ورا كم امتحان» أو أكثر، أو امتحان موعده أقل من 24 ساعة من وقت ما اشترى (ما ينحسب عليه، يروح للتعويض) */
 async function hasMakeup(late: Row[]) {
+  if (late.some((e) => e.soon)) return true;
   const mk = await (await import("./makeup.ts")).makeupChapters();
-  return late.some((e) => labelChapters(String(e.chapter ?? "")).some((c) => mk[c]));
+  if (late.some((e) => labelChapters(String(e.chapter ?? "")).some((c) => mk[c]))) return true;
+  const stages = await (await import("./chapterStages.ts")).chapterStages();
+  const per = new Map<string, number>();
+  for (const e of late) for (const c of labelChapters(String(e.chapter ?? ""))) per.set(c, (per.get(c) ?? 0) + 1);
+  return [...per].some(([c, n]) => !!stages[c]?.after && n >= Number(stages[c].after));
 }
+/** شوكت انفتحله كل فصل (اشتراه): من الشراء بالبوت، أو طلب المكتبة/المكتب للحضوري */
+async function chapterSince(uid: number) {
+  const out = new Map<string, string>();
+  const keep = (c: string, at: unknown) => { const t = String(at ?? "").replace("T", " ").slice(0, 16); if (/^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(t) && (!out.has(c) || t < out.get(c)!)) out.set(c, t); };
+  for (const r of await find("exam_access", { user_id: uid })) keep(String(r.chapter), r.created);
+  for (const o of await find("orders", { user_id: uid }, { where: (o) => o.printed === 1 || o.printed === 3 })) {
+    for (const it of JSON.parse(o.items || "[]") as Row[]) {
+      const label = String(it.name).includes("امتحان") && !String(it.name).includes("دفتر") ? chapterLabel(it.name)?.replace("الاول", "الأول") : null;
+      if (label) keep(label, o.created);
+    }
+  }
+  return out;
+}
+const GRACE_MIN = 24 * 60;
 async function guardWaitOf(uid: number) {
   const g = await import("./guardianLock.ts");
   const { pendingSeen } = await import("./guardianWatch.ts");
@@ -544,9 +563,14 @@ async function lateExams(uid: number, sc: Row, s: SchedSettings): Promise<Row[]>
   const has = new Set((await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional").map((i) => i.exam_id));
   const now = stamp();
   const out: Row[] = [];
+  const since = await chapterSince(uid);
   for (const e of await boughtExams(uid)) {
     const at = days.has(e.id) ? pickedAt(days.get(e.id)!, picks) : null;
-    if (at && !has.has(e.id) && itemState("waiting", at, s.window, now) === "missed") out.push({ ...e, at });
+    if (!at || has.has(e.id)) continue;
+    // اشترى قبل الامتحان بأقل من 24 ساعة: ما ينحسب عليه، يروح ويا التعويض
+    const bought = labelChapters(String(e.chapter ?? "")).map((c) => since.get(c)).filter(Boolean).sort()[0];
+    const soon = !!bought && at >= bought && at < addMinutes(bought, GRACE_MIN);
+    if (soon || itemState("waiting", at, s.window, now) === "missed") out.push({ ...e, at, soon });
   }
   return out;
 }
@@ -586,14 +610,16 @@ async function itemsView(uid: number, s: SchedSettings) {
   const inPerson = (await placeFor(uid)).inPerson && !await photosAllowed(uid);
   const ipad = inPerson && await ipadExam(uid);
   const lec = await lectureMap();
+  // وين ينقدم: الإدارة تگدر تفتحه «إلكتروني من بيته» لو «بمركزه بالآيباد»، والتعويض حسب اختياره
+  const placeOf = (i: Row) => (i.catch_place === "online" ? "online" : i.catch_place === "ipad" ? "ipad" : i.kind === "catchup" ? "online" : ipad ? "ipad" : inPerson ? "paper" : "online");
   return (await find("sched_items", { user_id: uid }, { order: ["at"] })).filter((i) => i.status !== "skipped").map((i) => {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
     return { id: i.id, exam: i.exam_id as number, optional: i.kind === "optional", catchup: i.kind === "catchup", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of,
       // بالآيباد بالمركز: ينتظر الحضور، ومن ينسجل تنفتح أسئلته (التعويض الحضوري هم)
-      ipad: i.kind === "catchup" ? i.catch_place === "ipad" : ipad,
-      state: i.kind === "catchup" ? (i.catch_place === "ipad" ? ipadState(i.status, state) : state) : ipad ? ipadState(i.status, state) : inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
+      ipad: placeOf(i) === "ipad", away: i.catch_place === "online",
+      state: placeOf(i) === "online" ? state : placeOf(i) === "ipad" ? ipadState(i.status, state) : inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
   });
 }
 /** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
@@ -840,7 +866,8 @@ export async function myExamAction(body: Row) {
   need(await student(id), "سجل معلوماتك أول");
   await checkDevice(id, body.device);
   await checkPhone(id, body.pf);
-  await checkStopped(id);
+  // الموقوف: يدخل بس على الامتحان اللي فتحته الإدارة إله
+  await checkStopped(id, ["openExam", "oath", "delAnswer", "submitExam", "examLeft"].includes(a) ? body.item ?? -1 : undefined);
   // سلّم أول امتحان: الحساب ينقفل لحد ما يربط ولي أمره
   need(!await needsGuardian(id), "🔒 حسابك مقفول لحد ما تربط ولي أمرك. افتح 🏠 القائمة الرئيسية وسوي الخطوات، أو شوف الرسالة بالمحادثة.");
   if (a === "slowSave" || a === "slowMove") {
@@ -1078,10 +1105,8 @@ export async function myExamAction(body: Row) {
   }
   if (a === "lectureFile") { await sendLectureFile(id, body.name); return { ...await studentInfo(id), notice: "📄 وصلك ملف المحاضرة بالبوت" }; }
   if (a === "cpSeen") { await seeCheckpoint(id, body.key); return await studentInfo(id); }
-  if (a === "askException") {
-    await askException(id, body.item, body.reason, await schedSettings());
-    return { ...await studentInfo(id), notice: "📨 وصل طلبك. من يوافقون ينفتحلك الامتحان وتوصلك رسالة" };
-  }
+  // «📨 عندي عذر» انشال (قرار الأستاذ 2026-11-20): الطالب الصادق يراسل الإدارة بنفسه، وهي تفتحله من ملفه
+  need(a !== "askException", "تواصل ويا الإدارة إذا عندك عذر");
   if (a === "askTravel") {
     await (await import("./guardianLock.ts")).askTravel(id);
     return { ...await studentInfo(id), notice: "✈️ وصل طلبك للإدارة" };
@@ -1585,7 +1610,7 @@ export async function studentSchedule(uid: number) {
   // «ويا الطلاب»: أوقاته لكل يوم، والمكتمل يتعلم، حتى الإدارة تغيره
   let times = null;
   if (sc?.mode === "general") { const slots = await placeSlots(sc.center_id); times = { picks: picksOf(sc), days: daysView(slots, await fullTimes(sc.center_id, slots, await student(uid), uid)) }; }
-  return { way, times, items: await itemsView(uid, s), perDay: Number(await kvGet(`sched_perday_${uid}`)) || 0, general: s.perDay, hol, holReq: (await holRequests()).find((r) => r.uid === uid) ?? null };
+  return { way, times, inPerson: (await student(uid))?.exam === "حضوري", items: await itemsView(uid, s), perDay: Number(await kvGet(`sched_perday_${uid}`)) || 0, general: s.perDay, hol, holReq: (await holRequests()).find((r) => r.uid === uid) ?? null };
 }
 export async function resetSchedule(uid: number) {
   await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed });
@@ -1599,7 +1624,11 @@ export const setPerDay = async (uid: number, n: number) => await kvSet(`sched_pe
  *  اللي اشترى محاضرات بس ما ينقفل. طلاب التجربة هم ينقفلون، حتى صاحب البوت يشوف نفس اللي يشوفه الطالب */
 export async function needsSchedule(uid: number) {
   if (!uid || !await student(uid)) return false;
-  if (await one("schedules", { user_id: uid })) return false;
+  const sc = await one("schedules", { user_id: uid });
+  // ويا الطلاب بس فاتته امتحانات قبل ما يسجل وبعده ما اختار تعويضها (لو يبقى ويا الطلاب): هم مقفول
+  if (sc) return sc.mode === "general" && (await lateExams(uid, sc, await schedSettings())).length > 0;
   return (await scheduleChapters(uid)).length > 0;
 }
+/** للقائمة «⏳ ما سووا جدول» */
+export const lateFor = (uid: number, sc: Row, s: SchedSettings) => lateExams(uid, sc, s);
 export const SCHED_FIRST = "🗓 اختار أوقات امتحاناتك أول من «امتحاناتي»، وبعدها ينفتحلك كلشي";

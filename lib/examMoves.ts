@@ -3,7 +3,8 @@
 // الموعد اللي ينحط باليد (fixed) ما يمسحه ترتيب الجدول من جديد
 import { one, insert, update } from "./db.ts";
 import { logActivity } from "./access.ts";
-import { can } from "./data.ts";
+import { can, student } from "./data.ts";
+import { allowWhileStopped } from "./checkpoints.ts";
 import { prettyAt } from "./scheduleRules.ts";
 import { send } from "./telegram.ts";
 import { esc, stamp } from "./util.ts";
@@ -18,17 +19,21 @@ function validAt(raw: unknown) {
 }
 
 /** إعادة امتحان خلصه أو فاته: محاولة ثانية بالموعد اللي ينحط. الدرجتين يبينن عنده */
-export async function retakeExam(admin: number, itemId: unknown, rawAt: unknown) {
+export async function retakeExam(admin: number, itemId: unknown, rawAt: unknown, where?: unknown) {
   need(await can(admin, "retake"), "ما عندك صلاحية إعادة الامتحان", 403);
   const it = await one("sched_items", { id: Number(itemId) });
   need(it, "الامتحان غير موجود");
   need(it!.kind !== "optional", "الاختياري ما ينعاد");
   need(["done", "missed"].includes(String(it!.status)), "هذا الامتحان بعده ما خلص");
   const at = validAt(rawAt);
-  await insert("sched_items", { user_id: it!.user_id, exam_id: it!.exam_id, at, status: "waiting", fixed: "retake", retake_of: it!.id });
+  // الطالب الحضوري: الإدارة تختار يعيده بمركزه، لو «💻 إلكتروني من بيته»
+  const away = (await student(it!.user_id))?.exam === "حضوري";
+  const online = away && where === "online", ipad = away && where === "ipad";
+  const row = await insert("sched_items", { user_id: it!.user_id, exam_id: it!.exam_id, at, status: "waiting", fixed: "retake", retake_of: it!.id, ...(online ? { catch_place: "online" } : ipad ? { catch_place: "ipad" } : {}) });
+  await allowWhileStopped(it!.user_id, Number(row) || 0);
   const e = await one("bank_exams", { id: it!.exam_id });
-  await logActivity(it!.user_id, `🔁 الإدارة حطتله إعادة امتحان ${e?.title ?? ""} ${at}`);
-  await send(it!.user_id, `🔁 <b>انحطتلك إعادة امتحان ${esc(e?.title ?? "")}</b>\n🗓 ${prettyAt(at)}\nإذا ما دخلت بوقته ينحسب غياب.`);
+  await logActivity(it!.user_id, `🔁 الإدارة حطتله إعادة امتحان ${e?.title ?? ""} ${at}${online ? " (إلكتروني من بيته)" : ipad ? " (بمركزه بالآيباد)" : ""}`);
+  await send(it!.user_id, `🔁 <b>انحطتلك إعادة امتحان ${esc(e?.title ?? "")}</b>\n🗓 ${prettyAt(at)}${online ? "\n💻 إلكتروني من بيتك: تدخله من امتحاناتي وتصور أجوبتك" : ipad ? "\n🏫 بمركزك بالآيباد: لازم يكون وياك آيباد وقلم، والنت شغال وياك بالمركز. من يسجلون حضورك تنفتح أسئلتك" : ""}\nإذا ما دخلت بوقته ينحسب غياب.`);
   return at;
 }
 

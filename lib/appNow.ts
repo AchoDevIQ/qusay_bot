@@ -23,7 +23,7 @@ export async function nowCards(uid: number, now = stamp()): Promise<NowCard[]> {
   const items = (await find("sched_items", { user_id: uid })).filter((i) => i.kind !== "optional" && i.notified !== "test" && i.status !== "skipped")
     .sort((a, b) => String(a.at).localeCompare(String(b.at)));
   const title = (i: Row) => String(exams.get(i.exam_id)?.title ?? "امتحان");
-  const where = (i: Row) => (i.kind === "catchup" ? (i.catch_place === "ipad" ? "تعويض حضوري بمركزك بالآيباد" : "تعويض إلكتروني") : inPerson ? "بمركزك" : "إلكتروني");
+  const where = (i: Row) => (i.kind === "catchup" ? (i.catch_place === "ipad" ? "تعويض حضوري بمركزك بالآيباد" : "تعويض إلكتروني") : i.catch_place === "online" ? "إلكتروني من بيتك" : i.catch_place === "ipad" ? "بمركزك بالآيباد" : inPerson ? "بمركزك" : "إلكتروني");
   const when = (at: string) => `${at.slice(0, 10) === today ? "اليوم" : at.slice(0, 10) === tomorrow ? "باچر" : prettyDay(at.slice(0, 10))} الساعة ${ampm(at.slice(11, 16))}`;
   const out: NowCard[] = [];
   // ١. مفتوح هسه

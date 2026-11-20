@@ -55,9 +55,26 @@ export async function setGradeOnly(exam: number, ids: number[], until: string) {
   if (ids.length) all[exam] = { ids, until }; else delete all[exam];
   await kvSet(ONLY_KEY, JSON.stringify(all));
 }
+// ---------- أوراق الاستثناء والتعويض (طلب الأستاذ 2026-11-20): كل امتحان مو ويا الطلاب بوقتهم
+// (الإدارة فتحتله، إعادة، تقديم موعد، تعويض، جا للمركز بغير وقته) يروح للمصححين اللي يختارهم صاحب البوت:
+// مصححين لكل الفصول، ولكل فصل مصححين غيرهم إذا يريد. إذا ما اختار أحد: تروح حسب مركز الطالب (بدون ما يطابق الوقت)
+export type OutCfg = { ids: number[]; chapters: Record<string, number[]> };
+const OUT_KEY = "grade_out";
+export const outOf = (p: Row) => p.kind === "catchup" || !!p.retake_of || !!p.exc_by || p.fixed === "moved";
+export async function outCfg(): Promise<OutCfg> {
+  try {
+    const j = JSON.parse((await kvGet(OUT_KEY)) ?? "{}") ?? {};
+    const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.map(Number).filter(Boolean))] : []);
+    return { ids: ids(j.ids), chapters: Object.fromEntries(Object.entries(j.chapters ?? {}).map(([c, v]) => [c, ids(v)]).filter(([, v]) => (v as number[]).length)) };
+  } catch { return { ids: [], chapters: {} }; }
+}
+export const setOutCfg = async (c: OutCfg) => await kvSet(OUT_KEY, JSON.stringify(c));
+/** مصححين أوراق الاستثناء لهذا الفصل: مصححين الفصل إذا محددين، وإلا مصححين كل الفصول */
+export const outGraders = (c: OutCfg, chapter: unknown) => c.chapters[String(chapter ?? "")] ?? c.ids;
+
 export async function gradeScope(uid: number) {
   const mine = await chaptersOf(uid), off = new Set(await examsOffOf(uid)), pl = await placesOf(uid);
-  const only = await gradeOnly(), boss = await isAdmin(uid);
+  const only = await gradeOnly(), boss = await isAdmin(uid), out = await outCfg();
   const chapter = new Map((await find("bank_exams")).map((e) => [e.id, e.chapter]));
   const sched = new Map((await find("schedules")).map((s) => [s.user_id, s]));
   const keys = new Set(pl.keys);
@@ -65,6 +82,10 @@ export async function gradeScope(uid: number) {
   return {
     isGeneral,
     can: (p: Row) => {
+      if (p.user_id > 0 && outOf(p)) {
+        const list = outGraders(out, chapter.get(p.exam_id));
+        if (list.length) return boss || list.includes(uid);
+      }
       if (mine.length && !mine.includes(chapter.get(p.exam_id))) return false;
       if (off.has(p.exam_id)) return false;
       if (!boss && only[p.exam_id] && !only[p.exam_id].ids.includes(uid)) return false;
@@ -72,6 +93,8 @@ export async function gradeScope(uid: number) {
       if (!isGeneral(p)) return pl.private;
       if (pl.all) return true;
       const c = Number(sched.get(p.user_id)?.center_id ?? 0), s = slotOf(p.at);
+      // الاستثناء والتعويض بوقت غير أوقات المركز: لأي مصحح على هذا المركز
+      if (outOf(p) && pl.keys.some((k) => k === `c${c}` || k.startsWith(`c${c}|`))) return true;
       return keys.has(`c${c}`) || keys.has(`c${c}|${s.d}|${s.t}`);
     },
   };

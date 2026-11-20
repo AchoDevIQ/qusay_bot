@@ -249,6 +249,18 @@ test("الوقت لكل يوم مستقل، ومواعيد المكان توصل
   assert.equal((await find("sched_items", { user_id: 82, status: "missed" })).length, 1);
   await assert.rejects(act(82, "joinPlace", { picks }), /مثبت/);
   await assert.rejects(act(82, "preview", form()), /مثبت/);
+  // اشترى قبل امتحانه بأقل من 24 ساعة: ما ينحط بجدوله ولا ينحسب غياب، يروح ويا التعويض حتى لو الفصل مو تعويضي
+  const { addMinutes } = await import("../lib/scheduleRules.ts");
+  await student(183);
+  await put("exam_access", { user_id: 183, chapter: "الفصل الأول", order_id: 1, created: addMinutes(`${sun} 20:30`, -600) });
+  const j83 = await act(183, "joinPlace", { picks });
+  assert.equal(j83.late.length, 2);
+  assert.equal(j83.catchup, true);
+  assert.equal(j83.items.length, 1);
+  // وبعده ما اختار تعويضه: كلشي غير امتحاناتي مقفول
+  const { needsSchedule } = await import("../lib/schedApi.ts");
+  assert.equal(await needsSchedule(183), true);
+  assert.equal(await needsSchedule(82), false);
   // فصل صار تعويضي: بدل «تنحسب فايتة» ياخذ جدول تعويضي مكثف إلكتروني، وبعدها يبقى ويا مجموعته
   const { setMakeup } = await import("../lib/makeup.ts");
   await setMakeup("الفصل الأول", true);

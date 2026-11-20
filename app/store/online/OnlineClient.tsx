@@ -5,7 +5,7 @@ import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 import { DateInput } from "../shared";
 
-type Stage = { start: string; makeup: number | null; online: number | null };
+type Stage = { start: string; makeup: number | null; online: number | null; after?: number | null };
 type Ch = { label: string; on: boolean; stage: Stage | null; now: "normal" | "makeup" | "online" | "" };
 type Data = { chapters: Ch[]; notice?: string };
 const NOW: Record<string, string> = { normal: "🟢 هسه: عادي، اللي يشتري يمشي ويا جماعته", makeup: "🟡 هسه: تعويضي، اللي يشتري ياخذ جدول مكثف إلكتروني وبعدين يرجع لمركزه", online: "🔴 هسه: إلكتروني فقط، المتجر يطلع أسعار الإلكتروني بس" };
@@ -21,7 +21,7 @@ export default function OnlineClient() {
         {data && (
           <div className="card">
             <h2>شلون تشتغل</h2>
-            <div className="expad exhint">لكل فصل اكتب يوم بدايته ومدتين بالأيام من البداية:<br />• <b>ورا أيام التعويض</b>: اللي يشتري يصير تعويضي. نسويله جدول مكثف إلكتروني للي فاته، وبعدين يرجع يمتحن ويا جماعته (الحضوري بمركزه).<br />• <b>ورا أيام الإلكتروني فقط</b>: اللي يشتري ما يلحق حضوري. المتجر يطلع لطالب الحضوري أسعار الإلكتروني بس، ويا تنبيه.<br />الفصل يتعرف من اسم المنتج، مثل «الفصل الأول».</div>
+            <div className="expad exhint">لكل فصل اكتب يوم بدايته ومدتين بالأيام من البداية:<br />• <b>ورا أيام التعويض</b>: اللي يشتري يصير تعويضي. نسويله جدول مكثف إلكتروني للي فاته، وبعدين يرجع يمتحن ويا جماعته (الحضوري بمركزه).<br />• <b>تعويضي ورا كم امتحان</b>: لكل طالب وحده، حسب كم امتحان فاته من الفصل قبل ما يشتري.<br />• <b>ورا أيام الإلكتروني فقط</b>: اللي يشتري ما يلحق حضوري. المتجر يطلع لطالب الحضوري أسعار الإلكتروني بس، ويا تنبيه.<br />الفصل يتعرف من اسم المنتج، مثل «الفصل الأول».</div>
           </div>
         )}
         {data && !data.chapters.length && <div className="empty">ماكو منتجات باسمها فصل، مثل «الفصل الأول».</div>}
@@ -36,6 +36,7 @@ function Chapter({ c, busy, call }: { c: Ch; busy: boolean; call: (b: Record<str
   const [start, setStart] = useState(c.stage?.start ?? "");
   const [makeup, setMakeup] = useState(c.stage?.makeup == null ? "" : String(c.stage.makeup));
   const [online, setOnline] = useState(c.stage?.online == null ? "" : String(c.stage.online));
+  const [after, setAfter] = useState(c.stage?.after == null ? "" : String(c.stage.after));
   return (
     <div className="card">
       <h2>{c.label}</h2>
@@ -47,7 +48,10 @@ function Chapter({ c, busy, call }: { c: Ch; busy: boolean; call: (b: Record<str
           <div><label>تعويضي ورا (يوم)</label><input inputMode="numeric" value={makeup} placeholder="مثلاً 5" onChange={(e) => setMakeup(e.target.value.replace(/\D/g, ""))} /></div>
           <div><label>إلكتروني فقط ورا (يوم)</label><input inputMode="numeric" value={online} placeholder="مثلاً 10" onChange={(e) => setOnline(e.target.value.replace(/\D/g, ""))} /></div>
         </div>
-        <button type="button" className="btn" disabled={busy || !start} onClick={() => void call({ action: "stage", label: c.label, start, makeup, online })}>💾 احفظ مواعيد {c.label}</button>
+        <label>تعويضي ورا كم امتحان</label>
+        <input inputMode="numeric" value={after} placeholder="مثلاً 2" onChange={(e) => setAfter(e.target.value.replace(/\D/g, ""))} />
+        <div className="exhint">لكل طالب وحده: إذا فاته من هذا الفصل هالعدد من الامتحانات أو أكثر قبل ما يشتريه، ياخذ جدول تعويض. والامتحان اللي موعده أقل من 24 ساعة من وقت ما اشترى ما ينحسب عليه، يروح ويا التعويض.</div>
+        <button type="button" className="btn" disabled={busy || (!start && !after)} onClick={() => void call({ action: "stage", label: c.label, start, makeup, online, after })}>💾 احفظ مواعيد {c.label}</button>
         {c.stage && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "stage", label: c.label, clear: true })}>🗑 شيل المواعيد</button>}
         <label className="adcheck adtop">
           <input type="checkbox" checked={c.on} disabled={busy} onChange={() => void call({ action: "toggle", label: c.label })} />

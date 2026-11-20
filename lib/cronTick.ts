@@ -47,6 +47,7 @@ export async function cronTick(key: unknown) {
     await step("examTitlesEn", async () => (await import("./examTitlesEn.ts")).fillEnTitles());
     await step("versionsFill", () => fillAllVersions());
     await step("makeup", () => sweepMakeup());
+    await step("noSchedule", async () => (await import("./noSchedule.ts")).noScheduleTick());
     await step("qaFails", () => qaFailTick());
   } finally {
     await kvSet(LOCK, "0");

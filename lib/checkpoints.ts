@@ -122,15 +122,18 @@ async function rewardStudent(uid: number, st: Row, band: Band | null, pic: strin
   if (g) try { await send(g, text); } catch (e) { console.error(e); }
 }
 
-/** يحسب السيطرات اللي كملت للطالب، ويوقفه إذا ما عبر وحدة منها */
+/** يحسب السيطرات اللي كملت للطالب، ويوقفه إذا ما عبر وحدة منها.
+ *  السيطرة تنحسب بوقتها وما تنتظر. بس إذا بعدين امتحن امتحان منها (الإدارة فتحتله، أو إعادة، أو تعويض)،
+ *  درجته تنحط بمكان الغياب والسيطرة تنحسب من جديد: إذا هسه عبرها والإيقاف منها، الإيقاف ينشال وحده */
 export async function runCheckpoints(uid: number) {
   const cfg = await loadCfg();
-  if (!Object.keys(cfg.rules).length || await activeStop(uid)) return;
+  if (!Object.keys(cfg.rules).length) return;
   const st = await student(uid);
   if (!st) return;
   const segs = segmentsOf(await bookExams(), cfg);
   const s = await schedSettings();
   await closeFinished(uid, s);
+  let stop = await activeStop(uid);
   const stops = (await find("student_stops", { user_id: uid })).map((x) => [String(x.created), String(x.lifted ?? "9")]);
   const now = stamp();
   const isMissed = (i: Row) => i.status === "missed" || (i.status === "waiting" && itemState("waiting", i.at, s.window, now) === "missed");
@@ -138,9 +141,8 @@ export async function runCheckpoints(uid: number) {
   const tries = new Map<number, Row[]>();
   for (const i of await find("sched_items", { user_id: uid }, { order: ["at"] })) if (i.kind !== "optional") tries.set(i.exam_id as number, [...tries.get(i.exam_id as number) ?? [], i]);
   const byExam = new Map([...tries].map(([e, list]) => [e, list.find((i) => i.graded_at) ?? list.find((i) => !isMissed(i)) ?? list[0]]));
-  const done = new Set((await find("checkpoint_done", { user_id: uid })).map((d) => `${d.chapter}|${d.block}`));
+  const done = new Map((await find("checkpoint_done", { user_id: uid })).map((d) => [`${d.chapter}|${d.block}`, d]));
   for (const g of segs) {
-    if (done.has(`${g.chapter}|${g.exam}`)) continue;
     const its = g.ids.map((id) => byExam.get(id));
     if (its.some((i) => !i)) continue;   // فصل ما مشتريه، أو امتحان لسه ما انحط بجدوله
     const res = its.map((i) => {
@@ -148,15 +150,30 @@ export async function runCheckpoints(uid: number) {
       // ما بيه أجوبة = غياب، إلكتروني أو حضوري
       return isMissed(i!) ? { mark: 0, absent: 1 } : null;
     });
+    const old = done.get(`${g.chapter}|${g.exam}`);
+    const score = res.reduce((n, x) => n + (x?.mark ?? 0), 0), absent = res.reduce((n, x) => n + (x?.absent ?? 0), 0);
+    const n = g.ids.length;
+    const low = g.min > 0 && score < g.min, many = g.absent > 0 && absent >= g.absent;
+    if (old) {
+      // انحسبت قبل: إذا امتحن بعدها امتحان منها (درجة بمكان الغياب)، تنحسب من جديد
+      if (Number(old.passed) === 2 || res.some((x) => x === null) || (Number(old.score) === score && Number(old.absent) === absent)) continue;
+      const pass = !low && !many;
+      await update("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam }, { score, absent, passed: pass ? 1 : 0 });
+      await logActivity(uid, `🚦 سيطرة ${g.chapter} بعد ${g.title} انحسبت من جديد: ${score} من ${n * PER_EXAM}، غياب ${absent}`);
+      if (stop && stop.chapter === g.chapter && Number(stop.block) === g.exam) {
+        if (pass) { await autoLift(uid, st, stop, g, score, absent); stop = null; }
+        else await update("student_stops", { id: stop.id }, { score, absent });
+      }
+      continue;
+    }
+    // وهو موقوف ما تنحسب سيطرة جديدة
+    if (stop) continue;
     if (res.some((x) => x === null)) continue;   // باقي امتحان ما انصحح أو ما صار وقته
     // امتحانات فاتته وهو موقوف: هذي السيطرة ما تنحسب عليه
     if (its.some((i) => stops.some(([a, b]) => String(i!.at) >= a && String(i!.at) <= b))) {
       await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: 2, score: null, absent: null, created: now });
       continue;
     }
-    const score = res.reduce((n, x) => n + x!.mark, 0), absent = res.reduce((n, x) => n + x!.absent, 0);
-    const n = g.ids.length;
-    const low = g.min > 0 && score < g.min, many = g.absent > 0 && absent >= g.absent;
     const pctScore = Math.round((score * 100) / (n * PER_EXAM));
     const band = low || many ? null : cfg.mode === "percent" ? bandOf(cfg.pct.bands, pctScore) : bandOf(cfg.rules[String(g.exam)]?.bands, score);
     const pic = band ? await freshPicture(uid, band) : null;
@@ -169,6 +186,38 @@ export async function runCheckpoints(uid: number) {
     await stopStudent(uid, st, cfg, { chapter: g.chapter, block: g.exam, every: n, score, need: g.min, absent, reason: [low && LOW, many && ABSENT].filter(Boolean).join(" و") });
     return;
   }
+}
+
+/** امتحن الامتحان اللي فتحته الإدارة وصار عابر السيطرة: الإيقاف ينشال وحده، ويوصل الخبر للكل */
+async function autoLift(uid: number, st: Row, stop: Row, g: Seg, score: number, absent: number) {
+  await update("student_stops", { id: stop.id }, { lifted: stamp(), lifted_by: 0, score, absent });
+  await kvSet(allowKey(uid), "[]");
+  const what = whatOf(stop), max = g.ids.length * PER_EXAM;
+  await logActivity(uid, `✅ امتحن الامتحان اللي انفتحله وعبر سيطرة ${g.chapter} (${score} من ${max}، غياب ${absent})، فرجعت ${what} وحدها`);
+  const safe = async (chat: number, text: string) => { try { await send(chat, text); } catch (e) { console.error(e); } };
+  await safe(uid, `✅ <b>رجعت ${what}</b>\nامتحنت الامتحان اللي انفتحلك، وصار مجموعك بسيطرة ${esc(g.chapter)} ${score} من ${max}، فعبرتها. بالتوفيق.`);
+  const gd = await guardianOf(uid);
+  if (gd) await safe(gd.guardian_id, `✅ رجعت ${what} للطالب ${esc(st.name ?? "")}: امتحن الامتحان اللي انفتحله وعبر سيطرة ${esc(g.chapter)} (${score} من ${max}).`);
+  for (const a of ADMIN_IDS) await safe(a, `✅ <b>انشال إيقاف وحده</b>\nالطالب: ${esc(st.name ?? "")}\nامتحن الامتحان اللي انفتحله، وصار ${esc(g.chapter)}: ${score} من ${max}، غياب ${absent}، فعبر السيطرة ورجعت ${what}.`);
+}
+
+/** الامتحانات اللي فتحتها الإدارة وهو موقوف: يگدر يدخلها هي بس */
+const allowKey = (uid: number) => `stop_allow_${uid}`;
+async function allowedIds(uid: number): Promise<number[]> {
+  try { const j = JSON.parse(await kvGet(allowKey(uid)) ?? "[]"); return Array.isArray(j) ? j.map(Number).filter(Boolean) : []; } catch { return []; }
+}
+export async function allowWhileStopped(uid: number, itemId: number) {
+  if (!itemId || !await activeStop(uid)) return;
+  await kvSet(allowKey(uid), JSON.stringify([...new Set([...await allowedIds(uid), itemId])]));
+}
+const LIVE_OPEN = new Set(["waiting", "exception", "started", "attended"]);
+/** موقوف بس عنده امتحان فتحته الإدارة وبعده ما امتحنه: يدخل عليه (وإذا انطى رقم امتحان: هذا بالذات) */
+async function openedForStopped(uid: number, item?: unknown) {
+  const ids = await allowedIds(uid);
+  if (!ids.length) return false;
+  const live = (await find("sched_items", { user_id: uid })).filter((i) => ids.includes(i.id as number) && LIVE_OPEN.has(String(i.status))).map((i) => i.id as number);
+  if (item === undefined) return live.length > 0;
+  return live.includes(Number(item));
 }
 
 async function stopStudent(uid: number, st: Row, cfg: Cfg, x: { chapter: string; block: number; every: number; score: number; need: number; absent: number; reason: string }) {
@@ -202,11 +251,12 @@ export async function seeCheckpoint(uid: number, key: unknown) {
   await update("checkpoint_done", { user_id: uid, chapter, block: Number(block) }, { seen: stamp() });
 }
 
-/** صفحات امتحانات الطالب: إذا موقوف ما يدخل */
-export async function checkStopped(uid: number) {
+/** صفحات امتحانات الطالب: إذا موقوف ما يدخل، إلا الامتحان اللي فتحته الإدارة إله */
+export async function checkStopped(uid: number, item?: unknown) {
   if (await isStaff(uid) || !await student(uid)) return;
   await runCheckpoints(uid);
   const s = await activeStop(uid);
+  if (s && await openedForStopped(uid, item)) return;
   if (s) throw new ApiError(423, `⛔ توقفت عليك ${whatOf(s)} بسبب ${s.reason}. حتى ترجع تواصل ويا قصي العميري.`, { stop: await (async () => { const c = await loadCfg(); return { image: cpImageUrl(c.stopImage), bubble: plain(c.stopBubble, { "الاسم": (await student(uid))?.name ?? "" }) }; })() });
 }
 
@@ -214,6 +264,7 @@ export async function liftStop(uid: number, by: number) {
   const s = await activeStop(uid);
   need(s, "هذا الطالب مو موقوف");
   await update("student_stops", { id: s!.id }, { lifted: stamp(), lifted_by: by });
+  await kvSet(allowKey(uid), "[]");
   await logActivity(uid, `✅ الإدارة فكت الإيقاف ورجعت ${whatOf(s!)}`);
   try { await send(uid, `✅ رجعت ${whatOf(s!)}. بالتوفيق.`); } catch (e) { console.error(e); }
 }

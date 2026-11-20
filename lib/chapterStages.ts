@@ -5,7 +5,8 @@
 import { kvGet, kvSet, type Row } from "./db.ts";
 import { addDays, validDay } from "./scheduleRules.ts";
 
-export type Stage = { start: string; makeup: number | null; online: number | null };
+//   «تعويضي ورا كم امتحان» (طلب الأستاذ 2026-11-20): لكل طالب وحده، إذا فاته من الفصل هالعدد أو أكثر قبل ما يشتريه، ياخذ جدول تعويض
+export type Stage = { start: string; makeup: number | null; online: number | null; after?: number | null };
 const KEY = "chapter_stages";
 const today = () => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);   // بتوقيت بغداد
 
@@ -13,11 +14,12 @@ export async function chapterStages(): Promise<Record<string, Stage>> {
   try { const j = JSON.parse(await kvGet(KEY) ?? "{}"); return j && typeof j === "object" ? j : {}; } catch { return {}; }
 }
 const days = (v: unknown) => { const n = Number(v); return v === "" || v === null || v === undefined || !Number.isInteger(n) || n < 0 || n > 365 ? null : n; };
+const exams = (v: unknown) => { const n = Number(v); return v === "" || v === null || v === undefined || !Number.isInteger(n) || n < 1 || n > 50 ? null : n; };
 export function cleanStage(r: Row): Stage | null {
-  const start = String(r.start ?? "").trim();
-  if (!validDay(start)) return null;
+  const start = String(r.start ?? "").trim(), after = exams(r.after);
+  if (!validDay(start)) return after === null ? null : { start: "", makeup: null, online: null, after };
   const makeup = days(r.makeup), online = days(r.online);
-  return { start, makeup, online: online !== null && makeup !== null && online < makeup ? makeup : online };
+  return { start, makeup, online: online !== null && makeup !== null && online < makeup ? makeup : online, ...(after !== null ? { after } : {}) };
 }
 export async function setChapterStage(chapter: string, r: Row | null) {
   const all = await chapterStages();
