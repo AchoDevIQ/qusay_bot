@@ -226,6 +226,25 @@ test("🌙 بالدفعة: الورقة تنحجز، وترجع درجتها ل�
   await Q.saveQgSettings({ batch: false });
 });
 
+test("ورقة تجربة «🧠 تصحيح قصي»: يصححها طبيعي حتى لو الموضوع مو مأشر، والدرجة توصل (لطالب التجربة)", async () => {
+  const { addTestPaper } = await import("../lib/gradeApi.ts");
+  await put("students", { user_id: -3, name: "طالب تجربة 3", exam: "إلكتروني", created: "2026-01-01 00:00" });
+  await Q.saveQgSettings({ live: [] });
+  const id = await addTestPaper(1, -3, ver, new Map([[1, [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70])]], [2, [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70])]]]), "qusay");
+  assert.equal((await one("sched_items", { id }))!.grader_id, QUSAY_GRADER, "محجوزة إله من الرفع");
+  reply = () => good;
+  tg.length = 0;
+  await Q.qusayTick(finishByAi);
+  const it = await one("sched_items", { id });
+  assert.equal(it!.total, 85.5);
+  assert.ok(it!.graded_at);
+  assert.equal((await Q.qgResultOf(id))!.sent, true);
+  assert.ok(tg.some((m) => m.method.startsWith("send")), "بطاقة الدرجة طلعت");
+  const d: any = await qusayAction({ initData: sign(1), action: "paper", id });
+  assert.equal(d.paper.qs.length, 2);
+  await Q.saveQgSettings({ live: [ex] });
+});
+
 test("الكلفة: الكاش يندفع عشره", () => {
   const t = { in: 1000, cw: 0, cr: 4000, out: 800 };
   assert.equal(Math.round(Q.usdOf(t, false) * 1e7) / 1e7, (1000 * 0.1 + 4000 * 0.01 + 800 * 0.5) / 1e6);

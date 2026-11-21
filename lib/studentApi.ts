@@ -138,7 +138,13 @@ export async function studentUpload(form: FormData) {
     list.push(Buffer.from(await v.arrayBuffer()));
     byQ.set(Number(m[1]), list);
   }
-  const who = form.get("who") === "me" ? "me" : "ai";
+  const who = form.get("who") === "me" ? "me" : form.get("who") === "qusay" ? "qusay" : "ai";
+  if (who === "qusay") {
+    const Q = await import("./qusayGrade.ts");
+    need(await Q.qgOn(), "«🧠 تصحيح قصي» طافي. شغله من صفحته أول");
+    const why = await Q.versionWhyNot(Number(form.get("vid")));
+    need(!why, `«🧠 تصحيح قصي» ما يگدر يصححها: ${why}`);
+  }
   if (who === "ai") {
     const v = await one("bank_versions", { id: Number(form.get("vid")) });
     const why = v ? await aiWhyNot(v.exam_id, v.id) : null;
@@ -146,7 +152,7 @@ export async function studentUpload(form: FormData) {
   }
   await addTestPaper(uid, Number(form.get("sid")), Number(form.get("vid")), byQ, who);
   const name = (await student(Number(form.get("sid"))))?.name ?? "";
-  return { ...await pageData("", filtersOf({}), uid), notice: who === "ai" ? `🧪 انرفعت ورقة ${name}. نظام التصحيح AI ياخذها خلال دقيقة (إذا موضوعها مأشر وخطواته جاهزة وهو شغال)` : `🧪 انرفعت ورقة ${name}، وتنتظرك بـ ✍️ التصحيح` };
+  return { ...await pageData("", filtersOf({}), uid), notice: who === "qusay" ? `🧪 انرفعت ورقة ${name}. «🧠 تصحيح قصي» يصححها خلال دقيقة أو دقيقتين، ودرجتها توصلك بالبوت مثل ما توصل للطالب` : who === "ai" ? `🧪 انرفعت ورقة ${name}. نظام التصحيح AI ياخذها خلال دقيقة (إذا موضوعها مأشر وخطواته جاهزة وهو شغال)` : `🧪 انرفعت ورقة ${name}، وتنتظرك بـ ✍️ التصحيح` };
 }
 
 export async function studentAction(body: Row) {

@@ -8,7 +8,7 @@ import path from "node:path";
 import { addMinutes } from "./scheduleRules.ts";
 import { find, insert, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
-import { can, AI_GRADER, examLabel, isAdmin, staffIds, staffName, staffRow, student } from "./data.ts";
+import { can, AI_GRADER, QUSAY_GRADER, examLabel, isAdmin, staffIds, staffName, staffRow, student } from "./data.ts";
 import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
 import { deliverMsg, voiceOf } from "./directMsg.ts";
 import { pickComment } from "./commentsApi.ts";
@@ -328,8 +328,9 @@ export async function makeTests() {
   return papers;
 }
 /** ورقة تجربة من صور حقيقية: صاحب البوت يرفع جواب كل سؤال لطالب تجربة، ويختار منو يصححها:
- *  «ai» ياخذها نظام التصحيح AI (إذا الموضوع مأشر وخطواته جاهزة)، و«me» تروح لصاحب البوت نفسه وما يمسها نظام التصحيح */
-export async function addTestPaper(owner: number, sid: number, vid: number, byQ: Map<number, Buffer[]>, who: "ai" | "me") {
+ *  «ai» ياخذها نظام التصحيح AI (إذا الموضوع مأشر وخطواته جاهزة)، و«me» تروح لصاحب البوت نفسه وما يمسها نظام التصحيح،
+ *  و«qusay» ياخذها «🧠 تصحيح قصي» ويصححها طبيعي (درجتها توصل لطالب التجربة، يعني لصاحب البوت) */
+export async function addTestPaper(owner: number, sid: number, vid: number, byQ: Map<number, Buffer[]>, who: "ai" | "me" | "qusay") {
   need(sid < 0 && await student(sid), "اختار طالب تجربة");
   const v = await one("bank_versions", { id: vid });
   need(v, "اختار الامتحان");
@@ -343,7 +344,7 @@ export async function addTestPaper(owner: number, sid: number, vid: number, byQ:
     await remove("sched_items", { id: old.id });
   }
   // «uploading» لحد ما تنرفع كل الصور: قبلها نظام التصحيح چان ياخذها فاضية ويعطي صفر
-  const id = await insert("sched_items", { user_id: sid, exam_id: v!.exam_id, at: stamp(), status: "uploading", version_id: vid, started_at: stamp(), submitted_at: stamp(), grader_id: who === "me" ? owner : null });
+  const id = await insert("sched_items", { user_id: sid, exam_id: v!.exam_id, at: stamp(), status: "uploading", version_id: vid, started_at: stamp(), submitted_at: stamp(), grader_id: who === "me" ? owner : who === "qusay" ? QUSAY_GRADER : null });
   for (const [n, pics] of byQ) for (const [i, b] of pics.entries()) {
     const ref = `test_papers/${id}/q${n}_${i + 1}_${Date.now()}.jpg`;
     await files().write(ref, b, "image/jpeg");

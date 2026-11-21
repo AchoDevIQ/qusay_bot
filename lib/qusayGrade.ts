@@ -470,6 +470,11 @@ async function pollBatches(finish: (uid: number, itemId: number) => Promise<unkn
   return done;
 }
 
+/** ورقة تجربة تنتظر «تصحيح قصي»: طالب تجربة، محجوزة إله، ما مصححة، وما تجربت 3 مرات */
+async function testPaperFor(it: Row) {
+  if (it.user_id >= 0 || it.grader_id !== QUSAY_GRADER || it.graded_at || !it.version_id) return false;
+  return await tries(it.id) < MAX_TRIES && !await qgResultOf(it.id) && !await versionWhyNot(it.version_id);
+}
 /** دكة المؤقت (كل دقيقة): يصحح أوراق مواضيعه، ويكمل التجربة، ويستلم الدفعات اللي رجعت */
 export async function qusayTick(finish: (uid: number, itemId: number) => Promise<unknown>) {
   if (!await qgOn()) return { off: true };
@@ -481,6 +486,8 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
   const take = await liveTaker();
   for (const it of await find("sched_items", { status: "done" }, { order: ["id"] })) {
     if (jobs.length >= LIVE_PER_TICK) break;
+    // ورقة طالب تجربة رفعها صاحب البوت وختار «🧠 تصحيح قصي»: محجوزة إله من الرفع، ويصححها طبيعي مثل الحقيقية (أي موضوع)
+    if (await testPaperFor(it)) { jobs.push({ it, kind: "live" }); continue; }
     if (!await take(it) || !await claim(it.id)) continue;
     jobs.push({ it: (await one("sched_items", { id: it.id }))!, kind: "live" });
   }
