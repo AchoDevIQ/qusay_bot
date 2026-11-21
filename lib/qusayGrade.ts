@@ -370,7 +370,7 @@ async function settle(p: Prepared, msg: Anthropic.Message, batch: boolean, finis
   if (kind === "trial") {
     res.human = it.graded_at ? Number(it.total ?? 0) : null;
     await kvSet(resKey(it.id), JSON.stringify(res));
-    await addLog({ at: stamp(), kind: "trial", item: it.id, name, exam, total, usd, note: `المصحح ${res.human ?? "—"}${sure ? "" : " · ⚠️ ما متأكد"}` });
+    await addLog({ at: stamp(), kind: "trial", item: it.id, name, exam, total, usd, note: `${res.human === null ? "ورقة جديدة، بعدها عند المصححين" : `المصحح ${res.human}`}${sure ? "" : " · ⚠️ ما متأكد"}` });
     return;
   }
   const now = await one("sched_items", { id: it.id });
@@ -395,24 +395,30 @@ async function settle(p: Prepared, msg: Anthropic.Message, batch: boolean, finis
   await addLog({ at: stamp(), kind: "sent", item: it.id, name, exam, total, usd });
 }
 
-// ---------- 🧪 التجربة المخفية: أوراق صححها مصحح، يصححها «تصحيح قصي» بالسر ونقارن
+// ---------- 🧪 التجربة المخفية: يصحح بالسر ويطلع النتيجة لصاحب البوت بس، ولا شي يتغير ولا يوصل للطالب.
+// على أوراق صححها مصحح (نقارن فوراً)، لو على أوراق جديدة ما مصححة (طلب الأستاذ 2026-11-21): تبقى عند المصححين
+// مثل ما هي، ومن يصححها مصحح تطلع درجته جنب درجة «تصحيح قصي» وحدها
 export async function trialQueue(): Promise<number[]> { const q = await readJson<number[]>(TRIAL, []); return Array.isArray(q) ? q.map(Number) : []; }
-/** أوراق صححها مصحح بشري بهذا الموضوع (آخرها أول)، وما تجربت قبل */
-export async function trialCandidates(examId: number): Promise<Row[]> {
+/** درجة المصحح البشري على الورقة هسه، إذا صححها */
+export const humanMark = (it: Row) => (it.graded_at && it.grader_id && it.grader_id !== QUSAY_GRADER ? Number(it.total ?? 0) : null);
+/** أوراق هذا الموضوع وبعدها ما تجربت: fresh = الجديدة اللي سلمها الطالب وما صححها أحد (آخرها أول)، وإلا اللي صححها مصحح بشري */
+export async function trialCandidates(examId: number, fresh = false): Promise<Row[]> {
   const queued = new Set(await trialQueue());
   const out: Row[] = [];
-  for (const it of (await find("sched_items", { exam_id: examId, status: "done" })).sort((a, b) => String(b.graded_at ?? "").localeCompare(String(a.graded_at ?? "")))) {
-    if (!it.graded_at || !it.grader_id || it.grader_id === AI_GRADER || it.grader_id === QUSAY_GRADER || !it.version_id || queued.has(it.id)) continue;
+  const when = (it: Row) => String((fresh ? it.submitted_at : it.graded_at) ?? "");
+  for (const it of (await find("sched_items", { exam_id: examId, status: "done" })).sort((a, b) => when(b).localeCompare(when(a)))) {
+    if (!it.version_id || queued.has(it.id) || it.grader_id === QUSAY_GRADER) continue;
+    if (fresh ? !!it.graded_at : !it.graded_at || !it.grader_id || it.grader_id === AI_GRADER) continue;
     if (await qgResultOf(it.id)) continue;
     out.push(it);
   }
   return out;
 }
-export async function queueTrial(examId: number, n: number) {
+export async function queueTrial(examId: number, n: number, fresh = false) {
   const want = Math.max(1, Math.min(50, Math.round(n) || 0));
   const cand = [];
   const ready = new Map<number, boolean>();
-  for (const it of await trialCandidates(examId)) {
+  for (const it of await trialCandidates(examId, fresh)) {
     if (cand.length >= want) break;
     if (!ready.has(it.version_id)) ready.set(it.version_id, !await versionWhyNot(it.version_id));
     if (ready.get(it.version_id)) cand.push(it.id as number);

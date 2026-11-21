@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 
-type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; trials: number; gap: number | null; close: number | null; unsure: number };
+type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Step = { text: string; points: number; awarded: number; note: string };
 type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null };
@@ -68,7 +68,7 @@ export default function QusayClient() {
                 const gap = t.human === null ? null : Math.abs(t.qusay - t.human);
                 return (
                   <div key={t.id} className="aig-logrow">
-                    <div><b>{t.name}</b> · {t.exam}<br /><small>المصحح: <b>{t.human ?? "—"}</b> · تصحيح قصي: <b>{t.qusay}</b>{gap !== null && <> · الفرق {gap}</>}{!t.sure && " · ⚠️ ما متأكد (كان يرجعها للمصحح)"} · {t.iqd} دينار</small></div>
+                    <div><b>{t.name}</b> · {t.exam}<br /><small>المصحح: <b>{t.human ?? "⏳ بعده ما صححها"}</b> · تصحيح قصي: <b>{t.qusay}</b>{gap !== null && <> · الفرق {gap}</>}{!t.sure && " · ⚠️ ما متأكد (كان يرجعها للمصحح)"} · {t.iqd} دينار</small></div>
                     <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "paper", id: t.id })}>👁 شوف</button>
                   </div>
                 );
@@ -120,6 +120,7 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
 
 function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
   const [n, setN] = useState(String(Math.min(10, Math.max(1, e.human))));
+  const [nf, setNf] = useState(String(Math.min(3, Math.max(1, e.fresh))));
   return (
     <div className="card expad">
       <div className="exlabel">{e.title} {e.live && "· ✅ يصححه صدگ"}</div>
@@ -127,7 +128,8 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
       {e.why ? <div className="exbad">⏳ {e.why}. اكتب خطوات الحل من صفحة «🤖 نظام التصحيح AI» (نفس الخطوات تنفع للاثنين).</div> : <div className="fdok">✅ كل أسئلته إلها خطوات أو حل</div>}
       <div className="aig-stats">
         {e.trials ? <>جربته على <b>{e.trials}</b> ورقة · معدل الفرق عن المصحح: <b>{e.gap ?? "—"}</b> درجة · قريبة (3 درجات أو أقل): <b>{e.close ?? "—"}%</b>{e.unsure > 0 && <> · ما متأكد بـ {e.unsure}</>}</> : "بعد ما جربته على هذا الموضوع."}
-        <br />أوراق صححها مصحح وتگدر تجربها: <b>{e.human}</b>
+        {e.waiting > 0 && <><br />⏳ {e.waiting} ورقة جديدة جربها وتنتظر المصحح: من يصححها تطلع درجته جنبها</>}
+        <br />أوراق صححها مصحح وتگدر تجربها: <b>{e.human}</b> · أوراق جديدة ما مصححة: <b>{e.fresh}</b>
       </div>
       {!e.why && e.human > 0 && (
         <div className="aig-logrow">
@@ -135,6 +137,13 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
           <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "trial", exam: e.id, n: Number(n) })}>🧪 جرب على {n} ورقة</button>
         </div>
       )}
+      {!e.why && e.fresh > 0 && (
+        <div className="aig-logrow">
+          <input type="number" inputMode="numeric" min={1} max={50} value={nf} onChange={(x) => setNf(x.target.value)} style={{ width: 70 }} />
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "trial", exam: e.id, n: Number(nf), fresh: true })}>🆕 جرب على {nf} ورقة جديدة</button>
+        </div>
+      )}
+      {!e.why && e.fresh > 0 && <div className="exhint">الورقة الجديدة تبقى عند المصححين مثل ما هي، ودرجة «تصحيح قصي» تطلع إلك إنت بس. ولا شي يوصل للطالب.</div>}
       {e.trials > 0 && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "forget", exam: e.id })}>🗑 امسح تجاربه حتى أعيدها</button>}
       {!e.mu && !e.why && (
         <button type="button" className={e.live ? "btn ghost" : "btn"} disabled={busy} onClick={() => void call({ action: "live", exam: e.id, on: !e.live })}>

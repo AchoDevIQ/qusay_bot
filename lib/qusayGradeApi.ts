@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, clearTrialQueue, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  saveQgSettings, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
+  humanMark, saveQgSettings, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -36,11 +36,12 @@ async function listData(uid: number) {
     let why: string | null = vs.length ? null : "ماكو نماذج";
     for (const v of vs) { const w = await versionWhyNot(v.id); if (w) { why = `نموذج ${v.model}: ${w}`; break; } }
     const trials = items.filter((it) => it.exam_id === e.id && results.get(it.id)?.kind === "trial");
-    const both = trials.map((it) => results.get(it.id)!).filter((r) => r.human !== null && r.human !== undefined);
+    // درجة المصحح من الورقة هسه: الورقة الجديدة اللي تجربت قبل ما يصححها، درجته تطلع من يصححها
+    const both = trials.filter((it) => humanMark(it) !== null).map((it) => ({ ...results.get(it.id)!, human: humanMark(it) }));
     const gaps = both.map((r) => Math.abs(r.total - Number(r.human)));
     c.exams.push({
       id: e.id, title: e.title, why, live: s.live.includes(e.id), mu: mu.has(e.id),
-      human: (await trialCandidates(e.id)).length, trials: trials.length,
+      human: (await trialCandidates(e.id)).length, fresh: (await trialCandidates(e.id, true)).length, trials: trials.length, waiting: trials.length - both.length,
       gap: gaps.length ? r1(gaps.reduce((t, g) => t + g, 0) / gaps.length) : null,
       close: gaps.length ? Math.round((gaps.filter((g) => g <= 3).length / gaps.length) * 100) : null,
       unsure: both.filter((r) => !r.sure).length,
@@ -50,7 +51,7 @@ async function listData(uid: number) {
   const trialRows = [];
   for (const it of items.filter((x) => results.get(x.id)?.kind === "trial").sort((a, b) => String(results.get(b.id)!.at).localeCompare(String(results.get(a.id)!.at))).slice(0, SHOW)) {
     const r = results.get(it.id)!;
-    trialRows.push({ id: it.id, name: await nameOf(it), exam: titles.get(it.exam_id) ?? "", human: r.human ?? null, qusay: r.total, sure: r.sure, iqd: iqd(r.usd), at: r.at });
+    trialRows.push({ id: it.id, name: await nameOf(it), exam: titles.get(it.exam_id) ?? "", human: humanMark(it), qusay: r.total, sure: r.sure, iqd: iqd(r.usd), at: r.at });
   }
   const paid = [...results.values()].slice(-100);
   return {
@@ -73,9 +74,9 @@ async function paperDetail(id: number) {
   const marks = new Map((await find("question_marks", { item_id: id })).map((m) => [Number(m.q), Number(m.mark)]));
   const answers = await find("exam_answers", { item_id: id }, { order: ["q", "id"] });
   return {
-    id, name: await nameOf(it!), exam: String((await one("bank_exams", { id: it!.exam_id }))?.title ?? ""), kind: r!.kind, human: r!.human ?? null,
+    id, name: await nameOf(it!), exam: String((await one("bank_exams", { id: it!.exam_id }))?.title ?? ""), kind: r!.kind, human: r!.kind === "trial" ? humanMark(it!) : r!.human ?? null,
     total: r!.total, sure: r!.sure, iqd: iqd(r!.usd), batch: r!.batch, sent: !!r!.sent,
-    qs: r!.qs.map((q) => ({ ...q, human: r!.kind === "trial" && marks.has(q.n) ? marks.get(q.n)! : null })),
+    qs: r!.qs.map((q) => ({ ...q, human: r!.kind === "trial" && humanMark(it!) !== null && marks.has(q.n) ? marks.get(q.n)! : null })),
     photos: answers.map((a) => ({ q: Number(a.q) || 0, ref: String(a.file) })),
   };
 }
@@ -114,10 +115,11 @@ export async function qusayAction(body: Row) {
   }
   if (a === "trial") {
     need(await one("bank_exams", { id: exam }), "اختار الموضوع");
-    const n = await queueTrial(exam, Number(body.n));
-    need(n > 0, "ماكو أوراق صححها مصحح بهذا الموضوع وبعدها ما تجربت (أو باقي خطوات)");
+    const fresh = body.fresh === true;
+    const n = await queueTrial(exam, Number(body.n), fresh);
+    need(n > 0, fresh ? "ماكو أوراق جديدة سلمها الطلاب بهذا الموضوع وبعدها ما تصححت (أو باقي خطوات)" : "ماكو أوراق صححها مصحح بهذا الموضوع وبعدها ما تجربت (أو باقي خطوات)");
     const on = await qgOn();
-    return await out(`🧪 ${n} ورقة تنتظر التجربة. ${on ? "تبدي خلال دقيقة، وكل دقيقة 6 أوراق." : "شغّل «تصحيح قصي» حتى تبدي."}`);
+    return await out(`🧪 ${n} ورقة ${fresh ? "جديدة " : ""}تنتظر التجربة.${fresh ? " تبقى عند المصححين مثل ما هي، ولا شي يوصل للطالب." : ""} ${on ? "تبدي خلال دقيقة، وكل دقيقة 6 أوراق." : "شغّل «تصحيح قصي» حتى تبدي."}`);
   }
   if (a === "trialClear") { await clearTrialQueue(); return await out("انمسحت الأوراق اللي تنتظر التجربة"); }
   if (a === "forget") { const n = await forgetTrial(exam); return await out(`انمسحت نتائج ${n} تجربة بهذا الموضوع، تگدر تعيدها`); }

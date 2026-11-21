@@ -114,6 +114,35 @@ test("التجربة بالسر: يصحح ورقة صححها مصحح، ودر�
   assert.equal(d.paper.qs[0].human, 40);
 });
 
+test("🆕 التجربة على ورقة جديدة ما مصححة: تبقى عند المصححين، ودرجة المصحح تطلع جنبها من يصححها", async () => {
+  const id = await paper([1, 2]);
+  reply = () => good;
+  let page: any = await qusayAction({ initData: sign(1), action: "list" });
+  assert.equal(page.chapters[0].exams.find((x: any) => x.id === ex).fresh, 1);
+  const r: any = await qusayAction({ initData: sign(1), action: "trial", exam: ex, n: 3, fresh: true });
+  assert.match(r.notice, /1 ورقة جديدة/);
+  tg.length = 0;
+  await Q.qusayTick(finishByAi);
+  const res = await Q.qgResultOf(id);
+  assert.equal(res!.kind, "trial");
+  assert.equal(res!.total, 85.5);
+  const it = await one("sched_items", { id });
+  assert.deepEqual([it!.graded_at ?? null, it!.grader_id ?? null], [null, null], "ما انحجزت ولا انصححت");
+  assert.equal(tg.filter((m) => m.method.startsWith("send")).length, 0, "ما يوصل شي للطالب");
+  assert.equal((await Q.qusayHeld([it!])).has(id), false, "ما يحجبها عن المصححين");
+  page = await qusayAction({ initData: sign(1), action: "list" });
+  assert.equal(page.trials.find((t: any) => t.id === id).human, null);
+  assert.equal(page.chapters[0].exams.find((x: any) => x.id === ex).waiting, 1);
+  // المصحح صححها: درجته تطلع جنبها وحدها
+  await put("sched_items", { ...it, grader_id: 41, graded_at: stamp(), total: 80 });
+  await put("question_marks", { item_id: id, q: 1, mark: 50 });
+  page = await qusayAction({ initData: sign(1), action: "list" });
+  assert.equal(page.trials.find((t: any) => t.id === id).human, 80);
+  const d: any = await qusayAction({ initData: sign(1), action: "paper", id });
+  assert.equal(d.paper.human, 80);
+  assert.equal(d.paper.qs[0].human, 50);
+});
+
 test("يصحح صدگ: يحجز الورقة ويحفظ الدرجة ويوصلها للطالب باسمه", async () => {
   await qusayAction({ initData: sign(1), action: "live", exam: ex, on: true });
   const id = await paper([1]);   // السؤال 2 ما جاوبه: صفر بدون ما يسأل عنه
