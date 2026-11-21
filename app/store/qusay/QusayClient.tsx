@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 import { Inline, MarkedPage, MathText, type MarkedPageT } from "../myexams/AiCompare";
+import VoiceText from "./VoiceText";
 
 type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number; style: string };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
@@ -138,8 +139,8 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
         <option value="0">⏸ طافية: الطالب يشوف التصحيح خطوات بس (الأصل)</option>
         <option value="1">🖍 شغالة: كل ورقة يصححها تطلع للطالب مصححة بالأحمر</option>
       </select>
-      <div className="exhint">✍️ طريقتك بالكتابة: اكتب أمثلة من ملاحظاتك مثل ما تكتبها على ورقة الطالب، كل وحدة بسطر (مثلاً: «المفروض 23π/12» ، «نسيت تعوض» ، «ركز بالإشارة»). يكتب مثلك بالعلامات الحمرة وبـ 🖍 جرب العلامات</div>
-      <textarea rows={4} maxLength={3000} value={style} onChange={(e) => setStyle(e.target.value)} />
+      <div className="exhint">✍️ طريقتك بالكتابة: اكتب أو احچي (🎤 فويس) أمثلة من ملاحظاتك مثل ما تكتبها على ورقة الطالب، كل وحدة بسطر (مثلاً: «المفروض 23π/12» ، «نسيت تعوض» ، «ركز بالإشارة»). يكتب مثلك بالعلامات الحمرة وبـ 🖍 جرب العلامات</div>
+      <VoiceText value={style} onChange={setStyle} />
       <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure, marks, style })}>💾 احفظ</button>
     </div>
   );
@@ -184,8 +185,8 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
       {/* عبارات الأستاذ الخاصة بهذا الموضوع، فوك «✍️ طريقتك بالكتابة» العامة */}
       <button type="button" className="exbtn" onClick={() => setOpenWords(!openWords)}>✍️ عبارات هذا الموضوع{e.style.trim() ? " ✅" : ""}</button>
       {openWords && <>
-        <div className="exhint">العبارات والكلمات اللي تستعملها بهذا الموضوع بس، كل وحدة بسطر. يستعملها ويا «✍️ طريقتك بالكتابة» العامة بالعلامات الحمرة.</div>
-        <textarea rows={4} maxLength={3000} value={words} onChange={(x) => setWords(x.target.value)} />
+        <div className="exhint">العبارات والكلمات اللي تستعملها بهذا الموضوع بس، كل وحدة بسطر. تگدر تكتبها لو تحچيها (🎤 فويس). يستعملها ويا «✍️ طريقتك بالكتابة» العامة بالعلامات الحمرة.</div>
+        <VoiceText value={words} onChange={setWords} />
         <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
       </>}
       {!e.mu && !e.why && (

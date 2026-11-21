@@ -1019,7 +1019,8 @@ function PaperView({ paper, busy, error, object, leave }: { paper: Paper; busy: 
             </tbody></table>
           </div>
         )}
-        {!!paper.questions.length && (
+        {/* بعد التصحيح أسئلة الامتحان ما تطلع (طلب الأستاذ 2026-11-21) */}
+        {!graded && !!paper.questions.length && (
           <div className="card">
             <h2>📄 أسئلة الامتحان</h2>
             {paper.questions.map((p) => <img key={p} className="eximg" src={fileUrl(paper.id, p)} alt="أسئلة الامتحان" />)}
