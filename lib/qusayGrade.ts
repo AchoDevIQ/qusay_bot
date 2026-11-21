@@ -195,6 +195,7 @@ PEN MARKS: the student's images are numbered [Image 1], [Image 2], ... The teach
 - The teacher marks only what lost points. So give a box ONLY for a step that did not get its full points: p = the image number where that step is written, and a TIGHT box around exactly the handwriting of that step (usually one line). Do not include neighbouring lines.
 - A step that got its full points: p=0 and a box of zeros. Exception: when the WHOLE question got full marks, give the box of its LAST written step only (the teacher writes "well done" there).
 - If a step is not written anywhere, give p=0 and a box of zeros.
+- For each question: p = the image where its answer ENDS, and a box around the student's whole answer to that question on that image (the teacher writes a final remark just after it). If the question was not answered, zeros.
 Be precise: each box must sit on that step's own ink.`;
 const BOX = { p: { type: "integer" }, x1: { type: "integer" }, y1: { type: "integer" }, x2: { type: "integer" }, y2: { type: "integer" } } as const;
 const BOX_KEYS = ["p", "x1", "y1", "x2", "y2"];
@@ -208,7 +209,7 @@ function schemaOf(marks: boolean) {
     properties: {
       papers: { type: "array", items: { type: "object", properties: BOX, required: BOX_KEYS, additionalProperties: false } },
       questions: { ...SCHEMA.properties.questions, items: {
-        ...q, properties: { ...q.properties, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, ...BOX_KEYS], properties: { ...st.properties, ...BOX } } } },
+        ...q, required: [...q.required, ...BOX_KEYS], properties: { ...q.properties, ...BOX, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, ...BOX_KEYS], properties: { ...st.properties, ...BOX } } } },
       } },
     },
   };
@@ -329,7 +330,7 @@ export function papersOf(j: any): Map<number, Box> {
   return m;
 }
 /** وين تنرسم علامة الخطوة: بعد آخر سطرها مباشرة، بنص ارتفاعه، وجوة الورقة دائماً. إذا ما يساع يمينه، يسار السطر */
-export function ptOf(s: any, pages: number, papers: Map<number, Box> = new Map()): QgPt | undefined {
+export function ptOf(s: any, pages: number, papers: Map<number, Box> = new Map(), end = false): QgPt | undefined {
   const p = Math.round(Number(s?.p));
   if (!(p >= 1 && p <= pages)) return undefined;
   const paper = papers.get(p) ?? { x1: 0, y1: 0, x2: 1000, y2: 1000 };
@@ -337,7 +338,8 @@ export function ptOf(s: any, pages: number, papers: Map<number, Box> = new Map()
   const b = boxOf(s);
   if (!b) return s?.x === undefined ? undefined : { p, x: inX(c1000(s.x)), y: inY(c1000(s.y)) };
   const right = b.x2 + 40;
-  return { p, x: Math.round(inX(right <= paper.x2 - 35 ? right : b.x1 - 40)), y: Math.round(inY((b.y1 + b.y2) / 2)) };
+  // end: آخر الجواب كله (ملاحظة المدرس الأخيرة يم آخر سطر)
+  return { p, x: Math.round(inX(right <= paper.x2 - 35 ? right : b.x1 - 40)), y: Math.round(inY(end ? Math.max(b.y1 + 10, b.y2 - 25) : (b.y1 + b.y2) / 2)) };
 }
 const shortNote = (t: string) => (t.length > 90 ? t.slice(0, 88).replace(/\s+\S*$/, "") + "…" : t);
 /** علامات الورقة اللي تنرسم لكل صورة: ✓ للخطوة الصح، ✗ للغلط، ونص الدرجة للناقصة، ودرجة السؤال بدائرة.
@@ -353,15 +355,22 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
     // درجة السؤال ما تنكتب على الورقة: مكتوبة بزر السؤال فوك. والصح ما ينرسم: بس الغلط والناقص،
     // والسؤال الصح كله ✓ وحدة و«أحسنت» بآخره، حتى يحس انصححت (طلب الأستاذ 2026-11-21)
     const full = (s: QgStep) => s.awarded >= s.points && s.points > 0;
-    if (q.steps.length && q.steps.every(full)) {
-      const last = [...q.steps].reverse().find((s) => s.at);
-      add(last?.at, { kind: "good", text: "أحسنت" });
+    if (q.steps.length ? q.steps.every(full) : q.score >= q.max) {
+      add(q.at ?? [...q.steps].reverse().find((s) => s.at)?.at, { kind: "good", text: "أحسنت" });
       continue;
     }
+    let drawn = 0;
+    const unplaced: string[] = [];
     for (const s of q.steps) {
       if (full(s)) continue;
       const kind = s.awarded > 0 ? "half" : "bad";
-      add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(s.note ? { note: shortNote(s.note) } : {}) });
+      if (s.at) { add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(s.note ? { note: shortNote(s.note) } : {}) }); drawn++; }
+      else if (s.note) unplaced.push(s.note);
+    }
+    // الخطوات اللي ما كتبها الطالب (ما إلها مكان): ✗ وملاحظتها بآخر جوابه، مثل «ناقص» المدرس. وإذا ماكو ولا علامة، سبب السؤال
+    if (unplaced.length || !drawn) {
+      const note = unplaced.length ? unplaced.join("، ") : q.reason;
+      add(q.at, { kind: "bad", text: "", ...(note ? { note: shortNote(note) } : {}) });
     }
   }
   const out: { ref: string; marks: PaperMark[] }[] = [];
@@ -401,7 +410,7 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
     }) : [];
     let score = plan ? steps.reduce((t, s) => t + s.awarded, 0) : Number(a.score) || 0;
     score = answered ? Math.min(m.max, Math.max(0, half(score))) : 0;
-    const at = ptOf(a, pages, papers);
+    const at = ptOf(a, pages, papers, true);
     return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: String(a.reason ?? "").slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}) };
   });
   // «أجب عن K»: السؤال اللي ما جاوبه ما يحتاج تأكيد

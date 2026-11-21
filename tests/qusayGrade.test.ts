@@ -441,6 +441,15 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
   const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
   const [g] = Q.marksByPage([good], ["a"]);
   assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.x, m.y]), [["good", "أحسنت", 50, 965]]);
+  // الطالب ما كتب الخطوات (مثل س5: 3 من 15): ✗ وملاحظاتها بآخر جوابه
+  const miss = { n: 5, max: 15, score: 3, answered: true, sure: true, reason: "ناقص", method: 1, at: { p: 1, x: 600, y: 700 },
+    steps: [{ text: "أ", points: 5, awarded: 3, note: "", at: undefined }, { text: "ب", points: 10, awarded: 0, note: "ما كملت الحل" }] };
+  const [m5] = Q.marksByPage([miss], ["a"]);
+  assert.deepEqual(m5.marks.map((m) => [m.kind, m.x, m.y, m.note]), [["bad", 600, 700, "ما كملت الحل"]]);
+  // ماكو ولا ملاحظة: سبب السؤال
+  const [m6] = Q.marksByPage([{ ...miss, steps: miss.steps.map((st) => ({ ...st, note: "" })) }], ["a"]);
+  assert.equal(m6.marks[0].note, "ناقص");
+  assert.equal(Q.ptOf({ p: 1, x1: 100, y1: 200, x2: 500, y2: 600 }, 1, new Map(), true)!.y, 575, "آخر الجواب");
 });
 
 test("🖍 العلامة بعد آخر سطر الخطوة وجوة الورقة، مو على الطاولة أو الشاشة اللي حواليها", () => {
