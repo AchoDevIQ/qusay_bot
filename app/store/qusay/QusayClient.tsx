@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 import { Inline, MarkedPage, MathText, type MarkedPageT } from "../myexams/AiCompare";
 import VoiceText from "./VoiceText";
+import InkBook, { type InkItem } from "./InkBook";
 
 type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number; style: string };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
@@ -15,7 +16,7 @@ type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; i
 type Data = {
   on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string }; fileToken: string;
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
-  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; paper?: Paper; notice?: string;
+  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; paper?: Paper; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي" };
@@ -69,6 +70,7 @@ export default function QusayClient() {
               {data.log.length > 8 && <button type="button" className="exbtn" onClick={() => setAllLog(!allLog)}>{allLog ? "⬆️ أقل" : `⬇️ كل السجل (${data.log.length})`}</button>}
             </div>
             <Settings key={JSON.stringify(data.settings)} s={data.settings} busy={busy} call={call} />
+            <InkCard busy={busy} call={call} />
             {data.chapters.length > 0 && (
               <div className="card expad">
                 <div className="exlabel">الفصل</div>
@@ -146,12 +148,26 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
   );
 }
 
+/** «✍️ خط إيدي» العام: ينفتح بزر، حتى الصفحة ما تثگل */
+function InkCard({ busy, call }: { busy: boolean; call: Call }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="card expad">
+      <div className="exlabel">✍️ خط إيدي على ورقة الطالب</div>
+      <div className="exhint">تكتب بقلم الآيباد ✓ و✗ والمدح والملاحظات، والتصحيح الأحمر يرسمها بخطك إنت بدل الخط المطبوع. حتى الطالب يحس إنك صححت ورقته بإيدك.</div>
+      <button type="button" className={open ? "btn ghost" : "btn"} onClick={() => setOpen(!open)}>{open ? "⬆️ سد" : "✍️ افتح خط إيدي"}</button>
+      {open && <InkBook exam={0} busy={busy} call={call} />}
+    </div>
+  );
+}
+
 function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
   const [n, setN] = useState(String(Math.min(10, Math.max(1, e.human))));
   const [nf, setNf] = useState(String(Math.min(3, Math.max(1, e.fresh))));
   const [fast, setFast] = useState(true);
   const [words, setWords] = useState(e.style);
   const [openWords, setOpenWords] = useState(false);
+  const [openInk, setOpenInk] = useState(false);
   return (
     <div className="card expad">
       <div className="exlabel">{e.title} {e.live && "· ✅ يصححه صدگ"}</div>
@@ -189,6 +205,9 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
         <VoiceText value={words} onChange={setWords} />
         <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
       </>}
+      {/* خط إيده الخاص بهذا الموضوع، فوك خطه العام */}
+      <button type="button" className="exbtn" onClick={() => setOpenInk(!openInk)}>✍️ خط إيدي لهذا الموضوع</button>
+      {openInk && <InkBook exam={e.id} busy={busy} call={call} />}
       {!e.mu && !e.why && (
         <button type="button" className={e.live ? "btn ghost" : "btn"} disabled={busy} onClick={() => void call({ action: "live", exam: e.id, on: !e.live })}>
           {e.live ? "⏸ رجّع هذا الموضوع للمصححين" : "▶️ خليه يصحح هذا الموضوع صدگ"}

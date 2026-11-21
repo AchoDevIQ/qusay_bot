@@ -328,7 +328,7 @@ body.grwide .grtop{padding-left:104px}
 .mk svg{display:block}.mkgood{font-family:var(--mkfont);font-size:24px;font-weight:700;white-space:nowrap;transform:rotate(-8deg)}.mkhalf{font-family:var(--mkfont);font-size:20px;font-weight:700}
 .mkscore{font-family:var(--mkfont);font-weight:700;font-size:19px;border:3px solid #d40000;border-radius:50%;padding:7px 9px;white-space:nowrap;transform:rotate(-6deg)}
 .mknote{position:absolute;top:100%;left:0;margin-top:2px;width:max-content;max-width:min(240px,45vw);font-family:var(--mkfont);font-size:15px;line-height:1.35;color:#d40000;text-shadow:0 0 3px #fff,0 0 3px #fff;direction:rtl;white-space:normal}.mknote.mkleft{left:auto;right:0}
-.mkink{height:28px;width:auto;display:block}.mkinkw{height:36px;width:auto;display:block;transform:rotate(-6deg)}
+.mkink{display:block;overflow:visible;flex:none}.mknote.mkhand{max-width:none;text-shadow:none;filter:drop-shadow(0 0 1px #fff)}
 .mknote .katex{font-size:.95em;color:#d40000}
 .aicbig{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:10px}.aicbig img{max-width:100%;max-height:100%}.aicbig span{position:absolute;top:calc(14px + var(--tg-safe-area-inset-top,0px));left:14px;color:#fff;font-size:22px}
 .aiinl{display:inline-block;unicode-bidi:isolate}.aiinl .katex{font-size:1.05em}
@@ -478,3 +478,13 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .gk-vmbar{flex:1 1 100%;order:6;display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#1b1d21;border-radius:10px;padding:6px 10px}.gk-vmtext{flex:1;min-width:160px;font-weight:700;font-size:15px}.gk-vmok{color:#7ee2a8}.gk-vmerr{color:#ffb74d}
 .gk-vm-why{height:32px;border:1px dashed #555;border-radius:10px;background:none;color:#b9bcc4;font-family:inherit;font-size:13px;padding:0 10px;cursor:pointer;flex:none}
 .gk-kbin{flex:1 1 220px;min-width:0;height:40px;border:1px solid #444;border-radius:10px;background:#111316;color:#fff;font-family:inherit;font-size:16px;padding:0 10px}
+/* «✍️ خط إيدي»: الأستاذ يكتب بقلم الآيباد */
+.inkbox{margin-top:10px}.inkkind{border-top:1px solid #e5e5e5;padding-top:8px;margin-top:8px}
+.inklist{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.inkitem{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:4px 6px;color:#d40000}
+.inkitem small{color:#555}.inkpic{display:flex;min-height:30px;align-items:center}
+.inkpad{display:block;width:100%;height:auto;margin:8px auto;background:#fff;border:2px dashed #c9a24a;border-radius:10px;touch-action:none;cursor:crosshair}
+.inkpaper{background:#fff repeating-linear-gradient(#fff 0 29px,#c9d6ee 29px 30px);border-radius:8px;padding:6px 14px;margin:8px 0;max-width:420px;line-height:30px;color:#d40000}
+.inkstu{color:#1b2a6b;direction:ltr;text-align:left;font:italic 17px/30px "Times New Roman",serif}
+.inkon{display:flex;justify-content:flex-start;padding-right:10px}
+.vtext textarea{display:block;width:100%;box-sizing:border-box;font-size:16px;border:1px solid var(--gold2);border-radius:10px;padding:10px;margin-top:6px;background:transparent;color:inherit;resize:vertical}

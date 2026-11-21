@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, marksByPage, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
+  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -82,11 +82,12 @@ async function paperDetail(id: number) {
   // 🖍 العلامات على الورقة: من التصحيح نفسه إذا كانت شغالة، وإلا من «🖍 جرب العلامات» إذا سواها
   const demo = await qgMarksOf(id);
   const mk = r!.pages?.length ? { qs: r!.qs, pages: r!.pages } : demo;
+  const ink = mk ? await inkFor(Number(it!.exam_id)) : [];
   return {
     id, name: await nameOf(it!), exam: String((await one("bank_exams", { id: it!.exam_id }))?.title ?? ""), kind: r!.kind, human: r!.kind === "trial" ? humanMark(it!) : r!.human ?? null,
     total: r!.total, sure: r!.sure, iqd: iqd(r!.usd), batch: r!.batch, sent: !!r!.sent,
     qs: r!.qs.map((q) => ({ ...q, human: r!.kind === "trial" && humanMark(it!) !== null && marks.has(q.n) ? marks.get(q.n)! : null,
-      marked: mk ? marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => Number(a.q) === q.n).map((a) => String(a.file))) : null })),
+      marked: mk ? marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => Number(a.q) === q.n).map((a) => String(a.file)), ink) : null })),
     photos: answers.map((a) => ({ q: Number(a.q) || 0, ref: String(a.file) })),
     demo: demo ? { at: demo.at, total: demo.total, iqd: iqd(demo.usd) } : null, demoWaiting: await marksWaiting(id),
   };
@@ -153,6 +154,15 @@ export async function qusayAction(body: Row) {
   if (a === "marks") {
     try { await queueMarks(Number(body.id)); } catch (e) { fail(e); }
     return await out(`🖍 تنتظر. خلال دقيقة لو دقيقتين يعيد تصحيحها ويرسم العلامات على الورقة (⚡ هسه، تقريباً 6 دنانير)${(await qgOn()) ? "" : ". شغّل «تصحيح قصي» أول حتى يبدي"}. درجتها الأصلية ما تتغير. بعدها دوس 🔄 حدّث وافتح 👁 مرة ثانية.`, { paper: await paperDetail(Number(body.id)) });
+  }
+  // «✍️ خط إيدي»: العام (exam=0) أو الخاص بموضوع
+  if (a === "inkList" || a === "inkAdd" || a === "inkDel") {
+    const ex = Number(body.exam) || 0;
+    if (ex) need(await one("bank_exams", { id: ex }), "الموضوع غير موجود");
+    let notice = "";
+    if (a === "inkAdd") { try { await addInk(ex, body.item); } catch (e) { fail(e); } notice = "✅ انرفعت بخطك"; }
+    if (a === "inkDel") { await removeInk(ex, Number(body.id)); notice = "🗑 انمسحت"; }
+    return await out(notice, { inkOf: { exam: ex, items: await inkList(ex) } });
   }
   if (a === "retry") { try { await qgRetry(Number(body.id)); } catch (e) { fail(e); } return await out("🔁 يعيد يجربها بالدكة الجاية"); }
   throw new ApiError(400, "أمر غير معروف");

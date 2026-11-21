@@ -11,18 +11,35 @@ export type AiStep = { status: string; awarded: number; possible: number; expect
 /** الخطوة اللي نظام التصحيح ما گدر يحللها، أو كتابتها ما تنرسم: الطالب يشوف هاي الرسالة بدل كتابة ما تنقرا */
 export const FAIL_TEXT = "تعذّر تحليل هذه الخطوة، أرسل صورة ثانية أوضح.";
 /** علامة حمرة على صورة الورقة (x و y من 0 لـ 1000): ✓ صح، ✗ غلط، نص درجة، ودرجة السؤال بدائرة */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string };
+export type InkShape = { w: number; h: number; s: number[][] };
+/** sym ✓/✗، word المدح، hand الملاحظة: بخط إيد الأستاذ إذا كاتبها بـ «✍️ خط إيدي» */
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
 export type MarkedPageT = { ref: string; marks: PaperMark[] };
 export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay"; marked?: MarkedPageT[] };
 
 const Tick = () => <svg viewBox="0 0 44 32" width="34" height="25" aria-hidden><path d="M3 17 Q9 21 15 29 Q24 11 41 3" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 const Cross = () => <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden><path d="M5 5 Q16 15 27 28 M27 4 Q15 16 5 27" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" /></svg>;
-/** صور من خط الأستاذ نفسه بالقلم الأحمر (بـ public/ink/، خلفيتها شفافة): كل شي كاتبه كم مرة، والبوت ياخذ وحدة منهن
- *  حتى ما تتكرر نفس الشكل. إذا ماكو صورة لشي، ينرسم مثل قبل (✓ ✗ مرسومة، والكلام بخط الرقعة) */
-export const INK: Record<"tick" | "cross" | "good", string[]> = { tick: [], cross: [], good: [] };
-/** نفس العلامة تاخذ نفس الصورة كل مرة تنفتح الورقة (مو كل مرة شكل) */
-const inkOf = (k: keyof typeof INK, m: PaperMark, i: number) => { const l = INK[k]; return l.length ? l[(Math.round(m.x * 7 + m.y * 13) + i) % l.length] : ""; };
-const Ink = ({ src, cls }: { src: string; cls: string }) => <img className={cls} src={src} alt="" aria-hidden />;
+/** حجم خط الإيد على الورقة: سطر الكتابة بصفحة «✍️ خط إيدي» (120) يصير 30 بكسل، فكل شي بحجمه مثل ما كتبه */
+export const INK_PX = 0.25;
+/** الخط الناعم: منتصف كل نقطتين، نفس قلم الآيباد */
+export function inkPath(p: number[]) {
+  if (p.length <= 2) return `M${p[0]} ${p[1]}l0.1 0`;
+  let d = `M${p[0]} ${p[1]}`;
+  for (let i = 2; i < p.length - 2; i += 2) d += `Q${p[i]} ${p[i + 1]} ${(p[i] + p[i + 2]) / 2} ${(p[i + 1] + p[i + 3]) / 2}`;
+  return d + `L${p[p.length - 2]} ${p[p.length - 1]}`;
+}
+/** كتابة الأستاذ بالأحمر، مقصوصة على حجمها (بدون فراغ المربع) وخلفيتها شفافة */
+export function InkSvg({ sh, k = INK_PX, color = "currentColor", width = 2.6 }: { sh: InkShape; k?: number; color?: string; width?: number }) {
+  const all = sh.s.flat();
+  const xs = all.filter((_, i) => i % 2 === 0), ys = all.filter((_, i) => i % 2 === 1);
+  if (!xs.length) return null;
+  const pad = 8, x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad, w = Math.max(...xs) - x0 + pad, h = Math.max(...ys) - y0 + pad;
+  return (
+    <svg className="mkink" viewBox={`${x0} ${y0} ${w} ${h}`} width={w * k} height={h * k} aria-hidden>
+      {sh.s.map((p, i) => <path key={i} d={inkPath(p)} fill="none" stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
+    </svg>
+  );
+}
 /** صورة ورقة الطالب وعليها تصحيح بقلم أحمر مثل المدرس: ✓ و✗ يم كل خطوة، ودرجة السؤال بدائرة، وملاحظة قصيرة بخط اليد */
 export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) {
   return (
@@ -31,13 +48,11 @@ export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) 
       {marks.map((m, i) => (
         <div key={i} className={"mk mk-" + m.kind} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}>
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : <>
-            {m.kind === "bad"
-              ? (inkOf("cross", m, i) ? <Ink src={inkOf("cross", m, i)} cls="mkink" /> : <Cross />)
-              : (inkOf("tick", m, i) ? <Ink src={inkOf("tick", m, i)} cls="mkink" /> : <Tick />)}
-            {m.kind === "good" && inkOf("good", m, i) ? <Ink src={inkOf("good", m, i)} cls="mkinkw" />
-              : m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
+            {m.sym ? <InkSvg sh={m.sym} /> : m.kind === "bad" ? <Cross /> : <Tick />}
+            {m.word ? <InkSvg sh={m.word} /> : m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
           </>}
-          {m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "")}><Inline text={m.note} /></span>}
+          {m.hand ? <span className={"mknote mkhand" + (m.x > 500 ? " mkleft" : "")}><InkSvg sh={m.hand} /></span>
+            : m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "")}><Inline text={m.note} /></span>}
         </div>
       ))}
     </div>

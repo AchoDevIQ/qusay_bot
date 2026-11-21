@@ -498,3 +498,33 @@ test("الصفحة بس لصاحب البوت واللي عنده الصلاحي
   const { adminHomeAction } = await import("../lib/adminHomeApi.ts");
   assert.ok(JSON.stringify(await adminHomeAction({ initData: sign(42), action: "list" })).includes('"qusay"'), "مربعه بلوحة التحكم");
 });
+
+test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينرسم على الورقة بدل الخط، والملاحظة بخطه إذا الذكاء اختار رقمها", async () => {
+  const shape = { w: 480, h: 360, s: [[10, 10, 50, 80, 120, 20]] };
+  await assert.rejects(qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "note", text: "", ...shape } }), /اكتب شنو مكتوب/);
+  await assert.rejects(qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "tick", w: 480, h: 360, s: [] } }), /ما كتبت شي/);
+  const t: any = await qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "tick", ...shape, s: [[10, 10, 9999, -5]] } });
+  assert.deepEqual(t.inkOf.items[0].s, [[10, 10, 480, 0]], "النقاط جوة المربع");
+  assert.equal(t.inkOf.items[0].text, "✓");
+  await qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "cross", ...shape } });
+  await qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "praise", text: "ممتاز", w: 1000, h: 360, s: [[1, 2, 3, 4]] } });
+  const ex = (await find("bank_exams", {}))[0].id;
+  const n: any = await qusayAction({ initData: sign(1), action: "inkAdd", exam: ex, item: { kind: "note", text: "نسيت تعوض", w: 1000, h: 360, s: [[5, 5, 6, 6]] } });
+  assert.equal(n.inkOf.exam, ex);
+  const note = n.inkOf.items[0];
+  const ink = await Q.inkFor(ex);
+  assert.equal(ink.length, 4, "العام والخاص سوا");
+  assert.equal((await Q.inkFor(0)).length, 3, "الخاص بس بموضوعه");
+  const q = { n: 1, max: 10, score: 5, answered: true, sure: true, reason: "", method: 1,
+    steps: [{ text: "أ", points: 5, awarded: 0, note: "نسيت تعوض", hw: note.id, at: { p: 1, x: 300, y: 300 } }, { text: "ب", points: 5, awarded: 2, note: "قريب", hw: 999, at: { p: 1, x: 400, y: 600 } }] };
+  const [pg] = Q.marksByPage([q], ["a"], undefined, [], ink);
+  assert.deepEqual(pg.marks[0].sym!.s, ink.find((x) => x.kind === "cross")!.s, "✗ بخطه");
+  assert.deepEqual(pg.marks[0].hand!.s, note.s, "الملاحظة بخطه");
+  assert.equal(pg.marks[1].hand, undefined, "رقم مو موجود: تنكتب بالخط");
+  assert.deepEqual(pg.marks[1].sym!.s, ink.find((x) => x.kind === "tick")!.s, "النص درجة: ✓ بخطه");
+  const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
+  assert.ok(Q.marksByPage([good], ["a"], undefined, [], ink)[0].marks[0].word, "المدح بخطه");
+  assert.equal(Q.marksByPage([q], ["a"])[0].marks[0].sym, undefined, "بدون خط إيد: مثل قبل");
+  await qusayAction({ initData: sign(1), action: "inkDel", exam: ex, id: note.id });
+  assert.equal((await Q.inkList(ex)).length, 0);
+});

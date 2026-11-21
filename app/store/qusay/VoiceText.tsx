@@ -54,7 +54,7 @@ export default function VoiceText({ value, onChange, rows = 4, maxLength = 3000 
   }
   function stop() { rec.current?.stop(); setOn(false); }
   return (
-    <div>
+    <div className="vtext">
       <div className="seg">
         <button type="button" className={mode === "type" ? "on" : ""} onClick={() => { stop(); setMode("type"); }}>⌨️ كتابة</button>
         <button type="button" className={mode === "voice" ? "on" : ""} onClick={() => setMode("voice")}>🎤 فويس</button>

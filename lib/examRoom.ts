@@ -315,10 +315,12 @@ async function qusayShown(it: Row) {
   // 🖍 ورقته مصححة بالأحمر: من التصحيح نفسه إذا العلامات شغالة، ولطالب التجربة من «🖍 جرب العلامات» كمان
   const demo = it.user_id < 0 ? await qg.qgMarksOf(it.id) : null;
   const mk = r.pages?.length ? { qs: r.qs, pages: r.pages } : demo;
+  // ✓ ✗ والمدح والملاحظات بخط إيد الأستاذ («✍️ خط إيدي»)، إذا كاتبها
+  const ink = mk ? await qg.inkFor(Number(it.exam_id)) : [];
   return r.qs.filter((q) => q.answered).map((q) => ({
     n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
     photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
-    ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string)) } : {}),
+    ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink) } : {}),
     steps: q.steps.map((st) => ({ status: "", awarded: st.awarded, possible: st.points, expected: st.text, student: st.note, reason: st.note })), by: "qusay" as const,
   }));
 }

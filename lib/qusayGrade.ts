@@ -27,15 +27,22 @@ export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap
 /** مكان على صور جواب الطالب: p رقم الصورة (من 1)، x من اليسار و y من فوك، من 0 لـ 1000 من عرضها وطولها */
 export type QgPt = { p: number; x: number; y: number };
 /** at: وين مكتوبة الخطوة على ورقة الطالب، حتى تنرسم عليها ✓ أو ✗ حمرة مثل قلم المدرس (بس إذا «🖍 العلامات» شغالة) */
-export type QgStep = { text: string; points: number; awarded: number; note: string; at?: QgPt };
-export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[]; at?: QgPt };
+/** hw: رقم عبارة من «✍️ خط إيدي» تقول نفس الملاحظة، فتنرسم بخط الأستاذ نفسه بدل الخط */
+export type QgStep = { text: string; points: number; awarded: number; note: string; at?: QgPt; hw?: number };
+export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[]; at?: QgPt; hw?: number };
 export type QgTokens = { in: number; cw: number; cr: number; out: number };
 /** نتيجة ورقة: trial تجربة مخفية على ورقة صححها مصحح (human درجته)، live ورقة صححها صدگ (لو رجعها للمصححين إذا ما متأكد) */
 export type QgResult = { at: string; kind: "trial" | "live"; total: number; sure: boolean; qs: QgQuestion[]; usd: number; tokens: QgTokens; batch: boolean; human?: number | null; sent?: boolean; pages?: string[] };
 /** «🖍 جرب العلامات»: تصحيح ثاني لورقة بالعلامات على الورقة، ينحفظ لحاله وما يغير درجتها ولا يوصل شي للطالب */
 export type QgMarksDemo = { at: string; total: number; qs: QgQuestion[]; pages: string[]; usd: number };
-/** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string };
+/** شي كتبه الأستاذ بقلم الآيباد بصفحة «✍️ خط إيدي»: خطوطه (s: كل خط x,y,x,y...) بمربع w×h */
+export type InkShape = { w: number; h: number; s: number[][] };
+/** tick ✓، cross ✗، praise مدح (أحسنت، ممتاز…)، note ملاحظة (نسيت تعوض…). text: شنو مكتوب بيها */
+export type InkKind = "tick" | "cross" | "praise" | "note";
+export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
+/** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة.
+ *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
@@ -209,7 +216,7 @@ function schemaOf(marks: boolean) {
     properties: {
       papers: { type: "array", items: { type: "object", properties: BOX, required: BOX_KEYS, additionalProperties: false } },
       questions: { ...SCHEMA.properties.questions, items: {
-        ...q, required: [...q.required, ...BOX_KEYS], properties: { ...q.properties, ...BOX, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, ...BOX_KEYS], properties: { ...st.properties, ...BOX } } } },
+        ...q, required: [...q.required, ...BOX_KEYS, "hw"], properties: { ...q.properties, ...BOX, hw: { type: "integer" }, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, ...BOX_KEYS, "hw"], properties: { ...st.properties, ...BOX, hw: { type: "integer" } } } } },
       } },
     },
   };
@@ -223,6 +230,56 @@ ${style.trim()}` : "");
 const exStyleKey = (examId: number) => `qg_style_ex_${examId}`;
 export const examStyle = async (examId: number) => String((await kvGet(exStyleKey(examId))) ?? "");
 export const setExamStyle = (examId: number, text: string) => kvSet(exStyleKey(examId), text.slice(0, STYLE_MAX));
+// ---------- «✍️ خط إيدي»: الأستاذ يكتب بقلم الآيباد ✓ و✗ والمدح والملاحظات، وتنرسم على ورقة الطالب بخطه هو (طلبه 2026-11-21)
+// عام لكل المواضيع، وخاص لكل موضوع (ينضاف فوك العام). ما يصرف فلوس: الرسم بالسيرفر، والملاحظات بس أسماؤها تروح للذكاء
+const inkKey = (exam = 0) => (exam ? `qg_ink_ex_${exam}` : "qg_ink");
+export const INK_KINDS: InkKind[] = ["tick", "cross", "praise", "note"];
+export const INK_MAX = 80;
+export const inkList = (exam = 0) => readJson<InkItem[]>(inkKey(exam), []);
+/** كل خط إيده اللي ينفع لموضوع: العام والخاص */
+export const inkFor = async (exam: number) => [...await inkList(), ...(exam ? await inkList(exam) : [])];
+/** يفحص اللي إجا من الصفحة ويحفظه: خطوط بأرقام، بحدود المربع، ومو كبيرة */
+export async function addInk(exam: number, raw: any): Promise<InkItem> {
+  const kind = String(raw?.kind) as InkKind;
+  if (!INK_KINDS.includes(kind)) throw new Error("اختار شنو تكتب");
+  const text = kind === "tick" ? "✓" : kind === "cross" ? "✗" : String(raw?.text ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+  if (!text) throw new Error("اكتب شنو مكتوب بالعبارة");
+  const w = Math.round(Number(raw?.w)), h = Math.round(Number(raw?.h));
+  if (!(w >= 100 && w <= 1500 && h >= 100 && h <= 1500)) throw new Error("مربع الكتابة غلط");
+  const s: number[][] = [];
+  let pts = 0;
+  for (const st of Array.isArray(raw?.s) ? raw.s.slice(0, 150) : []) {
+    if (!Array.isArray(st) || st.length < 2) continue;
+    const a: number[] = [];
+    for (let i = 0; i + 1 < st.length && i < 1600; i += 2) {
+      const x = Number(st[i]), y = Number(st[i + 1]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      a.push(Math.round(Math.min(w, Math.max(0, x))), Math.round(Math.min(h, Math.max(0, y))));
+    }
+    if (a.length) { s.push(a); pts += a.length; }
+  }
+  if (!s.length) throw new Error("ما كتبت شي");
+  if (pts > 30000) throw new Error("الكتابة كبيرة هواية، امسح واكتبها أصغر");
+  const list = await inkList(exam);
+  if (list.length >= INK_MAX) throw new Error(`وصلت ${INK_MAX} عبارة، امسح وحدة أول`);
+  const item: InkItem = { id: Math.max(Date.now(), ...list.map((x) => x.id + 1)), kind, text, w, h, s };
+  await kvSet(inkKey(exam), JSON.stringify([...list, item]));
+  return item;
+}
+export async function removeInk(exam: number, id: number) {
+  const list = await inkList(exam);
+  await kvSet(inkKey(exam), JSON.stringify(list.filter((x) => x.id !== id)));
+}
+/** ملاحظاته المكتوبة بخطه تروح للذكاء بأسمائها بس، حتى إذا ملاحظة تطلع نفس وحدة منها يختار رقمها */
+const handText = (ink: InkItem[]) => {
+  const notes = ink.filter((x) => x.kind === "note");
+  return notes.length ? `
+
+QUSAY'S HANDWRITTEN NOTES: Qusay wrote these notes by hand; the student sees his real handwriting when you pick one.
+${notes.map((x) => `${x.id}: ${x.text}`).join("\n")}
+For every step and question, set "hw" to the number of the one note above that says what you want to say (same meaning), and then write that same note in "note"/"reason". If none fits, hw=0 and write your own short note.` : "";
+};
+
 const topicText = (t: string) => (t.trim() ? `
 
 QUSAY'S WORDS FOR THIS TOPIC (use these words and phrases when they fit):
@@ -308,7 +365,7 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
   const req: Req = {
     // ويا العلامات يكتب أكثر (مربع كل سطر)، و12 ألف چانت تنقطع (2026-11-21). ينحسب بس اللي يكتبه فعلاً
     model: MODEL, max_tokens: 32000,
-    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) + topicText(await examStyle(Number(it.exam_id))) : ""), cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) + topicText(await examStyle(Number(it.exam_id))) + handText(await inkFor(Number(it.exam_id))) : ""), cache_control: { type: "ephemeral" } }],
     output_config: { effort, format: { type: "json_schema", schema: schemaOf(marks) as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content: [...head, ...body] }],
   };
@@ -344,11 +401,22 @@ export function ptOf(s: any, pages: number, papers: Map<number, Box> = new Map()
 const shortNote = (t: string) => (t.length > 90 ? t.slice(0, 88).replace(/\s+\S*$/, "") + "…" : t);
 /** علامات الورقة اللي تنرسم لكل صورة: ✓ للخطوة الصح، ✗ للغلط، ونص الدرجة للناقصة، ودرجة السؤال بدائرة.
  *  only: سؤال واحد. extra: صور السؤال حتى لو ماكو عليها علامة (تطلع بدون رسم) */
-export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, extra: string[] = []): { ref: string; marks: PaperMark[] }[] {
+export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, extra: string[] = [], ink: InkItem[] = []): { ref: string; marks: PaperMark[] }[] {
   const by = new Map<number, PaperMark[]>();
   // العلامة كلها جوة الصورة، ما تطلع برة الورقة ولا على حافتها (طلب الأستاذ 2026-11-21)
   const inside = (v: number, lo: number) => Math.min(1000 - lo, Math.max(lo, v));
-  const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => { if (pt) by.set(pt.p, [...(by.get(pt.p) ?? []), { x: inside(pt.x, 50), y: inside(pt.y, 35), ...m }]); };
+  // خط إيد الأستاذ: كل علامة تاخذ وحدة من اللي كاتبها (نفس العلامة نفس الشكل كل مرة، والعلامات تختلف عن بعض)
+  const shape = (x: InkItem): InkShape => ({ w: x.w, h: x.h, s: x.s });
+  const pool = (k: InkKind) => ink.filter((x) => x.kind === k);
+  const pick = (l: InkItem[], seed: number) => (l.length ? shape(l[seed % l.length]) : undefined);
+  const handOf = (id?: number) => { const x = id ? ink.find((i) => i.id === id && i.kind === "note") : undefined; return x ? shape(x) : undefined; };
+  const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => {
+    if (!pt) return;
+    const x = inside(pt.x, 50), y = inside(pt.y, 35), seed = Math.round(x * 7 + y * 13);
+    const sym = pick(pool(m.kind === "bad" ? "cross" : "tick"), seed);
+    const word = m.kind === "good" ? pick(pool("praise"), seed) : undefined;
+    by.set(pt.p, [...(by.get(pt.p) ?? []), { x, y, ...m, ...(sym ? { sym } : {}), ...(word ? { word } : {}) }]);
+  };
   for (const q of qs) {
     if (only !== undefined && q.n !== only) continue;
     if (!q.answered) continue;
@@ -360,17 +428,20 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       continue;
     }
     let drawn = 0;
-    const unplaced: string[] = [];
+    const unplaced: QgStep[] = [];
     for (const s of q.steps) {
       if (full(s)) continue;
       const kind = s.awarded > 0 ? "half" : "bad";
-      if (s.at) { add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(s.note ? { note: shortNote(s.note) } : {}) }); drawn++; }
-      else if (s.note) unplaced.push(s.note);
+      const hand = handOf(s.hw);
+      if (s.at) { add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(s.note ? { note: shortNote(s.note) } : {}), ...(hand ? { hand } : {}) }); drawn++; }
+      else if (s.note) unplaced.push(s);
     }
     // الخطوات اللي ما كتبها الطالب (ما إلها مكان): ✗ وملاحظتها بآخر جوابه، مثل «ناقص» المدرس. وإذا ماكو ولا علامة، سبب السؤال
     if (unplaced.length || !drawn) {
-      const note = unplaced.length ? unplaced.join("، ") : q.reason;
-      add(q.at, { kind: "bad", text: "", ...(note ? { note: shortNote(note) } : {}) });
+      const note = unplaced.length ? unplaced.map((s) => s.note).join("، ") : q.reason;
+      // ملاحظة وحدة مكتوبة بخطه تنرسم بخطه، وأكثر من وحدة تنكتب بالخط
+      const hand = unplaced.length === 1 ? handOf(unplaced[0].hw) : unplaced.length ? undefined : handOf(q.hw);
+      add(q.at, { kind: "bad", text: "", ...(note ? { note: shortNote(note) } : {}), ...(hand ? { hand } : {}) });
     }
   }
   const out: { ref: string; marks: PaperMark[] }[] = [];
@@ -406,12 +477,14 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
     const steps: QgStep[] = plan ? plan.map((p, k) => {
       const s: any = byI.get(k + 1);
       const at = ptOf(s, pages, papers);
-      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, half(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300), ...(at ? { at } : {}) };
+      const hw = Math.round(Number(s?.hw) || 0);
+      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, half(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
     }) : [];
     let score = plan ? steps.reduce((t, s) => t + s.awarded, 0) : Number(a.score) || 0;
     score = answered ? Math.min(m.max, Math.max(0, half(score))) : 0;
     const at = ptOf(a, pages, papers, true);
-    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: String(a.reason ?? "").slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}) };
+    const hw = Math.round(Number(a.hw) || 0);
+    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: String(a.reason ?? "").slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
   });
   // «أجب عن K»: السؤال اللي ما جاوبه ما يحتاج تأكيد
   if (answerOnly) for (const q of qs) if (!q.answered) q.sure = true;
