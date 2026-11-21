@@ -12,7 +12,7 @@ type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; h
 type TrialRow = { id: number; name: string; exam: string; human: number | null; qusay: number; sure: boolean; iqd: number; at: string };
 type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
 type Data = {
-  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean }; fileToken: string;
+  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string }; fileToken: string;
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
   trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; paper?: Paper; notice?: string;
 };
@@ -106,6 +106,7 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
   const [carry, setCarry] = useState(s.carry);
   const [unsure, setUnsure] = useState(s.unsure);
   const [marks, setMarks] = useState(s.marks);
+  const [style, setStyle] = useState(s.style);
   return (
     <div className="card expad">
       <div className="exlabel">⚙️ الإعدادات</div>
@@ -137,7 +138,9 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
         <option value="0">⏸ طافية: الطالب يشوف التصحيح خطوات بس (الأصل)</option>
         <option value="1">🖍 شغالة: كل ورقة يصححها تطلع للطالب مصححة بالأحمر</option>
       </select>
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure, marks })}>💾 احفظ</button>
+      <div className="exhint">✍️ طريقتك بالكتابة: اكتب أمثلة من ملاحظاتك مثل ما تكتبها على ورقة الطالب، كل وحدة بسطر (مثلاً: «المفروض 23π/12» ، «نسيت تعوض» ، «ركز بالإشارة»). يكتب مثلك بالعلامات الحمرة وبـ 🖍 جرب العلامات</div>
+      <textarea rows={4} maxLength={3000} value={style} onChange={(e) => setStyle(e.target.value)} />
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure, marks, style })}>💾 احفظ</button>
     </div>
   );
 }

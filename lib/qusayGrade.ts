@@ -23,7 +23,7 @@ export type QgEffort = "low" | "medium";
 /** live: المواضيع اللي يصححها صدگ. batch: بالدفعة (أرخص بالنص، والدرجة تتأخر، وهي الأصل من 2026-11-21).
  *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل).
  *  unsure: الورقة اللي يشك بيها: «send» يصححها ويبعث درجتها ويكتب السبب بالسجل (الأصل، طلب الأستاذ 2026-11-21)، «graders» ترجع للمصححين */
-export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean };
+export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string };
 /** مكان على صور جواب الطالب: p رقم الصورة (من 1)، x من اليسار و y من فوك، من 0 لـ 1000 من عرضها وطولها */
 export type QgPt = { p: number; x: number; y: number };
 /** at: وين مكتوبة الخطوة على ورقة الطالب، حتى تنرسم عليها ✓ أو ✗ حمرة مثل قلم المدرس (بس إذا «🖍 العلامات» شغالة) */
@@ -44,6 +44,8 @@ const mkKey = (id: number) => `qg_mk_${id}`;
 const tryKey = (id: number) => `qg_try_${id}`;
 const capNoteKey = (day: string) => `qg_cap_note_${day}`;
 export const DEFAULT_CAP = 2;
+/** أطول «✍️ طريقتك بالكتابة» */
+export const STYLE_MAX = 3000;
 const MAX_TRIES = 3;
 const LIVE_PER_TICK = 10, TRIAL_PER_TICK = 6, LOG_MAX = 3000;
 /** أكبر صورة يقبلها الذكاء، وأكبر PDF */
@@ -64,7 +66,7 @@ export async function qgSettings(): Promise<QgSettings> {
   const cap = Number(s.cap);
   // الإعدادات القديمة (قبل v 2) كانت «هسه» بالأصل: تصير بالدفعة، طلب الأستاذ 2026-11-21
   const v2 = Number(s.v) >= 2;
-  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true };
+  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "" };
 }
 export async function saveQgSettings(p: Partial<QgSettings>) {
   const s = { ...await qgSettings(), ...p, v: 2 };
@@ -183,24 +185,32 @@ Write every piece of math inside the Arabic text as LaTeX between $ signs, the w
 /** «🖍 العلامات على الورقة»: نفس التصحيح، ويا مكان كل خطوة على صور الطالب حتى نرسم عليها مثل قلم المدرس الأحمر */
 const MARKS_TEXT = `
 
-PEN MARKS: the student's images are numbered [Image 1], [Image 2], ... The teacher will draw red pen marks (a tick or a cross) on the student's own images, so also say WHERE each step is:
-- For each step: p = the image number where the student wrote that step, and x, y = a point in the blank space just after the end of that line of work (where a teacher puts a tick), measured on that image from 0 to 1000: x from the left edge, y from the top edge.
-- For each question: p, x, y of a blank spot in the margin beside the start of its answer (where the teacher writes the question's mark).
+READING THE HANDWRITING: read every number and symbol carefully; zoom in mentally on unclear digits. Similar digits (3 and 8, 1 and 7, 4 and 9, 0 and 6, 5 and 6) are easy to confuse. When a digit is unclear, decide it from the student's own work around it: the line before and the line after, and what the student does with that value next. If the student's next steps use a value consistently, that is what they wrote. Never take points off for a value you only misread; if you truly cannot tell, keep the student's benefit and set sure=false.
+
+TEACHER'S VOICE: the student must feel that his teacher Qusay marked the paper by hand. Write every "note" and "reason" the way an Iraqi math teacher writes a quick comment in red pen on a paper: very short (a few words, at most one short sentence), spoken Iraqi Arabic, talking to the student ("عندك", "سويت", "المفروض"). Say what is wrong and what it should be, e.g. "المفروض $\\frac{23\\pi}{12}$" or "الإشارة غلط" or "نسيت تعوض". Leave a correct step's note empty. Never use formal words like "الصواب" or "الإجابة الصحيحة هي", never describe yourself, never mention a model, an AI, a system, a marking scheme or "steps", and never explain how you graded.
+
+PEN MARKS: the student's images are numbered [Image 1], [Image 2], ... The teacher draws a red tick or cross on the student's own image beside each step, so also say WHERE each step is:
+- For each step: p = the image number where the student wrote that step, and x, y = a point just after the end of that line of work, ON THE PAPER itself (where a teacher puts a tick), measured on that image from 0 to 1000: x from the left edge, y from the top edge.
+- The point must be on the sheet of paper, inside the written area's margin: never outside the paper's edges, never on the table or background around the paper, and never in the image's outer border.
 - If a step is not written anywhere, give p=0, x=0, y=0.
 Be precise: the mark must land on that step's line, not between lines.`;
 const PT = { p: { type: "integer" }, x: { type: "integer" }, y: { type: "integer" } } as const;
-/** نفس الشكل، وإذا العلامات شغالة: p و x و y لكل خطوة ولكل سؤال */
+/** نفس الشكل، وإذا العلامات شغالة: p و x و y لكل خطوة */
 function schemaOf(marks: boolean) {
   if (!marks) return SCHEMA;
   const q = SCHEMA.properties.questions.items;
   const st = q.properties.steps.items;
   return {
     ...SCHEMA, properties: { questions: { ...SCHEMA.properties.questions, items: {
-      ...q, required: [...q.required, "p", "x", "y"],
-      properties: { ...q.properties, ...PT, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, "p", "x", "y"], properties: { ...st.properties, ...PT } } } },
+      ...q, properties: { ...q.properties, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, "p", "x", "y"], properties: { ...st.properties, ...PT } } } },
     } } },
   };
 }
+/** «✍️ طريقتك بالكتابة»: أمثلة يكتبها الأستاذ من ملاحظاته، حتى الذكاء يكتب مثله */
+const styleText = (style: string) => (style.trim() ? `
+
+HOW QUSAY WRITES HIS COMMENTS (copy his wording and tone exactly; these are his own words):
+${style.trim()}` : "");
 
 const SCHEMA = {
   type: "object",
@@ -229,7 +239,7 @@ const SCHEMA = {
 
 const stepsText = (steps: { text: string; points: number }[]) => steps.map((s, i) => `  ${i + 1}. [${s.points} points] ${s.text}`).join("\n");
 /** يبني طلب الورقة: مادة النموذج أول (بالكاش)، وبعدها صور الطالب */
-async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false): Promise<{ req: Req; unanswered: Set<number>; pages: string[] }> {
+async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false, style = ""): Promise<{ req: Req; unanswered: Set<number>; pages: string[] }> {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   if (!answers.length) throw new Error("ماكو صور جواب بالورقة");
   const head: Anthropic.ContentBlockParam[] = [{ type: "text", text: "MARKING SCHEME (the same for every student of this exam version):" }];
@@ -281,7 +291,7 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false)
   body.push({ type: "text", text: `\nGrade questions ${asked.join(", ")}. Return one entry per question, with one step entry per step of the method you chose (i = step number).` });
   const req: Req = {
     model: MODEL, max_tokens: 12000,
-    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT : ""), cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) : ""), cache_control: { type: "ephemeral" } }],
     output_config: { effort, format: { type: "json_schema", schema: schemaOf(marks) as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content: [...head, ...body] }],
   };
@@ -300,11 +310,13 @@ const shortNote = (t: string) => (t.length > 90 ? t.slice(0, 88).replace(/\s+\S*
  *  only: سؤال واحد. extra: صور السؤال حتى لو ماكو عليها علامة (تطلع بدون رسم) */
 export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, extra: string[] = []): { ref: string; marks: PaperMark[] }[] {
   const by = new Map<number, PaperMark[]>();
-  const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => { if (pt) by.set(pt.p, [...(by.get(pt.p) ?? []), { x: pt.x, y: pt.y, ...m }]); };
+  // العلامة كلها جوة الصورة، ما تطلع برة الورقة ولا على حافتها (طلب الأستاذ 2026-11-21)
+  const inside = (v: number, lo: number) => Math.min(1000 - lo, Math.max(lo, v));
+  const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => { if (pt) by.set(pt.p, [...(by.get(pt.p) ?? []), { x: inside(pt.x, 50), y: inside(pt.y, 35), ...m }]); };
   for (const q of qs) {
     if (only !== undefined && q.n !== only) continue;
     if (!q.answered) continue;
-    add(q.at, { kind: "score", text: `${q.score}/${q.max}` });
+    // درجة السؤال ما تنكتب على الورقة: مكتوبة بزر السؤال فوك (طلب الأستاذ 2026-11-21)
     for (const s of q.steps) {
       const kind = s.awarded >= s.points && s.points > 0 ? "ok" : s.awarded > 0 ? "half" : "bad";
       add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(kind !== "ok" && s.note ? { note: shortNote(s.note) } : {}) });
@@ -417,7 +429,7 @@ async function release(id: number) {
 }
 type Job = { it: Row; kind: "trial" | "live" };
 type Prepared = { job: Job; req: Req; mat: VMat; unanswered: Set<number>; answerOnly: boolean; pages: string[]; marks: boolean };
-async function prepare(jobs: Job[], effort: QgEffort, onFail: (j: Job, e: unknown) => Promise<void>, marks = false): Promise<Prepared[]> {
+async function prepare(jobs: Job[], effort: QgEffort, onFail: (j: Job, e: unknown) => Promise<void>, marks = false, style = ""): Promise<Prepared[]> {
   const mats = new Map<number, VMat>();
   const out: Prepared[] = [];
   for (const job of jobs) {
@@ -425,7 +437,7 @@ async function prepare(jobs: Job[], effort: QgEffort, onFail: (j: Job, e: unknow
       const vid = Number(job.it.version_id);
       if (!mats.has(vid)) mats.set(vid, await material(vid));
       const mat = mats.get(vid)!;
-      const { req, unanswered, pages } = await buildRequest(job.it, mat, effort, marks);
+      const { req, unanswered, pages } = await buildRequest(job.it, mat, effort, marks, style);
       out.push({ job, req, mat, unanswered, answerOnly: answerOnlyOf(await one("bank_exams", { id: job.it.exam_id })) > 0, pages, marks });
     } catch (e) { await onFail(job, e); }
   }
@@ -548,7 +560,7 @@ export async function forgetTrial(examId: number) {
 type BatchRow = { id: string; at: number; jobs: { item: number; kind: "trial" | "live" }[] };
 const batches = () => readJson<BatchRow[]>(BATCHES, []);
 export const pendingBatches = async () => (await batches()).length;
-async function pollBatches(finish: (uid: number, itemId: number) => Promise<unknown>, effort: QgEffort, marks = false) {
+async function pollBatches(finish: (uid: number, itemId: number) => Promise<unknown>, effort: QgEffort, marks = false, style = "") {
   const list = await batches();
   const keep: BatchRow[] = [];
   let done = 0;
@@ -568,7 +580,7 @@ async function pollBatches(finish: (uid: number, itemId: number) => Promise<unkn
       const r = got.get(`qg_${j.item}`);
       if (!r?.msg) { await failed(job, new Error(`الدفعة: ${r?.err ?? "ماكو جواب"}`)); continue; }
       // نعيد بناء المادة (بدون إرسال) حتى نعرف الخطوات والأسئلة اللي ما جاوبها
-      const [p] = await prepare([job], effort, failed, marks);
+      const [p] = await prepare([job], effort, failed, marks, style);
       if (!p) continue;
       try { await settle(p, r.msg, true, finish); done++; } catch (e) { await failed(job, e); }
     }
@@ -587,9 +599,9 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
   if (!await qgOn()) return { off: true };
   if (!keyReady()) return { noKey: true };
   const s = await qgSettings();
-  const received = (await batches()).length ? await pollBatches(finish, s.effort, s.marks) : 0;
+  const received = (await batches()).length ? await pollBatches(finish, s.effort, s.marks, s.style) : 0;
   if (await overCap(s)) return { cap: true, ...(received ? { received } : {}) };
-  const marked = await runMarksDemos(s.effort);
+  const marked = await runMarksDemos(s);
   const jobs: Job[] = [];
   const take = await liveTaker();
   for (const it of await find("sched_items", { status: "done" }, { order: ["id"] })) {
@@ -607,7 +619,7 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
     if (it && await tries(id) < MAX_TRIES && !await qgResultOf(id)) jobs.push({ it, kind: "trial" });
   }
   if (!jobs.length) return { idle: true, ...(received ? { received } : {}), ...(marked ? { marked } : {}) };
-  const ready = await prepare(jobs, s.effort, failed, s.marks);
+  const ready = await prepare(jobs, s.effort, failed, s.marks, s.style);
   // اللي اختارهن «⚡ هسه» يتصححن هسه، والباقي حسب الإعداد
   const fast = new Set(await nowList());
   const later = s.batch ? ready.filter((p) => !fast.has(p.job.it.id)) : [];
@@ -652,7 +664,7 @@ export async function queueMarks(id: number) {
   if (!(await find("exam_answers", { item_id: id })).length) throw new Error("ماكو صور جواب بالورقة");
   await kvSet(MK_Q, JSON.stringify([...new Set([...await marksQueue(), id])]));
 }
-async function runMarksDemos(effort: QgEffort) {
+async function runMarksDemos(s: QgSettings) {
   const ids = (await marksQueue()).slice(0, 3);
   if (!ids.length) return 0;
   await kvSet(MK_Q, JSON.stringify((await marksQueue()).filter((x) => !ids.includes(x))));
@@ -661,7 +673,7 @@ async function runMarksDemos(effort: QgEffort) {
     const it = await one("sched_items", { id });
     if (!it) continue;
     const fail = async (_j: Job, e: unknown) => { await addLog({ at: stamp(), kind: "failed", item: id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), note: `🖍 العلامات: ${errText(e)}` }); };
-    const [p] = await prepare([{ it, kind: "trial" }], effort, fail, true);
+    const [p] = await prepare([{ it, kind: "trial" }], s.effort, fail, true, s.style);
     if (!p) continue;
     try {
       const { qs, tokens } = readAnswer(await apiImpl.create(p.req), p.mat, p.unanswered, p.answerOnly, p.pages.length);

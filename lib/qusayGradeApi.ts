@@ -5,7 +5,7 @@ import { can } from "./data.ts";
 import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
-  IQD, QG_PERM, clearTrialQueue, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
+  IQD, QG_PERM, STYLE_MAX, clearTrialQueue, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
   humanMark, marksByPage, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
@@ -122,6 +122,7 @@ export async function qusayAction(body: Row) {
     if (typeof body.carry === "boolean") p.carry = body.carry;
     if (body.unsure === "send" || body.unsure === "graders") p.unsure = body.unsure;
     if (typeof body.marks === "boolean") p.marks = body.marks;
+    if (typeof body.style === "string") p.style = body.style.slice(0, STYLE_MAX);
     if (body.cap !== undefined) { const c = Number(body.cap); need(c > 0 && c <= 100, "الحد اليومي بين 0.1 و 100 دولار"); p.cap = c; }
     await saveQgSettings(p);
     return await out("✅ انحفظ");
