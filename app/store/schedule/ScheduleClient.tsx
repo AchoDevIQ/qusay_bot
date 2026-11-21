@@ -13,7 +13,7 @@ const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 type Slot = { d: number; t: string };
 type Row = { exam: number; chapter: string; title: string; date: string; inserted?: number; hols?: { id: number; from: string; reason: string }[]; versions: Record<string, number>; models: { id: number; model: string }[] };
 type Seat = { d: number; t: string; limit: { b: number; g: number }; taken: { b: number; g: number } };
-type Data = { seats?: Seat[]; cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; perWeek: number; gap: number; holidayStart: string; holidayDays: number; holidayNote: string; mid: { from: string; to: string } | null; midOwn: boolean; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holReqs?: { uid: number; name: string; want: string; now: string; at: string }[] };
+type Data = { seats?: Seat[]; cronUrl: string; optionalOpen: boolean; gallery: boolean; window: number; extra: number; excWindow: number; perDay: number; perWeek: number; gap: number; holidayStart: string; holidayDays: number; holidayNote: string; mid: { from: string; to: string } | null; midOwn: boolean; fromHour: number; toHour: number; offDays: number[]; excluded: string[]; places: { id: number; name: string }[]; center: number; slots: Slot[]; students: number; rows: Row[]; canLoad: boolean; canLoadDates: boolean; week: { i: number; name: string }[]; schedules: number; notice: string; holidays: Hol[]; holReqs?: { uid: number; name: string; want: string; now: string; at: string }[]; earlyOpen?: boolean; early?: { uid: number; name: string; with: boolean; last: string }[] };
 type Hol = { id: number; title: string; days: number; reason: string; places: { center: number; text: string }[]; students: number };
 type Act = (b: Record<string, unknown>) => Promise<Data | null>;
 
@@ -27,7 +27,7 @@ export default function ScheduleClient() {
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && <Place d={data} busy={busy} act={act} />}
-        {data && <Form key={JSON.stringify([data.optionalOpen, data.gallery, data.window, data.extra, data.excWindow, data.perDay, data.perWeek, data.gap, data.holidayStart, data.holidayDays, data.fromHour, data.toHour, data.offDays, data.excluded])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
+        {data && <Form key={JSON.stringify([data.optionalOpen, data.gallery, data.window, data.extra, data.excWindow, data.perDay, data.perWeek, data.gap, data.holidayStart, data.holidayDays, data.fromHour, data.toHour, data.offDays, data.excluded, data.earlyOpen])} d={data} busy={busy} save={(b) => void act({ action: "save", ...b })} />}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
@@ -40,6 +40,7 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
   const [excWindow, setExcWindow] = useState(String(d.excWindow));
   const [optionalOpen, setOptionalOpen] = useState(d.optionalOpen);
   const [gallery, setGallery] = useState(d.gallery);
+  const [earlyOpen, setEarlyOpen] = useState(!!d.earlyOpen);
   const [perDay, setPerDay] = useState(String(d.perDay));
   const [perWeek, setPerWeek] = useState(String(d.perWeek ?? 4));
   const [gap, setGap] = useState(String(d.gap));
@@ -62,6 +63,9 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <input className="ltr" inputMode="numeric" value={excWindow} onChange={(e) => setExcWindow(e.target.value)} />
         <label className="adcheck adflat"><input type="checkbox" checked={optionalOpen} onChange={(e) => setOptionalOpen(e.target.checked)} /><span>الامتحانات الاختيارية مفتوحة للطلاب</span></label>
         <label className="adcheck adflat"><input type="checkbox" checked={gallery} onChange={(e) => setGallery(e.target.checked)} /><span>🖼 الطالب يگدر يختار صورة جوابه من الاستوديو (إذا مطفي: الكاميرا بس)</span></label>
+        <label className="adcheck adflat"><input type="checkbox" checked={earlyOpen} onChange={(e) => setEarlyOpen(e.target.checked)} /><span>🚀 طالب «ويا الطلاب» يگدر يبدي الفصل اللي ورا عطلة نصف السنة (الفصل الرابع) من هسه</span></label>
+        <div className="exhint">يطلع بس للطالب المشتري هذا الفصل. يختار: ويا المراجعات لو بدونها. امتحاناته بأيام مكانه وبوقته، امتحان واحد باليوم، ويوم المراجعة يبقى للمراجعة. باقي الطلاب ما يتغير شي بجدولهم.</div>
+        {!!d.early?.length && <div className="exhint">🚀 بدوه قبل وقته ({d.early.length}): {d.early.map((x) => `${x.name} (${x.with ? "ويا المراجعات" : "بدون المراجعات"}، آخر امتحان ${prettyDay(x.last.slice(0, 10))})`).join("، ")}</div>}
         <label>أكثر عدد امتحانات بالأسبوع بالجدول الخاص</label>
         <div className="exhint">الطالب الخاص يختار كم امتحان بالأسبوع، من 2 لهذا الرقم، ويشوف يم كل اختيار شوكت يخلص الفصل والمنهج.</div>
         <input className="ltr" inputMode="numeric" value={perWeek} onChange={(e) => setPerWeek(e.target.value)} />
@@ -88,7 +92,7 @@ function Form({ d, busy, save }: { d: Data; busy: boolean; save: (b: Record<stri
         <div className="exhint">هاي الساعات بس تطلعله يختار منها وقت امتحانه. الطالب الخاص الحضوري يختار من أوقات مركزه، وطلاب «ويا الطلاب» من أوقات مكانهم.</div>
         <div className="exhint">⚠️ إذا غيرت العطلة أو الأيام المستثناة، جداول الطلاب تنعاد من باجر، وكل طالب يوصله الخبر.</div>
         {d.cronUrl && <CronBox url={d.cronUrl} />}
-        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, excWindow, optionalOpen, gallery, perDay, perWeek, gap, holidayStart, holidayDays, offDays, fromHour, toHour: Math.max(fromHour, toHour) })}>حفظ</button>
+        <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => save({ window, extra, excWindow, optionalOpen, gallery, earlyOpen, perDay, perWeek, gap, holidayStart, holidayDays, offDays, fromHour, toHour: Math.max(fromHour, toHour) })}>حفظ</button>
       </div>
     </div>
   );

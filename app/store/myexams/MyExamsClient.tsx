@@ -17,7 +17,7 @@ type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; w
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
   slowOk?: boolean; basics?: Basics | null; viewOnly?: boolean; appLink: string; attendCode: string; ipad?: boolean | null; inPerson: boolean; place: string; mode: string | null; needsChoice: boolean; repick: boolean; optional: { exam: number; title: string; chapter: string; minutes: number }[]; picks: Record<string, string> | null; late: { title: string; at: string }[]; catchup?: boolean; catchHours?: number[];
-  catchPlan?: CatchPlan | null; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[]; placePreview?: PlacePreview;
+  catchPlan?: CatchPlan | null; early?: EarlyInfo | null; guardWait?: { pending: number[]; old: boolean; travel: string } | null; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[]; placePreview?: PlacePreview;
   name: string; remaining: number; canDrop?: { exam: number; title: string }[]; toPlan?: { exam: number; title: string; chapter: string; skip: boolean }[]; perWeekMax?: number; pace?: Pace; needsBuild: boolean; schedule: { start: string; end: string; weekdays: number[]; hour: number; times: Record<string, string[]> | null; hol?: { from: string; to: string } | null } | null; items: Item[]; holidays: Hol[]; midHol?: { from: string; to: string; reason: string } | null; gap: number;
   today: string; minStart: string; window: number; perDay: number; week: { i: number; name: string }[]; hours: number[]; offDays?: number[]; holiday: { start: string; days: number } | null; holReq?: { from: string; to: string; at: string } | null;
   preview?: Preview; notice?: string; error?: string; cp?: { key: string; image: string; text: string } | null; stop?: { image: string; bubble?: string }; comp?: Comp | null; lectureFiles?: string[]; inExam?: boolean; lateText: string; closedText: string; room?: Room; obj?: Obj; paper?: Paper;
@@ -167,6 +167,7 @@ export default function MyExamsClient() {
         {info && !info.basics && !info.needsChoice && info.needsBuild && info.mode !== "slow" && <Build info={info} busy={busy} call={call} />}
         {info && info.mode !== "general" && info.mode !== "slow" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}
         {info && info.mode === "general" && !info.repick && <MyTimes info={info} busy={busy} call={call} />}
+        {info?.early && !info.repick && !info.late.length && !info.viewOnly && <EarlyCard e={info.early} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} ipad={!!info.ipad} />}
@@ -256,6 +257,69 @@ function CatchupAsk({ info, busy, call }: { info: Info; busy: boolean; call: (b:
         <div className="exhint exbad">الامتحان اللي يفوتك وما تدخله ينحسب غياب وصفر، ويدخل بحساب السيطرة، ويوصل خبر لولي أمرك.</div>
         <button type="button" className="btn" disabled={busy || !ready} onClick={() => void call({ action: "lateCatchup", mode: ipad ? "ipad" : "online", kit, hour, times, per1, days1, per2, days2 })}>📅 سويلي جدول التعويض</button>
         <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "latePrivate" })}>👤 لا، أريد كل امتحاناتي جدول خاص بأيامي</button>
+      </div>
+    </div>
+  );
+}
+
+/** 🚀 يبدي الفصل اللي ورا عطلة نصف السنة من هسه. المراجعات إجبارية، بس هو يختار يمتحنها ويا الفصل لو يشيلها */
+type EarlySum = { first: string; last: string; before: number };
+type EarlyInfo = { offer?: { chapter: string; count: number; midFrom: string; reviews: { title: string; at: string }[]; withPlan: EarlySum | null; withoutPlan: EarlySum | null; center: string };
+  chosen?: { chapter: string; with: boolean; place: string } };
+function EarlyCard({ e, busy, call }: { e: EarlyInfo; busy: boolean; call: (b: Record<string, unknown>) => Promise<Info | null> }) {
+  const [open, setOpen] = useState(false);
+  const [withR, setWithR] = useState(true);
+  const [mode, setMode] = useState<"online" | "ipad">("online");
+  const [kit, setKit] = useState(false);
+  if (e.chosen) return (
+    <div className="card">
+      <h2>🚀 بديت {e.chosen.chapter} قبل جماعتك</h2>
+      <div className="hmlink">
+        <div>{e.chosen.with ? "ويا المراجعات بمواعيدها." : "بدون المراجعات."} امتحاناته بجدولك تحت. إذا غيرت رأيك، تگدر ترجع ويا جماعتك لحد ما يجي موعد أول امتحان.</div>
+        <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "earlyUndo" })}>↩️ رجعني ويا جماعتي</button>
+      </div>
+    </div>
+  );
+  const o = e.offer;
+  if (!o) return null;
+  const plan = o.reviews.length && !withR ? o.withoutPlan : o.withPlan;
+  const sumText = (p: EarlySum | null) => p ? `أول امتحان ${prettyAt(p.first)}، وآخر امتحان ${prettyDay(p.last.slice(0, 10))}. قبل العطلة تلحق ${p.before} من ${o.count}.` : "ما تلحق بأيام مكانك.";
+  const ready = !!plan && (mode !== "ipad" || kit);
+  return (
+    <div className="card">
+      <h2>🚀 تريد تبدي {o.chapter} من هسه؟</h2>
+      <div className="hmlink">
+        <div>جماعتك يبدون {o.chapter} ورا عطلة نصف السنة ({prettyDay(o.midFrom)}). إذا تريد تبديه هسه، امتحاناته ({o.count}) تنحط بأيام {o.center || "امتحانك"} وبنفس الأوقات اللي اخترتها، امتحان واحد باليوم.</div>
+        {!open ? <>
+          <button type="button" className="btn" disabled={busy} onClick={() => setOpen(true)}>🚀 أريد أبديه هسه</button>
+          <div className="exhint">إذا ما تريد، لا تسوي شي: تبقى ويا جماعتك.</div>
+        </> : <>
+          {o.reviews.length > 0 && (
+            <div className="expad">
+              <b>المراجعات اللي بجدولك:</b>
+              <ul className="hmsteps">{o.reviews.map((r) => <li key={r.title + r.at}>{r.title} <small>{prettyAt(r.at)}</small></li>)}</ul>
+              <label className="chk"><input type="radio" checked={withR} onChange={() => setWithR(true)} /> 📚 {o.chapter} ويا المراجعات</label>
+              <div className="exhint">المراجعات تبقى بمواعيدها، ويوم المراجعة ما ينحط بيه امتحان {o.chapter}. {sumText(o.withPlan)}</div>
+              <label className="chk"><input type="radio" checked={!withR} onChange={() => setWithR(false)} /> ⏩ {o.chapter} بدون المراجعات</label>
+              <div className="exhint">المراجعات تنشال من جدولك. {sumText(o.withoutPlan)}</div>
+            </div>
+          )}
+          {o.reviews.length === 0 && <div className="exhint">{sumText(o.withPlan)}</div>}
+          {o.center && (
+            <div className="expad">
+              <b>وين تمتحن {o.chapter}؟</b>
+              <label className="chk"><input type="radio" checked={mode === "online"} onChange={() => setMode("online")} /> 💻 إلكتروني من البيت</label>
+              <label className="chk"><input type="radio" checked={mode === "ipad"} onChange={() => setMode("ipad")} /> 🏫 حضوري بـ{o.center} بالآيباد</label>
+              {mode === "ipad" && <>
+                <div className="exhint">بالمركز ما تنطبعلك أسئلة: تحل على آيبادك بالقلم. من يسجلون حضورك تنفتح أسئلتك بالآيباد بس.</div>
+                <label className="chk"><input type="checkbox" checked={kit} onChange={(ev) => setKit(ev.target.checked)} /> ✅ عندي آيباد وقلم، وإنترنت شغال وياي بالمركز</label>
+              </>}
+            </div>
+          )}
+          <div className="exhint exbad">الامتحان اللي يفوتك وما تدخله ينحسب غياب وصفر، ويدخل بحساب السيطرة، ويوصل خبر لولي أمرك.</div>
+          <button type="button" className="btn" disabled={busy || !ready} onClick={() => void call({ action: "earlyStart", with: withR, mode, kit })}>✅ ثبتها</button>
+          <button type="button" className="btn ghost" disabled={busy} onClick={() => setOpen(false)}>لا، أبقى ويا جماعتي</button>
+        </>}
       </div>
     </div>
   );

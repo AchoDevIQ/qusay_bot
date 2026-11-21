@@ -60,7 +60,7 @@ export async function setGradeOnly(exam: number, ids: number[], until: string) {
 // مصححين لكل الفصول، ولكل فصل مصححين غيرهم إذا يريد. إذا ما اختار أحد: تروح حسب مركز الطالب (بدون ما يطابق الوقت)
 export type OutCfg = { ids: number[]; chapters: Record<string, number[]> };
 const OUT_KEY = "grade_out";
-export const outOf = (p: Row) => p.kind === "catchup" || !!p.retake_of || !!p.exc_by || p.fixed === "moved";
+export const outOf = (p: Row) => p.kind === "catchup" || p.kind === "early" || !!p.retake_of || !!p.exc_by || p.fixed === "moved";
 export async function outCfg(): Promise<OutCfg> {
   try {
     const j = JSON.parse((await kvGet(OUT_KEY)) ?? "{}") ?? {};

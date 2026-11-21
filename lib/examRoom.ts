@@ -61,7 +61,8 @@ export function roomState(it: Row, s: SchedSettings, now = stamp()) {
 export async function versionOf(it: Row, e: Row) {
   const sc = await one("schedules", { user_id: it.user_id });
   let wanted: number | null = null;
-  if (sc?.mode === "general") {
+  // 🚀 الفصل المبكر ينقدم قبل جماعته: ياخذ نسخة الجدول الخاص، مو نسخة وقت مكانه
+  if (sc?.mode === "general" && it.kind !== "early") {
     const d = await one("place_dates", { center_id: sc.center_id, exam_id: e.id });
     wanted = JSON.parse(d?.versions || "{}")[String(it.at).slice(11)] ?? null;
   } else wanted = JSON.parse(e.group_versions || "{}").private ?? null;

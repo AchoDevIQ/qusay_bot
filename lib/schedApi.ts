@@ -93,6 +93,133 @@ async function catchView(uid: number, late: Row[], s: SchedSettings) {
     center: place.inPerson ? { name: place.label, days: daysView(await placeSlots(place.centerId)).filter((x) => !s.offDays.includes(x.d)) } : null,
   };
 }
+// ---------- 🚀 الفصل الرابع قبل نصف السنة (اتفاق الأستاذ 2026-11-21)
+// المراجعات (امتحانات مربوطة بفصل ثاني بـ «يطلع ويا الفصل»، مثل فاينل الأول والثاني ويا الفصل الثالث) إجبارية، وجدولها ما يتحرك.
+// بس طالب «ويا الطلاب» اللي مشتري الفصل اللي جماعته يبدونه ورا عطلة نصف السنة، يگدر يبديه هسه، ويختار: ويا المراجعات لو بدونها.
+// امتحاناته بأيام مكانه وبالوقت اللي اختاره لكل يوم، امتحان واحد باليوم: اليوم اللي بيه امتحان إله (مراجعة أو غيره) ينعبر،
+// ومن تخلص أيام قبل العطلة يكمل بعدها. صاحب البوت يفتح الخيار من إعدادات الجدول (مسدود بالأصل)
+const earlyKey = (uid: number) => `early_ch_${uid}`;
+type Early = { at: string; chapter: string; with: boolean; place: "online" | "ipad"; exams: number[]; dropped: number[] };
+async function earlyOf(uid: number): Promise<Early | null> {
+  try { const j = JSON.parse(await kvGet(earlyKey(uid)) ?? "null"); return j && Array.isArray(j.exams) ? j : null; } catch { return null; }
+}
+type EarlyCan = { chapter: string; exams: Row[]; reviews: { e: Row; at: string }[]; mid: Range };
+/** يگدر يبدي فصل قبل العطلة؟ الفصل (أول فصل بالمنهج كل امتحاناته بمكانه ورا العطلة)، امتحاناته اللي اشتراها، ومراجعاته قبل العطلة */
+async function earlyCan(uid: number, sc: Row | null | undefined, s: SchedSettings): Promise<EarlyCan | null> {
+  if (!s.earlyOpen || sc?.mode !== "general" || await earlyOf(uid)) return null;
+  const mid = await midFor(sc.center_id, s);
+  if (!mid || todayStr() >= mid.from) return null;
+  const days = await placeDays(sc.center_id);
+  const withCh = await examWith();
+  const linked = (e: Row) => !!withCh[String(e.id)] && withCh[String(e.id)] !== e.chapter;
+  const all = await find("bank_exams");
+  const chapter = (await allChapters()).find((ch) => {
+    const list = all.filter((e) => e.chapter === ch && !linked(e));
+    return list.length > 0 && list.every((e) => !days.has(e.id) || days.get(e.id)! > mid.to);
+  });
+  if (!chapter) return null;
+  const bought = await boughtExams(uid);
+  const items = await find("sched_items", { user_id: uid });
+  const gone = new Set(items.filter((i) => i.kind !== "optional" && (i.status !== "waiting" || i.fixed)).map((i) => i.exam_id));
+  const exams = bought.filter((e) => e.chapter === chapter && !linked(e) && !gone.has(e.id));
+  if (!exams.length) return null;
+  const picks = picksOf(sc), now = stamp();
+  const reviews = bought.filter((e) => linked(e) && !gone.has(e.id))
+    .map((e) => ({ e, at: days.has(e.id) ? pickedAt(days.get(e.id)!, picks) ?? "" : "" }))
+    .filter((r) => r.at > now && r.at.slice(0, 10) < mid.from);
+  return { chapter, exams, reviews, mid };
+}
+/** مواعيد الفصل المبكر: من باچر، بأيام مكانه ووقته، امتحان واحد باليوم، وما ينحط بيوم بيه امتحان إله ولا بعطلة */
+async function earlyPlan(uid: number, sc: Row, s: SchedSettings, c: EarlyCan, withReviews: boolean) {
+  const days = await placeDays(sc.center_id), picks = picksOf(sc);
+  const moving = new Set(c.exams.map((e) => e.id as number));
+  const dropped = new Set(withReviews ? [] : c.reviews.map((r) => r.e.id as number));
+  const busy = new Set<string>();
+  for (const e of await boughtExams(uid)) {
+    if (moving.has(e.id) || dropped.has(e.id)) continue;
+    const d = days.get(e.id), at = d ? pickedAt(d, picks) : null;
+    if (at) busy.add(at.slice(0, 10));
+  }
+  for (const i of await find("sched_items", { user_id: uid, status: "waiting" })) if (!moving.has(i.exam_id) && !dropped.has(i.exam_id)) busy.add(String(i.at).slice(0, 10));
+  const ps = await placeSettings(sc.center_id, s);
+  const ranges = (await holidays()).filter((h) => !h.insert).flatMap((h) => h.places.filter((p) => p.center === sc.center_id));
+  const weekdays = [...new Set((await placeSlots(sc.center_id)).map((x) => x.d))].filter((d) => !s.offDays.includes(d) && !!picks[String(d)]);
+  const ok = (d: string) => !busy.has(d) && !inHoliday(d, ps) && !s.excluded.includes(d) && !ranges.some((r) => inRange(d, r));
+  return catchupPlan(c.exams.map((e, k) => ({ id: e.id as number, at: String(k).padStart(4, "0") })), { days1: weekdays, days2: [], timeOf: (wd) => picks[String(wd)] }, addDays(todayStr(), 1), null, ok);
+}
+/** يگدر يرجع ويا جماعته؟ لحد ما يجي موعد أول امتحان مبكر أو أول مراجعة شالها */
+async function earlyUndoable(uid: number) {
+  const now = stamp();
+  const mine = (await find("sched_items", { user_id: uid })).filter((i) => i.kind === "early" || i.kind === "early_skip");
+  return mine.every((i) => i.at > now && (i.kind === "early_skip" || i.status === "waiting"));
+}
+/** شنو يطلع للطالب: العرض، لو اللي اختاره (إذا بعده يگدر يرجع) */
+async function earlyView(uid: number, sc: Row | null | undefined, s: SchedSettings) {
+  if (sc?.mode !== "general") return null;
+  const mine = await earlyOf(uid);
+  if (mine) return await earlyUndoable(uid) ? { chosen: { chapter: mine.chapter, with: mine.with, place: mine.place } } : null;
+  const c = await earlyCan(uid, sc, s);
+  if (!c) return null;
+  const sum = async (w: boolean) => {
+    const p = await earlyPlan(uid, sc, s, c, w);
+    return p.length === c.exams.length ? { first: p[0].at, last: p[p.length - 1].at, before: p.filter((x) => x.at.slice(0, 10) < c.mid.from).length } : null;
+  };
+  const place = await placeFor(uid);
+  return { offer: { chapter: c.chapter, count: c.exams.length, midFrom: c.mid.from, reviews: c.reviews.map((r) => ({ title: String(r.e.title), at: r.at })),
+    withPlan: await sum(true), withoutPlan: c.reviews.length ? await sum(false) : null, center: place.inPerson ? place.label : "" } };
+}
+/** يثبت الفصل المبكر: امتحاناته تصير ثابتة بمواعيدها الجديدة، والمراجعات اللي شالها تنحسب «منشالة» (مو غياب) */
+async function earlyStart(uid: number, body: Row) {
+  const sc = await one("schedules", { user_id: uid });
+  const s = await schedSettings();
+  const c = await earlyCan(uid, sc, s);
+  need(c, "هذا الخيار مو مفتوح إلك هسه");
+  const withReviews = body.with !== false || !c!.reviews.length;
+  const place = await placeFor(uid);
+  const ipad = body.mode === "ipad";
+  if (ipad) {
+    need(place.inPerson, "الامتحان بالمركز بالآيباد لطالب المركز بس");
+    need(body.kit === true, "أشّر إن عندك آيباد وقلم، وإنترنت شغال وياك بالمركز");
+  }
+  const plan = await earlyPlan(uid, sc!, s, c!, withReviews);
+  need(plan.length === c!.exams.length, "ما گدرنا نرتب كل امتحانات الفصل بأيام مكانك. راسل الإدارة");
+  if (ipad) { const why = await seatProblems(place.centerId, plan, await student(uid), uid); need(!why, why); }
+  const moving = new Set(c!.exams.map((e) => e.id as number));
+  const dropped = withReviews ? [] : c!.reviews;
+  const drop = new Set(dropped.map((r) => r.e.id as number));
+  await tx(async () => {
+    await remove("sched_items", { user_id: uid, status: "waiting" }, { where: (r) => !r.fixed && r.kind !== "optional" && (moving.has(r.exam_id) || drop.has(r.exam_id)) });
+    for (const x of plan) await insert("sched_items", { user_id: uid, exam_id: x.examId, at: x.at, status: "waiting", kind: "early", fixed: 1, catch_place: ipad ? "ipad" : "online" });
+    for (const r of dropped) await insert("sched_items", { user_id: uid, exam_id: r.e.id, at: r.at, status: "skipped", kind: "early_skip", fixed: 1 });
+  });
+  const e: Early = { at: stamp(), chapter: c!.chapter, with: withReviews, place: ipad ? "ipad" : "online", exams: plan.map((x) => x.examId), dropped: [...drop] };
+  await kvSet(earlyKey(uid), JSON.stringify(e));
+  const last = plan[plan.length - 1].at.slice(0, 10);
+  const how = ipad ? `حضوري بالآيباد بـ${place.label}` : "إلكتروني";
+  await logActivity(uid, `🚀 بدا ${c!.chapter} قبل نصف السنة ${c!.reviews.length ? (withReviews ? "ويا المراجعات" : `بدون المراجعات (انشالت ${dropped.length})`) : ""}: ${plan.length} امتحان ${how} من ${prettyDay(plan[0].at.slice(0, 10))} إلى ${prettyDay(last)}`);
+  return `✅ انثبت: ${plan.length} امتحان من ${c!.chapter}، أولها ${prettyAt(plan[0].at)} وآخرها ${prettyDay(last)}.${dropped.length ? ` وانشالت ${dropped.length} مراجعة من جدولك.` : ""} الامتحان اللي يفوتك ينحسب غياب وصفر.`;
+}
+/** يرجع ويا جماعته: امتحانات الفصل ترجع لمواعيد مكانه، والمراجعات ترجع */
+async function earlyUndo(uid: number) {
+  const e = await earlyOf(uid);
+  need(e, "ما بديت فصل قبل وقته");
+  need(await earlyUndoable(uid), "بديت بامتحانات الفصل، فما يصير ترجع هسه");
+  await remove("sched_items", { user_id: uid }, { where: (r) => r.kind === "early" || r.kind === "early_skip" });
+  await kvSet(earlyKey(uid), "null");
+  await logActivity(uid, `↩️ رجع ويا جماعته: ${e!.chapter} بعد نصف السنة${e!.dropped.length ? "، والمراجعات رجعت" : ""}`);
+  return `↩️ رجعت ويا جماعتك: ${e!.chapter} بعد العطلة${e!.dropped.length ? "، والمراجعات رجعت لجدولك" : ""}`;
+}
+/** لصفحة الجدول: منو بدا فصل قبل وقته */
+async function earlyStudents() {
+  const by = new Map<number, Row[]>();
+  for (const i of await find("sched_items", { kind: "early" })) by.set(i.user_id as number, [...by.get(i.user_id as number) ?? [], i]);
+  const out: { uid: number; name: string; with: boolean; last: string }[] = [];
+  for (const [uid, list] of by) {
+    const e = await earlyOf(uid);
+    out.push({ uid, name: String((await student(uid))?.name ?? uid), with: e?.with ?? true, last: list.map((i) => String(i.at)).sort().at(-1) ?? "" });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
 /** ياخذ جدول تعويض؟ بالامتحانات الفايتة امتحان من فصل صار تعويضي (باليد أو بالأيام)، أو فاته من الفصل
  *  «تعويضي ورا كم امتحان» أو أكثر، أو امتحان موعده أقل من 24 ساعة من وقت ما اشترى (ما ينحسب عليه، يروح للتعويض) */
 async function hasMakeup(late: Row[]) {
@@ -700,6 +827,8 @@ async function studentInfo(uid: number) {
     // فصل صار تعويضي: يطلعله جدول تعويضي مكثف بدل «تنحسب فايتة»
     catchup: late.length > 0 && await hasMakeup(late), catchHours: allowedHours(s),
     catchPlan: late.length > 0 && await hasMakeup(late) ? await catchView(uid, late, s) : null,
+    // 🚀 يبدي الفصل اللي ورا العطلة من هسه، ويا المراجعات لو بدونها
+    early: await earlyView(uid, sched, s),
     // ولي الأمر ما استلم: الدرجات اللي تنتظره، والقفل بعد 3 أيام، وتأجيل السفر
     guardWait: await guardWaitOf(uid),
     items: [...(await itemsView(uid, s)).map((i) => ({ ...i, title: enTitle(i.exam, i.title), skippable: !general && !!sched && i.status === "waiting" && !i.optional && i.state === "locked" && skip.has(i.exam) && !kept.has(i.exam) })), ...lockedRows].sort((a, b) => String(a.at).localeCompare(String(b.at))), today: todayStr(), minStart: addDays(todayStr(), 1), window: s.window, perDay: await perDayFor(uid, s),
@@ -1001,6 +1130,11 @@ export async function myExamAction(body: Row) {
     const pace = [heavy && `${days1.length} بالأسبوع${phase2 ? ` لحد ${prettyDay(phase2)}` : ""}`, phase2 && `${days2.length} بالأسبوع${heavy ? " بعدها" : ""}`].filter(Boolean).join("، ");
     await logActivity(id, `📅 أخذ جدول تعويض: ${plan.length} امتحان ${how} من ${prettyDay(plan[0].at.slice(0, 10))} إلى ${prettyDay(plan[plan.length - 1].at.slice(0, 10))} (${pace})`);
     return { ...await studentInfo(id), notice: `✅ انثبت جدول تعويضك: ${plan.length} امتحان، آخرها ${prettyDay(plan[plan.length - 1].at.slice(0, 10))}. الامتحان اللي يفوتك ينحسب غياب وصفر.` };
+  }
+  if (a === "earlyStart" || a === "earlyUndo") {
+    // يتثبت أول، وبعدها ترجع الصفحة بالجدول الجديد
+    const notice = a === "earlyStart" ? await earlyStart(id, body) : await earlyUndo(id);
+    return { ...await studentInfo(id), notice };
   }
   if (a === "lateKeep" || a === "latePrivate") {
     const sc = await one("schedules", { user_id: id });
@@ -1312,6 +1446,8 @@ export async function schedAdminAction(body: Row) {
       gallery: body.gallery === undefined ? old.gallery : !!body.gallery,
       // الجدول الخاص: أكثر شي كم امتحان بالأسبوع يگدر يختار الطالب
       perWeek: body.perWeek === undefined ? old.perWeek : intOf(body.perWeek, 1, 14, "امتحانات الأسبوع من 1 إلى 14"),
+      // 🚀 الطالب ويا الطلاب يگدر يبدي الفصل اللي ورا عطلة نصف السنة من هسه
+      earlyOpen: body.earlyOpen === undefined ? !!old.earlyOpen : !!body.earlyOpen,
     };
     await kvSet("sched_settings", JSON.stringify(next));
     notice = "✅ انحفظت الإعدادات";
@@ -1508,7 +1644,7 @@ export async function schedAdminAction(body: Row) {
     const sc = await one("schedules", { user_id: r.uid });
     return { uid: r.uid, name: String((await student(r.uid))?.name ?? r.uid), want: holText(r), now: holText(holOf(sc?.hol) ?? null), at: r.at };
   }));
-  return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice, holidays: holidayList, holidayPreview: preview, holReqs };
+  return { ...await schedSettings(), cronUrl: await isAdmin(uid) ? cronUrl() : "", ...await placesPage(Number(body.center ?? 0)), schedules: (await find("schedules")).length, notice, holidays: holidayList, holidayPreview: preview, holReqs, early: await earlyStudents() };
 }
 const cronUrl = () => `${siteBase()}/api/cron?key=${cronKey()}`;
 /** كل طالب بهذا المكان يوصله خبر واحد إذا تغيرت مواعيده */
