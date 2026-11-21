@@ -2,6 +2,7 @@
 // «🧠 تصحيح قصي»: مصحح الأستاذ الثاني. يجربه بالسر على أوراق صححها مصحح ويقارن، ومن يرتاح لموضوع يخليه يصححه صدگ
 import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
+import { Inline, MathText } from "../myexams/AiCompare";
 
 type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
@@ -178,6 +179,31 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
   );
 }
 
+/** سؤال واحد: زر «📝 التصحيح» وجنبه «📷 ورقة الطالب»، كل واحد يطلع لحاله. الرياضيات بشكل الكتاب (الكسر أفقي، π) */
+function QView({ q, photos }: { q: Q; photos: string[] }) {
+  const [view, setView] = useState<"grade" | "paper">("grade");
+  return (
+    <div className="card expad">
+      <div className="exlabel">السؤال {q.n}: {q.score} من {q.max}{q.human !== null && <> · المصحح {q.human}</>} {q.sure ? "" : "⚠️ ما متأكد"}</div>
+      <div className="aicview">
+        <button type="button" className={view === "grade" ? "on" : ""} onClick={() => setView("grade")}>📝 التصحيح</button>
+        <button type="button" className={view === "paper" ? "on" : ""} onClick={() => setView("paper")}>📷 ورقة الطالب{photos.length ? "" : " (ماكو)"}</button>
+      </div>
+      {view === "paper" ? photos.map((u) => <img key={u} src={u} alt="" style={{ width: "100%", minWidth: 0, marginTop: 6 }} />) : <>
+        {q.reason && <div className="exhint"><Inline text={q.reason} /></div>}
+        {q.method > 1 && <div className="exhint">صححه على الطريقة {q.method}</div>}
+        {q.steps.map((s, i) => (
+          <div key={i} className="aig-logrow"><div style={{ minWidth: 0, flex: 1 }}>
+            {s.awarded >= s.points ? "✅" : s.awarded > 0 ? "◐" : "❌"} <b>{s.awarded}/{s.points}</b>
+            <MathText text={s.text} />
+            {s.note && <small><Inline text={s.note} /></small>}
+          </div></div>
+        ))}
+      </>}
+    </div>
+  );
+}
+
 function PaperView({ p, fileUrl, close }: { p: Paper; fileUrl: (ref: string) => string; close: () => void }) {
   return (
     <div className="exfull" style={{ background: "var(--ink)" }}>
@@ -189,17 +215,7 @@ function PaperView({ p, fileUrl, close }: { p: Paper; fileUrl: (ref: string) => 
           <br />{p.kind === "trial" ? "🧪 تجربة بالسر، ما وصلت للطالب" : p.sent ? "✅ هو صححها ووصلت الدرجة للطالب" : "↩️ ما كان متأكد، فرجعها للمصححين"}
         </div>
       </div>
-      {p.qs.map((q) => (
-        <div key={q.n} className="card expad">
-          <div className="exlabel">السؤال {q.n}: {q.score} من {q.max}{q.human !== null && <> · المصحح {q.human}</>} {q.sure ? "" : "⚠️ ما متأكد"}</div>
-          {q.reason && <div className="exhint">{q.reason}</div>}
-          {q.method > 1 && <div className="exhint">صححه على الطريقة {q.method}</div>}
-          {q.steps.map((s, i) => (
-            <div key={i} className="aig-logrow"><div>{s.awarded >= s.points ? "✅" : s.awarded > 0 ? "◐" : "❌"} <b>{s.awarded}/{s.points}</b> · {s.text}{s.note && <><br /><small>{s.note}</small></>}</div></div>
-          ))}
-          {p.photos.filter((f) => f.q === q.n).map((f) => <img key={f.ref} src={fileUrl(f.ref)} alt="" style={{ width: "100%", minWidth: 0, marginTop: 6 }} />)}
-        </div>
-      ))}
+      {p.qs.map((q) => <QView key={q.n} q={q} photos={p.photos.filter((f) => f.q === q.n).map((f) => fileUrl(f.ref))} />)}
       {p.photos.some((f) => !f.q) && (
         <div className="card expad">
           <div className="exlabel">صفحات الورقة</div>

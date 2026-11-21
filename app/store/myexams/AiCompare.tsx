@@ -10,7 +10,20 @@ export type AiStep = { status: string; awarded: number; possible: number; expect
 
 /** الخطوة اللي نظام التصحيح ما گدر يحللها، أو كتابتها ما تنرسم: الطالب يشوف هاي الرسالة بدل كتابة ما تنقرا */
 export const FAIL_TEXT = "تعذّر تحليل هذه الخطوة، أرسل صورة ثانية أوضح.";
-export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[] };
+export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay" };
+
+/** كلام عربي ويا رياضيات مكتوبة بدون $ (x/2 ، pi): كل قطعة مو عربية بيها حرف أو رقم تنرسم رياضيات
+ *  (الكسر أفقي، والباي π)، والعربي يبقى كلام مثل ما هو */
+function Mixed({ text }: { text: string }) {
+  const parts = text.split(/([^؀-ۿ]+)/);
+  return <>{parts.map((p, i) => {
+    const t = p.trim();
+    const plainNum = /^[\d\s.,:()-]+$/.test(t);
+    if (!t || /[؀-ۿ]/.test(p) || !/[A-Za-z0-9π√]/.test(t) || plainNum) return <span key={i}>{p}</span>;
+    const lead = /^\s*/.exec(p)![0], tail = /\s*$/.exec(p)![0];
+    return <span key={i}>{lead}<span dir="ltr" className="aiinl" dangerouslySetInnerHTML={{ __html: mathHtml(t) }} />{tail}</span>;
+  })}</>;
+}
 
 
 /** خطوة رياضيات: كل سطر (مفصول بـ ;) ينكتب مثل الكتاب. السطر اللي بيه كلام عربي ينكتب نص.
@@ -34,6 +47,7 @@ export function MathText({ text }: { text: string }) {
 }
 /** جملة عربية بيها رياضيات بين $ $: الرياضيات تنكتب مثل الكتاب */
 export function Inline({ text }: { text: string }) {
+  if (!String(text ?? "").includes("$")) return <Mixed text={String(text ?? "")} />;
   const parts = String(text ?? "").split(/(\$[^$]+\$)/);
   // «$» بلا شريك ما ينكتب: ما يطلع للطالب علامة دولار وحيدة
   return <>{parts.map((p, i) => (p.startsWith("$") && p.endsWith("$") && p.length > 2
@@ -63,7 +77,8 @@ export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: s
         <div className="expad">{q.photos.map((p) => <img key={p} className="eximg" src={fileUrl(p)} alt={`جواب السؤال ${q.n}`} />)}</div>
       ) : (
         <div className="expad">
-          {!!q.photos.length && (
+          {/* «تصحيح قصي»: صورة الجواب بس بزر «📷 ورقتي»، مو جوة التصحيح (طلب الأستاذ 2026-11-21) */}
+          {!!q.photos.length && q.by !== "qusay" && (
             <div className="aicthumbs">
               {q.photos.map((p) => <button type="button" key={p} onClick={() => setBig(p)}><img src={fileUrl(p)} alt="جوابك" /></button>)}
               <small>اضغط على الصورة حتى تكبر</small>
@@ -72,16 +87,16 @@ export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: s
           {q.note && <div className="exhint">💬 <Inline text={q.note} /></div>}
           <div className="aicgrid">
             <div className="aiccol">📐 الحل النموذجي</div>
-            <div className="aiccol">✍️ حلك</div>
+            <div className="aiccol">{q.by === "qusay" ? "📝 التصحيح" : "✍️ حلك"}</div>
             {q.steps.map((s, i) => (
               <div key={i} className="aicrow">
                 <div className="aiccell"><MathText text={s.expected} /></div>
                 <div className={"aiccell " + mark(s)}>
-                  {s.failed || (s.student && !canRender(s.student))
+                  {q.by === "qusay" ? (s.student ? <div dir="rtl"><Inline text={s.student} /></div> : <span className="aicmiss">—</span>) : s.failed || (s.student && !canRender(s.student))
                     ? <div className="aicfail">⚠️ {s.message || FAIL_TEXT}</div>
                     : s.student ? <MathText text={s.student} /> : <span className="aicmiss">ما مكتوب</span>}
                   <div className="aicmark">{mark(s) === "ok" ? "✅" : mark(s) === "bad" ? "❌" : "🟡"} {s.awarded} / {s.possible}</div>
-                  {mark(s) !== "ok" && !s.failed && s.reason && <small><Inline text={s.reason} /></small>}
+                  {q.by !== "qusay" && mark(s) !== "ok" && !s.failed && s.reason && <small><Inline text={s.reason} /></small>}
                 </div>
               </div>
             ))}

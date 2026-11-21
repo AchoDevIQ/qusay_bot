@@ -310,7 +310,7 @@ async function qusayShown(it: Row) {
   return r.qs.filter((q) => q.answered).map((q) => ({
     n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
     photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
-    steps: q.steps.map((st) => ({ status: "", awarded: st.awarded, possible: st.points, expected: st.text, student: st.note, reason: st.note })),
+    steps: q.steps.map((st) => ({ status: "", awarded: st.awarded, possible: st.points, expected: st.text, student: st.note, reason: st.note })), by: "qusay" as const,
   }));
 }
 /** تصحيح نظام التصحيح AI اللي يشوفه الطالب: كل الورقة إذا هو صححها، أو بس أسئلته إذا حوّل الباقي لمصحح */

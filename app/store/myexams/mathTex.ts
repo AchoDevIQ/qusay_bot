@@ -46,10 +46,11 @@ export const stripDelimiters = (s: string) => s.replace(/\$+|\\\(|\\\)|\\\[|\\\]
 
 export function toTex(p: string) {
   let t = braceArgs(stripDelimiters(p)).replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
-    .replace(/=>|⇒|⟹/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ").replace(/−/g, "-").replace(/×/g, "\\times ");
+    .replace(/π/g, "pi").replace(/=>|⇒|⟹/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ").replace(/−/g, "-").replace(/×/g, "\\times ");
   const re = new RegExp(`${OPERAND}\\s*/\\s*${OPERAND}`);
   for (let i = 0; i < 12 && re.test(t); i++) t = t.replace(re, (_, x: string, y: string) => `\\frac{${unwrap(x)}}{${unwrap(y)}}`);
-  return wordsAsText(t);
+  // «pi» و«π» يصيرن رمز الباي مثل الكتاب (بعد الكسور، حتى pi/4 يصير كسر بيه π)
+  return wordsAsText(t).replace(/(?<![\\A-Za-z])pi(?![A-Za-z])/g, "\\pi ");
 }
 
 /** أسماء الدوال والرموز اللي تبقى رياضيات حتى لو حروفها 3 أو أكثر */
