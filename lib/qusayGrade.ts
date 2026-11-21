@@ -20,8 +20,9 @@ import { stamp } from "./util.ts";
 export const QG_PERM = "qusay";
 /** low: يفكر أقل وأرخص. medium: يفكر أكثر وأدق (الأصل) */
 export type QgEffort = "low" | "medium";
-/** live: المواضيع اللي يصححها صدگ. batch: بالدفعة (أرخص بالنص، والدرجة تتأخر). cap: أكثر شي يصرف باليوم بالدولار */
-export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number };
+/** live: المواضيع اللي يصححها صدگ. batch: بالدفعة (أرخص بالنص، والدرجة تتأخر، وهي الأصل من 2026-11-21).
+ *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل) */
+export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean };
 export type QgStep = { text: string; points: number; awarded: number; note: string };
 export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[] };
 export type QgTokens = { in: number; cw: number; cr: number; out: number };
@@ -29,7 +30,7 @@ export type QgTokens = { in: number; cw: number; cr: number; out: number };
 export type QgResult = { at: string; kind: "trial" | "live"; total: number; sure: boolean; qs: QgQuestion[]; usd: number; tokens: QgTokens; batch: boolean; human?: number | null; sent?: boolean };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
-const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches";
+const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now";
 const resKey = (id: number) => `qg_res_${id}`;
 const tryKey = (id: number) => `qg_try_${id}`;
 const capNoteKey = (day: string) => `qg_cap_note_${day}`;
@@ -50,12 +51,14 @@ const readJson = async <T>(k: string, def: T): Promise<T> => { try { return JSON
 export const qgOn = async () => (await kvGet(ON)) === "1";
 export const setQgOn = (on: boolean) => kvSet(ON, on ? "1" : "0");
 export async function qgSettings(): Promise<QgSettings> {
-  const s = await readJson<Partial<QgSettings>>(SET, {});
+  const s = await readJson<Partial<QgSettings> & { v?: number }>(SET, {});
   const cap = Number(s.cap);
-  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: !!s.batch, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP };
+  // الإعدادات القديمة (قبل v 2) كانت «هسه» بالأصل: تصير بالدفعة، طلب الأستاذ 2026-11-21
+  const v2 = Number(s.v) >= 2;
+  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true };
 }
 export async function saveQgSettings(p: Partial<QgSettings>) {
-  const s = { ...await qgSettings(), ...p };
+  const s = { ...await qgSettings(), ...p, v: 2 };
   await kvSet(SET, JSON.stringify(s));
   return await qgSettings();
 }
@@ -282,21 +285,32 @@ const nameOfRow = async (it: Row) => (await one("students", { user_id: it.user_i
 const examTitle = async (id: number) => String((await one("bank_exams", { id }))?.title ?? "");
 const tries = async (id: number) => Number(await kvGet(tryKey(id))) || 0;
 const todayUsd = async () => spentFrom(await qgLog(), stamp().slice(0, 10));
+/** معدل كلفة الورقة من آخر الأوراق، حتى نحسب حساب الدفعات اللي بعدها ما رجعت */
+async function avgUsd() {
+  const paid = (await qgLog()).filter((r) => r.usd).slice(-50);
+  return paid.length ? paid.reduce((t, r) => t + Number(r.usd), 0) / paid.length : 0.003;
+}
+/** صرفية اليوم ويا تقدير الدفعات اللي بالطريق (كلفتها تنحسب من ترجع، فبدونها يعبر الحد) */
+async function spentWithPending() {
+  const jobs = (await batches()).reduce((t, b) => t + b.jobs.length, 0);
+  return await todayUsd() + (jobs ? jobs * await avgUsd() / 2 : 0);
+}
 async function overCap(s: QgSettings) {
-  const spent = await todayUsd();
+  const spent = await spentWithPending();
   if (spent < s.cap) return false;
   const day = stamp().slice(0, 10);
   if (!await kvGet(capNoteKey(day))) {
     await kvSet(capNoteKey(day), "1");
     await addLog({ at: stamp(), kind: "cap", note: `وصل حد اليوم ${s.cap} دولار` });
-    for (const id of ADMIN_IDS) await send(id, `👤 <b>لصاحب البوت بس</b>\n🧠 «تصحيح قصي» وصل حد اليوم (${s.cap} دولار، تقريباً ${Math.round(s.cap * IQD)} دينار) فوگف لباچر. الأوراق رجعت للمصححين.\nتگدر تكبر الحد من صفحته.`).catch(() => undefined);
+    for (const id of ADMIN_IDS) await send(id, `👤 <b>لصاحب البوت بس</b>\n🧠 «تصحيح قصي» وصل حد اليوم (${s.cap} دولار، تقريباً ${Math.round(s.cap * IQD)} دينار) فوگف لباچر. ${s.carry ? "الأوراق الباقية تنتظر وتتصحح باچر، وما تروح للمصححين." : "الأوراق الباقية رجعت للمصححين."}\nتگدر تكبر الحد من صفحته.`).catch(() => undefined);
   }
   return true;
 }
 /** يختار الأوراق اللي ياخذها: مواضيعه المأشرة بس، ومو من مواضيع أو طلاب نظام التصحيح AI مال مؤمل */
 async function liveTaker() {
   const s = await qgSettings();
-  const active = keyReady() && await qgOn() && s.live.length > 0 && !(await todayUsd() >= s.cap);
+  // وصل الحد: إذا «الزايد لباچر» الأوراق تبقى محجوبة عن المصححين وتنتظره، وإلا ترجعلهم
+  const active = keyReady() && await qgOn() && s.live.length > 0 && (s.carry || !(await spentWithPending() >= s.cap));
   const mu = await aiSettings();
   const live = new Set(s.live), muExams = new Set(mu.exams), muStudents = new Set(mu.students);
   const ready = new Map<number, boolean>();
@@ -414,7 +428,10 @@ export async function trialCandidates(examId: number, fresh = false): Promise<Ro
   }
   return out;
 }
-export async function queueTrial(examId: number, n: number, fresh = false) {
+/** أوراق التجربة اللي صاحب البوت اختار تتصحح «⚡ هسه» حتى لو الإعداد بالدفعة */
+const nowList = async () => { const l = await readJson<number[]>(NOW, []); return Array.isArray(l) ? l.map(Number) : []; };
+export async function markNow(ids: number[]) { if (ids.length) await kvSet(NOW, JSON.stringify([...new Set([...await nowList(), ...ids])])); }
+export async function queueTrial(examId: number, n: number, fresh = false, now = false) {
   const want = Math.max(1, Math.min(50, Math.round(n) || 0));
   const cand = [];
   const ready = new Map<number, boolean>();
@@ -424,6 +441,7 @@ export async function queueTrial(examId: number, n: number, fresh = false) {
     if (ready.get(it.version_id)) cand.push(it.id as number);
   }
   await kvSet(TRIAL, JSON.stringify([...await trialQueue(), ...cand]));
+  if (now) await markNow(cand);
   return cand.length;
 }
 export const clearTrialQueue = () => kvSet(TRIAL, "[]");
@@ -500,18 +518,25 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
   }
   if (!jobs.length) return { idle: true, ...(received ? { received } : {}) };
   const ready = await prepare(jobs, s.effort, failed);
-  if (s.batch && ready.length) {
+  // اللي اختارهن «⚡ هسه» يتصححن هسه، والباقي حسب الإعداد
+  const fast = new Set(await nowList());
+  const later = s.batch ? ready.filter((p) => !fast.has(p.job.it.id)) : [];
+  const nowJobs = ready.filter((p) => !later.includes(p));
+  if (fast.size) { const done = new Set(jobs.map((j) => j.it.id as number)); await kvSet(NOW, JSON.stringify([...fast].filter((id) => !done.has(id)))); }
+  let batched = 0;
+  if (later.length) {
     try {
-      const id = await apiImpl.batchCreate(ready.map((p) => ({ custom_id: `qg_${p.job.it.id}`, params: p.req })));
-      await kvSet(BATCHES, JSON.stringify([...await batches(), { id, at: Date.now(), jobs: ready.map((p) => ({ item: p.job.it.id as number, kind: p.job.kind })) }]));
-      return { batched: ready.length, ...(received ? { received } : {}) };
-    } catch (e) { for (const p of ready) await failed(p.job, e); return { failed: ready.length }; }
+      const id = await apiImpl.batchCreate(later.map((p) => ({ custom_id: `qg_${p.job.it.id}`, params: p.req })));
+      await kvSet(BATCHES, JSON.stringify([...await batches(), { id, at: Date.now(), jobs: later.map((p) => ({ item: p.job.it.id as number, kind: p.job.kind })) }]));
+      batched = later.length;
+    } catch (e) { for (const p of later) await failed(p.job, e); if (!nowJobs.length) return { failed: later.length }; }
   }
+  if (!nowJobs.length) return { batched, ...(received ? { received } : {}) };
   let graded = 0, bad = 0;
-  await Promise.all(ready.map(async (p) => {
+  await Promise.all(nowJobs.map(async (p) => {
     try { await settle(p, await apiImpl.create(p.req), false, finish); graded++; } catch (e) { bad++; await failed(p.job, e); }
   }));
-  return { graded, ...(bad ? { failed: bad } : {}), ...(received ? { received } : {}) };
+  return { graded, ...(batched ? { batched } : {}), ...(bad ? { failed: bad } : {}), ...(received ? { received } : {}) };
 }
 
 /** الورقة رجعت للمصححين لأن ما متأكد، أو خربت: يعيد يجربها */

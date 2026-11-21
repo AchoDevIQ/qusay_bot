@@ -11,7 +11,7 @@ type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; h
 type TrialRow = { id: number; name: string; exam: string; human: number | null; qusay: number; sure: boolean; iqd: number; at: string };
 type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string };
 type Data = {
-  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number }; fileToken: string;
+  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean }; fileToken: string;
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
   trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; paper?: Paper; notice?: string;
 };
@@ -98,6 +98,7 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
   const [effort, setEffort] = useState(s.effort);
   const [batch, setBatch] = useState(s.batch);
   const [cap, setCap] = useState(String(s.cap));
+  const [carry, setCarry] = useState(s.carry);
   return (
     <div className="card expad">
       <div className="exlabel">⚙️ الإعدادات</div>
@@ -111,9 +112,14 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
         <option value="0">⚡ هسه: خلال دقيقة أو دقيقتين</option>
         <option value="1">🌙 بالدفعة: نص الكلفة، توصل خلال ساعة تقريباً (أكثر شي يوم)</option>
       </select>
-      <div className="exhint">أكثر شي يصرف باليوم (بالدولار). من يوصله يوگف لباچر والأوراق ترجع للمصححين: {Math.round((Number(cap) || 0) * 1600).toLocaleString("en-US")} دينار</div>
+      <div className="exhint">أكثر شي يصرف باليوم (بالدولار): {Math.round((Number(cap) || 0) * 1600).toLocaleString("en-US")} دينار. من يوصله يوگف لباچر</div>
       <input type="number" inputMode="decimal" min={0.1} max={100} step={0.5} value={cap} onChange={(e) => setCap(e.target.value)} />
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap) })}>💾 احفظ</button>
+      <div className="exhint">الأوراق اللي تزيد عن الحد</div>
+      <select value={carry ? "1" : "0"} onChange={(e) => setCarry(e.target.value === "1")}>
+        <option value="1">⏳ تنتظر وتتصحح باچر (ما تروح للمصححين)</option>
+        <option value="0">✍️ ترجع للمصححين</option>
+      </select>
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry })}>💾 احفظ</button>
     </div>
   );
 }
@@ -121,6 +127,7 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
 function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
   const [n, setN] = useState(String(Math.min(10, Math.max(1, e.human))));
   const [nf, setNf] = useState(String(Math.min(3, Math.max(1, e.fresh))));
+  const [fast, setFast] = useState(true);
   return (
     <div className="card expad">
       <div className="exlabel">{e.title} {e.live && "· ✅ يصححه صدگ"}</div>
@@ -131,16 +138,22 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
         {e.waiting > 0 && <><br />⏳ {e.waiting} ورقة جديدة جربها وتنتظر المصحح: من يصححها تطلع درجته جنبها</>}
         <br />أوراق صححها مصحح وتگدر تجربها: <b>{e.human}</b> · أوراق جديدة ما مصححة: <b>{e.fresh}</b>
       </div>
+      {!e.why && (e.human > 0 || e.fresh > 0) && (
+        <div className="seg">
+          <button type="button" className={fast ? "on" : ""} onClick={() => setFast(true)}>⚡ التجربة هسه</button>
+          <button type="button" className={!fast ? "on" : ""} onClick={() => setFast(false)}>🌙 بالدفعة (نص الكلفة)</button>
+        </div>
+      )}
       {!e.why && e.human > 0 && (
         <div className="aig-logrow">
           <input type="number" inputMode="numeric" min={1} max={50} value={n} onChange={(x) => setN(x.target.value)} style={{ width: 70 }} />
-          <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "trial", exam: e.id, n: Number(n) })}>🧪 جرب على {n} ورقة</button>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "trial", exam: e.id, n: Number(n), now: fast })}>🧪 جرب على {n} ورقة</button>
         </div>
       )}
       {!e.why && e.fresh > 0 && (
         <div className="aig-logrow">
           <input type="number" inputMode="numeric" min={1} max={50} value={nf} onChange={(x) => setNf(x.target.value)} style={{ width: 70 }} />
-          <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "trial", exam: e.id, n: Number(nf), fresh: true })}>🆕 جرب على {nf} ورقة جديدة</button>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "trial", exam: e.id, n: Number(nf), fresh: true, now: fast })}>🆕 جرب على {nf} ورقة جديدة</button>
         </div>
       )}
       {!e.why && e.fresh > 0 && <div className="exhint">الورقة الجديدة تبقى عند المصححين مثل ما هي، ودرجة «تصحيح قصي» تطلع إلك إنت بس. ولا شي يوصل للطالب.</div>}

@@ -109,6 +109,7 @@ export async function qusayAction(body: Row) {
     const p: Row = {};
     if (body.effort === "low" || body.effort === "medium") p.effort = body.effort;
     if (typeof body.batch === "boolean") p.batch = body.batch;
+    if (typeof body.carry === "boolean") p.carry = body.carry;
     if (body.cap !== undefined) { const c = Number(body.cap); need(c > 0 && c <= 100, "الحد اليومي بين 0.1 و 100 دولار"); p.cap = c; }
     await saveQgSettings(p);
     return await out("✅ انحفظ");
@@ -116,10 +117,11 @@ export async function qusayAction(body: Row) {
   if (a === "trial") {
     need(await one("bank_exams", { id: exam }), "اختار الموضوع");
     const fresh = body.fresh === true;
-    const n = await queueTrial(exam, Number(body.n), fresh);
+    const now = body.now === true;
+    const n = await queueTrial(exam, Number(body.n), fresh, now);
     need(n > 0, fresh ? "ماكو أوراق جديدة سلمها الطلاب بهذا الموضوع وبعدها ما تصححت (أو باقي خطوات)" : "ماكو أوراق صححها مصحح بهذا الموضوع وبعدها ما تجربت (أو باقي خطوات)");
     const on = await qgOn();
-    return await out(`🧪 ${n} ورقة ${fresh ? "جديدة " : ""}تنتظر التجربة.${fresh ? " تبقى عند المصححين مثل ما هي، ولا شي يوصل للطالب." : ""} ${on ? "تبدي خلال دقيقة، وكل دقيقة 6 أوراق." : "شغّل «تصحيح قصي» حتى تبدي."}`);
+    return await out(`🧪 ${n} ورقة ${fresh ? "جديدة " : ""}تنتظر التجربة.${fresh ? " تبقى عند المصححين مثل ما هي، ولا شي يوصل للطالب." : ""} ${!on ? "شغّل «تصحيح قصي» حتى تبدي." : now || !(await qgSettings()).batch ? "تبدي خلال دقيقة، وكل دقيقة 6 أوراق." : "🌙 بالدفعة: نص الكلفة، ونتيجتها تطلع خلال ساعة تقريباً (أكثر شي يوم)."}`);
   }
   if (a === "trialClear") { await clearTrialQueue(); return await out("انمسحت الأوراق اللي تنتظر التجربة"); }
   if (a === "forget") { const n = await forgetTrial(exam); return await out(`انمسحت نتائج ${n} تجربة بهذا الموضوع، تگدر تعيدها`); }

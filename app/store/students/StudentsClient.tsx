@@ -660,12 +660,13 @@ function TestPaper({ tests, versions, busy, upload }: { tests: TestStudent[]; ve
   const topics = versions.filter((x, i) => x.slug === slug && versions.findIndex((y) => y.exam === x.exam) === i);
   const models = versions.filter((x) => x.exam === exam);
   const [who, setWho] = useState<"ai" | "me" | "qusay">("ai");
+  const [fast, setFast] = useState(true);
   const [pics, setPics] = useState<Record<number, File[]>>({});
   const v = versions.find((x) => x.id === vid);
   const count = Object.values(pics).reduce((t, x) => t + x.length, 0);
   async function go() {
     const f = new FormData();
-    f.set("action", "testPaper"); f.set("sid", String(sid)); f.set("vid", String(vid)); f.set("who", who);
+    f.set("action", "testPaper"); f.set("sid", String(sid)); f.set("vid", String(vid)); f.set("who", who); f.set("now", fast ? "1" : "0");
     for (const [n, list] of Object.entries(pics)) for (const p of list) f.append(`q_${n}`, await shrink(p), "answer.jpg");
     if (await upload(f)) setPics({});
   }
@@ -713,6 +714,12 @@ function TestPaper({ tests, versions, busy, upload }: { tests: TestStudent[]; ve
               <button type="button" className={who === "me" ? "on" : ""} onClick={() => setWho("me")}>✍️ أصححها أنا</button>
               <button type="button" className={who === "qusay" ? "on" : ""} onClick={() => setWho("qusay")}>🧠 تصحيح قصي</button>
             </div>
+            {who === "qusay" && (
+              <div className="seg">
+                <button type="button" className={fast ? "on" : ""} onClick={() => setFast(true)}>⚡ هسه</button>
+                <button type="button" className={!fast ? "on" : ""} onClick={() => setFast(false)}>🌙 بالدفعة (نص الكلفة)</button>
+              </div>
+            )}
             {who === "qusay" && <div className="exhint">يصححها طبيعي مثل ورقة حقيقية، بأي موضوع، والدرجة توصلك بالبوت مثل ما توصل للطالب. حتى ياخذها: لازم «تصحيح قصي» شغال، وكل أسئلة النموذج إلها خطوات أو حل. التفصيل كامل بصفحته ← السجل ← 👁.</div>}
             {who === "ai" && <div className="exhint">حتى ياخذها: لازم موضوعها مأشر بصفحة نظام التصحيح AI، وكل أسئلة النموذج إلها خطوات، وهو شغال.</div>}
             <button type="button" className="btn" disabled={busy || !count} onClick={() => void go()}>{busy ? "جاري الرفع..." : `📤 ارفع الورقة (${count} صورة)`}</button>

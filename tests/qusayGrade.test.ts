@@ -73,7 +73,15 @@ const good = { questions: [
   { n: 2, answered: true, method: 1, steps: [{ i: 1, awarded: 25.3, note: "نص" }], score: 25, sure: true, reason: "ناقص" },
 ] };
 
-test("طافي من البداية وما يصرف شي", async () => {
+test("طافي من البداية وما يصرف شي، وبالأصل بالدفعة والزايد عن الحد لباچر", async () => {
+  const d0 = await Q.qgSettings();
+  assert.deepEqual([d0.batch, d0.carry], [true, true]);
+  // إعدادات قديمة محفوظة «هسه» قبل هذا التغيير: تصير بالدفعة
+  await kvSet("qg_settings", JSON.stringify({ live: [], effort: "medium", batch: false, cap: 2 }));
+  assert.equal((await Q.qgSettings()).batch, true);
+  // الفحوصات الجاية «هسه» إلا اللي تجرب الدفعة
+  await Q.saveQgSettings({ batch: false });
+  assert.equal((await Q.qgSettings()).batch, false);
   assert.deepEqual(await Q.qusayTick(finishByAi), { off: true });
   assert.equal(sent.length, 0);
   assert.equal(await staffName(QUSAY_GRADER), "🧠 تصحيح قصي");
@@ -243,6 +251,38 @@ test("ورقة تجربة «🧠 تصحيح قصي»: يصححها طبيعي ح
   const d: any = await qusayAction({ initData: sign(1), action: "paper", id });
   assert.equal(d.paper.qs.length, 2);
   await Q.saveQgSettings({ live: [ex] });
+});
+
+test("بالدفعة بس التجربة «⚡ هسه»: هاي تتصحح هسه، والباقي يروح بالدفعة", async () => {
+  await Q.saveQgSettings({ batch: true, live: [] });
+  const a = await paper([1, 2], { grader_id: 41, graded_at: "2026-11-21 08:00", total: 50 });
+  const b = await paper([1, 2], { grader_id: 41, graded_at: "2026-11-21 09:00", total: 60 });
+  reply = () => good;
+  await qusayAction({ initData: sign(1), action: "trial", exam: ex, n: 1, now: true });   // آخر وحدة تصححت أول (b)
+  await qusayAction({ initData: sign(1), action: "trial", exam: ex, n: 1 });
+  const before = batches.size;
+  const r: any = await Q.qusayTick(finishByAi);
+  assert.equal(r.graded, 1);
+  assert.equal(r.batched, 1);
+  assert.equal(batches.size, before + 1);
+  assert.equal((await Q.qgResultOf(b))!.batch, false, "هسه");
+  assert.equal(await Q.qgResultOf(a), null, "بالدفعة، تنتظر");
+  batches.get(`b${batches.size}`)!.ended = true;
+  await Q.qusayTick(finishByAi);
+  assert.equal((await Q.qgResultOf(a))!.batch, true);
+  await Q.saveQgSettings({ batch: false, live: [ex] });
+});
+
+test("وصل الحد: الزايد ينتظر لباچر وما يروح للمصححين، وإذا اختار يرجعون للمصححين", async () => {
+  await Q.saveQgSettings({ cap: 0.0001, carry: true });
+  const id = await paper([1, 2]);
+  const p = (await one("sched_items", { id }))!;
+  await Q.qusayTick(finishByAi);
+  assert.equal((await one("sched_items", { id }))!.grader_id, null, "ما انحجزت ولا انصرف عليها");
+  assert.equal((await Q.qusayHeld([p])).has(id), true, "محجوبة عن المصححين لباچر");
+  await Q.saveQgSettings({ carry: false });
+  assert.equal((await Q.qusayHeld([p])).has(id), false, "ترجع للمصححين");
+  await Q.saveQgSettings({ cap: 2, carry: true });
 });
 
 test("الكلفة: الكاش يندفع عشره", () => {
