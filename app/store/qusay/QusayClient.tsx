@@ -22,6 +22,7 @@ const num = (n: number) => n.toLocaleString("en-US");
 export default function QusayClient() {
   const { data, error, busy, call } = useAdminApi<Data>("/api/qusay", "🧠 تصحيح قصي");
   const [slug, setSlug] = useState("");
+  const [allLog, setAllLog] = useState(false);
   const ch = data?.chapters.find((c) => c.slug === slug) ?? data?.chapters[0];
   const fileUrl = (ref: string) => `/api/exams/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
   return (
@@ -33,8 +34,8 @@ export default function QusayClient() {
         {data && (
           <>
             <div className="exhint tmhint">
-              مصححك الثاني، بروحه وبعيد عن نظام التصحيح AI مال مؤمل. يقرا ورقة الطالب كلها بمرة وحدة ويصححها على خطوات الحل اللي كتبتها، فكلفته واطية.
-              الورقة اللي يشك بيها ما ينطيها درجة، ترجع للمصححين. ابدي بالتجربة: يصحح بالسر أوراق صححها مصحح، وتقارن الدرجتين. ما يوصل شي للطالب لحد ما تخليه يصحح موضوع صدگ.
+              مصححك الثاني، بروحه وبعيد عن نظام التصحيح AI مال مؤمل. يقرا ورقة الطالب كلها بمرة وحدة ويصححها على خطوات الحل اللي كتبتها.
+              جربه بالسر على أوراق الطلاب (ما يوصل شي للطالب)، لو ارفع ورقة طالب تجربة من 🎓 الطلاب ← 📷 ورقة تجربة ← 🧠 تصحيح قصي. كل اللي يصححه يطلع تحت بـ «📋 السجل».
             </div>
             <div className="card expad">
               <div className="exlabel">التشغيل</div>
@@ -50,6 +51,20 @@ export default function QusayClient() {
                 {data.batches > 0 && <><br />🌙 دفعات بعدها عند الذكاء: <b>{data.batches}</b></>}
               </div>
               <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "list" })}>🔄 حدّث</button>
+            </div>
+            <div className="card expad">
+              <div className="exlabel">📋 السجل: آخر الأوراق اللي صححها</div>
+              <div className="exhint">دوس 👁 يم أي ورقة حتى تشوف تصحيحها كامل: كل سؤال، وكل خطوة شگد انطى وليش، ويا صور الجواب.</div>
+              {!data.log.length && <div className="exhint">ماكو شي بعد.</div>}
+              {(allLog ? data.log : data.log.slice(0, 8)).map((r, i) => (
+                <div key={i} className="aig-logrow">
+                  <div><small>{r.at}</small> · {KIND[r.kind]}{r.name && <> · <b>{r.name}</b></>}{r.exam && <> · {r.exam}</>}{r.total !== undefined && <> · {r.total}</>}{r.iqd !== null && <> · {r.iqd} دينار</>}{r.note && <><br /><small>{r.note}</small></>}</div>
+                  {r.item && r.kind !== "failed" && r.kind !== "cap" && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "paper", id: r.item })}>👁 شوف</button>}
+                  {r.item && r.canSend && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "sendSaved", id: r.item })}>✅ ابعث درجته</button>}
+                  {r.item && (r.kind === "unsure" || r.kind === "failed") && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "retry", id: r.item })}>🔁 يعيدها</button>}
+                </div>
+              ))}
+              {data.log.length > 8 && <button type="button" className="exbtn" onClick={() => setAllLog(!allLog)}>{allLog ? "⬆️ أقل" : `⬇️ كل السجل (${data.log.length})`}</button>}
             </div>
             <Settings key={JSON.stringify(data.settings)} s={data.settings} busy={busy} call={call} />
             {data.chapters.length > 0 && (
@@ -73,18 +88,6 @@ export default function QusayClient() {
                   </div>
                 );
               })}
-            </div>
-            <div className="card expad">
-              <div className="exlabel">📋 السجل</div>
-              {!data.log.length && <div className="exhint">ماكو شي بعد.</div>}
-              {data.log.map((r, i) => (
-                <div key={i} className="aig-logrow">
-                  <div><small>{r.at}</small> · {KIND[r.kind]}{r.name && <> · <b>{r.name}</b></>}{r.exam && <> · {r.exam}</>}{r.total !== undefined && <> · {r.total}</>}{r.iqd !== null && <> · {r.iqd} دينار</>}{r.note && <><br /><small>{r.note}</small></>}</div>
-                  {r.item && r.canSend && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "sendSaved", id: r.item })}>✅ ابعث درجته</button>}
-                  {r.item && (r.kind === "unsure" || r.kind === "failed") && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "retry", id: r.item })}>🔁 يعيدها</button>}
-                  {r.item && r.kind !== "failed" && r.kind !== "cap" && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "paper", id: r.item })}>👁</button>}
-                </div>
-              ))}
             </div>
           </>
         )}
