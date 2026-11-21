@@ -398,6 +398,16 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   const p: any = await myPaper(-3, id);
   assert.ok(p.ai[0].marked[0].marks.length === 3);
   assert.match((await Q.qgLog()).at(-1)!.note!, /2 من 3 خطوة/);
+  // صاحب البوت يفتح ورقة طالب التجربة مثل ما تطلعله (👁 عرض بس) ويشوف صورها
+  const { viewToken } = await import("../lib/webAuth.ts");
+  const { myExamAction } = await import("../lib/schedApi.ts");
+  const { roomFile } = await import("../lib/examRoom.ts");
+  const v: any = await myExamAction({ token: viewToken(-3), action: "paper", item: id });
+  assert.equal(v.viewOnly, true);
+  assert.equal(v.paper.ai[0].marked[0].marks.length, 3);
+  const f = await roomFile(viewToken(-3), id, v.paper.ai[0].marked[0].ref);
+  assert.ok(f.body.length > 0);
+  await assert.rejects(myExamAction({ token: viewToken(-3), action: "submitExam", item: id }), /عرض بس/);
 });
 
 test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ بأماكنها والطالب الحقيقي يشوفها", async () => {

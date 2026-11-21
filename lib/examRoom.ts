@@ -21,7 +21,7 @@ import { gradedPages } from "./gradeApi.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { aiPartialOf, aiResultOf, methodSteps, rubricFull } from "./aiGrade.ts";
 import { ApiError, ensure, need } from "./webApi.ts";
-import { cronKey, verifyHomeToken } from "./webAuth.ts";
+import { cronKey, verifyHomeToken, verifyViewToken } from "./webAuth.ts";
 
 export const LATE_TEXT = "فات وقت الدخول لهذا الامتحان.";
 export const CLOSED_TEXT = "انتهى وقت الامتحان المحدد، وأعطيناك وقت إضافي، ولم ترسل الإجابة.";
@@ -241,10 +241,14 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
 /** صور الأسئلة والأجوبة: بس لصاحب الامتحان، وبس ملفات امتحانه */
 export async function roomFile(token: unknown, itemId: unknown, ref: unknown, pf?: unknown, device?: unknown) {
   await ensure();
-  const uid = verifyHomeToken(token);
+  // صاحب البوت يشوف ورقة الطالب مثل ما تطلعله (👁 عرض بس): بدون قفل جهاز ولا تلفون
+  const viewed = verifyViewToken(token);
+  const uid = viewed ?? verifyHomeToken(token);
   need(uid !== null, "الرابط انتهى", 401);
-  await checkPhone(uid!, pf);
-  await checkDevice(uid!, device);
+  if (viewed === null) {
+    await checkPhone(uid!, pf);
+    await checkDevice(uid!, device);
+  }
   const it = await one("sched_items", { id: Number(itemId), user_id: uid! });
   need(it?.version_id, "ما عندك صلاحية", 403);
   const e = (await one("bank_exams", { id: it!.exam_id }))!;

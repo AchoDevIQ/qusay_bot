@@ -989,8 +989,11 @@ export async function myExamAction(body: Row) {
   // صاحب البوت يشوف جدول الطالب مثل ما يطلعله: عرض بس، بلا قفل جهاز، وما يتغير شي
   const viewed = verifyViewToken(body?.token);
   if (viewed !== null) {
-    need(String(body.action ?? "") === "info", "👁 هذا عرض بس لجدول الطالب، ما تگدر تغير شي منه");
+    // يگدر يفتح ورقته وتصحيحها كمان (قراية بس)، طلب الأستاذ 2026-11-21
+    const va = String(body.action ?? "");
+    need(va === "info" || va === "paper", "👁 هذا عرض بس لجدول الطالب، ما تگدر تغير شي منه");
     need(await student(viewed), "الطالب غير موجود");
+    if (va === "paper") return { ...await studentInfo(viewed), viewOnly: true, paper: await myPaper(viewed, body.item) };
     return { ...await studentInfo(viewed), viewOnly: true };
   }
   const uid = verifyHomeToken(body?.token);
