@@ -63,7 +63,9 @@ export async function inboxAction(body: Row) {
     return { ok: true };
   }
   need(a === "list", "أمر غير معروف");
-  return { list: await myNotices(uid) };
+  // التصويت اللي ينتظر صوته يطلع فوك الإشعارات (بطاقة «🗳» بالرئيسية تفتح هنا)
+  const { openFor } = await import("./polls.ts");
+  return { list: await myNotices(uid), votes: (await openFor(uid)).map((p) => ({ id: p.id, question: p.question })) };
 }
 /** صورة الإشعار: للطالب اللي يوصله، أو للإدارة */
 export async function noticeImage(url: URL): Promise<Response> {

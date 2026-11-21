@@ -1,5 +1,6 @@
 // رابط التصويت اللي ينحط بقناة التليگرام: يفتح التطبيق على التصويت، أو البوت. الصفحة نفسها ما بيها أي معلومة عن الطالب ولا النتيجة.
-// التطبيق يفتح بس روابط qmath://loginToken (أندرويد)، فالتصويت يمشي عليه بـ ?vote=رقم. النسخة القديمة من التطبيق تنفتح بس على الرئيسية
+// التطبيق يفتح بس روابط qmath://loginToken (أندرويد: intent-filter بيه host=loginToken، فـ qmath://vote ما يفتحه)، فالتصويت يمشي عليه بـ ?vote=رقم.
+// التطبيق مثل ما هو هسه (بدون تحديث) ينفتح على الرئيسية بس، والتصويت يلگاه ببطاقة «🗳 تصويت ينتظر صوتك» وبالمحادثة
 import { kvGet } from "../../../lib/db.ts";
 import { ensure } from "../../../lib/webApi.ts";
 
@@ -26,7 +27,7 @@ a.b{display:block;margin:12px 0;padding:14px;border-radius:12px;text-decoration:
 <p>اضغط حتى تصوت من التطبيق.</p>
 <a class="b app" id="app" href="${ios}">📱 افتح بالتطبيق</a>
 <a class="b tg" href="${tg}">✈️ افتح بالبوت</a>
-<p><small>إذا ما انفتح التصويت: افتح التطبيق، التصويت بالرئيسية.</small></p></div>
+<p><small>إذا ما انفتح التصويت: افتح التطبيق، التصويت يطلعلك بيه (بالرئيسية «🗳 تصويت ينتظر صوتك»، وبالمحادثة).</small></p></div>
 <script>(function(){var a=/android/i.test(navigator.userAgent),u=a?${JSON.stringify(android)}:${JSON.stringify(ios)};document.getElementById("app").href=u;try{location.href=u}catch(e){}})();</script>
 </body></html>`;
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });

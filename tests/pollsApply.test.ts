@@ -118,7 +118,7 @@ test("رابط القناة: يفتح التطبيق على التصويت (أن
   assert.match(html, new RegExp(`qmath://loginToken\\?vote=${p.id}`));
   assert.match(html, new RegExp(`intent://loginToken\\?vote=${p.id}#Intent;scheme=qmath;package=com.achodev.qmath;end`));
   assert.match(html, new RegExp(`t.me/Qusay_Alomairi_Bot\\?start=vote_${p.id}`));
-  assert.match(html, /افتح التطبيق، التصويت بالرئيسية/);
+  assert.match(html, /افتح التطبيق، التصويت يطلعلك بيه/);
   assert.doesNotMatch(html, /طالب 700/);
   assert.equal((await channelLink(new Request("https://x.test/v/abc"), { params: Promise.resolve({ id: "abc" }) })).status, 404);
 });
@@ -155,4 +155,22 @@ test("اللي ما ينفع يطلع اسمه وليش: مبدي من قبل", 
   assert.deepEqual(card.applied.fail.map((f: any) => [f.id, f.name]), [[700, "طالب 700"]]);
   assert.match(card.applied.fail[0].why, /مو مفتوح إلك/);
   assert.equal((await find("sched_items", { user_id: 703, kind: "early" })).length, 2);
+});
+
+test("بدون تحديث التطبيق: بطاقة «🗳 تصويت ينتظر صوتك» بالرئيسية تفتح الإشعارات، وفوكها زر التصويت", async () => {
+  const { nowCards } = await import("../lib/appNow.ts");
+  const { inboxAction } = await import("../lib/notices.ts");
+  const r = await pa("create", { question: "سؤال للرئيسية", options: ["إي", "لا"], curr: "عربي" });
+  const p = r.polls[0];
+  const cards = await nowCards(702);
+  const c = cards.find((x) => x.kind === "vote");
+  assert.ok(c);
+  assert.equal(c!.go, "inbox");
+  assert.equal(c!.id, p.id);
+  const inbox: any = await inboxAction({ token: homeToken(702), device: "dev-" + String(702).padStart(14, "0"), action: "list" });
+  assert.deepEqual(inbox.votes.map((v: any) => v.id), [p.id]);
+  // الإنجليزي ما يطلعله، وبعد ما يصوت تختفي
+  assert.ok(!(await nowCards(703)).some((x) => x.kind === "vote" && x.id === p.id));
+  await va(702, { action: "vote", id: p.id, choice: 0 });
+  assert.ok(!(await nowCards(702)).some((x) => x.kind === "vote"));
 });

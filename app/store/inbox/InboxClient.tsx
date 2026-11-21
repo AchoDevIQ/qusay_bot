@@ -7,6 +7,7 @@ type N = { id: number; kind: string; text: string; img: boolean; at: string; rea
 
 export default function InboxClient() {
   const [list, setList] = useState<N[] | null>(null);
+  const [votes, setVotes] = useState<{ id: number; question: string }[]>([]);
   const [open, setOpen] = useState<number | null>(null);
   const [error, setError] = useState("");
   const token = () => new URLSearchParams(location.search).get("t") ?? "";
@@ -20,7 +21,7 @@ export default function InboxClient() {
       return j;
     } catch { setError("ماكو اتصال، حاول مرة ثانية"); return null; }
   }
-  useEffect(() => { void call({ action: "list" }).then((r) => r && setList(r.list)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void call({ action: "list" }).then((r) => { if (r) { setList(r.list); setVotes(r.votes ?? []); } }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function show(n: N) {
     setOpen(open === n.id ? null : n.id);
@@ -36,6 +37,15 @@ export default function InboxClient() {
       <div className="wrap">
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {!list && !error && <div className="empty">جاري التحميل...</div>}
+        {votes.map((v) => (
+          <a key={`v${v.id}`} className="card" href={`/store/vote?t=${encodeURIComponent(token())}&p=${v.id}`} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+            <div className="form">
+              <b>🗳 تصويت ينتظر صوتك</b>
+              <div style={{ whiteSpace: "pre-wrap", maxHeight: "3.2em", overflow: "hidden" }}>{v.question}</div>
+              <div className="exhint">اضغط حتى تصوت</div>
+            </div>
+          </a>
+        ))}
         {list && !list.length && <div className="empty">ماكو إشعارات هسه.</div>}
         {list?.map((n) => (
           <div key={n.id} className="card" onClick={() => show(n)} style={{ cursor: "pointer" }}>

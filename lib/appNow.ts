@@ -11,7 +11,7 @@ import { schedSettings } from "./schedApi.ts";
 import { addDays, ampm, prettyDay } from "./scheduleRules.ts";
 import { stamp, todayStr } from "./util.ts";
 
-export type NowCard = { kind: "exam" | "notice" | "grade" | "order" | "next"; title: string; text: string; go: "exams" | "inbox" | "orders"; hot?: boolean; id?: number };
+export type NowCard = { kind: "exam" | "vote" | "notice" | "grade" | "order" | "next"; title: string; text: string; go: "exams" | "inbox" | "orders"; hot?: boolean; id?: number };
 const MAX = 8;
 
 export async function nowCards(uid: number, now = stamp()): Promise<NowCard[]> {
@@ -39,6 +39,9 @@ export async function nowCards(uid: number, now = stamp()): Promise<NowCard[]> {
     if (i.status !== "waiting" || at <= now || at.slice(0, 10) > tomorrow) continue;
     out.push({ kind: "exam", id: Number(i.id), title: `📝 ${title(i)}`, text: `${when(at)} · ${where(i)}`, go: "exams" });
   }
+  // تصويت ينتظر صوته: التطبيق يفتح «الإشعارات» (صفحتنا)، وفوكها زر التصويت. ما يحتاج تحديث للتطبيق
+  const { openFor } = await import("./polls.ts");
+  for (const p of (await openFor(uid)).slice(0, 2)) out.push({ kind: "vote", id: p.id, hot: true, title: "🗳 تصويت ينتظر صوتك", text: plain(p.question, 120), go: "inbox" });
   // ٣. إشعارات ما قراها
   const { myNotices } = await import("./notices.ts");
   for (const n of (await myNotices(uid)).filter((x) => !x.read).slice(0, 3)) out.push({ kind: "notice", id: n.id, title: n.kind === "keep" ? "📌 إشعار" : "🔔 إشعار جديد", text: plain(n.text, 120), go: "inbox" });
