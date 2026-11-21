@@ -95,7 +95,8 @@ export type QgApi = {
 let client: Anthropic | null = null;
 const sdk = () => (client ??= new Anthropic());
 const realApi: QgApi = {
-  create: (req) => sdk().messages.create(req),
+  // بالبث: الجواب الطويل (حد 32 ألف) ما ينقطع بمهلة الطلب، والـ SDK ما يرفضه
+  create: (req) => sdk().messages.stream(req).finalMessage(),
   batchCreate: async (requests) => (await sdk().messages.batches.create({ requests })).id,
   batchGet: async (id) => {
     const b = await sdk().messages.batches.retrieve(id);
@@ -303,7 +304,8 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
   const asked = mat.qs.filter((q) => !unanswered.has(q.n)).map((q) => q.n);
   body.push({ type: "text", text: `\nGrade questions ${asked.join(", ")}. Return one entry per question, with one step entry per step of the method you chose (i = step number).` });
   const req: Req = {
-    model: MODEL, max_tokens: 12000,
+    // ويا العلامات يكتب أكثر (مربع كل سطر)، و12 ألف چانت تنقطع (2026-11-21). ينحسب بس اللي يكتبه فعلاً
+    model: MODEL, max_tokens: 32000,
     system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) + topicText(await examStyle(Number(it.exam_id))) : ""), cache_control: { type: "ephemeral" } }],
     output_config: { effort, format: { type: "json_schema", schema: schemaOf(marks) as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content: [...head, ...body] }],
@@ -361,13 +363,18 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
 
 const half = (x: number) => Math.round(x * 2) / 2;
 /** يقرا جواب الذكاء ويرتبه: الدرجة من الخطوات (مو من رقمه)، وما تعدي حدها */
+/** الذكاء جاوب بس جوابه ما ينفع: الطلب انحسب فلوسه، فلازم تنحسب بالصرفية */
+export class PaidError extends Error { usd = 0; tokens: QgTokens; constructor(m: string, tokens: QgTokens) { super(m); this.tokens = tokens; } }
+const priced = (e: unknown, batch: boolean) => { if (e instanceof PaidError) e.usd = usdOf(e.tokens, batch); return e; };
+/** صرفية طلب خرب بس انحسب: تنضاف للصرفية وترجع حتى تنكتب بالسجل */
+async function chargeFailed(e: unknown) { if (e instanceof PaidError && e.usd > 0) { await addSpend("qusay", e.usd); return e.usd; } return undefined; }
 export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<number>, answerOnly: boolean, pages = 0): { qs: QgQuestion[]; tokens: QgTokens } {
   const u = msg.usage;
   const tokens = { in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 };
-  if (msg.stop_reason === "refusal") throw new Error("الذكاء رفض يصحح الورقة");
-  if (msg.stop_reason === "max_tokens") throw new Error("جواب الذكاء طويل وانگطع");
+  if (msg.stop_reason === "refusal") throw new PaidError("الذكاء رفض يصحح الورقة", tokens);
+  if (msg.stop_reason === "max_tokens") throw new PaidError("جواب الذكاء طويل وانگطع", tokens);
   let j: { questions?: any[] } = {};
-  try { j = JSON.parse(msg.content.map((b) => (b.type === "text" ? b.text : "")).join("")); } catch { throw new Error("جواب الذكاء مو مفهوم"); }
+  try { j = JSON.parse(msg.content.map((b) => (b.type === "text" ? b.text : "")).join("")); } catch { throw new PaidError("جواب الذكاء مو مفهوم", tokens); }
   const got = new Map((Array.isArray(j.questions) ? j.questions : []).map((q) => [Number(q?.n), q]));
   const papers = papersOf(j);
   const qs = mat.qs.map((m): QgQuestion => {
@@ -481,13 +488,16 @@ async function failed(job: Job, e: unknown) {
   console.error("qusay grade", it.id, e);
   const n = await tries(it.id) + 1;
   await kvSet(tryKey(it.id), String(n));
-  await addLog({ at: stamp(), kind: "failed", item: it.id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), note: `${job.kind === "trial" ? "🧪 تجربة: " : ""}${errText(e)}` });
+  const usd = await chargeFailed(e);
+  await addLog({ at: stamp(), kind: "failed", item: it.id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), usd, note: `${job.kind === "trial" ? "🧪 تجربة: " : ""}${errText(e)}` });
   if (job.kind === "live") await release(it.id);
 }
 /** الذكاء رجع جواب الورقة: التجربة تنحفظ بس، والحقيقية تنطي الدرجة أو ترجع للمصححين */
 async function settle(p: Prepared, msg: Anthropic.Message, batch: boolean, finish: (uid: number, itemId: number) => Promise<unknown>) {
   const { it, kind } = p.job;
-  const { qs, tokens } = readAnswer(msg, p.mat, p.unanswered, p.answerOnly, p.marks ? p.pages.length : 0);
+  let read: ReturnType<typeof readAnswer>;
+  try { read = readAnswer(msg, p.mat, p.unanswered, p.answerOnly, p.marks ? p.pages.length : 0); } catch (e) { throw priced(e, batch); }
+  const { qs, tokens } = read;
   const usd = usdOf(tokens, batch);
   await addSpend("qusay", usd);
   const total = qs.reduce((t, q) => t + q.score, 0);
@@ -704,7 +714,7 @@ async function runMarksDemos(s: QgSettings) {
   for (const id of ids) {
     const it = await one("sched_items", { id });
     if (!it) continue;
-    const fail = async (_j: Job, e: unknown) => { await addLog({ at: stamp(), kind: "failed", item: id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), note: `🖍 العلامات: ${errText(e)}` }); };
+    const fail = async (_j: Job, e: unknown) => { const usd = await chargeFailed(priced(e, false)); await addLog({ at: stamp(), kind: "failed", item: id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), usd, note: `🖍 العلامات: ${errText(e)}` }); };
     const [p] = await prepare([{ it, kind: "trial" }], s.effort, fail, true, s.style);
     if (!p) continue;
     try {

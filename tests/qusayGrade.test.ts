@@ -452,6 +452,26 @@ test("🖍 العلامة بعد آخر سطر الخطوة وجوة الورق�
   assert.equal(Q.ptOf({ p: 2, x1: 1, y1: 1, x2: 50, y2: 50 }, 1, papers), undefined);
 });
 
+test("جواب انقطع: الطلب انحسب بالصرفية والسجل، وحد الكتابة صار 32 ألف", async () => {
+  const id = await paper([1, 2]);
+  const real = msg;
+  Q.setQgApi({
+    create: async (req) => { sent.push(req); return { ...real({ questions: [] }), stop_reason: "max_tokens" }; },
+    batchCreate: async () => "x", batchGet: async () => ({ ended: false, results: [] }),
+  });
+  await Q.queueMarks((await find("sched_items", { status: "done" })).find((x) => x.grader_id === QUSAY_GRADER && x.graded_at)!.id);
+  await Q.qusayTick(finishByAi);
+  const fails = (await Q.qgLog()).filter((r) => r.kind === "failed").slice(-2);
+  assert.ok(fails.some((r) => /طويل وانگطع/.test(r.note ?? "") && (r.usd ?? 0) > 0), "انحسبت كلفته");
+  assert.equal(sent.at(-1).max_tokens, 32000);
+  assert.equal((await one("sched_items", { id }))!.grader_id, null, "الورقة رجعت مثل ما چانت");
+  Q.setQgApi({
+    create: async (req) => { sent.push(req); return msg(reply(req)); },
+    batchCreate: async (reqs) => { const bid = `b${batches.size + 1}`; batches.set(bid, { reqs, ended: false }); return bid; },
+    batchGet: async (bid) => { const bb = batches.get(bid)!; return { ended: bb.ended, results: bb.ended ? bb.reqs.map((r) => ({ id: r.custom_id, msg: msg(reply(r.params)) })) : [] }; },
+  });
+});
+
 test("الكلفة: الكاش يندفع عشره", () => {
   const t = { in: 1000, cw: 0, cr: 4000, out: 800 };
   assert.equal(Math.round(Q.usdOf(t, false) * 1e7) / 1e7, (1000 * 0.1 + 4000 * 0.01 + 800 * 0.5) / 1e6);
