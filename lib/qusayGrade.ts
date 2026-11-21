@@ -120,6 +120,10 @@ export const setQgApi = (a: QgApi | null) => { apiImpl = a ?? realApi; };
 const keyReady = () => hasKey() || apiImpl !== realApi;
 
 // ---------- مادة النموذج: الأسئلة والخطوات (نفسها لكل أوراقه، فتنحفظ بالكاش)
+/** خطوة بيها رسم: رسم الدوال، القطوع، شكل مسألة المعدلات («Drawing»، «Sketch of the ellipse»، «الرسم») */
+export const DRAW_STEP = /\b(graph of|sketch|drawing|draw)\b|الرسم|ارسم|رسم الدالة|رسم القطع|رسم المنحني/i;
+export const hasDrawStep = (r: Rubric | null) => !!r && [r.steps, ...r.alts].some((st) => st.some((s) => DRAW_STEP.test(s.text)));
+const DRAW_PDF_MAX = 15 * 1024 * 1024;
 type QMat = { n: number; max: number; rubric: Rubric | null; qText: string; qImg: Buffer | null; model: Buffer[] };
 type VMat = { qs: QMat[]; pdf: Buffer | null };
 const mediaOf = (b: Buffer): "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "application/pdf" | null => {
@@ -170,7 +174,14 @@ async function material(versionId: number): Promise<VMat> {
     qs.push({ n: Number(q.n), max: Number(q.max_mark) || 0, rubric, qText, qImg, model });
   }
   const needPdf = qs.some((q) => !q.rubric && !q.model.length);
-  return { qs, pdf: needPdf && v?.answer_pdf ? await readRef(String(v.answer_pdf)) : null };
+  // سؤال بيه خطوة رسم («[8] Graph of the function»، «[7] الرسم»): الخطوات ما توصف شكل الرسم، فيروح وياها PDF حله
+  // حتى يقارن رسم الطالب برسمه هو (طلب الأستاذ 2026-11-22). بالكاش، فكلفته على أول ورقة بس
+  const drawPdf = !needPdf && qs.some((q) => !q.model.length && hasDrawStep(q.rubric));
+  if (!(needPdf || drawPdf) || !v?.answer_pdf) return { qs, pdf: null };
+  const pdf = await readRef(String(v.answer_pdf));
+  // للرسم بس: PDF كبير أو مو PDF ما يوگف التصحيح، يصحح بدونه مثل قبل
+  if (drawPdf && (!pdf || mediaOf(pdf) !== "application/pdf" || pdf.length > DRAW_PDF_MAX)) return { qs, pdf: null };
+  return { qs, pdf };
 }
 
 const SYSTEM = `You are a careful, fair grader of Iraqi high-school (6th preparatory) mathematics exams, grading on behalf of the teacher, Qusay.
@@ -184,6 +195,8 @@ Grade the student's answer question by question:
 - Ignore crossed-out work. Do not reward work that is only copied from the question.
 - Never award more than a step's points, never more than the question's maximum.
 - If a question has no answer anywhere in the student's pages, set answered=false and score 0.
+
+DRAWINGS (graphs of functions, parabola / ellipse / hyperbola sketches, the figure of a word problem): a step that asks for a drawing is graded by looking at the student's drawing itself, compared with the teacher's drawing in the model solution (when given) and with the values found in the earlier steps. Check the main features: the axes; the special points the curve must pass through (intercepts, critical / turning points, inflection points, table points, vertices, foci, centre) placed at about the right places; the asymptotes; and the right shape (where it rises and falls, concave up or down, symmetry, which way it opens). Hand drawings are rough: never take points for neatness or exact scale. Full drawing points when the main features are right, part of them when only some are right, 0 when there is no drawing or it does not match. A drawing step is never earned by written work alone: no drawing means 0 for that step. If you cannot see the drawing clearly in the photo, set sure=false.
 
 Set sure=false for a question when you cannot read the handwriting, part of the answer is cut off or missing from the photo, the work matches no method and you cannot judge it, or you hesitate between two marks. Being unsure is fine: a human grader will then check the paper. Do not guess.
 
@@ -327,7 +340,7 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
     if (q.qImg) head.push(block(q.qImg, `صورة السؤال ${q.n}`));
     for (const m of q.model) head.push(block(m, `حل السؤال ${q.n}`));
   }
-  if (mat.pdf) head.push({ type: "text", text: "\nTeacher's model solution PDF:" }, block(mat.pdf, "PDF الحل"));
+  if (mat.pdf) head.push({ type: "text", text: mat.qs.some((q) => !q.rubric && !q.model.length) ? "\nTeacher's model solution PDF:" : "\nTeacher's model solution PDF (for the drawing steps: it shows what each correct drawing looks like; the points still follow the steps above):" }, block(mat.pdf, "PDF الحل"));
   // نقطة الكاش: كل اللي فوك نفسه لكل أوراق النموذج
   const last = head[head.length - 1] as Anthropic.TextBlockParam;
   last.cache_control = { type: "ephemeral" };

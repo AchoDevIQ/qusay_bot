@@ -528,3 +528,29 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   await qusayAction({ initData: sign(1), action: "inkDel", exam: ex, id: note.id });
   assert.equal((await Q.inkList(ex)).length, 0);
 });
+
+test("📈 سؤال بيه خطوة رسم: PDF حل الأستاذ يروح ويا الخطوات حتى يقارن الرسم، وبدون رسم ما يروح", async () => {
+  fs.writeFileSync(path.join(tmp, "ans", "model.pdf"), Buffer.from("%PDF-1.4\n%fake\n"));
+  const exD = await insert("bank_exams", { slug: "c3", chapter: "الفصل الثالث", ord: 9, title: "رسم الدوال شامل", minutes: 60, pos: 9 });
+  const verD = await insert("bank_versions", { exam_id: exD, model: "A", kind: "mandatory", ok: 1, answer_pdf: "ans/model.pdf" });
+  const qD = await insert("bank_questions", { version_id: verD, n: 1, max_mark: 30, q_text: "ارسم الدالة", a_files: "[]" });
+  await kvSet(`ai_rubric_q_${qD}`, JSON.stringify({ steps: [{ text: "المشتقة", points: 22 }, { text: "Graph of the function", points: 8 }], alts: [] }));
+  await qusayAction({ initData: sign(1), action: "live", exam: exD, on: true });
+  await paper([1], {}, exD, verD);
+  reply = () => ({ questions: [{ n: 1, answered: true, method: 1, steps: [{ i: 1, awarded: 22, note: "" }, { i: 2, awarded: 4, note: "ناقص المحاذي" }], score: 26, sure: true, reason: "" }] });
+  await Q.qusayTick(finishByAi);
+  const req = sent.at(-1);
+  assert.match(req.system[0].text, /DRAWINGS/);
+  const head = req.messages[0].content;
+  assert.ok(head.some((b: any) => b.type === "document"), "PDF الحل راح");
+  assert.ok(head.some((b: any) => /drawing steps/.test(b.text ?? "")));
+  // موضوع بلا خطوة رسم: نفس قبل، الـ PDF ما يروح
+  const verN = await insert("bank_versions", { exam_id: exD, model: "B", kind: "mandatory", ok: 1, answer_pdf: "ans/model.pdf" });
+  const qN = await insert("bank_questions", { version_id: verN, n: 1, max_mark: 30, q_text: "جد المشتقة", a_files: "[]" });
+  await kvSet(`ai_rubric_q_${qN}`, JSON.stringify({ steps: [{ text: "Sign chart of f'(x)", points: 30 }], alts: [] }));
+  await paper([1], {}, exD, verN);
+  reply = () => ({ questions: [{ n: 1, answered: true, method: 1, steps: [{ i: 1, awarded: 30, note: "" }], score: 30, sure: true, reason: "" }] });
+  await Q.qusayTick(finishByAi);
+  assert.ok(!sent.at(-1).messages[0].content.some((b: any) => b.type === "document"));
+  assert.ok(Q.DRAW_STEP.test("Drawing of the cylinder with r and h") && Q.DRAW_STEP.test("[7] الرسم") && Q.DRAW_STEP.test("Sketch of the ellipse") && !Q.DRAW_STEP.test("Table: x = 1, -1"));
+});
