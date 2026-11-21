@@ -13,6 +13,7 @@ import { myBooks } from "./notes.ts";
 import { marksFor } from "./noteMarks.ts";
 import { bookFind, bookRows, rasidFind, rasidIndex, topicPages, type BookHit, type RasidHit } from "./rasidQa.ts";
 import { bookToc } from "./noteToc.ts";
+import { lectureNo } from "./noteSpot.ts";
 import { addSpend } from "./aiSpend.ts";
 
 export type QaKind = "main" | "extra" | "exams";
@@ -45,6 +46,12 @@ export function lectureHead(raw: string): { topic: string; lecture: number } | n
   if (l.length > 110 || !LEC_WORD.test(l) || /[=→⇒]/.test(l)) return null;
   const plain = l.replace(/\$\\omega\$/g, "ω").replace(/\^\{,\}/g, "'");
   if (/\$/.test(plain)) return null;
+  // الفصل الثالث عربي: «المحاضرة الأولى : المعدلات الزمنية» (رقمها بالكلمة والموضوع بعد النقطتين)
+  const ord = plain.match(/^المحاضر[ةه]\s+([؀-ۿ]+)\s*[:：]\s*(.+)$/);
+  if (ord) {
+    const n = lectureNo(ord[1]), topic = ord[2].replace(/\s+/g, " ").trim();
+    return n >= 1 && n <= 60 && topic.length >= 2 && topic.length <= 70 && !/\d/.test(topic) ? { topic, lecture: n } : null;
+  }
   const nums = plain.match(/\d{1,3}/g);
   if (!nums || nums.length !== 1 || Number(nums[0]) < 1 || Number(nums[0]) > 60) return null;
   const topic = plain.replace(LEC_WORD, " ").replace(/\d{1,3}/, " ")

@@ -60,6 +60,9 @@ test("Word: المعادلات تصير LaTeX، والأس المرفوع ^{}، 
   assert.deepEqual(qa.lectureHead("الاساسيات (1) lecturer"), { topic: "الاساسيات", lecture: 1 });
   assert.deepEqual(qa.lectureHead("De Movier’s [ lecturer 2]"), { topic: "De Movier’s", lecture: 2 });
   assert.deepEqual(qa.lectureHead("فصل المتغيرات المحاضره 3 الثنائية (اثرائيات)"), { topic: "فصل المتغيرات", lecture: 3 });
+  assert.deepEqual(qa.lectureHead("المحاضرة الأولى : الاشتقاق"), { topic: "الاشتقاق", lecture: 1 });
+  assert.deepEqual(qa.lectureHead("المحاضره السادسة : المعدلات الزمنية"), { topic: "المعدلات الزمنية", lecture: 6 });
+  assert.equal(qa.lectureHead("في هذه المحاضرة لا توجد واجبات للثنائية"), null);
   assert.deepEqual(qa.lectureHead("Lecture 2 الربط"), { topic: "الربط", lecture: 2 });
   assert.equal(qa.lectureHead("نعوض بالمحاضرة 2 x=3 → y=5"), null);
   const c1 = [{ id: 1, ar: "ما قبل إيجاد x و y", en: "Before Finding x and y" }, { id: 4, ar: "إيجاد قيم x و y", en: "Finding x and y" }, { id: 6, ar: "الصيغة القطبية وديموافر", en: "Polar Form and De Moivre's Theorem" }, { id: 5, ar: "الأوميگا ω", en: "Omega (Cube Roots of Unity)" }];
