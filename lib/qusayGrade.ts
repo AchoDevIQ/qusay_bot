@@ -35,7 +35,7 @@ export type QgResult = { at: string; kind: "trial" | "live"; total: number; sure
 /** «🖍 جرب العلامات»: تصحيح ثاني لورقة بالعلامات على الورقة، ينحفظ لحاله وما يغير درجتها ولا يوصل شي للطالب */
 export type QgMarksDemo = { at: string; total: number; qs: QgQuestion[]; pages: string[]; usd: number };
 /** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score"; text: string; note?: string };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
@@ -192,7 +192,8 @@ TEACHER'S VOICE: the student must feel that his teacher Qusay marked the paper b
 
 PEN MARKS: the student's images are numbered [Image 1], [Image 2], ... The teacher draws a red tick or cross beside each step on the student's own image, so also give boxes, measured on each image from 0 to 1000 (x from the left edge, y from the top edge; x1,y1 = top-left corner, x2,y2 = bottom-right corner):
 - "papers": for every image, p = the image number and the box of the sheet of paper itself. Photos often show a table, a hand, a screen or a dark border around the paper: the box is the white sheet only.
-- For each step: p = the image number where that step is written, and a TIGHT box around exactly the handwriting of that step (usually one line). Do not include neighbouring lines.
+- The teacher marks only what lost points. So give a box ONLY for a step that did not get its full points: p = the image number where that step is written, and a TIGHT box around exactly the handwriting of that step (usually one line). Do not include neighbouring lines.
+- A step that got its full points: p=0 and a box of zeros. Exception: when the WHOLE question got full marks, give the box of its LAST written step only (the teacher writes "well done" there).
 - If a step is not written anywhere, give p=0 and a box of zeros.
 Be precise: each box must sit on that step's own ink.`;
 const BOX = { p: { type: "integer" }, x1: { type: "integer" }, y1: { type: "integer" }, x2: { type: "integer" }, y2: { type: "integer" } } as const;
@@ -349,10 +350,18 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   for (const q of qs) {
     if (only !== undefined && q.n !== only) continue;
     if (!q.answered) continue;
-    // درجة السؤال ما تنكتب على الورقة: مكتوبة بزر السؤال فوك (طلب الأستاذ 2026-11-21)
+    // درجة السؤال ما تنكتب على الورقة: مكتوبة بزر السؤال فوك. والصح ما ينرسم: بس الغلط والناقص،
+    // والسؤال الصح كله ✓ وحدة و«أحسنت» بآخره، حتى يحس انصححت (طلب الأستاذ 2026-11-21)
+    const full = (s: QgStep) => s.awarded >= s.points && s.points > 0;
+    if (q.steps.length && q.steps.every(full)) {
+      const last = [...q.steps].reverse().find((s) => s.at);
+      add(last?.at, { kind: "good", text: "أحسنت" });
+      continue;
+    }
     for (const s of q.steps) {
-      const kind = s.awarded >= s.points && s.points > 0 ? "ok" : s.awarded > 0 ? "half" : "bad";
-      add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(kind !== "ok" && s.note ? { note: shortNote(s.note) } : {}) });
+      if (full(s)) continue;
+      const kind = s.awarded > 0 ? "half" : "bad";
+      add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(s.note ? { note: shortNote(s.note) } : {}) });
     }
   }
   const out: { ref: string; marks: PaperMark[] }[] = [];

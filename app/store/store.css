@@ -325,7 +325,7 @@ body.grwide .grtop{padding-left:104px}
 /* 🖍 ورقة الطالب مصححة بقلم أحمر: العلامة مركزها على النقطة اللي رجعها الذكاء */
 .mkpage{position:relative;margin-top:8px;line-height:0;border-radius:8px;overflow:hidden;background:#fff}.mkpage>img{width:100%;display:block}
 .mk{position:absolute;transform:translate(-50%,-50%);color:#d40000;line-height:1;display:flex;align-items:center;gap:2px;pointer-events:none;filter:drop-shadow(0 0 1px #fff)}
-.mk svg{display:block}.mkhalf{font-family:"Aref Ruqaa",serif;font-size:20px;font-weight:700}
+.mk svg{display:block}.mkgood{font-family:"Aref Ruqaa",serif;font-size:24px;font-weight:700;white-space:nowrap;transform:rotate(-8deg)}.mkhalf{font-family:"Aref Ruqaa",serif;font-size:20px;font-weight:700}
 .mkscore{font-family:"Aref Ruqaa",serif;font-weight:700;font-size:19px;border:3px solid #d40000;border-radius:50%;padding:7px 9px;white-space:nowrap;transform:rotate(-6deg)}
 .mknote{position:absolute;top:100%;left:0;margin-top:2px;width:max-content;max-width:min(240px,45vw);font-family:"Aref Ruqaa",serif;font-size:15px;line-height:1.35;color:#d40000;text-shadow:0 0 3px #fff,0 0 3px #fff;direction:rtl;white-space:normal}.mknote.mkleft{left:auto;right:0}
 .mknote .katex{font-size:.95em;color:#d40000}

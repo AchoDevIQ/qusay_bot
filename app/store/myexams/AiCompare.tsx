@@ -11,7 +11,7 @@ export type AiStep = { status: string; awarded: number; possible: number; expect
 /** الخطوة اللي نظام التصحيح ما گدر يحللها، أو كتابتها ما تنرسم: الطالب يشوف هاي الرسالة بدل كتابة ما تنقرا */
 export const FAIL_TEXT = "تعذّر تحليل هذه الخطوة، أرسل صورة ثانية أوضح.";
 /** علامة حمرة على صورة الورقة (x و y من 0 لـ 1000): ✓ صح، ✗ غلط، نص درجة، ودرجة السؤال بدائرة */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score"; text: string; note?: string };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string };
 export type MarkedPageT = { ref: string; marks: PaperMark[] };
 export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay"; marked?: MarkedPageT[] };
 
@@ -26,7 +26,7 @@ export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) 
         <div key={i} className={"mk mk-" + m.kind} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}>
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : <>
             {m.kind === "bad" ? <Cross /> : <Tick />}
-            {m.text && <b className="mkhalf">{m.text}</b>}
+            {m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
           </>}
           {m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "")}><Inline text={m.note} /></span>}
         </div>

@@ -398,12 +398,12 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   assert.equal(d.paper.demo.total, 30);
   assert.equal(d.paper.demoWaiting, false);
   const m1 = d.paper.qs[0].marked;
-  assert.deepEqual(m1[0].marks.map((m: any) => [m.kind, m.text]), [["ok", ""], ["half", "10"]], "درجة السؤال ما تنكتب على الورقة");
-  assert.equal(m1[0].marks[1].note, "غلط بالإشارة");
+  assert.deepEqual(m1[0].marks.map((m: any) => [m.kind, m.text]), [["half", "10"]], "بس الغلط والناقص ينرسم، ودرجة السؤال ما تنكتب على الورقة");
+  assert.equal(m1[0].marks[0].note, "غلط بالإشارة");
   assert.equal(d.paper.qs[1].marked[0].marks.length, 0, "صورة السؤال تطلع بدون رسم");
   // طالب التجربة يشوف ورقته مرسومة
   const p: any = await myPaper(-3, id);
-  assert.ok(p.ai[0].marked[0].marks.length === 2);
+  assert.ok(p.ai[0].marked[0].marks.length === 1);
   assert.match((await Q.qgLog()).at(-1)!.note!, /2 من 3 خطوة/);
   // صاحب البوت يفتح ورقة طالب التجربة مثل ما تطلعله (👁 عرض بس) ويشوف صورها
   const { viewToken } = await import("../lib/webAuth.ts");
@@ -411,7 +411,7 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   const { roomFile } = await import("../lib/examRoom.ts");
   const v: any = await myExamAction({ token: viewToken(-3), action: "paper", item: id });
   assert.equal(v.viewOnly, true);
-  assert.equal(v.paper.ai[0].marked[0].marks.length, 2);
+  assert.equal(v.paper.ai[0].marked[0].marks.length, 1);
   const f = await roomFile(viewToken(-3), id, v.paper.ai[0].marked[0].ref);
   assert.ok(f.body.length > 0);
   await assert.rejects(myExamAction({ token: viewToken(-3), action: "submitExam", item: id }), /عرض بس/);
@@ -427,7 +427,7 @@ test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ ب
   assert.deepEqual(res.pages, ["ans/a.jpg", "ans/a.jpg"]);
   assert.equal(res.total, 30);
   const p: any = await myPaper(90, id);
-  assert.equal(p.ai[0].marked[0].marks.length, 2);
+  assert.equal(p.ai[0].marked[0].marks.length, 1);
   // طالب حقيقي ما يشوف «🖍 جرب العلامات» (بس لطالب التجربة)، بس هاي من التصحيح نفسه
   await Q.saveQgSettings({ marks: false });
   assert.deepEqual(Q.marksByPage(res.qs, res.pages!, 2).length, 0);
@@ -436,7 +436,11 @@ test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ ب
 test("🖍 العلامة ما تطلع برة الصورة", () => {
   const q = { n: 1, max: 10, score: 5, answered: true, sure: true, reason: "", method: 1, steps: [{ text: "أ", points: 5, awarded: 5, note: "", at: { p: 1, x: 1000, y: 0 } }, { text: "ب", points: 5, awarded: 0, note: "غلط", at: { p: 1, x: 0, y: 1000 } }] };
   const [pg] = Q.marksByPage([q], ["a"]);
-  assert.deepEqual(pg.marks.map((m) => [m.x, m.y]), [[950, 35], [50, 965]]);
+  assert.deepEqual(pg.marks.map((m) => [m.x, m.y]), [[50, 965]], "الصح ما ينرسم، والعلامة جوة الصورة");
+  // السؤال الصح كله: ✓ وحدة و«أحسنت» بآخر خطوة
+  const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
+  const [g] = Q.marksByPage([good], ["a"]);
+  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.x, m.y]), [["good", "أحسنت", 50, 965]]);
 });
 
 test("🖍 العلامة بعد آخر سطر الخطوة وجوة الورقة، مو على الطاولة أو الشاشة اللي حواليها", () => {
