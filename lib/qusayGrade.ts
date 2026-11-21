@@ -189,21 +189,26 @@ READING THE HANDWRITING: read every number and symbol carefully; zoom in mentall
 
 TEACHER'S VOICE: the student must feel that his teacher Qusay marked the paper by hand. Write every "note" and "reason" the way an Iraqi math teacher writes a quick comment in red pen on a paper: very short (a few words, at most one short sentence), spoken Iraqi Arabic, talking to the student ("عندك", "سويت", "المفروض"). Say what is wrong and what it should be, e.g. "المفروض $\\frac{23\\pi}{12}$" or "الإشارة غلط" or "نسيت تعوض". Leave a correct step's note empty. Never use formal words like "الصواب" or "الإجابة الصحيحة هي", never describe yourself, never mention a model, an AI, a system, a marking scheme or "steps", and never explain how you graded.
 
-PEN MARKS: the student's images are numbered [Image 1], [Image 2], ... The teacher draws a red tick or cross on the student's own image beside each step, so also say WHERE each step is:
-- For each step: p = the image number where the student wrote that step, and x, y = a point just after the end of that line of work, ON THE PAPER itself (where a teacher puts a tick), measured on that image from 0 to 1000: x from the left edge, y from the top edge.
-- The point must be on the sheet of paper, inside the written area's margin: never outside the paper's edges, never on the table or background around the paper, and never in the image's outer border.
-- If a step is not written anywhere, give p=0, x=0, y=0.
-Be precise: the mark must land on that step's line, not between lines.`;
-const PT = { p: { type: "integer" }, x: { type: "integer" }, y: { type: "integer" } } as const;
-/** نفس الشكل، وإذا العلامات شغالة: p و x و y لكل خطوة */
+PEN MARKS: the student's images are numbered [Image 1], [Image 2], ... The teacher draws a red tick or cross beside each step on the student's own image, so also give boxes, measured on each image from 0 to 1000 (x from the left edge, y from the top edge; x1,y1 = top-left corner, x2,y2 = bottom-right corner):
+- "papers": for every image, p = the image number and the box of the sheet of paper itself. Photos often show a table, a hand, a screen or a dark border around the paper: the box is the white sheet only.
+- For each step: p = the image number where that step is written, and a TIGHT box around exactly the handwriting of that step (usually one line). Do not include neighbouring lines.
+- If a step is not written anywhere, give p=0 and a box of zeros.
+Be precise: each box must sit on that step's own ink.`;
+const BOX = { p: { type: "integer" }, x1: { type: "integer" }, y1: { type: "integer" }, x2: { type: "integer" }, y2: { type: "integer" } } as const;
+const BOX_KEYS = ["p", "x1", "y1", "x2", "y2"];
+/** نفس الشكل، وإذا العلامات شغالة: مربع الورقة بكل صورة، ومربع كتابة كل خطوة */
 function schemaOf(marks: boolean) {
   if (!marks) return SCHEMA;
   const q = SCHEMA.properties.questions.items;
   const st = q.properties.steps.items;
   return {
-    ...SCHEMA, properties: { questions: { ...SCHEMA.properties.questions, items: {
-      ...q, properties: { ...q.properties, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, "p", "x", "y"], properties: { ...st.properties, ...PT } } } },
-    } } },
+    ...SCHEMA, required: [...SCHEMA.required, "papers"],
+    properties: {
+      papers: { type: "array", items: { type: "object", properties: BOX, required: BOX_KEYS, additionalProperties: false } },
+      questions: { ...SCHEMA.properties.questions, items: {
+        ...q, properties: { ...q.properties, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, ...BOX_KEYS], properties: { ...st.properties, ...BOX } } } },
+      } },
+    },
   };
 }
 /** «✍️ طريقتك بالكتابة»: أمثلة يكتبها الأستاذ من ملاحظاته، حتى الذكاء يكتب مثله */
@@ -307,11 +312,29 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
 }
 
 /** مكان من جواب الذكاء: رقم صورة موجودة، وx وy بين 0 و1000. غيره (0 يعني ما مكتوب) ما ينرسم */
-function ptOf(s: any, pages: number): QgPt | undefined {
+type Box = { x1: number; y1: number; x2: number; y2: number };
+const c1000 = (v: unknown) => Math.min(1000, Math.max(0, Math.round(Number(v) || 0)));
+function boxOf(s: any): Box | null {
+  if (s?.x1 === undefined) return null;
+  const [x1, x2] = [c1000(s.x1), c1000(s.x2)].sort((a, b) => a - b), [y1, y2] = [c1000(s.y1), c1000(s.y2)].sort((a, b) => a - b);
+  return x2 - x1 >= 5 && y2 - y1 >= 5 ? { x1, y1, x2, y2 } : null;
+}
+/** مربع الورقة بكل صورة (بدون الطاولة أو الشاشة اللي حواليها) */
+export function papersOf(j: any): Map<number, Box> {
+  const m = new Map<number, Box>();
+  for (const x of Array.isArray(j?.papers) ? j.papers : []) { const b = boxOf(x); if (b && b.x2 - b.x1 > 200 && b.y2 - b.y1 > 200) m.set(Math.round(Number(x.p)), b); }
+  return m;
+}
+/** وين تنرسم علامة الخطوة: بعد آخر سطرها مباشرة، بنص ارتفاعه، وجوة الورقة دائماً. إذا ما يساع يمينه، يسار السطر */
+export function ptOf(s: any, pages: number, papers: Map<number, Box> = new Map()): QgPt | undefined {
   const p = Math.round(Number(s?.p));
   if (!(p >= 1 && p <= pages)) return undefined;
-  const c = (v: unknown) => Math.min(1000, Math.max(0, Math.round(Number(v) || 0)));
-  return { p, x: c(s.x), y: c(s.y) };
+  const paper = papers.get(p) ?? { x1: 0, y1: 0, x2: 1000, y2: 1000 };
+  const inX = (v: number) => Math.min(paper.x2 - 35, Math.max(paper.x1 + 35, v)), inY = (v: number) => Math.min(paper.y2 - 25, Math.max(paper.y1 + 25, v));
+  const b = boxOf(s);
+  if (!b) return s?.x === undefined ? undefined : { p, x: inX(c1000(s.x)), y: inY(c1000(s.y)) };
+  const right = b.x2 + 40;
+  return { p, x: Math.round(inX(right <= paper.x2 - 35 ? right : b.x1 - 40)), y: Math.round(inY((b.y1 + b.y2) / 2)) };
 }
 const shortNote = (t: string) => (t.length > 90 ? t.slice(0, 88).replace(/\s+\S*$/, "") + "…" : t);
 /** علامات الورقة اللي تنرسم لكل صورة: ✓ للخطوة الصح، ✗ للغلط، ونص الدرجة للناقصة، ودرجة السؤال بدائرة.
@@ -346,6 +369,7 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
   let j: { questions?: any[] } = {};
   try { j = JSON.parse(msg.content.map((b) => (b.type === "text" ? b.text : "")).join("")); } catch { throw new Error("جواب الذكاء مو مفهوم"); }
   const got = new Map((Array.isArray(j.questions) ? j.questions : []).map((q) => [Number(q?.n), q]));
+  const papers = papersOf(j);
   const qs = mat.qs.map((m): QgQuestion => {
     if (unanswered.has(m.n)) return { n: m.n, max: m.max, score: 0, answered: false, sure: true, reason: "ما جاوب", method: 1, steps: [] };
     const a = got.get(m.n);
@@ -356,12 +380,12 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
     const byI = new Map((Array.isArray(a.steps) ? a.steps : []).map((s: any) => [Number(s?.i), s]));
     const steps: QgStep[] = plan ? plan.map((p, k) => {
       const s: any = byI.get(k + 1);
-      const at = ptOf(s, pages);
+      const at = ptOf(s, pages, papers);
       return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, half(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300), ...(at ? { at } : {}) };
     }) : [];
     let score = plan ? steps.reduce((t, s) => t + s.awarded, 0) : Number(a.score) || 0;
     score = answered ? Math.min(m.max, Math.max(0, half(score))) : 0;
-    const at = ptOf(a, pages);
+    const at = ptOf(a, pages, papers);
     return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: String(a.reason ?? "").slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}) };
   });
   // «أجب عن K»: السؤال اللي ما جاوبه ما يحتاج تأكيد

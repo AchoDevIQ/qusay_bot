@@ -439,6 +439,19 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
   assert.deepEqual(pg.marks.map((m) => [m.x, m.y]), [[950, 35], [50, 965]]);
 });
 
+test("🖍 العلامة بعد آخر سطر الخطوة وجوة الورقة، مو على الطاولة أو الشاشة اللي حواليها", () => {
+  const papers = Q.papersOf({ papers: [{ p: 1, x1: 150, y1: 120, x2: 820, y2: 950 }] });
+  // بعد السطر يمين، بنص ارتفاعه
+  assert.deepEqual(Q.ptOf({ p: 1, x1: 200, y1: 300, x2: 500, y2: 340 }, 1, papers), { p: 1, x: 540, y: 320 });
+  // السطر واصل لحافة الورقة: العلامة يسار السطر، مو برة الورقة
+  assert.deepEqual(Q.ptOf({ p: 1, x1: 300, y1: 400, x2: 800, y2: 440 }, 1, papers), { p: 1, x: 260, y: 420 });
+  // سطر فوك حافة الورقة: ينزل جوة
+  assert.equal(Q.ptOf({ p: 1, x1: 200, y1: 50, x2: 400, y2: 90 }, 1, papers)!.y, 145);
+  // خطوة ما مكتوبة، أو صورة مو موجودة
+  assert.equal(Q.ptOf({ p: 0, x1: 0, y1: 0, x2: 0, y2: 0 }, 1, papers), undefined);
+  assert.equal(Q.ptOf({ p: 2, x1: 1, y1: 1, x2: 50, y2: 50 }, 1, papers), undefined);
+});
+
 test("الكلفة: الكاش يندفع عشره", () => {
   const t = { in: 1000, cw: 0, cr: 4000, out: 800 };
   assert.equal(Math.round(Q.usdOf(t, false) * 1e7) / 1e7, (1000 * 0.1 + 4000 * 0.01 + 800 * 0.5) / 1e6);
