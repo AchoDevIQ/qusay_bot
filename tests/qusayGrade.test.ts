@@ -326,6 +326,20 @@ test("وصل الحد: الزايد ينتظر لباچر وما يروح للم
   await Q.saveQgSettings({ cap: 2, carry: true });
 });
 
+test("الطالب يشوف تصحيح «تصحيح قصي» خطوة خطوة بورقته", async () => {
+  const { myPaper } = await import("../lib/examRoom.ts");
+  const id = await paper([1, 2]);
+  reply = () => good;
+  await Q.qusayTick(finishByAi);
+  assert.ok((await one("sched_items", { id }))!.graded_at);
+  const p: any = await myPaper(90, id);
+  assert.equal(p.ai.length, 2);
+  assert.equal(p.ai[0].note, "زين");
+  assert.deepEqual(p.ai[0].steps.map((x: any) => [x.expected, x.awarded, x.possible]), [["التعويض", 20, 20], ["التبسيط", 40, 40]]);
+  assert.equal(p.ai[1].steps[0].reason, "نص");
+  assert.equal(p.ai[0].photos.length, 1);
+});
+
 test("الكلفة: الكاش يندفع عشره", () => {
   const t = { in: 1000, cw: 0, cr: 4000, out: 800 };
   assert.equal(Math.round(Q.usdOf(t, false) * 1e7) / 1e7, (1000 * 0.1 + 4000 * 0.01 + 800 * 0.5) / 1e6);

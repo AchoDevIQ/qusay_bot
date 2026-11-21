@@ -11,7 +11,7 @@ import path from "node:path";
 import { find, insert, kvGet, kvSet, one, put, remove, update, type Row } from "./db.ts";
 import { guardianOf, logActivity } from "./access.ts";
 import { STORE_URL } from "./config.ts";
-import { AI_GRADER, can, staffIds, student } from "./data.ts";
+import { AI_GRADER, QUSAY_GRADER, can, staffIds, student } from "./data.ts";
 import { files } from "./files.ts";
 import { adminPageLink } from "./keyboards.ts";
 import { addMinutes, ampm, answersClose, itemState, pickMandatory, type SchedSettings } from "./scheduleRules.ts";
@@ -302,9 +302,22 @@ export async function myPaper(uid: number, itemId: unknown) {
     solutions: it!.graded_at && v.answer_pdf ? String(v.answer_pdf) : null,
   };
 }
+/** تصحيح «🧠 تصحيح قصي» بشكل عرض نظام التصحيح AI: الخطوة من خطوات الأستاذ، وجنبها شنو سوى الطالب وليش هالدرجة */
+async function qusayShown(it: Row) {
+  const r = await (await import("./qusayGrade.ts")).qgResultOf(it.id);
+  if (!r?.sent) return [];
+  const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
+  return r.qs.filter((q) => q.answered).map((q) => ({
+    n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
+    photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
+    steps: q.steps.map((st) => ({ status: "", awarded: st.awarded, possible: st.points, expected: st.text, student: st.note, reason: st.note })),
+  }));
+}
 /** تصحيح نظام التصحيح AI اللي يشوفه الطالب: كل الورقة إذا هو صححها، أو بس أسئلته إذا حوّل الباقي لمصحح */
 async function aiShown(it: Row) {
   if (!it.graded_at) return [];
+  // صححها «🧠 تصحيح قصي»: الطالب يشوف نفس العرض، كل سؤال وكل خطوة شگد انطى عليها وليش
+  if (it.grader_id === QUSAY_GRADER) return await qusayShown(it);
   const part = await aiPartialOf(it.id);
   if (it.grader_id !== AI_GRADER && !part) return [];
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
