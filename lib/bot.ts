@@ -9,7 +9,7 @@ import { allowed, can, isAdmin, isStaff, myOffice, noteFail, question, searchStu
 import { ADMIN_IDS, WEBHOOK_SECRET } from "./config.ts";
 import { guardianSeen, onMemberUpdate } from "./guardianWatch.ts";
 import { isGuardian, linkGuardian, notForChatText } from "./access.ts";
-import { HOME_PAGE, mainKb, regKb } from "./keyboards.ts";
+import { HOME_PAGE, adminPageLink, mainKb, regKb } from "./keyboards.ts";
 import { api, answerCb, send } from "./telegram.ts";
 import { btn, esc } from "./util.ts";
 import { adminMenuFor, onAdminCb, onAdminText } from "./admin.ts";
@@ -71,6 +71,13 @@ async function onMessage(m: Row) {
   if (["myid", "id", "رقمي", "ايدي", "آيدي"].includes(idWord)) { await send(chat, `رقم حسابك: <code>${uid}</code>`); return; }
   if (text.startsWith("/start grp_")) return await invitePrompt(chat, uid, text.slice(text.indexOf("grp_") + 4).trim());
   if (text.startsWith("/start lib_")) return await joinOfficeByCode(chat, uid, text.slice(text.indexOf("lib_") + 4).trim(), m.from ?? {});
+  if (text.startsWith("/start vote_")) {
+    // رابط التصويت من القناة: يفتح صفحة «🗳 التصويت» على هذا التصويت
+    const pid = Number(text.slice(text.indexOf("vote_") + 5).trim()) || 0;
+    if (!await student(uid)) { await send(chat, "🗳 حتى تصوت لازم تسجل أول. اكتب /start وسجل."); return; }
+    await send(chat, "🗳 <b>التصويت</b>\nدوس الزر حتى تشوف التصويت وتصوت.", { kb: [[{ text: "🗳 افتح التصويت", web_app: { url: `${adminPageLink("vote", uid)}${pid ? `&p=${pid}` : ""}` } }]] });
+    return;
+  }
   const digits = toLatinDigits(text).replace(/ /g, "");
   if (/^\d{8}$/.test(digits)) {
     if (await kvGet("libinv_" + digits) && !await tooManyFails("invfail", uid)) return await joinOfficeByCode(chat, uid, digits, m.from ?? {});

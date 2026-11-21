@@ -81,7 +81,7 @@ export const SCHEMA: Record<string, Table> = {
   // مشتريات الطالب من التطبيق لكل سنة دراسية (لخصم طالب العام). kind: exams / lectures
   year_buys: { key: ["user_id", "year", "chapter", "kind"], cols: nulls("src", "created") },
   // التصويت: options وcenters نص JSON. shown: null ما تقرر، 1 النسب انرسلت للطلاب، 0 لا
-  polls: { key: "id", auto: true, cols: nulls("question", "options", "centers", "gender", "status", "created", "by_id", "closed_at", "shown") },
+  polls: { key: "id", auto: true, cols: nulls("question", "options", "centers", "gender", "status", "created", "by_id", "closed_at", "shown", "curr", "chapters", "acts", "applied", "reach") },
   poll_votes: { key: ["poll_id", "user_id"], cols: nulls("choice", "at") },
   company_settlements: { key: "id", auto: true, cols: nulls("from_id", "to_id", "n", "gross", "fees", "net", "created", "parts", "basis", "rets") },
 };

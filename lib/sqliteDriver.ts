@@ -118,6 +118,11 @@ async function init() {
   await addColumn("note_books", "sol", "INTEGER");
   await addColumn("note_marks", "link", "INTEGER");
   await addColumn("bank_questions", "q_text_en", "TEXT");
+  await addColumn("polls", "curr", "TEXT");
+  await addColumn("polls", "chapters", "TEXT");
+  await addColumn("polls", "acts", "TEXT");
+  await addColumn("polls", "applied", "TEXT");
+  await addColumn("polls", "reach", "INTEGER");
   await addColumn("bank_exams", "title_en", "TEXT");
   await addColumn("settlements", "parts", "TEXT");
   await addColumn("company_settlements", "parts", "TEXT");

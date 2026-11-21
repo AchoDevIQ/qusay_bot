@@ -1,5 +1,6 @@
 // الصفحة الرئيسية للطالب، وإرسال طلب المتجر للسيرفر مباشرة
 import { checkDevice } from "./deviceLock.ts";
+import { openFor } from "./polls.ts";
 import { getSession, one, put, setSession, type Row } from "./db.ts";
 import { canAsk, childrenOf, guardianCopy, guardianLink, guardianOf, guardianText, logActivity, needsGuardian } from "./access.ts";
 import { allowUpdate } from "./bot.ts";
@@ -10,7 +11,6 @@ import { examsMenu } from "./exams.ts";
 import { adminPageLink, homeLink, mainKb, regLink, storeLink } from "./keyboards.ts";
 import { issuePassword } from "./password.ts";
 import { hasBooks } from "./notes.ts";
-import { openFor, sendPollTo } from "./polls.ts";
 import { SCHED_FIRST, needsSchedule, scheduleChapters } from "./schedApi.ts";
 import { askStart, myQuestions } from "./questions.ts";
 import { onStoreOrder, saveStudent, showMe, studentFromForm } from "./student.ts";
@@ -143,12 +143,9 @@ export async function homeAction(body: Row) {
   }
   if (a === "notes") return { url: adminPageLink("notes", id) };
   if (a === "vote") {
-    // التصويتات المفتوحة إله توصله بالمحادثة، ويصوت من هناك
-    const list = await openFor(id);
-    if (!list.length) await send(id, "🗳 ماكو تصويت ينتظر صوتك هسه.");
-    for (const p of list) await sendPollTo(p, id);
+    // صفحة «🗳 التصويت»: نفسها بالتطبيق والبوت، يصوت منها
     await logActivity(id, "🗳 فتح التصويت");
-    return { close: true };
+    return { url: adminPageLink("vote", id) };
   }
   if (a === "ask") {
     await setSession(id, "", {});

@@ -169,9 +169,10 @@ async function earlyView(uid: number, sc: Row | null | undefined, s: SchedSettin
     withPlan: await sum(true), withoutPlan: c.reviews.length ? await sum(false) : null, center: place.inPerson ? place.label : "" } };
 }
 /** يثبت الفصل المبكر: امتحاناته تصير ثابتة بمواعيدها الجديدة، والمراجعات اللي شالها تنحسب «منشالة» (مو غياب) */
-async function earlyStart(uid: number, body: Row) {
+async function earlyStart(uid: number, body: Row, force = false) {
   const sc = await one("schedules", { user_id: uid });
-  const s = await schedSettings();
+  // force: صاحب البوت يثبته من نتيجة التصويت، حتى لو خيار الطلاب بالجدول مسدود
+  const s = force ? { ...await schedSettings(), earlyOpen: true } : await schedSettings();
   const c = await earlyCan(uid, sc, s);
   need(c, "هذا الخيار مو مفتوح إلك هسه");
   const withReviews = body.with !== false || !c!.reviews.length;
@@ -199,6 +200,8 @@ async function earlyStart(uid: number, body: Row) {
   await logActivity(uid, `🚀 بدا ${c!.chapter} قبل نصف السنة ${c!.reviews.length ? (withReviews ? "ويا المراجعات" : `بدون المراجعات (انشالت ${dropped.length})`) : ""}: ${plan.length} امتحان ${how} من ${prettyDay(plan[0].at.slice(0, 10))} إلى ${prettyDay(last)}`);
   return `✅ انثبت: ${plan.length} امتحان من ${c!.chapter}، أولها ${prettyAt(plan[0].at)} وآخرها ${prettyDay(last)}.${dropped.length ? ` وانشالت ${dropped.length} مراجعة من جدولك.` : ""} الامتحان اللي يفوتك ينحسب غياب وصفر.`;
 }
+/** «⚡ طبّق على المصوتين» بالتصويت: يبدي الفصل المبكر لطالب صوّت إله. امتحاناته إلكتروني، حتى طالب المركز (الآيباد يحتاج يأشّر بنفسه إن عنده آيباد وقلم) */
+export const earlyStartFor = (uid: number, withReviews: boolean) => earlyStart(uid, { with: withReviews, mode: "online" }, true);
 /** يرجع ويا جماعته: امتحانات الفصل ترجع لمواعيد مكانه، والمراجعات ترجع */
 async function earlyUndo(uid: number) {
   const e = await earlyOf(uid);
