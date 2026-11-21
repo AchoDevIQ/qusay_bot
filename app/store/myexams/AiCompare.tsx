@@ -17,6 +17,12 @@ export type AiQ = { n: number; score: number; max: number; note: string; photos:
 
 const Tick = () => <svg viewBox="0 0 44 32" width="34" height="25" aria-hidden><path d="M3 17 Q9 21 15 29 Q24 11 41 3" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 const Cross = () => <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden><path d="M5 5 Q16 15 27 28 M27 4 Q15 16 5 27" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" /></svg>;
+/** صور من خط الأستاذ نفسه بالقلم الأحمر (بـ public/ink/، خلفيتها شفافة): كل شي كاتبه كم مرة، والبوت ياخذ وحدة منهن
+ *  حتى ما تتكرر نفس الشكل. إذا ماكو صورة لشي، ينرسم مثل قبل (✓ ✗ مرسومة، والكلام بخط الرقعة) */
+export const INK: Record<"tick" | "cross" | "good", string[]> = { tick: [], cross: [], good: [] };
+/** نفس العلامة تاخذ نفس الصورة كل مرة تنفتح الورقة (مو كل مرة شكل) */
+const inkOf = (k: keyof typeof INK, m: PaperMark, i: number) => { const l = INK[k]; return l.length ? l[(Math.round(m.x * 7 + m.y * 13) + i) % l.length] : ""; };
+const Ink = ({ src, cls }: { src: string; cls: string }) => <img className={cls} src={src} alt="" aria-hidden />;
 /** صورة ورقة الطالب وعليها تصحيح بقلم أحمر مثل المدرس: ✓ و✗ يم كل خطوة، ودرجة السؤال بدائرة، وملاحظة قصيرة بخط اليد */
 export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) {
   return (
@@ -25,8 +31,11 @@ export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) 
       {marks.map((m, i) => (
         <div key={i} className={"mk mk-" + m.kind} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}>
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : <>
-            {m.kind === "bad" ? <Cross /> : <Tick />}
-            {m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
+            {m.kind === "bad"
+              ? (inkOf("cross", m, i) ? <Ink src={inkOf("cross", m, i)} cls="mkink" /> : <Cross />)
+              : (inkOf("tick", m, i) ? <Ink src={inkOf("tick", m, i)} cls="mkink" /> : <Tick />)}
+            {m.kind === "good" && inkOf("good", m, i) ? <Ink src={inkOf("good", m, i)} cls="mkinkw" />
+              : m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
           </>}
           {m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "")}><Inline text={m.note} /></span>}
         </div>
