@@ -211,6 +211,14 @@ const styleText = (style: string) => (style.trim() ? `
 
 HOW QUSAY WRITES HIS COMMENTS (copy his wording and tone exactly; these are his own words):
 ${style.trim()}` : "");
+/** «✍️ عبارات هذا الموضوع»: عبارات الأستاذ الخاصة بموضوع واحد، تنضاف فوك العامة (طلبه 2026-11-21) */
+const exStyleKey = (examId: number) => `qg_style_ex_${examId}`;
+export const examStyle = async (examId: number) => String((await kvGet(exStyleKey(examId))) ?? "");
+export const setExamStyle = (examId: number, text: string) => kvSet(exStyleKey(examId), text.slice(0, STYLE_MAX));
+const topicText = (t: string) => (t.trim() ? `
+
+QUSAY'S WORDS FOR THIS TOPIC (use these words and phrases when they fit):
+${t.trim()}` : "");
 
 const SCHEMA = {
   type: "object",
@@ -291,7 +299,7 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
   body.push({ type: "text", text: `\nGrade questions ${asked.join(", ")}. Return one entry per question, with one step entry per step of the method you chose (i = step number).` });
   const req: Req = {
     model: MODEL, max_tokens: 12000,
-    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) : ""), cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) + topicText(await examStyle(Number(it.exam_id))) : ""), cache_control: { type: "ephemeral" } }],
     output_config: { effort, format: { type: "json_schema", schema: schemaOf(marks) as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content: [...head, ...body] }],
   };

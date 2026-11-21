@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 import { Inline, MarkedPage, MathText, type MarkedPageT } from "../myexams/AiCompare";
 
-type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number };
+type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number; style: string };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Step = { text: string; points: number; awarded: number; note: string };
 type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null; marked: MarkedPageT[] | null };
@@ -76,7 +76,7 @@ export default function QusayClient() {
                 </select>
               </div>
             )}
-            {ch?.exams.map((e) => <ExamCard key={e.id + ":" + e.trials + ":" + e.live} e={e} busy={busy} call={call} />)}
+            {ch?.exams.map((e) => <ExamCard key={e.id + ":" + e.trials + ":" + e.live + ":" + e.style} e={e} busy={busy} call={call} />)}
             <div className="card expad">
               <div className="exlabel">🧪 نتائج التجارب (درجة المصحح جنب درجة تصحيح قصي)</div>
               {!data.trials.length && <div className="exhint">بعد ما جربته. اختار موضوع فوك ودوس «🧪 جرب».</div>}
@@ -149,6 +149,8 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
   const [n, setN] = useState(String(Math.min(10, Math.max(1, e.human))));
   const [nf, setNf] = useState(String(Math.min(3, Math.max(1, e.fresh))));
   const [fast, setFast] = useState(true);
+  const [words, setWords] = useState(e.style);
+  const [openWords, setOpenWords] = useState(false);
   return (
     <div className="card expad">
       <div className="exlabel">{e.title} {e.live && "· ✅ يصححه صدگ"}</div>
@@ -179,6 +181,13 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
       )}
       {!e.why && e.fresh > 0 && <div className="exhint">الورقة الجديدة تبقى عند المصححين مثل ما هي، ودرجة «تصحيح قصي» تطلع إلك إنت بس. ولا شي يوصل للطالب.</div>}
       {e.trials > 0 && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "forget", exam: e.id })}>🗑 امسح تجاربه حتى أعيدها</button>}
+      {/* عبارات الأستاذ الخاصة بهذا الموضوع، فوك «✍️ طريقتك بالكتابة» العامة */}
+      <button type="button" className="exbtn" onClick={() => setOpenWords(!openWords)}>✍️ عبارات هذا الموضوع{e.style.trim() ? " ✅" : ""}</button>
+      {openWords && <>
+        <div className="exhint">العبارات والكلمات اللي تستعملها بهذا الموضوع بس، كل وحدة بسطر. يستعملها ويا «✍️ طريقتك بالكتابة» العامة بالعلامات الحمرة.</div>
+        <textarea rows={4} maxLength={3000} value={words} onChange={(x) => setWords(x.target.value)} />
+        <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
+      </>}
       {!e.mu && !e.why && (
         <button type="button" className={e.live ? "btn ghost" : "btn"} disabled={busy} onClick={() => void call({ action: "live", exam: e.id, on: !e.live })}>
           {e.live ? "⏸ رجّع هذا الموضوع للمصححين" : "▶️ خليه يصحح هذا الموضوع صدگ"}

@@ -5,7 +5,7 @@ import { can } from "./data.ts";
 import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
-  IQD, QG_PERM, STYLE_MAX, clearTrialQueue, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
+  IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
   humanMark, marksByPage, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
@@ -45,6 +45,7 @@ async function listData(uid: number) {
       gap: gaps.length ? r1(gaps.reduce((t, g) => t + g, 0) / gaps.length) : null,
       close: gaps.length ? Math.round((gaps.filter((g) => g <= 3).length / gaps.length) * 100) : null,
       unsure: both.filter((r) => !r.sure).length,
+      style: await examStyle(e.id),
     });
   }
   const titles = new Map(exams.map((e) => [e.id as number, String(e.title ?? "")]));
@@ -135,6 +136,11 @@ export async function qusayAction(body: Row) {
     need(n > 0, fresh ? "ماكو أوراق جديدة سلمها الطلاب بهذا الموضوع وبعدها ما تصححت (أو باقي خطوات)" : "ماكو أوراق صححها مصحح بهذا الموضوع وبعدها ما تجربت (أو باقي خطوات)");
     const on = await qgOn();
     return await out(`🧪 ${n} ورقة ${fresh ? "جديدة " : ""}تنتظر التجربة.${fresh ? " تبقى عند المصححين مثل ما هي، ولا شي يوصل للطالب." : ""} ${!on ? "شغّل «تصحيح قصي» حتى تبدي." : now || !(await qgSettings()).batch ? "تبدي خلال دقيقة، وكل دقيقة 6 أوراق." : "🌙 بالدفعة: نص الكلفة، ونتيجتها تطلع خلال ساعة تقريباً (أكثر شي يوم)."}`);
+  }
+  if (a === "examStyle") {
+    need(await one("bank_exams", { id: exam }), "اختار الموضوع");
+    await setExamStyle(exam, String(body.style ?? ""));
+    return await out("✅ انحفظت عبارات هذا الموضوع");
   }
   if (a === "trialClear") { await clearTrialQueue(); return await out("انمسحت الأوراق اللي تنتظر التجربة"); }
   if (a === "forget") { const n = await forgetTrial(exam); return await out(`انمسحت نتائج ${n} تجربة بهذا الموضوع، تگدر تعيدها`); }

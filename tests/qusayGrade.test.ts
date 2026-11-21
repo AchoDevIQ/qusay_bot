@@ -369,6 +369,8 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   assert.equal(total, 85.5);
   await assert.rejects(qusayAction({ initData: sign(1), action: "marks", id: 999999 }));
   await qusayAction({ initData: sign(1), action: "settings", style: "المفروض تعوض بالدالة" });
+  const ws: any = await qusayAction({ initData: sign(1), action: "examStyle", exam: ex, style: "اكتب الجذور بشكل أوميگا" });
+  assert.equal(ws.chapters[0].exams.find((x: any) => x.id === ex).style, "اكتب الجذور بشكل أوميگا");
   const r: any = await qusayAction({ initData: sign(1), action: "marks", id });
   assert.equal(r.paper.demoWaiting, true);
   reply = () => withMarks;
@@ -378,6 +380,7 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   assert.match(req.system[0].text, /PEN MARKS/);
   assert.match(req.system[0].text, /TEACHER'S VOICE/);
   assert.match(req.system[0].text, /المفروض تعوض بالدالة/, "طريقته بالكتابة");
+  assert.match(req.system[0].text, /THIS TOPIC[^]*اكتب الجذور بشكل أوميگا/, "عبارات الموضوع");
   assert.ok(req.system[0].text.includes("$\\frac{23\\pi}{12}$"), "الرياضيات بشكل LaTeX صحيح");
   assert.ok(req.messages[0].content.some((b: any) => b.text === "[Image 2]"), "صور الطالب مرقمة");
   assert.ok(JSON.stringify(req.output_config.format.schema).includes('"p"'));
