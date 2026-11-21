@@ -23,16 +23,24 @@ export type QgEffort = "low" | "medium";
 /** live: المواضيع اللي يصححها صدگ. batch: بالدفعة (أرخص بالنص، والدرجة تتأخر، وهي الأصل من 2026-11-21).
  *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل).
  *  unsure: الورقة اللي يشك بيها: «send» يصححها ويبعث درجتها ويكتب السبب بالسجل (الأصل، طلب الأستاذ 2026-11-21)، «graders» ترجع للمصححين */
-export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders" };
-export type QgStep = { text: string; points: number; awarded: number; note: string };
-export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[] };
+export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean };
+/** مكان على صور جواب الطالب: p رقم الصورة (من 1)، x من اليسار و y من فوك، من 0 لـ 1000 من عرضها وطولها */
+export type QgPt = { p: number; x: number; y: number };
+/** at: وين مكتوبة الخطوة على ورقة الطالب، حتى تنرسم عليها ✓ أو ✗ حمرة مثل قلم المدرس (بس إذا «🖍 العلامات» شغالة) */
+export type QgStep = { text: string; points: number; awarded: number; note: string; at?: QgPt };
+export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[]; at?: QgPt };
 export type QgTokens = { in: number; cw: number; cr: number; out: number };
 /** نتيجة ورقة: trial تجربة مخفية على ورقة صححها مصحح (human درجته)، live ورقة صححها صدگ (لو رجعها للمصححين إذا ما متأكد) */
-export type QgResult = { at: string; kind: "trial" | "live"; total: number; sure: boolean; qs: QgQuestion[]; usd: number; tokens: QgTokens; batch: boolean; human?: number | null; sent?: boolean };
+export type QgResult = { at: string; kind: "trial" | "live"; total: number; sure: boolean; qs: QgQuestion[]; usd: number; tokens: QgTokens; batch: boolean; human?: number | null; sent?: boolean; pages?: string[] };
+/** «🖍 جرب العلامات»: تصحيح ثاني لورقة بالعلامات على الورقة، ينحفظ لحاله وما يغير درجتها ولا يوصل شي للطالب */
+export type QgMarksDemo = { at: string; total: number; qs: QgQuestion[]; pages: string[]; usd: number };
+/** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة */
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score"; text: string; note?: string };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
-const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now";
+const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
 const resKey = (id: number) => `qg_res_${id}`;
+const mkKey = (id: number) => `qg_mk_${id}`;
 const tryKey = (id: number) => `qg_try_${id}`;
 const capNoteKey = (day: string) => `qg_cap_note_${day}`;
 export const DEFAULT_CAP = 2;
@@ -56,7 +64,7 @@ export async function qgSettings(): Promise<QgSettings> {
   const cap = Number(s.cap);
   // الإعدادات القديمة (قبل v 2) كانت «هسه» بالأصل: تصير بالدفعة، طلب الأستاذ 2026-11-21
   const v2 = Number(s.v) >= 2;
-  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send" };
+  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true };
 }
 export async function saveQgSettings(p: Partial<QgSettings>) {
   const s = { ...await qgSettings(), ...p, v: 2 };
@@ -172,6 +180,28 @@ Set sure=false for a question when you cannot read the handwriting, part of the 
 Write "reason" and each step "note" in short, simple Arabic (Iraqi style), for the teacher and the student: what the student did right or wrong. Keep them brief.
 Write every piece of math inside the Arabic text as LaTeX between $ signs, the way an Iraqi math book prints it: fractions as $\\frac{a}{b}$ (never a/b), pi as $\\pi$ (never the word pi), roots as $\\sqrt{x}$, powers as $x^{2}$. Example: "عوّض $x=\\frac{\\pi}{2}$ صح".`;
 
+/** «🖍 العلامات على الورقة»: نفس التصحيح، ويا مكان كل خطوة على صور الطالب حتى نرسم عليها مثل قلم المدرس الأحمر */
+const MARKS_TEXT = `
+
+PEN MARKS: the student's images are numbered [Image 1], [Image 2], ... The teacher will draw red pen marks (a tick or a cross) on the student's own images, so also say WHERE each step is:
+- For each step: p = the image number where the student wrote that step, and x, y = a point in the blank space just after the end of that line of work (where a teacher puts a tick), measured on that image from 0 to 1000: x from the left edge, y from the top edge.
+- For each question: p, x, y of a blank spot in the margin beside the start of its answer (where the teacher writes the question's mark).
+- If a step is not written anywhere, give p=0, x=0, y=0.
+Be precise: the mark must land on that step's line, not between lines.`;
+const PT = { p: { type: "integer" }, x: { type: "integer" }, y: { type: "integer" } } as const;
+/** نفس الشكل، وإذا العلامات شغالة: p و x و y لكل خطوة ولكل سؤال */
+function schemaOf(marks: boolean) {
+  if (!marks) return SCHEMA;
+  const q = SCHEMA.properties.questions.items;
+  const st = q.properties.steps.items;
+  return {
+    ...SCHEMA, properties: { questions: { ...SCHEMA.properties.questions, items: {
+      ...q, required: [...q.required, "p", "x", "y"],
+      properties: { ...q.properties, ...PT, steps: { ...q.properties.steps, items: { ...st, required: [...st.required, "p", "x", "y"], properties: { ...st.properties, ...PT } } } },
+    } } },
+  };
+}
+
 const SCHEMA = {
   type: "object",
   properties: {
@@ -199,7 +229,7 @@ const SCHEMA = {
 
 const stepsText = (steps: { text: string; points: number }[]) => steps.map((s, i) => `  ${i + 1}. [${s.points} points] ${s.text}`).join("\n");
 /** يبني طلب الورقة: مادة النموذج أول (بالكاش)، وبعدها صور الطالب */
-async function buildRequest(it: Row, mat: VMat, effort: QgEffort): Promise<{ req: Req; unanswered: Set<number> }> {
+async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false): Promise<{ req: Req; unanswered: Set<number>; pages: string[] }> {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   if (!answers.length) throw new Error("ماكو صور جواب بالورقة");
   const head: Anthropic.ContentBlockParam[] = [{ type: "text", text: "MARKING SCHEME (the same for every student of this exam version):" }];
@@ -222,6 +252,13 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort): Promise<{ req
   const body: Anthropic.ContentBlockParam[] = [{ type: "text", text: "STUDENT'S ANSWER PAGES:" }];
   const whole = answers.filter((a) => !a.q);
   const unanswered = new Set<number>();
+  // صور الطالب بالترتيب: «🖍 العلامات» يرجع رقم الصورة اللي بيها كل خطوة
+  const pages: string[] = [];
+  const addPage = (ref: string, b: Buffer, what: string) => {
+    pages.push(ref);
+    if (marks) body.push({ type: "text", text: `[Image ${pages.length}]` });
+    body.push(block(b, what));
+  };
   for (const q of mat.qs) {
     const mine = answers.filter((a) => Number(a.q) === q.n);
     if (!mine.length) { if (!whole.length) unanswered.add(q.n); continue; }
@@ -229,7 +266,7 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort): Promise<{ req
     for (const a of mine) {
       const b = await readRef(String(a.file));
       if (!b) throw new Error(`صورة جواب سؤال ${q.n} مفقودة`);
-      body.push(block(b, `جواب سؤال ${q.n}`));
+      addPage(String(a.file), b, `جواب سؤال ${q.n}`);
     }
   }
   if (whole.length) {
@@ -237,23 +274,51 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort): Promise<{ req
     for (const a of whole) {
       const b = await readRef(String(a.file));
       if (!b) throw new Error("صفحة من الورقة مفقودة");
-      body.push(block(b, "صفحة الورقة"));
+      addPage(String(a.file), b, "صفحة الورقة");
     }
   }
   const asked = mat.qs.filter((q) => !unanswered.has(q.n)).map((q) => q.n);
   body.push({ type: "text", text: `\nGrade questions ${asked.join(", ")}. Return one entry per question, with one step entry per step of the method you chose (i = step number).` });
   const req: Req = {
     model: MODEL, max_tokens: 12000,
-    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-    output_config: { effort, format: { type: "json_schema", schema: SCHEMA as unknown as Record<string, unknown> } },
+    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT : ""), cache_control: { type: "ephemeral" } }],
+    output_config: { effort, format: { type: "json_schema", schema: schemaOf(marks) as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content: [...head, ...body] }],
   };
-  return { req, unanswered };
+  return { req, unanswered, pages };
+}
+
+/** مكان من جواب الذكاء: رقم صورة موجودة، وx وy بين 0 و1000. غيره (0 يعني ما مكتوب) ما ينرسم */
+function ptOf(s: any, pages: number): QgPt | undefined {
+  const p = Math.round(Number(s?.p));
+  if (!(p >= 1 && p <= pages)) return undefined;
+  const c = (v: unknown) => Math.min(1000, Math.max(0, Math.round(Number(v) || 0)));
+  return { p, x: c(s.x), y: c(s.y) };
+}
+const shortNote = (t: string) => (t.length > 90 ? t.slice(0, 88).replace(/\s+\S*$/, "") + "…" : t);
+/** علامات الورقة اللي تنرسم لكل صورة: ✓ للخطوة الصح، ✗ للغلط، ونص الدرجة للناقصة، ودرجة السؤال بدائرة.
+ *  only: سؤال واحد. extra: صور السؤال حتى لو ماكو عليها علامة (تطلع بدون رسم) */
+export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, extra: string[] = []): { ref: string; marks: PaperMark[] }[] {
+  const by = new Map<number, PaperMark[]>();
+  const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => { if (pt) by.set(pt.p, [...(by.get(pt.p) ?? []), { x: pt.x, y: pt.y, ...m }]); };
+  for (const q of qs) {
+    if (only !== undefined && q.n !== only) continue;
+    if (!q.answered) continue;
+    add(q.at, { kind: "score", text: `${q.score}/${q.max}` });
+    for (const s of q.steps) {
+      const kind = s.awarded >= s.points && s.points > 0 ? "ok" : s.awarded > 0 ? "half" : "bad";
+      add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(kind !== "ok" && s.note ? { note: shortNote(s.note) } : {}) });
+    }
+  }
+  const out: { ref: string; marks: PaperMark[] }[] = [];
+  pages.forEach((ref, i) => { const m = by.get(i + 1); if (m || extra.includes(ref)) out.push({ ref, marks: m ?? [] }); });
+  for (const ref of extra) if (!pages.includes(ref)) out.push({ ref, marks: [] });
+  return out;
 }
 
 const half = (x: number) => Math.round(x * 2) / 2;
 /** يقرا جواب الذكاء ويرتبه: الدرجة من الخطوات (مو من رقمه)، وما تعدي حدها */
-export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<number>, answerOnly: boolean): { qs: QgQuestion[]; tokens: QgTokens } {
+export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<number>, answerOnly: boolean, pages = 0): { qs: QgQuestion[]; tokens: QgTokens } {
   const u = msg.usage;
   const tokens = { in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 };
   if (msg.stop_reason === "refusal") throw new Error("الذكاء رفض يصحح الورقة");
@@ -271,11 +336,13 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
     const byI = new Map((Array.isArray(a.steps) ? a.steps : []).map((s: any) => [Number(s?.i), s]));
     const steps: QgStep[] = plan ? plan.map((p, k) => {
       const s: any = byI.get(k + 1);
-      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, half(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300) };
+      const at = ptOf(s, pages);
+      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, half(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300), ...(at ? { at } : {}) };
     }) : [];
     let score = plan ? steps.reduce((t, s) => t + s.awarded, 0) : Number(a.score) || 0;
     score = answered ? Math.min(m.max, Math.max(0, half(score))) : 0;
-    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: String(a.reason ?? "").slice(0, 500), method: plan ? method : 1, steps };
+    const at = ptOf(a, pages);
+    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: String(a.reason ?? "").slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}) };
   });
   // «أجب عن K»: السؤال اللي ما جاوبه ما يحتاج تأكيد
   if (answerOnly) for (const q of qs) if (!q.answered) q.sure = true;
@@ -349,8 +416,8 @@ async function release(id: number) {
   }
 }
 type Job = { it: Row; kind: "trial" | "live" };
-type Prepared = { job: Job; req: Req; mat: VMat; unanswered: Set<number>; answerOnly: boolean };
-async function prepare(jobs: Job[], effort: QgEffort, onFail: (j: Job, e: unknown) => Promise<void>): Promise<Prepared[]> {
+type Prepared = { job: Job; req: Req; mat: VMat; unanswered: Set<number>; answerOnly: boolean; pages: string[]; marks: boolean };
+async function prepare(jobs: Job[], effort: QgEffort, onFail: (j: Job, e: unknown) => Promise<void>, marks = false): Promise<Prepared[]> {
   const mats = new Map<number, VMat>();
   const out: Prepared[] = [];
   for (const job of jobs) {
@@ -358,8 +425,8 @@ async function prepare(jobs: Job[], effort: QgEffort, onFail: (j: Job, e: unknow
       const vid = Number(job.it.version_id);
       if (!mats.has(vid)) mats.set(vid, await material(vid));
       const mat = mats.get(vid)!;
-      const { req, unanswered } = await buildRequest(job.it, mat, effort);
-      out.push({ job, req, mat, unanswered, answerOnly: answerOnlyOf(await one("bank_exams", { id: job.it.exam_id })) > 0 });
+      const { req, unanswered, pages } = await buildRequest(job.it, mat, effort, marks);
+      out.push({ job, req, mat, unanswered, answerOnly: answerOnlyOf(await one("bank_exams", { id: job.it.exam_id })) > 0, pages, marks });
     } catch (e) { await onFail(job, e); }
   }
   return out;
@@ -376,13 +443,13 @@ async function failed(job: Job, e: unknown) {
 /** الذكاء رجع جواب الورقة: التجربة تنحفظ بس، والحقيقية تنطي الدرجة أو ترجع للمصححين */
 async function settle(p: Prepared, msg: Anthropic.Message, batch: boolean, finish: (uid: number, itemId: number) => Promise<unknown>) {
   const { it, kind } = p.job;
-  const { qs, tokens } = readAnswer(msg, p.mat, p.unanswered, p.answerOnly);
+  const { qs, tokens } = readAnswer(msg, p.mat, p.unanswered, p.answerOnly, p.marks ? p.pages.length : 0);
   const usd = usdOf(tokens, batch);
   await addSpend("qusay", usd);
   const total = qs.reduce((t, q) => t + q.score, 0);
   const sure = qs.every((q) => q.sure);
   const name = await nameOfRow(it), exam = await examTitle(it.exam_id);
-  const res: QgResult = { at: stamp(), kind, total, sure, qs, usd, tokens, batch };
+  const res: QgResult = { at: stamp(), kind, total, sure, qs, usd, tokens, batch, ...(p.marks ? { pages: p.pages } : {}) };
   if (kind === "trial") {
     res.human = it.graded_at ? Number(it.total ?? 0) : null;
     await kvSet(resKey(it.id), JSON.stringify(res));
@@ -481,7 +548,7 @@ export async function forgetTrial(examId: number) {
 type BatchRow = { id: string; at: number; jobs: { item: number; kind: "trial" | "live" }[] };
 const batches = () => readJson<BatchRow[]>(BATCHES, []);
 export const pendingBatches = async () => (await batches()).length;
-async function pollBatches(finish: (uid: number, itemId: number) => Promise<unknown>, effort: QgEffort) {
+async function pollBatches(finish: (uid: number, itemId: number) => Promise<unknown>, effort: QgEffort, marks = false) {
   const list = await batches();
   const keep: BatchRow[] = [];
   let done = 0;
@@ -501,7 +568,7 @@ async function pollBatches(finish: (uid: number, itemId: number) => Promise<unkn
       const r = got.get(`qg_${j.item}`);
       if (!r?.msg) { await failed(job, new Error(`الدفعة: ${r?.err ?? "ماكو جواب"}`)); continue; }
       // نعيد بناء المادة (بدون إرسال) حتى نعرف الخطوات والأسئلة اللي ما جاوبها
-      const [p] = await prepare([job], effort, failed);
+      const [p] = await prepare([job], effort, failed, marks);
       if (!p) continue;
       try { await settle(p, r.msg, true, finish); done++; } catch (e) { await failed(job, e); }
     }
@@ -520,8 +587,9 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
   if (!await qgOn()) return { off: true };
   if (!keyReady()) return { noKey: true };
   const s = await qgSettings();
-  const received = (await batches()).length ? await pollBatches(finish, s.effort) : 0;
+  const received = (await batches()).length ? await pollBatches(finish, s.effort, s.marks) : 0;
   if (await overCap(s)) return { cap: true, ...(received ? { received } : {}) };
+  const marked = await runMarksDemos(s.effort);
   const jobs: Job[] = [];
   const take = await liveTaker();
   for (const it of await find("sched_items", { status: "done" }, { order: ["id"] })) {
@@ -538,8 +606,8 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
     const it = await one("sched_items", { id });
     if (it && await tries(id) < MAX_TRIES && !await qgResultOf(id)) jobs.push({ it, kind: "trial" });
   }
-  if (!jobs.length) return { idle: true, ...(received ? { received } : {}) };
-  const ready = await prepare(jobs, s.effort, failed);
+  if (!jobs.length) return { idle: true, ...(received ? { received } : {}), ...(marked ? { marked } : {}) };
+  const ready = await prepare(jobs, s.effort, failed, s.marks);
   // اللي اختارهن «⚡ هسه» يتصححن هسه، والباقي حسب الإعداد
   const fast = new Set(await nowList());
   const later = s.batch ? ready.filter((p) => !fast.has(p.job.it.id)) : [];
@@ -570,4 +638,41 @@ export async function qgRetry(id: number) {
   // ورقة طالب التجربة: ترجع محجوزة إله حتى يعيدها هو، مو تبقى عند المصححين
   const it = await one("sched_items", { id });
   if (it && it.user_id < 0 && !it.graded_at && !it.grader_id) await update("sched_items", { id }, { grader_id: QUSAY_GRADER });
+}
+
+// ---------- 🖍 تجربة العلامات على الورقة (طلب الأستاذ 2026-11-21): يعيد تصحيح ورقة صححها «تصحيح قصي» بالعلامات الحمرة،
+// ⚡ هسه، وينحفظ لحاله: درجة الورقة الأصلية ما تتغير، ولا شي يوصل للطالب الحقيقي (طالب التجربة يشوفها بورقته)
+export const qgMarksOf = (id: number) => readJson<QgMarksDemo | null>(mkKey(id), null);
+const marksQueue = async () => { const l = await readJson<number[]>(MK_Q, []); return Array.isArray(l) ? l.map(Number) : []; };
+export const marksWaiting = async (id: number) => (await marksQueue()).includes(id);
+export async function queueMarks(id: number) {
+  const it = await one("sched_items", { id });
+  if (!it?.version_id) throw new Error("ماكو هيچ ورقة");
+  if (!await qgResultOf(id)) throw new Error("«تصحيح قصي» بعده ما صحح هاي الورقة");
+  if (!(await find("exam_answers", { item_id: id })).length) throw new Error("ماكو صور جواب بالورقة");
+  await kvSet(MK_Q, JSON.stringify([...new Set([...await marksQueue(), id])]));
+}
+async function runMarksDemos(effort: QgEffort) {
+  const ids = (await marksQueue()).slice(0, 3);
+  if (!ids.length) return 0;
+  await kvSet(MK_Q, JSON.stringify((await marksQueue()).filter((x) => !ids.includes(x))));
+  let n = 0;
+  for (const id of ids) {
+    const it = await one("sched_items", { id });
+    if (!it) continue;
+    const fail = async (_j: Job, e: unknown) => { await addLog({ at: stamp(), kind: "failed", item: id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), note: `🖍 العلامات: ${errText(e)}` }); };
+    const [p] = await prepare([{ it, kind: "trial" }], effort, fail, true);
+    if (!p) continue;
+    try {
+      const { qs, tokens } = readAnswer(await apiImpl.create(p.req), p.mat, p.unanswered, p.answerOnly, p.pages.length);
+      const usd = usdOf(tokens, false);
+      await addSpend("qusay", usd);
+      const total = qs.reduce((t, q) => t + q.score, 0);
+      await kvSet(mkKey(id), JSON.stringify({ at: stamp(), total, qs, pages: p.pages, usd } satisfies QgMarksDemo));
+      const placed = qs.reduce((t, q) => t + q.steps.filter((s) => s.at).length, 0), all = qs.reduce((t, q) => t + q.steps.length, 0);
+      await addLog({ at: stamp(), kind: "trial", item: id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), total, usd, note: `🖍 تجربة العلامات على الورقة: ${placed} من ${all} خطوة انرسمت. شوفها من 👁` });
+      n++;
+    } catch (e) { await fail({ it, kind: "trial" }, e); }
+  }
+  return n;
 }

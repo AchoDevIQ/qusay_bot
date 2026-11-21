@@ -8,7 +8,7 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" precedence="default" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Cairo:wght@400;600;700;800;900&display=swap" precedence="default" />
       {/* الخط اللي يختاره صاحب البوت من «✍️ الخط»، يتغير بكل الصفحات */}
       <link rel="stylesheet" href="/api/font?f=css" precedence="default" />
       {/* صفحات الطالب بشكل تطبيق قصي (فاتح)، بالتطبيق وبالبوت. صفحات الإدارة تبقى غامقة */}

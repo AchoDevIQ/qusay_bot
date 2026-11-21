@@ -304,12 +304,17 @@ export async function myPaper(uid: number, itemId: unknown) {
 }
 /** تصحيح «🧠 تصحيح قصي» بشكل عرض نظام التصحيح AI: الخطوة من خطوات الأستاذ، وجنبها شنو سوى الطالب وليش هالدرجة */
 async function qusayShown(it: Row) {
-  const r = await (await import("./qusayGrade.ts")).qgResultOf(it.id);
+  const qg = await import("./qusayGrade.ts");
+  const r = await qg.qgResultOf(it.id);
   if (!r?.sent) return [];
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
+  // 🖍 ورقته مصححة بالأحمر: من التصحيح نفسه إذا العلامات شغالة، ولطالب التجربة من «🖍 جرب العلامات» كمان
+  const demo = it.user_id < 0 ? await qg.qgMarksOf(it.id) : null;
+  const mk = r.pages?.length ? { qs: r.qs, pages: r.pages } : demo;
   return r.qs.filter((q) => q.answered).map((q) => ({
     n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
     photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
+    ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string)) } : {}),
     steps: q.steps.map((st) => ({ status: "", awarded: st.awarded, possible: st.points, expected: st.text, student: st.note, reason: st.note })), by: "qusay" as const,
   }));
 }

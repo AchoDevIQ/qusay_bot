@@ -10,7 +10,30 @@ export type AiStep = { status: string; awarded: number; possible: number; expect
 
 /** الخطوة اللي نظام التصحيح ما گدر يحللها، أو كتابتها ما تنرسم: الطالب يشوف هاي الرسالة بدل كتابة ما تنقرا */
 export const FAIL_TEXT = "تعذّر تحليل هذه الخطوة، أرسل صورة ثانية أوضح.";
-export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay" };
+/** علامة حمرة على صورة الورقة (x و y من 0 لـ 1000): ✓ صح، ✗ غلط، نص درجة، ودرجة السؤال بدائرة */
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score"; text: string; note?: string };
+export type MarkedPageT = { ref: string; marks: PaperMark[] };
+export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay"; marked?: MarkedPageT[] };
+
+const Tick = () => <svg viewBox="0 0 44 32" width="34" height="25" aria-hidden><path d="M3 17 Q9 21 15 29 Q24 11 41 3" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+const Cross = () => <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden><path d="M5 5 Q16 15 27 28 M27 4 Q15 16 5 27" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" /></svg>;
+/** صورة ورقة الطالب وعليها تصحيح بقلم أحمر مثل المدرس: ✓ و✗ يم كل خطوة، ودرجة السؤال بدائرة، وملاحظة قصيرة بخط اليد */
+export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) {
+  return (
+    <div className="mkpage">
+      <img src={src} alt="ورقة الطالب" />
+      {marks.map((m, i) => (
+        <div key={i} className={"mk mk-" + m.kind} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}>
+          {m.kind === "score" ? <span className="mkscore">{m.text}</span> : <>
+            {m.kind === "bad" ? <Cross /> : <Tick />}
+            {m.text && <b className="mkhalf">{m.text}</b>}
+          </>}
+          {m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "")}><Inline text={m.note} /></span>}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** كلام عربي ويا رياضيات مكتوبة بدون $ (x/2 ، pi): كل قطعة مو عربية بيها حرف أو رقم تنرسم رياضيات
  *  (الكسر أفقي، والباي π)، والعربي يبقى كلام مثل ما هو */
@@ -57,23 +80,29 @@ export function Inline({ text }: { text: string }) {
 
 export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: string) => string }) {
   const [at, setAt] = useState(0);
-  const [view, setView] = useState<"grade" | "paper">("grade");
+  const hasMarks = (x: AiQ | undefined) => !!x?.marked?.some((p) => p.marks.length);
+  const [view, setView] = useState<"grade" | "paper" | "marked">(hasMarks(qs[0]) ? "marked" : "grade");
   const [big, setBig] = useState<string | null>(null);
   const q = qs[Math.min(at, qs.length - 1)];
   if (!q) return null;
+  const marked = hasMarks(q);
   const mark = (s: AiStep) => (s.awarded >= s.possible && s.possible > 0 ? "ok" : s.awarded <= 0 ? "bad" : "half");
   return (
     <div className="card aic">
-      <h2>🤖 تصحيح كل سؤال</h2>
+      {/* «تصحيح قصي»: مثل ورقة صححها المدرس، بدون روبوت (طلب الأستاذ 2026-11-21) */}
+      <h2>{q.by === "qusay" ? "✍️ تصحيح ورقتك" : "🤖 تصحيح كل سؤال"}</h2>
       <div className="aictabs">
-        {qs.map((x, i) => <button type="button" key={x.n} className={i === at ? "on" : ""} onClick={() => { setAt(i); setView("grade"); }}>س{x.n} · {x.score}/{x.max}</button>)}
+        {qs.map((x, i) => <button type="button" key={x.n} className={i === at ? "on" : ""} onClick={() => { setAt(i); setView(hasMarks(x) ? "marked" : "grade"); }}>س{x.n} · {x.score}/{x.max}</button>)}
       </div>
       <div className="aichead"><b>السؤال {q.n}</b><span className={q.score >= q.max ? "aigood" : ""}><b>{q.score}</b> / {q.max}</span></div>
       <div className="aicview">
-        <button type="button" className={view === "grade" ? "on" : ""} onClick={() => setView("grade")}>📝 التصحيح</button>
-        <button type="button" className={view === "paper" ? "on" : ""} onClick={() => setView("paper")}>📷 ورقتي</button>
+        {marked && <button type="button" className={view === "marked" ? "on" : ""} onClick={() => setView("marked")}>🖍 ورقتي مصححة</button>}
+        <button type="button" className={view === "grade" ? "on" : ""} onClick={() => setView("grade")}>{marked ? "📝 التفصيل" : "📝 التصحيح"}</button>
+        {!marked && <button type="button" className={view === "paper" ? "on" : ""} onClick={() => setView("paper")}>📷 ورقتي</button>}
       </div>
-      {view === "paper" ? (
+      {view === "marked" && marked ? (
+        <div className="expad">{q.marked!.map((p) => <MarkedPage key={p.ref} src={fileUrl(p.ref)} marks={p.marks} />)}</div>
+      ) : view === "paper" ? (
         <div className="expad">{q.photos.map((p) => <img key={p} className="eximg" src={fileUrl(p)} alt={`جواب السؤال ${q.n}`} />)}</div>
       ) : (
         <div className="expad">

@@ -340,6 +340,82 @@ test("الطالب يشوف تصحيح «تصحيح قصي» خطوة خطوة �
   assert.equal(p.ai[0].photos.length, 1);
 });
 
+test("🖍 العلامات طافية بالأصل: الطلب نفسه بدون أماكن", async () => {
+  assert.equal((await Q.qgSettings()).marks, false);
+  const id = await paper([1, 2]);
+  reply = () => good;
+  await Q.qusayTick(finishByAi);
+  const req = sent.at(-1);
+  assert.doesNotMatch(req.system[0].text, /PEN MARKS/);
+  assert.ok(!JSON.stringify(req.output_config.format.schema).includes('"p"'));
+  assert.ok(!req.messages[0].content.some((b: any) => /\[Image \d\]/.test(b.text ?? "")));
+  assert.equal((await Q.qgResultOf(id))!.pages, undefined);
+});
+
+// الجواب مع أماكن الخطوات على صور الطالب
+const withMarks = { questions: [
+  { n: 1, answered: true, method: 1, p: 1, x: 900, y: 40, steps: [{ i: 1, awarded: 20, note: "صح", p: 1, x: 700, y: 200 }, { i: 2, awarded: 10, note: "غلط بالإشارة", p: 1, x: 650, y: 400 }], score: 30, sure: true, reason: "زين" },
+  { n: 2, answered: true, method: 1, p: 9, x: 5000, y: 10, steps: [{ i: 1, awarded: 0, note: "ما برهن", p: 0, x: 0, y: 0 }], score: 0, sure: true, reason: "ناقص" },
+] };
+
+test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب التجربة بالأماكن، ودرجتها الأصلية ما تتغير، وطالب التجربة يشوفها مرسومة", async () => {
+  const { addTestPaper } = await import("../lib/gradeApi.ts");
+  const { myPaper } = await import("../lib/examRoom.ts");
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70]);
+  const id = await addTestPaper(1, -3, ver, new Map([[1, [jpg]], [2, [jpg]]]), "qusay");
+  reply = () => good;
+  await Q.qusayTick(finishByAi);
+  const total = (await one("sched_items", { id }))!.total;
+  assert.equal(total, 85.5);
+  await assert.rejects(qusayAction({ initData: sign(1), action: "marks", id: 999999 }));
+  const r: any = await qusayAction({ initData: sign(1), action: "marks", id });
+  assert.equal(r.paper.demoWaiting, true);
+  reply = () => withMarks;
+  tg.length = 0;
+  await Q.qusayTick(finishByAi);
+  const req = sent.at(-1);
+  assert.match(req.system[0].text, /PEN MARKS/);
+  assert.ok(req.messages[0].content.some((b: any) => b.text === "[Image 2]"), "صور الطالب مرقمة");
+  assert.ok(JSON.stringify(req.output_config.format.schema).includes('"p"'));
+  // الأصلية ما تغيرت، ولا شي انبعث
+  assert.equal((await one("sched_items", { id }))!.total, total);
+  assert.equal((await Q.qgResultOf(id))!.total, 85.5);
+  assert.equal(tg.filter((m) => m.method.startsWith("send")).length, 0);
+  const demo = (await Q.qgMarksOf(id))!;
+  assert.equal(demo.total, 30);
+  assert.deepEqual(demo.qs[0].steps.map((s) => s.at), [{ p: 1, x: 700, y: 200 }, { p: 1, x: 650, y: 400 }]);
+  assert.equal(demo.qs[1].at, undefined, "صورة مو موجودة ما تنرسم");
+  assert.equal(demo.qs[1].steps[0].at, undefined, "الخطوة اللي ما مكتوبة ما تنرسم");
+  // صفحة صاحب البوت: «🖍 على الورقة» بكل سؤال
+  const d: any = await qusayAction({ initData: sign(1), action: "paper", id });
+  assert.equal(d.paper.demo.total, 30);
+  assert.equal(d.paper.demoWaiting, false);
+  const m1 = d.paper.qs[0].marked;
+  assert.deepEqual(m1[0].marks.map((m: any) => [m.kind, m.text]), [["score", "30/60"], ["ok", ""], ["half", "10"]]);
+  assert.equal(m1[0].marks[2].note, "غلط بالإشارة");
+  assert.equal(d.paper.qs[1].marked[0].marks.length, 0, "صورة السؤال تطلع بدون رسم");
+  // طالب التجربة يشوف ورقته مرسومة
+  const p: any = await myPaper(-3, id);
+  assert.ok(p.ai[0].marked[0].marks.length === 3);
+  assert.match((await Q.qgLog()).at(-1)!.note!, /2 من 3 خطوة/);
+});
+
+test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ بأماكنها والطالب الحقيقي يشوفها", async () => {
+  const { myPaper } = await import("../lib/examRoom.ts");
+  await Q.saveQgSettings({ marks: true });
+  const id = await paper([1, 2]);
+  reply = () => withMarks;
+  await Q.qusayTick(finishByAi);
+  const res = (await Q.qgResultOf(id))!;
+  assert.deepEqual(res.pages, ["ans/a.jpg", "ans/a.jpg"]);
+  assert.equal(res.total, 30);
+  const p: any = await myPaper(90, id);
+  assert.equal(p.ai[0].marked[0].marks.length, 3);
+  // طالب حقيقي ما يشوف «🖍 جرب العلامات» (بس لطالب التجربة)، بس هاي من التصحيح نفسه
+  await Q.saveQgSettings({ marks: false });
+  assert.deepEqual(Q.marksByPage(res.qs, res.pages!, 2).length, 0);
+});
+
 test("الكلفة: الكاش يندفع عشره", () => {
   const t = { in: 1000, cw: 0, cr: 4000, out: 800 };
   assert.equal(Math.round(Q.usdOf(t, false) * 1e7) / 1e7, (1000 * 0.1 + 4000 * 0.01 + 800 * 0.5) / 1e6);

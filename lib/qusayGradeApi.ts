@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, clearTrialQueue, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
+  humanMark, marksByPage, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -78,11 +78,16 @@ async function paperDetail(id: number) {
   need(r, "«تصحيح قصي» بعده ما صحح هاي الورقة");
   const marks = new Map((await find("question_marks", { item_id: id })).map((m) => [Number(m.q), Number(m.mark)]));
   const answers = await find("exam_answers", { item_id: id }, { order: ["q", "id"] });
+  // 🖍 العلامات على الورقة: من التصحيح نفسه إذا كانت شغالة، وإلا من «🖍 جرب العلامات» إذا سواها
+  const demo = await qgMarksOf(id);
+  const mk = r!.pages?.length ? { qs: r!.qs, pages: r!.pages } : demo;
   return {
     id, name: await nameOf(it!), exam: String((await one("bank_exams", { id: it!.exam_id }))?.title ?? ""), kind: r!.kind, human: r!.kind === "trial" ? humanMark(it!) : r!.human ?? null,
     total: r!.total, sure: r!.sure, iqd: iqd(r!.usd), batch: r!.batch, sent: !!r!.sent,
-    qs: r!.qs.map((q) => ({ ...q, human: r!.kind === "trial" && humanMark(it!) !== null && marks.has(q.n) ? marks.get(q.n)! : null })),
+    qs: r!.qs.map((q) => ({ ...q, human: r!.kind === "trial" && humanMark(it!) !== null && marks.has(q.n) ? marks.get(q.n)! : null,
+      marked: mk ? marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => Number(a.q) === q.n).map((a) => String(a.file))) : null })),
     photos: answers.map((a) => ({ q: Number(a.q) || 0, ref: String(a.file) })),
+    demo: demo ? { at: demo.at, total: demo.total, iqd: iqd(demo.usd) } : null, demoWaiting: await marksWaiting(id),
   };
 }
 
@@ -116,6 +121,7 @@ export async function qusayAction(body: Row) {
     if (typeof body.batch === "boolean") p.batch = body.batch;
     if (typeof body.carry === "boolean") p.carry = body.carry;
     if (body.unsure === "send" || body.unsure === "graders") p.unsure = body.unsure;
+    if (typeof body.marks === "boolean") p.marks = body.marks;
     if (body.cap !== undefined) { const c = Number(body.cap); need(c > 0 && c <= 100, "الحد اليومي بين 0.1 و 100 دولار"); p.cap = c; }
     await saveQgSettings(p);
     return await out("✅ انحفظ");
@@ -136,6 +142,10 @@ export async function qusayAction(body: Row) {
     const { finishByAi } = await import("./gradeApi.ts");
     try { await sendSaved(Number(body.id), finishByAi); } catch (e) { fail(e); }
     return await out("✅ انبعثت درجته، ووصلت بطاقة الدرجة");
+  }
+  if (a === "marks") {
+    try { await queueMarks(Number(body.id)); } catch (e) { fail(e); }
+    return await out(`🖍 تنتظر. خلال دقيقة لو دقيقتين يعيد تصحيحها ويرسم العلامات على الورقة (⚡ هسه، تقريباً 6 دنانير)${(await qgOn()) ? "" : ". شغّل «تصحيح قصي» أول حتى يبدي"}. درجتها الأصلية ما تتغير. بعدها دوس 🔄 حدّث وافتح 👁 مرة ثانية.`, { paper: await paperDetail(Number(body.id)) });
   }
   if (a === "retry") { try { await qgRetry(Number(body.id)); } catch (e) { fail(e); } return await out("🔁 يعيد يجربها بالدكة الجاية"); }
   throw new ApiError(400, "أمر غير معروف");

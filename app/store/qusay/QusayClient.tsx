@@ -2,17 +2,17 @@
 // «🧠 تصحيح قصي»: مصحح الأستاذ الثاني. يجربه بالسر على أوراق صححها مصحح ويقارن، ومن يرتاح لموضوع يخليه يصححه صدگ
 import { useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
-import { Inline, MathText } from "../myexams/AiCompare";
+import { Inline, MarkedPage, MathText, type MarkedPageT } from "../myexams/AiCompare";
 
 type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Step = { text: string; points: number; awarded: number; note: string };
-type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null };
-type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; human: number | null; total: number; sure: boolean; iqd: number; batch: boolean; sent: boolean; qs: Q[]; photos: { q: number; ref: string }[] };
+type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null; marked: MarkedPageT[] | null };
+type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; human: number | null; total: number; sure: boolean; iqd: number; batch: boolean; sent: boolean; qs: Q[]; photos: { q: number; ref: string }[]; demo: { at: string; total: number; iqd: number } | null; demoWaiting: boolean };
 type TrialRow = { id: number; name: string; exam: string; human: number | null; qusay: number; sure: boolean; iqd: number; at: string };
 type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
 type Data = {
-  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders" }; fileToken: string;
+  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean }; fileToken: string;
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
   trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; paper?: Paper; notice?: string;
 };
@@ -93,7 +93,7 @@ export default function QusayClient() {
           </>
         )}
       </div>
-      {data?.paper && <PaperView p={data.paper} fileUrl={fileUrl} close={() => void call({ action: "list" })} />}
+      {data?.paper && <PaperView p={data.paper} fileUrl={fileUrl} busy={busy} call={call} close={() => void call({ action: "list" })} />}
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
   );
@@ -105,6 +105,7 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
   const [cap, setCap] = useState(String(s.cap));
   const [carry, setCarry] = useState(s.carry);
   const [unsure, setUnsure] = useState(s.unsure);
+  const [marks, setMarks] = useState(s.marks);
   return (
     <div className="card expad">
       <div className="exlabel">⚙️ الإعدادات</div>
@@ -131,7 +132,12 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
         <option value="graders">↩️ ترجع للمصححين</option>
       </select>
       <div className="exhint">ورقة طالب التجربة ما ترجع للمصححين أبداً.</div>
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure })}>💾 احفظ</button>
+      <div className="exhint">🖍 العلامات الحمرة على ورقة الطالب (✓ و✗ يم كل خطوة، ودرجة السؤال بدائرة). جربها أول على ورقة من 👁 ← 🖍 جرب العلامات</div>
+      <select value={marks ? "1" : "0"} onChange={(e) => setMarks(e.target.value === "1")}>
+        <option value="0">⏸ طافية: الطالب يشوف التصحيح خطوات بس (الأصل)</option>
+        <option value="1">🖍 شغالة: كل ورقة يصححها تطلع للطالب مصححة بالأحمر</option>
+      </select>
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure, marks })}>💾 احفظ</button>
     </div>
   );
 }
@@ -180,16 +186,18 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
 }
 
 /** سؤال واحد: زر «📝 التصحيح» وجنبه «📷 ورقة الطالب»، كل واحد يطلع لحاله. الرياضيات بشكل الكتاب (الكسر أفقي، π) */
-function QView({ q, photos }: { q: Q; photos: string[] }) {
-  const [view, setView] = useState<"grade" | "paper">("grade");
+function QView({ q, photos, fileUrl }: { q: Q; photos: string[]; fileUrl: (ref: string) => string }) {
+  const marked = !!q.marked?.some((p) => p.marks.length);
+  const [view, setView] = useState<"grade" | "paper" | "marked">(marked ? "marked" : "grade");
   return (
     <div className="card expad">
       <div className="exlabel">السؤال {q.n}: {q.score} من {q.max}{q.human !== null && <> · المصحح {q.human}</>} {q.sure ? "" : "⚠️ ما متأكد"}</div>
       <div className="aicview">
+        {marked && <button type="button" className={view === "marked" ? "on" : ""} onClick={() => setView("marked")}>🖍 على الورقة</button>}
         <button type="button" className={view === "grade" ? "on" : ""} onClick={() => setView("grade")}>📝 التصحيح</button>
         <button type="button" className={view === "paper" ? "on" : ""} onClick={() => setView("paper")}>📷 ورقة الطالب{photos.length ? "" : " (ماكو)"}</button>
       </div>
-      {view === "paper" ? photos.map((u) => <img key={u} src={u} alt="" style={{ width: "100%", minWidth: 0, marginTop: 6 }} />) : <>
+      {view === "marked" && marked ? q.marked!.map((p) => <MarkedPage key={p.ref} src={fileUrl(p.ref)} marks={p.marks} />) : view === "paper" ? photos.map((u) => <img key={u} src={u} alt="" style={{ width: "100%", minWidth: 0, marginTop: 6 }} />) : <>
         {q.reason && <div className="exhint"><Inline text={q.reason} /></div>}
         {q.method > 1 && <div className="exhint">صححه على الطريقة {q.method}</div>}
         {q.steps.map((s, i) => (
@@ -204,7 +212,7 @@ function QView({ q, photos }: { q: Q; photos: string[] }) {
   );
 }
 
-function PaperView({ p, fileUrl, close }: { p: Paper; fileUrl: (ref: string) => string; close: () => void }) {
+function PaperView({ p, fileUrl, busy, call, close }: { p: Paper; fileUrl: (ref: string) => string; busy: boolean; call: Call; close: () => void }) {
   return (
     <div className="exfull" style={{ background: "var(--ink)" }}>
       <button type="button" className="exbtn" onClick={close}>✖ سد</button>
@@ -214,8 +222,12 @@ function PaperView({ p, fileUrl, close }: { p: Paper; fileUrl: (ref: string) => 
           تصحيح قصي: <b>{p.total}</b>{p.human !== null && <> · المصحح: <b>{p.human}</b></>} · {p.iqd} دينار{p.batch && " (بالدفعة)"}
           <br />{p.kind === "trial" ? "🧪 تجربة بالسر، ما وصلت للطالب" : p.sent ? "✅ هو صححها ووصلت الدرجة للطالب" : "↩️ ما كان متأكد، فرجعها للمصححين"}
         </div>
+        {/* 🖍 يعيد تصحيحها بالعلامات الحمرة على الورقة، لحالها: درجتها الأصلية ما تتغير */}
+        {p.demo && <div className="exhint">🖍 العلامات على الورقة: صححها مرة ثانية بالعلامات ({p.demo.at}) وانطاها <b>{p.demo.total}</b> · {p.demo.iqd} دينار. شوف «🖍 على الورقة» بكل سؤال.</div>}
+        {p.demoWaiting ? <div className="exhint">🖍 تنتظر: خلال دقيقة لو دقيقتين ترسم العلامات. دوس 🔄 حدّث وافتح 👁 مرة ثانية.</div>
+          : <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "marks", id: p.id })}>🖍 {p.demo ? "أعد" : "جرب"} العلامات على هاي الورقة (تقريباً 6 دنانير)</button>}
       </div>
-      {p.qs.map((q) => <QView key={q.n} q={q} photos={p.photos.filter((f) => f.q === q.n).map((f) => fileUrl(f.ref))} />)}
+      {p.qs.map((q) => <QView key={q.n} q={q} fileUrl={fileUrl} photos={p.photos.filter((f) => f.q === q.n).map((f) => fileUrl(f.ref))} />)}
       {p.photos.some((f) => !f.q) && (
         <div className="card expad">
           <div className="exlabel">صفحات الورقة</div>
