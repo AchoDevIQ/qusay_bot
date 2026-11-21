@@ -170,7 +170,21 @@ test("يصحح صدگ: يحجز الورقة ويحفظ الدرجة ويوصل�
   assert.equal((await Q.qgResultOf(id))!.sent, true);
 });
 
-test("الورقة اللي يشك بيها ترجع للمصححين وما ياخذها مرة ثانية", async () => {
+test("ما متأكد، بالأصل: يصححها ويبعث درجتها، والسبب بالسجل", async () => {
+  assert.equal((await Q.qgSettings()).unsure, "send");
+  const id = await paper([1, 2]);
+  reply = () => ({ questions: [{ ...good.questions[0], sure: false, reason: "الخط ما ينقرا" }, good.questions[1]] });
+  await Q.qusayTick(finishByAi);
+  const it = await one("sched_items", { id });
+  assert.ok(it!.graded_at, "انصححت");
+  assert.equal(it!.total, 85.5);
+  const row = (await Q.qgLog()).filter((l) => l.item === id).at(-1)!;
+  assert.equal(row.kind, "sent");
+  assert.match(row.note!, /ما متأكد.*الخط ما ينقرا/);
+});
+
+test("إذا اختار «ترجع للمصححين»: الورقة اللي يشك بيها ترجع وما ياخذها مرة ثانية، و«✅ ابعث درجته» يبعثها بدون صرف", async () => {
+  await Q.saveQgSettings({ unsure: "graders" });
   const id = await paper([1, 2]);
   reply = () => ({ questions: [{ ...good.questions[0], sure: false, reason: "الخط ما ينقرا" }, good.questions[1]] });
   await Q.qusayTick(finishByAi);
@@ -184,11 +198,38 @@ test("الورقة اللي يشك بيها ترجع للمصححين وما ي�
   assert.equal(sent.length, n, "ما يعيدها");
   const log = await Q.qgLog();
   assert.match(log.at(-1)?.note ?? log.find((l) => l.kind === "unsure")!.note!, /الخط ما ينقرا/);
-  await qusayAction({ initData: sign(1), action: "retry", id });
-  assert.equal((await Q.qusayHeld([it!])).size, 1, "🔁 يعيد يجربها");
+  // «✅ ابعث درجته»: يطلع زره بالسجل، ويبعث الدرجة المحفوظة بدون طلب جديد
+  const page: any = await qusayAction({ initData: sign(1), action: "list" });
+  assert.equal(page.log.find((r: any) => r.item === id && r.kind === "unsure").canSend, true);
+  const n2 = sent.length;
+  await qusayAction({ initData: sign(1), action: "sendSaved", id });
+  assert.equal(sent.length, n2, "ما صرف مرة ثانية");
+  const done = await one("sched_items", { id });
+  assert.deepEqual([done!.grader_id, done!.total], [QUSAY_GRADER, 85.5]);
+  await assert.rejects(qusayAction({ initData: sign(1), action: "sendSaved", id }));
+  // 🔁 يعيدها على ورقة ثانية رجعت
+  const id2 = await paper([1, 2]);
+  reply = () => ({ questions: [{ ...good.questions[0], sure: false, reason: "مقطوعة" }, good.questions[1]] });
+  await Q.qusayTick(finishByAi);
+  const it2 = (await one("sched_items", { id: id2 }))!;
+  await qusayAction({ initData: sign(1), action: "retry", id: id2 });
+  assert.equal((await Q.qusayHeld([it2])).size, 1, "🔁 يعيد يجربها");
   reply = () => good;
   await Q.qusayTick(finishByAi);
-  assert.equal((await one("sched_items", { id }))!.grader_id, QUSAY_GRADER);
+  assert.equal((await one("sched_items", { id: id2 }))!.grader_id, QUSAY_GRADER);
+  await Q.saveQgSettings({ unsure: "send" });
+});
+
+test("ورقة طالب التجربة ما ترجع للمصححين حتى لو مختار «ترجع»", async () => {
+  const { addTestPaper } = await import("../lib/gradeApi.ts");
+  await put("students", { user_id: -4, name: "طالب تجربة 4", exam: "إلكتروني", created: "2026-01-01 00:00" });
+  await Q.saveQgSettings({ unsure: "graders" });
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70]);
+  const id = await addTestPaper(1, -4, ver, new Map([[1, [jpg]], [2, [jpg]]]), "qusay");
+  reply = () => ({ questions: [{ ...good.questions[0], sure: false, reason: "ما واضح" }, good.questions[1]] });
+  await Q.qusayTick(finishByAi);
+  assert.ok((await one("sched_items", { id }))!.graded_at, "انصححت وما رجعت");
+  await Q.saveQgSettings({ unsure: "send" });
 });
 
 test("ما يلمس مواضيع وطلاب نظام التصحيح AI مال مؤمل", async () => {

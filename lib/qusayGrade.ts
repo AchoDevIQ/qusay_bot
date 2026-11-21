@@ -21,8 +21,9 @@ export const QG_PERM = "qusay";
 /** low: يفكر أقل وأرخص. medium: يفكر أكثر وأدق (الأصل) */
 export type QgEffort = "low" | "medium";
 /** live: المواضيع اللي يصححها صدگ. batch: بالدفعة (أرخص بالنص، والدرجة تتأخر، وهي الأصل من 2026-11-21).
- *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل) */
-export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean };
+ *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل).
+ *  unsure: الورقة اللي يشك بيها: «send» يصححها ويبعث درجتها ويكتب السبب بالسجل (الأصل، طلب الأستاذ 2026-11-21)، «graders» ترجع للمصححين */
+export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders" };
 export type QgStep = { text: string; points: number; awarded: number; note: string };
 export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[] };
 export type QgTokens = { in: number; cw: number; cr: number; out: number };
@@ -55,7 +56,7 @@ export async function qgSettings(): Promise<QgSettings> {
   const cap = Number(s.cap);
   // الإعدادات القديمة (قبل v 2) كانت «هسه» بالأصل: تصير بالدفعة، طلب الأستاذ 2026-11-21
   const v2 = Number(s.v) >= 2;
-  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true };
+  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send" };
 }
 export async function saveQgSettings(p: Partial<QgSettings>) {
   const s = { ...await qgSettings(), ...p, v: 2 };
@@ -389,24 +390,44 @@ async function settle(p: Prepared, msg: Anthropic.Message, batch: boolean, finis
   }
   const now = await one("sched_items", { id: it.id });
   if (!now || now.graded_at || now.grader_id !== QUSAY_GRADER) return;
-  if (!sure) {
+  const why = qs.filter((q) => !q.sure).map((q) => `س${q.n}: ${q.reason || "ما متأكد"}`).join(" | ").slice(0, 300);
+  // ما متأكد: يرجعها للمصححين بس إذا صاحب البوت اختار هيچ، وورقة طالب التجربة ما ترجع أبداً
+  if (!sure && it.user_id >= 0 && (await qgSettings()).unsure === "graders") {
     await kvSet(resKey(it.id), JSON.stringify(res));
     await release(it.id);
-    await addLog({ at: stamp(), kind: "unsure", item: it.id, name, exam, total, usd, note: qs.filter((q) => !q.sure).map((q) => `س${q.n}: ${q.reason || "ما متأكد"}`).join(" | ").slice(0, 300) });
+    await addLog({ at: stamp(), kind: "unsure", item: it.id, name, exam, total, usd, note: why });
     return;
   }
-  for (const q of qs) await put("question_marks", { item_id: it.id, q: q.n, mark: !q.answered && p.answerOnly ? SKIP : q.score });
+  await sendResult(it.id, res, p.answerOnly, finish);
+  await addLog({ at: stamp(), kind: "sent", item: it.id, name, exam, total, usd, ...(sure ? {} : { note: `⚠️ ما متأكد، وصححها: ${why}` }) });
+}
+/** يحفظ درجات الأسئلة ويبعث بطاقة الدرجة باسم «تصحيح قصي». إذا خربت ترجع الورقة مثل ما چانت */
+async function sendResult(id: number, res: QgResult, answerOnly: boolean, finish: (uid: number, itemId: number) => Promise<unknown>) {
+  for (const q of res.qs) await put("question_marks", { item_id: id, q: q.n, mark: !q.answered && answerOnly ? SKIP : q.score });
   res.sent = true;
-  await kvSet(resKey(it.id), JSON.stringify(res));
+  await kvSet(resKey(id), JSON.stringify(res));
   try {
-    await finish(QUSAY_GRADER, it.id);
+    await finish(QUSAY_GRADER, id);
   } catch (e) {
     res.sent = false;
-    await kvSet(resKey(it.id), JSON.stringify({ ...res, kind: "live", sure: false }));
-    await release(it.id);
+    await kvSet(resKey(id), JSON.stringify({ ...res, kind: "live", sure: false }));
+    await release(id);
     throw e;
   }
-  await addLog({ at: stamp(), kind: "sent", item: it.id, name, exam, total, usd });
+}
+/** «✅ ابعث درجته»: ورقة رجعها للمصححين لأنه ما متأكد، صاحب البوت يبعث درجته المحفوظة بدون ما يصرف مرة ثانية */
+export async function sendSaved(id: number, finish: (uid: number, itemId: number) => Promise<unknown>) {
+  const r = await qgResultOf(id);
+  if (!r || r.kind !== "live" || r.sent) throw new Error("ماكو درجة محفوظة تنبعث لهاي الورقة");
+  const it = await one("sched_items", { id });
+  if (!it || it.graded_at) throw new Error("هاي الورقة انصححت");
+  if (it.grader_id !== QUSAY_GRADER) {
+    if (it.grader_id) throw new Error("هاي الورقة ماخذها مصحح هسه");
+    const got = await tx(async () => { const cur = await one("sched_items", { id }); if (!cur || cur.graded_at || cur.grader_id) return false; await update("sched_items", { id }, { grader_id: QUSAY_GRADER }); return true; });
+    if (!got) throw new Error("مصحح سبقك عليها");
+  }
+  await sendResult(id, r, answerOnlyOf(await one("bank_exams", { id: it.exam_id })) > 0, finish);
+  await addLog({ at: stamp(), kind: "sent", item: id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), total: r.total, note: "✅ إنت بعثت درجته" });
 }
 
 // ---------- 🧪 التجربة المخفية: يصحح بالسر ويطلع النتيجة لصاحب البوت بس، ولا شي يتغير ولا يوصل للطالب.
@@ -545,4 +566,7 @@ export async function qgRetry(id: number) {
   if (r?.sent) throw new Error("هاي الورقة صححها وانطى درجتها");
   await kvSet(resKey(id), "null");
   await kvSet(tryKey(id), "0");
+  // ورقة طالب التجربة: ترجع محجوزة إله حتى يعيدها هو، مو تبقى عند المصححين
+  const it = await one("sched_items", { id });
+  if (it && it.user_id < 0 && !it.graded_at && !it.grader_id) await update("sched_items", { id }, { grader_id: QUSAY_GRADER });
 }

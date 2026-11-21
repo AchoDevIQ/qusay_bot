@@ -9,9 +9,9 @@ type Step = { text: string; points: number; awarded: number; note: string };
 type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null };
 type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; human: number | null; total: number; sure: boolean; iqd: number; batch: boolean; sent: boolean; qs: Q[]; photos: { q: number; ref: string }[] };
 type TrialRow = { id: number; name: string; exam: string; human: number | null; qusay: number; sure: boolean; iqd: number; at: string };
-type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string };
+type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
 type Data = {
-  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean }; fileToken: string;
+  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders" }; fileToken: string;
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
   trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; paper?: Paper; notice?: string;
 };
@@ -80,6 +80,7 @@ export default function QusayClient() {
               {data.log.map((r, i) => (
                 <div key={i} className="aig-logrow">
                   <div><small>{r.at}</small> · {KIND[r.kind]}{r.name && <> · <b>{r.name}</b></>}{r.exam && <> · {r.exam}</>}{r.total !== undefined && <> · {r.total}</>}{r.iqd !== null && <> · {r.iqd} دينار</>}{r.note && <><br /><small>{r.note}</small></>}</div>
+                  {r.item && r.canSend && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "sendSaved", id: r.item })}>✅ ابعث درجته</button>}
                   {r.item && (r.kind === "unsure" || r.kind === "failed") && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "retry", id: r.item })}>🔁 يعيدها</button>}
                   {r.item && r.kind !== "failed" && r.kind !== "cap" && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "paper", id: r.item })}>👁</button>}
                 </div>
@@ -99,6 +100,7 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
   const [batch, setBatch] = useState(s.batch);
   const [cap, setCap] = useState(String(s.cap));
   const [carry, setCarry] = useState(s.carry);
+  const [unsure, setUnsure] = useState(s.unsure);
   return (
     <div className="card expad">
       <div className="exlabel">⚙️ الإعدادات</div>
@@ -119,7 +121,13 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
         <option value="1">⏳ تنتظر وتتصحح باچر (ما تروح للمصححين)</option>
         <option value="0">✍️ ترجع للمصححين</option>
       </select>
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry })}>💾 احفظ</button>
+      <div className="exhint">الورقة اللي ما متأكد من سؤال بيها</div>
+      <select value={unsure} onChange={(e) => setUnsure(e.target.value === "graders" ? "graders" : "send")}>
+        <option value="send">✅ يصححها ويبعث درجتها، والسبب يطلع بالسجل (الأصل)</option>
+        <option value="graders">↩️ ترجع للمصححين</option>
+      </select>
+      <div className="exhint">ورقة طالب التجربة ما ترجع للمصححين أبداً.</div>
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure })}>💾 احفظ</button>
     </div>
   );
 }

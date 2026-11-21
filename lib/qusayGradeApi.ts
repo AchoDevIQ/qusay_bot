@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, clearTrialQueue, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, saveQgSettings, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
+  humanMark, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { ApiError, authed, need } from "./webApi.ts";
@@ -61,7 +61,12 @@ async function listData(uid: number) {
     sent: log.filter((r) => r.kind === "sent").length, unsure: log.filter((r) => r.kind === "unsure").length,
     trialLeft: (await trialQueue()).length, batches: await pendingBatches(),
     chapters, trials: trialRows,
-    log: log.slice(-SHOW).reverse().map((r) => ({ ...r, iqd: r.usd ? iqd(r.usd) : null, usd: undefined })),
+    // «✅ ابعث درجته»: الورقة اللي رجعها للمصححين ودرجتها محفوظة وبعدها ما انصححت
+    log: await Promise.all(log.slice(-SHOW).reverse().map(async (r) => {
+      let canSend = false;
+      if (r.kind === "unsure" && r.item) { const res = await qgResultOf(r.item); const it = await one("sched_items", { id: r.item }); canSend = !!res && !res.sent && !!it && !it.graded_at && !it.grader_id; }
+      return { ...r, iqd: r.usd ? iqd(r.usd) : null, usd: undefined, canSend };
+    })),
   };
 }
 
@@ -110,6 +115,7 @@ export async function qusayAction(body: Row) {
     if (body.effort === "low" || body.effort === "medium") p.effort = body.effort;
     if (typeof body.batch === "boolean") p.batch = body.batch;
     if (typeof body.carry === "boolean") p.carry = body.carry;
+    if (body.unsure === "send" || body.unsure === "graders") p.unsure = body.unsure;
     if (body.cap !== undefined) { const c = Number(body.cap); need(c > 0 && c <= 100, "الحد اليومي بين 0.1 و 100 دولار"); p.cap = c; }
     await saveQgSettings(p);
     return await out("✅ انحفظ");
@@ -126,6 +132,11 @@ export async function qusayAction(body: Row) {
   if (a === "trialClear") { await clearTrialQueue(); return await out("انمسحت الأوراق اللي تنتظر التجربة"); }
   if (a === "forget") { const n = await forgetTrial(exam); return await out(`انمسحت نتائج ${n} تجربة بهذا الموضوع، تگدر تعيدها`); }
   if (a === "paper") return await out("", { paper: await paperDetail(Number(body.id)) });
+  if (a === "sendSaved") {
+    const { finishByAi } = await import("./gradeApi.ts");
+    try { await sendSaved(Number(body.id), finishByAi); } catch (e) { fail(e); }
+    return await out("✅ انبعثت درجته، ووصلت بطاقة الدرجة");
+  }
   if (a === "retry") { try { await qgRetry(Number(body.id)); } catch (e) { fail(e); } return await out("🔁 يعيد يجربها بالدكة الجاية"); }
   throw new ApiError(400, "أمر غير معروف");
 }
