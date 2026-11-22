@@ -448,11 +448,11 @@ test("درجات صحيحة بس: النص يروح لصالح الطالب، و
 test("🖍 العلامة ما تطلع برة الصورة", () => {
   const q = { n: 1, max: 10, score: 5, answered: true, sure: true, reason: "", method: 1, steps: [{ text: "أ", points: 5, awarded: 5, note: "", at: { p: 1, x: 1000, y: 0 } }, { text: "ب", points: 5, awarded: 0, note: "غلط", at: { p: 1, x: 0, y: 1000 } }] };
   const [pg] = Q.marksByPage([q], ["a"]);
-  assert.deepEqual(pg.marks.map((m) => [m.kind, m.x, m.y]), [["ok", 950, 35], ["bad", 50, 965]], "✓ على الصح و✗ على الغلط، والعلامة جوة الصورة");
+  assert.deepEqual(pg.marks.map((m) => [m.kind, m.x, m.y]), [["ok", 930, 60], ["bad", 70, 940]], "✓ على الصح و✗ على الغلط، والعلامة جوة الصورة");
   // السؤال الصح كله: ✓ على كل خطوة و«أحسنت» بآخر خطوة (بيها ✓، فما تنعاد)
   const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
   const [g] = Q.marksByPage([good], ["a"]);
-  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.x, m.y]), [["ok", "", 950, 35], ["good", "أحسنت", 50, 965]]);
+  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.x, m.y]), [["ok", "", 930, 60], ["good", "أحسنت", 70, 940]]);
   // الطالب ما كتب الخطوات (مثل س5: 3 من 15): «؟» وملاحظاتها تحت آخر جوابه
   const miss = { n: 5, max: 15, score: 3, answered: true, sure: true, reason: "ناقص", method: 1, at: { p: 1, x: 600, y: 700 },
     steps: [{ text: "أ", points: 5, awarded: 3, note: "", at: undefined }, { text: "ب", points: 10, awarded: 0, note: "ما كملت الحل" }] };
@@ -553,10 +553,18 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   const praise = [{ ...blue, id: 1, s: [[1, 1, 9, 9]] }, { ...blue, id: 2, s: [[2, 2, 8, 8]] }];
   const two = [{ ...good, n: 1, at: { p: 1, x: 500, y: 300 } }, { ...good, n: 2, at: { p: 1, x: 500, y: 700 } }];
   const gm = Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.filter((m) => m.kind === "good");
-  assert.equal(gm.length, 2);
-  assert.notDeepEqual(gm[0].word!.s, gm[1].word!.s, "مدح مختلف ورا بعض");
+  // المدح مرة وحدة بالورقة كلها (طلبه 2026-11-23): السؤال الكامل الثاني ياخذ ✓ بس
+  assert.equal(gm.length, 1);
+  assert.ok(Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.some((m) => m.kind === "ok" && m.y === 700));
   assert.ok(gm.every((m) => typeof m.rot === "number" && m.sc! >= 0.88 && m.sc! <= 1.12));
-  assert.ok(gm[0].x !== 500 || gm[0].y !== 300 || gm[1].x !== 500 || gm[1].y !== 700, "يتزحزح عن مكانه");
+  assert.ok(gm[0].x !== 500 || gm[0].y !== 300, "يتزحزح عن مكانه");
+  // ورقة ثانية تاخذ مدح ثاني
+  const words2 = ["a", "b", "c", "d", "e"].map((r) => JSON.stringify(Q.marksByPage(two, [r], undefined, [], praise)[0].marks.find((m) => m.kind === "good")!.word!.s));
+  assert.ok(new Set(words2).size > 1, "المدح يتبدل من ورقة لورقة");
+  // علامتين بنفس المكان ما يركبن فوك بعض
+  const same = { ...q, steps: [{ text: "أ", points: 5, awarded: 5, note: "", at: { p: 1, x: 500, y: 500 } }, { text: "ب", points: 5, awarded: 5, note: "", at: { p: 1, x: 510, y: 505 } }] };
+  const sm = Q.marksByPage([{ ...same, score: 7 }], ["a"])[0].marks;
+  assert.ok(Math.abs(sm[0].x - sm[1].x) >= 55, "تزحزحت");
   assert.deepEqual(Q.marksByPage(two, ["a"], undefined, [], praise), Q.marksByPage(two, ["a"], undefined, [], praise), "ثابت لنفس الورقة");
   assert.notDeepEqual(Q.marksByPage(two, ["b"], undefined, [], praise)[0].marks.map((m) => [m.x, m.y, m.rot]), gm.length && Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.map((m) => [m.x, m.y, m.rot]), "ورقة ثانية شكل ثاني");
 });
@@ -700,6 +708,12 @@ test("معادلات Word تصير كتابة موبايل", async () => {
   assert.equal(mk(r("R") + r(" \\ {0}")), B`R\{0}`, "ملفه: «R \\ {0}»");
   assert.equal(mk(`<m:nary><m:naryPr><m:chr m:val="∑"/></m:naryPr><m:sub/><m:sup/><m:e>${r("hiMi")}</m:e></m:nary>`), "∑ hiMi", "∑ ما يضيع اللي بعده");
   assert.equal(mk(r("F1(2,0) &amp; F2(-2,0)")), "F1(2,0) & F2(-2,0)");
+});
+
+test("ألفاظ الأستاذ بس: «قصوى» تصير «عظمى» و«دنيا» تصير «صغرى»", () => {
+  assert.equal(Q.bookWords("ما كتبت إنها نقطة قصوى محلية"), "ما كتبت إنها نقطة نهاية عظمى محلية");
+  assert.equal(Q.bookWords("نهاية قصوى ونقطة دنيا"), "نهاية عظمى ونقطة نهاية صغرى");
+  assert.equal(Q.bookWords("نقطة نهاية عظمى محلية"), "نقطة نهاية عظمى محلية");
 });
 
 test("🪄 رتّب كلامي: يرجع الكلام مرتب، وينحسب بالصرفية", async () => {

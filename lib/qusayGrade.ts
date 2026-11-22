@@ -216,6 +216,8 @@ HOW A NOTE MUST READ (the teacher's own rules):
 - Name the exact thing the student should have done, taken from the teacher's steps / model solution for THIS question. Example: the model solution multiplies by the conjugate, so the note is "المفروض تضرب بالمرافق"; the angle is in the fourth quadrant, so "الزاوية بالربع الرابع مو الأول". Never a vague or general phrase such as "المفروض تحسب جبرياً" or "راجع الحل".
 - Iraqi words only: "مو" (never "مش"), "هيچ", "هسه", "المفروض". No Egyptian, Levantine or formal wording.
 - Use the words of the Iraqi math book: "الأس" (never "القوة"), "المقياس", "السعة", "المرافق", "الجذر".
+- The marking scheme may be written in English; never translate its terms yourself. Use ONLY these Iraqi book terms (Qusay's own words): local maximum point = "نقطة نهاية عظمى محلية" (never "قصوى"); local minimum point = "نقطة نهاية صغرى محلية" (never "دنيا"); inflection point = "نقطة انقلاب"; critical point = "نقطة حرجة"; asymptote = "المحاذي" (vertical = "المحاذي العمودي", horizontal = "المحاذي الأفقي"); domain = "أوسع مجال"; intercepts = "نقاط التقاطع مع المحورين"; symmetry = "التناظر" (about the y-axis = "حول محور الصادات", about the origin = "حول نقطة الأصل"); increasing / decreasing = "تزايد / تناقص"; concave up / down = "تقعر / تحدب"; sign line = "خط الاختبار"; table = "الجدول"; graph = "الرسم". If Qusay's topic rules use a word for something, use his word.
+- Any value you write in a note (a point, a root, a result) is copied exactly from the marking scheme / model solution of THIS question and version, in the same form: if the scheme says $(\\pm1,\\frac{3}{2})$, write exactly that, never an unsimplified form like $\\frac{6}{4}$ and never a value of another function.
 - Math symbols always as LaTeX, never spelled out in letters: $\\theta$ (never "ثيتا" or "theta"), $\\cos\\theta$ (never "كوساين بصفة theta"), $2^{\\frac{3}{4}}$.
 - Never say how many points were taken off or given.
 - Be decisive. A step is either right (full points, empty note) or you say exactly what is wrong. Never write vague words such as "تأكد"، "قريب"، "يحتاج تدقيق"، "راجع"، "مو واضح بشكل كافي". If the photo truly does not let you judge, give the student the benefit and set sure=false.
@@ -316,7 +318,13 @@ For every step and question, set "hw" to the number of the one note above that s
 
 const topicText = (t: string) => (t.trim() ? `
 
-QUSAY'S WORDS AND RULES FOR THIS TOPIC (he wrote them in a Word/PDF file or dictated them by voice; if dictated, speech recognition may have changed some words: read them by their mathematical meaning; they are his marking rules for this topic, follow them, and use his phrases when they fit):
+QUSAY'S WORDS AND RULES FOR THIS TOPIC (he wrote them in a Word/PDF file or dictated them by voice; if dictated, speech recognition may have changed some words: read them by their mathematical meaning).
+These rules OVERRIDE your own judgment and every general rule above. Grade the same way on every paper:
+- Before you award ANY step, find every one of his rules below that is about that step (domain, intercepts, symmetry, the sign line, asymptotes, the graph, the points, ...) and apply it literally to what this student wrote or drew.
+- When he says a thing must be written (for example the law of symmetry $f(-x)=f(x)$, not only the words), a student who did not write it does NOT get that step's full points, even if the conclusion is right.
+- When he says to take off a number of points for something, take off exactly that, and write exactly his sentence to the student.
+- When he says something is fine, give the full points for it.
+- Judge a drawing by what is really in the photo: an asymptote counts as drawn only if you can see it (a dotted or thick line, as he says); never say it is missing when you can see it, and never say "أحسنت" for a graph that breaks one of his rules.
 ${t.trim()}` : "");
 
 const SCHEMA = {
@@ -435,6 +443,10 @@ export function ptOf(s: any, pages: number, papers: Map<number, Box> = new Map()
   return { p, x: Math.round(inX(right <= paper.x2 - 35 ? right : b.x1 - 40)), y: Math.round(inY(end ? Math.max(b.y1 + 10, b.y2 - 25) : (b.y1 + b.y2) / 2)) };
 }
 const shortNote = (t: string) => (t.length > 90 ? t.slice(0, 88).replace(/\s+\S*$/, "") + "…" : t);
+/** ألفاظ الأستاذ بس (طلبه 2026-11-23: «أنا ما كاتب قصوى، انت شلون كاتب قصوى؟»): الكلمات اللي مو من كتابه تتبدل */
+export const bookWords = (t: string) => String(t ?? "")
+  .replace(/نقطة\s+(?:قصوى|عليا)/g, "نقطة نهاية عظمى").replace(/(نهاية|قيمة)\s+(?:قصوى|عليا)/g, "$1 عظمى")
+  .replace(/نقطة\s+(?:دنيا|الدنيا)/g, "نقطة نهاية صغرى").replace(/(نهاية|قيمة)\s+(?:دنيا|الدنيا)/g, "$1 صغرى");
 /** علامات الورقة اللي تنرسم لكل صورة: ✓ للخطوة الصح، ✗ للغلط، ونص الدرجة للناقصة، ودرجة السؤال بدائرة.
  *  only: سؤال واحد. extra: صور السؤال حتى لو ماكو عليها علامة (تطلع بدون رسم) */
 export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, extra: string[] = [], ink: InkItem[] = []): { ref: string; marks: PaperMark[] }[] {
@@ -452,12 +464,22 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   const pick = (k: InkKind) => { const l = pool(k); if (!l.length) return undefined; const i = turn.get(k) ?? base % l.length; turn.set(k, i + 1); return shape(l[i % l.length]); };
   const handOf = (id?: number) => { const x = id ? ink.find((i) => i.id === id && i.kind === "note") : undefined; return x ? shape(x) : undefined; };
   let count = 0;
+  const fullQ = (q: QgQuestion) => q.answered && (q.steps.length ? q.steps.every((s) => s.awarded >= s.points && s.points > 0) : q.score >= q.max);
+  const praiseQ = qs.find(fullQ)?.n;
   const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => {
     if (!pt) return;
     const n = ++count * 3;
     const good = m.kind === "good";
     // «ممتاز» يتزحزح لحد 35 يمين ويسار و25 فوك وجوة، والباقي يبقى بمكان خطوته
-    const x = inside(pt.x + (good ? Math.round((rnd(n) - 0.5) * 70) : 0), 50), y = inside(pt.y + (good ? Math.round((rnd(n + 1) - 0.5) * 50) : 0), 35);
+    let x = inside(pt.x + (good ? Math.round((rnd(n) - 0.5) * 70) : 0), 70), y = inside(pt.y + (good ? Math.round((rnd(n + 1) - 0.5) * 50) : 0), 60);
+    // علامتين فوك بعض (طلبه 2026-11-23): الجديدة تتزحزح لليسار لو لليمين لحد ما يصير بيناتهم مكان
+    const near = by.get(pt.p) ?? [];
+    const clash = (v: number) => near.some((o) => Math.abs(o.x - v) < 55 && Math.abs(o.y - y) < 40);
+    for (const dir of x > 500 ? [-1, 1] : [1, -1]) {
+      let v = x;
+      for (let k = 0; k < 6 && clash(v); k++) v = inside(v + dir * 30, 70);
+      if (!clash(v)) { x = v; break; }
+    }
     const sym = pick(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick");
     const word = good ? pick("praise") : undefined;
     const rot = Math.round((rnd(n + 2) - 0.5) * (good ? 18 : 12)), sc = Math.round((0.88 + rnd(n + 3) * 0.24) * 100) / 100;
@@ -472,6 +494,8 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
     const allRight = q.steps.length ? q.steps.every(full) : q.score >= q.max;
     const placed = q.steps.filter((s) => s.at);
     const praiseAt = allRight ? q.at ?? placed.at(-1)?.at : undefined;
+    // المدح مرة وحدة بالورقة كلها (طلبه 2026-11-23)، والسؤال الكامل الثاني ياخذ ✓ بس
+    const praise = allRight && q.n === praiseQ;
     let drawn = 0;
     const unplaced: QgStep[] = [];
     for (const s of q.steps) {
@@ -484,7 +508,7 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       if (s.at) { add(s.at, { kind: "bad", text: "", ...(s.note ? { note: shortNote(s.note) } : {}), ...(hand ? { hand } : {}) }); drawn++; }
       else if (s.note) unplaced.push(s);
     }
-    if (allRight) { add(praiseAt, { kind: "good", text: "أحسنت" }); continue; }
+    if (allRight) { add(praiseAt, praise ? { kind: "good", text: "أحسنت" } : { kind: "ok", text: "" }); continue; }
     // الخطوات اللي ما كتبها الطالب (ما إلها مكان): «؟» تحت آخر جوابه (مو ✗ على سطر صح، طلبه 2026-11-22)، ويمها شنو ناقص
     if (unplaced.length || !drawn) {
       const note = unplaced.length ? unplaced.map((s) => s.note).join("، ") : q.reason;
@@ -549,7 +573,7 @@ export async function qusayJudgeObjection(it: Row, n: number, text: string, oldM
   try { j = JSON.parse(msg.content.map((b) => (b.type === "text" ? b.text : "")).join("")); } catch { throw new Error("جواب الذكاء مو مفهوم"); }
   const mark = Math.min(q.max, Math.max(0, whole(Number(j.mark) || 0)));
   const accept = !!j.accept && mark > oldMark;
-  const reason = String(j.reason ?? "").slice(0, 500);
+  const reason = bookWords(String(j.reason ?? "")).slice(0, 500);
   // الطالب يشوف الدرجة الجديدة بتفصيل ورقته، ويا سبب القبول
   if (accept) {
     const res = await qgResultOf(it.id);
@@ -633,7 +657,7 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
       const s: any = byI.get(k + 1);
       const at = ptOf(s, pages, papers);
       const hw = Math.round(Number(s?.hw) || 0);
-      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
+      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0))), note: bookWords(String(s?.note ?? "")).slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
     }) : [];
     // الذكاء رجّع درجة السؤال بس بدون خطوات (طالب تجربة 9: «ممتاز عاشت الأيادي» وصفر): الكامل ينحسب كامل، والباقي يتعاد
     if (plan && answered && !plan.some((_, k) => byI.has(k + 1))) {
@@ -644,7 +668,7 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
     score = answered ? Math.min(m.max, Math.max(0, whole(score))) : 0;
     const at = ptOf(a, pages, papers, true);
     const hw = Math.round(Number(a.hw) || 0);
-    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: String(a.reason ?? "").slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
+    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: bookWords(String(a.reason ?? "")).slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
   });
   // «أجب عن K»: السؤال اللي ما جاوبه ما يحتاج تأكيد
   if (answerOnly) for (const q of qs) if (!q.answered) q.sure = true;

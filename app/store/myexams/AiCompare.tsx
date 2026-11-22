@@ -37,7 +37,7 @@ export function inkPath(p: number[]) {
   return d + `L${p[p.length - 2]} ${p[p.length - 1]}`;
 }
 /** كتابة الأستاذ بالأحمر، مقصوصة على حجمها (بدون فراغ المربع) وخلفيتها شفافة */
-export function InkSvg({ sh, k = INK_PX, color = "currentColor", width }: { sh: InkShape; k?: number; color?: string; width?: number }) {
+export function InkSvg({ sh, k = INK_PX, color = "currentColor", width, cap }: { sh: InkShape; k?: number; color?: string; width?: number; cap?: number }) {
   // لونه وسمكه اللي اختارهم الأستاذ وهو يكتب. الخط القديم بدونهم: لون العلامة وسمك وسط
   const stroke = INK_COLORS.some((x) => x.c === sh.c) ? sh.c! : color, sw = width ?? INK_WIDTH[sh.wd ?? 2] ?? 2.6;
   const all = sh.s.flat();
@@ -45,7 +45,9 @@ export function InkSvg({ sh, k = INK_PX, color = "currentColor", width }: { sh: 
   if (!xs.length) return null;
   const pad = 8, x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad, w = Math.max(...xs) - x0 + pad, h = Math.max(...ys) - y0 + pad;
   return (
-    <svg className="mkink" viewBox={`${x0} ${y0} ${w} ${h}`} width={w * k} height={h * k} aria-hidden>
+    // cap: أكبر عرض كنسبة من عرض الورقة (cqw)، حتى الصح ما يطلع أكبر من سطر الطالب بالشاشة الصغيرة (طلبه 2026-11-23)
+    <svg className="mkink" viewBox={`${x0} ${y0} ${w} ${h}`} width={w * k} height={h * k} aria-hidden
+      style={cap ? { width: `min(${w * k}px, ${cap}cqw)`, height: `min(${h * k}px, ${(cap * h / w).toFixed(2)}cqw)` } : undefined}>
       {sh.s.map((p, i) => <path key={i} d={inkPath(p)} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
     </svg>
   );
@@ -60,12 +62,13 @@ export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) 
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : (
             // خط إيده يميل ويكبر ويصغر شوية بكل علامة، حتى ما تبين نسخة وحدة
             <span className="mkjit" style={m.rot || m.sc ? { transform: `rotate(${m.rot ?? 0}deg) scale(${m.sc ?? 1})` } : undefined}>
-              {m.sym ? <InkSvg sh={m.sym} /> : m.kind === "bad" ? <Cross /> : m.kind === "miss" ? <b className="mkask">؟</b> : <Tick />}
-              {m.word ? <InkSvg sh={m.word} /> : m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
+              {m.sym ? <InkSvg sh={m.sym} cap={9} /> : m.kind === "bad" ? <Cross /> : m.kind === "miss" ? <b className="mkask">؟</b> : <Tick />}
+              {m.word ? <InkSvg sh={m.word} cap={30} /> : m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
             </span>
           )}
-          {m.hand ? <span className={"mknote mkhand" + (m.x > 500 ? " mkleft" : "")}><InkSvg sh={m.hand} /></span>
-            : m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "")}><Inline text={m.note} /></span>}
+          {/* الملاحظة بآخر الصفحة تنكتب فوك العلامة، لا تنزل برة الورقة وتنخفي (طلبه 2026-11-23) */}
+          {m.hand ? <span className={"mknote mkhand" + (m.x > 500 ? " mkleft" : "") + (m.y > 740 ? " mkup" : "")}><InkSvg sh={m.hand} cap={45} /></span>
+            : m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "") + (m.y > 740 ? " mkup" : "")}><Inline text={m.note} /></span>}
         </div>
       ))}
     </div>
