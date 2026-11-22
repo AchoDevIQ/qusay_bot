@@ -219,6 +219,13 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
       {openWords && <>
         <div className="exhint">العبارات والكلمات اللي تستعملها بهذا الموضوع بس، كل وحدة بسطر. تگدر تكتبها لو تحچيها (🎤 فويس). يستعملها ويا «✍️ طريقتك بالكتابة» العامة بالعلامات الحمرة.</div>
         <VoiceText value={words} onChange={setWords} />
+        <div className="exhint">المعادلة اكتبها مثل الموبايل: x² لو x^2، والكسر 3/x²، والجذر √(x+1)، و≠ و±. وتحت تطلعلك مرتبة مثل الكتاب حتى تتأكد.</div>
+        {/[A-Za-z0-9²³√$]/.test(words) && (
+          <div className="tidyview">
+            <div className="exhint">👁 هيچ ينقرا كلامك (المعادلات مرتبة):</div>
+            {words.split(/\n/).filter((l) => l.trim()).map((l, i) => <div key={i} className="tidyline"><Inline text={l} /></div>)}
+          </div>
+        )}
         <button type="button" className="exbtn" disabled={busy || !words.trim()} onClick={() => void call({ action: "tidy", text: words }).then((d) => { if (d?.tidy) setWords(d.tidy); })}>🪄 رتّب كلامي (الفويس ينكتب بغلطات)</button>
         <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
       </>}

@@ -548,6 +548,17 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   assert.equal(odd.inkOf.items.at(-1).c, "#d40000"); assert.equal(odd.inkOf.items.at(-1).wd, 2);
   const words = Q.marksByPage([good], ["a"], undefined, [], [blue])[0].marks.find((m) => m.kind === "good")!.word!;
   assert.equal(words.c, "#1d4ed8"); assert.equal(words.wd, 3);
+  // «ممتاز» مو نسخة ملزوگة (طلبه 2026-11-22): سؤالين كاملين بنفس الورقة ياخذون مدح مختلف، يتزحزح عن مكانه ويميل،
+  // ونفس الورقة تطلع نفس الشكل كل ما تنفتح
+  const praise = [{ ...blue, id: 1, s: [[1, 1, 9, 9]] }, { ...blue, id: 2, s: [[2, 2, 8, 8]] }];
+  const two = [{ ...good, n: 1, at: { p: 1, x: 500, y: 300 } }, { ...good, n: 2, at: { p: 1, x: 500, y: 700 } }];
+  const gm = Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.filter((m) => m.kind === "good");
+  assert.equal(gm.length, 2);
+  assert.notDeepEqual(gm[0].word!.s, gm[1].word!.s, "مدح مختلف ورا بعض");
+  assert.ok(gm.every((m) => typeof m.rot === "number" && m.sc! >= 0.88 && m.sc! <= 1.12));
+  assert.ok(gm[0].x !== 500 || gm[0].y !== 300 || gm[1].x !== 500 || gm[1].y !== 700, "يتزحزح عن مكانه");
+  assert.deepEqual(Q.marksByPage(two, ["a"], undefined, [], praise), Q.marksByPage(two, ["a"], undefined, [], praise), "ثابت لنفس الورقة");
+  assert.notDeepEqual(Q.marksByPage(two, ["b"], undefined, [], praise)[0].marks.map((m) => [m.x, m.y, m.rot]), gm.length && Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.map((m) => [m.x, m.y, m.rot]), "ورقة ثانية شكل ثاني");
 });
 
 test("📈 سؤال بيه خطوة رسم: PDF حل الأستاذ يروح ويا الخطوات حتى يقارن الرسم، وبدون رسم ما يروح", async () => {

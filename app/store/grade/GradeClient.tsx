@@ -21,8 +21,8 @@ type CheckG = { id: number; name: string; count: number; checked: number; last: 
 type CheckT = { exam: number; title: string; chapter: string; count: number; checked: number; avg: number | null; others: number | null };
 type Check = { graders: CheckG[]; grader: number | null; name: string; topics: CheckT[] | null };
 type Data = { canEdit?: boolean; canCheck?: boolean; check?: Check; found?: FoundPaper[]; only?: Only; groups: Group[]; unsent?: Row[]; history?: History; objLog?: ObjLog; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean; quota?: { target: number; done: number } | null; quotaStop?: number[]; contractDue?: boolean; contract?: ContractData };
-type Signed = { v: number; at: string; name: string; text: string; sig: { w: number; h: number; s: number[][] } };
-type ContractData = { text: string; v: number; updated: string; mine: string; signed: { v: number; at: string; current: boolean } | null; graders?: { id: number; name: string; signed: { v: number; at: string; current: boolean } | null }[]; copy?: Signed | null };
+type Signed = { v: number; at: string; name: string; text: string; sig: { w: number; h: number; s: number[][] }; own?: { w: number; h: number; s: number[][] } | null };
+type ContractData = { own?: Signed["sig"] | null; text: string; v: number; updated: string; mine: string; signed: { v: number; at: string; current: boolean } | null; graders?: { id: number; name: string; signed: { v: number; at: string; current: boolean } | null }[]; copy?: Signed | null; copyId?: number; preview?: { text: string; id: number; name: string } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -650,19 +650,34 @@ const SigSvg = ({ sig }: { sig: Signed["sig"] }) => (
     {sig.s.map((p, i) => <polyline key={i} points={p.reduce((a, v, k) => a + (k % 2 ? `,${v} ` : `${v}`), "")} fill="none" stroke="#0b2a6b" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />)}
   </svg>
 );
-/** نسخة العقد الموقعة: النص اللي وقع عليه، واسمه وتوقيعه والتاريخ. تنطبع */
-function SignedCopy({ c }: { c: Signed }) {
+/** ورقة العقد الرسمية (طلب الأستاذ 2026-11-22): شعاره واسمه فوك، العنوان، نصه هو (اسم المصحح منملي وحده)،
+ *  وجوة مربعين: الطرف الأول قصي العميري، والطرف الثاني المصحح باسمه وتوقيعه. وشعاره خفيف ورا الكلام */
+function ContractPaper({ text, no, date, name, sig, own, children }: { text: string; no: string; date: string; name?: string; sig?: Signed["sig"]; own?: Signed["sig"] | null; children?: React.ReactNode }) {
   return (
-    <div className="card contractpaper">
-      <h2>📜 عقد التصحيح</h2>
-      <div className="contracttext">{c.text}</div>
-      <div className="contractsign">
-        <div>اسم المصحح: <b>{c.name}</b></div>
-        <div>التاريخ: <b dir="ltr">{c.at.slice(0, 16)}</b></div>
-        <SigSvg sig={c.sig} />
+    <div className="cpaper contractpaper">
+      <img className="cpwater" src="/logo.png" alt="" />
+      <div className="cphead">
+        <img src="/logo.png" alt="" />
+        <div className="cpwho"><b>قصي العميري</b><span>مدرس الرياضيات · السادس الإعدادي</span></div>
+        <div className="cpmeta"><span>رقم العقد: <b dir="ltr">{no}</b></span><span>التاريخ: <b dir="ltr">{date}</b></span></div>
       </div>
-      <button type="button" className="exbtn noprint" onClick={() => window.print()}>🖨 اطبعه</button>
+      <div className="cptitle">عقد تصحيح أوراق الامتحانات</div>
+      <div className="cptext">{text}</div>
+      <div className="cpsigns">
+        <div className="cpbox"><b>الطرف الأول</b><span>قصي العميري</span>{own ? <SigSvg sig={own} /> : <div className="cpline" />}<small>التوقيع</small></div>
+        <div className="cpbox"><b>الطرف الثاني (المصحح)</b><span>{name || "................................"}</span>
+          {sig ? <SigSvg sig={sig} /> : <div className="cpline" />}<small>التوقيع</small></div>
+      </div>
+      {children}
     </div>
+  );
+}
+/** نسخة العقد الموقعة: النص اللي وقع عليه، واسمه وتوقيعه والتاريخ. تنطبع */
+function SignedCopy({ c, id }: { c: Signed; id?: number }) {
+  return (
+    <ContractPaper text={c.text} no={`${c.v}-${id ?? ""}`} date={c.at.slice(0, 10)} name={c.name} sig={c.sig} own={c.own}>
+      <button type="button" className="exbtn noprint" onClick={() => window.print()}>🖨 اطبعه</button>
+    </ContractPaper>
   );
 }
 /** 📜 العقد: صاحب البوت يكتب الصيغة ويشوف منو وقع، والمصحح يقراه ويوقع */
@@ -670,7 +685,20 @@ function ContractTab({ c, owner, busy, act }: { c: ContractData; owner: boolean;
   const [text, setText] = useState(c.text);
   const [name, setName] = useState("");
   const [sig, setSig] = useState<Signed["sig"] | null>(null);
-  if (c.copy) return <><SignedCopy c={c.copy} /><button type="button" className="exbtn" onClick={() => void act({ action: "contract" })}>↩️ رجوع</button></>;
+  const [who, setWho] = useState(0);
+  const [ownSig, setOwnSig] = useState<Signed["sig"] | null>(null);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  if (c.copy) return <><SignedCopy c={c.copy} id={c.copyId} /><button type="button" className="exbtn" onClick={() => void act({ action: "contract" })}>↩️ رجوع</button></>;
+  if (c.preview) return (
+    <>
+      <div className="exhint">👁 هيچ يطلع العقد{c.preview.name ? ` لـ ${c.preview.name}` : " (مثال باسم «فلان الفلاني»)"}. هذا بس عرض، ما انحفظ شي.</div>
+      <ContractPaper text={c.preview.text} no={`${c.v || 1}-${c.preview.id || ""}`} date={today} name={c.preview.name} own={c.own}>
+        <button type="button" className="exbtn noprint" onClick={() => window.print()}>🖨 اطبعه</button>
+      </ContractPaper>
+      <button type="button" className="exbtn" onClick={() => void act({ action: "contract" })}>↩️ رجوع للكتابة</button>
+    </>
+  );
   return (
     <>
       {owner && (
@@ -678,8 +706,21 @@ function ContractTab({ c, owner, busy, act }: { c: ContractData; owner: boolean;
           <h2>✍️ صيغة العقد</h2>
           <div className="form">
             <div className="exhint">اكتب العقد بكلامك. تگدر تحط بداخله: <b>{"{الاسم}"}</b> (اسم المصحح)، <b>{"{الغرامة}"}</b> (غرامة اليوم اللي تحددها بحسابه)، <b>{"{الحصة}"}</b> (قدرته)، <b>{"{التاريخ}"}</b>، وتنملى وحدها لكل مصحح. إذا غيرت الصيغة، كل المصححين يوقعون من جديد.</div>
-            <textarea rows={14} value={text} onChange={(e) => setText(e.target.value)} placeholder="أنا {الاسم} أتعهد أن أصحح يومياً حصتي من الأوراق..." />
+            <div className="exhint">مثلاً: «أنا الموقع أدناه {"{الاسم}"} أتعهد...»، ويطلع اسم كل مصحح بمكانه. الشعار والعنوان ومربعات التوقيع تطلع وحدها بالورقة.</div>
+            <textarea rows={14} value={text} onChange={(e) => setText(e.target.value)} placeholder="أنا الموقع أدناه {الاسم} أتعهد أن أصحح يومياً حصتي من الأوراق..." />
+            <label>👁 شوف شكله باسم:</label>
+            <select value={who} onChange={(e) => setWho(Number(e.target.value))}>
+              <option value={0}>فلان الفلاني (مثال)</option>
+              {(c.graders ?? []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <button type="button" className="exbtn" disabled={busy || text.trim().length < 20} onClick={() => void act({ action: "contractPreview", text, grader: who })}>👁 شوف شكل العقد</button>
             <button type="button" className="btn" disabled={busy || text.trim() === c.text} onClick={() => void act({ action: "contractSave", text })}>💾 احفظ العقد</button>
+            <button type="button" className="exbtn" onClick={() => setOwnOpen(!ownOpen)}>✍️ توقيعك إنت (الطرف الأول){c.own ? " ✅" : ""}</button>
+            {ownOpen && <>
+              <div className="exhint">توقع مرة وحدة، ويطلع بمربع «الطرف الأول» بكل العقود. إذا وقعت من جديد، يتبدل بالعقود الجاية.</div>
+              <SignPad onChange={setOwnSig} />
+              <button type="button" className="btn" disabled={busy || !ownSig} onClick={() => void act({ action: "contractOwnSign", sig: ownSig })}>💾 احفظ توقيعي</button>
+            </>}
             {c.v > 0 && <div className="exhint">النسخة {c.v} · آخر تعديل {c.updated.slice(0, 16)}</div>}
           </div>
         </div>
@@ -698,9 +739,7 @@ function ContractTab({ c, owner, busy, act }: { c: ContractData; owner: boolean;
         </div>
       )}
       {!owner && (c.v === 0 ? <div className="empty">بعده ما انكتب عقد.</div> : (
-        <div className="card contractpaper">
-          <h2>📜 عقد التصحيح</h2>
-          <div className="contracttext">{c.mine}</div>
+        <ContractPaper text={c.mine} no={`${c.v}-`} date={today} name={c.signed?.current ? undefined : name.trim()} own={c.own}>
           {c.signed?.current ? (
             <div className="form">
               <div className="fdok">✅ وقعته بتاريخ {c.signed.at.slice(0, 16)}</div>
@@ -716,7 +755,7 @@ function ContractTab({ c, owner, busy, act }: { c: ContractData; owner: boolean;
               <button type="button" className="btn" disabled={busy || name.trim().split(/\s+/).length < 2 || !sig} onClick={() => void act({ action: "contractSign", name, sig })}>✍️ أوقع على العقد</button>
             </div>
           )}
-        </div>
+        </ContractPaper>
       ))}
     </>
   );

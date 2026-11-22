@@ -109,6 +109,13 @@ test("📜 العقد: صاحب البوت يكتب الصيغة، المصحح 
   const copy = (await g(1, "contractCopy", { grader: 32 })).contract.copy;
   assert.equal(copy.name, "زيد كريم علي");
   assert.match(copy.text, /زيد كريم/);
+  // 👁 شكل العقد قبل الحفظ باسم مصحح أو «فلان الفلاني»، وتوقيع الأستاذ يطلع بكل العقود
+  await assert.rejects(g(32, "contractPreview", { text: "أنا الموقع أدناه {الاسم} أتعهد بالتصحيح" }), (e: any) => e.status === 403);
+  assert.match((await g(1, "contractPreview", { text: "أنا الموقع أدناه {الاسم} أتعهد بالتصحيح", grader: 33 })).contract.preview.text, /أنا الموقع أدناه سارة أحمد/);
+  assert.match((await g(1, "contractPreview", { text: "أنا الموقع أدناه {الاسم} أتعهد بالتصحيح" })).contract.preview.text, /فلان الفلاني/);
+  await assert.rejects(g(32, "contractOwnSign", { sig }), (e: any) => e.status === 403);
+  await g(1, "contractOwnSign", { sig });
+  assert.equal((await g(32, "contract")).contract.own.s.length, 1);
   // صيغة جديدة: يوقع من جديد
   await g(1, "contractSave", { text: "أنا {الاسم} أتعهد بتصحيح حصتي اليومية كاملة، وإلا أدفع {الغرامة} عن كل يوم." });
   assert.equal((await g(32, "list")).contractDue, true);

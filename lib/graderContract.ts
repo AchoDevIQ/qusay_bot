@@ -7,8 +7,11 @@ import { stamp } from "./util.ts";
 import { need } from "./webApi.ts";
 
 export type Contract = { text: string; v: number; updated: string };
-export type Signed = { v: number; at: string; name: string; text: string; sig: { w: number; h: number; s: number[][] } };
+export type Sig = { w: number; h: number; s: number[][] };
+/** own: توقيع الأستاذ (الطرف الأول) وقت ما وقع المصحح */
+export type Signed = { v: number; at: string; name: string; text: string; sig: Sig; own?: Sig | null };
 const KEY = "grader_contract";
+const OWN_KEY = "grader_contract_owner_sig";
 const signKey = (uid: number) => `grader_contract_sign_${uid}`;
 const TEXT_MAX = 20000;
 
@@ -26,12 +29,12 @@ export async function saveContract(text: unknown) {
   await kvSet(KEY, JSON.stringify(c));
   return c;
 }
-/** الصيغة بأرقام هذا المصحح: اسمه وغرامته وقدرته وتاريخ اليوم */
+/** الصيغة بأرقام هذا المصحح: اسمه وغرامته وقدرته وتاريخ اليوم. uid 0: مثال («فلان الفلاني») حتى الأستاذ يشوف شكله */
 export async function filledFor(uid: number, text?: string) {
-  const r = await one("grader_pay", { user_id: uid });
+  const r = uid > 0 ? await one("grader_pay", { user_id: uid }) : null;
   const fine = Number(r?.fine ?? 0), weight = Number(r?.weight) > 0 ? Number(r!.weight) : 1;
   return String(text ?? (await contract()).text)
-    .replaceAll("{الاسم}", await staffName(uid))
+    .replaceAll("{الاسم}", uid > 0 ? await staffName(uid) : "فلان الفلاني")
     .replaceAll("{الغرامة}", fine ? `${fine.toLocaleString("en-US")} دينار` : "(ما محددة)")
     .replaceAll("{الحصة}", weight === 1 ? "مثل باقي المصححين" : `${weight} مرة من حصة المصحح العادي`)
     .replaceAll("{التاريخ}", stamp().slice(0, 10));
@@ -46,12 +49,8 @@ export async function signedOf(uid: number): Promise<{ v: number; at: string; cu
 export async function signedCopy(uid: number): Promise<Signed | null> {
   try { return JSON.parse((await kvGet(signKey(uid))) ?? "null"); } catch { return null; }
 }
-/** المصحح يوقع: يكتب اسمه ويرسم توقيعه. ينحفظ نص العقد نفسه اللي وقع عليه */
-export async function sign(uid: number, name: unknown, sig: any) {
-  const c = await contract();
-  need(c.v > 0, "بعده ما انكتب عقد");
-  const n = String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
-  need(n.split(" ").length >= 2, "اكتب اسمك الكامل");
+/** التوقيع المرسوم: يتنظف ويتأكد إنه مو فارغ */
+function cleanSig(sig: any): Sig {
   const w = Math.round(Number(sig?.w)), h = Math.round(Number(sig?.h));
   need(w >= 100 && w <= 2000 && h >= 50 && h <= 1000, "ارسم توقيعك");
   const s: number[][] = [];
@@ -62,7 +61,20 @@ export async function sign(uid: number, name: unknown, sig: any) {
     if (a.length >= 2) { s.push(a); pts += a.length; }
   }
   need(s.length && pts >= 10, "ارسم توقيعك");
-  const row: Signed = { v: c.v, at: stamp(), name: n, text: await filledFor(uid, c.text), sig: { w, h, s } };
+  return { w, h, s };
+}
+/** توقيع الأستاذ (الطرف الأول): يوقع مرة وحدة، ويطلع بكل العقود */
+export async function ownerSig(): Promise<Sig | null> {
+  try { const j = JSON.parse((await kvGet(OWN_KEY)) ?? "null"); return j?.s?.length ? j : null; } catch { return null; }
+}
+export const setOwnerSig = async (sig: any) => kvSet(OWN_KEY, JSON.stringify(cleanSig(sig)));
+/** المصحح يوقع: يكتب اسمه ويرسم توقيعه. ينحفظ نص العقد نفسه اللي وقع عليه */
+export async function sign(uid: number, name: unknown, sig: any) {
+  const c = await contract();
+  need(c.v > 0, "بعده ما انكتب عقد");
+  const n = String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+  need(n.split(" ").length >= 2, "اكتب اسمك الكامل");
+  const row: Signed = { v: c.v, at: stamp(), name: n, text: await filledFor(uid, c.text), sig: cleanSig(sig), own: await ownerSig() };
   await kvSet(signKey(uid), JSON.stringify(row));
   return row;
 }

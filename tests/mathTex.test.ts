@@ -68,5 +68,8 @@ test("شكل الكتاب: الأس كله مرفوع، الكسر اللي بي
   assert.equal(toTex("(2kpi)/3"), String.raw`\frac{2k\pi }{3}`);
   assert.equal(toTex("theta lies in the fourth quadrant"), String.raw`\text{ theta lies } in \text{ the fourth quadrant }`);
   assert.equal(toTex("cos(theta) = x/r"), String.raw`\cos (\theta ) = \frac{x}{r}`);
+  // «رتّب كلامي» يكتب مثل الموبايل: x² و3/x² تنكتب مثل الكتاب
+  assert.equal(toTex("y = 3/x²"), String.raw`y = \frac{3}{x^2}`);
+  assert.equal(toTex("x⁻¹ + x¹²"), "x^{-1} + x^{12}");
   for (const l of ["((cosθ+isinθ)^2)^5 / ((cosθ+isinθ)^3)^3", "C = 5, F2(-5,0) & F1(+5,0)", "domain R\{1}", "x ➔ 2", "a * b"]) assert.ok(renderTex(l), l);
 });

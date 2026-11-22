@@ -628,21 +628,30 @@ export async function gradeAction(body: Row) {
       await deleteTests();
       notice = "🗑 انمسحت أوراق التجربة";
     }
-  } else if (a === "contract" || a === "contractSign" || a === "contractSave" || a === "contractCopy" || a === "quotaStop") {
+  } else if (a === "contract" || a === "contractSign" || a === "contractSave" || a === "contractCopy" || a === "contractPreview" || a === "contractOwnSign" || a === "quotaStop") {
     // 📜 العقد، و🛑 «يوقف من يوصل حصته» لكل امتحان
     const C = await import("./graderContract.ts");
     const owner = await isAdmin(uid);
     if (a === "contractSave") { need(owner, "صيغة العقد لصاحب البوت بس", 403); await C.saveContract(body.text); notice = "✅ انحفظ العقد. المصححين يوصلهم ويوقعون عليه"; }
     if (a === "contractSign") { await C.sign(uid, body.name, body.sig); notice = "✅ وقعت العقد. نسخته محفوظة"; }
+    if (a === "contractOwnSign") { need(owner, "لصاحب البوت بس", 403); await C.setOwnerSig(body.sig); notice = "✅ انحفظ توقيعك. يطلع بمربع الطرف الأول بكل العقود"; }
     if (a === "quotaStop") { need(owner, "لصاحب البوت بس", 403); await setQuotaStop(Number(body.exam), !!body.on); notice = body.on ? "🛑 هذا الامتحان: المصحح يوقف من يوصل حصته" : "✅ هذا الامتحان: المصحح يكمل بعد حصته ويعوض البطيئين"; }
     const c = await C.contract();
     const copyOf = a === "contractCopy" ? (owner ? Number(body.grader) : uid) : 0;
+    // 👁 شكل العقد قبل الحفظ: الصيغة اللي يكتبها هسه، باسم مصحح يختاره (لو «فلان الفلاني» مثال)
+    let preview: { text: string; id: number; name: string } | undefined;
+    if (a === "contractPreview") {
+      need(owner, "لصاحب البوت بس", 403);
+      const g = Math.max(0, Math.round(Number(body.grader) || 0));
+      preview = { text: await C.filledFor(g, String(body.text ?? c.text)), id: g, name: g ? await staffName(g) : "" };
+    }
     return {
       ...await listData(uid), paper: null, notice,
       contract: {
-        text: c.text, v: c.v, updated: c.updated, mine: await C.filledFor(uid), signed: await C.signedOf(uid),
+        text: c.text, v: c.v, updated: c.updated, mine: await C.filledFor(uid), signed: await C.signedOf(uid), own: await C.ownerSig(),
         ...(owner ? { graders: await Promise.all((await (await import("./graderPay.ts")).humanGraders()).map(async (id) => ({ id, name: await staffName(id), signed: await C.signedOf(id) }))) } : {}),
-        ...(copyOf ? { copy: await C.signedCopy(copyOf) } : {}),
+        ...(copyOf ? { copy: await C.signedCopy(copyOf), copyId: copyOf } : {}),
+        ...(preview ? { preview } : {}),
       },
     };
   } else if (a === "pay") {

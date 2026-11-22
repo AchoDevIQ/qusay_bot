@@ -48,8 +48,11 @@ export const stripDelimiters = (s: string) => s.replace(/\$+|\\\(|\\\)|\\\[|\\\]
 /** شكل الكتاب العراقي (طلب الأستاذ 2026-11-22): الأس كله مرفوع (x^10 مو x¹0، و^-5)، و«isinθ» = i sinθ،
  *  والدوال sin وcos مستقيمة مثل الكتاب، وtheta وomega رموز */
 const FUNCS = /(?<![\\A-Za-z])(sin|cos|tan|sec|csc|cot|ln|log)(?![A-Za-z])/g;
+/** «x²» و«x⁻¹» المكتوبة بالآيباد: أس عادي (x^2) حتى ينكتب فوك مثل الكتاب */
+const SUP: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁻": "-", "ⁿ": "n" };
+const supToPow = (s: string) => s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻ⁿ]+/g, (m) => "^" + [...m].map((c) => SUP[c]).join(""));
 export function toTex(p: string) {
-  let t = braceArgs(stripDelimiters(p).replace(/(?<![A-Za-z\\])i(sin|cos|tan)(?![A-Za-z])/g, "i $1")
+  let t = braceArgs(supToPow(stripDelimiters(p)).replace(/(?<![A-Za-z\\])i(sin|cos|tan)(?![A-Za-z])/g, "i $1")
     // «F2(-5,0) & F1(5,0)» و«R\{0}» و«➔»: رموز تنكتب مثل ما هي
     .replace(/(?<!\\)&/g, "\\&").replace(/\\\{([^{}\\]*)\}/g, "\\{$1\\}").replace(/➔/g, "→")).replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
     .replace(/π/g, "pi").replace(/=>|⇒|⟹/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ").replace(/−/g, "-").replace(/×/g, "\\times ");

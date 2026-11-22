@@ -46,7 +46,8 @@ export type InkKind = "tick" | "cross" | "praise" | "note" | "ask";
 export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
 /** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة.
  *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
+/** rot وsc: ميلان (درجات) وحجم خط الإيد، يتغيرون شوية بكل علامة حتى ما تبين نسخة وحدة (طلب الأستاذ 2026-11-22) */
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
@@ -201,6 +202,7 @@ Grade the student's answer question by question:
 - A step is earned by its CONTENT, in any order or equivalent form. Example: the symmetry test may check the origin first and the y-axis second, or write f(-x) on another line; if the test and its conclusion are there, the step is full.
 - A table of values may use ANY x values: if the y values are right for the x values the student chose, and there are enough points, the table step is full. Never require the teacher's own x values.
 - A step's conclusion must be right: e.g. writing "symmetric about the origin" for a function that is not, loses the symmetry step even if f(-x) was computed.
+- A result that comes from the line before in ONE direct, routine operation needs no written working. Example: from $f'(x)=3x^{2}$ the student writes $f''(x)=6x$ straight away: that is full. The lines in the marking scheme are the teacher's own working; the student does not have to copy each of them. Never take points, and never write a note, asking the student to "write the steps" (خطوات) of something they did correctly. Take points only for a needed result that is missing or wrong.
 - Never award more than a step's points, never more than the question's maximum.
 - If a question has no answer anywhere in the student's pages, set answered=false and score 0.
 
@@ -439,17 +441,27 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   const by = new Map<number, PaperMark[]>();
   // العلامة كلها جوة الصورة، ما تطلع برة الورقة ولا على حافتها (طلب الأستاذ 2026-11-21)
   const inside = (v: number, lo: number) => Math.min(1000 - lo, Math.max(lo, v));
-  // خط إيد الأستاذ: كل علامة تاخذ وحدة من اللي كاتبها (نفس العلامة نفس الشكل كل مرة، والعلامات تختلف عن بعض)
+  // خط إيد الأستاذ: كل علامة تاخذ وحدة من اللي كاتبها، وتتبدل بالدور (المدح بالورقة الوحدة ما ينعاد نفسه ورا بعض).
+  // وكل علامة تميل وتكبر وتصغر شوية، و«ممتاز» يتزحزح عن مكانه، حتى ما تبين نسخة وحدة ملزوگة (طلبه 2026-11-22).
+  // الرقم ثابت لنفس الورقة: كل ما تنفتح تطلع نفس الشكل
   const shape = (x: InkItem): InkShape => ({ w: x.w, h: x.h, s: x.s, ...(x.c ? { c: x.c } : {}), ...(x.wd ? { wd: x.wd } : {}) });
   const pool = (k: InkKind) => ink.filter((x) => x.kind === k);
-  const pick = (l: InkItem[], seed: number) => (l.length ? shape(l[seed % l.length]) : undefined);
+  const base = [...pages.join("|")].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const rnd = (n: number) => { const v = Math.sin((base % 100000) * 0.731 + n * 12.9898) * 43758.5453; return v - Math.floor(v); };
+  const turn = new Map<InkKind, number>();
+  const pick = (k: InkKind) => { const l = pool(k); if (!l.length) return undefined; const i = turn.get(k) ?? base % l.length; turn.set(k, i + 1); return shape(l[i % l.length]); };
   const handOf = (id?: number) => { const x = id ? ink.find((i) => i.id === id && i.kind === "note") : undefined; return x ? shape(x) : undefined; };
+  let count = 0;
   const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => {
     if (!pt) return;
-    const x = inside(pt.x, 50), y = inside(pt.y, 35), seed = Math.round(x * 7 + y * 13);
-    const sym = pick(pool(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick"), seed);
-    const word = m.kind === "good" ? pick(pool("praise"), seed) : undefined;
-    by.set(pt.p, [...(by.get(pt.p) ?? []), { x, y, ...m, ...(sym ? { sym } : {}), ...(word ? { word } : {}) }]);
+    const n = ++count * 3;
+    const good = m.kind === "good";
+    // «ممتاز» يتزحزح لحد 35 يمين ويسار و25 فوك وجوة، والباقي يبقى بمكان خطوته
+    const x = inside(pt.x + (good ? Math.round((rnd(n) - 0.5) * 70) : 0), 50), y = inside(pt.y + (good ? Math.round((rnd(n + 1) - 0.5) * 50) : 0), 35);
+    const sym = pick(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick");
+    const word = good ? pick("praise") : undefined;
+    const rot = Math.round((rnd(n + 2) - 0.5) * (good ? 18 : 12)), sc = Math.round((0.88 + rnd(n + 3) * 0.24) * 100) / 100;
+    by.set(pt.p, [...(by.get(pt.p) ?? []), { x, y, ...m, ...(sym ? { sym } : {}), ...(word ? { word } : {}), ...(sym || word ? { rot, sc } : {}) }]);
   };
   for (const q of qs) {
     if (only !== undefined && q.n !== only) continue;
@@ -552,8 +564,8 @@ export async function qusayJudgeObjection(it: Row, n: number, text: string, oldM
 // قواعد واضحة مرقمة بكلامه، والأستاذ يقراها ويصلحها قبل الحفظ. ما يضيف قواعد من عنده
 const TIDY = `A math teacher (Iraqi 6th preparatory) dictated by voice how he grades one exam topic. Speech recognition wrote it with many wrong words (English words, broken Arabic, numbers in the wrong place).
 Rewrite it as clear, numbered grading rules in simple Iraqi Arabic, one rule per line, keeping EVERY rule and example he gave and his own phrases for notes to students (the words he says he writes to the student, like «عيوني ترى القانون ما كاتبه»).
-- Fix the speech-recognition mistakes by their mathematical meaning (e.g. «سرك Respect واي X» → متناظرة حول محور الصادات; «إكس تربيع» → $x^{2}$; «خط الاختبار» stays خط الاختبار; «فجوة» = a gap/hole left at the zero of the sign line).
-- Write math as LaTeX between $ signs.
+- Fix the speech-recognition mistakes by their mathematical meaning (e.g. «سرك Respect واي X» → متناظرة حول محور الصادات; «إكس تربيع» → x²; «خط الاختبار» stays خط الاختبار; «فجوة» = a gap/hole left at the zero of the sign line).
+- He will read and correct your text on an iPad, so write math the simple way people type it on a phone, never LaTeX: no $ signs and no backslashes. Powers with ² ³ (x², x³) or ^ (x^4), fractions with / and brackets (3/x², 6x/(x²+3)²), roots √(x+1), and the symbols ≠ ± θ π. Example: «y = 3/x²: أوسع مجال R عدا x = 0، لازم يكتب x² ≠ 0».
 - If he says something about one exam version, start that rule with «بالنسخة B:».
 - Do not add rules he did not say. Do not drop any. If a part cannot be understood at all, keep it at the end under «ما فهمته:» so he can fix it.
 Return only the rules.`;
