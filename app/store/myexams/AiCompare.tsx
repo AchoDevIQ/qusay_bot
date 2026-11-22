@@ -11,7 +11,15 @@ export type AiStep = { status: string; awarded: number; possible: number; expect
 /** الخطوة اللي نظام التصحيح ما گدر يحللها، أو كتابتها ما تنرسم: الطالب يشوف هاي الرسالة بدل كتابة ما تنقرا */
 export const FAIL_TEXT = "تعذّر تحليل هذه الخطوة، أرسل صورة ثانية أوضح.";
 /** علامة حمرة على صورة الورقة (x و y من 0 لـ 1000): ✓ صح، ✗ غلط، نص درجة، ودرجة السؤال بدائرة */
-export type InkShape = { w: number; h: number; s: number[][] };
+/** c: لون الكتابة (من ألوان «✍️ خط إيدي»)، wd: السمك 1 رفيع، 2 وسط، 3 ثخين (طلب الأستاذ 2026-11-22). القديمة بدونهم: أحمر ووسط */
+export type InkShape = { w: number; h: number; s: number[][]; c?: string; wd?: 1 | 2 | 3 };
+/** ألوان القلم، الأحمر أول (الأصل) */
+export const INK_COLORS: { c: string; t: string }[] = [
+  { c: "#d40000", t: "أحمر" }, { c: "#1d4ed8", t: "أزرق" }, { c: "#15803d", t: "أخضر" },
+  { c: "#111111", t: "أسود" }, { c: "#7e22ce", t: "بنفسجي" }, { c: "#ea580c", t: "برتقالي" },
+];
+/** سمك الخط على ورقة الطالب (بكسل)، لكل اختيار */
+export const INK_WIDTH: Record<1 | 2 | 3, number> = { 1: 1.7, 2: 2.6, 3: 3.8 };
 /** sym ✓/✗، word المدح، hand الملاحظة: بخط إيد الأستاذ إذا كاتبها بـ «✍️ خط إيدي» */
 export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
 export type MarkedPageT = { ref: string; marks: PaperMark[] };
@@ -29,14 +37,16 @@ export function inkPath(p: number[]) {
   return d + `L${p[p.length - 2]} ${p[p.length - 1]}`;
 }
 /** كتابة الأستاذ بالأحمر، مقصوصة على حجمها (بدون فراغ المربع) وخلفيتها شفافة */
-export function InkSvg({ sh, k = INK_PX, color = "currentColor", width = 2.6 }: { sh: InkShape; k?: number; color?: string; width?: number }) {
+export function InkSvg({ sh, k = INK_PX, color = "currentColor", width }: { sh: InkShape; k?: number; color?: string; width?: number }) {
+  // لونه وسمكه اللي اختارهم الأستاذ وهو يكتب. الخط القديم بدونهم: لون العلامة وسمك وسط
+  const stroke = INK_COLORS.some((x) => x.c === sh.c) ? sh.c! : color, sw = width ?? INK_WIDTH[sh.wd ?? 2] ?? 2.6;
   const all = sh.s.flat();
   const xs = all.filter((_, i) => i % 2 === 0), ys = all.filter((_, i) => i % 2 === 1);
   if (!xs.length) return null;
   const pad = 8, x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad, w = Math.max(...xs) - x0 + pad, h = Math.max(...ys) - y0 + pad;
   return (
     <svg className="mkink" viewBox={`${x0} ${y0} ${w} ${h}`} width={w * k} height={h * k} aria-hidden>
-      {sh.s.map((p, i) => <path key={i} d={inkPath(p)} fill="none" stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
+      {sh.s.map((p, i) => <path key={i} d={inkPath(p)} fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
     </svg>
   );
 }

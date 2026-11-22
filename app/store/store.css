@@ -484,6 +484,7 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .inklist{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .inkitem{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:4px 6px;color:#d40000}
 .inkitem small{color:#555}.inkpic{display:flex;min-height:30px;align-items:center}
+.inkcolors{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 6px}.inkcolors button{width:38px;height:38px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #bbb;cursor:pointer}.inkcolors button.on{box-shadow:0 0 0 3px #c9a24a}
 .inkpad{display:block;width:100%;height:auto;margin:8px auto;background:#fff;border:2px dashed #c9a24a;border-radius:10px;touch-action:none;cursor:crosshair}
 .inkpaper{background:#fff repeating-linear-gradient(#fff 0 29px,#c9d6ee 29px 30px);border-radius:8px;padding:6px 14px;margin:8px 0;max-width:420px;line-height:30px;color:#d40000}
 .inkstu{color:#1b2a6b;direction:ltr;text-align:left;font:italic 17px/30px "Times New Roman",serif}

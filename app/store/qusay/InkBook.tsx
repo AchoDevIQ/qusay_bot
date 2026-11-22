@@ -2,7 +2,7 @@
 // «✍️ خط إيدي»: الأستاذ يكتب بقلم الآيباد على ورقة بيضة ✓ و✗ والمدح والملاحظات، يشوفها شلون تطلع على ورقة الطالب،
 // وبعدين يرفعها. التصحيح الأحمر يرسمها بخطه هو بدل الخط. عام لكل المواضيع (exam=0)، وخاص لكل موضوع (طلبه 2026-11-21)
 import { useEffect, useRef, useState } from "react";
-import { InkSvg, inkPath, type InkShape } from "../myexams/AiCompare";
+import { INK_COLORS, InkSvg, inkPath, type InkShape } from "../myexams/AiCompare";
 import VoiceText from "./VoiceText";
 
 type Kind = "tick" | "cross" | "praise" | "note";
@@ -29,9 +29,9 @@ export default function InkBook({ exam, call, busy }: { exam: number; call: Call
   const [done, setDone] = useState("");
   useEffect(() => { void call({ action: "inkList", exam }).then((d) => { if (d?.inkOf?.exam === exam) setItems(d.inkOf.items); }); }, [exam]); // eslint-disable-line react-hooks/exhaustive-deps
   const got = (d: Awaited<ReturnType<Call>>) => { if (d?.inkOf?.exam === exam) { setItems(d.inkOf.items); return true; } return false; };
-  async function upload(s: number[][]) {
+  async function upload(s: number[][], c: string, wd: 1 | 2 | 3) {
     const b = BOX[adding!.kind];
-    const d = await call({ action: "inkAdd", exam, item: { kind: adding!.kind, text: adding!.text, w: b.w, h: b.h, s } });
+    const d = await call({ action: "inkAdd", exam, item: { kind: adding!.kind, text: adding!.text, w: b.w, h: b.h, s, c, wd } });
     if (got(d)) { setWriting(false); setDone(adding!.kind === "tick" ? "✓" : adding!.kind === "cross" ? "✗" : adding!.text); }
   }
   async function del(id: number) {
@@ -96,16 +96,45 @@ export default function InkBook({ exam, call, busy }: { exam: number; call: Call
   );
 }
 
-/** ورقة بيضة للقلم: يكتب، يرجع خط، يمسح الكل، و«👁 شوف» يطلعها على ورقة طالب بحجمها الحقيقي قبل الرفع */
-function Pad({ kind, label, busy, onCancel, onUpload }: { kind: Kind; label: string; busy: boolean; onCancel: () => void; onUpload: (s: number[][]) => void }) {
+/** سمك الخط بمربع الكتابة (نفس نسبته على ورقة الطالب) */
+const PAD_W: Record<1 | 2 | 3, number> = { 1: 4.5, 2: 7, 3: 11 };
+const SIZES: { wd: 1 | 2 | 3; t: string }[] = [{ wd: 1, t: "رفيع" }, { wd: 2, t: "وسط" }, { wd: 3, t: "ثخين" }];
+/** آخر لون وسمك اختارهم يبقون للمرة الجاية (بهذا الجهاز) */
+const PEN_KEY = "qgInkPen";
+function savedPen(): { c: string; wd: 1 | 2 | 3 } {
+  try {
+    const j = JSON.parse(localStorage.getItem(PEN_KEY) ?? "{}");
+    return { c: INK_COLORS.some((x) => x.c === j.c) ? j.c : RED, wd: [1, 2, 3].includes(j.wd) ? j.wd : 2 };
+  } catch { return { c: RED, wd: 2 }; }
+}
+type TgSwipe = { Telegram?: { WebApp?: { disableVerticalSwipes?: () => void; enableVerticalSwipes?: () => void } } };
+/** داخل تليگرام: سحبة القلم لتحت چانت تسد الصفحة وتقطع الخط. توگف وهو يكتب */
+function tgSwipes(on: boolean) {
+  const wins: Window[] = [window];
+  try { if (window.parent !== window) wins.push(window.parent); } catch { /* */ }
+  for (const w of wins) {
+    try { const a = (w as unknown as TgSwipe).Telegram?.WebApp; (on ? a?.enableVerticalSwipes : a?.disableVerticalSwipes)?.call(a); } catch { /* */ }
+  }
+}
+
+/** ورقة بيضة للقلم: يكتب، يرجع خط، يمسح الكل، و«👁 شوف» يطلعها على ورقة طالب بحجمها الحقيقي قبل الرفع.
+ *  القلم ناعم وما يقطع (طلب الأستاذ 2026-11-22): كل نقاط القلم (حتى اللي بين إطارين)، يرسم بس القطعة الجديدة،
+ *  وإذا الجهاز قطع اللمسة يبقى الخط مو ينمسح. ويختار اللون والسمك */
+function Pad({ kind, label, busy, onCancel, onUpload }: { kind: Kind; label: string; busy: boolean; onCancel: () => void; onUpload: (s: number[][], c: string, wd: 1 | 2 | 3) => void }) {
   const { w, h } = BOX[kind];
   const cv = useRef<HTMLCanvasElement>(null);
   const [strokes, setStrokes] = useState<number[][]>([]);
   const [look, setLook] = useState(false);
+  const [pen, setPen] = useState(savedPen);
   const live = useRef<number[] | null>(null);
   const penSeen = useRef(false);
-  const all = () => (live.current ? [...strokes, live.current] : strokes);
-  function draw(list = all()) {
+  const choose = (p: { c: string; wd: 1 | 2 | 3 }) => { setPen(p); try { localStorage.setItem(PEN_KEY, JSON.stringify(p)); } catch { /* */ } };
+  function ctxPen() {
+    const ctx = cv.current!.getContext("2d")!;
+    ctx.strokeStyle = pen.c; ctx.lineWidth = PAD_W[pen.wd]; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    return ctx;
+  }
+  function draw() {
     const c = cv.current; if (!c) return;
     const ctx = c.getContext("2d")!;
     ctx.clearRect(0, 0, w, h);
@@ -113,39 +142,57 @@ function Pad({ kind, label, busy, onCancel, onUpload }: { kind: Kind; label: str
     // سطور الورقة: خفيفة، حتى يكتب بحجم سطر الدفتر
     ctx.strokeStyle = "#c9d6ee"; ctx.lineWidth = 2;
     for (const y of [LINE - 120, LINE]) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
-    ctx.strokeStyle = RED; ctx.lineWidth = 7; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    for (const p of list) { ctx.beginPath(); const path = new Path2D(inkPath(p)); ctx.stroke(path); }
+    ctxPen();
+    for (const p of live.current ? [...strokes, live.current] : strokes) ctx.stroke(new Path2D(inkPath(p)));
   }
-  useEffect(() => { draw(); }); // كل تغيير يعيد الرسم
-  const pt = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * w), Math.round((e.clientY - r.top) / r.height * h)]; };
+  useEffect(() => { draw(); }); // الخطوط أو اللون أو السمك تغيرت: يعيد الرسم كله
+  useEffect(() => {
+    tgSwipes(false);
+    // سفاري الآيباد: اللمسة على المربع ما تحرك الصفحة أبداً
+    const c = cv.current, stop = (e: TouchEvent) => e.preventDefault();
+    c?.addEventListener("touchstart", stop, { passive: false });
+    c?.addEventListener("touchmove", stop, { passive: false });
+    return () => { tgSwipes(true); c?.removeEventListener("touchstart", stop); c?.removeEventListener("touchmove", stop); };
+  }, [look]);
+  const pt = (e: { clientX: number; clientY: number }) => { const r = cv.current!.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * w * 10) / 10, Math.round((e.clientY - r.top) / r.height * h * 10) / 10]; };
   /** إذا كتب بقلم الآيباد مرة، لمس الكف ما يكتب */
   const skip = (e: React.PointerEvent) => { if (e.pointerType === "pen") penSeen.current = true; return e.pointerType === "touch" && penSeen.current; };
   function down(e: React.PointerEvent) {
     if (skip(e)) return;
-    e.preventDefault(); cv.current!.setPointerCapture(e.pointerId);
-    live.current = pt(e); draw();
+    e.preventDefault();
+    try { cv.current!.setPointerCapture(e.pointerId); } catch { /* */ }
+    live.current = pt(e);
+    const ctx = ctxPen(), [x, y] = live.current;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 0.1, y); ctx.stroke();
   }
   function move(e: React.PointerEvent) {
-    if (skip(e) || !live.current || !(e.buttons & 1)) return;
-    const [x, y] = pt(e), p = live.current;
-    // نقطة جديدة بس إذا تحرك القلم شوية (أخف بالحفظ، ونفس الشكل)
-    if (Math.hypot(x - p[p.length - 2], y - p[p.length - 1]) >= 3) { p.push(x, y); draw(); }
+    if (skip(e) || !live.current) return;
+    const p = live.current, ctx = ctxPen();
+    // قلم الآيباد يعطي نقاط أكثر من إطارات الشاشة: ناخذها كلها حتى الخط ما يطلع مكسر
+    const evs = (e.nativeEvent as PointerEvent).getCoalescedEvents?.() ?? [];
+    for (const ev of evs.length ? evs : [e.nativeEvent]) {
+      const [x, y] = pt(ev), lx = p[p.length - 2], ly = p[p.length - 1];
+      if (Math.hypot(x - lx, y - ly) < 1.5) continue;
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(x, y); ctx.stroke();
+      p.push(x, y);
+    }
   }
-  function up() { const p = live.current; if (p) { live.current = null; setStrokes((l) => [...l, p]); } }
+  /** نهاية الخط. وإذا الجهاز قطع اللمسة (cancel)، الخط يبقى مثل ما انكتب */
+  function up() { const p = live.current; if (p) { live.current = null; setStrokes((l) => [...l, p.map((v) => Math.round(v))]); } }
 
   if (look) {
-    const sh = { w, h, s: strokes };
+    const sh = { w, h, s: strokes, c: pen.c, wd: pen.wd };
     return (
       <div className="inkbox">
         <div className="exlabel">👁 هيچ تطلع «{label}» على ورقة الطالب</div>
         <div className="inkpaper">
           <div className="inkstu">z = 2(cos 23π/12 + i sin 23π/12)</div>
-          <span className="inkon"><InkSvg sh={sh} color={RED} /></span>
+          <span className="inkon"><InkSvg sh={sh} /></span>
           <div className="inkstu">= 2(0.96 − 0.25 i)</div>
         </div>
         <div className="exhint">بحجمها الحقيقي على ورقة بالتلفون. إذا عاجبتك ارفعها، وإذا لا ارجع وعدلها.</div>
         <div className="aig-logrow">
-          <button type="button" className="btn" disabled={busy} onClick={() => onUpload(strokes)}>📤 ارفع</button>
+          <button type="button" className="btn" disabled={busy} onClick={() => onUpload(strokes, pen.c, pen.wd)}>📤 ارفع</button>
           <button type="button" className="btn ghost" disabled={busy} onClick={() => setLook(false)}>✏️ ارجع عدّل</button>
         </div>
       </div>
@@ -156,7 +203,17 @@ function Pad({ kind, label, busy, onCancel, onUpload }: { kind: Kind; label: str
       <div className="exlabel">✍️ اكتب «{label}» بالقلم</div>
       <div className="exhint">اكتبها على السطر بحجمها الطبيعي، مثل ما تكتبها على دفتر الطالب. ما يهم وين بالمربع: تنقص على قدها وحدها.</div>
       <canvas ref={cv} width={w} height={h} className="inkpad" style={{ aspectRatio: `${w} / ${h}`, maxWidth: kind === "tick" || kind === "cross" ? 340 : 700 }}
-        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { live.current = null; draw(); }} />
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up} />
+      <div className="exhint">اللون:</div>
+      <div className="inkcolors">
+        {INK_COLORS.map((x) => <button key={x.c} type="button" className={pen.c === x.c ? "on" : ""} style={{ background: x.c }} onClick={() => choose({ ...pen, c: x.c })} aria-label={x.t} title={x.t} />)}
+      </div>
+      <div className="exhint">سمك الخط:</div>
+      <div className="seg">
+        {SIZES.map((x) => <button key={x.wd} type="button" className={pen.wd === x.wd ? "on" : ""} onClick={() => choose({ ...pen, wd: x.wd })}>
+          <svg width="44" height="14" aria-hidden><line x1="6" y1="7" x2="38" y2="7" stroke={pen.c} strokeWidth={PAD_W[x.wd] / 2.2} strokeLinecap="round" /></svg> {x.t}
+        </button>)}
+      </div>
       <div className="aig-logrow">
         <button type="button" className="exbtn" disabled={!strokes.length} onClick={() => setStrokes(strokes.slice(0, -1))}>↩️ رجّع خط</button>
         <button type="button" className="exbtn" disabled={!strokes.length} onClick={() => setStrokes([])}>🗑 امسح الكل</button>

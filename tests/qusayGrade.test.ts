@@ -527,6 +527,14 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   assert.equal(Q.marksByPage([q], ["a"])[0].marks[0].sym, undefined, "بدون خط إيد: مثل قبل");
   await qusayAction({ initData: sign(1), action: "inkDel", exam: ex, id: note.id });
   assert.equal((await Q.inkList(ex)).length, 0);
+  // اللون والسمك: ينحفظون ويروحون للورقة. لون مو من القائمة يصير أحمر، والقديم بدونهم
+  const b: any = await qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "praise", text: "أحسنت", w: 1000, h: 360, s: [[1, 2, 3, 4]], c: "#1d4ed8", wd: 3 } });
+  const blue = b.inkOf.items.at(-1);
+  assert.equal(blue.c, "#1d4ed8"); assert.equal(blue.wd, 3);
+  const odd: any = await qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "praise", text: "بطل", w: 1000, h: 360, s: [[1, 2, 3, 4]], c: "url(x)", wd: 9 } });
+  assert.equal(odd.inkOf.items.at(-1).c, "#d40000"); assert.equal(odd.inkOf.items.at(-1).wd, 2);
+  const words = Q.marksByPage([good], ["a"], undefined, [], [blue])[0].marks[0].word!;
+  assert.equal(words.c, "#1d4ed8"); assert.equal(words.wd, 3);
 });
 
 test("📈 سؤال بيه خطوة رسم: PDF حل الأستاذ يروح ويا الخطوات حتى يقارن الرسم، وبدون رسم ما يروح", async () => {

@@ -36,7 +36,9 @@ export type QgResult = { at: string; kind: "trial" | "live"; total: number; sure
 /** «🖍 جرب العلامات»: تصحيح ثاني لورقة بالعلامات على الورقة، ينحفظ لحاله وما يغير درجتها ولا يوصل شي للطالب */
 export type QgMarksDemo = { at: string; total: number; qs: QgQuestion[]; pages: string[]; usd: number };
 /** شي كتبه الأستاذ بقلم الآيباد بصفحة «✍️ خط إيدي»: خطوطه (s: كل خط x,y,x,y...) بمربع w×h */
-export type InkShape = { w: number; h: number; s: number[][] };
+/** c لون الكتابة، wd سمكها 1 رفيع 2 وسط 3 ثخين (القديمة بدونهم: أحمر ووسط) */
+export type InkShape = { w: number; h: number; s: number[][]; c?: string; wd?: 1 | 2 | 3 };
+export const INK_COLOR_LIST = ["#d40000", "#1d4ed8", "#15803d", "#111111", "#7e22ce", "#ea580c"];
 /** tick ✓، cross ✗، praise مدح (أحسنت، ممتاز…)، note ملاحظة (نسيت تعوض…). text: شنو مكتوب بيها */
 export type InkKind = "tick" | "cross" | "praise" | "note";
 export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
@@ -262,10 +264,10 @@ export async function addInk(exam: number, raw: any): Promise<InkItem> {
   if (!(w >= 100 && w <= 1500 && h >= 100 && h <= 1500)) throw new Error("مربع الكتابة غلط");
   const s: number[][] = [];
   let pts = 0;
-  for (const st of Array.isArray(raw?.s) ? raw.s.slice(0, 150) : []) {
+  for (const st of Array.isArray(raw?.s) ? raw.s.slice(0, 200) : []) {
     if (!Array.isArray(st) || st.length < 2) continue;
     const a: number[] = [];
-    for (let i = 0; i + 1 < st.length && i < 1600; i += 2) {
+    for (let i = 0; i + 1 < st.length && i < 4000; i += 2) {
       const x = Number(st[i]), y = Number(st[i + 1]);
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       a.push(Math.round(Math.min(w, Math.max(0, x))), Math.round(Math.min(h, Math.max(0, y))));
@@ -273,10 +275,12 @@ export async function addInk(exam: number, raw: any): Promise<InkItem> {
     if (a.length) { s.push(a); pts += a.length; }
   }
   if (!s.length) throw new Error("ما كتبت شي");
-  if (pts > 30000) throw new Error("الكتابة كبيرة هواية، امسح واكتبها أصغر");
+  if (pts > 60000) throw new Error("الكتابة كبيرة هواية، امسح واكتبها أصغر");
   const list = await inkList(exam);
   if (list.length >= INK_MAX) throw new Error(`وصلت ${INK_MAX} عبارة، امسح وحدة أول`);
-  const item: InkItem = { id: Math.max(Date.now(), ...list.map((x) => x.id + 1)), kind, text, w, h, s };
+  const c = INK_COLOR_LIST.includes(String(raw?.c)) ? String(raw.c) : INK_COLOR_LIST[0];
+  const wd = ([1, 2, 3] as const).find((x) => x === Number(raw?.wd)) ?? 2;
+  const item: InkItem = { id: Math.max(Date.now(), ...list.map((x) => x.id + 1)), kind, text, w, h, s, c, wd };
   await kvSet(inkKey(exam), JSON.stringify([...list, item]));
   return item;
 }
@@ -420,7 +424,7 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   // العلامة كلها جوة الصورة، ما تطلع برة الورقة ولا على حافتها (طلب الأستاذ 2026-11-21)
   const inside = (v: number, lo: number) => Math.min(1000 - lo, Math.max(lo, v));
   // خط إيد الأستاذ: كل علامة تاخذ وحدة من اللي كاتبها (نفس العلامة نفس الشكل كل مرة، والعلامات تختلف عن بعض)
-  const shape = (x: InkItem): InkShape => ({ w: x.w, h: x.h, s: x.s });
+  const shape = (x: InkItem): InkShape => ({ w: x.w, h: x.h, s: x.s, ...(x.c ? { c: x.c } : {}), ...(x.wd ? { wd: x.wd } : {}) });
   const pool = (k: InkKind) => ink.filter((x) => x.kind === k);
   const pick = (l: InkItem[], seed: number) => (l.length ? shape(l[seed % l.length]) : undefined);
   const handOf = (id?: number) => { const x = id ? ink.find((i) => i.id === id && i.kind === "note") : undefined; return x ? shape(x) : undefined; };
