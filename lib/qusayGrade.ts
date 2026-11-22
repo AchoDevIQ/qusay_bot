@@ -316,7 +316,7 @@ For every step and question, set "hw" to the number of the one note above that s
 
 const topicText = (t: string) => (t.trim() ? `
 
-QUSAY'S WORDS AND RULES FOR THIS TOPIC (he dictated them by voice, so speech recognition may have changed some words: read them by their mathematical meaning; they are his marking rules for this topic, follow them, and use his phrases when they fit):
+QUSAY'S WORDS AND RULES FOR THIS TOPIC (he wrote them in a Word/PDF file or dictated them by voice; if dictated, speech recognition may have changed some words: read them by their mathematical meaning; they are his marking rules for this topic, follow them, and use his phrases when they fit):
 ${t.trim()}` : "");
 
 const SCHEMA = {
@@ -579,6 +579,28 @@ export async function tidyNotes(text: string): Promise<{ text: string; usd: numb
   if (msg.stop_reason === "max_tokens") throw new Error("الكلام طويل كلش، رتبه على دفعتين");
   const out = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
   if (!out) throw new Error("ما گدرت أرتبه، جرب مرة ثانية");
+  return { text: out.slice(0, STYLE_MAX), usd };
+}
+
+// ---------- «📄 ارفع ملف» (2026-11-22): PDF لو صورة لشرحه المكتوب، ينقرا حرف بحرف بدون تغيير. الـ Word ببلاش (notesFile.ts)
+const SCAN = `This file is a math teacher's own written grading rules for one exam topic (Iraqi 6th preparatory, Arabic).
+Copy its text EXACTLY as written, word for word, in reading order. Do not fix, rephrase, summarize, reorder, add or drop anything; keep his numbering and bullets.
+Each paragraph, bullet or table row on its own line. Skip page numbers and repeated page headers.
+Write every equation the simple way people type it on a phone, never LaTeX: no $ signs and no backslashes. Powers with ² ³ (x², x³) or ^ (x^4), fractions with / and brackets (3/x², 6x/(x²+3)²), roots √(x+1), primes f''(x), and the symbols ≠ ± ≤ ≥ ∞ θ π →.
+If a word or symbol cannot be read, write [؟] in its place.
+Return only the text.`;
+export async function readNotesScan(kind: "pdf" | "image", name: string, b64: string): Promise<{ text: string; usd: number }> {
+  const media = kind === "pdf" ? "application/pdf" : /\.png$/i.test(name) ? "image/png" : /\.webp$/i.test(name) ? "image/webp" : "image/jpeg";
+  const block = kind === "pdf"
+    ? { type: "document", source: { type: "base64", media_type: media, data: b64 } }
+    : { type: "image", source: { type: "base64", media_type: media, data: b64 } };
+  const msg = await apiImpl.create({ model: MODEL, max_tokens: 16000, system: SCAN, output_config: { effort: "low" }, messages: [{ role: "user", content: [block, { type: "text", text: "انقل كلامه مثل ما هو." }] }] } as Req);
+  const u = msg.usage;
+  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 }, false);
+  await addSpend("qusay", usd);
+  if (msg.stop_reason === "max_tokens") throw new Error("الملف طويل كلش، قسمه لملفين");
+  const out = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+  if (!out) throw new Error("ما گدرت أقرا الملف، جرب مرة ثانية");
   return { text: out.slice(0, STYLE_MAX), usd };
 }
 

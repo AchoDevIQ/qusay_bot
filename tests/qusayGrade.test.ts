@@ -645,6 +645,40 @@ test("؟ بخطه: الخطوات اللي ما كتبها الطالب تنرس
   assert.deepEqual(pg.marks[1].sym!.s, ask.s, "«؟» بخطه");
 });
 
+test("📄 ارفع ملف: Word ببلاش والمعادلات تصير x² و 3/x²، PDF يقراه الذكاء حرف بحرف", async () => {
+  const name = Buffer.from("word/document.xml");
+  const xml = '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><w:body>' +
+    '<w:p><w:r><w:t xml:space="preserve">1. المجال </w:t></w:r><m:oMath><m:r><m:t>y=</m:t></m:r><m:f><m:num><m:r><m:t>3</m:t></m:r></m:num><m:den><m:sSup><m:e><m:r><m:t>x</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:den></m:f></m:oMath></w:p>' +
+    '<w:p><w:r><w:t>2. عيوني ترى القانون ما كاتبه</w:t></w:r></w:p></w:body></w:document>';
+  const data = Buffer.from(xml, "utf8");
+  const crc = (b: Buffer) => { let c = ~0; for (const x of b) { c ^= x; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)); } return ~c >>> 0; };
+  const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt32LE(crc(data), 14); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(name.length, 26);
+  const cen = Buffer.alloc(46); cen.writeUInt32LE(0x02014b50, 0); cen.writeUInt32LE(crc(data), 16); cen.writeUInt32LE(data.length, 20); cen.writeUInt32LE(data.length, 24); cen.writeUInt16LE(name.length, 28);
+  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10); end.writeUInt32LE(46 + name.length, 12); end.writeUInt32LE(30 + name.length + data.length, 16);
+  const docx = Buffer.concat([local, name, data, cen, name, end]);
+  const prev = sent.length;
+  const r: any = await qusayAction({ initData: sign(1), action: "notesFile", name: "شرحي.docx", b64: docx.toString("base64") });
+  assert.equal(r.tidy, "1. المجال y=3/x²\n2. عيوني ترى القانون ما كاتبه");
+  assert.equal(sent.length, prev, "الـ Word ما يروح للذكاء");
+  assert.match(r.notice, /ببلاش/);
+  reply = () => "1. المجال y=3/x²";
+  const pdf: any = await qusayAction({ initData: sign(1), action: "notesFile", name: "شرحي.pdf", b64: Buffer.from("%PDF-1.4 " + "x".repeat(200)).toString("base64") });
+  assert.equal(sent.length, prev + 1);
+  assert.equal(sent.at(-1).messages[0].content[0].type, "document");
+  assert.match(sent.at(-1).system, /EXACTLY as written/);
+  assert.ok(pdf.tidy.includes("y=3/x²"));
+  await assert.rejects(qusayAction({ initData: sign(1), action: "notesFile", name: "a.txt", b64: "aGVsbG8=" }), /Word/);
+});
+
+test("معادلات Word تصير كتابة موبايل", async () => {
+  const { texToPhone } = await import("../lib/notesFile.ts");
+  const B = String.raw;
+  assert.equal(texToPhone(B`\frac{6x}{{\left({x}^{2}+3\right)}^{2}}`), "6x/(x²+3)²");
+  assert.equal(texToPhone(B`{f}^{''}\left(x\right)=6x`), "f''(x)=6x");
+  assert.equal(texToPhone(B`\sqrt{x+1}`), "√(x+1)");
+  assert.equal(texToPhone(B`{e}^{x+1}`), "e^(x+1)");
+});
+
 test("🪄 رتّب كلامي: يرجع الكلام مرتب، وينحسب بالصرفية", async () => {
   reply = () => "1. بالنسخة B: ...";
   const prev = sent.length;

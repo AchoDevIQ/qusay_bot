@@ -217,7 +217,24 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
       {/* عبارات الأستاذ الخاصة بهذا الموضوع، فوك «✍️ طريقتك بالكتابة» العامة */}
       <button type="button" className="exbtn" onClick={() => setOpenWords(!openWords)}>✍️ عبارات هذا الموضوع{e.style.trim() ? " ✅" : ""}</button>
       {openWords && <>
-        <div className="exhint">العبارات والكلمات اللي تستعملها بهذا الموضوع بس، كل وحدة بسطر. تگدر تكتبها لو تحچيها (🎤 فويس). يستعملها ويا «✍️ طريقتك بالكتابة» العامة بالعلامات الحمرة.</div>
+        <div className="exhint">العبارات والكلمات اللي تستعملها بهذا الموضوع بس، كل وحدة بسطر. أحسن شي: اكتب شرحك بالـ Word (المعادلات بمحرر المعادلات) وارفعه هنا. وتگدر هم تكتبها لو تحچيها (🎤 فويس). يستعملها ويا «✍️ طريقتك بالكتابة» العامة بالعلامات الحمرة.</div>
+        <label className={"exbtn" + (busy ? " off" : "")}>📄 ارفع ملف Word لو PDF (الـ Word ببلاش)
+          <input type="file" accept=".docx,.pdf,image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden disabled={busy} onChange={(x) => {
+            const f = x.target.files?.[0]; x.target.value = "";
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = () => {
+              const b64 = String(r.result ?? "").split(",")[1] ?? "";
+              void call({ action: "notesFile", name: f.name, b64 }).then((d) => {
+                if (!d?.tidy) return;
+                // المربع بيه كلام: يبدله لو يضيفه بالآخر
+                const keep = words.trim() && !window.confirm("تبدل الكلام اللي بالمربع بكلام الملف؟\n(إلغاء = يضيفه بآخر الكلام)");
+                setWords(keep ? `${words.trim()}\n${d.tidy}` : d.tidy);
+              });
+            };
+            r.readAsDataURL(f);
+          }} />
+        </label>
         <VoiceText value={words} onChange={setWords} />
         <div className="exhint">المعادلة اكتبها مثل الموبايل: x² لو x^2، والكسر 3/x²، والجذر √(x+1)، و≠ و±. وتحت تطلعلك مرتبة مثل الكتاب حتى تتأكد.</div>
         {/[A-Za-z0-9²³√$]/.test(words) && (
@@ -226,7 +243,7 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
             {words.split(/\n/).filter((l) => l.trim()).map((l, i) => <div key={i} className="tidyline"><Inline text={l} /></div>)}
           </div>
         )}
-        <button type="button" className="exbtn" disabled={busy || !words.trim()} onClick={() => void call({ action: "tidy", text: words }).then((d) => { if (d?.tidy) setWords(d.tidy); })}>🪄 رتّب كلامي (الفويس ينكتب بغلطات)</button>
+        <button type="button" className="exbtn" disabled={busy || !words.trim()} onClick={() => void call({ action: "tidy", text: words }).then((d) => { if (d?.tidy) setWords(d.tidy); })}>🪄 رتّب كلام الفويس (بفلوس)</button>
         <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
       </>}
       {/* خط إيده الخاص بهذا الموضوع، فوك خطه العام */}

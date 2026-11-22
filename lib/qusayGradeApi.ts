@@ -9,6 +9,7 @@ import {
   humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
+import { docxNotes, notesKind } from "./notesFile.ts";
 import { ApiError, authed, need } from "./webApi.ts";
 import { fileToken } from "./webAuth.ts";
 
@@ -149,6 +150,22 @@ export async function qusayAction(body: Row) {
   if (a === "tidy") {
     const r = await (await import("./qusayGrade.ts")).tidyNotes(String(body.text ?? ""));
     return await out(`🪄 رتبته (${Math.max(1, Math.round(r.usd * IQD))} دينار). اقراه وصلّح اللي تريده، وبعدين احفظ`, { tidy: r.text });
+  }
+  // «📄 ارفع ملف»: Word ببلاش (المعادلات تصير x² و 3/x²)، PDF لو صورة يقراه الذكاء حرف بحرف. يرجع النص للمربع، والحفظ بـ 💾
+  if (a === "notesFile") {
+    const name = String(body.name ?? "");
+    const kind = notesKind(name);
+    need(kind, "ارفع ملف Word (docx) لو PDF لو صورة");
+    const buf = Buffer.from(String(body.b64 ?? ""), "base64");
+    need(buf.length > 100, "الملف فارغ");
+    need(buf.length <= 15 * 1024 * 1024, "الملف أكبر من 15 ميگا، قسمه");
+    if (kind === "docx") {
+      let text = "";
+      try { text = docxNotes(buf); } catch (e) { fail(e); }
+      return await out("📄 انقرا الملف (ببلاش). تأكد من المعادلات تحت المربع، وبعدين 💾 احفظ العبارات", { tidy: text.slice(0, STYLE_MAX) });
+    }
+    const r = await (await import("./qusayGrade.ts")).readNotesScan(kind as "pdf" | "image", name, buf.toString("base64"));
+    return await out(`📄 انقرا الملف (${Math.max(1, Math.round(r.usd * IQD))} دينار). تأكد منه، وبعدين 💾 احفظ العبارات`, { tidy: r.text });
   }
   if (a === "examStyle") {
     need(await one("bank_exams", { id: exam }), "اختار الموضوع");
