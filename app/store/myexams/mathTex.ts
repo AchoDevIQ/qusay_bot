@@ -54,7 +54,7 @@ const supToPow = (s: string) => s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻ⁿ]+/
 export function toTex(p: string) {
   let t = braceArgs(supToPow(stripDelimiters(p)).replace(/(?<![A-Za-z\\])i(sin|cos|tan)(?![A-Za-z])/g, "i $1")
     // «F2(-5,0) & F1(5,0)» و«R\{0}» و«➔»: رموز تنكتب مثل ما هي
-    .replace(/(?<!\\)&/g, "\\&").replace(/\\\{([^{}\\]*)\}/g, "\\{$1\\}").replace(/➔/g, "→")).replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
+    .replace(/(?<!\\)&/g, "\\&").replace(/\\\{([^{}\\]*)\}/g, "\\setminus\\{$1\\}").replace(/➔/g, "→")).replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
     .replace(/π/g, "pi").replace(/=>|⇒|⟹/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ").replace(/−/g, "-").replace(/×/g, "\\times ");
   // الأس اللي أكثر من رقم أو بيه سالب: كله فوك
   t = t.replace(/\^(-?\d+(?:\.\d+)?)/g, (m, x: string) => (x.length > 1 ? `^{${x}}` : m)).replace(/\^-([A-Za-z])/g, "^{-$1}");

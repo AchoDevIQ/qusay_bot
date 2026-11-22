@@ -7,7 +7,7 @@ const SUP: Record<string, string> = { "0": "⁰", "1": "¹", "2": "²", "3": "³
 const SUB: Record<string, string> = { "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉" };
 const CMD: Record<string, string> = {
   pm: "±", mp: "∓", times: "×", div: "÷", neq: "≠", ne: "≠", le: "≤", leq: "≤", ge: "≥", geq: "≥", infty: "∞", pi: "π", theta: "θ", omega: "ω",
-  alpha: "α", beta: "β", backslash: " − ", setminus: " − ", to: "→", rightarrow: "→", Rightarrow: "⇒", therefore: "∴", in: "∈", cdot: "·", approx: "≈", ",": " ", ";": " ", quad: " ", " ": " ",
+  alpha: "α", beta: "β", backslash: "\\", setminus: "\\", to: "→", rightarrow: "→", Rightarrow: "⇒", therefore: "∴", in: "∈", cdot: "·", approx: "≈", ",": " ", ";": " ", quad: " ", " ": " ",
   "{": "{", "}": "}",
 };
 /** المقطع يحتاج قوس إذا صار بسط/مقام لو قبل أس: أكثر من رمز واحد وما محاط بقوس */
@@ -59,7 +59,8 @@ export function texToPhone(tex: string): string {
     else if (c === "&") { out += " "; i++; }
     else { out += c; i++; }
   }
-  return out.replace(/[ \t]+/g, " ").trim();
+  // R ما عدا 0: «R\{0}» مثل ما يكتبها بالـ Word (الـ «\» والقوس سوة)
+  return out.replace(/\s*\\\s*\{/g, "\\{").replace(/[ \t]+/g, " ").trim();
 }
 
 /** سطر من الـ Word: المعادلات بين $ $ والأس المرفوع ^{..} يصيرن كتابة موبايل */

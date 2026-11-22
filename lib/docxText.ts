@@ -32,7 +32,9 @@ const attr = (n: Node, a: string) => ((n[":@"] as Record<string, string> | undef
 const find = (n: Node, t: string) => kids(n).find((k) => tagOf(k) === t);
 const textIn = (n: Node): string => kids(n).map((k) => (tagOf(k) === "#text" ? String(k["#text"] ?? "") : textIn(k))).join("");
 
-const SYM: Record<string, string> = { "±": "\\pm ", "∓": "\\mp ", "×": "\\times ", "÷": "\\div ", "≠": "\\neq ", "≤": "\\le ", "≥": "\\ge ", "∞": "\\infty ", "π": "\\pi ", "θ": "\\theta ", "ω": "\\omega ", "α": "\\alpha ", "β": "\\beta ", "→": "\\to ", "⇒": "\\Rightarrow ", "⟹": "\\Rightarrow ", "∴": "\\therefore ", "−": "-", "∈": "\\in " };
+const SYM: Record<string, string> = { "±": "\\pm ", "∓": "\\mp ", "×": "\\times ", "÷": "\\div ", "≠": "\\neq ", "≤": "\\le ", "≥": "\\ge ", "∞": "\\infty ", "π": "\\pi ", "θ": "\\theta ", "ω": "\\omega ", "α": "\\alpha ", "β": "\\beta ", "→": "\\to ", "⇒": "\\Rightarrow ", "⟹": "\\Rightarrow ", "∴": "\\therefore ", "−": "-", "∈": "\\in ", "∖": "\\setminus ",
+  // حروف حرفية بمعادلة Word («R \ {0}» = R ما عدا 0): لازم تنهرب، لا تضيع الأقواس والـ «\» (طلب الأستاذ 2026-11-22)
+  "\\": "\\setminus ", "{": "\\{", "}": "\\}" };
 const sym = (t: string) => [...t].map((c) => SYM[c] ?? c).join("");
 
 /** معادلة Word (OMML) → LaTeX */

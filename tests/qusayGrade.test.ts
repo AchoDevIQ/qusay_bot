@@ -677,6 +677,10 @@ test("معادلات Word تصير كتابة موبايل", async () => {
   assert.equal(texToPhone(B`{f}^{''}\left(x\right)=6x`), "f''(x)=6x");
   assert.equal(texToPhone(B`\sqrt{x+1}`), "√(x+1)");
   assert.equal(texToPhone(B`{e}^{x+1}`), "e^(x+1)");
+  // ملفه الحقيقي: «R \ {0}» بمعادلة Word چانت تطلع «R 0» (طلبه 2026-11-22)
+  assert.equal(texToPhone(B`R\setminus  \{0\}`), B`R\{0}`);
+  const { toTex } = await import("../app/store/myexams/mathTex.ts");
+  assert.equal(toTex(B`R\{0}`), B`R\setminus\{0\}`, "ينرسم R∖{0} مو R{0}");
 });
 
 test("🪄 رتّب كلامي: يرجع الكلام مرتب، وينحسب بالصرفية", async () => {
