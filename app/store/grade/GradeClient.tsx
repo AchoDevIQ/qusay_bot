@@ -12,15 +12,17 @@ type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
 type History = { day: string; days: { d: string; n: number }[]; prev: string; next: string; due: number | null; count: number; owner: boolean; rows: HistRow[] };
 type ObjQ = { q: number; text: string; old: number; mark: number | null; status: string; reason: string; edited: boolean; by: string; at: string };
 type ObjLog = { q: string; people: { name: string; n: number; ok: number }[]; day: string; days: { d: string; n: number }[]; prev: string; next: string; owner: boolean; count: number; ok: number; no: number; open: number; rows: (Row & { qs: ObjQ[]; at: string; canEdit: boolean; canAnswer: boolean })[] };
-type Rate = { mandatory: number; optional: number; deduct: number };
-type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
+type Rate = { mandatory: number; optional: number; deduct: number; fine: number; weight: number };
+type PayCard = { id: number; name: string; chapters: string[]; rate: Rate; mand: number; opt: number; obj: number; fines: { day: string; target: number; done: number }[]; contract: { v: number; at: string; current: boolean } | null; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Pay = { all: boolean; chapters: string[]; graders: PayCard[] };
 type Only = { exams: { id: number; slug: string; chapter: string; title: string }[]; graders: { id: number; name: string }[]; rules: { exam: number; title: string; until: string; names: string[] }[]; out?: { ids: number[]; chapters: Record<string, number[]> } };
 type FoundPaper = { id: number; name: string; title: string; chapter: string; model: string; total: number; graded: string };
 type CheckG = { id: number; name: string; count: number; checked: number; last: string };
 type CheckT = { exam: number; title: string; chapter: string; count: number; checked: number; avg: number | null; others: number | null };
 type Check = { graders: CheckG[]; grader: number | null; name: string; topics: CheckT[] | null };
-type Data = { canEdit?: boolean; canCheck?: boolean; check?: Check; found?: FoundPaper[]; only?: Only; groups: Group[]; unsent?: Row[]; history?: History; objLog?: ObjLog; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean };
+type Data = { canEdit?: boolean; canCheck?: boolean; check?: Check; found?: FoundPaper[]; only?: Only; groups: Group[]; unsent?: Row[]; history?: History; objLog?: ObjLog; pay?: Pay; objections: ObjRow[]; waiting: Row[]; done: Row[]; owner: boolean; hasTests: boolean; fileToken: string; paper: Paper | null; notice: string; today: number; errors?: string[]; stickers?: Sticker[]; penText?: boolean; quota?: { target: number; done: number } | null; quotaStop?: number[]; contractDue?: boolean; contract?: ContractData };
+type Signed = { v: number; at: string; name: string; text: string; sig: { w: number; h: number; s: number[][] } };
+type ContractData = { text: string; v: number; updated: string; mine: string; signed: { v: number; at: string; current: boolean } | null; graders?: { id: number; name: string; signed: { v: number; at: string; current: boolean } | null }[]; copy?: Signed | null };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type FullApp = { isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; isFullscreen?: boolean };
 const tgApp = () => (window as unknown as { Telegram?: { WebApp?: FullApp } }).Telegram?.WebApp;
@@ -45,7 +47,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
   const skipped = useRef(new Set<number>());
   // الامتحان اللي فتحه: الأوراق تنفتح منه وحده لحد ما تخلص
   const group = useRef<string | null>(null);
-  const [tab, setTab] = useState<"papers" | "history" | "objlog" | "pay" | "check">("papers");
+  const [tab, setTab] = useState<"papers" | "history" | "objlog" | "pay" | "check" | "contract">("papers");
   const inGroup = (x: Row) => group.current === null || `${x.exam}|${x.general}` === group.current;
   const saving = useRef(new Set<number>());
   const [savedNow, setSavedNow] = useState(0);
@@ -214,7 +216,10 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
               <button type="button" className={tab === "objlog" ? "on" : ""} onClick={() => { setTab("objlog"); void call({ action: "objLog" }); }}>✋ الاعتراضات</button>
               {data.canCheck && <button type="button" className={tab === "check" ? "on" : ""} onClick={() => { setTab("check"); void call({ action: "check" }); }}>👀 فحص المصححين</button>}
               {!data.owner && <button type="button" className={tab === "pay" ? "on" : ""} onClick={() => { setTab("pay"); void call({ action: "pay" }); }}>💰 حسابي</button>}
+              <button type="button" className={tab === "contract" ? "on" : ""} onClick={() => { setTab("contract"); void call({ action: "contract" }); }}>📜 العقد{data.contractDue ? " ⚠️" : ""}</button>
             </div>
+            {tab === "papers" && data.contractDue && <div className="card warn"><div className="form"><b>📜 عندك عقد التصحيح، لازم تقراه وتوقعه.</b><button type="button" className="btn" disabled={busy} onClick={() => { setTab("contract"); void call({ action: "contract" }); }}>📜 افتح العقد ووقع</button></div></div>}
+            {tab === "papers" && data.quota && <div className="card"><div className="form"><b>🎯 حصتك اليوم: صححت {data.quota.done} من {data.quota.target}</b>{data.quota.done >= data.quota.target && <span className="fdok">✅ وصلت حصتك</span>}</div></div>}
             {tab === "papers" && data.canEdit && <EditFind found={data.found ?? null} busy={busy} act={act} />}
             {tab === "papers" && <List data={data} busy={busy} act={act} openGroup={(g) => {
               group.current = `${g.exam}|${g.general}`; skipped.current.clear();
@@ -224,6 +229,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
             {tab === "objlog" && data.objLog && <ObjLogTab h={data.objLog} busy={busy} act={act} />}
             {tab === "pay" && data.pay && <PayTab pay={data.pay} busy={busy} act={act} />}
             {tab === "check" && data.check && <CheckTab c={data.check} busy={busy} act={act} />}
+            {tab === "contract" && data.contract && <ContractTab c={data.contract} owner={data.owner} busy={busy} act={act} />}
           </>
         )}
       </div>
@@ -274,6 +280,7 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
       {!!data.objections.length && <ObjList data={data} busy={busy} act={act} />}
       {data.only && <OnlyCard only={data.only} busy={busy} act={act} />}
       {data.only && <OutCard only={data.only} busy={busy} act={act} />}
+      {data.only && <QuotaCard only={data.only} stop={data.quotaStop ?? []} busy={busy} act={act} />}
       <div className="card">
         <h2>📥 أوراق تنتظر: {sum(data.groups)}</h2>
         <div className="seg expad gktabs2">
@@ -474,23 +481,28 @@ function PayCardView({ g, all, chapters, busy, act }: { g: PayCard; all: boolean
   const num = (k: keyof Rate) => (
     <input type="number" inputMode="numeric" className="ltr" min={0} value={rate[k]} onChange={(e) => setRate({ ...rate, [k]: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
   );
+  const fineSum = g.fines.length * g.rate.fine;
   return (
     <div className="card">
       <h2>✍️ {g.name}</h2>
+      {all && <div className="exhint expad">📜 العقد: {g.contract ? (g.contract.current ? `✅ وقع ${g.contract.at.slice(0, 10)}` : "⚠️ وقع نسخة قديمة") : "⏳ ما وقع"}</div>}
       <div className="form">
         <div className="paybal">
           <div><span>أوراق إجبارية</span><b>{g.mand} × {iqd(g.rate.mandatory)}</b></div>
           <div><span>أوراق اختيارية</span><b>{g.opt} × {iqd(g.rate.optional)}</b></div>
           <div><span>اعتراضات انقبلت</span><b>− {g.obj} × {iqd(g.rate.deduct)}</b></div>
+          {!!g.fines.length && <div><span>أيام ما وصل حصته والأوراق ما خلصت</span><b>− {g.fines.length} × {iqd(g.rate.fine)}</b></div>}
           <div className="paytotal"><span>الرصيد</span><b>{iqd(g.amount)}</b></div>
         </div>
+        {!!g.fines.length && <div className="exhint">🎯 {g.fines.map((f) => `${f.day}: ${f.done} من ${f.target}`).join(" · ")}</div>}
+        {all && !!g.fines.length && <Confirm label={`🤝 تسوية بدون الغرامات: ${iqd(g.amount + fineSum)}`} disabled={busy} onYes={() => void act({ action: "settle", grader: g.id, forgiveFine: true })} />}
         {all && (g.obj ? (
           <>
             <div className="hint">عليه {g.obj} اعتراض انقبل. تخصمها من حسابه؟</div>
             <Confirm label={`✂️ تسوية ويا الخصم: ${iqd(g.amount)}`} disabled={busy} onYes={() => void act({ action: "settle", grader: g.id })} />
             <Confirm label={`🤝 تسوية بدون خصم: ${iqd(g.amount + g.obj * g.rate.deduct)}`} disabled={busy} onYes={() => void act({ action: "settle", grader: g.id, forgive: true })} />
           </>
-        ) : <Confirm label="💵 تسوية الحساب (يصفر الرصيد)" disabled={busy || (!g.mand && !g.opt)} onYes={() => void act({ action: "settle", grader: g.id })} />)}
+        ) : <Confirm label="💵 تسوية الحساب (يصفر الرصيد)" disabled={busy || (!g.mand && !g.opt && !g.fines.length)} onYes={() => void act({ action: "settle", grader: g.id })} />)}
         {all && (
           <>
             <label>الفصول اللي يصححها</label>
@@ -501,6 +513,9 @@ function PayCardView({ g, all, chapters, busy, act }: { g: PayCard; all: boolean
             <label>أجر الورقة الإجبارية (دينار)</label>{num("mandatory")}
             <label>أجر الورقة الاختيارية (دينار)</label>{num("optional")}
             <label>خصم كل اعتراض ينقبل على ورقته (دينار)</label>{num("deduct")}
+            <label>غرامة اليوم اللي ما يوصل بيه حصته والأوراق ما تخلص (دينار، 0 = بدون)</label>{num("fine")}
+            <label>قدرته: كم مرة من حصة المصحح العادي (1 عادي، 1.5 مرة ونص)</label>
+            <input type="number" inputMode="decimal" className="ltr" min={0.2} max={5} step={0.1} value={rate.weight} onChange={(e) => setRate({ ...rate, weight: Number(e.target.value) || 1 })} />
             <div className="hint">الأجر الجديد ينحسب على الأوراق اللي بعدها ما انحاسبت.</div>
             <button type="button" className="btn agbtn" disabled={busy} onClick={() => void act({ action: "setRate", grader: g.id, ...rate, chapters: chs })}>💾 حفظ</button>
           </>
@@ -579,5 +594,130 @@ function EditFind({ found, busy, act }: { found: FoundPaper[] | null; busy: bool
         </div>
       ))}
     </div>
+  );
+}
+
+/** 🎯 الحصص (صاحب البوت): بالأصل المصحح يكمل بعد حصته ويعوض البطيئين، ولكل امتحان يگدر يخليه يوقف من يوصلها */
+function QuotaCard({ only, stop, busy, act }: { only: Only; stop: number[]; busy: boolean; act: Call }) {
+  const [exam, setExam] = useState(0);
+  const title = (id: number) => only.exams.find((e) => e.id === id)?.title ?? String(id);
+  return (
+    <div className="card">
+      <h2>🎯 حصة كل مصحح</h2>
+      <div className="form">
+        <div className="exhint">كل يوم، أوراق كل امتحان تنقسم بالعدد على المصححين اللي يگدرون يصححوه (والمصحح اللي «قدرته» أكثر ياخذ أكثر، تحددها بحسابه). كل مصحح يشوف «🎯 حصتك اليوم».</div>
+        <div className="exhint">بالأصل يكمل بعد حصته حتى يعوض البطيئين. إذا تريد بامتحان معين يوقف من يوصل حصته، اختاره هنا:</div>
+        <select value={exam} onChange={(e) => setExam(Number(e.target.value))}>
+          <option value={0}>اختار الامتحان...</option>
+          {only.exams.map((e) => <option key={e.id} value={e.id}>{e.chapter} · {e.title}</option>)}
+        </select>
+        {!!exam && (stop.includes(exam)
+          ? <button type="button" className="btn ghost" disabled={busy} onClick={() => void act({ action: "quotaStop", exam, on: false })}>✅ رجّعه: يكمل بعد حصته</button>
+          : <button type="button" className="btn" disabled={busy} onClick={() => void act({ action: "quotaStop", exam, on: true })}>🛑 يوقف من يوصل حصته</button>)}
+        {!!stop.length && <div className="exhint">🛑 يوقفون من يوصلون حصتهم: {stop.map(title).join("، ")}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** التوقيع: يرسم بإصبعه أو بقلم الآيباد */
+function SignPad({ onChange }: { onChange: (sig: { w: number; h: number; s: number[][] } | null) => void }) {
+  const W = 600, H = 220;
+  const cv = useRef<HTMLCanvasElement>(null);
+  const strokes = useRef<number[][]>([]);
+  const live = useRef<number[] | null>(null);
+  const pt = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * W), Math.round((e.clientY - r.top) / r.height * H)]; };
+  const ctx = () => { const c = cv.current!.getContext("2d")!; c.strokeStyle = "#0b2a6b"; c.lineWidth = 3.5; c.lineCap = "round"; c.lineJoin = "round"; return c; };
+  function clear() { strokes.current = []; const c = cv.current!.getContext("2d")!; c.clearRect(0, 0, W, H); onChange(null); }
+  useEffect(() => {
+    const c = cv.current, stop = (e: TouchEvent) => e.preventDefault();
+    c?.addEventListener("touchstart", stop, { passive: false }); c?.addEventListener("touchmove", stop, { passive: false });
+    return () => { c?.removeEventListener("touchstart", stop); c?.removeEventListener("touchmove", stop); };
+  }, []);
+  return (
+    <>
+      <canvas ref={cv} width={W} height={H} className="inkpad" style={{ aspectRatio: `${W} / ${H}`, maxWidth: 600 }}
+        onPointerDown={(e) => { e.preventDefault(); try { cv.current!.setPointerCapture(e.pointerId); } catch { /* */ } live.current = pt(e); }}
+        onPointerMove={(e) => { const p = live.current; if (!p) return; const [x, y] = pt(e); const c = ctx(); c.beginPath(); c.moveTo(p[p.length - 2], p[p.length - 1]); c.lineTo(x, y); c.stroke(); p.push(x, y); }}
+        onPointerUp={() => { if (live.current) { strokes.current.push(live.current); live.current = null; onChange({ w: W, h: H, s: strokes.current }); } }}
+        onPointerCancel={() => { if (live.current) { strokes.current.push(live.current); live.current = null; onChange({ w: W, h: H, s: strokes.current }); } }} />
+      <button type="button" className="exbtn" onClick={clear}>🗑 امسح التوقيع</button>
+    </>
+  );
+}
+const SigSvg = ({ sig }: { sig: Signed["sig"] }) => (
+  <svg viewBox={`0 0 ${sig.w} ${sig.h}`} style={{ width: "100%", maxWidth: 320, height: "auto" }} aria-hidden>
+    {sig.s.map((p, i) => <polyline key={i} points={p.reduce((a, v, k) => a + (k % 2 ? `,${v} ` : `${v}`), "")} fill="none" stroke="#0b2a6b" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />)}
+  </svg>
+);
+/** نسخة العقد الموقعة: النص اللي وقع عليه، واسمه وتوقيعه والتاريخ. تنطبع */
+function SignedCopy({ c }: { c: Signed }) {
+  return (
+    <div className="card contractpaper">
+      <h2>📜 عقد التصحيح</h2>
+      <div className="contracttext">{c.text}</div>
+      <div className="contractsign">
+        <div>اسم المصحح: <b>{c.name}</b></div>
+        <div>التاريخ: <b dir="ltr">{c.at.slice(0, 16)}</b></div>
+        <SigSvg sig={c.sig} />
+      </div>
+      <button type="button" className="exbtn noprint" onClick={() => window.print()}>🖨 اطبعه</button>
+    </div>
+  );
+}
+/** 📜 العقد: صاحب البوت يكتب الصيغة ويشوف منو وقع، والمصحح يقراه ويوقع */
+function ContractTab({ c, owner, busy, act }: { c: ContractData; owner: boolean; busy: boolean; act: Call }) {
+  const [text, setText] = useState(c.text);
+  const [name, setName] = useState("");
+  const [sig, setSig] = useState<Signed["sig"] | null>(null);
+  if (c.copy) return <><SignedCopy c={c.copy} /><button type="button" className="exbtn" onClick={() => void act({ action: "contract" })}>↩️ رجوع</button></>;
+  return (
+    <>
+      {owner && (
+        <div className="card">
+          <h2>✍️ صيغة العقد</h2>
+          <div className="form">
+            <div className="exhint">اكتب العقد بكلامك. تگدر تحط بداخله: <b>{"{الاسم}"}</b> (اسم المصحح)، <b>{"{الغرامة}"}</b> (غرامة اليوم اللي تحددها بحسابه)، <b>{"{الحصة}"}</b> (قدرته)، <b>{"{التاريخ}"}</b>، وتنملى وحدها لكل مصحح. إذا غيرت الصيغة، كل المصححين يوقعون من جديد.</div>
+            <textarea rows={14} value={text} onChange={(e) => setText(e.target.value)} placeholder="أنا {الاسم} أتعهد أن أصحح يومياً حصتي من الأوراق..." />
+            <button type="button" className="btn" disabled={busy || text.trim() === c.text} onClick={() => void act({ action: "contractSave", text })}>💾 احفظ العقد</button>
+            {c.v > 0 && <div className="exhint">النسخة {c.v} · آخر تعديل {c.updated.slice(0, 16)}</div>}
+          </div>
+        </div>
+      )}
+      {owner && !!c.graders?.length && (
+        <div className="card">
+          <h2>منو وقع</h2>
+          <table className="extable"><tbody>
+            {c.graders.map((g) => (
+              <tr key={g.id}>
+                <td><b>{g.name}</b><small className="pdmode">{g.signed ? (g.signed.current ? `✅ وقع ${g.signed.at.slice(0, 10)}` : `⚠️ وقع نسخة قديمة ${g.signed.at.slice(0, 10)}، لازم يوقع الجديدة`) : "⏳ بعده ما وقع"}</small></td>
+                <td className="p">{g.signed && <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "contractCopy", grader: g.id })}>👁 نسخته</button>}</td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
+      {!owner && (c.v === 0 ? <div className="empty">بعده ما انكتب عقد.</div> : (
+        <div className="card contractpaper">
+          <h2>📜 عقد التصحيح</h2>
+          <div className="contracttext">{c.mine}</div>
+          {c.signed?.current ? (
+            <div className="form">
+              <div className="fdok">✅ وقعته بتاريخ {c.signed.at.slice(0, 16)}</div>
+              <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "contractCopy" })}>👁 نسختي الموقعة</button>
+            </div>
+          ) : (
+            <div className="form">
+              {c.signed && <div className="exhint">⚠️ العقد تغير بعد ما وقعت، اقراه ووقع النسخة الجديدة.</div>}
+              <label>اسمك الكامل</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} />
+              <label>توقيعك (بإصبعك أو بالقلم)</label>
+              <SignPad onChange={setSig} />
+              <button type="button" className="btn" disabled={busy || name.trim().split(/\s+/).length < 2 || !sig} onClick={() => void act({ action: "contractSign", name, sig })}>✍️ أوقع على العقد</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </>
   );
 }

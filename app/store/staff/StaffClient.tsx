@@ -5,12 +5,12 @@ import { useState } from "react";
 import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Account = { sold: number; paid: number; owed: number; limit: number; left: number };
-type Rate = { mandatory: number; optional: number; deduct: number };
+type Rate = { mandatory: number; optional: number; deduct: number; fine: number; weight: number };
 type Topic = { id: number; title: string; chapter: string };
 type Places = { all: boolean; keys: string[]; private: boolean };
 type Area = { id: number; name: string; centers: { id: number; name: string; slots: { d: number; t: string }[] }[] };
 const DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
-type Grade = { chapters: string[]; off: number[]; places: Places; rate: Rate; mand: number; opt: number; obj: number; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
+type Grade = { chapters: string[]; off: number[]; places: Places; rate: Rate; mand: number; opt: number; obj: number; fines?: { day: string; target: number; done: number }[]; contract?: { v: number; at: string; current: boolean } | null; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
 type Staff = { id: number; name: string; perms: string[]; door?: boolean; work: { today: number; last: string } | null; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
 type Data = { chapters: string[]; topics: Topic[]; tree: Area[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string; door?: { id: number; name: string; link: string; qr: string } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -172,9 +172,13 @@ function GradeWallet({ s, g, chapters, topics, tree, busy, call }: { s: Staff; g
         <div><b>{g.mand}</b>ورقة إجبارية × {fmt(g.rate.mandatory)}</div>
         <div><b>{g.opt}</b>ورقة اختيارية × {fmt(g.rate.optional)}</div>
         <div><b>{g.obj}</b>اعتراض انقبل − {fmt(g.rate.deduct)}</div>
+        {!!g.fines?.length && <div><b>{g.fines.length}</b>يوم ما وصل حصته − {fmt(g.rate.fine)}</div>}
         <div><b>{fmt(g.amount)}</b>إله هسه (دينار)</div>
       </div>
+      {!!g.fines?.length && <div className="exhint">🎯 {g.fines.map((f) => `${f.day}: ${f.done} من ${f.target}`).join(" · ")}</div>}
+      <div className="exhint">📜 العقد: {g.contract ? (g.contract.current ? `✅ وقع ${g.contract.at.slice(0, 10)}` : "⚠️ وقع نسخة قديمة") : "⏳ ما وقع"}</div>
       <PayGrader g={g} busy={busy} pay={(forgive) => void call({ action: "gradePay", id: s.id, forgive })} />
+      {!!g.fines?.length && <Confirm label={`🤝 دفع بدون الغرامات: ${fmt(g.amount + g.fines.length * g.rate.fine)}`} disabled={busy} onYes={() => void call({ action: "gradePay", id: s.id, forgiveFine: true })} />}
       <PlacesPicker tree={tree} pl={pl} setPl={setPl} />
       <div className="exlabel adtop">الفصول اللي يصححها</div>
       <div className="seg wrap2">
@@ -201,6 +205,10 @@ function GradeWallet({ s, g, chapters, topics, tree, busy, call }: { s: Staff; g
       {num("mandatory", "أجر الورقة الإجبارية (دينار)")}
       {num("optional", "أجر الورقة الاختيارية (دينار)")}
       {num("deduct", "خصم كل اعتراض ينقبل على ورقته (دينار)")}
+      {num("fine", "غرامة اليوم اللي ما يوصل بيه حصته والأوراق ما تخلص (دينار، 0 = بدون)")}
+      <label className="stfield">قدرته: كم مرة من حصة المصحح العادي (1 عادي، 1.5 مرة ونص)
+        <input type="number" inputMode="decimal" className="ltr" min={0.2} max={5} step={0.1} value={rate.weight} onChange={(e) => setRate({ ...rate, weight: Number(e.target.value) || 1 })} />
+      </label>
       <div className="exhint">الأجر الجديد ينحسب على الأوراق اللي بعدها ما اندفعت.</div>
       <button type="button" className="btn adsmallbtn" disabled={busy} onClick={() => void call({ action: "gradeRate", id: s.id, ...rate, chapters: chs, off: off.filter((x) => topics.some((t) => t.id === x && shown.includes(t.chapter))), places: pl })}>💾 حفظ الأماكن والفصول والأجور</button>
       {!!g.archive.length && <div className="exhint">الدفعات السابقة: {g.archive.map((a) => `${a.created.slice(0, 10)}: ${fmt(a.amount)} (${a.mand + a.opt} ورقة${a.obj ? `، ${a.obj} اعتراض ${a.forgiven ? "بدون خصم" : "انخصم"}` : ""})`).join(" · ")}</div>}

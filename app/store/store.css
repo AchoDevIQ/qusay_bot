@@ -491,3 +491,7 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .inkstu{color:#1b2a6b;direction:ltr;text-align:left;font:italic 17px/30px "Times New Roman",serif}
 .inkon{display:flex;justify-content:flex-start;padding-right:10px}
 .vtext textarea{display:block;width:100%;box-sizing:border-box;font-size:16px;border:1px solid var(--gold2);border-radius:10px;padding:10px;margin-top:6px;background:transparent;color:inherit;resize:vertical}
+/* 📜 عقد المصححين: مثل ورقة، والنص بأسطره، ويطبع نظيف */
+.contractpaper{background:#fff;color:#1a1a1a}.contracttext{white-space:pre-wrap;line-height:1.9;font-size:16px;padding:6px 2px}
+.contractsign{display:grid;gap:6px;margin-top:14px;border-top:1px solid #ddd;padding-top:10px}
+@media print{body *{visibility:hidden}.contractpaper,.contractpaper *{visibility:visible}.contractpaper{position:absolute;inset:0;box-shadow:none}.noprint{display:none!important}}

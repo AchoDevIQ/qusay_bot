@@ -13,7 +13,7 @@ import { send, sendAlbum, upload, type Kb } from "./telegram.ts";
 import { deliverMsg, voiceOf } from "./directMsg.ts";
 import { pickComment } from "./commentsApi.ts";
 import { canHandle, openObjections, testObjection } from "./objections.ts";
-import { balanceOf, gradeOnly, gradeScope, outCfg, outOf, payAction, payData, setGradeOnly, setOutCfg } from "./graderPay.ts";
+import { balanceOf, dayOf, dayQuotas, gradeOnly, gradeScope, outCfg, outOf, payAction, payData, quotaStop, setGradeOnly, setOutCfg, setQuotaStop } from "./graderPay.ts";
 import { files } from "./files.ts";
 import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
@@ -64,7 +64,19 @@ async function waitingFor(uid: number, papers: Row[]) {
   // أول أوراق المواضيع اللي يصححها نظام التصحيح: بس لصاحب البوت وللمساعد اللي عنده صلاحية 🎓
   const calib = await aiCalibIds(papers);
   const mayCalib = ADMIN_IDS.includes(uid) || String((await staffRow(uid))?.perms ?? "").split(",").includes(CALIB_PERM);
-  return papers.filter((p) => !p.graded_at && !held.has(p.id) && (p.grader_id === uid || (!p.grader_id && scope.can(p) && (mayCalib || !calib.has(p.id)))));
+  const list = papers.filter((p) => !p.graded_at && !held.has(p.id) && (p.grader_id === uid || (!p.grader_id && scope.can(p) && (mayCalib || !calib.has(p.id)))));
+  // امتحان «🛑 يوقف من يوصل حصته»: المصحح اللي وصل حصته بذاك اليوم ما تطلعله أوراق جديدة منه (اللي ماسكها تبقى)
+  const stop = new Set(await quotaStop());
+  if (!stop.size || ADMIN_IDS.includes(uid)) return list;
+  const full = new Map<string, boolean>();
+  const out: Row[] = [];
+  for (const p of list) {
+    if (p.grader_id === uid || !stop.has(p.exam_id)) { out.push(p); continue; }
+    const key = `${dayOf(p)}|${p.exam_id}`;
+    if (!full.has(key)) { const e = (await dayQuotas(dayOf(p), papers)).get(uid)?.exams.get(p.exam_id); full.set(key, !!e && e.done >= e.target); }
+    if (!full.get(key)) out.push(p);
+  }
+  return out;
 }
 /** الامتحانات اللي بيها أوراق تنتظر: المصحح يختار امتحان، مو طالب */
 async function examGroups(waiting: Row[]) {
@@ -107,6 +119,10 @@ async function listData(uid: number) {
     owner: await isAdmin(uid), hasTests: papers.some(isTest), fileToken: fileToken(uid), penText: false,
     stickers: (await find("stickers", {})).sort((a, b) => a.lo - b.lo || a.id - b.id).map((s) => ({ id: s.id, name: s.name, lo: s.lo, hi: s.hi })),
     today: papers.filter((p) => p.grader_id === uid && String(p.graded_at ?? "").startsWith(stamp().slice(0, 10))).length,
+    // 🎯 حصته اليوم: شگد لازم يصحح من أوراق اليوم وشگد صحح
+    quota: await (async () => { const q = (await dayQuotas(stamp().slice(0, 10), papers)).get(uid); return q && q.target ? { target: q.target, done: q.done } : null; })(),
+    quotaStop: await isAdmin(uid) ? await quotaStop() : undefined,
+    contractDue: await (async () => { const C = await import("./graderContract.ts"); const c = await C.contract(); if (!c.v || await isAdmin(uid)) return false; return !(await C.signedOf(uid))?.current; })(),
   };
 }
 /** الأوراق اللي عليها اعتراض ينتظر رد هذا المصحح */
@@ -612,6 +628,23 @@ export async function gradeAction(body: Row) {
       await deleteTests();
       notice = "🗑 انمسحت أوراق التجربة";
     }
+  } else if (a === "contract" || a === "contractSign" || a === "contractSave" || a === "contractCopy" || a === "quotaStop") {
+    // 📜 العقد، و🛑 «يوقف من يوصل حصته» لكل امتحان
+    const C = await import("./graderContract.ts");
+    const owner = await isAdmin(uid);
+    if (a === "contractSave") { need(owner, "صيغة العقد لصاحب البوت بس", 403); await C.saveContract(body.text); notice = "✅ انحفظ العقد. المصححين يوصلهم ويوقعون عليه"; }
+    if (a === "contractSign") { await C.sign(uid, body.name, body.sig); notice = "✅ وقعت العقد. نسخته محفوظة"; }
+    if (a === "quotaStop") { need(owner, "لصاحب البوت بس", 403); await setQuotaStop(Number(body.exam), !!body.on); notice = body.on ? "🛑 هذا الامتحان: المصحح يوقف من يوصل حصته" : "✅ هذا الامتحان: المصحح يكمل بعد حصته ويعوض البطيئين"; }
+    const c = await C.contract();
+    const copyOf = a === "contractCopy" ? (owner ? Number(body.grader) : uid) : 0;
+    return {
+      ...await listData(uid), paper: null, notice,
+      contract: {
+        text: c.text, v: c.v, updated: c.updated, mine: await C.filledFor(uid), signed: await C.signedOf(uid),
+        ...(owner ? { graders: await Promise.all((await (await import("./graderPay.ts")).humanGraders()).map(async (id) => ({ id, name: await staffName(id), signed: await C.signedOf(id) }))) } : {}),
+        ...(copyOf ? { copy: await C.signedCopy(copyOf) } : {}),
+      },
+    };
   } else if (a === "pay") {
     return { ...await listData(uid), paper: null, notice: "", pay: await payData(uid) };
   } else if (a === "setRate" || a === "settle") {

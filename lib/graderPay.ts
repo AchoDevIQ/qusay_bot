@@ -2,7 +2,8 @@
 // الرصيد هو اللي ما انحاسب بعد، والتسوية تصفره وتنحفظ بالأرشيف. أوراق التجربة ما تنحسب
 import { aiHeld, aiPartialOf, graderShare } from "./aiGrade.ts";
 import { find, insert, kvGet, kvSet, one, put, update, type Row } from "./db.ts";
-import { isAdmin, staffName } from "./data.ts";
+import { AI_GRADER, QUSAY_GRADER, isAdmin, staffIds, staffName } from "./data.ts";
+import { ADMIN_IDS } from "./config.ts";
 import { send } from "./telegram.ts";
 import { addMinutes } from "./scheduleRules.ts";
 import { stamp } from "./util.ts";
@@ -15,7 +16,75 @@ const money = (v: unknown, what: string) => {
 };
 export async function rateOf(uid: number) {
   const r = await one("grader_pay", { user_id: uid });
-  return { mandatory: r?.mandatory ?? 0, optional: r?.optional ?? 0, deduct: r?.deduct ?? 0 };
+  return { mandatory: r?.mandatory ?? 0, optional: r?.optional ?? 0, deduct: r?.deduct ?? 0, fine: r?.fine ?? 0, weight: Number(r?.weight) > 0 ? Number(r!.weight) : 1 };
+}
+
+// ---------- حصة كل مصحح باليوم وغرامته (طلب الأستاذ 2026-11-22)
+// حصة المصحح من امتحان بيوم = أوراق الامتحان بذاك اليوم ÷ المصححين اللي يگدرون يصححوه (بالعدد، مو نسبة).
+// «قدرته»: مصحح ×1.5 ياخذ مرة ونص من غيره (مثلاً 1000 ورقة و10 مصححين: هو 143 والباقين 95 تقريباً).
+// بالأصل يكمل بعد حصته حتى يعوض البطيئين، وبكل امتحان صاحب البوت يگدر يخليه «يوقف من يوصل حصته».
+// الغرامة: يوم ما وصل بيه حصته، والأوراق بعدها ما خلصت بنهاية اليوم (إذا غيره عوض عنه، ماكو غرامة)
+const STOP_KEY = "grade_quota_stop";
+export async function quotaStop(): Promise<number[]> { try { const j = JSON.parse((await kvGet(STOP_KEY)) ?? "[]"); return Array.isArray(j) ? j.map(Number) : []; } catch { return []; } }
+export async function setQuotaStop(exam: number, on: boolean) {
+  const l = new Set(await quotaStop());
+  if (on) l.add(exam); else l.delete(exam);
+  await kvSet(STOP_KEY, JSON.stringify([...l]));
+}
+/** يوم الورقة: يوم امتحانها */
+export const dayOf = (p: Row) => String(p.at ?? p.submitted_at ?? "").slice(0, 10);
+/** أوراق المصححين (مو التجربة ولا اللي صححها الذكاء) */
+const humanPaper = (p: Row) => p.user_id > 0 && p.status === "done" && p.grader_id !== AI_GRADER && p.grader_id !== QUSAY_GRADER;
+export const humanGraders = async () => (await staffIds("grade")).filter((id) => !ADMIN_IDS.includes(id));
+export type DayQuota = { target: number; done: number; open: number; exams: Map<number, { target: number; done: number; n: number; graders: number }> };
+/** حصص يوم: لكل مصحح، شگد لازم يصحح وشگد صحح، وكم ورقة من امتحاناته بقت ما مصححة بنهاية اليوم */
+// حصص اليوم تنحسب مرة بالدقيقة (صفحة الحساب تطلبها لكل مصحح ولكل يوم)
+const quotaCache = new Map<string, { at: number; q: Map<number, DayQuota> }>();
+export async function dayQuotas(day: string, papersAll?: Row[]): Promise<Map<number, DayQuota>> {
+  const hit = quotaCache.get(day);
+  if (hit && Date.now() - hit.at < 60_000) return hit.q;
+  const q = await computeQuotas(day, papersAll);
+  quotaCache.set(day, { at: Date.now(), q });
+  return q;
+}
+export const clearQuotaCache = () => quotaCache.clear();
+async function computeQuotas(day: string, papersAll?: Row[]): Promise<Map<number, DayQuota>> {
+  const papers = (papersAll ?? await find("sched_items", { status: "done" })).filter((p) => humanPaper(p) && dayOf(p) === day);
+  const ids = await humanGraders();
+  const scopes = new Map(await Promise.all(ids.map(async (id) => [id, await gradeScope(id)] as const)));
+  const byExam = new Map<number, Row[]>();
+  for (const p of papers) byExam.set(p.exam_id, [...byExam.get(p.exam_id) ?? [], p]);
+  const out = new Map<number, DayQuota>(ids.map((id) => [id, { target: 0, done: 0, open: 0, exams: new Map() }]));
+  for (const [exam, list] of byExam) {
+    const can = ids.filter((id) => list.some((p) => scopes.get(id)!.can(p)));
+    if (!can.length) continue;
+    const w = new Map(await Promise.all(can.map(async (id) => [id, (await rateOf(id)).weight] as const)));
+    const sum = can.reduce((t, id) => t + w.get(id)!, 0);
+    const open = list.filter((p) => !p.graded_at || String(p.graded_at).slice(0, 10) > day).length;
+    for (const id of can) {
+      const share = Math.ceil(list.length * w.get(id)! / sum);
+      const q = out.get(id)!;
+      const done = list.filter((p) => p.grader_id === id && p.graded_at).length;
+      q.exams.set(exam, { target: share, done, n: list.length, graders: can.length });
+      q.target += share; q.done += done; q.open += open;
+    }
+  }
+  return out;
+}
+/** الأيام اللي عليه بيها غرامة وما انحاسبت: ما وصل حصته والأوراق ما خلصت. من يوم انحطت الغرامة، لحد البارحة */
+export async function fineDays(uid: number, papersAll?: Row[]) {
+  const r = await one("grader_pay", { user_id: uid });
+  if (!r?.fine || !r.fine_from) return [];
+  const paid = new Set<string>((await find("grader_settlements", { user_id: uid })).flatMap((s) => { try { return JSON.parse(String(s.fine_days ?? "[]")) as string[]; } catch { return []; } }));
+  const today = stamp().slice(0, 10);
+  const papers = papersAll ?? await find("sched_items", { status: "done" });
+  const days = [...new Set(papers.filter(humanPaper).map(dayOf))].filter((d) => d && d >= String(r.fine_from) && d < today && !paid.has(d)).sort();
+  const out: { day: string; target: number; done: number }[] = [];
+  for (const d of days) {
+    const q = (await dayQuotas(d, papers)).get(uid);
+    if (q && q.target > 0 && q.done < q.target && q.open > 0) out.push({ day: d, target: q.target, done: q.done });
+  }
+  return out;
 }
 /** الفصول اللي يصححها المصحح. فارغة يعني كل الفصول. صاحب البوت يصحح كلشي */
 export async function chaptersOf(uid: number): Promise<string[]> {
@@ -131,9 +200,10 @@ export async function balanceOf(uid: number) {
   const opt = round2(papers.reduce((t, p, i) => t + (p.kind === "optional" ? shares[i] : 0), 0));
   // الاعتراض ينحسب على الورقة: سؤال واحد انقبل أو خمسة، يبقى اعتراض واحد على المصحح
   const obj = new Set(objs.map((o) => o.item_id)).size;
+  const fines = await fineDays(uid);
   return {
-    rate, mand, opt, obj,
-    amount: Math.round(mand * rate.mandatory + opt * rate.optional - obj * rate.deduct),
+    rate, mand, opt, obj, fines,
+    amount: Math.round(mand * rate.mandatory + opt * rate.optional - obj * rate.deduct - fines.length * rate.fine),
     paperIds: papers.map((p) => p.id as number), objIds: objs.map((o) => o.id as number),
   };
 }
@@ -147,7 +217,7 @@ export async function graders() {
 }
 export async function card(uid: number) {
   const b = await balanceOf(uid);
-  return { id: uid, name: await staffName(uid), chapters: await chaptersOf(uid), off: await examsOffOf(uid), places: await placesOf(uid), rate: b.rate, mand: b.mand, opt: b.opt, obj: b.obj, amount: b.amount, archive: await archiveOf(uid) };
+  return { id: uid, name: await staffName(uid), chapters: await chaptersOf(uid), off: await examsOffOf(uid), places: await placesOf(uid), rate: b.rate, mand: b.mand, opt: b.opt, obj: b.obj, fines: b.fines, amount: b.amount, archive: await archiveOf(uid), contract: await (await import("./graderContract.ts")).signedOf(uid) };
 }
 
 /** صفحة التعويض: صاحب البوت يشوف كل المصححين ويعدل أجورهم ويسوي تسوية، والمصحح يشوف حسابه بس */
@@ -178,18 +248,25 @@ export async function payAction(uid: number, body: Row) {
       need(keys.every((k) => valid.has(k)), "مكان أو وقت غير معروف");
       places = JSON.stringify({ all: pl.all !== false, keys: pl.all === false ? keys : [], private: pl.private !== false });
     }
-    await put("grader_pay", { user_id: id, mandatory: money(body.mandatory, "أجر الإجباري"), optional: money(body.optional, "أجر الاختياري"), deduct: money(body.deduct, "خصم الاعتراض"), chapters: JSON.stringify(chapters.length === all.length ? [] : chapters), exams_off: JSON.stringify(off), places });
+    // الغرامة تبدي تنحسب من يوم انحطت (مو على الأيام اللي قبلها)
+    const fine = body.fine === undefined ? Number(old?.fine ?? 0) : money(body.fine, "غرامة اليوم");
+    const weight = body.weight === undefined ? (Number(old?.weight) > 0 ? Number(old!.weight) : 1) : Number(body.weight);
+    need(weight >= 0.2 && weight <= 5, "قدرة المصحح بين ×0.2 و ×5");
+    const fine_from = fine ? (old?.fine && old?.fine_from ? old.fine_from : stamp().slice(0, 10)) : null;
+    await put("grader_pay", { user_id: id, mandatory: money(body.mandatory, "أجر الإجباري"), optional: money(body.optional, "أجر الاختياري"), deduct: money(body.deduct, "خصم الاعتراض"), chapters: JSON.stringify(chapters.length === all.length ? [] : chapters), exams_off: JSON.stringify(off), places, fine, fine_from, weight: Math.round(weight * 100) / 100 });
     return "✅ انحفظ";
   }
   const b = await balanceOf(id);
-  need(b.paperIds.length || b.objIds.length, "ماكو شي ينحاسب");
-  // صاحب البوت يختار: يخصم الاعتراضات اللي انقبلت، لو يسامحه بيها
+  need(b.paperIds.length || b.objIds.length || b.fines.length, "ماكو شي ينحاسب");
+  // صاحب البوت يختار: يخصم الاعتراضات اللي انقبلت، لو يسامحه بيها. ونفس الشي الغرامات
   const forgive = !!body.forgive && b.obj > 0;
-  const amount = forgive ? b.amount + b.obj * b.rate.deduct : b.amount;
-  const sid = await insert("grader_settlements", { user_id: id, n_mand: b.mand, n_opt: b.opt, n_obj: b.obj, amount, forgiven: forgive ? 1 : 0, created: stamp(), by_id: uid });
+  const forgiveFine = !!body.forgiveFine && b.fines.length > 0;
+  const amount = b.amount + (forgive ? b.obj * b.rate.deduct : 0) + (forgiveFine ? b.fines.length * b.rate.fine : 0);
+  const sid = await insert("grader_settlements", { user_id: id, n_mand: b.mand, n_opt: b.opt, n_obj: b.obj, amount, forgiven: forgive ? 1 : 0, created: stamp(), by_id: uid, fine_days: JSON.stringify(b.fines.map((f) => f.day)), fine_forgiven: forgiveFine ? 1 : 0 });
   for (const p of b.paperIds) await update("sched_items", { id: p }, { paid_id: sid });
   for (const o of b.objIds) await update("objections", { id: o }, { paid_id: sid });
-  const parts = [b.mand ? `${b.mand} ورقة إجبارية` : "", b.opt ? `${b.opt} ورقة اختيارية` : "", b.obj ? (forgive ? `${b.obj} اعتراض انقبل وما انخصم` : `خصم ${b.obj} اعتراض انقبل`) : ""].filter(Boolean).join("، ");
+  const parts = [b.mand ? `${b.mand} ورقة إجبارية` : "", b.opt ? `${b.opt} ورقة اختيارية` : "", b.obj ? (forgive ? `${b.obj} اعتراض انقبل وما انخصم` : `خصم ${b.obj} اعتراض انقبل`) : "",
+    b.fines.length ? (forgiveFine ? `${b.fines.length} يوم ما وصلت بيه حصتك وما انغرمت` : `غرامة ${b.fines.length} يوم ما وصلت بيه حصتك (${b.fines.map((f) => `${f.day}: ${f.done} من ${f.target}`).join("، ")})`) : ""].filter(Boolean).join("، ");
   await send(id, `💵 <b>قصي العميري دفعلك ${amount.toLocaleString("en")} دينار</b>\nعن تصحيح: ${parts}.\nرصيدك هسه صفر.`);
   return `✅ انحاسب ${await staffName(id)}: ${amount.toLocaleString("en")} دينار${forgive ? "، بدون خصم الاعتراضات" : ""}`;
 }

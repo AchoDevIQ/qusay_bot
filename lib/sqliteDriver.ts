@@ -171,6 +171,11 @@ async function init() {
   await addColumn("sched_items", "retake_of", "INTEGER");
   await addColumn("grader_pay", "exams_off", "TEXT");
   await addColumn("grader_pay", "places", "TEXT");
+  await addColumn("grader_pay", "fine", "INTEGER");
+  await addColumn("grader_pay", "fine_from", "TEXT");
+  await addColumn("grader_pay", "weight", "REAL");
+  await addColumn("grader_settlements", "fine_days", "TEXT");
+  await addColumn("grader_settlements", "fine_forgiven", "INTEGER");
   for (const c of ["started_at", "submitted_at", "opened_at", "notified"]) await addColumn("sched_items", c, "TEXT");
   await addColumn("schedules", "mode", "TEXT");
   await addColumn("schedules", "center_id", "INTEGER");
