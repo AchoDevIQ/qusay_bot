@@ -25,21 +25,25 @@ const TG_MAX = 3900;
 export const POLL_ACTS: Record<string, string> = {
   early_with: "🚀 يبدي الفصل الجاي هسه، ويا المراجعات",
   early_without: "🚀 يبدي الفصل الجاي هسه، بدون المراجعات",
+  // نفس اختيار الطالب «📱 أمتحن بالآيباد» بجدوله (ipad_exam_<رقمه>): بالمركز ما تنطبعله ورقة، ويكتب بالقلم بالآيباد
+  ipad: "📝 يمتحن بالآيباد (الحضوري)",
 };
-/** شنو صار لمن انطبق: كم واحد انثبت، ومنو ما انثبت وليش */
-export type Applied = { at: string; ok: number; fail: { id: number; name: string; why: string }[]; running?: boolean };
-/** curr: المنهج، chapters: الفصول (الطالب شاري واحد منها على الأقل)، acts: شغل كل اختيار، reach: كم طالب بالفئة وقت ما انرسل */
-export type Poll = { id: number; question: string; options: string[]; centers: number[]; gender: string; curr: string; chapters: string[]; acts: string[]; applied: Applied | null; reach: number | null; status: "open" | "closed"; created: string; closed_at: string; shown: boolean | null };
+/** شنو صار لمن انطبق: كم واحد انثبت، ومنو ما انثبت وليش، ومنو استثناه صاحب البوت */
+export type Applied = { at: string; ok: number; fail: { id: number; name: string; why: string }[]; skipped?: { id: number; name: string }[]; running?: boolean };
+/** شنو شاري: lec محاضرات بس، exam امتحانات بس، both الاثنين. الفئة تختار واحد أو أكثر، وبدونها كل المسجلين */
+export const BUYS: Record<string, string> = { lec: "محاضرات بس", exam: "امتحانات بس", both: "محاضرات وامتحانات" };
+/** curr: المنهج، chapters: الفصول (الطالب شاري واحد منها على الأقل)، buys: شنو شاري، acts: شغل كل اختيار، reach: كم طالب بالفئة وقت ما انرسل */
+export type Poll = { id: number; question: string; options: string[]; centers: number[]; gender: string; curr: string; chapters: string[]; buys: string[]; acts: string[]; applied: Applied | null; reach: number | null; status: "open" | "closed"; created: string; closed_at: string; shown: boolean | null };
 const arr = (v: unknown) => { try { const j = JSON.parse(String(v ?? "[]")); return Array.isArray(j) ? j : []; } catch { return []; } };
 const pollOf = (r: Row): Poll => ({
   id: r.id, question: String(r.question ?? ""), options: arr(r.options).map(String), centers: arr(r.centers).map(Number),
-  gender: String(r.gender ?? ""), curr: String(r.curr ?? ""), chapters: arr(r.chapters).map(String),
+  gender: String(r.gender ?? ""), curr: String(r.curr ?? ""), chapters: arr(r.chapters).map(String), buys: arr(r.buys).map(String).filter((b) => BUYS[b]),
   acts: arr(r.acts).map((a) => (POLL_ACTS[String(a)] ? String(a) : "")), applied: appliedOf(r.applied), reach: r.reach == null ? null : Number(r.reach),
   status: r.status === "closed" ? "closed" : "open", created: String(r.created ?? ""), closed_at: String(r.closed_at ?? ""),
   shown: r.shown === 1 ? true : r.shown === 0 ? false : null,
 });
 function appliedOf(v: unknown): Applied | null {
-  try { const j = JSON.parse(String(v ?? "null")); return j && typeof j.at === "string" ? { at: j.at, ok: Number(j.ok) || 0, fail: Array.isArray(j.fail) ? j.fail : [], ...(j.running ? { running: true } : {}) } : null; } catch { return null; }
+  try { const j = JSON.parse(String(v ?? "null")); return j && typeof j.at === "string" ? { at: j.at, ok: Number(j.ok) || 0, fail: Array.isArray(j.fail) ? j.fail : [], ...(Array.isArray(j.skipped) && j.skipped.length ? { skipped: j.skipped } : {}), ...(j.running ? { running: true } : {}) } : null; } catch { return null; }
 }
 export async function getPoll(id: number) { const r = await one("polls", { id }); return r ? pollOf(r) : null; }
 
@@ -54,7 +58,17 @@ export async function inTarget(p: Poll, s: Row | null | undefined) {
     const mine = new Set(await ownedChapters(Number(s.user_id)));
     if (!p.chapters.some((c) => mine.has(c))) return false;
   }
+  if (p.buys.length && !p.buys.includes(await buyKind(Number(s.user_id)))) return false;
   return true;
+}
+/** شنو شاري هالسنة الدراسية: محاضرات، امتحانات، لو الاثنين (من البوت والتطبيق، نفس اللي يحسب خصم طالب العام).
+ *  الامتحانات كذلك من تفعيل الامتحانات (exam_access). ما شاري شي = "" */
+export async function buyKind(uid: number): Promise<string> {
+  const { boughtIn, retSettings, schoolYear } = await import("./returnDisc.ts");
+  const kinds = [...await boughtIn(uid, schoolYear(stamp(), (await retSettings()).start))].map((k) => k.split("|")[1]);
+  const exam = kinds.includes("exams") || (await find("exam_access", { user_id: uid })).length > 0;
+  const lec = kinds.includes("lectures");
+  return exam && lec ? "both" : exam ? "exam" : lec ? "lec" : "";
 }
 async function targets(p: Poll) {
   const out: Row[] = [];
@@ -81,7 +95,7 @@ export async function centerNames() {
 export async function targetLabel(p: Poll) {
   const names = await centerNames();
   const where = p.centers.length ? p.centers.map((c) => names.get(c) ?? `مركز ${c}`).join("، ") : "كل الطلاب";
-  return [where, p.gender && `${p.gender} بس`, p.curr && `منهج ${p.curr}`, p.chapters.length && `شاري ${p.chapters.join(" أو ")}`].filter(Boolean).join(" · ");
+  return [where, p.gender && `${p.gender} بس`, p.curr && `منهج ${p.curr}`, p.chapters.length && `شاري ${p.chapters.join(" أو ")}`, p.buys.length && `شاري ${p.buys.map((b) => BUYS[b]).join(" أو ")}`].filter(Boolean).join(" · ");
 }
 
 /** النسب تنجمع 100 بالضبط (الباقي يروح للأكبر كسراً) */
@@ -203,7 +217,9 @@ export async function closePoll(id: number) {
   const n = await update("polls", { id, status: "open" }, { status: "closed", closed_at: stamp() });
   const p = await getPoll(id);
   if (!n || !p) return 0;
-  const text = `${await fullText(p)}\n\n❓ <b>تريد تظهر النتيجة للطلاب؟</b> يوصلهم النسب بس، بدون أسماء ولا أعداد.`;
+  const acted = p.acts.some(Boolean) ? (await find("poll_votes", { poll_id: p.id })).filter((v) => p.acts[Number(v.choice)]).length : 0;
+  const todo = acted ? `\n\n⚡ <b>${acted} طالب صوتوا لاختيار بيه شغل.</b> تريد تطبّقه عليهم؟ افتح التصويت ودوس «⚡ طبّق على المصوتين»، وتگدر تستثني أي واحد.` : "";
+  const text = `${await fullText(p)}${todo}\n\n❓ <b>تريد تظهر النتيجة للطلاب؟</b> يوصلهم النسب بس، بدون أسماء ولا أعداد.`;
   let sent = 0;
   for (const to of await staffIds(POLL_PERM)) { try { if (await send(to, text, { kb: askShowKb(p) })) sent++; } catch (e) { console.error(e); } }
   return sent;
@@ -263,11 +279,13 @@ export async function pollAction(body: Row) {
     const rawActs = Array.isArray(body.acts) ? body.acts.map(String) : [];
     const acts = options.map((o) => { const a = rawActs[rawOpts.indexOf(o)] ?? ""; return POLL_ACTS[a] ? a : ""; });
     // الفصل المبكر: اللي يبديه يختار ويا المراجعات لو بدونها، فلازم الاثنين، واختيار ثالث يبقى بيه على جدوله
-    if (acts.some(Boolean)) {
+    const buys = [...new Set((Array.isArray(body.buys) ? body.buys : []).map(String))];
+    need(buys.every((b) => BUYS[b]), "اختار شنو شاري");
+    if (acts.some((a) => a.startsWith("early_"))) {
       need(acts.includes("early_with") && acts.includes("early_without"), "حط «ويا المراجعات» على اختيار و«بدون المراجعات» على اختيار ثاني");
       need(acts.some((a) => !a), "خلي اختيار بلا شغل للي يبقى ويا جماعته (بعد العطلة)");
     }
-    const id = await insert("polls", { question, options: JSON.stringify(options), centers: JSON.stringify(centers), gender, curr, chapters: JSON.stringify(chapters), acts: JSON.stringify(acts), applied: null, reach: null, status: "open", created: stamp(), by_id: uid, closed_at: null, shown: null });
+    const id = await insert("polls", { question, options: JSON.stringify(options), centers: JSON.stringify(centers), gender, curr, chapters: JSON.stringify(chapters), buys: JSON.stringify(buys), acts: JSON.stringify(acts), applied: null, reach: null, status: "open", created: stamp(), by_id: uid, closed_at: null, shown: null });
     const p = (await getPoll(id))!;
     const list = await targets(p);
     await update("polls", { id }, { reach: list.length });
@@ -280,7 +298,7 @@ export async function pollAction(body: Row) {
     need(p!.status === "closed", "أنهي التصويت أول");
     need(p!.acts.some(Boolean), "هذا التصويت ما بيه شغل يتطبق");
     need(!p!.applied, "انطبق من قبل");
-    notice = await applyPoll(p!);
+    notice = await applyPoll(p!, Array.isArray(body.skip) ? body.skip.map(Number) : []);
   } else if (a === "close") {
     const p = await getPoll(Number(body.id));
     need(p, "التصويت غير موجود");
@@ -303,13 +321,13 @@ export async function pollAction(body: Row) {
   const names = await centerNames();
   return {
     polls: await Promise.all(polls.map(async (p) => ({ ...p, target: await targetLabel(p), results: await resultsOf(p), link: pollLink(p.id) }))),
-    centers: [...names.entries()].map(([id, name]) => ({ id, name })), genders: GENDERS, currs: CURRS, chapters: await chapterNames(),
+    centers: [...names.entries()].map(([id, name]) => ({ id, name })), genders: GENDERS, currs: CURRS, chapters: await chapterNames(), buys: Object.entries(BUYS).map(([key, text]) => ({ key, text })),
     acts: Object.entries(POLL_ACTS).map(([key, text]) => ({ key, text })), notice,
   };
 }
 
 /** «⚡ طبّق على المصوتين»: مرة وحدة بس. كل اللي اختاروا اختيار بيه شغل يتسويله، واللي ما ينفع يطلع اسمه وليش */
-async function applyPoll(p: Poll) {
+async function applyPoll(p: Poll, skip: number[] = []) {
   const at = stamp();
   const mine = await tx(async () => {
     const r = await one("polls", { id: p.id });
@@ -319,21 +337,33 @@ async function applyPoll(p: Poll) {
   });
   need(mine, "انطبق من قبل");
   const { earlyStartFor } = await import("./schedApi.ts");
-  const res: Applied = { at, ok: 0, fail: [] };
+  const res: Applied = { at, ok: 0, fail: [], skipped: [] };
+  const nameOf = async (uid: number) => String((await one("students", { user_id: uid }))?.name ?? `طالب ${uid}`);
   for (const v of await find("poll_votes", { poll_id: p.id }, { order: ["at"] })) {
     const act = p.acts[Number(v.choice)];
     if (!act) continue;
     const uid = Number(v.user_id);
+    // صاحب البوت شال علامته قبل ما يطبّق: يبقى مثل ما هو
+    if (skip.includes(uid)) { res.skipped!.push({ id: uid, name: await nameOf(uid) }); continue; }
     try {
-      await earlyStartFor(uid, act === "early_with");
+      if (act === "ipad") await ipadFor(uid);
+      else await earlyStartFor(uid, act === "early_with");
       res.ok++;
     } catch (e) {
-      const s = await one("students", { user_id: uid });
-      res.fail.push({ id: uid, name: String(s?.name ?? `طالب ${uid}`), why: e instanceof Error ? e.message : String(e) });
+      res.fail.push({ id: uid, name: await nameOf(uid), why: e instanceof Error ? e.message : String(e) });
     }
   }
   await update("polls", { id: p.id }, { applied: JSON.stringify(res) });
   return `⚡ انطبق على ${res.ok} طالب${res.fail.length ? `، وما انطبق على ${res.fail.length} (شوف الأسماء والسبب بالتصويت)` : ""}`;
+}
+
+/** «📝 يمتحن بالآيباد»: نفس زر الطالب بجدوله. للحضوري بس، ومركزه ما يصور الأجوبة بالتلفون */
+async function ipadFor(uid: number) {
+  const { photosAllowed, setIpadExam } = await import("./inPerson.ts");
+  const st = await one("students", { user_id: uid });
+  need(st?.exam === "حضوري", "طالب إلكتروني: يمتحن من بيته، ما بيه آيباد بالمركز");
+  need(!await photosAllowed(uid), "مركزه يصورون الأجوبة بالتلفون، فما بيه آيباد");
+  await setIpadExam(uid, true);
 }
 
 // ---------- صفحة الطالب «🗳 التصويت»: بالتطبيق والبوت. نفس الصوت ونفس «متأكد؟» (التأكيد بالصفحة نفسها)

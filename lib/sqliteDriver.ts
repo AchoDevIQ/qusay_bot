@@ -123,6 +123,7 @@ async function init() {
   await addColumn("polls", "acts", "TEXT");
   await addColumn("polls", "applied", "TEXT");
   await addColumn("polls", "reach", "INTEGER");
+  await addColumn("polls", "buys", "TEXT");
   await addColumn("bank_exams", "title_en", "TEXT");
   await addColumn("settlements", "parts", "TEXT");
   await addColumn("company_settlements", "parts", "TEXT");

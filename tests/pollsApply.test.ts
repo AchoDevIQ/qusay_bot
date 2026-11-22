@@ -174,3 +174,47 @@ test("بدون تحديث التطبيق: بطاقة «🗳 تصويت ينتظ�
   await va(702, { action: "vote", id: p.id, choice: 0 });
   assert.ok(!(await nowCards(702)).some((x) => x.kind === "vote"));
 });
+
+test("الفئة بشنو شاري: محاضرات بس، امتحانات بس، الاثنين، لو كل المسجلين", async () => {
+  const { stamp } = await import("../lib/util.ts");
+  const stu = (uid: number, exam = "إلكتروني", center: number | null = null) => put("students", { user_id: uid, name: `طالب ${uid}`, curr: "عربي", gender: "بنين", exam, center_id: center, created: "2026-01-01 10:00" });
+  const order = (uid: number, name: string) => insert("orders", { user_id: uid, name: `طالب ${uid}`, items: JSON.stringify([{ name, qty: 1 }]), created: stamp(), printed: 1, ret: 0 });
+  await stu(720); await order(720, "محاضرات الفصل الأول");
+  await stu(721); await order(721, "محاضرات + امتحانات الفصل الأول");
+  await stu(722);
+  const lec = await pa("create", { question: "للمحاضرات بس", options: ["إي", "لا"], buys: ["lec"] });
+  assert.equal(lec.polls[0].results.targets, 1);
+  assert.match(lec.polls[0].target, /شاري محاضرات بس/);
+  calls.length = 0;
+  const ex = await pa("create", { question: "للي شاري امتحانات", options: ["إي", "لا"], buys: ["exam", "both"] });
+  const to = sentTo();
+  assert.ok(to.includes(700) && to.includes(721) && to.includes(704));
+  assert.ok(!to.includes(720) && !to.includes(722));
+  assert.match(ex.polls[0].target, /شاري امتحانات بس أو محاضرات وامتحانات/);
+  await assert.rejects(pa("create", { question: "س", options: ["أ", "ب"], buys: ["كتب"] }), /شنو شاري/);
+});
+
+test("📝 يمتحن بالآيباد: بعد الإنهاء الحضوري يصير آيباد، الإلكتروني يطلع ليش، واللي استثنيته يبقى على الورقة", async () => {
+  const { ipadExam } = await import("../lib/inPerson.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "البنوك" });
+  const center = await insert("centers", { area_id: area, name: "مركز البنوك", gender: null });
+  for (const [uid, exam] of [[730, "حضوري"], [731, "إلكتروني"], [732, "حضوري"]] as const) {
+    await put("students", { user_id: uid, name: `طالب ${uid}`, curr: "عربي", gender: "بنين", exam, center_id: exam === "حضوري" ? center : null, created: "2026-01-01 10:00" });
+  }
+  const r = await pa("create", { question: "منو عنده آيباد وقلم؟", options: ["إي، عندي", "لا"], acts: ["ipad", ""], centers: [center, -1] });
+  const p = r.polls[0];
+  assert.deepEqual(p.acts, ["ipad", ""]);
+  for (const uid of [730, 731, 732]) await va(uid, { action: "vote", id: p.id, choice: 0 });
+  calls.length = 0;
+  await pa("close", { id: p.id });
+  assert.match(calls.find((c) => c.p.chat_id === 1)!.p.text, /3 طالب صوتوا لاختيار بيه شغل/);
+  const done = await pa("apply", { id: p.id, skip: [732] });
+  assert.match(done.notice, /انطبق على 1 طالب، وما انطبق على 1/);
+  const card = done.polls.find((x: any) => x.id === p.id);
+  assert.deepEqual(card.applied.fail.map((f: any) => f.id), [731]);
+  assert.match(card.applied.fail[0].why, /إلكتروني/);
+  assert.deepEqual(card.applied.skipped.map((x: any) => x.id), [732]);
+  assert.equal(await ipadExam(730), true);
+  assert.equal(await ipadExam(732), false);
+  await assert.rejects(pa("apply", { id: p.id }), /انطبق من قبل/);
+});

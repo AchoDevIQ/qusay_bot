@@ -7,9 +7,9 @@ import { AdminHeader, Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Name = { id: number; name: string; where: string; at: string };
 type Res = { voted: number; targets: number; options: { text: string; count: number; pct: number; names: Name[] }[] };
-type Applied = { at: string; ok: number; fail: { id: number; name: string; why: string }[]; running?: boolean };
-type Poll = { id: number; question: string; options: string[]; centers: number[]; gender: string; curr: string; chapters: string[]; acts: string[]; applied: Applied | null; status: "open" | "closed"; created: string; closed_at: string; shown: boolean | null; target: string; results: Res; link: string };
-type Data = { polls: Poll[]; centers: { id: number; name: string }[]; genders: string[]; currs: string[]; chapters: string[]; acts: { key: string; text: string }[]; notice: string };
+type Applied = { at: string; ok: number; fail: { id: number; name: string; why: string }[]; skipped?: { id: number; name: string }[]; running?: boolean };
+type Poll = { id: number; question: string; options: string[]; centers: number[]; gender: string; curr: string; chapters: string[]; buys: string[]; acts: string[]; applied: Applied | null; status: "open" | "closed"; created: string; closed_at: string; shown: boolean | null; target: string; results: Res; link: string };
+type Data = { polls: Poll[]; centers: { id: number; name: string }[]; genders: string[]; currs: string[]; chapters: string[]; buys: { key: string; text: string }[]; acts: { key: string; text: string }[]; notice: string };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 export default function PollsClient() {
@@ -37,25 +37,33 @@ function NewPoll({ data, busy, call }: { data: Data; busy: boolean; call: Call }
   const [gender, setGender] = useState("");
   const [curr, setCurr] = useState("");
   const [chapters, setChapters] = useState<string[]>([]);
+  const [buys, setBuys] = useState<string[]>([]);
   const [acts, setActs] = useState<string[]>(["", ""]);
   const [sure, setSure] = useState(false);
   const filled = options.map((o) => o.trim()).filter(Boolean);
   const actsOf = options.map((o, i) => (o.trim() ? acts[i] ?? "" : "")).filter((_, i) => options[i].trim());
   const usesAct = actsOf.some(Boolean);
-  const actsOk = !usesAct || (actsOf.includes("early_with") && actsOf.includes("early_without") && actsOf.some((a) => !a));
+  const usesEarly = actsOf.some((a) => a.startsWith("early_"));
+  const actsOk = !usesEarly || (actsOf.includes("early_with") && actsOf.includes("early_without") && actsOf.some((a) => !a));
   const ready = !!question.trim() && filled.length >= 2 && actsOk;
   const toggle = (id: number) => setCenters((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const toggleCh = (ch: string) => setChapters((c) => (c.includes(ch) ? c.filter((x) => x !== ch) : [...c, ch]));
-  const who = [centers.length ? data.centers.filter((c) => centers.includes(c.id)).map((c) => c.name).join("، ") : "كل الطلاب", gender && `${gender} بس`, curr && `منهج ${curr}`, chapters.length && `شاري ${chapters.join(" أو ")}`].filter(Boolean).join(" · ");
-  function reset() { setQuestion(""); setOptions(["", ""]); setActs(["", ""]); setCenters([]); setGender(""); setCurr(""); setChapters([]); setSure(false); setOpen(false); }
+  const who = [centers.length ? data.centers.filter((c) => centers.includes(c.id)).map((c) => c.name).join("، ") : "كل الطلاب", gender && `${gender} بس`, curr && `منهج ${curr}`, chapters.length && `شاري ${chapters.join(" أو ")}`, buys.length && `شاري ${data.buys.filter((b) => buys.includes(b.key)).map((b) => b.text).join(" أو ")}`].filter(Boolean).join(" · ");
+  function reset() { setQuestion(""); setOptions(["", ""]); setActs(["", ""]); setCenters([]); setGender(""); setCurr(""); setChapters([]); setBuys([]); setSure(false); setOpen(false); }
   function earlyExample() {
     setQuestion("منو يريد يبدي الفصل الرابع (التكامل) هسه قبل العطلة؟");
     setOptions(["أبدي التكامل هسه، ويا المراجعات", "أبدي التكامل هسه، بدون المراجعات", "أكمل بعد العطلة ويا جماعتي"]);
     setActs(["early_with", "early_without", ""]);
     setSure(false);
   }
+  function ipadExample() {
+    setQuestion("منو عنده آيباد وقلم، ويريد يمتحن بالمركز بالآيباد بدل الورقة؟");
+    setOptions(["إي، عندي آيباد وقلم وأمتحن بيه", "لا، أبقى على الورقة"]);
+    setActs(["ipad", ""]);
+    setSure(false);
+  }
   async function create() {
-    const r = await call({ action: "create", question, options: filled, acts: actsOf, centers, gender, curr, chapters });
+    const r = await call({ action: "create", question, options: filled, acts: actsOf, centers, gender, curr, chapters, buys });
     if (r) reset();
   }
   if (!open) return <button type="button" className="btn" onClick={() => setOpen(true)}>➕ تصويت جديد</button>;
@@ -76,8 +84,11 @@ function NewPoll({ data, busy, call }: { data: Data; busy: boolean; call: Call }
         </div>
       ))}
       {options.length < 10 && <button type="button" className="exbtn" onClick={() => { setOptions([...options, ""]); setActs([...acts, ""]); }}>➕ اختيار ثاني</button>}
-      <div className="exhint">«بلا شغل» = بس تصويت. لو تختار «🚀 يبدي الفصل الجاي هسه» على اختيار، بعد ما تنهي التصويت يطلعلك «⚡ طبّق على المصوتين» ويتثبت لكل اللي اختاروه. لازم «ويا المراجعات» على اختيار و«بدون المراجعات» على اختيار ثاني، واختيار بلا شغل للي يبقى ويا جماعته.</div>
-      <button type="button" className="exbtn" onClick={earlyExample}>🚀 عبّيه مثال التكامل (3 اختيارات)</button>
+      <div className="exhint">«بلا شغل» = بس تصويت. لو تختار شغل على اختيار، بعد ما تنهي التصويت يطلعلك «⚡ طبّق على المصوتين» ويتسوى لكل اللي اختاروه (وتگدر تستثني أي واحد). «🚀 يبدي الفصل الجاي هسه»: لازم «ويا المراجعات» على اختيار و«بدون المراجعات» على اختيار ثاني، واختيار بلا شغل للي يبقى ويا جماعته. «📝 يمتحن بالآيباد»: الطالب الحضوري يصير يمتحن بالمركز بالآيباد والقلم بدل الورقة.</div>
+      <div className="exadd">
+        <button type="button" className="exbtn" onClick={earlyExample}>🚀 عبّيه مثال التكامل (3 اختيارات)</button>
+        <button type="button" className="exbtn" onClick={ipadExample}>📝 عبّيه مثال الآيباد</button>
+      </div>
       {usesAct && !actsOk && <div className="card warn exerr">⚠️ حط «ويا المراجعات» على اختيار، و«بدون المراجعات» على اختيار ثاني، وخلي اختيار بلا شغل.</div>}
       <div className="exlabel">منو يصوت: المراكز</div>
       <div className="exhint">ما تختار ولا مركز = كل الطلاب. تگدر تختار أكثر من مركز.</div>
@@ -99,6 +110,12 @@ function NewPoll({ data, busy, call }: { data: Data; busy: boolean; call: Call }
       <div className="plchips">
         <button type="button" className={"exbtn" + (!chapters.length ? " on" : "")} onClick={() => { setChapters([]); setSure(false); }}>👥 الكل</button>
         {data.chapters.map((ch) => <button type="button" key={ch} className={"exbtn" + (chapters.includes(ch) ? " on" : "")} onClick={() => { toggleCh(ch); setSure(false); }}>{ch}</button>)}
+      </div>
+      <div className="exlabel">منو يصوت: شنو شاري</div>
+      <div className="exhint">«👥 كل المسجلين» = أي طالب مسجل عدنا. مثلاً تصويت يخص الامتحانات: اختار «امتحانات بس» و«محاضرات وامتحانات» سوه، فيوصل لكل اللي شاري امتحانات.</div>
+      <div className="plchips">
+        <button type="button" className={"exbtn" + (!buys.length ? " on" : "")} onClick={() => { setBuys([]); setSure(false); }}>👥 كل المسجلين</button>
+        {data.buys.map((b) => <button type="button" key={b.key} className={"exbtn" + (buys.includes(b.key) ? " on" : "")} onClick={() => { setBuys((x) => (x.includes(b.key) ? x.filter((y) => y !== b.key) : [...x, b.key])); setSure(false); }}>{b.text}</button>)}
       </div>
       <div className="exfoot">
         <div className="exhint">يوصل لـ: <b>{who}</b>. كل طالب يصوت مرة وحدة من حسابه، وبعد ما يأكد ما يگدر يغير.</div>
@@ -125,7 +142,7 @@ function PollCard({ p, busy, call }: { p: Poll; busy: boolean; call: Call }) {
       {r.options.map((o, i) => (
         <div key={i} className="plres">
           <div className="plrow"><b>{o.text}</b><span>{o.count} صوت · <b>{o.pct}%</b></span></div>
-          {p.acts[i] && <div className="exhint">⚡ {p.acts[i] === "early_with" ? "🚀 يبدي الفصل الجاي هسه، ويا المراجعات" : "🚀 يبدي الفصل الجاي هسه، بدون المراجعات"}</div>}
+          {p.acts[i] && <div className="exhint">⚡ {ACT_TEXT[p.acts[i]] ?? p.acts[i]}</div>}
           <div className="plbar"><span style={{ width: `${o.pct}%` }} /></div>
           {names && !!o.names.length && <ol className="plnames">{o.names.map((n) => <li key={n.id}>{n.name}{n.where && <small> · {n.where}</small>}</li>)}</ol>}
         </div>
@@ -137,15 +154,51 @@ function PollCard({ p, busy, call }: { p: Poll; busy: boolean; call: Call }) {
         <div className="exhint">
           {p.applied.running ? "⏳ قاعد ينطبق…" : <>⚡ انطبق {p.applied.at.slice(0, 16)}: انثبت لـ <b>{p.applied.ok}</b> طالب{p.applied.fail.length ? <>، وما انثبت لـ <b>{p.applied.fail.length}</b>:</> : "."}</>}
           {!!p.applied.fail.length && <ol className="plnames">{p.applied.fail.map((f) => <li key={f.id}>{f.name}<small> · {f.why}</small></li>)}</ol>}
+          {!!p.applied.skipped?.length && <>🙅 استثنيتهم: {p.applied.skipped.map((x) => x.name).join("، ")}</>}
         </div>
       )}
+      {p.status === "closed" && p.acts.some(Boolean) && !p.applied && <ApplyBox p={p} busy={busy} call={call} />}
       <div className="exadd">
         {r.voted > 0 && <button type="button" className="exbtn" onClick={() => setNames(!names)}>{names ? "إخفاء الأسماء" : "👁 الأسماء"}</button>}
-        {p.status === "closed" && p.acts.some(Boolean) && !p.applied && <Confirm label="⚡ طبّق على المصوتين" disabled={busy} onYes={() => void call({ action: "apply", id: p.id })} />}
         {p.status === "open" && <Confirm label="🔒 إنهاء التصويت" disabled={busy} onYes={() => void call({ action: "close", id: p.id })} />}
         {p.status === "closed" && p.shown !== true && <Confirm label="📢 انشر النسب للطلاب" disabled={busy} onYes={() => void call({ action: "publish", id: p.id })} />}
         <Confirm label="🗑 حذف" disabled={busy} onYes={() => void call({ action: "delete", id: p.id })} />
       </div>
+    </div>
+  );
+}
+
+const ACT_TEXT: Record<string, string> = {
+  early_with: "🚀 يبدي الفصل الجاي هسه، ويا المراجعات",
+  early_without: "🚀 يبدي الفصل الجاي هسه، بدون المراجعات",
+  ipad: "📝 يمتحن بالآيباد (الحضوري)",
+};
+
+/** بعد الإنهاء: «تطبّق على كل الـ N؟» ويا قائمة المصوتين، كلهم مأشرين، وتشيل علامة اللي تستثنيه */
+function ApplyBox({ p, busy, call }: { p: Poll; busy: boolean; call: Call }) {
+  const voters = p.results.options.flatMap((o, i) => (p.acts[i] ? o.names.map((n) => ({ ...n, act: p.acts[i] })) : []));
+  const [skip, setSkip] = useState<number[]>([]);
+  const [open, setOpen] = useState(false);
+  const n = voters.length - skip.length;
+  const what = [...new Set(voters.map((v) => v.act))].map((a) => ACT_TEXT[a] ?? a).join(" / ");
+  if (!voters.length) return <div className="exhint">⚡ ماكو أحد صوّت لاختيار بيه شغل.</div>;
+  if (!open) return <button type="button" className="btn" disabled={busy} onClick={() => setOpen(true)}>⚡ طبّق على المصوتين ({voters.length})</button>;
+  return (
+    <div className="card expad">
+      <h2>⚡ تطبّق على كل الـ {voters.length}؟</h2>
+      <div className="exhint">{what}. شيل العلامة عن اللي تريد تستثنيه، فيبقى مثل ما هو.</div>
+      <ol className="plnames">
+        {voters.map((v) => (
+          <li key={v.id}>
+            <label><input type="checkbox" checked={!skip.includes(v.id)} onChange={() => setSkip((x) => (x.includes(v.id) ? x.filter((y) => y !== v.id) : [...x, v.id]))} /> {v.name}{v.where && <small> · {v.where}</small>}<small> · {ACT_TEXT[v.act] ?? v.act}</small></label>
+          </li>
+        ))}
+      </ol>
+      <div className="exadd">
+        <Confirm label={`✅ إي، طبّق على ${n}`} disabled={busy || !n} onYes={() => void call({ action: "apply", id: p.id, skip })} />
+        <button type="button" className="exbtn" disabled={busy} onClick={() => setOpen(false)}>❌ لا، هسه لا</button>
+      </div>
+      <div className="exhint">يتطبق مرة وحدة بس.</div>
     </div>
   );
 }
