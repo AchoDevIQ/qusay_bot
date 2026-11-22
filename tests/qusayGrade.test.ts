@@ -681,6 +681,25 @@ test("معادلات Word تصير كتابة موبايل", async () => {
   assert.equal(texToPhone(B`R\setminus  \{0\}`), B`R\{0}`);
   const { toTex } = await import("../app/store/myexams/mathTex.ts");
   assert.equal(toTex(B`R\{0}`), B`R\setminus\{0\}`, "ينرسم R∖{0} مو R{0}");
+  // فحص كل ملفات Word عنده (707 ألف معادلة): ∛ ، الأس الطويل بقوس، ومسافة بعد الأس
+  assert.equal(texToPhone(B`\sqrt[3]{{\left(3x-1\right)}^{2}}`), "∛((3x-1)²)");
+  assert.equal(toTex("∛((3x-1)²)"), B`\sqrt[3]{(3x-1)^2}`);
+  assert.equal(texToPhone(B`{e}^{-x}dx`), "e^(-x)dx");
+  assert.equal(texToPhone(B`{e}^{x}\cos {e}^{x}`), "e^x cos e^x");
+  assert.equal(texToPhone(B`{\left(-1{)}^{6}`), "(-1)⁶");
+  const { docxMath } = await import("../lib/docxText.ts");
+  const mk = (math: string) => {
+    const name = Buffer.from("word/document.xml");
+    const data = Buffer.from(`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><w:body><w:p><m:oMath>${math}</m:oMath></w:p></w:body></w:document>`, "utf8");
+    const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(name.length, 26);
+    const cen = Buffer.alloc(46); cen.writeUInt32LE(0x02014b50, 0); cen.writeUInt32LE(data.length, 20); cen.writeUInt32LE(data.length, 24); cen.writeUInt16LE(name.length, 28);
+    const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10); end.writeUInt32LE(46 + name.length, 12); end.writeUInt32LE(30 + name.length + data.length, 16);
+    return texToPhone(docxMath(Buffer.concat([local, name, data, cen, name, end]))[0].tex);
+  };
+  const r = (t: string) => `<m:r><m:t xml:space="preserve">${t}</m:t></m:r>`;
+  assert.equal(mk(r("R") + r(" \\ {0}")), B`R\{0}`, "ملفه: «R \\ {0}»");
+  assert.equal(mk(`<m:nary><m:naryPr><m:chr m:val="∑"/></m:naryPr><m:sub/><m:sup/><m:e>${r("hiMi")}</m:e></m:nary>`), "∑ hiMi", "∑ ما يضيع اللي بعده");
+  assert.equal(mk(r("F1(2,0) &amp; F2(-2,0)")), "F1(2,0) & F2(-2,0)");
 });
 
 test("🪄 رتّب كلامي: يرجع الكلام مرتب، وينحسب بالصرفية", async () => {

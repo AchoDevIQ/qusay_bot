@@ -51,10 +51,22 @@ const FUNCS = /(?<![\\A-Za-z])(sin|cos|tan|sec|csc|cot|ln|log)(?![A-Za-z])/g;
 /** «x²» و«x⁻¹» المكتوبة بالآيباد: أس عادي (x^2) حتى ينكتب فوك مثل الكتاب */
 const SUP: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁻": "-", "ⁿ": "n" };
 const supToPow = (s: string) => s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻ⁿ]+/g, (m) => "^" + [...m].map((c) => SUP[c]).join(""));
+/** √( ∛( ∜( بأقواس متداخلة («∛((3x-1)²)» من الـ Word): \sqrt{..} و\sqrt[3]{..} */
+function roots(s: string): string {
+  const re = /([√∛∜])\s*\(/;
+  for (let m = re.exec(s), k = 0; m && k < 50; m = re.exec(s), k++) {
+    let d = 0, j = m.index + m[0].length - 1;
+    for (; j < s.length; j++) { if (s[j] === "(") d++; else if (s[j] === ")" && --d === 0) break; }
+    if (j >= s.length) break;
+    const n = m[1] === "∛" ? "[3]" : m[1] === "∜" ? "[4]" : "";
+    s = s.slice(0, m.index) + `\\sqrt${n}{${roots(s.slice(m.index + m[0].length, j))}}` + s.slice(j + 1);
+  }
+  return s;
+}
 export function toTex(p: string) {
   let t = braceArgs(supToPow(stripDelimiters(p)).replace(/(?<![A-Za-z\\])i(sin|cos|tan)(?![A-Za-z])/g, "i $1")
     // «F2(-5,0) & F1(5,0)» و«R\{0}» و«➔»: رموز تنكتب مثل ما هي
-    .replace(/(?<!\\)&/g, "\\&").replace(/\\\{([^{}\\]*)\}/g, "\\setminus\\{$1\\}").replace(/➔/g, "→")).replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
+    .replace(/(?<!\\)&/g, "\\&").replace(/\\\{([^{}\\]*)\}/g, "\\setminus\\{$1\\}").replace(/➔/g, "→")).replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/[√∛∜]\s*\(.*$/s, (m) => roots(m)).replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
     .replace(/π/g, "pi").replace(/=>|⇒|⟹/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ").replace(/−/g, "-").replace(/×/g, "\\times ");
   // الأس اللي أكثر من رقم أو بيه سالب: كله فوك
   t = t.replace(/\^(-?\d+(?:\.\d+)?)/g, (m, x: string) => (x.length > 1 ? `^{${x}}` : m)).replace(/\^-([A-Za-z])/g, "^{-$1}");

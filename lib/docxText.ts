@@ -34,7 +34,7 @@ const textIn = (n: Node): string => kids(n).map((k) => (tagOf(k) === "#text" ? S
 
 const SYM: Record<string, string> = { "±": "\\pm ", "∓": "\\mp ", "×": "\\times ", "÷": "\\div ", "≠": "\\neq ", "≤": "\\le ", "≥": "\\ge ", "∞": "\\infty ", "π": "\\pi ", "θ": "\\theta ", "ω": "\\omega ", "α": "\\alpha ", "β": "\\beta ", "→": "\\to ", "⇒": "\\Rightarrow ", "⟹": "\\Rightarrow ", "∴": "\\therefore ", "−": "-", "∈": "\\in ", "∖": "\\setminus ",
   // حروف حرفية بمعادلة Word («R \ {0}» = R ما عدا 0): لازم تنهرب، لا تضيع الأقواس والـ «\» (طلب الأستاذ 2026-11-22)
-  "\\": "\\setminus ", "{": "\\{", "}": "\\}" };
+  "\\": "\\setminus ", "{": "\\{", "}": "\\}", "&": "\\&", "%": "\\%", "#": "\\#", "_": "\\_" };
 const sym = (t: string) => [...t].map((c) => SYM[c] ?? c).join("");
 
 /** معادلة Word (OMML) → LaTeX */
@@ -59,13 +59,16 @@ function omml(n: Node): string {
     }
     case "nary": {
       const pr = find(n, "m:naryPr"); const c = pr && find(pr, "m:chr") ? attr(find(pr, "m:chr")!, "m:val") : "∫";
-      return ({ "∑": "\\sum", "∏": "\\prod" } as Record<string, string>)[c ?? ""] ?? "\\int" + `_{${sub("sub")}}^{${sub("sup")}}${sub("e")}`;
+      // قبل: «∑» يرجع \sum بس ويضيع الحدود وكلشي بعده (∑hiMi چانت تصير ∑ وحدها)
+      const lo = sub("sub"), hi = sub("sup");
+      return (({ "∑": "\\sum", "∏": "\\prod" } as Record<string, string>)[c ?? ""] ?? "\\int") + (lo.trim() ? `_{${lo}}` : "") + (hi.trim() ? `^{${hi}}` : "") + " " + sub("e");
     }
     case "func": return `${sub("fName")} ${sub("e")}`;
     case "bar": return `\\overline{${sub("e")}}`;
     case "limLow": return `${sub("e")}_{${sub("lim")}}`;
     case "limUpp": return `${sub("e")}^{${sub("lim")}}`;
-    case "eqArr": return kids(n).filter((k) => tagOf(k) === "m:e").map(all).join(" \\\\ ");
+    // «&» بسطور المعادلات (eqArr) هي محاذاة Word، مو حرف
+    case "eqArr": return kids(n).filter((k) => tagOf(k) === "m:e").map((e) => all(e).replace(/\\&/g, "")).join(" \\\\ ");
     case "m": return "\\begin{matrix}" + kids(n).filter((k) => tagOf(k) === "m:mr").map((r) => kids(r).filter((k) => tagOf(k) === "m:e").map(all).join(" & ")).join(" \\\\ ") + "\\end{matrix}";
     case "box": case "borderBox": case "groupChr": case "phant": case "acc": return sub("e");
     default: return t.endsWith("Pr") ? "" : all(n);
@@ -113,4 +116,16 @@ export function docxLines(docx: Buffer): string[] {
   };
   walk(tree);
   return lines;
+}
+
+/** كل معادلات الملف: نصها مثل ما مكتوب بالـ Word (raw) وتحويلها (tex). للفحص: ولا رمز يضيع بالتحويل */
+export function docxMath(docx: Buffer): { raw: string; tex: string }[] {
+  const xml = unzipEntry(docx, "word/document.xml");
+  if (!xml) return [];
+  const tree = new XMLParser({ preserveOrder: true, ignoreAttributes: false, attributeNamePrefix: "@_", trimValues: false, processEntities: true, parseTagValue: false, parseAttributeValue: false }).parse(xml.toString("utf8")) as Node[];
+  const out: { raw: string; tex: string }[] = [];
+  const rawOf = (n: Node): string => kids(n).map((k) => (tagOf(k) === "m:t" ? textIn(k) : tagOf(k).endsWith("Pr") ? "" : rawOf(k))).join("");
+  const walk = (list: Node[]) => { for (const n of list) { const t = tagOf(n); if (t === "mc:Fallback") continue; if (t === "m:oMath") out.push({ raw: rawOf(n), tex: all(n).trim() }); else walk(kids(n)); } };
+  walk(tree);
+  return out;
 }

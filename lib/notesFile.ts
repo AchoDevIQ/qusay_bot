@@ -8,12 +8,16 @@ const SUB: Record<string, string> = { "0": "₀", "1": "₁", "2": "₂", "3": "
 const CMD: Record<string, string> = {
   pm: "±", mp: "∓", times: "×", div: "÷", neq: "≠", ne: "≠", le: "≤", leq: "≤", ge: "≥", geq: "≥", infty: "∞", pi: "π", theta: "θ", omega: "ω",
   alpha: "α", beta: "β", backslash: "\\", setminus: "\\", to: "→", rightarrow: "→", Rightarrow: "⇒", therefore: "∴", in: "∈", cdot: "·", approx: "≈", ",": " ", ";": " ", quad: " ", " ": " ",
-  "{": "{", "}": "}",
+  // الحروف المحمية: القوس المعقوف يبقى «\{ \}» (ينرسم قوس، مو تجميع)، والباقي حرف عادي
+  "{": "\\{", "}": "\\}", "&": "&", "%": "%", "#": "#", "_": "_", sum: "∑", int: "∫", prod: "∏",
 };
 /** المقطع يحتاج قوس إذا صار بسط/مقام لو قبل أس: أكثر من رمز واحد وما محاط بقوس */
-const simple = (x: string) => /^-?[A-Za-z0-9.πθ⁰-⁹²³¹ⁿ⁻]+$/.test(x) || /^\((?:[^()]|\([^()]*\))*\)[⁰-⁹²³¹ⁿ⁻]*$/.test(x);
+const simple = (x: string) => /^[)\]|]$/.test(x) ||/^-?[A-Za-z0-9.πθ⁰-⁹²³¹ⁿ⁻]+$/.test(x) || /^\((?:[^()]|\([^()]*\))*\)[⁰-⁹²³¹ⁿ⁻]*$/.test(x);
 const wrap = (x: string) => (simple(x) ? x : `(${x})`);
-const raise = (x: string, map: Record<string, string>, mark: string) => (/^['′″]+$/.test(x) ? x : [...x].every((c) => map[c]) ? [...x].map((c) => map[c]).join("") : `${mark}${wrap(x)}`);
+const raise = (x: string, map: Record<string, string>, mark: string) => (/^['′″]+$/.test(x) ? x : [...x].every((c) => map[c]) ? [...x].map((c) => map[c]).join("")
+  // أس بداخله أس (e^(x²)) لازم قوس، وإلا «e^x²» ما تنقرا
+  // وأس أطول من حرف واحد ينحط بقوس: e^(-x)dx مو e^-xdx (وين يخلص الأس؟)
+  : /^([A-Za-z]|\d+(\.\d+)?)$/.test(x) || /^\((?:[^()]|\([^()]*\))*\)$/.test(x) ? `${mark}${x}` : `${mark}(${x})`);
 
 /** LaTeX (من معادلات Word) → كتابة الموبايل: \frac{3}{x^{2}} → 3/x² ، \sqrt{x+1} → √(x+1) */
 export function texToPhone(tex: string): string {
@@ -41,14 +45,21 @@ export function texToPhone(tex: string): string {
       else if (k === "sqrt") {
         let n = "";
         if (s[i] === "[") { const e = s.indexOf("]", i); n = texToPhone(s.slice(i + 1, e)); i = e + 1; }
-        out += (n ? raise(n, SUP, "^") : "") + `√(${group()})`;
+        // الجذر التكعيبي والرابع: ∛( و∜( مثل الموبايل، والباقي ⁵√(
+        const r = n === "3" ? "∛" : n === "4" ? "∜" : (n ? raise(n, SUP, "^") : "") + "√";
+        out += `${r}(${group()})`;
       }
       else if (k === "left" || k === "right") { const g = group(); out += g === "." ? "" : g; }
       else if (k === "\\") out += "، ";
       else if (k === "begin" || k === "end") group();
       else if (k === "overline" || k === "text" || k === "mathrm" || k === "operatorname") out += group();
       else out += CMD[k] ?? k + (/^[A-Za-z{]/.test(s[i] ?? "") ? " " : "");
-    } else if (c === "^") { i++; out = out.replace(/\s+$/, ""); out += raise(group(), SUP, "^"); }
+    } else if (c === "^") {
+      i++; out = out.replace(/\s+$/, "");
+      const r = raise(group(), SUP, "^");
+      // «e^x cos» مو «e^xcos» (وين يخلص الأس؟)
+      out += r + (/\^[A-Za-z0-9.]+$/.test(r) && /^\s*[A-Za-z\\{]/.test(s.slice(i)) ? " " : "");
+    }
     else if (c === "_") { i++; out += raise(group(), SUB, "_"); }
     else if (c === "{") {
       const g = group();
@@ -60,7 +71,7 @@ export function texToPhone(tex: string): string {
     else { out += c; i++; }
   }
   // R ما عدا 0: «R\{0}» مثل ما يكتبها بالـ Word (الـ «\» والقوس سوة)
-  return out.replace(/\s*\\\s*\{/g, "\\{").replace(/[ \t]+/g, " ").trim();
+  return out.replace(/\s*\\\s*\\\{([^{}\\]*)\\\}/g, "\\{$1}").replace(/[ \t]+/g, " ").trim();
 }
 
 /** سطر من الـ Word: المعادلات بين $ $ والأس المرفوع ^{..} يصيرن كتابة موبايل */
