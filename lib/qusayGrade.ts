@@ -238,7 +238,8 @@ function schemaOf(marks: boolean) {
 const styleText = (style: string) => (style.trim() ? `
 
 HOW QUSAY WRITES HIS COMMENTS (copy his wording and tone exactly; these are his own words):
-${style.trim()}` : "");
+${style.trim()}
+Praise words in these examples (ممتاز، أحسنت، عاشت إيدك and the like) are ONLY for a question the student answered with FULL marks. Never put praise in the note of a step that lost points, nor in the reason of a question that did not get full marks.` : "");
 /** «✍️ عبارات هذا الموضوع»: عبارات الأستاذ الخاصة بموضوع واحد، تنضاف فوك العامة (طلبه 2026-11-21) */
 const exStyleKey = (examId: number) => `qg_style_ex_${examId}`;
 export const examStyle = async (examId: number) => String((await kvGet(exStyleKey(examId))) ?? "");
