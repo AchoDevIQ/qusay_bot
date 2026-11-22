@@ -41,11 +41,12 @@ export type QgMarksDemo = { at: string; total: number; qs: QgQuestion[]; pages: 
 export type InkShape = { w: number; h: number; s: number[][]; c?: string; wd?: 1 | 2 | 3 };
 export const INK_COLOR_LIST = ["#d40000", "#1d4ed8", "#15803d", "#111111", "#7e22ce", "#ea580c"];
 /** tick ✓، cross ✗، praise مدح (أحسنت، ممتاز…)، note ملاحظة (نسيت تعوض…). text: شنو مكتوب بيها */
-export type InkKind = "tick" | "cross" | "praise" | "note";
+/** ask: «؟» بخطه، بآخر الحل الناقص (طلبه 2026-11-22) */
+export type InkKind = "tick" | "cross" | "praise" | "note" | "ask";
 export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
 /** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة.
  *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
@@ -197,6 +198,9 @@ Grade the student's answer question by question:
 - Follow-through: when a step is done correctly but uses a wrong value carried from the student's own earlier mistake, award about half of that step's points, as a whole number.
 - Every awarded value is a WHOLE number (0, 1, 2, ...). Never give fractions such as 2.5 or 8.5.
 - Ignore crossed-out work. Do not reward work that is only copied from the question.
+- A step is earned by its CONTENT, in any order or equivalent form. Example: the symmetry test may check the origin first and the y-axis second, or write f(-x) on another line; if the test and its conclusion are there, the step is full.
+- A table of values may use ANY x values: if the y values are right for the x values the student chose, and there are enough points, the table step is full. Never require the teacher's own x values.
+- A step's conclusion must be right: e.g. writing "symmetric about the origin" for a function that is not, loses the symmetry step even if f(-x) was computed.
 - Never award more than a step's points, never more than the question's maximum.
 - If a question has no answer anywhere in the student's pages, set answered=false and score 0.
 
@@ -205,12 +209,15 @@ DRAWINGS (graphs of functions, parabola / ellipse / hyperbola sketches, the figu
 Set sure=false for a question when you cannot read the handwriting, part of the answer is cut off or missing from the photo, the work matches no method and you cannot judge it, or you hesitate between two marks. Being unsure is fine: a human grader will then check the paper. Do not guess.
 
 Write "reason" and each step "note" in short, simple Arabic (Iraqi style), for the teacher and the student: what the student did right or wrong. Keep them brief.
+"reason" names EVERY part of the question that lost points, all of them, briefly (e.g. "ناقص إشارة المشتقة الأولى والثانية والجدول والرسم"), so the student knows everything that is missing and does not object to a correct mark.
 HOW A NOTE MUST READ (the teacher's own rules):
 - Name the exact thing the student should have done, taken from the teacher's steps / model solution for THIS question. Example: the model solution multiplies by the conjugate, so the note is "المفروض تضرب بالمرافق"; the angle is in the fourth quadrant, so "الزاوية بالربع الرابع مو الأول". Never a vague or general phrase such as "المفروض تحسب جبرياً" or "راجع الحل".
 - Iraqi words only: "مو" (never "مش"), "هيچ", "هسه", "المفروض". No Egyptian, Levantine or formal wording.
 - Use the words of the Iraqi math book: "الأس" (never "القوة"), "المقياس", "السعة", "المرافق", "الجذر".
 - Math symbols always as LaTeX, never spelled out in letters: $\\theta$ (never "ثيتا" or "theta"), $\\cos\\theta$ (never "كوساين بصفة theta"), $2^{\\frac{3}{4}}$.
 - Never say how many points were taken off or given.
+- Be decisive. A step is either right (full points, empty note) or you say exactly what is wrong. Never write vague words such as "تأكد"، "قريب"، "يحتاج تدقيق"، "راجع"، "مو واضح بشكل كافي". If the photo truly does not let you judge, give the student the benefit and set sure=false.
+- Words the teacher never uses: "دالة زوجية" / "دالة فردية". Say "متناظرة حول محور الصادات" or "متناظرة حول نقطة الأصل".
 Write every piece of math inside the Arabic text as LaTeX between $ signs, the way an Iraqi math book prints it: fractions as $\\frac{a}{b}$ (never a/b), pi as $\\pi$ (never the word pi), roots as $\\sqrt{x}$, powers as $x^{2}$. Example: "عوّض $x=\\frac{\\pi}{2}$ صح".`;
 
 /** «🖍 العلامات على الورقة»: نفس التصحيح، ويا مكان كل خطوة على صور الطالب حتى نرسم عليها مثل قلم المدرس الأحمر */
@@ -256,7 +263,7 @@ export const setExamStyle = (examId: number, text: string) => kvSet(exStyleKey(e
 // ---------- «✍️ خط إيدي»: الأستاذ يكتب بقلم الآيباد ✓ و✗ والمدح والملاحظات، وتنرسم على ورقة الطالب بخطه هو (طلبه 2026-11-21)
 // عام لكل المواضيع، وخاص لكل موضوع (ينضاف فوك العام). ما يصرف فلوس: الرسم بالسيرفر، والملاحظات بس أسماؤها تروح للذكاء
 const inkKey = (exam = 0) => (exam ? `qg_ink_ex_${exam}` : "qg_ink");
-export const INK_KINDS: InkKind[] = ["tick", "cross", "praise", "note"];
+export const INK_KINDS: InkKind[] = ["tick", "cross", "praise", "note", "ask"];
 export const INK_MAX = 80;
 export const inkList = (exam = 0) => readJson<InkItem[]>(inkKey(exam), []);
 /** كل خط إيده اللي ينفع لموضوع: العام والخاص */
@@ -265,7 +272,7 @@ export const inkFor = async (exam: number) => [...await inkList(), ...(exam ? aw
 export async function addInk(exam: number, raw: any): Promise<InkItem> {
   const kind = String(raw?.kind) as InkKind;
   if (!INK_KINDS.includes(kind)) throw new Error("اختار شنو تكتب");
-  const text = kind === "tick" ? "✓" : kind === "cross" ? "✗" : String(raw?.text ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const text = kind === "tick" ? "✓" : kind === "cross" ? "✗" : kind === "ask" ? "؟" : String(raw?.text ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
   if (!text) throw new Error("اكتب شنو مكتوب بالعبارة");
   const w = Math.round(Number(raw?.w)), h = Math.round(Number(raw?.h));
   if (!(w >= 100 && w <= 1500 && h >= 100 && h <= 1500)) throw new Error("مربع الكتابة غلط");
@@ -307,7 +314,7 @@ For every step and question, set "hw" to the number of the one note above that s
 
 const topicText = (t: string) => (t.trim() ? `
 
-QUSAY'S WORDS FOR THIS TOPIC (use these words and phrases when they fit):
+QUSAY'S WORDS AND RULES FOR THIS TOPIC (he dictated them by voice, so speech recognition may have changed some words: read them by their mathematical meaning; they are his marking rules for this topic, follow them, and use his phrases when they fit):
 ${t.trim()}` : "");
 
 const SCHEMA = {
@@ -440,7 +447,7 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => {
     if (!pt) return;
     const x = inside(pt.x, 50), y = inside(pt.y, 35), seed = Math.round(x * 7 + y * 13);
-    const sym = pick(pool(m.kind === "bad" ? "cross" : "tick"), seed);
+    const sym = pick(pool(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick"), seed);
     const word = m.kind === "good" ? pick(pool("praise"), seed) : undefined;
     by.set(pt.p, [...(by.get(pt.p) ?? []), { x, y, ...m, ...(sym ? { sym } : {}), ...(word ? { word } : {}) }]);
   };
@@ -466,12 +473,13 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       else if (s.note) unplaced.push(s);
     }
     if (allRight) { add(praiseAt, { kind: "good", text: "أحسنت" }); continue; }
-    // الخطوات اللي ما كتبها الطالب (ما إلها مكان): ✗ وملاحظتها بآخر جوابه، مثل «ناقص» المدرس. وإذا ماكو ولا علامة، سبب السؤال
+    // الخطوات اللي ما كتبها الطالب (ما إلها مكان): «؟» تحت آخر جوابه (مو ✗ على سطر صح، طلبه 2026-11-22)، ويمها شنو ناقص
     if (unplaced.length || !drawn) {
       const note = unplaced.length ? unplaced.map((s) => s.note).join("، ") : q.reason;
       // ملاحظة وحدة مكتوبة بخطه تنرسم بخطه، وأكثر من وحدة تنكتب بالخط
       const hand = unplaced.length === 1 ? handOf(unplaced[0].hw) : unplaced.length ? undefined : handOf(q.hw);
-      add(q.at, { kind: "bad", text: "", ...(note ? { note: shortNote(note) } : {}), ...(hand ? { hand } : {}) });
+      const end = q.at ? { ...q.at, y: Math.min(1000, q.at.y + 45) } : undefined;
+      add(end, { kind: unplaced.length ? "miss" : "bad", text: "", ...(note ? { note: shortNote(note) } : {}), ...(hand ? { hand } : {}) });
     }
   }
   const out: { ref: string; marks: PaperMark[] }[] = [];
@@ -540,6 +548,28 @@ export async function qusayJudgeObjection(it: Row, n: number, text: string, oldM
   return { accept, mark: accept ? mark : oldMark, reason, usd };
 }
 
+// ---------- «🪄 رتّب كلامي» (2026-11-22): الفويس ينكتب بغلطات («سرك Respect» بدل «متناظرة حول محور الصادات»)، فيرتبه
+// قواعد واضحة مرقمة بكلامه، والأستاذ يقراها ويصلحها قبل الحفظ. ما يضيف قواعد من عنده
+const TIDY = `A math teacher (Iraqi 6th preparatory) dictated by voice how he grades one exam topic. Speech recognition wrote it with many wrong words (English words, broken Arabic, numbers in the wrong place).
+Rewrite it as clear, numbered grading rules in simple Iraqi Arabic, one rule per line, keeping EVERY rule and example he gave and his own phrases for notes to students (the words he says he writes to the student, like «عيوني ترى القانون ما كاتبه»).
+- Fix the speech-recognition mistakes by their mathematical meaning (e.g. «سرك Respect واي X» → متناظرة حول محور الصادات; «إكس تربيع» → $x^{2}$; «خط الاختبار» stays خط الاختبار; «فجوة» = a gap/hole left at the zero of the sign line).
+- Write math as LaTeX between $ signs.
+- If he says something about one exam version, start that rule with «بالنسخة B:».
+- Do not add rules he did not say. Do not drop any. If a part cannot be understood at all, keep it at the end under «ما فهمته:» so he can fix it.
+Return only the rules.`;
+export async function tidyNotes(text: string): Promise<{ text: string; usd: number }> {
+  const raw = text.trim().slice(0, STYLE_MAX);
+  if (!raw) throw new Error("ماكو كلام حتى أرتبه");
+  const msg = await apiImpl.create({ model: MODEL, max_tokens: 16000, system: TIDY, output_config: { effort: "low" }, messages: [{ role: "user", content: raw }] } as Req);
+  const u = msg.usage;
+  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 }, false);
+  await addSpend("qusay", usd);
+  if (msg.stop_reason === "max_tokens") throw new Error("الكلام طويل كلش، رتبه على دفعتين");
+  const out = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+  if (!out) throw new Error("ما گدرت أرتبه، جرب مرة ثانية");
+  return { text: out.slice(0, STYLE_MAX), usd };
+}
+
 /** درجات صحيحة بس، بدون نص (طلب الأستاذ 2026-11-22: «8.5» تبين للطالب إنها مو منه). النص يروح لصالح الطالب */
 const whole = (x: number) => Math.floor(x + 0.5 + 1e-9);
 /** يقرا جواب الذكاء ويرتبه: الدرجة من الخطوات (مو من رقمه)، وما تعدي حدها */
@@ -571,6 +601,11 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
       const hw = Math.round(Number(s?.hw) || 0);
       return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
     }) : [];
+    // الذكاء رجّع درجة السؤال بس بدون خطوات (طالب تجربة 9: «ممتاز عاشت الأيادي» وصفر): الكامل ينحسب كامل، والباقي يتعاد
+    if (plan && answered && !plan.some((_, k) => byI.has(k + 1))) {
+      if ((Number(a.score) || 0) >= m.max) for (const st of steps) st.awarded = st.points;
+      else throw new PaidError(`جواب الذكاء ناقص (السؤال ${m.n} بلا خطوات)`, tokens);
+    }
     let score = plan ? steps.reduce((t, s) => t + s.awarded, 0) : Number(a.score) || 0;
     score = answered ? Math.min(m.max, Math.max(0, whole(score))) : 0;
     const at = ptOf(a, pages, papers, true);

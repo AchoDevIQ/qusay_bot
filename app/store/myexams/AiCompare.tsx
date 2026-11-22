@@ -21,7 +21,7 @@ export const INK_COLORS: { c: string; t: string }[] = [
 /** سمك الخط على ورقة الطالب (بكسل)، لكل اختيار */
 export const INK_WIDTH: Record<1 | 2 | 3, number> = { 1: 1.7, 2: 2.6, 3: 3.8 };
 /** sym ✓/✗، word المدح، hand الملاحظة: بخط إيد الأستاذ إذا كاتبها بـ «✍️ خط إيدي» */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
 export type MarkedPageT = { ref: string; marks: PaperMark[] };
 export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay"; marked?: MarkedPageT[] };
 
@@ -58,7 +58,7 @@ export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) 
       {marks.map((m, i) => (
         <div key={i} className={"mk mk-" + m.kind} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}>
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : <>
-            {m.sym ? <InkSvg sh={m.sym} /> : m.kind === "bad" ? <Cross /> : <Tick />}
+            {m.sym ? <InkSvg sh={m.sym} /> : m.kind === "bad" ? <Cross /> : m.kind === "miss" ? <b className="mkask">؟</b> : <Tick />}
             {m.word ? <InkSvg sh={m.word} /> : m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
           </>}
           {m.hand ? <span className={"mknote mkhand" + (m.x > 500 ? " mkleft" : "")}><InkSvg sh={m.hand} /></span>

@@ -328,6 +328,7 @@ body.grwide .grtop{padding-left:104px}
 .mk svg{display:block}.mkgood{font-family:var(--mkfont);font-size:24px;font-weight:700;white-space:nowrap;transform:rotate(-8deg)}.mkhalf{font-family:var(--mkfont);font-size:20px;font-weight:700}
 .mkscore{font-family:var(--mkfont);font-weight:700;font-size:19px;border:3px solid #d40000;border-radius:50%;padding:7px 9px;white-space:nowrap;transform:rotate(-6deg)}
 .mknote{position:absolute;top:100%;left:0;margin-top:2px;width:max-content;max-width:min(240px,45vw);font-family:var(--mkfont);font-size:15px;line-height:1.35;color:#d40000;text-shadow:0 0 3px #fff,0 0 3px #fff;direction:rtl;white-space:normal}.mknote.mkleft{left:auto;right:0}
+.mkask{font-family:var(--mkfont);font-size:34px;font-weight:700;line-height:1}
 .mkink{display:block;overflow:visible;flex:none}.mknote.mkhand{max-width:none;text-shadow:none;filter:drop-shadow(0 0 1px #fff)}
 .mknote .katex{font-size:.95em;color:#d40000}
 .aicbig{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:10px}.aicbig img{max-width:100%;max-height:100%}.aicbig span{position:absolute;top:calc(14px + var(--tg-safe-area-inset-top,0px));left:14px;color:#fff;font-size:22px}

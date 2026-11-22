@@ -146,6 +146,10 @@ export async function qusayAction(body: Row) {
     const on = await qgOn();
     return await out(`🧪 ${n} ورقة ${fresh ? "جديدة " : ""}تنتظر التجربة.${fresh ? " تبقى عند المصححين مثل ما هي، ولا شي يوصل للطالب." : ""} ${!on ? "شغّل «تصحيح قصي» حتى تبدي." : now || !(await qgSettings()).batch ? "تبدي خلال دقيقة، وكل دقيقة 6 أوراق." : "🌙 بالدفعة: نص الكلفة، ونتيجتها تطلع خلال ساعة تقريباً (أكثر شي يوم)."}`);
   }
+  if (a === "tidy") {
+    const r = await (await import("./qusayGrade.ts")).tidyNotes(String(body.text ?? ""));
+    return await out(`🪄 رتبته (${Math.max(1, Math.round(r.usd * IQD))} دينار). اقراه وصلّح اللي تريده، وبعدين احفظ`, { tidy: r.text });
+  }
   if (a === "examStyle") {
     need(await one("bank_exams", { id: exam }), "اختار الموضوع");
     await setExamStyle(exam, String(body.style ?? ""));

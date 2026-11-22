@@ -16,7 +16,7 @@ type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | 
 type Data = {
   on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number }; fileToken: string; objStaff: { id: number; name: string }[];
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
-  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; paper?: Paper; notice?: string; inkOf?: { exam: number; items: InkItem[] };
+  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي", obj: "✋ راجع اعتراض" };
@@ -219,6 +219,7 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
       {openWords && <>
         <div className="exhint">العبارات والكلمات اللي تستعملها بهذا الموضوع بس، كل وحدة بسطر. تگدر تكتبها لو تحچيها (🎤 فويس). يستعملها ويا «✍️ طريقتك بالكتابة» العامة بالعلامات الحمرة.</div>
         <VoiceText value={words} onChange={setWords} />
+        <button type="button" className="exbtn" disabled={busy || !words.trim()} onClick={() => void call({ action: "tidy", text: words }).then((d) => { if (d?.tidy) setWords(d.tidy); })}>🪄 رتّب كلامي (الفويس ينكتب بغلطات)</button>
         <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
       </>}
       {/* خط إيده الخاص بهذا الموضوع، فوك خطه العام */}

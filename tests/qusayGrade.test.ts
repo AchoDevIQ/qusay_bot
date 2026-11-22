@@ -453,11 +453,11 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
   const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
   const [g] = Q.marksByPage([good], ["a"]);
   assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.x, m.y]), [["ok", "", 950, 35], ["good", "أحسنت", 50, 965]]);
-  // الطالب ما كتب الخطوات (مثل س5: 3 من 15): ✗ وملاحظاتها بآخر جوابه
+  // الطالب ما كتب الخطوات (مثل س5: 3 من 15): «؟» وملاحظاتها تحت آخر جوابه
   const miss = { n: 5, max: 15, score: 3, answered: true, sure: true, reason: "ناقص", method: 1, at: { p: 1, x: 600, y: 700 },
     steps: [{ text: "أ", points: 5, awarded: 3, note: "", at: undefined }, { text: "ب", points: 10, awarded: 0, note: "ما كملت الحل" }] };
   const [m5] = Q.marksByPage([miss], ["a"]);
-  assert.deepEqual(m5.marks.map((m) => [m.kind, m.x, m.y, m.note]), [["bad", 600, 700, "ما كملت الحل"]]);
+  assert.deepEqual(m5.marks.map((m) => [m.kind, m.x, m.y, m.note]), [["miss", 600, 745, "ما كملت الحل"]]);
   // ماكو ولا ملاحظة: سبب السؤال
   const [m6] = Q.marksByPage([{ ...miss, steps: miss.steps.map((st) => ({ ...st, note: "" })) }], ["a"]);
   assert.equal(m6.marks[0].note, "ناقص");
@@ -614,4 +614,32 @@ test("✋ الاعتراض على ورقة «تصحيح قصي»: بالأصل �
   await aiObjectionsTick();
   assert.deepEqual([(await one("objections", { id: o2 }))!.status, (await one("objections", { id: o2 }))!.new_mark], ["rejected", 60]);
   await Q.saveQgSettings({ live: [], obj: "person", objTo: 0 });
+});
+
+test("سؤال رجع بلا خطوات: إذا درجته كاملة تنحسب كاملة، وإلا يتعاد، وما يصير صفر بالسكوت (طالب تجربة 9)", () => {
+  const mat = { qs: [{ n: 1, max: 30, rubric: { steps: [{ text: "أ", points: 10 }, { text: "ب", points: 20 }], alts: [] }, qText: "", qImg: null, model: [] }], pdf: null };
+  const m = (j: any) => ({ content: [{ type: "text", text: JSON.stringify(j) }], usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: "end_turn" } as any);
+  const full = Q.readAnswer(m({ questions: [{ n: 1, answered: true, method: 1, steps: [], score: 30, sure: true, reason: "ممتاز" }] }), mat as any, new Set(), false);
+  assert.equal(full.qs[0].score, 30);
+  assert.throws(() => Q.readAnswer(m({ questions: [{ n: 1, answered: true, method: 1, steps: [], score: 12, sure: true, reason: "" }] }), mat as any, new Set(), false), /بلا خطوات/);
+});
+
+test("؟ بخطه: الخطوات اللي ما كتبها الطالب تنرسم «؟» تحت آخر جوابه، مو ✗ على سطر صح", () => {
+  const q = { n: 1, max: 10, score: 5, answered: true, sure: true, reason: "ناقص الرسم", method: 1, at: { p: 1, x: 500, y: 600 },
+    steps: [{ text: "أ", points: 5, awarded: 5, note: "", at: { p: 1, x: 500, y: 500 } }, { text: "الرسم", points: 5, awarded: 0, note: "ما رسمت الدالة" }] };
+  const ask = { id: 7, kind: "ask" as const, text: "؟", w: 480, h: 360, s: [[1, 2, 3, 4]] };
+  const [pg] = Q.marksByPage([q], ["a"], undefined, [], [ask]);
+  assert.deepEqual(pg.marks.map((x) => [x.kind, x.y]), [["ok", 500], ["miss", 645]]);
+  assert.equal(pg.marks[1].note, "ما رسمت الدالة");
+  assert.deepEqual(pg.marks[1].sym!.s, ask.s, "«؟» بخطه");
+});
+
+test("🪄 رتّب كلامي: يرجع الكلام مرتب، وينحسب بالصرفية", async () => {
+  reply = () => "1. بالنسخة B: ...";
+  const prev = sent.length;
+  const r: any = await qusayAction({ initData: sign(1), action: "tidy", text: "سرك Respect واي X" });
+  assert.equal(sent.length, prev + 1);
+  assert.match(sent.at(-1).system, /speech recognition/i);
+  assert.equal(typeof r.tidy, "string");
+  await assert.rejects(qusayAction({ initData: sign(1), action: "tidy", text: "  " }), /ماكو كلام/);
 });

@@ -5,18 +5,19 @@ import { useEffect, useRef, useState } from "react";
 import { INK_COLORS, InkSvg, inkPath, type InkShape } from "../myexams/AiCompare";
 import VoiceText from "./VoiceText";
 
-type Kind = "tick" | "cross" | "praise" | "note";
+type Kind = "tick" | "cross" | "praise" | "note" | "ask";
 export type InkItem = InkShape & { id: number; kind: Kind; text: string };
 type Call = (b: Record<string, unknown>) => Promise<{ inkOf?: { exam: number; items: InkItem[] } } | null>;
 
 const RED = "#d40000";
 /** مربع الكتابة: ✓ و✗ مربع، والكلام عريض. السطر 120 (نفس سطر الورقة)، وخط الكتابة على 240 */
-const BOX: Record<Kind, { w: number; h: number }> = { tick: { w: 480, h: 360 }, cross: { w: 480, h: 360 }, praise: { w: 1000, h: 360 }, note: { w: 1000, h: 360 } };
+const BOX: Record<Kind, { w: number; h: number }> = { tick: { w: 480, h: 360 }, cross: { w: 480, h: 360 }, ask: { w: 480, h: 360 }, praise: { w: 1000, h: 360 }, note: { w: 1000, h: 360 } };
 const LINE = 240;
 /** كم وحدة نقترح يكتب من كل نوع (أكثر من وحدة حتى ما تتكرر نفس الشكل بكل الأوراق) */
 const KINDS: { k: Kind; t: string; want: number; how: string }[] = [
   { k: "tick", t: "✓ علامة الصح", want: 5, how: "اكتب ✓ بس، مثل ما تأشر على دفتر الطالب. ارفعها، وبعدين اكتبها مرة ثانية. 5 مرات، كل مرة لحالها." },
   { k: "cross", t: "✗ علامة الغلط", want: 5, how: "اكتب ✗ بس. 5 مرات، كل مرة لحالها." },
+  { k: "ask", t: "؟ الحل ناقص", want: 3, how: "اكتب «؟» بس. تنحط تحت آخر جواب الطالب لمن يكون حله ناقص (ما كمل، ما رسم، ما كتب الجدول)، ويمها شنو ناقص. 3 مرات، كل مرة لحالها." },
   { k: "praise", t: "🌟 المدح", want: 9, how: "تنكتب بآخر السؤال اللي الطالب جابه كامل. اقتراحي: «أحسنت» 3 مرات، «ممتاز» 3، «عاشت إيدك» 3. وتگدر تضيف أي مدح تحبه." },
   { k: "note", t: "📝 ملاحظات", want: 0, how: "الملاحظات اللي تتكرر عندك هواية، مثل: «نسيت تعوض»، «الإشارة غلط»، «راجع القانون»، «ناقص». كل وحدة مرة وحدة تكفي. الذكاء من يكتب ملاحظة بنفس معناها، يحط خطك بدلها. والملاحظة اللي ما إلها خط تنكتب بالرقعة." },
 ];
@@ -32,7 +33,7 @@ export default function InkBook({ exam, call, busy }: { exam: number; call: Call
   async function upload(s: number[][], c: string, wd: 1 | 2 | 3) {
     const b = BOX[adding!.kind];
     const d = await call({ action: "inkAdd", exam, item: { kind: adding!.kind, text: adding!.text, w: b.w, h: b.h, s, c, wd } });
-    if (got(d)) { setWriting(false); setDone(adding!.kind === "tick" ? "✓" : adding!.kind === "cross" ? "✗" : adding!.text); }
+    if (got(d)) { setWriting(false); setDone(adding!.kind === "tick" ? "✓" : adding!.kind === "cross" ? "✗" : adding!.kind === "ask" ? "؟" : adding!.text); }
   }
   async function del(id: number) {
     if (!confirm("تمسح هاي من خطك؟")) return;
@@ -42,7 +43,7 @@ export default function InkBook({ exam, call, busy }: { exam: number; call: Call
   const count = (k: Kind) => items.filter((x) => x.kind === k).length;
 
   // الكتابة: ورقة بيضة، وبعدها «👁 شوف شلون تطلع»، وبعدها «📤 ارفع»
-  if (adding && writing) return <Pad kind={adding.kind} label={adding.kind === "tick" ? "✓" : adding.kind === "cross" ? "✗" : adding.text} busy={busy} onCancel={() => setWriting(false)} onUpload={upload} />;
+  if (adding && writing) return <Pad kind={adding.kind} label={adding.kind === "tick" ? "✓" : adding.kind === "cross" ? "✗" : adding.kind === "ask" ? "؟" : adding.text} busy={busy} onCancel={() => setWriting(false)} onUpload={upload} />;
   if (adding) {
     const k = KINDS.find((x) => x.k === adding.kind)!;
     const needText = adding.kind === "praise" || adding.kind === "note";
