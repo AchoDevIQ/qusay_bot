@@ -12,7 +12,7 @@ globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, result: 
 const { one, put } = await import("../lib/db.ts");
 const { ensure } = await import("../lib/webApi.ts");
 const { homeToken, appKey } = await import("../lib/webAuth.ts");
-const { pinGuardian, verifyGuardToken, resetPin } = await import("../lib/guardianPin.ts");
+const { pinGuardian, verifyGuardToken, resetPin, issuePin, issuedCode } = await import("../lib/guardianPin.ts");
 const { guardianAction } = await import("../lib/guardianApi.ts");
 const { guardianOf } = await import("../lib/access.ts");
 const { send } = await import("../lib/telegram.ts");
@@ -23,30 +23,37 @@ await put("students", { user_id: SID, name: "علي حسن", curr: "عربي", e
 const auth = { token: homeToken(SID), app: appKey(SID) };
 const act = (action: string, x: object = {}) => guardianAction({ ...auth, action, ...x });
 
-test("بس من التطبيق، وأول مرة يحط رمز صعب ومتطابق", async () => {
+let CODE = "";
+test("بس من التطبيق، والرمز ينطيه الأستاذ: الطالب ما يگدر يحط رمز، ورمز انحط قبل من تلفونه ما ينحسب", async () => {
   await assert.rejects(guardianAction({ token: homeToken(SID), app: "0".repeat(32), action: "state" }), /التطبيق/);
   assert.equal((await act("state")).hasPin, false);
-  await assert.rejects(act("setPin", { pin: "12", pin2: "12" }), /4 أرقام/);
-  await assert.rejects(act("setPin", { pin: "4826", pin2: "4827" }), /مو نفس/);
-  await assert.rejects(act("setPin", { pin: "1111", pin2: "1111" }), /سهل/);
-  const r: any = await act("setPin", { pin: "٤٨٢٦", pin2: "4826" });
-  assert.equal(r.hasPin, true);
-  assert.equal(verifyGuardToken(r.gtoken), SID);
+  await assert.rejects(act("setPin", { pin: "4826", pin2: "4826" }), /ينطيه الأستاذ/);
+  // رمز قديم انحط من تلفون الطالب (قبل 2026-11-22): ما يفتح ولا ينحسب
+  await put("guardian_pins", { user_id: SID, hash: "x:y", method: "pin", fails: 0, locked_until: null, created: "2026-11-01 10:00" });
+  assert.equal((await act("state")).hasPin, false);
+  await assert.rejects(act("open", { pin: "4826" }), /ما انطى رمز/);
+  CODE = await issuePin(SID);
+  assert.match(CODE, /^\d{4}$/);
+  assert.notEqual(CODE, "1234");
+  assert.equal(await issuedCode(SID), CODE);
+  assert.equal((await act("state")).hasPin, true);
+  const r: any = await act("open", { pin: [...CODE].map((d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]).join("") });
+  assert.equal(verifyGuardToken(r.gtoken), SID, "الأرقام العربية تنقبل");
   assert.equal((await guardianOf(SID))?.guardian_id, pinGuardian(SID), "ينحسب ولي أمر مربوط");
-  await assert.rejects(act("setPin", { pin: "5937", pin2: "5937" }), /محطوط/);
 });
 
 test("الرمز الغلط: 5 مرات تقفله، والصح يفتح بعد القفل", async () => {
-  for (let i = 1; i <= 4; i++) await assert.rejects(act("open", { pin: "0000" }), /غلط/);
-  await assert.rejects(act("open", { pin: "0000" }), /انقفل/);
-  await assert.rejects(act("open", { pin: "4826" }), /انقفل/, "حتى الصح ما يفتح وهو مقفول");
+  const bad = CODE === "0000" ? "1357" : "0000";
+  for (let i = 1; i <= 4; i++) await assert.rejects(act("open", { pin: bad }), /غلط/);
+  await assert.rejects(act("open", { pin: bad }), /انقفل/);
+  await assert.rejects(act("open", { pin: CODE }), /انقفل/, "حتى الصح ما يفتح وهو مقفول");
   await put("guardian_pins", { ...(await one("guardian_pins", { user_id: SID }))!, locked_until: String(Date.now() - 1) });
-  const r: any = await act("open", { pin: "4826" });
+  const r: any = await act("open", { pin: CODE });
   assert.equal(verifyGuardToken(r.gtoken), SID);
 });
 
 test("رسائل ولي الأمر برمزه بس، والدوسة توصل للبوت باسمه", async () => {
-  const g: any = await act("open", { pin: "4826" });
+  const g: any = await act("open", { pin: CODE });
   await send(pinGuardian(SID), "📝 تم تصحيح امتحانك", { kb: [[{ text: "✅ استلمت", callback_data: "gs:done" }]] });
   await assert.rejects(act("list", { gtoken: "g1.2.3" }), /رمزك/);
   const l: any = await act("list", { gtoken: g.gtoken });
@@ -55,11 +62,13 @@ test("رسائل ولي الأمر برمزه بس، والدوسة توصل ل�
   assert.equal(c.answer, "✅ مستلمة");
 });
 
-test("صاحب البوت يصفّر الرمز: ينفك الربط، وولي الأمر يحط رمز جديد", async () => {
+test("صاحب البوت يشيل الرمز: ينفك الربط، ورمز جديد يبطل القديم", async () => {
   await resetPin(SID);
   assert.equal((await act("state")).hasPin, false);
   assert.equal(await guardianOf(SID), null);
-  await act("setPin", { pin: "5937", pin2: "5937" });
+  const old = await issuePin(SID);
+  CODE = await issuePin(SID);
+  if (old !== CODE) await assert.rejects(act("open", { pin: old }), /غلط/);
   assert.equal((await act("state")).hasPin, true);
 });
 
@@ -93,7 +102,7 @@ test("تلفون ولي الأمر نفسه: رابطه يفتح الصفحة ب
   const st: any = await own("state");
   assert.equal(st.own, true);
   await assert.rejects(own("setPin", { pin: "1357", pin2: "1357" }), /تلفون ابنك/);
-  const o: any = await own("open", { pin: "5937" });
+  const o: any = await own("open", { pin: CODE });
   await own("pushSub", { gtoken: o.gtoken, sub: { endpoint: "https://push.example/abc", keys: { p256dh: "k", auth: "a" } } });
   assert.equal((await find("guardian_push", { user_id: SID })).length, 1);
   await assert.rejects(own("pushSub", { gtoken: o.gtoken, sub: { endpoint: "http://bad", keys: {} } }), /الإشعارات/);

@@ -55,7 +55,7 @@ const tryKey = (id: number) => `qg_try_${id}`;
 const capNoteKey = (day: string) => `qg_cap_note_${day}`;
 export const DEFAULT_CAP = 2;
 /** أطول «✍️ طريقتك بالكتابة» */
-export const STYLE_MAX = 8000;   // شرحه بالفويس لكل موضوع يطول (طلبه 2026-11-22)
+export const STYLE_MAX = 60000;   // شرحه بالفويس لكل موضوع مفتوح، يحچي براحته (طلبه 2026-11-22)
 const MAX_TRIES = 3;
 const LIVE_PER_TICK = 20, TRIAL_PER_TICK = 6, LOG_MAX = 3000;
 /** أكبر صورة يقبلها الذكاء، وأكبر PDF */
@@ -340,7 +340,9 @@ const stepsText = (steps: { text: string; points: number }[]) => steps.map((s, i
 async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false, style = ""): Promise<{ req: Req; unanswered: Set<number>; pages: string[] }> {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   if (!answers.length) throw new Error("ماكو صور جواب بالورقة");
-  const head: Anthropic.ContentBlockParam[] = [{ type: "text", text: "MARKING SCHEME (the same for every student of this exam version):" }];
+  // حرف النسخة (A، B…): شرح الأستاذ بعبارات الموضوع ممكن يخص نسخة («بالنسخة B السؤال 3 …»)
+  const ver = String((await one("bank_versions", { id: it.version_id }))?.model ?? "");
+  const head: Anthropic.ContentBlockParam[] = [{ type: "text", text: `MARKING SCHEME (the same for every student of this exam version)${ver ? `. This paper is exam version ${ver} (النسخة ${ver}): when the teacher's notes talk about a version, apply what he says about version ${ver}` : ""}:` }];
   for (const q of mat.qs) {
     let t = `\n=== Question ${q.n} — maximum ${q.max} points ===`;
     if (q.qText) t += `\nQuestion text: ${q.qText}`;
@@ -494,7 +496,8 @@ export async function qusayJudgeObjection(it: Row, n: number, text: string, oldM
   if (!q) throw new Error("السؤال غير موجود بالنموذج");
   const s = await qgSettings();
   const content: Anthropic.ContentBlockParam[] = [];
-  let t = `MARKING SCHEME of question ${n} — maximum ${q.max} points`;
+  const ver = String((await one("bank_versions", { id: it.version_id }))?.model ?? "");
+  let t = `MARKING SCHEME of question ${n}${ver ? ` (exam version ${ver}, النسخة ${ver})` : ""} — maximum ${q.max} points`;
   if (q.qText) t += `\nQuestion text: ${q.qText}`;
   if (q.rubric) {
     t += `\nMethod 1 steps:\n${stepsText(q.rubric.steps)}`;

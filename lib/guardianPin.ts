@@ -2,8 +2,8 @@
 // ينربط كأنه ولي أمر عادي برقم وهمي (GUARD_BASE + رقم الطالب)، فكل نظام ولي الأمر القديم يشتغل مثل ما هو:
 // الدرجة توصله ويا «✅ استلمت»، والدرجات الجاية تنتظر استلامه، وتنبيهات صاحب البوت. رسائله تنحفظ بمحادثة التطبيق
 // (رقمه فوك 10^13) وتطلع بصفحة «👨‍👧 ولي الأمر» بس بعد ما يكتب رمزه
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { one, put, remove, type Row } from "./db.ts";
+import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from "node:crypto";
+import { kvGet, kvSet, one, put, remove, type Row } from "./db.ts";
 import { TOKEN } from "./config.ts";
 import { stamp } from "./util.ts";
 import { need } from "./webApi.ts";
@@ -22,14 +22,36 @@ function pinOk(pin: string, stored: string) {
 }
 const cleanPin = (v: unknown) => String(v ?? "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).trim();
 
+// رمز ولي الأمر ينطيه الأستاذ (قراره 2026-11-22): يطلعله بملف الطالب، وينطيه لولي الأمر بس.
+// الطالب ما يگدر يحط رمز من تلفونه (چان يگدر يحطه هو ويستلم الدرجات بدال أبوه)
+const codeKey = (sid: number) => `guardian_code_${sid}`;
+/** الرمز اللي انطاه الأستاذ (يشوفه صاحب البوت بس بملف الطالب)، أو "" */
+export const issuedCode = async (sid: number) => String((await kvGet(codeKey(sid))) ?? "");
+const EASY = ["1234", "4321", "0123", "9876"];
+/** صاحب البوت يصنع رمز ولي الأمر، أو رمز جديد والقديم يبطل (ويا الوجه المسجل وروابط تلفون ولي الأمر) */
+export async function issuePin(sid: number): Promise<string> {
+  let p = "";
+  do p = String(randomInt(0, 10000)).padStart(4, "0"); while (/^(\d)\1{3}$/.test(p) || EASY.includes(p));
+  await put("guardian_pins", { user_id: sid, hash: hashPin(p), method: "pin", fails: 0, locked_until: null, created: stamp(), face: null, face_at: null });
+  await put("guardians", { guardian_id: pinGuardian(sid), student_id: sid, created: stamp() });
+  await kvSet(codeKey(sid), p);
+  const { logActivity } = await import("./access.ts");
+  await logActivity(sid, "🔑 الإدارة صنعت رمز ولي الأمر");
+  // الدرجات اللي چانت تنتظر ولي أمر توصل لصفحته هسه
+  try { const { releaseHeld } = await import("./gradeApi.ts"); await releaseHeld(sid); } catch (e) { console.error(e); }
+  return p;
+}
 export async function pinState(sid: number) {
   const r = await one("guardian_pins", { user_id: sid });
-  return { hasPin: !!r, hasFace: !!r?.face, method: r ? String(r.method ?? "pin") : "" };
+  // رمز انحط قبل من تلفون الطالب (بدون رمز من الأستاذ) ما ينحسب
+  const ok = !!r && !!await issuedCode(sid);
+  return { hasPin: ok, hasFace: ok && !!r?.face, method: ok ? String(r!.method ?? "pin") : "" };
 }
 
 /** أول مرة: ولي الأمر يحط رمزه. تغييره بس من صاحب البوت (يصفّره من ملف الطالب) */
 export async function setPin(sid: number, pin: unknown, pin2: unknown) {
-  need(!await one("guardian_pins", { user_id: sid }), "رمز ولي الأمر محطوط من قبل. لتغييره تواصل ويا الإدارة", 409);
+  // من 2026-11-22 الرمز ينطيه الأستاذ بس (issuePin). هاي تبقى للاختبارات القديمة وما توصلها الصفحة
+  need(false, "الرمز السري ينطيه الأستاذ لولي الأمر. ولي الأمر يطلبه من الإدارة", 403);
   const p = cleanPin(pin);
   need(/^\d{4}$/.test(p), "الرمز 4 أرقام");
   need(p === cleanPin(pin2), "الرمزين مو نفس الشي، اكتبه مرة ثانية");
@@ -48,7 +70,7 @@ export async function setPin(sid: number, pin: unknown, pin2: unknown) {
 /** يفتح صفحة ولي الأمر: يرجع رمز جلسة لنص ساعة. 5 محاولات غلط تقفلها نص ساعة */
 export async function openWithPin(sid: number, pin: unknown) {
   const r = await one("guardian_pins", { user_id: sid });
-  need(r, "ولي أمرك بعده ما حط رمزه", 404);
+  need(r && await issuedCode(sid), "الأستاذ بعده ما انطى رمز ولي الأمر. ولي الأمر يطلبه من الإدارة", 404);
   need(!r!.locked_until || Number(r!.locked_until) < Date.now(), `الرمز انقفل لأن انكتب غلط هواية. جرب بعد ${LOCK_MIN} دقيقة`, 423);
   if (!pinOk(cleanPin(pin), String(r!.hash))) {
     const fails = Number(r!.fails ?? 0) + 1;
@@ -77,6 +99,7 @@ export function verifyGuardToken(t: unknown, now = Date.now() / 1000): number | 
 
 /** صاحب البوت يصفّر الرمز: ولي الأمر يحط رمز جديد، ورسائله القديمة تبقى */
 export async function resetPin(sid: number) {
+  await kvSet(codeKey(sid), "");
   await remove("guardian_pins", { user_id: sid });
   await remove("guardians", { guardian_id: pinGuardian(sid), student_id: sid });
 }
@@ -136,7 +159,7 @@ export async function setFace(sid: number, desc: unknown, photo: unknown) {
 export async function openWithFace(sid: number, desc: unknown, photo: unknown) {
   const d = descriptor(desc);
   const r = await one("guardian_pins", { user_id: sid });
-  need(r?.face, "ولي أمرك بعده ما سجل وجهه", 404);
+  need(r?.face && await issuedCode(sid), "ولي أمرك بعده ما سجل وجهه", 404);
   need(!r!.locked_until || Number(r!.locked_until) < Date.now(), `انقفل لأن فشل هواية. جرب بعد ${LOCK_MIN} دقيقة`, 423);
   const { unseal } = await import("./secretBox.ts");
   const saved = JSON.parse(unseal(String(r!.face))?.toString() ?? "[]") as number[];

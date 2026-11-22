@@ -42,9 +42,11 @@ export async function sendStudentsPdf(chat: number, fifth: boolean) {
     await Promise.all(rows.map(async (r) => [r.name, r.grade, r.curr, placeOf(r), r.phone1, r.phone2, (r.exam ?? "") + (r.center_id ? " - " + await centerName(r.center_id) : "")])),
     fifth ? "students_5th" : "students_all");
 }
-const view = async (s: Row) => ({
+const view = async (s: Row, admin = false) => ({
+  // رمز ولي الأمر يشوفه صاحب البوت بس
+  gcode: admin ? await (await import("./guardianPin.ts")).issuedCode(s.user_id) : "",
   id: s.user_id, username: s.username ?? "", name: s.name, curr: s.curr, grade: s.grade, gov: s.gov, side: s.side ?? "", area: s.area,
-  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), pilot: await (await import("./appLink.ts")).isPilot(s.user_id), sos: (await (await import("./studentVis.ts")).sosIds()).includes(s.user_id), door: !!await one("door_links", { user_id: s.user_id }), app: !!await one("app_links", { uid: s.user_id }), pin: !!await one("guardian_pins", { user_id: s.user_id }), gw: await guardianOf(s.user_id) ? await guardianState(s.user_id) : null, wa: whatsappOf(s.phone2), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
+  phone1: s.phone1, phone2: s.phone2, exam: s.exam ?? "", gender: s.gender ?? "", guardian: !!await guardianOf(s.user_id), pilot: await (await import("./appLink.ts")).isPilot(s.user_id), sos: (await (await import("./studentVis.ts")).sosIds()).includes(s.user_id), door: !!await one("door_links", { user_id: s.user_id }), app: !!await one("app_links", { uid: s.user_id }), pin: !!await one("guardian_pins", { user_id: s.user_id }) && !!await (await import("./guardianPin.ts")).issuedCode(s.user_id), gw: await guardianOf(s.user_id) ? await guardianState(s.user_id) : null, wa: whatsappOf(s.phone2), device: await deviceOf(s.user_id), stop: stopView(await activeStop(s.user_id)), centerId: s.center_id ?? 0, center: await centerName(s.center_id), created: s.created, updated: s.updated ?? "",
 });
 
 type Filters = { curr?: string; grade?: string; exam?: string; gov?: string };
@@ -77,7 +79,7 @@ async function pageData(q: string, f: Filters, uid = 0) {
   const rows = found.slice(0, RECENT);
   const centers = await find("centers", { active: 1 }, { order: ["id"] });
   return {
-    stats: await studentsStats(), results: await Promise.all(rows.map(view)), found: found.length, limit: RECENT, govs: GOVS,
+    stats: await studentsStats(), results: await Promise.all(rows.map(async (r) => view(r, !!uid && await isAdmin(uid)))), found: found.length, limit: RECENT, govs: GOVS,
     areas: (await areasWithCenters()).map((a) => ({ id: a.id, gov: a.gov, name: a.name, centers: centers.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, name: c.name })) })),
     tests: uid && await isAdmin(uid) ? await testStudents() : null,
     canMsg: uid ? await can(uid, MSG_PERM) : false,
@@ -317,11 +319,18 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
     // صور توقيع ولي الأمر بوجهه (مشفرة)، لصاحب البوت يراجعها
     const { signPhotos } = await import("./guardianPin.ts");
     return { photos: await signPhotos(id) };
+  } else if (a === "issuePin") {
+    // رمز ولي الأمر: صاحب البوت بس يصنعه ويشوفه، وينطيه لولي الأمر
+    need(await isAdmin(uid), "رمز ولي الأمر لصاحب البوت بس", 403);
+    need(await student(id), "الطالب غير موجود");
+    const { issuePin } = await import("./guardianPin.ts");
+    const code = await issuePin(id);
+    notice = `🔑 رمز ولي الأمر: ${code}. انطيه لولي الأمر بس. يفتح بيه «👨‍👧 ولي الأمر» بتطبيق ابنه. الرمز القديم بطل`;
   } else if (a === "resetPin") {
     const { resetPin } = await import("./guardianPin.ts");
     await resetPin(id);
     await logActivity(id, "🔐 الإدارة صفّرت رمز ولي الأمر");
-    notice = "✅ انصفّر رمز ولي الأمر. ولي الأمر يحط رمز جديد من صفحة «👨‍👧 ولي الأمر» بتطبيق ابنه";
+    notice = "✅ انشال رمز ولي الأمر. حتى يرجع يفتح، اصنعله رمز جديد من «🔑 رمز ولي الأمر»";
   } else if (a === "unlink") {
     await remove("guardians", { student_id: id });
     await remove("guardian_pins", { user_id: id });

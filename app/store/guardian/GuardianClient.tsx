@@ -14,7 +14,7 @@ export default function GuardianClient() {
   const [face, setFace] = useState<"" | "set" | "open">("");
   const [notice, setNotice] = useState("");
   const [g, setG] = useState("");
-  const [pin, setPin] = useState(""), [pin2, setPin2] = useState("");
+  const [pin, setPin] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [toast, setToast] = useState("");
@@ -74,14 +74,11 @@ export default function GuardianClient() {
       <header style={{ padding: "16px 14px" }}><h1 style={{ fontSize: 24 }}>👨‍👧 ولي الأمر</h1>{state?.name && <p>درجات {state.name.split(" ").slice(0, 2).join(" ")}</p>}</header>
       {!state && !error && <div className="empty">جاري التحميل...</div>}
       {error && <div className="chaterr">⚠️ {error}</div>}
+      {/* الرمز ينطيه الأستاذ لولي الأمر بس (قراره 2026-11-22): الطالب ما يگدر يحط رمز من هنا */}
       {state && !state.hasPin && (
         <div className="wrap"><div className="card"><div className="form">
-          <div className="exhint">هاي الصفحة لولي الأمر بس. ولي الأمر يحط هنا <b>رمز سري من 4 أرقام</b> يعرفه هو بس، والطالب ما يشوفه. بعدها كل درجة توصل هنا، وولي الأمر يفتحها برمزه ويدوس «✅ استلمت». إذا نسيت الرمز، الإدارة تصفّره.</div>
-          <label>الرمز</label>
-          <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(digits(e.target.value))} placeholder="••••" />
-          <label>اكتب الرمز مرة ثانية</label>
-          <input type="password" inputMode="numeric" value={pin2} onChange={(e) => setPin2(digits(e.target.value))} placeholder="••••" />
-          <button type="button" className="btn" disabled={busy || pin.length !== 4 || pin2.length !== 4} onClick={() => void call({ action: "setPin", pin, pin2 }).then((r) => { if (r) { setState({ ...state, hasPin: true }); setG(r.gtoken); setPin(""); setPin2(""); } })}>🔐 احفظ رمزي</button>
+          <div className="exhint">هاي الصفحة لولي الأمر بس. الدرجات توصل هنا، وولي الأمر يفتحها بـ<b>رمز سري من 4 أرقام</b> ينطيه الأستاذ لولي الأمر نفسه.</div>
+          <div className="exhint">🔑 بعده ما انطى رمز. ولي الأمر يطلبه من الإدارة، وبعدها يكتبه هنا.</div>
         </div></div></div>
       )}
       {face && (
@@ -95,7 +92,7 @@ export default function GuardianClient() {
       {state?.hasPin && !g && !face && (
         <div className="wrap"><div className="card"><div className="form">
           {state.hasFace && <button type="button" className="btn" disabled={busy} onClick={() => setFace("open")}>📸 افتح بوجهي</button>}
-          <div className="exhint">ولي الأمر يكتب رمزه حتى يشوف الدرجات ويستلمها.</div>
+          <div className="exhint">ولي الأمر يكتب الرمز اللي انطاه الأستاذ حتى يشوف الدرجات ويستلمها.</div>
           <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(digits(e.target.value))} placeholder="••••" />
           <button type="button" className="btn" disabled={busy || pin.length !== 4} onClick={() => void call({ action: "open", pin }).then((r) => { if (r) { setG(r.gtoken); setPin(""); } })}>🔓 افتح</button>
         </div></div></div>

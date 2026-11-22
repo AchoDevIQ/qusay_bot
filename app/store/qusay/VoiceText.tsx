@@ -24,7 +24,7 @@ function canListen() {
   return !!ctor();
 }
 
-export default function VoiceText({ value, onChange, rows = 4, maxLength = 8000 }: { value: string; onChange: (v: string) => void; rows?: number; maxLength?: number }) {
+export default function VoiceText({ value, onChange, rows = 4, maxLength = 60000 }: { value: string; onChange: (v: string) => void; rows?: number; maxLength?: number }) {
   const [mode, setMode] = useState<"type" | "voice">("type");
   const [can, setCan] = useState(false);
   const [on, setOn] = useState(false);
