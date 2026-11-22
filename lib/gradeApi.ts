@@ -27,7 +27,7 @@ import { ApiError, authed, ensure, need } from "./webApi.ts";
 import { browserToken, fileToken } from "./webAuth.ts";
 import { makeBrowserCode, useBrowserCode } from "./browserLink.ts";
 import { setPenText } from "./inkText.ts";
-import { qusayHeld } from "./qusayGrade.ts";
+import { qusayHeld, qgSettings, qusayJudgeObjection } from "./qusayGrade.ts";
 
 export const GRADE_PERM = "grade";
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -124,11 +124,14 @@ async function objectionPapers(uid: number) {
 // اعتراض على سؤال صححه نظام التصحيح AI: يراجعه هو. إذا ما گدر مرتين، يرجع لصاحب البوت
 const objTriesKey = (oid: number) => `ai_obj_try_${oid}`;
 const OBJ_TRIES = 2;
+/** ورقة صححها «تصحيح قصي» والأستاذ مختار إنه هو يراجع اعتراضاتها أول (طلبه 2026-11-22) */
+const qusayReviews = async (it: Row) => it.grader_id === QUSAY_GRADER && (await qgSettings()).obj === "qusay";
 /** الاعتراضات اللي يرد عليها إنسان: على أسئلة المصحح، أو أسئلة الذكاء اللي ما گدر يراجعها */
 async function humanObjections(it: Row) {
   const ai = await aiQuestions(it);
+  const qusay = await qusayReviews(it);
   const out: Row[] = [];
-  for (const o of await openObjections(it.id)) if (o.reopened || !ai.has(o.q) || (Number(await kvGet(objTriesKey(o.id))) || 0) >= OBJ_TRIES) out.push(o);
+  for (const o of await openObjections(it.id)) if (o.reopened || !(qusay || ai.has(o.q)) || (Number(await kvGet(objTriesKey(o.id))) || 0) >= OBJ_TRIES) out.push(o);
   return out;
 }
 /** دكة المؤقت: نظام التصحيح AI يراجع الاعتراضات على أسئلته ويرد على الطالب */
@@ -144,20 +147,23 @@ export async function aiObjectionsTick(limit = 4) {
     const it = await one("sched_items", { id });
     if (!it?.graded_at) continue;
     const ai = await aiQuestions(it);
-    const mine = objs.filter((o) => ai.has(o.q));
+    // «تصحيح قصي» يراجع كل اعتراضات أوراقه، ونظام التصحيح AI أسئلته بس
+    const qusay = await qusayReviews(it);
+    const mine = objs.filter((o) => qusay || ai.has(o.q));
     if (!mine.length) continue;
     const lines: string[] = [];
     let accepted = 0;
     for (const o of mine) {
       try {
-        const r = await aiJudgeObjection(it, o.q, String(o.text ?? ""), Number(o.old_mark ?? 0));
+        const r = qusay ? await qusayJudgeObjection(it, o.q, String(o.text ?? ""), Number(o.old_mark ?? 0)) : await aiJudgeObjection(it, o.q, String(o.text ?? ""), Number(o.old_mark ?? 0));
+        const by = qusay ? QUSAY_GRADER : AI_GRADER;
         if (r.accept) {
           await put("question_marks", { item_id: it.id, q: o.q, mark: r.mark });
-          await update("objections", { id: o.id }, { status: "accepted", new_mark: r.mark, reason: r.reason || null, decided_at: stamp(), decided_by: AI_GRADER });
+          await update("objections", { id: o.id }, { status: "accepted", new_mark: r.mark, reason: r.reason || null, decided_at: stamp(), decided_by: by });
           lines.push(`✅ السؤال ${o.q}: انقبل اعتراضك، صارت درجته <b>${r.mark}</b> بدل ${o.old_mark}${r.reason ? `\n${esc(plainMath(r.reason))}` : ""}`);
           accepted++;
         } else {
-          await update("objections", { id: o.id }, { status: "rejected", new_mark: o.old_mark, reason: r.reason || null, decided_at: stamp(), decided_by: AI_GRADER });
+          await update("objections", { id: o.id }, { status: "rejected", new_mark: o.old_mark, reason: r.reason || null, decided_at: stamp(), decided_by: by });
           lines.push(`❌ السؤال ${o.q}: انرفض اعتراضك وبقت درجته ${o.old_mark}${r.reason ? `\nالسبب: ${esc(plainMath(r.reason))}` : ""}`);
         }
         done++;
@@ -165,20 +171,20 @@ export async function aiObjectionsTick(limit = 4) {
         console.error("ai objection", o.id, e);
         const tries = (Number(await kvGet(objTriesKey(o.id))) || 0) + 1;
         await kvSet(objTriesKey(o.id), String(tries));
-        if (tries >= OBJ_TRIES) for (const a of ADMIN_IDS) await send(a, `👤 <b>لصاحب البوت بس، ما توصل للطالب</b>\n⚠️ نظام التصحيح AI ما گدر يراجع اعتراض السؤال ${o.q} على ورقة ${await nameOf(it)}، فصار ينتظرك بـ ✋ الاعتراضات.`);
+        if (tries >= OBJ_TRIES) for (const a of ADMIN_IDS) await send(a, `👤 <b>لصاحب البوت بس، ما توصل للطالب</b>\n⚠️ ${qusay ? "«تصحيح قصي»" : "نظام التصحيح AI"} ما گدر يراجع اعتراض السؤال ${o.q} على ورقة ${await nameOf(it)}، فصار ينتظرك بـ ✋ الاعتراضات.`);
       }
     }
     if (!lines.length) continue;
     const total = await itemTotal(it);
     await update("sched_items", { id: it.id }, { total });
     const view = await paperRow(it);
-    await send(it.user_id, `🤖 <b>رد نظام التصحيح AI على اعتراضك</b>\nامتحان: ${esc(view.title)}\n\n${lines.join("\n\n")}\n\nدرجتك${accepted ? " الجديدة" : ""}: <b>${total}</b> من 100`, { extra: { protect_content: true } });
+    await send(it.user_id, `${qusay ? "✋ <b>رد على اعتراضك</b>" : "🤖 <b>رد نظام التصحيح AI على اعتراضك</b>"}\nامتحان: ${esc(view.title)}\n\n${lines.join("\n\n")}\n\nدرجتك${accepted ? " الجديدة" : ""}: <b>${total}</b> من 100`, { extra: { protect_content: true } });
     const g = accepted ? await guardianOf(it.user_id) : null;
     if (g) {
       await send(g.guardian_id, `📝 <b>تعديل درجة بعد اعتراض</b>\nدرجة الطالب <b>${esc(view.name)}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`, { kb: seenButton(it.id), extra: { protect_content: true } });
       await guardianSent(it.user_id, g.guardian_id, it.id);
     }
-    await logActivity(it.user_id, `🤖 نظام التصحيح AI رد على اعتراضه بامتحان ${view.title}: ${accepted} انقبل. الدرجة ${total}`);
+    await logActivity(it.user_id, `${qusay ? "🧠 تصحيح قصي" : "🤖 نظام التصحيح AI"} رد على اعتراضه بامتحان ${view.title}: ${accepted} انقبل. الدرجة ${total}`);
   }
   return { done };
 }

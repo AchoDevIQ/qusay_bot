@@ -575,3 +575,43 @@ test("📈 سؤال بيه خطوة رسم: PDF حل الأستاذ يروح و�
   assert.ok(!sent.at(-1).messages[0].content.some((b: any) => b.type === "document"));
   assert.ok(Q.DRAW_STEP.test("Drawing of the cylinder with r and h") && Q.DRAW_STEP.test("[7] الرسم") && Q.DRAW_STEP.test("Sketch of the ellipse") && !Q.DRAW_STEP.test("Table: x = 1, -1"));
 });
+
+test("✋ الاعتراض على ورقة «تصحيح قصي»: بالأصل يروح لشخص، وإذا اختار «🧠 يراجعه» يعيد السؤال ويقبل أو يرفض، والدرجة ما تنزل", async () => {
+  const { aiObjectionsTick } = await import("../lib/gradeApi.ts");
+  const { canHandle } = await import("../lib/objections.ts");
+  await Q.saveQgSettings({ live: [ex], obj: "person", objTo: 0 });
+  const id = await paper([1, 2]);
+  reply = () => good;
+  await Q.qusayTick(finishByAi);
+  const it = (await one("sched_items", { id }))!;
+  assert.equal(it.grader_id, QUSAY_GRADER);
+  const o1 = await insert("objections", { item_id: id, user_id: 90, q: 2, text: "البرهان كامل بالصفحة الثانية", voice: null, status: "open", old_mark: 25, new_mark: null, reason: null, created: stamp(), decided_at: null, decided_by: null });
+  // «👤 لشخص»: ما يراجعه، ينتظر بالاعتراضات. والمساعد اللي ما مختار ما يرد
+  sent.length = 0;
+  await aiObjectionsTick();
+  assert.equal(sent.length, 0);
+  await put("staff", { user_id: 43, name: "مساعد الاعتراضات", perms: "objections" });
+  assert.equal(await canHandle(43, it), false);
+  await Q.saveQgSettings({ objTo: 43 });
+  assert.equal(await canHandle(43, it), true, "المختار يرد");
+  // «🧠 يراجعه»: الطلب بيه السؤال 2 بس وكلام الطالب، ويقبل لأن الدرجة صعدت
+  await Q.saveQgSettings({ obj: "qusay" });
+  reply = () => ({ accept: true, mark: 33.6, reason: "صح، البرهان كامل" });
+  tg.length = 0;
+  await aiObjectionsTick();
+  const req = sent.at(-1);
+  assert.match(req.system[0].text, /OBJECTION REVIEW/);
+  const text = req.messages[0].content.map((b: any) => b.text ?? "").join(" ");
+  assert.match(text, /question 2/); assert.match(text, /البرهان كامل بالصفحة الثانية/); assert.doesNotMatch(text, /Question 1 —/);
+  const o = (await one("objections", { id: o1 }))!;
+  assert.deepEqual([o.status, o.new_mark, o.decided_by], ["accepted", 34, QUSAY_GRADER]);
+  assert.equal((await Q.qgResultOf(id))!.qs.find((q) => q.n === 2)!.score, 34, "تفصيل ورقته يطلع الجديدة");
+  assert.match(tg.find((m) => String(m.p.chat_id) === "90")!.p.text, /رد على اعتراضك[\s\S]*البرهان كامل/);
+  assert.equal((await Q.qgLog()).at(-1)!.kind, "obj");
+  // يگول «اقبل» بس الدرجة ما صعدت: ينرفض، وما تنزل
+  const o2 = await insert("objections", { item_id: id, user_id: 90, q: 1, text: "أستحق أكثر", voice: null, status: "open", old_mark: 60, new_mark: null, reason: null, created: stamp(), decided_at: null, decided_by: null });
+  reply = () => ({ accept: true, mark: 40, reason: "خطوتك الثانية ناقصة" });
+  await aiObjectionsTick();
+  assert.deepEqual([(await one("objections", { id: o2 }))!.status, (await one("objections", { id: o2 }))!.new_mark], ["rejected", 60]);
+  await Q.saveQgSettings({ live: [], obj: "person", objTo: 0 });
+});

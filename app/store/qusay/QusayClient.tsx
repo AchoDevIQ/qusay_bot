@@ -12,14 +12,14 @@ type Step = { text: string; points: number; awarded: number; note: string };
 type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null; marked: MarkedPageT[] | null };
 type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; human: number | null; total: number; sure: boolean; iqd: number; batch: boolean; sent: boolean; qs: Q[]; photos: { q: number; ref: string }[]; demo: { at: string; total: number; iqd: number } | null; demoWaiting: boolean };
 type TrialRow = { id: number; name: string; exam: string; human: number | null; qusay: number; sure: boolean; iqd: number; at: string };
-type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
+type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
 type Data = {
-  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string }; fileToken: string;
+  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number }; fileToken: string; objStaff: { id: number; name: string }[];
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
   trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; paper?: Paper; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
-const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي" };
+const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي", obj: "✋ راجع اعتراض" };
 const num = (n: number) => n.toLocaleString("en-US");
 
 export default function QusayClient() {
@@ -69,7 +69,7 @@ export default function QusayClient() {
               ))}
               {data.log.length > 8 && <button type="button" className="exbtn" onClick={() => setAllLog(!allLog)}>{allLog ? "⬆️ أقل" : `⬇️ كل السجل (${data.log.length})`}</button>}
             </div>
-            <Settings key={JSON.stringify(data.settings)} s={data.settings} busy={busy} call={call} />
+            <Settings key={JSON.stringify(data.settings)} s={data.settings} staff={data.objStaff} busy={busy} call={call} />
             <InkCard busy={busy} call={call} />
             {data.chapters.length > 0 && (
               <div className="card expad">
@@ -102,7 +102,9 @@ export default function QusayClient() {
   );
 }
 
-function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call: Call }) {
+function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["objStaff"]; busy: boolean; call: Call }) {
+  const [obj, setObj] = useState(s.obj);
+  const [objTo, setObjTo] = useState(s.objTo);
   const [effort, setEffort] = useState(s.effort);
   const [batch, setBatch] = useState(s.batch);
   const [cap, setCap] = useState(String(s.cap));
@@ -136,6 +138,20 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
         <option value="graders">↩️ ترجع للمصححين</option>
       </select>
       <div className="exhint">ورقة طالب التجربة ما ترجع للمصححين أبداً.</div>
+      <div className="exhint">✋ اعتراض الطالب على ورقة صححها «تصحيح قصي»</div>
+      <select value={obj} onChange={(e) => setObj(e.target.value === "qusay" ? "qusay" : "person")}>
+        <option value="person">👤 يروح لشخص يرد عليه (الأصل)</option>
+        <option value="qusay">🧠 تصحيح قصي يراجعه: يعيد السؤال، إذا الدرجة تصعد يقبله، وإلا يرفضه ويكتب ليش</option>
+      </select>
+      {obj === "person" && <>
+        <div className="exhint">منو يرد على اعتراضاتها</div>
+        <select value={objTo} onChange={(e) => setObjTo(Number(e.target.value))}>
+          <option value={0}>👤 أنا (صاحب البوت)</option>
+          {staff.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        {!staff.length && <div className="exhint">حتى تختار مساعد: انطيه صلاحية «✋ الاعتراضات» من 👥 المساعدين.</div>}
+      </>}
+      {obj === "qusay" && <div className="exhint">كل سؤال يراجعه تقريباً 5 إلى 7 دنانير، ويطلع بالسجل «✋ راجع اعتراض». الدرجة ما تنزل بالاعتراض أبداً. إذا ما گدر يراجعه مرتين، يوصلك إنت.</div>}
       <div className="exhint">🖍 العلامات الحمرة على ورقة الطالب (✓ و✗ يم كل خطوة، ودرجة السؤال بدائرة). جربها أول على ورقة من 👁 ← 🖍 جرب العلامات</div>
       <select value={marks ? "1" : "0"} onChange={(e) => setMarks(e.target.value === "1")}>
         <option value="0">⏸ طافية: الطالب يشوف التصحيح خطوات بس (الأصل)</option>
@@ -143,7 +159,7 @@ function Settings({ s, busy, call }: { s: Data["settings"]; busy: boolean; call:
       </select>
       <div className="exhint">✍️ طريقتك بالكتابة: اكتب أو احچي (🎤 فويس) أمثلة من ملاحظاتك مثل ما تكتبها على ورقة الطالب، كل وحدة بسطر (مثلاً: «المفروض 23π/12» ، «نسيت تعوض» ، «ركز بالإشارة»). يكتب مثلك بالعلامات الحمرة وبـ 🖍 جرب العلامات</div>
       <VoiceText value={style} onChange={setStyle} />
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure, marks, style })}>💾 احفظ</button>
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure, marks, style, obj, objTo })}>💾 احفظ</button>
     </div>
   );
 }

@@ -3,7 +3,8 @@
 import katex from "katex";
 
 /** كتابة الطالب أو الملزمة (x^2 ، sqrt(3) ، 3/(2x)) تصير LaTeX، والكسر بخط أفقي مثل ما ينكتب باليد */
-const OPERAND = String.raw`(\((?:[^()]|\([^()]*\))*\)|\\sqrt\{[^{}]*\}|\\frac\{[^{}]*\}\{[^{}]*\}|[A-Za-z0-9.]+)`;
+const POW = String.raw`(?:\^\{[^{}]*\}|\^-?[A-Za-z0-9.]+)*`;
+const OPERAND = String.raw`((?:\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|\\sqrt\{[^{}]*\}|\\frac\{[^{}]*\}\{[^{}]*\}|[A-Za-z0-9.]+)${POW})`;
 const unwrap = (x: string) => (x.startsWith("(") && x.endsWith(")") ? x.slice(1, -1) : x);
 
 /** القوس اللي يبدي عند s[i] = "(": اللي داخله ونهايته، أو null إذا ما ينسد */
@@ -31,10 +32,10 @@ export function braceArgs(s: string): string {
         if (b) { out += `\\frac{${braceArgs(a[0])}}{${braceArgs(b[0])}}`; i = b[1]; continue; }
       }
     }
-    const arg = /^(\\sqrt|\^|_)\s*\(/.exec(s.slice(i));
+    const arg = /^(\\sqrt|\^|_)\s*\(/.exec(s.slice(i)) ?? (s[i - 1] !== "\\" && !/[A-Za-z]/.test(s[i - 1] ?? "") ? /^(sqrt)\s*\(/.exec(s.slice(i)) : null);
     if (arg) {
       const g = group(s, i + arg[0].length - 1);
-      if (g) { out += `${arg[1]}{${braceArgs(g[0])}}`; i = g[1]; continue; }
+      if (g) { out += `${arg[1] === "sqrt" ? "\\sqrt" : arg[1]}{${braceArgs(g[0])}}`; i = g[1]; continue; }
     }
     out += s[i++];
   }
@@ -44,13 +45,24 @@ export function braceArgs(s: string): string {
 /** فواصل الرياضيات ($ و \( \) و \[ \]) تنشال: KaTeX يرسم الرياضيات بدونها، وما يقبل $ بداخلها */
 export const stripDelimiters = (s: string) => s.replace(/\$+|\\\(|\\\)|\\\[|\\\]/g, " ").replace(/\s{2,}/g, " ").trim();
 
+/** شكل الكتاب العراقي (طلب الأستاذ 2026-11-22): الأس كله مرفوع (x^10 مو x¹0، و^-5)، و«isinθ» = i sinθ،
+ *  والدوال sin وcos مستقيمة مثل الكتاب، وtheta وomega رموز */
+const FUNCS = /(?<![\\A-Za-z])(sin|cos|tan|sec|csc|cot|ln|log)(?![A-Za-z])/g;
 export function toTex(p: string) {
-  let t = braceArgs(stripDelimiters(p)).replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
+  let t = braceArgs(stripDelimiters(p).replace(/(?<![A-Za-z\\])i(sin|cos|tan)(?![A-Za-z])/g, "i $1")
+    // «F2(-5,0) & F1(5,0)» و«R\{0}» و«➔»: رموز تنكتب مثل ما هي
+    .replace(/(?<!\\)&/g, "\\&").replace(/\\\{([^{}\\]*)\}/g, "\\{$1\\}").replace(/➔/g, "→")).replace(/sqrt\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*([A-Za-z0-9]+)/g, "\\sqrt{$1}")
     .replace(/π/g, "pi").replace(/=>|⇒|⟹/g, "\\Rightarrow ").replace(/->|→/g, "\\to ").replace(/∓/g, "\\mp ").replace(/±/g, "\\pm ").replace(/−/g, "-").replace(/×/g, "\\times ");
+  // الأس اللي أكثر من رقم أو بيه سالب: كله فوك
+  t = t.replace(/\^(-?\d+(?:\.\d+)?)/g, (m, x: string) => (x.length > 1 ? `^{${x}}` : m)).replace(/\^-([A-Za-z])/g, "^{-$1}");
+  t = t.replace(/\s\*\s|(?<=[\d)])\*(?=[\d(])/g, " \\times ");
   const re = new RegExp(`${OPERAND}\\s*/\\s*${OPERAND}`);
   for (let i = 0; i < 12 && re.test(t); i++) t = t.replace(re, (_, x: string, y: string) => `\\frac{${unwrap(x)}}{${unwrap(y)}}`);
   // «pi» و«π» يصيرن رمز الباي مثل الكتاب (بعد الكسور، حتى pi/4 يصير كسر بيه π)
-  return wordsAsText(t).replace(/(?<![\\A-Za-z])pi(?![A-Za-z])/g, "\\pi ");
+  // الكلام بداخل \text{...} يبقى كلام: الرموز والدوال برا منه بس
+  return wordsAsText(t).split(/(\\text\{[^{}]*\})/).map((x) => (x.startsWith("\\text{") ? x
+    : x.replace(/(?<![\\A-Za-z])pi(?![A-Za-z])|(?<=(?:^|[^\\A-Za-z])[a-z])pi(?![A-Za-z])/g, "\\pi ")
+      .replace(FUNCS, "\\$1 ").replace(/(?<![\\A-Za-z])(theta|omega|alpha|beta)(?![A-Za-z])/g, "\\$1 "))).join("");
 }
 
 /** أسماء الدوال والرموز اللي تبقى رياضيات حتى لو حروفها 3 أو أكثر */

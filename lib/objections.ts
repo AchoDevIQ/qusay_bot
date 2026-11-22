@@ -7,7 +7,7 @@ import { ADMIN_IDS } from "./config.ts";
 import { SKIP } from "./answerOnly.ts";
 import { find, insert, one, type Row } from "./db.ts";
 import { logActivity } from "./access.ts";
-import { can, isAdmin, student } from "./data.ts";
+import { QUSAY_GRADER, can, isAdmin, student } from "./data.ts";
 import { files } from "./files.ts";
 import { adminPageLink } from "./keyboards.ts";
 import { send, type Kb } from "./telegram.ts";
@@ -27,7 +27,10 @@ export const objectButton = (uid: number, item: number): Kb => [[{ text: "✋ ا
 /** منو يگدر يرد على اعتراضات هذي الورقة: مصححها إذا عنده الصلاحية، وصاحب البوت دائماً */
 export async function canHandle(uid: number, it: Row) {
   if (await isAdmin(uid)) return true;
-  return it.grader_id === uid && await can(uid, OBJ_PERM);
+  if (!await can(uid, OBJ_PERM)) return false;
+  // أوراق «تصحيح قصي»: المساعد اللي اختاره الأستاذ يرد على اعتراضاتها
+  if (it.grader_id === QUSAY_GRADER) return (await (await import("./qusayGrade.ts")).qgSettings()).objTo === uid;
+  return it.grader_id === uid;
 }
 export const openObjections = (itemId: number) => find("objections", { item_id: itemId, status: "open" });
 
@@ -95,7 +98,14 @@ export async function submitObjection(form: FormData) {
   const human = rows.map((r) => r.n).filter((n) => !ai.has(n));
   const aiList = rows.map((r) => r.n).filter((n) => ai.has(n));
   const head = `✋ <b>اعتراض جديد</b>\nالطالب: ${esc((await student(uid!))?.name ?? "")}\nالامتحان: ${esc(e?.title ?? "")}`;
-  if (human.length) await tellGraders(it, `${head}\nعلى السؤال: ${human.join("، ")}`);
+  if (it.grader_id === QUSAY_GRADER) {
+    const s = await (await import("./qusayGrade.ts")).qgSettings();
+    if (s.obj === "qusay") {
+      for (const id of new Set(ADMIN_IDS)) await send(id, `👤 <b>لصاحب البوت بس</b>\n${head}\nعلى السؤال: ${rows.map((r) => r.n).join("، ")}\n🧠 «تصحيح قصي» يراجعه خلال دقيقة، والرد يطلع بسجله.`);
+      return { obj: await objectionInfo(uid!, it.id), notice: "✅ وصل اعتراضك، والرد يوصلك خلال دقايق" };
+    }
+    await tellGraders({ ...it, grader_id: s.objTo || null }, `${head}\nعلى السؤال: ${rows.map((r) => r.n).join("، ")}`);
+  } else if (human.length) await tellGraders(it, `${head}\nعلى السؤال: ${human.join("، ")}`);
   else for (const id of new Set(ADMIN_IDS)) await send(id, `👤 <b>لصاحب البوت بس</b>\n${head}\n🤖 على السؤال ${aiList.join("، ")}، ويراجعه نظام التصحيح AI لأنه هو صححه.`);
   return { obj: await objectionInfo(uid!, it.id), notice: "✅ وصل اعتراضك للمصحح، والرد يوصلك بالبوت" };
 }

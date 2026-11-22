@@ -23,7 +23,8 @@ export type QgEffort = "low" | "medium";
 /** live: المواضيع اللي يصححها صدگ. batch: بالدفعة (أرخص بالنص، والدرجة تتأخر، وهي الأصل من 2026-11-21).
  *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل).
  *  unsure: الورقة اللي يشك بيها: «send» يصححها ويبعث درجتها ويكتب السبب بالسجل (الأصل، طلب الأستاذ 2026-11-21)، «graders» ترجع للمصححين */
-export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string };
+/** obj: الاعتراض على أوراقه، «qusay» يراجعه هو أول، «person» يروح لـ objTo (مساعد عنده صلاحية الاعتراضات، 0 = صاحب البوت) */
+export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number };
 /** مكان على صور جواب الطالب: p رقم الصورة (من 1)، x من اليسار و y من فوك، من 0 لـ 1000 من عرضها وطولها */
 export type QgPt = { p: number; x: number; y: number };
 /** at: وين مكتوبة الخطوة على ورقة الطالب، حتى تنرسم عليها ✓ أو ✗ حمرة مثل قلم المدرس (بس إذا «🖍 العلامات» شغالة) */
@@ -45,7 +46,7 @@ export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
 /** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة.
  *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
 export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape };
-export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
+export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
 const resKey = (id: number) => `qg_res_${id}`;
@@ -75,7 +76,7 @@ export async function qgSettings(): Promise<QgSettings> {
   const cap = Number(s.cap);
   // الإعدادات القديمة (قبل v 2) كانت «هسه» بالأصل: تصير بالدفعة، طلب الأستاذ 2026-11-21
   const v2 = Number(s.v) >= 2;
-  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "" };
+  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "", obj: s.obj === "qusay" ? "qusay" : "person", objTo: Number(s.objTo) > 0 ? Number(s.objTo) : 0 };
 }
 export async function saveQgSettings(p: Partial<QgSettings>) {
   const s = { ...await qgSettings(), ...p, v: 2 };
@@ -475,6 +476,65 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   pages.forEach((ref, i) => { const m = by.get(i + 1); if (m || extra.includes(ref)) out.push({ ref, marks: m ?? [] }); });
   for (const ref of extra) if (!pages.includes(ref)) out.push({ ref, marks: [] });
   return out;
+}
+
+// ---------- الاعتراض (طلب الأستاذ 2026-11-22): إذا اختار «🧠 تصحيح قصي يراجعه»، يعيد السؤال المعترض عليه بس،
+// ويقرا كلام الطالب. يقبل إذا الدرجة صارت أعلى، وإلا يرفض ويكتب ليش. الدرجة ما تنزل بالاعتراض أبداً
+const OBJ_TEXT = `
+
+OBJECTION REVIEW: you graded this student's paper before. The student now objects to the mark of ONE question and writes why. Re-check that question honestly against the marking scheme, looking again at the student's own work.
+- If the student is right (a step was missed, misread, or a valid other method was not credited), give the corrected mark: a WHOLE number, higher than the old mark, never more than the maximum. accept=true.
+- If the student is not right, keep the old mark: accept=false, mark = the old mark.
+- Never lower the mark.
+- "reason": one or two short sentences to the student, in the teacher's voice (spoken Iraqi Arabic, math as LaTeX between $ signs): what was corrected, or exactly why the mark stays. Never mention an AI, a model, a system or a marking scheme.`;
+const OBJ_SCHEMA = { type: "object", properties: { accept: { type: "boolean" }, mark: { type: "integer" }, reason: { type: "string" } }, required: ["accept", "mark", "reason"], additionalProperties: false } as const;
+export async function qusayJudgeObjection(it: Row, n: number, text: string, oldMark: number): Promise<{ accept: boolean; mark: number; reason: string; usd: number }> {
+  const mat = await material(Number(it.version_id));
+  const q = mat.qs.find((x) => x.n === n);
+  if (!q) throw new Error("السؤال غير موجود بالنموذج");
+  const s = await qgSettings();
+  const content: Anthropic.ContentBlockParam[] = [];
+  let t = `MARKING SCHEME of question ${n} — maximum ${q.max} points`;
+  if (q.qText) t += `\nQuestion text: ${q.qText}`;
+  if (q.rubric) {
+    t += `\nMethod 1 steps:\n${stepsText(q.rubric.steps)}`;
+    q.rubric.alts.forEach((a, k) => { t += `\nMethod ${k + 2} steps:\n${stepsText(a)}`; });
+  } else t += q.model.length ? "\nNo steps written: use the teacher's model solution image(s) below." : "\nNo steps written: use this question's part of the teacher's model solution PDF.";
+  content.push({ type: "text", text: t });
+  if (q.qImg) content.push(block(q.qImg, `صورة السؤال ${n}`));
+  for (const m of q.model) content.push(block(m, `حل السؤال ${n}`));
+  if (mat.pdf && (!q.rubric && !q.model.length || hasDrawStep(q.rubric))) content.push({ type: "text", text: "Teacher's model solution PDF:" }, block(mat.pdf, "PDF الحل"));
+  const prev = (await qgResultOf(it.id))?.qs.find((x) => x.n === n);
+  if (prev?.steps.length) content.push({ type: "text", text: `\nYOUR EARLIER GRADING of question ${n}: ${oldMark} / ${q.max}\n${prev.steps.map((st, i) => `  ${i + 1}. [${st.awarded} of ${st.points}] ${st.text}${st.note ? ` — note: ${st.note}` : ""}`).join("\n")}` });
+  else content.push({ type: "text", text: `\nEarlier mark of question ${n}: ${oldMark} / ${q.max}` });
+  const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
+  const mine = answers.filter((a) => Number(a.q) === n), pages = mine.length ? mine : answers.filter((a) => !a.q);
+  content.push({ type: "text", text: mine.length ? `\nStudent's answer to question ${n}:` : "\nStudent's pages for the whole paper (find question " + n + "):" });
+  for (const a of pages) { const b = await readRef(String(a.file)); if (b) content.push(block(b, `جواب سؤال ${n}`)); }
+  content.push({ type: "text", text: `\nTHE STUDENT'S OBJECTION:\n${text.slice(0, 1500)}` });
+  const req: Req = {
+    model: MODEL, max_tokens: 8000,
+    system: [{ type: "text", text: SYSTEM + OBJ_TEXT + styleText(s.style) + topicText(await examStyle(Number(it.exam_id))) }],
+    output_config: { effort: s.effort, format: { type: "json_schema", schema: OBJ_SCHEMA as unknown as Record<string, unknown> } },
+    messages: [{ role: "user", content }],
+  };
+  const msg = await apiImpl.create(req);
+  const u = msg.usage;
+  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 }, false);
+  await addSpend("qusay", usd);
+  let j: any = {};
+  try { j = JSON.parse(msg.content.map((b) => (b.type === "text" ? b.text : "")).join("")); } catch { throw new Error("جواب الذكاء مو مفهوم"); }
+  const mark = Math.min(q.max, Math.max(0, whole(Number(j.mark) || 0)));
+  const accept = !!j.accept && mark > oldMark;
+  const reason = String(j.reason ?? "").slice(0, 500);
+  // الطالب يشوف الدرجة الجديدة بتفصيل ورقته، ويا سبب القبول
+  if (accept) {
+    const res = await qgResultOf(it.id);
+    const rq = res?.qs.find((x) => x.n === n);
+    if (res && rq) { rq.score = mark; rq.reason = reason || rq.reason; res.total = res.qs.reduce((x, y) => x + y.score, 0); await kvSet(resKey(it.id), JSON.stringify(res)); }
+  }
+  await addLog({ at: stamp(), kind: "obj", item: it.id, name: await nameOfRow(it), exam: await examTitle(it.exam_id), total: accept ? mark : oldMark, usd, note: `✋ اعتراض السؤال ${n}: ${accept ? `انقبل ${oldMark} ← ${mark}` : `انرفض، بقت ${oldMark}`}${reason ? ` · ${reason.slice(0, 120)}` : ""}` });
+  return { accept, mark: accept ? mark : oldMark, reason, usd };
 }
 
 /** درجات صحيحة بس، بدون نص (طلب الأستاذ 2026-11-22: «8.5» تبين للطالب إنها مو منه). النص يروح لصالح الطالب */

@@ -56,7 +56,7 @@ async function listData(uid: number) {
   }
   const paid = [...results.values()].slice(-100);
   return {
-    on: await qgOn(), key: hasKey(), settings: s, fileToken: fileToken(uid),
+    on: await qgOn(), key: hasKey(), settings: s, fileToken: fileToken(uid), objStaff: await objStaff(),
     spent: { today: iqd(spentFrom(log, day)), month: iqd(spentFrom(log, day.slice(0, 7))), all: iqd(spentFrom(log, "")), capIqd: iqd(s.cap) },
     perPaper: paid.length ? r1(paid.reduce((t, r) => t + r.usd, 0) / paid.length * IQD) : null,
     sent: log.filter((r) => r.kind === "sent").length, unsure: log.filter((r) => r.kind === "unsure").length,
@@ -93,6 +93,12 @@ async function paperDetail(id: number) {
   };
 }
 
+/** اللي يگدرون يردون على الاعتراضات: المساعدين اللي عندهم صلاحية «الاعتراضات» */
+async function objStaff() {
+  const { find: f } = await import("./db.ts");
+  const { staffName } = await import("./data.ts");
+  return Promise.all((await f("staff")).filter((x) => String(x.perms ?? "").split(",").includes("objections")).map(async (x) => ({ id: Number(x.user_id), name: await staffName(Number(x.user_id)) })));
+}
 export async function qusayAction(body: Row) {
   const uid = await authed(body?.initData, QG_PERM);
   need(await can(uid, QG_PERM), "ما عندك صلاحية «🧠 تصحيح قصي»", 403);
@@ -126,6 +132,8 @@ export async function qusayAction(body: Row) {
     if (typeof body.marks === "boolean") p.marks = body.marks;
     if (typeof body.style === "string") p.style = body.style.slice(0, STYLE_MAX);
     if (body.cap !== undefined) { const c = Number(body.cap); need(c > 0 && c <= 100, "الحد اليومي بين 0.1 و 100 دولار"); p.cap = c; }
+    if (body.obj === "qusay" || body.obj === "person") p.obj = body.obj;
+    if (body.objTo !== undefined) { const to = Number(body.objTo) || 0; need(to === 0 || (await objStaff()).some((x) => x.id === to), "هذا ما عنده صلاحية الاعتراضات"); p.objTo = to; }
     await saveQgSettings(p);
     return await out("✅ انحفظ");
   }

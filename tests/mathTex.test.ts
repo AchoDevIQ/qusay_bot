@@ -59,3 +59,14 @@ test("الكلام الإنجليزي بالرياضيات ما يلتصق: «sq
   assert.equal(wordsAsText(String.raw`\text{area} = 4`), String.raw`\text{area} = 4`);
   assert.equal(wordsAsText("area = 36"), String.raw`\text{ area } = 36`);
 });
+
+test("شكل الكتاب: الأس كله مرفوع، الكسر اللي بيه أس أفقي، sin وcos مستقيمة، θ رمز (طلب الأستاذ 2026-11-22)", () => {
+  assert.equal(toTex("(cosθ+isinθ)^10 / (cosθ+isinθ)^9"), String.raw`\frac{(\cos θ+i \sin θ)^{10}}{(\cos θ+i \sin θ)^9}`);
+  assert.equal(toTex("x^-5"), "x^{-5}");
+  assert.equal(toTex("x^2/4 + y^2/9 = 1"), String.raw`\frac{x^2}{4} + \frac{y^2}{9} = 1`);
+  assert.equal(toTex("sqrt(2sqrt(2))"), String.raw`\sqrt{2\sqrt{2}}`);
+  assert.equal(toTex("(2kpi)/3"), String.raw`\frac{2k\pi }{3}`);
+  assert.equal(toTex("theta lies in the fourth quadrant"), String.raw`\text{ theta lies } in \text{ the fourth quadrant }`);
+  assert.equal(toTex("cos(theta) = x/r"), String.raw`\cos (\theta ) = \frac{x}{r}`);
+  for (const l of ["((cosθ+isinθ)^2)^5 / ((cosθ+isinθ)^3)^3", "C = 5, F2(-5,0) & F1(+5,0)", "domain R\{1}", "x ➔ 2", "a * b"]) assert.ok(renderTex(l), l);
+});
