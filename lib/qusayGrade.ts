@@ -54,9 +54,9 @@ const tryKey = (id: number) => `qg_try_${id}`;
 const capNoteKey = (day: string) => `qg_cap_note_${day}`;
 export const DEFAULT_CAP = 2;
 /** أطول «✍️ طريقتك بالكتابة» */
-export const STYLE_MAX = 3000;
+export const STYLE_MAX = 8000;   // شرحه بالفويس لكل موضوع يطول (طلبه 2026-11-22)
 const MAX_TRIES = 3;
-const LIVE_PER_TICK = 10, TRIAL_PER_TICK = 6, LOG_MAX = 3000;
+const LIVE_PER_TICK = 20, TRIAL_PER_TICK = 6, LOG_MAX = 3000;
 /** أكبر صورة يقبلها الذكاء، وأكبر PDF */
 const IMG_MAX = 5 * 1024 * 1024, PDF_MAX = 30 * 1024 * 1024;
 /** الدفعة اللي ما رجعت خلال 25 ساعة: أوراقها ترجع للمصححين */
@@ -193,7 +193,8 @@ For every question you get the teacher's marking scheme: numbered steps with poi
 Grade the student's answer question by question:
 - Award each step its points only when the student's own work clearly shows that step done correctly. A correct final answer with no supporting work earns only the steps it actually shows.
 - Any mathematically valid method earns full credit. Pick the method (1 = main, 2+ = alternatives) that fits the student's work best and grade against its steps.
-- Follow-through: when a step is done correctly but uses a wrong value carried from the student's own earlier mistake, award half of that step's points.
+- Follow-through: when a step is done correctly but uses a wrong value carried from the student's own earlier mistake, award about half of that step's points, as a whole number.
+- Every awarded value is a WHOLE number (0, 1, 2, ...). Never give fractions such as 2.5 or 8.5.
 - Ignore crossed-out work. Do not reward work that is only copied from the question.
 - Never award more than a step's points, never more than the question's maximum.
 - If a question has no answer anywhere in the student's pages, set answered=false and score 0.
@@ -203,6 +204,12 @@ DRAWINGS (graphs of functions, parabola / ellipse / hyperbola sketches, the figu
 Set sure=false for a question when you cannot read the handwriting, part of the answer is cut off or missing from the photo, the work matches no method and you cannot judge it, or you hesitate between two marks. Being unsure is fine: a human grader will then check the paper. Do not guess.
 
 Write "reason" and each step "note" in short, simple Arabic (Iraqi style), for the teacher and the student: what the student did right or wrong. Keep them brief.
+HOW A NOTE MUST READ (the teacher's own rules):
+- Name the exact thing the student should have done, taken from the teacher's steps / model solution for THIS question. Example: the model solution multiplies by the conjugate, so the note is "المفروض تضرب بالمرافق"; the angle is in the fourth quadrant, so "الزاوية بالربع الرابع مو الأول". Never a vague or general phrase such as "المفروض تحسب جبرياً" or "راجع الحل".
+- Iraqi words only: "مو" (never "مش"), "هيچ", "هسه", "المفروض". No Egyptian, Levantine or formal wording.
+- Use the words of the Iraqi math book: "الأس" (never "القوة"), "المقياس", "السعة", "المرافق", "الجذر".
+- Math symbols always as LaTeX, never spelled out in letters: $\\theta$ (never "ثيتا" or "theta"), $\\cos\\theta$ (never "كوساين بصفة theta"), $2^{\\frac{3}{4}}$.
+- Never say how many points were taken off or given.
 Write every piece of math inside the Arabic text as LaTeX between $ signs, the way an Iraqi math book prints it: fractions as $\\frac{a}{b}$ (never a/b), pi as $\\pi$ (never the word pi), roots as $\\sqrt{x}$, powers as $x^{2}$. Example: "عوّض $x=\\frac{\\pi}{2}$ صح".`;
 
 /** «🖍 العلامات على الورقة»: نفس التصحيح، ويا مكان كل خطوة على صور الطالب حتى نرسم عليها مثل قلم المدرس الأحمر */
@@ -214,8 +221,7 @@ TEACHER'S VOICE: the student must feel that his teacher Qusay marked the paper b
 
 PEN MARKS: the student's images are numbered [Image 1], [Image 2], ... The teacher draws a red tick or cross beside each step on the student's own image, so also give boxes, measured on each image from 0 to 1000 (x from the left edge, y from the top edge; x1,y1 = top-left corner, x2,y2 = bottom-right corner):
 - "papers": for every image, p = the image number and the box of the sheet of paper itself. Photos often show a table, a hand, a screen or a dark border around the paper: the box is the white sheet only.
-- The teacher marks only what lost points. So give a box ONLY for a step that did not get its full points: p = the image number where that step is written, and a TIGHT box around exactly the handwriting of that step (usually one line). Do not include neighbouring lines.
-- A step that got its full points: p=0 and a box of zeros. Exception: when the WHOLE question got full marks, give the box of its LAST written step only (the teacher writes "well done" there).
+- The teacher puts a tick on every right step and a cross on every step that lost points. So give a box for EVERY step the student wrote: p = the image number where that step is written, and a TIGHT box around exactly the handwriting of that step (usually one line). Do not include neighbouring lines.
 - If a step is not written anywhere, give p=0 and a box of zeros.
 - For each question: p = the image where its answer ENDS, and a box around the student's whole answer to that question on that image (the teacher writes a final remark just after it). If the question was not answered, zeros.
 Be precise: each box must sit on that step's own ink.`;
@@ -438,22 +444,25 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   for (const q of qs) {
     if (only !== undefined && q.n !== only) continue;
     if (!q.answered) continue;
-    // درجة السؤال ما تنكتب على الورقة: مكتوبة بزر السؤال فوك. والصح ما ينرسم: بس الغلط والناقص،
-    // والسؤال الصح كله ✓ وحدة و«أحسنت» بآخره، حتى يحس انصححت (طلب الأستاذ 2026-11-21)
+    // ✓ على كل خطوة صح بمكانها، و✗ على كل خطوة نقصت ويا ملاحظتها، وبدون أرقام على الورقة (طلب الأستاذ 2026-11-22:
+    // الدرجة مكتوبة بزر السؤال فوك، وما نكتب شگد نقصناه). السؤال الصح كله: «أحسنت» بآخره
     const full = (s: QgStep) => s.awarded >= s.points && s.points > 0;
-    if (q.steps.length ? q.steps.every(full) : q.score >= q.max) {
-      add(q.at ?? [...q.steps].reverse().find((s) => s.at)?.at, { kind: "good", text: "أحسنت" });
-      continue;
-    }
+    const allRight = q.steps.length ? q.steps.every(full) : q.score >= q.max;
+    const placed = q.steps.filter((s) => s.at);
+    const praiseAt = allRight ? q.at ?? placed.at(-1)?.at : undefined;
     let drawn = 0;
     const unplaced: QgStep[] = [];
     for (const s of q.steps) {
-      if (full(s)) continue;
-      const kind = s.awarded > 0 ? "half" : "bad";
+      if (full(s)) {
+        // آخر خطوة صح يمها «أحسنت» (بيها ✓)، فما تنعاد
+        if (s.at && !(allRight && !q.at && s === placed.at(-1))) add(s.at, { kind: "ok", text: "" });
+        continue;
+      }
       const hand = handOf(s.hw);
-      if (s.at) { add(s.at, { kind, text: kind === "half" ? String(s.awarded) : "", ...(s.note ? { note: shortNote(s.note) } : {}), ...(hand ? { hand } : {}) }); drawn++; }
+      if (s.at) { add(s.at, { kind: "bad", text: "", ...(s.note ? { note: shortNote(s.note) } : {}), ...(hand ? { hand } : {}) }); drawn++; }
       else if (s.note) unplaced.push(s);
     }
+    if (allRight) { add(praiseAt, { kind: "good", text: "أحسنت" }); continue; }
     // الخطوات اللي ما كتبها الطالب (ما إلها مكان): ✗ وملاحظتها بآخر جوابه، مثل «ناقص» المدرس. وإذا ماكو ولا علامة، سبب السؤال
     if (unplaced.length || !drawn) {
       const note = unplaced.length ? unplaced.map((s) => s.note).join("، ") : q.reason;
@@ -468,7 +477,8 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   return out;
 }
 
-const half = (x: number) => Math.round(x * 2) / 2;
+/** درجات صحيحة بس، بدون نص (طلب الأستاذ 2026-11-22: «8.5» تبين للطالب إنها مو منه). النص يروح لصالح الطالب */
+const whole = (x: number) => Math.floor(x + 0.5 + 1e-9);
 /** يقرا جواب الذكاء ويرتبه: الدرجة من الخطوات (مو من رقمه)، وما تعدي حدها */
 /** الذكاء جاوب بس جوابه ما ينفع: الطلب انحسب فلوسه، فلازم تنحسب بالصرفية */
 export class PaidError extends Error { usd = 0; tokens: QgTokens; constructor(m: string, tokens: QgTokens) { super(m); this.tokens = tokens; } }
@@ -496,10 +506,10 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
       const s: any = byI.get(k + 1);
       const at = ptOf(s, pages, papers);
       const hw = Math.round(Number(s?.hw) || 0);
-      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, half(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
+      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0))), note: String(s?.note ?? "").slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
     }) : [];
     let score = plan ? steps.reduce((t, s) => t + s.awarded, 0) : Number(a.score) || 0;
-    score = answered ? Math.min(m.max, Math.max(0, half(score))) : 0;
+    score = answered ? Math.min(m.max, Math.max(0, whole(score))) : 0;
     const at = ptOf(a, pages, papers, true);
     const hw = Math.round(Number(a.hw) || 0);
     return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: String(a.reason ?? "").slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };

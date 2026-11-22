@@ -833,8 +833,15 @@ function List({ info, busy, enter, paper, file, off, cmd }: { info: Info; busy: 
   const hols: Hol[] = [...info.holidays, ...(info.midHol ? [{ id: 0, ids: [], title: "", cancel: false, ...info.midHol }] : [])].sort((a, b) => a.from.localeCompare(b.from));
   const holAt = (i: number) => hols.filter((h) => info.items.findIndex((x) => String(x.at).slice(0, 10) >= h.from) === i);
   const holLast = hols.filter((h) => !info.items.some((x) => String(x.at).slice(0, 10) >= h.from));
-  // وين وصل الطالب: الامتحان المفتوح هسه، وإذا ماكو فالجاي. الزر فوق الجدول ينزله عليه (ويا محاضراته اللي قبله)
-  const now = info.items.find((i) => i.state === "open") ?? info.items.find((i) => i.state === "locked" || i.state === "center");
+  // وين وصل الطالب: الامتحان المفتوح هسه، وإذا ماكو فآخر امتحان امتحنه (طلب الأستاذ 2026-11-22)، وإذا ماكو فالجاي.
+  // الزر فوق الجدول ينزله عليه (ويا محاضراته اللي قبله)، والصفحة تنزل عليه وحدها أول ما تنفتح
+  const now = info.items.find((i) => i.state === "open") ?? [...info.items].reverse().find((i) => i.state === "done") ?? info.items.find((i) => i.state === "locked" || i.state === "center");
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (scrolled.current || !now) return;
+    scrolled.current = true;
+    requestAnimationFrame(() => document.getElementById("mx-now")?.scrollIntoView({ block: "center" }));
+  }, [now]);
   return (
     <div className="card">
       <h2>🗓 جدول امتحاناتك</h2>

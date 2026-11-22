@@ -98,9 +98,9 @@ test("التجربة بالسر: يصحح ورقة صححها مصحح، ودر�
   await Q.qusayTick(finishByAi);
   const res = await Q.qgResultOf(id);
   assert.equal(res!.kind, "trial");
-  // الخطوة ما تعدي درجتها، والدرجة من الخطوات مو من رقم الذكاء، وتتقرب لنص درجة
-  assert.deepEqual(res!.qs.map((q) => q.score), [60, 25.5]);
-  assert.equal(res!.total, 85.5);
+  // الخطوة ما تعدي درجتها، والدرجة من الخطوات مو من رقم الذكاء، وتتقرب لدرجة صحيحة (بدون نص)
+  assert.deepEqual(res!.qs.map((q) => q.score), [60, 25]);
+  assert.equal(res!.total, 85);
   assert.equal(res!.human, 70);
   const it = await one("sched_items", { id });
   assert.deepEqual([it!.total, it!.grader_id], [70, 41]);
@@ -116,7 +116,7 @@ test("التجربة بالسر: يصحح ورقة صححها مصحح، ودر�
   assert.match(content.slice(0, cacheAt + 1).map((b: any) => b.text ?? "").join("\n"), /\[20 points\] التعويض/);
   const page: any = await qusayAction({ initData: sign(1), action: "list" });
   const e = page.chapters[0].exams.find((x: any) => x.id === ex);
-  assert.deepEqual([e.trials, e.gap, e.close], [1, 15.5, 0]);
+  assert.deepEqual([e.trials, e.gap, e.close], [1, 15, 0]);
   assert.equal(page.trials[0].human, 70);
   const d: any = await qusayAction({ initData: sign(1), action: "paper", id });
   assert.equal(d.paper.qs[0].human, 40);
@@ -133,7 +133,7 @@ test("🆕 التجربة على ورقة جديدة ما مصححة: تبقى �
   await Q.qusayTick(finishByAi);
   const res = await Q.qgResultOf(id);
   assert.equal(res!.kind, "trial");
-  assert.equal(res!.total, 85.5);
+  assert.equal(res!.total, 85);
   const it = await one("sched_items", { id });
   assert.deepEqual([it!.graded_at ?? null, it!.grader_id ?? null], [null, null], "ما انحجزت ولا انصححت");
   assert.equal(tg.filter((m) => m.method.startsWith("send")).length, 0, "ما يوصل شي للطالب");
@@ -177,7 +177,7 @@ test("ما متأكد، بالأصل: يصححها ويبعث درجتها، و�
   await Q.qusayTick(finishByAi);
   const it = await one("sched_items", { id });
   assert.ok(it!.graded_at, "انصححت");
-  assert.equal(it!.total, 85.5);
+  assert.equal(it!.total, 85);
   const row = (await Q.qgLog()).filter((l) => l.item === id).at(-1)!;
   assert.equal(row.kind, "sent");
   assert.match(row.note!, /ما متأكد.*الخط ما ينقرا/);
@@ -205,7 +205,7 @@ test("إذا اختار «ترجع للمصححين»: الورقة اللي ي�
   await qusayAction({ initData: sign(1), action: "sendSaved", id });
   assert.equal(sent.length, n2, "ما صرف مرة ثانية");
   const done = await one("sched_items", { id });
-  assert.deepEqual([done!.grader_id, done!.total], [QUSAY_GRADER, 85.5]);
+  assert.deepEqual([done!.grader_id, done!.total], [QUSAY_GRADER, 85]);
   await assert.rejects(qusayAction({ initData: sign(1), action: "sendSaved", id }));
   // 🔁 يعيدها على ورقة ثانية رجعت
   const id2 = await paper([1, 2]);
@@ -268,7 +268,7 @@ test("🌙 بالدفعة: الورقة تنحجز، وترجع درجتها ل�
   batches.get("b1")!.ended = true;
   await Q.qusayTick(finishByAi);
   const it = await one("sched_items", { id });
-  assert.equal(it!.total, 85.5);
+  assert.equal(it!.total, 85);
   const res = await Q.qgResultOf(id);
   assert.equal(res!.batch, true);
   assert.equal(res!.usd, Q.usdOf(res!.tokens, false) / 2);
@@ -285,7 +285,7 @@ test("ورقة تجربة «🧠 تصحيح قصي»: يصححها طبيعي ح
   tg.length = 0;
   await Q.qusayTick(finishByAi);
   const it = await one("sched_items", { id });
-  assert.equal(it!.total, 85.5);
+  assert.equal(it!.total, 85);
   assert.ok(it!.graded_at);
   assert.equal((await Q.qgResultOf(id))!.sent, true);
   assert.ok(tg.some((m) => m.method.startsWith("send")), "بطاقة الدرجة طلعت");
@@ -366,7 +366,7 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   reply = () => good;
   await Q.qusayTick(finishByAi);
   const total = (await one("sched_items", { id }))!.total;
-  assert.equal(total, 85.5);
+  assert.equal(total, 85);
   await assert.rejects(qusayAction({ initData: sign(1), action: "marks", id: 999999 }));
   await qusayAction({ initData: sign(1), action: "settings", style: "المفروض تعوض بالدالة" });
   const ws: any = await qusayAction({ initData: sign(1), action: "examStyle", exam: ex, style: "اكتب الجذور بشكل أوميگا" });
@@ -386,7 +386,7 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   assert.ok(JSON.stringify(req.output_config.format.schema).includes('"p"'));
   // الأصلية ما تغيرت، ولا شي انبعث
   assert.equal((await one("sched_items", { id }))!.total, total);
-  assert.equal((await Q.qgResultOf(id))!.total, 85.5);
+  assert.equal((await Q.qgResultOf(id))!.total, 85);
   assert.equal(tg.filter((m) => m.method.startsWith("send")).length, 0);
   const demo = (await Q.qgMarksOf(id))!;
   assert.equal(demo.total, 30);
@@ -398,12 +398,12 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   assert.equal(d.paper.demo.total, 30);
   assert.equal(d.paper.demoWaiting, false);
   const m1 = d.paper.qs[0].marked;
-  assert.deepEqual(m1[0].marks.map((m: any) => [m.kind, m.text]), [["half", "10"]], "بس الغلط والناقص ينرسم، ودرجة السؤال ما تنكتب على الورقة");
-  assert.equal(m1[0].marks[0].note, "غلط بالإشارة");
+  assert.deepEqual(m1[0].marks.map((m: any) => [m.kind, m.text]), [["ok", ""], ["bad", ""]], "✓ على الصح و✗ على الناقص، وبدون أرقام على الورقة");
+  assert.equal(m1[0].marks[1].note, "غلط بالإشارة");
   assert.equal(d.paper.qs[1].marked[0].marks.length, 0, "صورة السؤال تطلع بدون رسم");
   // طالب التجربة يشوف ورقته مرسومة
   const p: any = await myPaper(-3, id);
-  assert.ok(p.ai[0].marked[0].marks.length === 1);
+  assert.ok(p.ai[0].marked[0].marks.length === 2);
   assert.match((await Q.qgLog()).at(-1)!.note!, /2 من 3 خطوة/);
   // صاحب البوت يفتح ورقة طالب التجربة مثل ما تطلعله (👁 عرض بس) ويشوف صورها
   const { viewToken } = await import("../lib/webAuth.ts");
@@ -411,7 +411,7 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   const { roomFile } = await import("../lib/examRoom.ts");
   const v: any = await myExamAction({ token: viewToken(-3), action: "paper", item: id });
   assert.equal(v.viewOnly, true);
-  assert.equal(v.paper.ai[0].marked[0].marks.length, 1);
+  assert.equal(v.paper.ai[0].marked[0].marks.length, 2);
   const f = await roomFile(viewToken(-3), id, v.paper.ai[0].marked[0].ref);
   assert.ok(f.body.length > 0);
   await assert.rejects(myExamAction({ token: viewToken(-3), action: "submitExam", item: id }), /عرض بس/);
@@ -427,20 +427,32 @@ test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ ب
   assert.deepEqual(res.pages, ["ans/a.jpg", "ans/a.jpg"]);
   assert.equal(res.total, 30);
   const p: any = await myPaper(90, id);
-  assert.equal(p.ai[0].marked[0].marks.length, 1);
+  assert.equal(p.ai[0].marked[0].marks.length, 2);
   // طالب حقيقي ما يشوف «🖍 جرب العلامات» (بس لطالب التجربة)، بس هاي من التصحيح نفسه
   await Q.saveQgSettings({ marks: false });
   assert.deepEqual(Q.marksByPage(res.qs, res.pages!, 2).length, 0);
 });
 
+test("درجات صحيحة بس: النص يروح لصالح الطالب، وماكو 8.5", () => {
+  const ans = () => ({ questions: [
+    { n: 1, answered: true, method: 1, steps: [{ i: 1, awarded: 7.5, note: "" }, { i: 2, awarded: 10.4, note: "" }], score: 17.9, sure: true, reason: "" },
+    { n: 2, answered: true, method: 1, steps: [{ i: 1, awarded: 0.5, note: "" }], score: 0.5, sure: true, reason: "" },
+  ] });
+  const r = Q.readAnswer({ content: [{ type: "text", text: JSON.stringify(ans()) }], usage: { input_tokens: 1, output_tokens: 1 } } as any,
+    { qs: [{ n: 1, max: 60, rubric: { steps: [{ text: "أ", points: 20 }, { text: "ب", points: 40 }], alts: [] }, qText: "", qImg: null, model: [] }, { n: 2, max: 40, rubric: { steps: [{ text: "ج", points: 40 }], alts: [] }, qText: "", qImg: null, model: [] }], pdf: null }, new Set(), false);
+  assert.deepEqual(r.qs.map((q) => q.steps.map((s) => s.awarded)), [[8, 10], [1]]);
+  assert.deepEqual(r.qs.map((q) => q.score), [18, 1]);
+  assert.ok(r.qs.every((q) => Number.isInteger(q.score)));
+});
+
 test("🖍 العلامة ما تطلع برة الصورة", () => {
   const q = { n: 1, max: 10, score: 5, answered: true, sure: true, reason: "", method: 1, steps: [{ text: "أ", points: 5, awarded: 5, note: "", at: { p: 1, x: 1000, y: 0 } }, { text: "ب", points: 5, awarded: 0, note: "غلط", at: { p: 1, x: 0, y: 1000 } }] };
   const [pg] = Q.marksByPage([q], ["a"]);
-  assert.deepEqual(pg.marks.map((m) => [m.x, m.y]), [[50, 965]], "الصح ما ينرسم، والعلامة جوة الصورة");
-  // السؤال الصح كله: ✓ وحدة و«أحسنت» بآخر خطوة
+  assert.deepEqual(pg.marks.map((m) => [m.kind, m.x, m.y]), [["ok", 950, 35], ["bad", 50, 965]], "✓ على الصح و✗ على الغلط، والعلامة جوة الصورة");
+  // السؤال الصح كله: ✓ على كل خطوة و«أحسنت» بآخر خطوة (بيها ✓، فما تنعاد)
   const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
   const [g] = Q.marksByPage([good], ["a"]);
-  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.x, m.y]), [["good", "أحسنت", 50, 965]]);
+  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.x, m.y]), [["ok", "", 950, 35], ["good", "أحسنت", 50, 965]]);
   // الطالب ما كتب الخطوات (مثل س5: 3 من 15): ✗ وملاحظاتها بآخر جوابه
   const miss = { n: 5, max: 15, score: 3, answered: true, sure: true, reason: "ناقص", method: 1, at: { p: 1, x: 600, y: 700 },
     steps: [{ text: "أ", points: 5, awarded: 3, note: "", at: undefined }, { text: "ب", points: 10, awarded: 0, note: "ما كملت الحل" }] };
@@ -521,9 +533,10 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   assert.deepEqual(pg.marks[0].sym!.s, ink.find((x) => x.kind === "cross")!.s, "✗ بخطه");
   assert.deepEqual(pg.marks[0].hand!.s, note.s, "الملاحظة بخطه");
   assert.equal(pg.marks[1].hand, undefined, "رقم مو موجود: تنكتب بالخط");
-  assert.deepEqual(pg.marks[1].sym!.s, ink.find((x) => x.kind === "tick")!.s, "النص درجة: ✓ بخطه");
+  assert.deepEqual(pg.marks[1].sym!.s, ink.find((x) => x.kind === "cross")!.s, "الناقصة: ✗ بخطه، بدون رقم");
+  assert.equal(pg.marks[1].text, "");
   const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
-  assert.ok(Q.marksByPage([good], ["a"], undefined, [], ink)[0].marks[0].word, "المدح بخطه");
+  assert.ok(Q.marksByPage([good], ["a"], undefined, [], ink)[0].marks.find((m) => m.kind === "good")!.word, "المدح بخطه");
   assert.equal(Q.marksByPage([q], ["a"])[0].marks[0].sym, undefined, "بدون خط إيد: مثل قبل");
   await qusayAction({ initData: sign(1), action: "inkDel", exam: ex, id: note.id });
   assert.equal((await Q.inkList(ex)).length, 0);
@@ -533,7 +546,7 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   assert.equal(blue.c, "#1d4ed8"); assert.equal(blue.wd, 3);
   const odd: any = await qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "praise", text: "بطل", w: 1000, h: 360, s: [[1, 2, 3, 4]], c: "url(x)", wd: 9 } });
   assert.equal(odd.inkOf.items.at(-1).c, "#d40000"); assert.equal(odd.inkOf.items.at(-1).wd, 2);
-  const words = Q.marksByPage([good], ["a"], undefined, [], [blue])[0].marks[0].word!;
+  const words = Q.marksByPage([good], ["a"], undefined, [], [blue])[0].marks.find((m) => m.kind === "good")!.word!;
   assert.equal(words.c, "#1d4ed8"); assert.equal(words.wd, 3);
 });
 
