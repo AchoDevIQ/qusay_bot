@@ -415,6 +415,14 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   const f = await roomFile(viewToken(-3), id, v.paper.ai[0].marked[0].ref);
   assert.ok(f.body.length > 0);
   await assert.rejects(myExamAction({ token: viewToken(-3), action: "submitExam", item: id }), /عرض بس/);
+  // الورقة إلها علامات قديمة من التصحيح نفسه: «🖍 جرب العلامات» الأحدث هو اللي يطلع (قبل چان يطلع القديم، طلبه 2026-11-23)
+  const old = (await Q.qgResultOf(id))!;
+  await kvSet(`qg_res_${id}`, JSON.stringify({ ...old, at: "2026-01-01 00:00", pages: demo.pages, qs: old.qs.map((q) => ({ ...q, reason: "قديم", steps: q.steps.map((st) => ({ ...st, note: "قديم", at: { p: 1, x: 100, y: 100 } })) })) }));
+  const d2: any = await qusayAction({ initData: sign(1), action: "paper", id });
+  assert.equal(d2.paper.qs[0].marked[0].marks[1].note, "غلط بالإشارة", "الجديد مو القديم");
+  assert.equal(d2.paper.total, 30, "طالب التجربة: درجة التصحيح الجديد");
+  const p2: any = await myPaper(-3, id);
+  assert.equal(p2.ai[0].marked[0].marks[1].note, "غلط بالإشارة");
 });
 
 test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ بأماكنها والطالب الحقيقي يشوفها", async () => {

@@ -314,10 +314,12 @@ async function qusayShown(it: Row) {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   // 🖍 ورقته مصححة بالأحمر: من التصحيح نفسه إذا العلامات شغالة، ولطالب التجربة من «🖍 جرب العلامات» كمان
   const demo = it.user_id < 0 ? await qg.qgMarksOf(it.id) : null;
-  const mk = r.pages?.length ? { qs: r.qs, pages: r.pages } : demo;
+  // طالب التجربة: «🖍 جرب العلامات» الأحدث يطلع هو، علاماته وملاحظاته ودرجاته
+  const fresh = demo && (!r.pages?.length || String(demo.at) >= String(r.at)) ? demo : null;
+  const mk = fresh ?? (r.pages?.length ? { qs: r.qs, pages: r.pages } : null);
   // ✓ ✗ والمدح والملاحظات بخط إيد الأستاذ («✍️ خط إيدي»)، إذا كاتبها
   const ink = mk ? await qg.inkFor(Number(it.exam_id)) : [];
-  return r.qs.filter((q) => q.answered).map((q) => ({
+  return (fresh ? fresh.qs : r.qs).filter((q) => q.answered).map((q) => ({
     n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
     photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
     ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink) } : {}),

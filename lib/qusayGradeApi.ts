@@ -82,12 +82,15 @@ async function paperDetail(id: number) {
   const answers = await find("exam_answers", { item_id: id }, { order: ["q", "id"] });
   // 🖍 العلامات على الورقة: من التصحيح نفسه إذا كانت شغالة، وإلا من «🖍 جرب العلامات» إذا سواها
   const demo = await qgMarksOf(id);
-  const mk = r!.pages?.length ? { qs: r!.qs, pages: r!.pages } : demo;
+  // «🖍 جرب العلامات» الأحدث يطلع هو (قبل: الورقة اللي إلها علامات قديمة چانت تعرض القديم وتتجاهل الجديد، طلبه 2026-11-23)
+  const fresh = demo && (!r!.pages?.length || String(demo.at) >= String(r!.at)) ? demo : null;
+  const mk = fresh ?? (r!.pages?.length ? { qs: r!.qs, pages: r!.pages } : null);
+  const shown = fresh ? fresh.qs : r!.qs;
   const ink = mk ? await inkFor(Number(it!.exam_id)) : [];
   return {
     id, name: await nameOf(it!), exam: String((await one("bank_exams", { id: it!.exam_id }))?.title ?? ""), kind: r!.kind, human: r!.kind === "trial" ? humanMark(it!) : r!.human ?? null,
-    total: r!.total, sure: r!.sure, iqd: iqd(r!.usd), batch: r!.batch, sent: !!r!.sent,
-    qs: r!.qs.map((q) => ({ ...q, human: r!.kind === "trial" && humanMark(it!) !== null && marks.has(q.n) ? marks.get(q.n)! : null,
+    total: fresh && it!.user_id < 0 ? fresh.total : r!.total, sure: r!.sure, iqd: iqd(r!.usd), batch: r!.batch, sent: !!r!.sent,
+    qs: shown.map((q) => ({ ...q, human: r!.kind === "trial" && humanMark(it!) !== null && marks.has(q.n) ? marks.get(q.n)! : null,
       marked: mk ? marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => Number(a.q) === q.n).map((a) => String(a.file)), ink) : null })),
     photos: answers.map((a) => ({ q: Number(a.q) || 0, ref: String(a.file) })),
     demo: demo ? { at: demo.at, total: demo.total, iqd: iqd(demo.usd) } : null, demoWaiting: await marksWaiting(id),
