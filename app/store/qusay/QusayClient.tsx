@@ -350,6 +350,7 @@ function CompareBox({ exam, n, setN, busy, call }: { exam: number; n: string; se
             </div>
           );
         })()}
+        <button type="button" className="exbtn" disabled={busy} onClick={() => load({ action: "compareRedoQ" })}>🔁 أعد قصي بس على نفس الأوراق (إذا غيرت إعداداته لو قواعده)</button>
         <button type="button" className="exbtn" disabled={busy} onClick={() => load({ action: "compareClear" })}>🗑 امسح نتائج المقارنة بهذا الموضوع</button>
       </>}
     </div>

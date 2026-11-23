@@ -202,7 +202,7 @@ export async function qusayAction(body: Row) {
     return await out("🗑 انشالت العلامة من الورقة، والدرجة مثل ما هي", { paper: await paperDetail(Number(body.id)) });
   }
     // ⚖️ قارن: نفس الأوراق يصححها مؤمل وقصي بالسر، وتنقارن بدرجة المصحح البشري
-  if (a === "compare" || a === "compareView" || a === "compareClear") {
+  if (a === "compare" || a === "compareView" || a === "compareClear" || a === "compareRedoQ") {
     need(await one("bank_exams", { id: exam }), "اختار الموضوع");
     const Q = await import("./qusayGrade.ts");
     let notice = "";
@@ -211,7 +211,8 @@ export async function qusayAction(body: Row) {
       need(n > 0, "ماكو أوراق جاهزة بهذا الموضوع (صححها مصحح، لو أوراق طلاب تجربة) وبعدها ما انقارنت");
       notice = `⚖️ ${n} ورقة تنتظر المقارنة. كل دقيقة ورقتين: الاثنين يصححوها بالسر${(await qgOn()) ? "" : ". شغّل «تصحيح قصي» حتى تبدي"}. بعدها دوس 📊 شوف النتائج.`;
     }
-    if (a === "compareClear") notice = `🗑 انمسحت نتائج ${await Q.clearCompare(exam)} ورقة`;
+    if (a === "compareRedoQ") notice = `🔁 قصي يعيد ${await Q.redoQusayCompare(exam)} ورقة (مؤمل يبقى مثل ما هو). بعد كم دقيقة دوس 📊 شوف النتائج.`;
+        if (a === "compareClear") notice = `🗑 انمسحت نتائج ${await Q.clearCompare(exam)} ورقة`;
     return await out(notice, { cmp: { exam, rows: await Q.compareRows(exam, nameOf) } });
   }
   if (a === "lessonDel") { await forgetLesson(exam, Number(body.lesson)); return await out("🗑 انمسحت هاي القاعدة"); }

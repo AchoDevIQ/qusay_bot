@@ -1088,6 +1088,20 @@ export async function compareRows(examId: number, nameOf: (it: Row) => Promise<s
   }
   return out.sort((a, b) => Number(b.waiting) - Number(a.waiting) || b.id - a.id);
 }
+/** «🔁 أعد قصي بس»: نتيجة مؤمل تبقى، وقصي يعيد نفس الأوراق (بعد ما تغير إعداداته لو قواعده) */
+export async function redoQusayCompare(examId: number) {
+  const ids: number[] = [];
+  for (const it of await find("sched_items", { exam_id: examId })) {
+    const c = await cmpOf(it.id);
+    if (!c) continue;
+    delete c.qg; delete c.qgErr; c.tries = 0;
+    await kvSet(cmpKey(it.id), JSON.stringify(c));
+    ids.push(it.id);
+  }
+  const q = await cmpQueue();
+  await kvSet(CMP_Q, JSON.stringify([...q, ...ids.filter((x) => !q.includes(x))]));
+  return ids.length;
+}
 export async function clearCompare(examId: number) {
   const mine = new Set<number>();
   for (const it of await find("sched_items", { exam_id: examId })) { if (await cmpOf(it.id)) { mine.add(it.id); await kvSet(cmpKey(it.id), "null"); } }
@@ -1115,10 +1129,11 @@ async function compareTick(s: QgSettings) {
     }
     if (!c.qg) {
       let err = "";
-      const [pp] = await prepare([{ it, kind: "trial" }], s.effort, async (_j, e) => { err = errText(e); }, false, s.style);
+      // نفس التصحيح الحقيقي بالضبط: قواعده بالـ Word وتصليحاته وخطه وأمثلته (قبل چانت المقارنة تمشي بدونها، 2026-11-23)
+      const [pp] = await prepare([{ it, kind: "trial" }], s.effort, async (_j, e) => { err = errText(e); }, true, s.style);
       if (pp) {
         try {
-          const { qs, tokens } = readAnswer(await apiImpl.create(pp.req), pp.mat, pp.unanswered, pp.answerOnly, 0);
+          const { qs, tokens } = readAnswer(await apiImpl.create(pp.req), pp.mat, pp.unanswered, pp.answerOnly, pp.pages.length);
           const usd = usdOf(tokens, false);
           await addSpend("qusay", usd);
           c.qg = { at: stamp(), total: qs.reduce((t, q) => t + q.score, 0), qs: qs.map((q) => ({ n: q.n, score: q.score, max: q.max, reason: q.reason.slice(0, 300) })), usd };
