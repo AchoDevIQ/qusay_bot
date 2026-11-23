@@ -21,7 +21,7 @@ export const INK_COLORS: { c: string; t: string }[] = [
 /** سمك الخط على ورقة الطالب (بكسل)، لكل اختيار */
 export const INK_WIDTH: Record<1 | 2 | 3, number> = { 1: 1.7, 2: 2.6, 3: 3.8 };
 /** sym ✓/✗، word المدح، hand الملاحظة: بخط إيد الأستاذ إذا كاتبها بـ «✍️ خط إيدي» */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
 export type MarkedPageT = { ref: string; marks: PaperMark[] };
 export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay"; marked?: MarkedPageT[] };
 
@@ -53,16 +53,18 @@ export function InkSvg({ sh, k = INK_PX, color = "currentColor", width, cap }: {
   );
 }
 /** صورة ورقة الطالب وعليها تصحيح بقلم أحمر مثل المدرس: ✓ و✗ يم كل خطوة، ودرجة السؤال بدائرة، وملاحظة قصيرة بخط اليد */
-export function MarkedPage({ src, marks }: { src: string; marks: PaperMark[] }) {
+/** onTap: صاحب البوت يدوس على العلامة حتى يشيلها لو يصلحها (طلبه 2026-11-23) */
+export function MarkedPage({ src, marks, onTap, picked }: { src: string; marks: PaperMark[]; onTap?: (m: PaperMark, k: number) => void; picked?: number }) {
   return (
     <div className="mkpage">
       <img src={src} alt="ورقة الطالب" />
       {marks.map((m, i) => (
-        <div key={i} className={"mk mk-" + m.kind} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}>
+        <div key={i} className={"mk mk-" + m.kind + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}
+          onClick={onTap ? () => onTap(m, i) : undefined}>
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : (
             // خط إيده يميل ويكبر ويصغر شوية بكل علامة، حتى ما تبين نسخة وحدة
             <span className="mkjit" style={m.rot || m.sc ? { transform: `rotate(${m.rot ?? 0}deg) scale(${m.sc ?? 1})` } : undefined}>
-              {m.sym ? <InkSvg sh={m.sym} cap={9} /> : m.kind === "bad" ? <Cross /> : m.kind === "miss" ? <b className="mkask">؟</b> : <Tick />}
+              {m.sym ? <InkSvg sh={m.sym} cap={m.big ? 20 : 9} /> : m.kind === "bad" ? <Cross /> : m.kind === "miss" ? <b className="mkask">؟</b> : m.big ? <span className="mkbig"><Tick /></span> : <Tick />}
               {m.word ? <InkSvg sh={m.word} cap={30} /> : m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
             </span>
           )}

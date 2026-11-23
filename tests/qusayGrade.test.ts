@@ -398,12 +398,12 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   assert.equal(d.paper.demo.total, 30);
   assert.equal(d.paper.demoWaiting, false);
   const m1 = d.paper.qs[0].marked;
-  assert.deepEqual(m1[0].marks.map((m: any) => [m.kind, m.text]), [["ok", ""], ["bad", ""]], "✓ على الصح و✗ على الناقص، وبدون أرقام على الورقة");
-  assert.equal(m1[0].marks[1].note, "غلط بالإشارة");
+  assert.deepEqual(m1[0].marks.map((m: any) => [m.kind, m.text]), [["bad", ""]], "✗ على الناقص بس، والصح بلا ✓، وبدون أرقام على الورقة");
+  assert.equal(m1[0].marks[0].note, "غلط بالإشارة");
   assert.equal(d.paper.qs[1].marked[0].marks.length, 0, "صورة السؤال تطلع بدون رسم");
   // طالب التجربة يشوف ورقته مرسومة
   const p: any = await myPaper(-3, id);
-  assert.ok(p.ai[0].marked[0].marks.length === 2);
+  assert.ok(p.ai[0].marked[0].marks.length === 1);
   assert.match((await Q.qgLog()).at(-1)!.note!, /2 من 3 خطوة/);
   // صاحب البوت يفتح ورقة طالب التجربة مثل ما تطلعله (👁 عرض بس) ويشوف صورها
   const { viewToken } = await import("../lib/webAuth.ts");
@@ -411,7 +411,7 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   const { roomFile } = await import("../lib/examRoom.ts");
   const v: any = await myExamAction({ token: viewToken(-3), action: "paper", item: id });
   assert.equal(v.viewOnly, true);
-  assert.equal(v.paper.ai[0].marked[0].marks.length, 2);
+  assert.equal(v.paper.ai[0].marked[0].marks.length, 1);
   const f = await roomFile(viewToken(-3), id, v.paper.ai[0].marked[0].ref);
   assert.ok(f.body.length > 0);
   await assert.rejects(myExamAction({ token: viewToken(-3), action: "submitExam", item: id }), /عرض بس/);
@@ -419,10 +419,17 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   const old = (await Q.qgResultOf(id))!;
   await kvSet(`qg_res_${id}`, JSON.stringify({ ...old, at: "2026-01-01 00:00", pages: demo.pages, qs: old.qs.map((q) => ({ ...q, reason: "قديم", steps: q.steps.map((st) => ({ ...st, note: "قديم", at: { p: 1, x: 100, y: 100 } })) })) }));
   const d2: any = await qusayAction({ initData: sign(1), action: "paper", id });
-  assert.equal(d2.paper.qs[0].marked[0].marks[1].note, "غلط بالإشارة", "الجديد مو القديم");
+  assert.equal(d2.paper.qs[0].marked[0].marks[0].note, "غلط بالإشارة", "الجديد مو القديم");
   assert.equal(d2.paper.total, 30, "طالب التجربة: درجة التصحيح الجديد");
   const p2: any = await myPaper(-3, id);
-  assert.equal(p2.ai[0].marked[0].marks[1].note, "غلط بالإشارة");
+  assert.equal(p2.ai[0].marked[0].marks[0].note, "غلط بالإشارة");
+  // 🗑 شيل هاي العلامة: تنشال من الورقة عنده وعند الطالب، والدرجة تبقى
+  const key = `1:${d2.paper.qs[0].marked[0].marks[0].i}:bad`;
+  const hd: any = await qusayAction({ initData: sign(1), action: "hideMark", id, key });
+  assert.equal(hd.paper.qs[0].marked[0].marks.length, 0);
+  assert.equal((await myPaper(-3, id) as any).ai[0].marked[0].marks.length, 0);
+  await assert.rejects(qusayAction({ initData: sign(1), action: "hideMark", id, key: "<x>" }), /مو مفهومة/);
+  await kvSet(`qg_hide_${id}`, "[]");
   // ✏️ صلّح وعلّمه (طلبه 2026-11-23): الدرجة الصح وليش ← تتصلح الورقة، وتصير قاعدة بالموضوع
   const st1 = d2.paper.qs[0].steps[1];
   await assert.rejects(qusayAction({ initData: sign(1), action: "teach", id, q: 1, i: 1, mark: st1.points, why: "" }), /اكتب ليش/);
@@ -451,7 +458,7 @@ test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ ب
   assert.deepEqual(res.pages, ["ans/a.jpg", "ans/a.jpg"]);
   assert.equal(res.total, 30);
   const p: any = await myPaper(90, id);
-  assert.equal(p.ai[0].marked[0].marks.length, 2);
+  assert.equal(p.ai[0].marked[0].marks.length, 1);
   // طالب حقيقي ما يشوف «🖍 جرب العلامات» (بس لطالب التجربة)، بس هاي من التصحيح نفسه
   await Q.saveQgSettings({ marks: false });
   assert.deepEqual(Q.marksByPage(res.qs, res.pages!, 2).length, 0);
@@ -484,11 +491,12 @@ test("درجات صحيحة بس: النص يروح لصالح الطالب، و
 test("🖍 العلامة ما تطلع برة الصورة", () => {
   const q = { n: 1, max: 10, score: 5, answered: true, sure: true, reason: "", method: 1, steps: [{ text: "أ", points: 5, awarded: 5, note: "", at: { p: 1, x: 1000, y: 0 } }, { text: "ب", points: 5, awarded: 0, note: "غلط", at: { p: 1, x: 0, y: 1000 } }] };
   const [pg] = Q.marksByPage([q], ["a"]);
-  assert.deepEqual(pg.marks.map((m) => [m.kind, m.x, m.y]), [["ok", 930, 60], ["bad", 70, 940]], "✓ على الصح و✗ على الغلط، والعلامة جوة الصورة");
+  assert.deepEqual(pg.marks.map((m) => [m.kind, m.x, m.y]), [["bad", 70, 940]], "✗ على الغلط بس، والعلامة جوة الصورة");
   // السؤال الصح كله: ✓ على كل خطوة و«أحسنت» بآخر خطوة (بيها ✓، فما تنعاد)
   const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
   const [g] = Q.marksByPage([good], ["a"]);
-  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.x, m.y]), [["ok", "", 930, 60], ["good", "أحسنت", 70, 940]]);
+  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.big]), [["good", "أحسنت", true]], "السؤال الصح كله: ✓ وحدة كبيرة ويا المدح، بلا ✓ على كل خطوة");
+  assert.ok(Math.abs(g.marks[0].x - 500) <= 40 && Math.abs(g.marks[0].y - 500) <= 30, "بنص شغله");
   // الطالب ما كتب الخطوات (مثل س5: 3 من 15): «؟» وملاحظاتها تحت آخر جوابه
   const miss = { n: 5, max: 15, score: 3, answered: true, sure: true, reason: "ناقص", method: 1, at: { p: 1, x: 600, y: 700 },
     steps: [{ text: "أ", points: 5, awarded: 3, note: "", at: undefined }, { text: "ب", points: 10, awarded: 0, note: "ما كملت الحل" }] };
@@ -591,15 +599,15 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   const gm = Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.filter((m) => m.kind === "good");
   // المدح مرة وحدة بالورقة كلها (طلبه 2026-11-23): السؤال الكامل الثاني ياخذ ✓ بس
   assert.equal(gm.length, 1);
-  assert.ok(Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.some((m) => m.kind === "ok" && m.y === 700));
+  assert.ok(Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.some((m) => m.kind === "ok" && m.big && m.q === 2));
   assert.ok(gm.every((m) => typeof m.rot === "number" && m.sc! >= 0.88 && m.sc! <= 1.12));
   assert.ok(gm[0].x !== 500 || gm[0].y !== 300, "يتزحزح عن مكانه");
   // ورقة ثانية تاخذ مدح ثاني
   const words2 = ["a", "b", "c", "d", "e"].map((r) => JSON.stringify(Q.marksByPage(two, [r], undefined, [], praise)[0].marks.find((m) => m.kind === "good")!.word!.s));
   assert.ok(new Set(words2).size > 1, "المدح يتبدل من ورقة لورقة");
   // علامتين بنفس المكان ما يركبن فوك بعض
-  const same = { ...q, steps: [{ text: "أ", points: 5, awarded: 5, note: "", at: { p: 1, x: 500, y: 500 } }, { text: "ب", points: 5, awarded: 5, note: "", at: { p: 1, x: 510, y: 505 } }] };
-  const sm = Q.marksByPage([{ ...same, score: 7 }], ["a"])[0].marks;
+  const same = { ...q, steps: [{ text: "أ", points: 5, awarded: 0, note: "", at: { p: 1, x: 500, y: 500 } }, { text: "ب", points: 5, awarded: 0, note: "", at: { p: 1, x: 510, y: 505 } }] };
+  const sm = Q.marksByPage([{ ...same, score: 0 }], ["a"])[0].marks;
   assert.ok(Math.abs(sm[0].x - sm[1].x) >= 55, "تزحزحت");
   assert.deepEqual(Q.marksByPage(two, ["a"], undefined, [], praise), Q.marksByPage(two, ["a"], undefined, [], praise), "ثابت لنفس الورقة");
   assert.notDeepEqual(Q.marksByPage(two, ["b"], undefined, [], praise)[0].marks.map((m) => [m.x, m.y, m.rot]), gm.length && Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.map((m) => [m.x, m.y, m.rot]), "ورقة ثانية شكل ثاني");
@@ -684,9 +692,9 @@ test("؟ بخطه: الخطوات اللي ما كتبها الطالب تنرس
     steps: [{ text: "أ", points: 5, awarded: 5, note: "", at: { p: 1, x: 500, y: 500 } }, { text: "الرسم", points: 5, awarded: 0, note: "ما رسمت الدالة" }] };
   const ask = { id: 7, kind: "ask" as const, text: "؟", w: 480, h: 360, s: [[1, 2, 3, 4]] };
   const [pg] = Q.marksByPage([q], ["a"], undefined, [], [ask]);
-  assert.deepEqual(pg.marks.map((x) => [x.kind, x.y]), [["ok", 500], ["miss", 645]]);
-  assert.equal(pg.marks[1].note, "ما رسمت الدالة");
-  assert.deepEqual(pg.marks[1].sym!.s, ask.s, "«؟» بخطه");
+  assert.deepEqual(pg.marks.map((x) => [x.kind, x.y]), [["miss", 645]]);
+  assert.equal(pg.marks[0].note, "ما رسمت الدالة");
+  assert.deepEqual(pg.marks[0].sym!.s, ask.s, "«؟» بخطه");
 });
 
 test("📄 ارفع ملف: Word ببلاش والمعادلات تصير x² و 3/x²، PDF يقراه الذكاء حرف بحرف", async () => {

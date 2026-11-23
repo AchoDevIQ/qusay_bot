@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
+  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { docxNotes, notesKind } from "./notesFile.ts";
@@ -92,11 +92,12 @@ async function paperDetail(id: number) {
   const mk = fresh ?? (r!.pages?.length ? { qs: r!.qs, pages: r!.pages } : null);
   const shown = fresh ? fresh.qs : r!.qs;
   const ink = mk ? await inkFor(Number(it!.exam_id)) : [];
+  const hidden = await hiddenMarks(id);
   return {
     id, name: await nameOf(it!), exam: String((await one("bank_exams", { id: it!.exam_id }))?.title ?? ""), kind: r!.kind, human: r!.kind === "trial" ? humanMark(it!) : r!.human ?? null,
     total: fresh && it!.user_id < 0 ? fresh.total : r!.total, sure: r!.sure, iqd: iqd(r!.usd), batch: r!.batch, sent: !!r!.sent,
     qs: shown.map((q) => ({ ...q, human: r!.kind === "trial" && humanMark(it!) !== null && marks.has(q.n) ? marks.get(q.n)! : null,
-      marked: mk ? marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => Number(a.q) === q.n).map((a) => String(a.file)), ink) : null })),
+      marked: mk ? dropHidden(marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => Number(a.q) === q.n).map((a) => String(a.file)), ink), hidden) : null })),
     photos: answers.map((a) => ({ q: Number(a.q) || 0, ref: String(a.file) })),
     demo: demo ? { at: demo.at, total: demo.total, iqd: iqd(demo.usd) } : null, demoWaiting: await marksWaiting(id),
   };
@@ -192,7 +193,11 @@ export async function qusayAction(body: Row) {
     const fx = r.official ? await (await import("./gradeApi.ts")).ownerFixMark(Number(body.id), r.official.q, r.official.mark) : null;
     return await out(`🧠 تعلمها: من هسه يصحح هيچ بهذا الموضوع (${r.n} قاعدة من تصحيحاتك).${fx ? ` ودرجة الطالب صارت ${fx.total} من 100، ووصله هو وولي أمره.` : ""}`, { paper: await paperDetail(Number(body.id)) });
   }
-  if (a === "lessonDel") { await forgetLesson(exam, Number(body.lesson)); return await out("🗑 انمسحت هاي القاعدة"); }
+  if (a === "hideMark") {
+    try { await hideMark(Number(body.id), String(body.key ?? "")); } catch (e) { fail(e); }
+    return await out("🗑 انشالت العلامة من الورقة، والدرجة مثل ما هي", { paper: await paperDetail(Number(body.id)) });
+  }
+    if (a === "lessonDel") { await forgetLesson(exam, Number(body.lesson)); return await out("🗑 انمسحت هاي القاعدة"); }
   if (a === "sendSaved") {
     const { finishByAi } = await import("./gradeApi.ts");
     try { await sendSaved(Number(body.id), finishByAi); } catch (e) { fail(e); }

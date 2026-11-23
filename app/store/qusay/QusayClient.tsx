@@ -2,7 +2,7 @@
 // «🧠 تصحيح قصي»: مصحح الأستاذ الثاني. يجربه بالسر على أوراق صححها مصحح ويقارن، ومن يرتاح لموضوع يخليه يصححه صدگ
 import { useEffect, useRef, useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
-import { Inline, MarkedPage, MathText, type MarkedPageT } from "../myexams/AiCompare";
+import { Inline, MarkedPage, MathText, type MarkedPageT, type PaperMark as MarkT } from "../myexams/AiCompare";
 import VoiceText from "./VoiceText";
 import InkBook, { type InkItem } from "./InkBook";
 
@@ -291,13 +291,31 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
 }
 
 /** سؤال واحد: زر «📝 التصحيح» وجنبه «📷 ورقة الطالب»، كل واحد يطلع لحاله. الرياضيات بشكل الكتاب (الكسر أفقي، π) */
-function QView({ q, photos, fileUrl, teach, busy }: { q: Q; photos: string[]; fileUrl: (ref: string) => string; teach?: (i: number, mark: number, why: string) => Promise<unknown>; busy?: boolean }) {
+function QView({ q, photos, fileUrl, teach, hide, busy }: { q: Q; photos: string[]; fileUrl: (ref: string) => string; teach?: (i: number, mark: number, why: string) => Promise<unknown>; hide?: (key: string) => Promise<unknown>; busy?: boolean }) {
   const marked = !!q.marked?.some((p) => p.marks.length);
   // «✏️ صلّح وعلّمه»: درجة الخطوة الصح وليش، وجوابه يصير قاعدة بهذا الموضوع
   const [fix, setFix] = useState<number | null>(null);
   const [mark, setMark] = useState("");
   const [why, setWhy] = useState("");
+  // العلامة اللي داس عليها بالورقة (طلبه 2026-11-23: يصلح على الورقة نفسها، مو بالكيبورد)
+  const [tap, setTap] = useState<{ ref: string; k: number; m: MarkT } | null>(null);
   const [view, setView] = useState<"grade" | "paper" | "marked">(marked ? "marked" : "grade");
+  const open = (i: number) => { setFix(i); setMark(String(q.steps[i]?.awarded ?? 0)); setWhy(""); };
+  const form = (i: number) => {
+    const s = q.steps[i];
+    if (!s || !teach) return null;
+    return (
+      <div className="form">
+        <label>✏️ الدرجة الصح لهاي الخطوة (من {s.points})</label>
+        <input type="number" inputMode="numeric" min={0} max={s.points} value={mark} onChange={(x) => setMark(x.target.value)} style={{ width: 90 }} />
+        <label>ليش؟ احچيها 🎤 لو اكتبها (هذا اللي يتعلمه ويطبقه بكل ورقة جاية)</label>
+        <VoiceText value={why} onChange={setWhy} rows={3} maxLength={1500} />
+        <button type="button" className="btn" disabled={busy || mark === "" || Number(mark) < 0 || Number(mark) > s.points || why.trim().length < 4}
+          onClick={() => void teach(i, Number(mark), why).then(() => { setFix(null); setWhy(""); setTap(null); })}>🧠 احفظ وعلّمه</button>
+        <button type="button" className="exbtn" onClick={() => setFix(null)}>✖ إلغاء</button>
+      </div>
+    );
+  };
   return (
     <div className="card expad">
       <div className="exlabel">السؤال {q.n}: {q.score} من {q.max}{q.human !== null && <> · المصحح {q.human}</>} {q.sure ? "" : "⚠️ ما متأكد"}</div>
@@ -306,7 +324,28 @@ function QView({ q, photos, fileUrl, teach, busy }: { q: Q; photos: string[]; fi
         <button type="button" className={view === "grade" ? "on" : ""} onClick={() => setView("grade")}>📝 التصحيح</button>
         <button type="button" className={view === "paper" ? "on" : ""} onClick={() => setView("paper")}>📷 ورقة الطالب{photos.length ? "" : " (ماكو)"}</button>
       </div>
-      {view === "marked" && marked ? q.marked!.map((p) => <MarkedPage key={p.ref} src={fileUrl(p.ref)} marks={p.marks} />) : view === "paper" ? photos.map((u) => <img key={u} src={u} alt="" style={{ width: "100%", minWidth: 0, marginTop: 6 }} />) : <>
+      {view === "marked" && marked ? <>
+        {teach && <div className="exhint">👆 دوس على أي علامة بالورقة حتى تشيلها لو تصلح درجتها.</div>}
+        {q.marked!.map((p) => (
+          <div key={p.ref}>
+            <MarkedPage src={fileUrl(p.ref)} marks={p.marks} picked={tap?.ref === p.ref ? tap.k : undefined}
+              onTap={teach ? (m, k) => { setTap({ ref: p.ref, k, m }); open(m.i !== undefined && m.i >= 0 ? m.i : q.steps.findIndex((s) => s.awarded < s.points) >= 0 ? q.steps.findIndex((s) => s.awarded < s.points) : 0); } : undefined} />
+            {tap?.ref === p.ref && (
+              <div className="card expad">
+                <div className="exlabel">{tap.m.big ? "✓ السؤال كله صح" : tap.m.kind === "miss" ? "؟ ناقص" : "✗ غلط"}{tap.m.note ? <> · <Inline text={tap.m.note} /></> : null}</div>
+                {hide && <button type="button" className="exbtn" disabled={busy} onClick={() => void hide(`${q.n}:${tap.m.i ?? -1}:${tap.m.kind}`).then(() => setTap(null))}>🗑 شيل هاي العلامة (مكانها غلط، والدرجة صح)</button>}
+                {q.steps.length > 1 && (
+                  <select value={fix ?? 0} onChange={(e) => open(Number(e.target.value))}>
+                    {q.steps.map((s, i) => <option key={i} value={i}>{i + 1}. {s.awarded}/{s.points} · {s.text.slice(0, 60)}</option>)}
+                  </select>
+                )}
+                {fix !== null && <><MathText text={q.steps[fix]?.text ?? ""} />{form(fix)}</>}
+                <button type="button" className="exbtn" onClick={() => { setTap(null); setFix(null); }}>✖ سد</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </> : view === "paper" ? photos.map((u) => <img key={u} src={u} alt="" style={{ width: "100%", minWidth: 0, marginTop: 6 }} />) : <>
         {q.reason && <div className="exhint"><Inline text={q.reason} /></div>}
         {q.method > 1 && <div className="exhint">صححه على الطريقة {q.method}</div>}
         {q.steps.map((s, i) => (
@@ -314,17 +353,7 @@ function QView({ q, photos, fileUrl, teach, busy }: { q: Q; photos: string[]; fi
             {s.awarded >= s.points ? "✅" : s.awarded > 0 ? "◐" : "❌"} <b>{s.awarded}/{s.points}</b>
             <MathText text={s.text} />
             {s.note && <small><Inline text={s.note} /></small>}
-            {teach && (fix === i ? (
-              <div className="form">
-                <label>✏️ الدرجة الصح لهاي الخطوة (من {s.points})</label>
-                <input type="number" inputMode="numeric" min={0} max={s.points} value={mark} onChange={(x) => setMark(x.target.value)} style={{ width: 90 }} />
-                <label>ليش؟ (هذا اللي يتعلمه ويطبقه بكل ورقة جاية)</label>
-                <VoiceText value={why} onChange={setWhy} rows={3} maxLength={1500} />
-                <button type="button" className="btn" disabled={busy || mark === "" || Number(mark) < 0 || Number(mark) > s.points || why.trim().length < 4}
-                  onClick={() => void teach(i, Number(mark), why).then(() => { setFix(null); setWhy(""); })}>🧠 احفظ وعلّمه</button>
-                <button type="button" className="exbtn" onClick={() => setFix(null)}>✖ إلغاء</button>
-              </div>
-            ) : <button type="button" className="exbtn" disabled={busy} onClick={() => { setFix(i); setMark(String(s.awarded)); setWhy(""); }}>✏️ صلّح</button>)}
+            {teach && (fix === i && !tap ? form(i) : <button type="button" className="exbtn" disabled={busy} onClick={() => { setTap(null); open(i); }}>✏️ صلّح</button>)}
           </div></div>
         ))}
       </>}
@@ -349,7 +378,7 @@ function PaperView({ p, fileUrl, busy, call, close }: { p: Paper; fileUrl: (ref:
       </div>
       <div className="exhint">✏️ إذا خطوة درجتها غلط: افتح «📝 التصحيح» بالسؤال ← ✏️ صلّح ← الدرجة الصح وليش ← 🧠 احفظ وعلّمه. يصلح هاي الورقة، ويتعلمها لكل ورقة جاية بهذا الموضوع.</div>
       {p.qs.map((q) => <QView key={q.n} q={q} fileUrl={fileUrl} photos={p.photos.filter((f) => f.q === q.n).map((f) => fileUrl(f.ref))} busy={busy}
-        teach={(i, mark, why) => call({ action: "teach", id: p.id, q: q.n, i, mark, why })} />)}
+        teach={(i, mark, why) => call({ action: "teach", id: p.id, q: q.n, i, mark, why })} hide={(key) => call({ action: "hideMark", id: p.id, key })} />)}
       {p.photos.some((f) => !f.q) && (
         <div className="card expad">
           <div className="exlabel">صفحات الورقة</div>

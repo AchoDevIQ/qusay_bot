@@ -319,6 +319,7 @@ async function qusayShown(it: Row) {
   const mk = fresh ?? (r.pages?.length ? { qs: r.qs, pages: r.pages } : null);
   // ✓ ✗ والمدح والملاحظات بخط إيد الأستاذ («✍️ خط إيدي»)، إذا كاتبها
   const ink = mk ? await qg.inkFor(Number(it.exam_id)) : [];
+  const hidden = await qg.hiddenMarks(it.id);
   // خطوات الحل بلغة منهجه: طالب عربي يشوفها عربي، وإنجليزي إنجليزي (طلبه 2026-11-23)
   const lang = String((await one("students", { user_id: it.user_id }))?.curr ?? "") === "إنجليزي" ? "en" : "ar";
   const shownQs = (fresh ? fresh.qs : r.qs).filter((q) => q.answered);
@@ -328,7 +329,7 @@ async function qusayShown(it: Row) {
   return shownQs.map((q, qi) => ({
     n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
     photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
-    ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink) } : {}),
+    ...(mk ? { marked: qg.dropHidden(qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink), hidden) } : {}),
     steps: q.steps.map((st, si) => ({ status: "", awarded: st.awarded, possible: st.points, expected: tr[qi][si], student: st.note, reason: st.note })), by: "qusay" as const,
   }));
 }

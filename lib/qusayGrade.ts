@@ -56,7 +56,8 @@ export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
 /** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة.
  *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
 /** rot وsc: ميلان (درجات) وحجم خط الإيد، يتغيرون شوية بكل علامة حتى ما تبين نسخة وحدة (طلب الأستاذ 2026-11-22) */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
+/** big: ✓ وحدة كبيرة على السؤال الصح كله. q / i: السؤال ورقم خطوته (i = -1 للسؤال كله)، حتى الأستاذ يدوس عليها ويصلحها */
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
@@ -332,6 +333,15 @@ export async function teach(id: number, qn: number, stepIdx: number, mark: numbe
   }
   return { official, n: list.length };
 }
+// ---------- «🗑 شيل هاي العلامة» (طلبه 2026-11-23): العلامة اللي مكانها غلط تنشال من الورقة، والدرجة تبقى
+const hideKey = (id: number) => `qg_hide_${id}`;
+export const hiddenMarks = async (id: number) => { const l = await readJson<string[]>(hideKey(id), []); return Array.isArray(l) ? l.map(String) : []; };
+export async function hideMark(id: number, key: string) {
+  if (!/^\d+:-?\d+:(ok|half|bad|good|miss)$/.test(key)) throw new Error("العلامة مو مفهومة");
+  await kvSet(hideKey(id), JSON.stringify([...new Set([...await hiddenMarks(id), key])]));
+}
+export const markKey = (m: PaperMark) => `${m.q}:${m.i ?? -1}:${m.kind}`;
+export const dropHidden = <T extends { marks: PaperMark[] }>(pages: T[], hidden: string[]) => (hidden.length ? pages.map((p) => ({ ...p, marks: p.marks.filter((m) => !hidden.includes(markKey(m))) })) : pages);
 export async function forgetLesson(examId: number, lessonId: number) {
   await kvSet(learnKey(examId), JSON.stringify((await lessonsOf(examId)).filter((x) => x.id !== lessonId)));
 }
@@ -591,34 +601,31 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   for (const q of qs) {
     if (only !== undefined && q.n !== only) continue;
     if (!q.answered) continue;
-    // ✓ على كل خطوة صح بمكانها، و✗ على كل خطوة نقصت ويا ملاحظتها، وبدون أرقام على الورقة (طلب الأستاذ 2026-11-22:
-    // الدرجة مكتوبة بزر السؤال فوك، وما نكتب شگد نقصناه). السؤال الصح كله: «أحسنت» بآخره
+    // العلامة بس على الخطوة الغلط ويا ملاحظتها، وبدون أرقام على الورقة. الخطوة الصح ما ياخذ ✓ (طلبه 2026-11-23: الصحات الكثيرة
+    // تلخبط الطالب، ✓ على سطر غلط يحسبها صح). السؤال الصح كله: ✓ وحدة كبيرة بنصه، ويمها المدح إذا هو أول سؤال كامل
     const full = (s: QgStep) => s.awarded >= s.points && s.points > 0;
     const allRight = q.steps.length ? q.steps.every(full) : q.score >= q.max;
     const placed = q.steps.filter((s) => s.at);
-    const praiseAt = allRight ? q.at ?? placed.at(-1)?.at : undefined;
+    const mid = placed.length ? { p: placed[Math.floor(placed.length / 2)].at!.p, x: Math.round(placed.reduce((t, s) => t + s.at!.x, 0) / placed.length), y: Math.round(placed.reduce((t, s) => t + s.at!.y, 0) / placed.length) } : undefined;
+    const praiseAt = allRight ? mid ?? q.at : undefined;
     // المدح مرة وحدة بالورقة كلها (طلبه 2026-11-23)، والسؤال الكامل الثاني ياخذ ✓ بس
     const praise = allRight && q.n === praiseQ;
     let drawn = 0;
     const unplaced: QgStep[] = [];
-    for (const s of q.steps) {
-      if (full(s)) {
-        // آخر خطوة صح يمها «أحسنت» (بيها ✓)، فما تنعاد
-        if (s.at && !(allRight && !q.at && s === placed.at(-1))) add(s.at, { kind: "ok", text: "" });
-        continue;
-      }
+    for (const [i, s] of q.steps.entries()) {
+      if (full(s)) continue;
       const hand = handOf(s.hw);
-      if (s.at) { add(s.at, { kind: "bad", text: "", ...(s.note ? { note: shortNote(s.note) } : {}), ...(hand ? { hand } : {}) }); drawn++; }
+      if (s.at) { add(s.at, { kind: "bad", text: "", q: q.n, i, ...(s.note ? { note: shortNote(s.note) } : {}), ...(hand ? { hand } : {}) }); drawn++; }
       else if (s.note) unplaced.push(s);
     }
-    if (allRight) { add(praiseAt, praise ? { kind: "good", text: "أحسنت" } : { kind: "ok", text: "" }); continue; }
+    if (allRight) { add(praiseAt, praise ? { kind: "good", text: "أحسنت", big: true, q: q.n, i: -1 } : { kind: "ok", text: "", big: true, q: q.n, i: -1 }); continue; }
     // الخطوات اللي ما كتبها الطالب (ما إلها مكان): «؟» تحت آخر جوابه (مو ✗ على سطر صح، طلبه 2026-11-22)، ويمها شنو ناقص
     if (unplaced.length || !drawn) {
       const note = unplaced.length ? unplaced.map((s) => s.note).join("، ") : q.reason;
       // ملاحظة وحدة مكتوبة بخطه تنرسم بخطه، وأكثر من وحدة تنكتب بالخط
       const hand = unplaced.length === 1 ? handOf(unplaced[0].hw) : unplaced.length ? undefined : handOf(q.hw);
       const end = q.at ? { ...q.at, y: Math.min(1000, q.at.y + 45) } : undefined;
-      add(end, { kind: unplaced.length ? "miss" : "bad", text: "", ...(note ? { note: shortNote(note) } : {}), ...(hand ? { hand } : {}) });
+      add(end, { kind: unplaced.length ? "miss" : "bad", text: "", q: q.n, i: unplaced.length === 1 ? q.steps.indexOf(unplaced[0]) : -1, ...(note ? { note: shortNote(note) } : {}), ...(hand ? { hand } : {}) });
     }
   }
   const out: { ref: string; marks: PaperMark[] }[] = [];
