@@ -82,7 +82,7 @@ test("رفع الملزمة لصاحب البوت بس، والبحث: المح�
   ai.length = 0;
   // «وتحقق» طلب زايد مو بسؤال الملزمة: مو نفس السؤال بالضبط، فيروح للذكاء يدور
   const a1 = await qa.qaAnswer({ text: "جد جذور 8i وتحقق" }, 1, await tidOf("الجذور التربيعية"), 1, "ar");
-  assert.deepEqual(a1, { source: "lecture", solution: "$x+yi=\\sqrt{8i}$" });
+  assert.deepEqual({ source: a1!.source, solution: a1!.solution }, { source: "lecture", solution: "$x+yi=\\sqrt{8i}$" });
   assert.equal(ai.length, 1);
   assert.ok(!ai[0].body.context.includes("اوسع مجال"));   // موضوع ثاني ما يدخل
   // مو بالمحاضرة 1، موجود بالمحاضرة 2 من نفس الموضوع
@@ -147,11 +147,11 @@ test("أسئلة الامتحانات: تنقرا مرة وحدة كتابة و�
   // نفس سؤال الامتحان: حله المحفوظ نفسه ببلاش، بلا طلب
   ai.length = 0;
   const a = await qa.qaAnswer({ text: "جذور 5-12i" }, 1, tid, 1, "ar");
-  assert.deepEqual(a, { source: "topic", solution: "x^{2}-y^{2}=5" });
+  assert.deepEqual({ source: a!.source, solution: a!.solution }, { source: "topic", solution: "x^{2}-y^{2}=5" });
   assert.equal(ai.length, 0);
   // بطلب ثاني («اثبت»): يدور بيه الذكاء
   const a2 = await qa.qaAnswer({ text: "اثبت ان 5-12i عدد مركب" }, 1, tid, 1, "ar");
-  assert.deepEqual(a2, { source: "topic", solution: "حل الامتحان" });
+  assert.deepEqual({ source: a2!.source, solution: a2!.solution }, { source: "topic", solution: "حل الامتحان" });
   // مرة ثانية ما يعيد قراءته
   assert.match(((await qa.qaAction({ initData: sign(1), action: "exams" })) as any).notice, /كل أسئلة الامتحانات انقرت/);
   assert.equal(((await qa.qaAction({ initData: sign(1), action: "list" })) as any).exams.done, 1);
@@ -345,4 +345,39 @@ test("«🤔 ما فهمت خطوة»: طافي من البداية، يشرح �
   const p: any = await qa.qaAction({ initData: sign(1), action: "list" });
   assert.deepEqual([p.qa.stepBtn, p.qa.teacherBtn, p.qa.explained], [true, false, qa.EXPLAIN_PER_ANSWER]);
   await qa.qaAction({ initData: sign(1), action: "settings", teacherBtn: true, stepBtn: false });
+});
+
+test("🔎 حلول الذكاء: الأستاذ يشوف حل الذكاء ويصلحه بالفويس، فيوصل للطالب، ونفس السؤال يصير ببلاش، والسبب قاعدة بالموضوع", async () => {
+  const R = await import("../lib/qaReview.ts");
+  const Q = await import("../lib/qusayGrade.ts");
+  const tid = await tidOf("الجذور التربيعية");
+  reply = (b) => (b.mode === "solve" ? { found: true, solution: "حل الذكاء الغلط" } : { found: false, solution: "" });
+  const a = await qa.qaAnswer({ text: "جد جذور 5+12i بطريقة ثانية" }, 1, tid, 1, "ar");
+  assert.equal(a!.source, "ai");
+  assert.equal(a!.asked, "جد جذور 5+12i بطريقة ثانية");
+  const id = await qa.saveAnswer(70, "جد جذور 5+12i بطريقة ثانية", a!, "الجذور التربيعية — المحاضرة 1", "ar", { chapter: 1, tid, lecture: 1, photo: "AgACphoto" });
+  const l: any = await R.qaReviewAction({ initData: sign(1), action: "list" });
+  assert.ok(l.rows.some((r: any) => r.id === id && r.source === "ai"), "ينضاف لقائمة الأستاذ");
+  const v: any = await R.qaReviewAction({ initData: sign(1), action: "view", id });
+  assert.equal(v.open.photo, "AgACphoto");
+  assert.equal(v.open.solution, "حل الذكاء الغلط");
+  // 🎤 يحچي شنو الغلط والذكاء يعيد الكتابة (ما ينحفظ لحد 💾)
+  Q.setQgApi({ create: async () => ({ content: [{ type: "text", text: "الحل الصح" }], usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: "end_turn", model: "claude-haiku-5-5" }) } as any);
+  const rw: any = await R.qaReviewAction({ initData: sign(1), action: "rewrite", id, note: "المفروض تستعمل المرافق" });
+  assert.equal(rw.draft, "الحل الصح");
+  Q.setQgApi(null);
+  const sv: any = await R.qaReviewAction({ initData: sign(1), action: "save", id, solution: "الحل الصح سطر\nسطر ثاني", why: "بهذا الموضوع دايماً بالمرافق" });
+  assert.match(sv.notice, /ووصل للطالب/);
+  assert.equal(((await qa.answerView({ token: homeToken(70), id })) as any).solution, "الحل الصح سطر\nسطر ثاني", "الطالب يشوف المصلّح");
+  assert.equal(sv.counts.fixed, 1);
+  // نفس السؤال لطالب ثاني: حل الأستاذ ببلاش، بلا ذكاء
+  ai.length = 0;
+  const again = await qa.qaAnswer({ text: "جد  جذور 5+12i بطريقة ثانية" }, 1, tid, 1, "ar");
+  assert.equal(again!.source, "teacher");
+  assert.equal(again!.solution, "الحل الصح سطر\nسطر ثاني");
+  assert.equal(ai.length, 0);
+  // سؤال ثاني بنفس الموضوع: سبب التصليح يروح ويا شرح الملزمة
+  await qa.qaAnswer({ text: "جد جذور 9+40i" }, 1, tid, 1, "ar");
+  assert.ok(ai.some((x) => x.body.mode === "solve" && x.body.context.includes("بهذا الموضوع دايماً بالمرافق")));
+  await assert.rejects(R.qaReviewAction({ initData: sign(5), action: "list" }), /صلاحية/);
 });

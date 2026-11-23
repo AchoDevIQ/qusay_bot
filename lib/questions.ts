@@ -117,22 +117,24 @@ async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean)
   if (r.source === "ai" && !(await qaCfg()).direct) return false;
   await kvSet(`qauto_${uid}`, JSON.stringify({ mid: m.message_id, t: data.t, l: data.l || 0 }));
   await setSession(uid, "", {});
-  await deliverQa(chat, uid, r, t, Number(data.l) || 0, en, text);
+  await deliverQa(chat, uid, r, t, Number(data.l) || 0, en, text, 0, (m.photo as Row[] | undefined)?.at(-1)?.file_id);
   await send(chat, "👆", { replyKb: await mainKb(uid) });
   return true;
 }
 
 /** يوصل للطالب زر «📘 افتح الحل». qid: سؤاله اللي بالمجموعة (الذكاء جاوبه بعد ما رجع يشتغل)، فـ«بعدني ما فهمت» يرجع لنفس السؤال */
-async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: number, en: boolean, text: string, qid = 0) {
+async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: number, en: boolean, text: string, qid = 0, photo?: string) {
   const where = `${t.ar}${l ? ` — المحاضرة ${l}` : ""}`;
   const shown = en ? `${t.en || t.ar}${l ? ` — Lecture ${l}` : ""}` : where;
   // موضوعه ومحاضرته ينحفظن ويا الحل، حتى «🤔 ما فهمت خطوة» ياخذ شرح الأستاذ من نفس الملزمة
-  const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar", { chapter: await chapterNo(t.chapter_id), tid: Number(t.id), lecture: l });
+  const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar", { chapter: await chapterNo(t.chapter_id), tid: Number(t.id), lecture: l, ...(photo ? { photo } : {}) });
   const more = en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ";
   const kb: Kb = [[{ text: en ? "📘 Open the solution" : "📘 افتح الحل", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }]];
   // صاحب البوت يگدر يخفي «❓ بعدني ما فهمت»
   if ((await qaCfg()).teacherBtn !== false) kb.push([btn(more, qid ? `qf:${qid}` : "qx:go")]);
-  const msg = r.source === "notebook"
+  const msg = r.source === "teacher"
+    ? (en ? "✏️ <b>The teacher solved this question himself</b>\nTap the button to see his solution." : "✏️ <b>سؤالك حله الأستاذ بنفسه</b>\nدوس الزر تشوف حله.")
+    : r.source === "notebook"
     ? (en ? "📘 <b>Your question is solved in the teacher's lecture notebook</b>\nTap the button to see his solution." : "📘 <b>سؤالك محلول بدفتر المحاضرات</b>\nدوس الزر تشوف حل الأستاذ.")
     : r.source === "rasid"
     ? (en ? "📝 <b>Your question is in the teacher's Rasid</b>\nTap the button to see his model solution." : "📝 <b>سؤالك موجود بالراصد</b>\nدوس الزر تشوف الحل النموذجي مال الأستاذ.")

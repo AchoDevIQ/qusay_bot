@@ -701,6 +701,16 @@ Rewrite it as clear, numbered grading rules in simple Iraqi Arabic, one rule per
 - If he says something about one exam version, start that rule with «بالنسخة B:».
 - Do not add rules he did not say. Do not drop any. If a part cannot be understood at all, keep it at the end under «ما فهمته:» so he can fix it.
 Return only the rules.`;
+/** كتابة بالذكاء المختار بـ ⚙️ (🔎 حلول الذكاء: يعيد كتابة حل على تصليح الأستاذ). kind: وين تنحسب الصرفية */
+export async function aiWrite(system: string, user: string, kind: "qa" | "qusay" = "qa"): Promise<string> {
+  const msg = await apiImpl.create({ model: await modelId(), max_tokens: 16000, system, output_config: { effort: "medium" }, messages: [{ role: "user", content: user }] } as Req);
+  const u = msg.usage;
+  await addSpend(kind, usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0, m: msg.model }, false));
+  if (msg.stop_reason === "max_tokens") throw new Error("الحل طويل كلش وانگطع");
+  const out = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+  if (!out) throw new Error("ما گدرت أكتبه، جرب مرة ثانية");
+  return out;
+}
 export async function tidyNotes(text: string): Promise<{ text: string; usd: number }> {
   const raw = text.trim().slice(0, STYLE_MAX);
   if (!raw) throw new Error("ماكو كلام حتى أرتبه");

@@ -2,6 +2,7 @@
 // ١. يدور بالمحاضرة اللي اختارها. ٢. إذا ما لگاه، يدور بالموضوع بس (مو بالفصل كله). ٣. إذا ما لگاه، نظام الذكاء يحله على طريقة الأستاذ.
 // الجواب يوصل للطالب كتابة (صفحة بيها الرياضيات مكتوبة مثل الكتاب)، مو صورة من الملزمة، حتى يبقى رخيص
 import { createHash, randomUUID } from "node:crypto";
+import { AI_SOURCES, fixKey, fixedFor, indexAnswer, lessonsCtx } from "./qaReview.ts";
 import { find, kvGet, kvSet, one, type Row } from "./db.ts";
 import { files } from "./files.ts";
 import { aiLinked, isImage, readRef, rubricOf, solutionPdf, svc } from "./aiGrade.ts";
@@ -264,7 +265,8 @@ export async function examQueueTick(limit = EXAM_PER_TICK) {
 export type QaAsk = { text?: string; image?: Buffer };
 /** rasid: الحل صفحة «📘 الحل النموذجي» من الراصد اللي بملازمي (book رقم الملزمة، page رقم الصفحة) */
 /** notebook: الحل صفحات «دفتر المحاضرات» بملازمي من بداية السؤال (y مكانه بأول صفحة)، ويا زر فيديوهاته (mark) */
-export type QaResult = { source: "lecture" | "topic" | "ai" | "rasid" | "notebook"; solution: string; rasid?: { book: number } & RasidHit; notebook?: { book: number; where: string } & BookHit };
+/** teacher: حل صلّحه الأستاذ لنفس السؤال قبل (🔎 حلول الذكاء)، يوصل ببلاش. asked: نص السؤال (بعد قراءة الصورة)، fk: بصمته */
+export type QaResult = { source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; asked?: string; fk?: string; rasid?: { book: number } & RasidHit; notebook?: { book: number; where: string } & BookHit };
 type Part = { kind: QaKind | "tests"; l: Lecture };
 const joinCtx = (list: Part[], max: number) => {
   let s = "";
@@ -306,6 +308,11 @@ async function partsFor(chapter: number, tid: number, lang: "ar" | "en") {
 }
 
 export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: number, lang: "ar" | "en", uid?: number): Promise<QaResult | null> {
+  const meta = { text: "", fk: "" };
+  const r = await qaAnswerCore(q, chapter, tid, lecture, lang, uid, meta);
+  return r ? { ...r, ...(meta.text ? { asked: meta.text } : {}), ...(meta.fk ? { fk: meta.fk } : {}) } : r;
+}
+async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: number, lang: "ar" | "en", uid: number | undefined, meta: { text: string; fk: string }): Promise<QaResult | null> {
   const t = await one("topics", { id: tid });
   const names = [String(t?.ar ?? ""), String(t?.en ?? "")].filter(Boolean);
   // ملازم منهج الطالب أول (إذا الموضوع ما بيها، المنهج الثاني، والحل ينكتب بلغة الطالب)، وأسئلة الامتحانات مال الموضوع
@@ -330,13 +337,20 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
     }
     text = [read, text].filter(Boolean).join("\n");
   }
+  // ✏️ نفس السؤال صلّح حله الأستاذ قبل (🔎 حلول الذكاء): حله يوصل ببلاش، قبل أي بحث أو ذكاء
+  if (text) {
+    meta.text = text;
+    meta.fk = fixKey(tid, lang, text);
+    const fixed = await fixedFor(meta.fk);
+    if (fixed) { const c = await qaCfg(); c.free = (c.free ?? 0) + 1; await saveCfg(c); return { source: "teacher", solution: fixed }; }
+  }
   // ما انقرت الصورة: الطريقة القديمة على المحاضرة بس (مو الموضوع كله)
   if (!text && !mine.length) { if (readErr) throw readErr; return null; }
   if (!text) {
     const lec = lecture ? mine.filter((x) => x.l.lecture === lecture) : mine;
     const r = await call("find", joinCtx(lec, LECTURE_MAX), q, lang);
     if (r.found && r.solution) return done("lecture", r.solution);
-    const s = await call("solve", joinCtx(lec, LECTURE_MAX), q, lang);
+    const s = await call("solve", (await lessonsCtx(tid)) + joinCtx(lec, LECTURE_MAX), q, lang);
     return s.solution ? done("ai", s.solution) : null;
   }
   // ٢. نفس السؤال انسأل قبل بنفس الموضوع وبنفس اللغة: الجواب المحفوظ يرجع بلا كلفة
@@ -403,7 +417,7 @@ export async function qaAnswer(q: QaAsk, chapter: number, tid: number, lecture: 
   }
   // ٥. ما موجود: يحله على طريقة الأستاذ، والأمثلة أقرب أسئلة محلولة (أو محاضرته إذا ماكو قريب)
   const examples = top.length ? blocksCtx(top.map((x) => x.b)) : joinCtx(lecture ? mine.filter((x) => x.l.lecture === lecture) : mine, LECTURE_MAX);
-  const s = await call("solve", examples || joinCtx(mine, LECTURE_MAX), ask, lang);
+  const s = await call("solve", (await lessonsCtx(tid)) + (examples || joinCtx(mine, LECTURE_MAX)), ask, lang);
   return s.solution ? save(await done("ai", s.solution)) : null;
 }
 
@@ -679,15 +693,17 @@ async function done(source: QaResult["source"], solution: string): Promise<QaRes
 }
 
 // ---------- الجواب المحفوظ للطالب (صفحة الحل)
-export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar", ctx: { chapter?: number; tid?: number; lecture?: number } = {}) {
+export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar", ctx: { chapter?: number; tid?: number; lecture?: number; photo?: string } = {}) {
   const id = randomUUID().replace(/-/g, "").slice(0, 16);
-  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), lang, ...ctx, at: new Date().toISOString() }));
+  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.asked ? { asked: r.asked.slice(0, 4000) } : {}), ...(r.fk ? { fk: r.fk } : {}), ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), lang, ...ctx, at: new Date().toISOString() }));
+  // 🔎 حلول الذكاء: كل حل كتبه الذكاء ينضاف لقائمة الأستاذ حتى يشوفه ويصلحه
+  if (AI_SOURCES.includes(r.source)) await indexAnswer({ id, at: new Date().toISOString().slice(0, 16).replace("T", " "), uid, tid: Number(ctx.tid) || 0, source: r.source, q: (r.asked || question).slice(0, 160) });
   return id;
 }
 /** «🤔 ما فهمت خطوة»: كم مرة على نفس الحل، وكم مرة باليوم للطالب (حتى الكلفة تبقى صغيرة) */
 export const EXPLAIN_PER_ANSWER = 5, EXPLAIN_PER_DAY = 20;
 type Explained = { ask: string; text: string; at: string };
-const canExplain = (a: Row, cfg: QaCfg) => !!cfg.stepBtn && aiLinked() && ["lecture", "topic", "ai"].includes(a.source) && !!String(a.solution ?? "").trim();
+const canExplain = (a: Row, cfg: QaCfg) => !!cfg.stepBtn && aiLinked() && ["lecture", "topic", "ai", "teacher"].includes(a.source) && !!String(a.solution ?? "").trim();
 /** الطالب ما فهم نقطة بالحل اللي شافه: الذكاء يشرحها على طريقة الأستاذ، من شرحه بالملزمة */
 export async function qaExplain(body: Row) {
   const uid = verifyHomeToken(body?.token);
