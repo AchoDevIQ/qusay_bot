@@ -495,8 +495,8 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
   // السؤال الصح كله: ✓ على كل خطوة و«أحسنت» بآخر خطوة (بيها ✓، فما تنعاد)
   const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
   const [g] = Q.marksByPage([good], ["a"]);
-  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.big]), [["good", "أحسنت", true]], "السؤال الصح كله: ✓ وحدة كبيرة ويا المدح، بلا ✓ على كل خطوة");
-  assert.ok(Math.abs(g.marks[0].x - 500) <= 40 && Math.abs(g.marks[0].y - 500) <= 30, "بنص شغله");
+  assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.big, m.word]), [["ok", "", true, undefined]], "السؤال الصح كله: ✓ وحدة كبيرة بس، بلا مدح وبلا ✓ على كل خطوة");
+  assert.deepEqual([g.marks[0].x, g.marks[0].y], [500, 500], "بنص شغله");
   // الطالب ما كتب الخطوات (مثل س5: 3 من 15): «؟» وملاحظاتها تحت آخر جوابه
   const miss = { n: 5, max: 15, score: 3, answered: true, sure: true, reason: "ناقص", method: 1, at: { p: 1, x: 600, y: 700 },
     steps: [{ text: "أ", points: 5, awarded: 3, note: "", at: undefined }, { text: "ب", points: 10, awarded: 0, note: "ما كملت الحل" }] };
@@ -580,7 +580,7 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   assert.deepEqual(pg.marks[1].sym!.s, ink.find((x) => x.kind === "cross")!.s, "الناقصة: ✗ بخطه، بدون رقم");
   assert.equal(pg.marks[1].text, "");
   const good = { ...q, score: 10, steps: q.steps.map((st) => ({ ...st, awarded: 5 })) };
-  assert.ok(Q.marksByPage([good], ["a"], undefined, [], ink)[0].marks.find((m) => m.kind === "good")!.word, "المدح بخطه");
+  assert.ok(!Q.marksByPage([good], ["a"], undefined, [], ink)[0].marks.some((m) => m.kind === "good" || m.word), "ماكو مدح على الورقة حتى لو كاتبه بخطه");
   assert.equal(Q.marksByPage([q], ["a"])[0].marks[0].sym, undefined, "بدون خط إيد: مثل قبل");
   await qusayAction({ initData: sign(1), action: "inkDel", exam: ex, id: note.id });
   assert.equal((await Q.inkList(ex)).length, 0);
@@ -590,27 +590,19 @@ test("✍️ خط إيدي: يرتفع (عام وخاص بموضوع)، وينر
   assert.equal(blue.c, "#1d4ed8"); assert.equal(blue.wd, 3);
   const odd: any = await qusayAction({ initData: sign(1), action: "inkAdd", item: { kind: "praise", text: "بطل", w: 1000, h: 360, s: [[1, 2, 3, 4]], c: "url(x)", wd: 9 } });
   assert.equal(odd.inkOf.items.at(-1).c, "#d40000"); assert.equal(odd.inkOf.items.at(-1).wd, 2);
-  const words = Q.marksByPage([good], ["a"], undefined, [], [blue])[0].marks.find((m) => m.kind === "good")!.word!;
-  assert.equal(words.c, "#1d4ed8"); assert.equal(words.wd, 3);
+
   // «ممتاز» مو نسخة ملزوگة (طلبه 2026-11-22): سؤالين كاملين بنفس الورقة ياخذون مدح مختلف، يتزحزح عن مكانه ويميل،
   // ونفس الورقة تطلع نفس الشكل كل ما تنفتح
   const praise = [{ ...blue, id: 1, s: [[1, 1, 9, 9]] }, { ...blue, id: 2, s: [[2, 2, 8, 8]] }];
   const two = [{ ...good, n: 1, at: { p: 1, x: 500, y: 300 } }, { ...good, n: 2, at: { p: 1, x: 500, y: 700 } }];
-  const gm = Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.filter((m) => m.kind === "good");
-  // المدح مرة وحدة بالورقة كلها (طلبه 2026-11-23): السؤال الكامل الثاني ياخذ ✓ بس
-  assert.equal(gm.length, 1);
-  assert.ok(Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.some((m) => m.kind === "ok" && m.big && m.q === 2));
-  assert.ok(gm.every((m) => typeof m.rot === "number" && m.sc! >= 0.88 && m.sc! <= 1.12));
-  assert.ok(gm[0].x !== 500 || gm[0].y !== 300, "يتزحزح عن مكانه");
-  // ورقة ثانية تاخذ مدح ثاني
-  const words2 = ["a", "b", "c", "d", "e"].map((r) => JSON.stringify(Q.marksByPage(two, [r], undefined, [], praise)[0].marks.find((m) => m.kind === "good")!.word!.s));
-  assert.ok(new Set(words2).size > 1, "المدح يتبدل من ورقة لورقة");
+  // ماكو مدح بالورقة أبد (طلبه 2026-11-23): كل سؤال كامل ✓ كبيرة بس
+  const tm = Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks;
+  assert.deepEqual(tm.map((m) => [m.kind, m.big, m.q]), [["ok", true, 1], ["ok", true, 2]]);
   // علامتين بنفس المكان ما يركبن فوك بعض
   const same = { ...q, steps: [{ text: "أ", points: 5, awarded: 0, note: "", at: { p: 1, x: 500, y: 500 } }, { text: "ب", points: 5, awarded: 0, note: "", at: { p: 1, x: 510, y: 505 } }] };
   const sm = Q.marksByPage([{ ...same, score: 0 }], ["a"])[0].marks;
   assert.ok(Math.abs(sm[0].x - sm[1].x) >= 55, "تزحزحت");
   assert.deepEqual(Q.marksByPage(two, ["a"], undefined, [], praise), Q.marksByPage(two, ["a"], undefined, [], praise), "ثابت لنفس الورقة");
-  assert.notDeepEqual(Q.marksByPage(two, ["b"], undefined, [], praise)[0].marks.map((m) => [m.x, m.y, m.rot]), gm.length && Q.marksByPage(two, ["a"], undefined, [], praise)[0].marks.map((m) => [m.x, m.y, m.rot]), "ورقة ثانية شكل ثاني");
 });
 
 test("📈 سؤال بيه خطوة رسم: PDF حل الأستاذ يروح ويا الخطوات حتى يقارن الرسم، وبدون رسم ما يروح", async () => {

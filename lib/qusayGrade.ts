@@ -578,7 +578,6 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   const handOf = (id?: number) => { const x = id ? ink.find((i) => i.id === id && i.kind === "note") : undefined; return x ? shape(x) : undefined; };
   let count = 0;
   const fullQ = (q: QgQuestion) => q.answered && (q.steps.length ? q.steps.every((s) => s.awarded >= s.points && s.points > 0) : q.score >= q.max);
-  const praiseQ = qs.find(fullQ)?.n;
   const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => {
     if (!pt) return;
     const n = ++count * 3;
@@ -608,8 +607,6 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
     const placed = q.steps.filter((s) => s.at);
     const mid = placed.length ? { p: placed[Math.floor(placed.length / 2)].at!.p, x: Math.round(placed.reduce((t, s) => t + s.at!.x, 0) / placed.length), y: Math.round(placed.reduce((t, s) => t + s.at!.y, 0) / placed.length) } : undefined;
     const praiseAt = allRight ? mid ?? q.at : undefined;
-    // المدح مرة وحدة بالورقة كلها (طلبه 2026-11-23)، والسؤال الكامل الثاني ياخذ ✓ بس
-    const praise = allRight && q.n === praiseQ;
     let drawn = 0;
     const unplaced: QgStep[] = [];
     for (const [i, s] of q.steps.entries()) {
@@ -618,7 +615,8 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       if (s.at) { add(s.at, { kind: "bad", text: "", q: q.n, i, ...(s.note ? { note: shortNote(s.note) } : {}), ...(hand ? { hand } : {}) }); drawn++; }
       else if (s.note) unplaced.push(s);
     }
-    if (allRight) { add(praiseAt, praise ? { kind: "good", text: "أحسنت", big: true, q: q.n, i: -1 } : { kind: "ok", text: "", big: true, q: q.n, i: -1 }); continue; }
+    // ماكو مدح ولا ذم على الورقة (طلبه 2026-11-23: المقولة توصله لحالها مع الدرجة): ✓ كبيرة بس
+    if (allRight) { add(praiseAt, { kind: "ok", text: "", big: true, q: q.n, i: -1 }); continue; }
     // الخطوات اللي ما كتبها الطالب (ما إلها مكان): «؟» تحت آخر جوابه (مو ✗ على سطر صح، طلبه 2026-11-22)، ويمها شنو ناقص
     if (unplaced.length || !drawn) {
       const note = unplaced.length ? unplaced.map((s) => s.note).join("، ") : q.reason;

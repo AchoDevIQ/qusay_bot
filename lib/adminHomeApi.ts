@@ -46,6 +46,8 @@ async function homeData(uid: number) {
   // الملازم والجواب الآلي: صاحب البوت بس
   if (await isAdmin(uid)) people.push({ page: "booklets", icon: "📚", title: "الملازم والجواب الآلي" });
   if (await isAdmin(uid)) people.push({ page: "aigrade", icon: "🤖", title: "نظام التصحيح AI", note: "المواضيع والخطوات والسجل" });
+  // 💰 الصرفية بالمجمل وكل شي لحاله (طلبه 2026-11-23)
+  if (await isAdmin(uid) || await can(uid, "spend")) people.push({ page: "spend", icon: "💰", title: "الصرفية", note: "شگد صرف الذكاء: الأسئلة العلمية والامتحانات" });
   if (await can(uid, "qusay")) people.push({ page: "qusay", icon: "🧠", title: "تصحيح قصي", note: "مصححك الثاني الرخيص: جربه بالسر وقارن" });
   if (await can(uid, "competition")) { const n = await pendingGroups(); people.push({ page: "competition", icon: "🏆", title: "المنافسة", note: n ? `${n} مجموعة تنتظر موافقتك` : "المجاميع وترتيب المراكز", hot: n > 0 }); }
   if (await can(uid, "birthdays")) { const n = await birthdaysToday(); people.push({ page: "birthdays", icon: "🎂", title: "أعياد الميلاد", note: n ? `اليوم: ${n}` : "ماكو اليوم", hot: n > 0 }); }
