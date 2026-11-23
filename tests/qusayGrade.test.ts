@@ -455,6 +455,18 @@ test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ ب
   // طالب حقيقي ما يشوف «🖍 جرب العلامات» (بس لطالب التجربة)، بس هاي من التصحيح نفسه
   await Q.saveQgSettings({ marks: false });
   assert.deepEqual(Q.marksByPage(res.qs, res.pages!, 2).length, 0);
+  // ✏️ صلّح على طالب حقيقي وصلته درجته: الدرجة الرسمية تتغير ويوصله (طلبه 2026-11-23)
+  assert.equal(res.sent, true);
+  const st = res.qs[0].steps.findIndex((x) => x.awarded < x.points);
+  const before = Number((await one("sched_items", { id }))!.total);
+  const prev = tg.length;
+  const t: any = await qusayAction({ initData: sign(1), action: "teach", id, q: 1, i: st, mark: res.qs[0].steps[st].points, why: "هاي الخطوة صح، الطالب كاتبها بطريقة ثانية" });
+  const gain = res.qs[0].steps[st].points - res.qs[0].steps[st].awarded;
+  assert.equal(Number((await one("sched_items", { id }))!.total), before + gain, "الدرجة الرسمية تغيرت");
+  assert.equal(Number((await one("question_marks", { item_id: id, q: 1 }))!.mark), res.qs[0].score + gain);
+  assert.match(t.notice, /درجة الطالب صارت/);
+  assert.ok(tg.slice(prev).some((m) => m.p.chat_id === 90 && /الأستاذ راجع ورقتك/.test(m.p.text)), "وصل للطالب");
+  assert.equal((await Q.qgResultOf(id))!.qs[0].score, res.qs[0].score + gain, "يشوف الخطوة متصلحة");
 });
 
 test("درجات صحيحة بس: النص يروح لصالح الطالب، وماكو 8.5", () => {

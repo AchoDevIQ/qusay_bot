@@ -205,6 +205,34 @@ export async function aiObjectionsTick(limit = 4) {
   return { done };
 }
 export const objectionsWaiting = async (uid: number) => (await objectionPapers(uid)).length;
+/** «✏️ صلّح» من صفحة «تصحيح قصي» على ورقة وصلت درجتها (طلب الأستاذ 2026-11-23): الدرجة الرسمية تتغير،
+ *  ويوصل للطالب وولي أمره مثل الاعتراض المقبول. نفس الدرجة: ما يصير شي */
+export async function ownerFixMark(itemId: number, q: number, mark: number) {
+  const it = await one("sched_items", { id: itemId });
+  if (!it) return null;
+  const row = await one("question_marks", { item_id: itemId, q });
+  const old = row ? Number(row.mark) : null;
+  if (old === mark) return null;
+  await put("question_marks", { item_id: itemId, q, mark });
+  const total = await itemTotal(it);
+  await update("sched_items", { id: itemId }, { total });
+  if (isTest(it)) return { total, old };
+  const view = await paperRow(it);
+  await send(it.user_id, `✏️ <b>الأستاذ راجع ورقتك</b>
+امتحان: ${esc(view.title)}
+
+السؤال ${q}: صارت درجته <b>${mark}</b>${old !== null ? ` بدل ${old}` : ""}
+
+درجتك الجديدة: <b>${total}</b> من 100`, { extra: { protect_content: true } });
+  const g = await guardianOf(it.user_id);
+  if (g) {
+    await send(g.guardian_id, `📝 <b>تعديل درجة</b>
+الأستاذ راجع ورقة الطالب <b>${esc(view.name)}</b> في امتحان <b>${esc(view.title)}</b>، وصارت درجته <b>${total}</b> من 100.`, { kb: seenButton(it.id), extra: { protect_content: true } });
+    await guardianSent(it.user_id, g.guardian_id, it.id);
+  }
+  await logActivity(it.user_id, `✏️ الأستاذ صلّح درجة السؤال ${q} بامتحان ${view.title}: ${old ?? "—"} ← ${mark}. الدرجة ${total}`);
+  return { total, old };
+}
 /** معلومات هدر الورقة المصححة: الفصل والمنهج */
 async function headerInfo(it: Row) {
   const e = await one("bank_exams", { id: it.exam_id });

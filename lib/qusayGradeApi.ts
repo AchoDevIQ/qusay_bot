@@ -180,9 +180,11 @@ export async function qusayAction(body: Row) {
   if (a === "paper") return await out("", { paper: await paperDetail(Number(body.id)) });
   // «✏️ صلّح وعلّمه»: درجة الخطوة الصح وليش. جوابه يصير قاعدة بهذا الموضوع
   if (a === "teach") {
-    let r: { sentReal: boolean; n: number } = { sentReal: false, n: 0 };
+    let r: Awaited<ReturnType<typeof teach>> = { official: null, n: 0 };
     try { r = await teach(Number(body.id), Number(body.q), Number(body.i), Number(body.mark), String(body.why ?? "")); } catch (e) { fail(e); }
-    return await out(`🧠 تعلمها: من هسه يصحح هيچ بهذا الموضوع (${r.n} قاعدة من تصحيحاتك).${r.sentReal ? " الدرجة اللي وصلت للطالب ما تغيرت من هنا." : ""}`, { paper: await paperDetail(Number(body.id)) });
+    // درجته وصلت: تتغير الرسمية، ويوصله هو وولي أمره (مثل الاعتراض المقبول)
+    const fx = r.official ? await (await import("./gradeApi.ts")).ownerFixMark(Number(body.id), r.official.q, r.official.mark) : null;
+    return await out(`🧠 تعلمها: من هسه يصحح هيچ بهذا الموضوع (${r.n} قاعدة من تصحيحاتك).${fx ? ` ودرجة الطالب صارت ${fx.total} من 100، ووصله هو وولي أمره.` : ""}`, { paper: await paperDetail(Number(body.id)) });
   }
   if (a === "lessonDel") { await forgetLesson(exam, Number(body.lesson)); return await out("🗑 انمسحت هاي القاعدة"); }
   if (a === "sendSaved") {

@@ -299,16 +299,26 @@ export async function teach(id: number, qn: number, stepIdx: number, mark: numbe
   const list = await lessonsOf(exam);
   list.push({ id: Math.max(0, ...list.map((x) => x.id)) + 1, at: stamp(), item: id, q: qn, step: st.text, from: st.awarded, to, max: st.points, why: w });
   await kvSet(learnKey(exam), JSON.stringify(list.slice(-200)));
-  // الورقة نفسها تتصلح بالعرض. الدرجة اللي وصلت للطالب الحقيقي ما تتغير من هنا
-  const sentReal = !fresh && !!r.sent && Number(it.user_id) > 0;
-  if (!sentReal) {
-    st.awarded = to;
-    if (to >= st.points) st.note = "";
-    q.score = q.steps.reduce((t, x) => t + x.awarded, 0);
-    src.total = src.qs.reduce((t, x) => t + x.score, 0);
-    await kvSet(fresh ? mkKey(id) : resKey(id), JSON.stringify(src));
+  // الورقة نفسها تتصلح بالعرض
+  const fixIn = (res: { qs: QgQuestion[]; total: number }) => {
+    const rq = res.qs.find((x) => x.n === qn), rs = rq?.steps[stepIdx];
+    if (!rq || !rs) return null;
+    rs.awarded = to;
+    if (to >= rs.points) rs.note = "";
+    rq.score = rq.steps.reduce((t, x) => t + x.awarded, 0);
+    res.total = res.qs.reduce((t, x) => t + x.score, 0);
+    return rq.score;
+  };
+  fixIn(src);
+  await kvSet(fresh ? mkKey(id) : resKey(id), JSON.stringify(src));
+  // الطالب الحقيقي اللي وصلته درجته: درجته الرسمية تتغير هم (طلبه 2026-11-23: «إذا أنا لگيت غلط، تتغير»)
+  let official: { q: number; mark: number } | null = null;
+  if (r.sent && Number(it.user_id) > 0) {
+    const mark = fresh ? fixIn(r) : q.score;
+    if (fresh) await kvSet(resKey(id), JSON.stringify(r));
+    if (mark !== null) official = { q: qn, mark };
   }
-  return { sentReal, n: list.length };
+  return { official, n: list.length };
 }
 export async function forgetLesson(examId: number, lessonId: number) {
   await kvSet(learnKey(examId), JSON.stringify((await lessonsOf(examId)).filter((x) => x.id !== lessonId)));
