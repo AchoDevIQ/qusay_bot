@@ -688,7 +688,10 @@ async function makeTaker() {
   const verReady = new Map<number, boolean>();
   const calib = new Map<number, number[]>();
   return async (it: Row) => {
-    if (!active || !(scope.has(it.exam_id) || picked.has(it.user_id)) || it.graded_at || it.grader_id || !it.version_id) return false;
+    // ورقة تجربة اختار لها صاحب البوت «🤖 نظام التصحيح AI»: محجوزة إله من الرفع، ويصححها بأي موضوع (طلبه 2026-11-24)
+    const testForAi = it.user_id < 0 && it.grader_id === AI_GRADER;
+    if (!active || it.graded_at || !it.version_id) return false;
+    if (!testForAi && (!(scope.has(it.exam_id) || picked.has(it.user_id)) || it.grader_id)) return false;
     if ((Number(await kvGet(triesKey(it.id))) || 0) >= MAX_TRIES) return false;
     if (!verReady.has(it.version_id)) {
       const qs = await find("bank_questions", { version_id: it.version_id });
@@ -885,6 +888,8 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
       const res = await gradePaper(it);
       const usage = sumUsage(res.map((q) => q.usage ?? []));
       await kvSet(resultKey(it.id), JSON.stringify(res));
+      // 🖍 تصحيحه ينرسم بالأحمر على ورقة الطالب بطريقة «تصحيح قصي» (طلب الأستاذ 2026-11-24)
+      try { const q: number[] = JSON.parse((await kvGet("mu_mk_q")) ?? "[]"); if (!q.includes(it.id)) await kvSet("mu_mk_q", JSON.stringify([...q, it.id])); } catch { /* الرسم مو ضروري */ }
       // صورة معتمة أو مهزوزة ما توگف الورقة: تنصحح عادي، والأستاذ (واللي عنده صلاحية 📷) يتبلغ بالسؤال ورقم الصورة
       const alert = photoAlert(await nameOf(it), (await one("bank_exams", { id: it.exam_id }))?.title ?? "", res);
       if (alert) for (const id of await staffIds(PHOTO_PERM)) await send(id, alert).catch((e) => console.error("ai photo alert", it.id, e));

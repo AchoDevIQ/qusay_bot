@@ -1185,6 +1185,67 @@ async function compareTick(s: QgSettings) {
   return n;
 }
 
+// ---------- «🖍 تصحيح مؤمل على الورقة» (طلب الأستاذ 2026-11-24): نظام مؤمل يصحح ويرجع الخطوات بدون أماكن، فطلب صغير بجهتنا
+// يلگى مكان كل خطوة بصفحات الطالب، والعلامات تنرسم بنفس رسم «تصحيح قصي» (الغلط بس، والسؤال الكامل ✓ كبيرة)
+const MU_Q = "mu_mk_q";
+const muKey = (id: number) => `mu_mk_${id}`;
+export const muMarksOf = (id: number) => readJson<{ qs: QgQuestion[]; pages: string[] } | null>(muKey(id), null);
+const LOCATE = `These are photos of a student's math exam answers (Iraqi 6th grade). Each photo is preceded by its label [Image k].
+For every listed step, find where on the photos the student wrote that step (or where it should have been) and return its position:
+p = the image number, x and y = position on that image from 0 to 1000 (x left to right, y top to bottom), at the END of the line where the step is written.
+For each question also return "at": the position just after the end of the student's whole answer to that question.
+If a step is not written at all, return p = 0 for it.
+Return {"questions":[{"n":..,"at":{"p":..,"x":..,"y":..},"steps":[{"i":..,"p":..,"x":..,"y":..}]}]}.`;
+const LOC_SCHEMA = { type: "object", properties: { questions: { type: "array", items: { type: "object", properties: { n: { type: "integer" }, at: { type: "object", properties: { p: { type: "integer" }, x: { type: "number" }, y: { type: "number" } }, required: ["p", "x", "y"], additionalProperties: false }, steps: { type: "array", items: { type: "object", properties: { i: { type: "integer" }, p: { type: "integer" }, x: { type: "number" }, y: { type: "number" } }, required: ["i", "p", "x", "y"], additionalProperties: false } } }, required: ["n", "at", "steps"], additionalProperties: false } } }, required: ["questions"], additionalProperties: false };
+export async function muMarksFor(itemId: number) {
+  const it = await one("sched_items", { id: itemId });
+  if (!it) return null;
+  const { aiResultOf } = await import("./aiGrade.ts");
+  const res = await aiResultOf(itemId);
+  if (!res?.length) return null;
+  const answers = await find("exam_answers", { item_id: itemId }, { order: ["q", "id"] });
+  const pages: string[] = [];
+  const content: Anthropic.ContentBlockParam[] = [];
+  for (const a of answers) {
+    const b = await readRef(String(a.file));
+    if (!b || !isImage(String(a.file))) continue;
+    pages.push(String(a.file));
+    content.push({ type: "text", text: `[Image ${pages.length}]${a.q ? ` (answer to question ${a.q})` : ""}` }, block(b, `صفحة ${pages.length}`));
+  }
+  if (!pages.length) return null;
+  content.push({ type: "text", text: "STEPS TO LOCATE:\n" + res.map((q) => `Question ${q.n}:\n` + q.steps.map((st, i) => `  ${i + 1}. ${String(st.expected ?? "").slice(0, 200)}`).join("\n")).join("\n") + "\n\n" + LOCATE });
+  const m = await apiImpl.create({ model: await modelId(), max_tokens: 8000, output_config: { effort: "low", format: { type: "json_schema", schema: LOC_SCHEMA } }, messages: [{ role: "user", content }] } as Req);
+  const u = m.usage;
+  await addSpend("qusay", usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0, m: m.model }, false));
+  let j: { questions?: any[] } = {};
+  try { j = JSON.parse(m.content.map((b) => (b.type === "text" ? b.text : "")).join("")); } catch { j = {}; }
+  const got = new Map((j.questions ?? []).map((q) => [Number(q.n), q]));
+  const pt = (o: any) => (o && Number(o.p) >= 1 && Number(o.p) <= pages.length ? { p: Number(o.p), x: Math.min(1000, Math.max(0, Number(o.x) || 0)), y: Math.min(1000, Math.max(0, Number(o.y) || 0)) } : undefined);
+  const qs: QgQuestion[] = res.map((q) => {
+    const g = got.get(q.n);
+    const at = pt(g?.at);
+    const byI = new Map((g?.steps ?? []).map((s: any) => [Number(s.i), s]));
+    return {
+      n: q.n, max: q.max, score: q.score, answered: q.steps.length > 0, sure: !q.review, reason: cleanNote(String(q.note ?? q.reason ?? "")), method: q.method ?? 1,
+      steps: q.steps.map((st, i) => { const a = pt(byI.get(i + 1)); return { text: String(st.expected ?? ""), points: st.possible, awarded: st.awarded, note: cleanNote(String(st.reason_ar || st.reason || "")).slice(0, 200), ...(a ? { at: a } : {}) }; }),
+      ...(at ? { at } : {}),
+    };
+  });
+  await kvSet(muKey(itemId), JSON.stringify({ qs, pages }));
+  return { qs, pages };
+}
+/** دكة: ورقتين بكل دقيقة */
+async function muMarksTick() {
+  const q = await readJson<number[]>(MU_Q, []);
+  const ids = (Array.isArray(q) ? q : []).slice(0, 2);
+  for (const id of ids) {
+    try { await muMarksFor(id); } catch (e) { console.error("mu marks", id, e); }
+    const now = await readJson<number[]>(MU_Q, []);
+    await kvSet(MU_Q, JSON.stringify((Array.isArray(now) ? now : []).filter((x) => x !== id)));
+  }
+  return ids.length;
+}
+
 /** ورقة تجربة تنتظر «تصحيح قصي»: طالب تجربة، محجوزة إله، ما مصححة، وما تجربت 3 مرات */
 async function testPaperFor(it: Row) {
   if (it.user_id >= 0 || it.grader_id !== QUSAY_GRADER || it.graded_at || !it.version_id) return false;
@@ -1194,6 +1255,8 @@ async function testPaperFor(it: Row) {
 export async function qusayTick(finish: (uid: number, itemId: number) => Promise<unknown>) {
   // 🖋 خط الأستاذ من الأوراق اللي صححها بإيده: يمشي حتى لو تصحيح قصي طافي (رخيص، Haiku)
   if (keyReady()) { const { harvestTick } = await import("./inkHarvest.ts"); await harvestTick(qgCreate, await modelId()).catch((e) => console.error("harvest", e)); }
+  // 🖍 تصحيح مؤمل على الورقة: يمشي حتى لو تصحيح قصي طافي
+  if (keyReady()) await muMarksTick().catch((e) => console.error("mu marks", e));
   if (!await qgOn()) return { off: true };
   if (!keyReady()) return { noKey: true };
   const s = await qgSettings();

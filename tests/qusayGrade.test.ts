@@ -871,3 +871,27 @@ test("سؤال جاوبه الطالب والذكاء ما رجع درجته: ا
   assert.equal(Q.cleanNote("الجدول غلط والرسم ناقص. ضعيف التأكد من وضوح الرسم. ملاحظة: الدرجة تقديرية"), "الجدول غلط والرسم ناقص.");
   assert.equal(Q.cleanNote("والرسم ناقص شوية بالفرع الأيسر.}],"), "والرسم ناقص شوية بالفرع الأيسر.");
 });
+
+test("🖍 تصحيح مؤمل على الورقة: طلب صغير يلگى مكان كل خطوة، والطالب يشوف علاماته بالأحمر مثل قصي", async () => {
+  const { myPaper } = await import("../lib/examRoom.ts");
+  const { AI_GRADER } = await import("../lib/data.ts");
+  const id = await paper([1, 2]);
+  const it = (await one("sched_items", { id }))!;
+  await put("sched_items", { ...it, graded_at: "2026-11-24 10:00", grader_id: AI_GRADER, total: 25 });
+  await kvSet(`ai_result_${id}`, JSON.stringify([
+    { n: 1, score: 10, max: 10, review: false, reason: "", lines: [], steps: [{ status: "ok", awarded: 10, possible: 10, reason: "", expected: "أ", student: "" }] },
+    { n: 2, score: 15, max: 20, review: false, reason: "", lines: [], steps: [{ status: "ok", awarded: 10, possible: 10, reason: "", expected: "ب", student: "" }, { status: "wrong", awarded: 5, possible: 10, reason: "", reason_ar: "الإشارة غلط", expected: "ج", student: "" }] },
+  ]));
+  Q.setQgApi({ create: async () => ({ content: [{ type: "text", text: JSON.stringify({ questions: [
+    { n: 1, at: { p: 1, x: 500, y: 300 }, steps: [{ i: 1, p: 1, x: 500, y: 250 }] },
+    { n: 2, at: { p: 2, x: 600, y: 700 }, steps: [{ i: 1, p: 2, x: 400, y: 300 }, { i: 2, p: 2, x: 420, y: 500 }] },
+  ] }) }], usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: "end_turn", model: "claude-haiku-5-5" }) } as any);
+  const mk = (await Q.muMarksFor(id))!;
+  Q.setQgApi(null);
+  assert.equal(mk.qs[1].steps[1].note, "الإشارة غلط");
+  const p: any = await myPaper(it.user_id, id);
+  const q2 = p.ai.find((q: any) => q.n === 2);
+  assert.ok(q2.marked.some((pg: any) => pg.marks.some((m: any) => m.kind === "bad" && m.note === "الإشارة غلط")), "✗ ويا ملاحظة مؤمل على الغلط");
+  const q1 = p.ai.find((q: any) => q.n === 1);
+  assert.ok(q1.marked.some((pg: any) => pg.marks.some((m: any) => m.big)), "السؤال الكامل ✓ كبيرة");
+});

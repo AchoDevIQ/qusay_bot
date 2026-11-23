@@ -343,6 +343,10 @@ async function aiShown(it: Row) {
   if (it.grader_id !== AI_GRADER && !part) return [];
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   const qs = new Map((await find("bank_questions", { version_id: it.version_id })).map((q) => [q.n as number, q.id as number]));
+  // 🖍 تصحيح مؤمل مرسوم على الورقة بطريقة «تصحيح قصي» (إذا انرسم)
+  const qg = await import("./qusayGrade.ts");
+  const mk = await qg.muMarksOf(it.id);
+  const ink = mk ? await qg.inkFor(Number(it.exam_id)) : [];
   return await Promise.all(((await aiResultOf(it.id)) ?? []).filter((q) => !part || !part.includes(q.n)).map(async (q) => {
     // عمود الحل النموذجي: خطواتك المحفوظة نفسها (مو صياغة الذكاء بالإنگليزي)
     // (بطريقة الحل اللي انحسبت بيها درجته، إذا الحل النموذجي بيه أكثر من طريقة)
@@ -352,6 +356,7 @@ async function aiShown(it: Row) {
     return {
       n: q.n, score: q.score, max: q.max, note: q.note ?? "",
       photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
+      ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink) } : {}),
       steps: q.steps.map((st, i) => ({ status: st.status, awarded: st.awarded, possible: st.possible,
         expected: sameCount ? mine![i].text : st.expected, student: st.student_tex || st.student, reason: st.reason_ar || st.reason_en || st.reason,
         // خطوة ما انقرت: الطالب يشوف رسالة «أرسل صورة ثانية» بدل كتابة ما تنقرا

@@ -288,7 +288,7 @@ test("ورقة تجربة من صور حقيقية: طالب تجربة 1 يصح
   assert.match(r.notice, /تنتظرك/);
   const a = (await find("sched_items", { user_id: -1 }))[0], b = (await find("sched_items", { user_id: -2 }))[0];
   assert.equal((await find("exam_answers", { item_id: a.id })).length, 2);
-  assert.deepEqual([a.grader_id, b.grader_id], [null, 1]);
+  assert.deepEqual([a.grader_id, b.grader_id], [AI_GRADER, 1], "ورقة مؤمل محجوزة إله من الرفع (2026-11-24)");
   // تعيد الرفع: الورقة القديمة تتبدل
   await studentUpload(form(-1, "ai"));
   assert.equal((await find("sched_items", { user_id: -1 })).length, 1);
@@ -360,13 +360,14 @@ test("ورقة تجربة للذكاء وهو طافي، أو موضوعها م�
   await setAiOn(false);
   await assert.rejects(studentUpload(form()), /نظام التصحيح AI طافي/);
   await setAiOn(true);
+  // موضوعها مو مأشر: تنقبل هسه (طلبه 2026-11-24)، مؤمل يصحح ورقة التجربة بأي موضوع
   await setChapterScope("c1", [], 0);
-  await assert.rejects(studentUpload(form()), /مو مأشر/);
+  await studentUpload(form());
   await setChapterScope("c1", [ex], 0);
   await studentUpload(form());
   const r: any = await aiGradeAction({ initData: sign(1), action: "list" });
   const mine = r.pending.find((p: any) => p.name === "طالب تجربة 1");
-  assert.match(mine.state, /بالدور/);
+  assert.match(mine.state, /بالدور|يصححها هسه/, "محجوزة إله من الرفع، فتطلع «يصححها هسه»");
 });
 
 test("يأشر مواضيع ويحفظ وهو طافي: نظام التصحيح AI يشتغل وحده", async () => {

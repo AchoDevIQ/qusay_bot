@@ -147,10 +147,11 @@ export async function studentUpload(form: FormData) {
     const why = await Q.versionWhyNot(Number(form.get("vid")));
     need(!why, `«🧠 تصحيح قصي» ما يگدر يصححها: ${why}`);
   }
+  // ورقة تجربة لمؤمل: يصححها بأي موضوع (مثل قصي)، حتى لو الموضوع مو مأشر بصفحته. لازم بس خطوات الحل وخدمته شغالة (طلبه 2026-11-24)
   if (who === "ai") {
     const v = await one("bank_versions", { id: Number(form.get("vid")) });
     const why = v ? await aiWhyNot(v.exam_id, v.id) : null;
-    need(!why, `نظام التصحيح AI ما راح ياخذها: ${why}`);
+    need(!why || /مو مأشر/.test(why), `نظام التصحيح AI ما راح ياخذها: ${why}`);
   }
   const paperId = await addTestPaper(uid, Number(form.get("sid")), Number(form.get("vid")), byQ, who);
   // «⚡ هسه» لو «🌙 بالدفعة»: صاحب البوت يختار لكل ورقة تجربة

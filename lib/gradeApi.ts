@@ -394,7 +394,7 @@ export async function addTestPaper(owner: number, sid: number, vid: number, byQ:
     await remove("sched_items", { id: old.id });
   }
   // «uploading» لحد ما تنرفع كل الصور: قبلها نظام التصحيح چان ياخذها فاضية ويعطي صفر
-  const id = await insert("sched_items", { user_id: sid, exam_id: v!.exam_id, at: stamp(), status: "uploading", version_id: vid, started_at: stamp(), submitted_at: stamp(), grader_id: who === "me" ? owner : who === "qusay" ? QUSAY_GRADER : null });
+  const id = await insert("sched_items", { user_id: sid, exam_id: v!.exam_id, at: stamp(), status: "uploading", version_id: vid, started_at: stamp(), submitted_at: stamp(), grader_id: who === "me" ? owner : who === "qusay" ? QUSAY_GRADER : AI_GRADER });
   for (const [n, pics] of byQ) for (const [i, b] of pics.entries()) {
     const ref = `test_papers/${id}/q${n}_${i + 1}_${Date.now()}.jpg`;
     await files().write(ref, b, "image/jpeg");

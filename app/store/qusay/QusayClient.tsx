@@ -278,9 +278,8 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
         <button type="button" className="exbtn" disabled={busy || !words.trim()} onClick={() => void call({ action: "tidy", text: words }).then((d) => { if (d?.tidy) setWords(d.tidy); })}>🪄 رتّب كلام الفويس (بفلوس)</button>
         <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
       </>}
-      {/* ⚖️ قارن مؤمل وقصي على نفس الأوراق (طلبه 2026-11-23) */}
-      <button type="button" className="exbtn" onClick={() => setOpenCmp(!openCmp)}>⚖️ قارن تصحيح مؤمل وتصحيح قصي</button>
-      {openCmp && <CompareBox exam={e.id} n={nc} setN={setNc} busy={busy} call={call} />}
+      {/* ⚖️ «قارن مؤمل وقصي» انشال من الصفحة بعد ما خلص المقارنة (طلبه 2026-11-24). الكود يبقى إذا احتاجه */}
+      {false && openCmp && <CompareBox exam={e.id} n={nc} setN={setNc} busy={busy} call={call} />}
       {/* 🧠 اللي تعلمه من تصحيحاته بـ «✏️ صلّح» */}
       {e.lessons.length > 0 && <button type="button" className="exbtn" onClick={() => setOpenLearn(!openLearn)}>🧠 اللي تعلمه من تصحيحاتك ({e.lessons.length})</button>}
       {openLearn && e.lessons.map((l) => (
