@@ -320,8 +320,9 @@ async function qusayShown(it: Row) {
   // ✓ ✗ والمدح والملاحظات بخط إيد الأستاذ («✍️ خط إيدي»)، إذا كاتبها
   const ink = mk ? await qg.inkFor(Number(it.exam_id)) : [];
   const hidden = await qg.hiddenMarks(it.id);
-  // خطوات الحل بلغة منهجه: طالب عربي يشوفها عربي، وإنجليزي إنجليزي (طلبه 2026-11-23)
-  const lang = String((await one("students", { user_id: it.user_id }))?.curr ?? "") === "إنجليزي" ? "en" : "ar";
+  // تصحيح قصي كله بالعربي، لكل الطلاب حتى طالب المنهج الإنجليزي (طلبه 2026-11-23: «لا يكتب ولا كلمة بالإنجليزي»).
+  // خطواته المكتوبة بالإنجليزي تنترجم مرة وحدة بكلمات الكتاب العراقي
+  const lang = "ar" as const;
   const shownQs = (fresh ? fresh.qs : r.qs).filter((q) => q.answered);
   const flat = await qg.stepsIn(lang, shownQs.flatMap((q) => q.steps.map((st) => st.text)));
   let k = 0;

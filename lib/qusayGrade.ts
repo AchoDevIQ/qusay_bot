@@ -457,9 +457,9 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
   const last = head[head.length - 1] as Anthropic.TextBlockParam;
   last.cache_control = { type: "ephemeral" };
 
-  // منهج الطالب (طلب الأستاذ 2026-11-23: كاتب بالعربي يطلع عربي، كاتب بالإنجليزي إنجليزي)
+  // كل الملاحظات بالعربي، حتى لطالب المنهج الإنجليزي (طلبه 2026-11-23: «لا يكتب ولا كلمة بالإنجليزي»)
   const en = String((await one("students", { user_id: it.user_id }))?.curr ?? "") === "إنجليزي";
-  const body: Anthropic.ContentBlockParam[] = [{ type: "text", text: (en ? "THIS STUDENT STUDIES THE ENGLISH CURRICULUM and writes in English: write every note and reason in short, simple English, in the teacher's voice, with the English book's terms (local maximum point, local minimum point, inflection point, critical point, vertical / horizontal asymptote, domain, intercepts, symmetry about the y-axis / the origin, increasing / decreasing, concave up / concave down, table, graph).\n" : "") + "STUDENT'S ANSWER PAGES:" }];
+  const body: Anthropic.ContentBlockParam[] = [{ type: "text", text: (en ? "This student studies the English curriculum and may write in English. Still write every note and reason in Iraqi Arabic only, with the Iraqi Arabic book's terms; never write English words." + String.fromCharCode(10) : "") + "STUDENT'S ANSWER PAGES:" }];
   const whole = answers.filter((a) => !a.q);
   const unanswered = new Set<number>();
   // صور الطالب بالترتيب: «🖍 العلامات» يرجع رقم الصورة اللي بيها كل خطوة

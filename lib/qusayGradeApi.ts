@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
+  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, stepsIn, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { docxNotes, notesKind } from "./notesFile.ts";
@@ -90,7 +90,11 @@ async function paperDetail(id: number) {
   // «🖍 جرب العلامات» الأحدث يطلع هو (قبل: الورقة اللي إلها علامات قديمة چانت تعرض القديم وتتجاهل الجديد، طلبه 2026-11-23)
   const { demo, fresh } = await shownResult(id);
   const mk = fresh ?? (r!.pages?.length ? { qs: r!.qs, pages: r!.pages } : null);
-  const shown = fresh ? fresh.qs : r!.qs;
+  const raw = fresh ? fresh.qs : r!.qs;
+  // كله بالعربي حتى بصفحتك (طلبه 2026-11-23): خطواتك الإنجليزية تنعرض مترجمة بكلمات الكتاب
+  const flat = await stepsIn("ar", raw.flatMap((q) => q.steps.map((st) => st.text)));
+  let k = 0;
+  const shown = raw.map((q) => ({ ...q, steps: q.steps.map((st) => ({ ...st, text: flat[k++] })) }));
   const ink = mk ? await inkFor(Number(it!.exam_id)) : [];
   const hidden = await hiddenMarks(id);
   return {
