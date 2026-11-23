@@ -161,7 +161,7 @@ export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: s
               <div key={i} className="aicrow">
                 <div className="aiccell"><MathText text={s.expected} /></div>
                 <div className={"aiccell " + mark(s)}>
-                  {q.by === "qusay" ? (s.student ? <div dir="rtl"><Inline text={s.student} /></div> : <span className="aicmiss">—</span>) : s.failed || (s.student && !canRender(s.student))
+                  {q.by === "qusay" ? (s.student ? <div dir="auto"><Inline text={s.student} /></div> : mark(s) === "ok" ? <span className="aicok">✓</span> : <span className="aicmiss">—</span>) : s.failed || (s.student && !canRender(s.student))
                     ? <div className="aicfail">⚠️ {s.message || FAIL_TEXT}</div>
                     : s.student ? <MathText text={s.student} /> : <span className="aicmiss">ما مكتوب</span>}
                   <div className="aicmark">{mark(s) === "ok" ? "✅" : mark(s) === "bad" ? "❌" : "🟡"} {s.awarded} / {s.possible}</div>

@@ -1,7 +1,7 @@
 // واجهة صفحة الطلاب: الأرقام، البحث، تعديل المعلومات، الحذف، وقوائم PDF
 import { activeStop, liftStop, stopView } from "./checkpoints.ts";
 import { deviceOf, unlockDevice } from "./deviceLock.ts";
-import { find, one, remove, setSession, type Row } from "./db.ts";
+import { find, one, remove, setSession, update, type Row } from "./db.ts";
 import { activityOf, guardianOf, logActivity } from "./access.ts";
 import { GOVS, GRADES, toLatinDigits } from "./config.ts";
 import { areasWithCenters, can, centerName, isAdmin, placeOf, staffName, student } from "./data.ts";
@@ -71,7 +71,7 @@ async function testStudents() {
     const mine = items.filter((i) => i.user_id === x.user_id);
     // الفصول اللي «مشتريها» من 📚، حتى صاحب البوت يعرف منو جاهز يجرب الجدول الخاص
     const chapters = access.filter((r) => r.user_id === x.user_id).map((r) => String(r.chapter));
-    return { id: x.user_id as number, name: x.name as string, papers: mine.length, graded: mine.filter((i) => i.graded_at).length, chapters, link: `/store/myexams?t=${homeToken(x.user_id)}&owner=1` };
+    return { id: x.user_id as number, name: x.name as string, curr: String(x.curr ?? "عربي"), papers: mine.length, graded: mine.filter((i) => i.graded_at).length, chapters, link: `/store/myexams?t=${homeToken(x.user_id)}&owner=1` };
   });
 }
 async function pageData(q: string, f: Filters, uid = 0) {
@@ -249,7 +249,16 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
     else { await deleteTests(); notice = "🗑 انمسحوا طلاب التجربة وأوراقهم"; }
   } else if (a === "addTest") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
-    notice = `➕ انضاف طالب تجربة ${await addTestStudent()}`;
+    const curr = body.curr === "إنجليزي" ? "إنجليزي" : "عربي";
+    notice = `➕ انضاف طالب تجربة ${await addTestStudent(curr)} (منهج ${curr})`;
+  } else if (a === "testCurr") {
+    // يبدل منهج طالب التجربة: عربي ↔ إنجليزي
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const sid = Number(body.sid);
+    need(sid < 0 && await one("students", { user_id: sid }), "اختار طالب تجربة");
+    const curr = body.curr === "إنجليزي" ? "إنجليزي" : "عربي";
+    await update("students", { user_id: sid }, { curr });
+    notice = `✅ صار منهجه ${curr}`;
   } else if (a === "testChapter") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     const sid = Number(body.sid), chapter = String(body.chapter ?? "");

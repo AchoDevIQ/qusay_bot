@@ -319,11 +319,17 @@ async function qusayShown(it: Row) {
   const mk = fresh ?? (r.pages?.length ? { qs: r.qs, pages: r.pages } : null);
   // ✓ ✗ والمدح والملاحظات بخط إيد الأستاذ («✍️ خط إيدي»)، إذا كاتبها
   const ink = mk ? await qg.inkFor(Number(it.exam_id)) : [];
-  return (fresh ? fresh.qs : r.qs).filter((q) => q.answered).map((q) => ({
+  // خطوات الحل بلغة منهجه: طالب عربي يشوفها عربي، وإنجليزي إنجليزي (طلبه 2026-11-23)
+  const lang = String((await one("students", { user_id: it.user_id }))?.curr ?? "") === "إنجليزي" ? "en" : "ar";
+  const shownQs = (fresh ? fresh.qs : r.qs).filter((q) => q.answered);
+  const flat = await qg.stepsIn(lang, shownQs.flatMap((q) => q.steps.map((st) => st.text)));
+  let k = 0;
+  const tr = shownQs.map((q) => q.steps.map(() => flat[k++]));
+  return shownQs.map((q, qi) => ({
     n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
     photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
     ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink) } : {}),
-    steps: q.steps.map((st) => ({ status: "", awarded: st.awarded, possible: st.points, expected: st.text, student: st.note, reason: st.note })), by: "qusay" as const,
+    steps: q.steps.map((st, si) => ({ status: "", awarded: st.awarded, possible: st.points, expected: tr[qi][si], student: st.note, reason: st.note })), by: "qusay" as const,
   }));
 }
 /** تصحيح نظام التصحيح AI اللي يشوفه الطالب: كل الورقة إذا هو صححها، أو بس أسئلته إذا حوّل الباقي لمصحح */

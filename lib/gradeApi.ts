@@ -404,12 +404,13 @@ export async function addTestPaper(owner: number, sid: number, vid: number, byQ:
   return id;
 }
 /** يزيد طالب تجربة واحد بالرقم الجاي، بدون ما يمس الباقين. الرقم 7 ما ينستخدم لأن -7 رقم نظام التصحيح AI */
-export async function addTestStudent() {
+/** curr: منهجه (طلب الأستاذ 2026-11-23: «قلي منهج عربي لو إنجليزي حتى يفرق»)، فتفصيل ورقته يطلع بلغته */
+export async function addTestStudent(curr = "عربي") {
   const used = (await find("students")).filter((x) => x.user_id < 0).map((x) => -x.user_id as number);
   need(used.length < 30, "وصلت 30 طالب تجربة");
   let k = 1;
   while (used.includes(k) || k === 7) k++;
-  await put("students", { user_id: -k, name: `طالب تجربة ${k}`, curr: "عربي", grade: "السادس العلمي", gov: "بغداد", area: "تجربة", phone1: "", phone2: "", exam: "إلكتروني", created: stamp() });
+  await put("students", { user_id: -k, name: `طالب تجربة ${k}`, curr: curr === "إنجليزي" ? "إنجليزي" : "عربي", grade: "السادس العلمي", gov: "بغداد", area: "تجربة", phone1: "", phone2: "", exam: "إلكتروني", created: stamp() });
   return k;
 }
 /** «📚 اعطيه فصل»: طالب التجربة يصير مشتري الفصل (بدون طلب)، حتى صاحب البوت يجرب الجدول الخاص بصفحته */

@@ -447,7 +447,9 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
   const last = head[head.length - 1] as Anthropic.TextBlockParam;
   last.cache_control = { type: "ephemeral" };
 
-  const body: Anthropic.ContentBlockParam[] = [{ type: "text", text: "STUDENT'S ANSWER PAGES:" }];
+  // منهج الطالب (طلب الأستاذ 2026-11-23: كاتب بالعربي يطلع عربي، كاتب بالإنجليزي إنجليزي)
+  const en = String((await one("students", { user_id: it.user_id }))?.curr ?? "") === "إنجليزي";
+  const body: Anthropic.ContentBlockParam[] = [{ type: "text", text: (en ? "THIS STUDENT STUDIES THE ENGLISH CURRICULUM and writes in English: write every note and reason in short, simple English, in the teacher's voice, with the English book's terms (local maximum point, local minimum point, inflection point, critical point, vertical / horizontal asymptote, domain, intercepts, symmetry about the y-axis / the origin, increasing / decreasing, concave up / concave down, table, graph).\n" : "") + "STUDENT'S ANSWER PAGES:" }];
   const whole = answers.filter((a) => !a.q);
   const unanswered = new Set<number>();
   // صور الطالب بالترتيب: «🖍 العلامات» يرجع رقم الصورة اللي بيها كل خطوة
@@ -514,6 +516,36 @@ export function ptOf(s: any, pages: number, papers: Map<number, Box> = new Map()
   return { p, x: Math.round(inX(right <= paper.x2 - 35 ? right : b.x1 - 40)), y: Math.round(inY(end ? Math.max(b.y1 + 10, b.y2 - 25) : (b.y1 + b.y2) / 2)) };
 }
 const shortNote = (t: string) => (t.length > 90 ? t.slice(0, 88).replace(/\s+\S*$/, "") + "…" : t);
+// ---------- خطوات الحل بلغة الطالب (طلب الأستاذ 2026-11-23): خطواته مكتوبة بالإنجليزي لو بالعربي، والطالب يشوفها بلغة منهجه.
+// الترجمة مرة وحدة لكل خطوة وتنحفظ، والرياضيات تبقى مثل ما هي
+const hasAr = (t: string) => /[؀-ۿ]/.test(t);
+const wordsEn = (t: string) => (t.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|lim|dx|dy|R)\b/g, "").match(/[A-Za-z]{3,}/g) ?? []).length;
+const needsTr = (lang: "ar" | "en", t: string) => (lang === "ar" ? !hasAr(t) && wordsEn(t) >= 1 : hasAr(t));
+const trKey = (lang: string, t: string) => `qg_tr_${lang}_${[...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36)}_${t.length}`;
+const TRANS = (lang: "ar" | "en") => `You translate the steps of a math marking scheme (Iraqi 6th preparatory, chapter on curve sketching and calculus) into ${lang === "ar" ? "Arabic, exactly as the Iraqi Arabic math book writes it" : "English, exactly as the Iraqi English-curriculum math book writes it"}.
+Keep every formula, symbol, number, arrow (→), semicolon (;) and set notation exactly as written; translate only the words.
+${lang === "ar" ? "Use these book terms: local maximum point = نقطة نهاية عظمى محلية; local minimum point = نقطة نهاية صغرى محلية; inflection point = نقطة انقلاب; critical point = نقطة حرجة; vertical asymptote = المحاذي العمودي; horizontal asymptote = المحاذي الأفقي; domain = أوسع مجال; intercepts = نقاط التقاطع مع المحورين; symmetric about the y-axis = متناظرة حول محور الصادات; about the origin = حول نقطة الأصل; increasing / decreasing = تزايد / تناقص; concave up / concave down = تقعر / تحدب; sign line / sign of f' = خط الاختبار; table = الجدول; graph = الرسم; denominator = المقام." : "Use the English book's terms (local maximum point, inflection point, vertical asymptote, domain, concave up / down, ...)."}
+Return {"items": [...]} with one translated string per input step, in the same order.`;
+export async function stepsIn(lang: "ar" | "en", texts: string[]): Promise<string[]> {
+  const out = [...texts];
+  const miss: number[] = [];
+  await Promise.all(texts.map(async (t, k) => {
+    if (!needsTr(lang, t)) return;
+    const c = await kvGet(trKey(lang, t));
+    if (c) out[k] = c; else miss.push(k);
+  }));
+  if (!miss.length) return out;
+  try {
+    const msg = await apiImpl.create({ model: MODEL, max_tokens: 8000, system: TRANS(lang), output_config: { effort: "low", format: { type: "json_schema", schema: { type: "object", properties: { items: { type: "array", items: { type: "string" } } }, required: ["items"], additionalProperties: false } } },
+      messages: [{ role: "user", content: JSON.stringify(miss.map((k) => texts[k])) }] } as Req);
+    const u = msg.usage;
+    await addSpend("qusay", usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0, m: msg.model }, false));
+    const items = (JSON.parse(msg.content.map((b) => (b.type === "text" ? b.text : "")).join("")) as { items?: unknown[] }).items ?? [];
+    if (items.length === miss.length) await Promise.all(miss.map(async (k, j) => { const v = String(items[j] ?? "").trim(); if (v) { out[k] = v; await kvSet(trKey(lang, texts[k]), v); } }));
+  } catch (e) { console.error("steps translate", e); }
+  return out;
+}
+
 /** ألفاظ الأستاذ بس (طلبه 2026-11-23: «أنا ما كاتب قصوى، انت شلون كاتب قصوى؟»): الكلمات اللي مو من كتابه تتبدل */
 export const bookWords = (t: string) => String(t ?? "")
   .replace(/نقطة\s+(?:قصوى|عليا)/g, "نقطة نهاية عظمى").replace(/(نهاية|قيمة)\s+(?:قصوى|عليا)/g, "$1 عظمى")

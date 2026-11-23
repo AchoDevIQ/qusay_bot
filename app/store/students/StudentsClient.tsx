@@ -9,7 +9,7 @@ import { CURR_OPTS, DateInput, SIDE_OPTS, Seg, cleanPhone } from "../shared";
 
 type S = { id: number; username: string; name: string; curr: string; grade: string; gov: string; side: string; area: string; phone1: string; phone2: string; exam: string; gender: string; guardian: boolean; pin?: boolean; gcode?: string; pilot?: boolean; app?: boolean; sos?: boolean; door?: boolean; gw: { lastSeen: string | null; unseen: number; blockedAt: string | null } | null; wa: string | null; device: { at: string; tried: string } | null; stop: { at: string; reason: string; what: string; chapter: string; score: number; max: number; absent: number } | null; centerId: number; center: string; created: string; updated: string };
 type Area = { id: number; gov: string; name: string; centers: { id: number; name: string }[] };
-type TestStudent = { id: number; name: string; papers: number; graded: number; chapters?: string[]; link: string };
+type TestStudent = { id: number; name: string; curr?: string; papers: number; graded: number; chapters?: string[]; link: string };
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null; skip?: boolean }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; lectures?: { title: string; subject: string; times: number; percent: number; last: string }[]; crashes?: { at: string; model: string; os: string; ver: string; screen: string; error: string }[]; log: { what: string; created: string }[]; average: number | null; retDisc?: { on: boolean; pct: number; year: string; lastYear: string; last: string[]; now: string[] } };
@@ -519,8 +519,9 @@ function TestStudents({ tests, chapters, busy, act }: { tests: TestStudent[]; ch
         <div className="exhint">3 طلاب تجربة، لكل واحد ورقة مسلمة بكل امتحان جاهز (جوابها الحل النموذجي). أوراقهم تطلع بالتصحيح مثل أي طالب. بعد التصحيح افتح صفحة الطالب وشوف درجته واعترض كأنك هو. ينحسبون مثل الطلاب الحقيقيين (بأجور المصححين وأرقام الطلاب والترتيب)، وكل رسالة توصلهم توصلك إنت وفوكها اسمه. قبل إطلاق المشروع امسحهم.</div>
         {tests.map((t) => (
           <div key={t.id} className="atrow">
-            <span><b>{t.name}</b> <small className="pdmode">{t.papers} ورقة · انصححت {t.graded}{t.chapters?.length ? ` · 📚 ${t.chapters.join("، ")}` : ""}</small></span>
+            <span><b>{t.name}</b> <small className="pdmode">منهج {t.curr ?? "عربي"} · {t.papers} ورقة · انصححت {t.graded}{t.chapters?.length ? ` · 📚 ${t.chapters.join("، ")}` : ""}</small></span>
             <a className="exbtn" style={{ textDecoration: "none" }} href={t.link}>👁 افتح امتحاناته كطالب</a>
+            <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "testCurr", sid: t.id, curr: t.curr === "إنجليزي" ? "عربي" : "إنجليزي" })}>🔁 خليه {t.curr === "إنجليزي" ? "عربي" : "إنجليزي"}</button>
           </div>
         ))}
         {!!tests.length && !!chapters.length && (
@@ -536,7 +537,8 @@ function TestStudents({ tests, chapters, busy, act }: { tests: TestStudent[]; ch
         )}
         <div className="exline adtop">
           <Confirm label={tests.length ? "🔄 سويهم من جديد" : "🧪 سوي طلاب تجربة"} disabled={busy} onYes={() => void act({ action: "makeTests" })} />
-          <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "addTest" })}>➕ زيد طالب تجربة</button>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "addTest", curr: "عربي" })}>➕ طالب تجربة عربي</button>
+          <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "addTest", curr: "إنجليزي" })}>➕ طالب تجربة إنجليزي</button>
           {!!tests.length && <Confirm label="🗑 امسحهم" disabled={busy} onYes={() => void act({ action: "deleteTests" })} />}
         </div>
       </div>

@@ -774,3 +774,16 @@ test("الذكاء اللي يصحح يتبدل (Haiku / Sonnet / Opus)، وكل
   assert.equal((await Q.qgSettings()).model, "sonnet", "قيمة غلط ما تنحفظ");
   await qusayAction({ initData: sign(1), action: "settings", model: "haiku" });
 });
+
+test("خطوات الحل بلغة منهج الطالب: الإنجليزي يصير عربي لطالب عربي، وتنحفظ وما تنعاد", async () => {
+  reply = () => ({ items: ["أوسع مجال: $x^2=0$ → $x=0$"] });
+  const prev = sent.length;
+  const a = await Q.stepsIn("ar", ["Domain: x^2=0 → x=0", "f''(x)=6x", "اوسع مجال للدالة هو R"]);
+  assert.deepEqual(a, ["أوسع مجال: $x^2=0$ → $x=0$", "f''(x)=6x", "اوسع مجال للدالة هو R"], "بس اللي بيه كلام إنجليزي يترجم");
+  assert.equal(sent.length, prev + 1);
+  assert.match(sent.at(-1).system, /نقطة نهاية عظمى محلية/);
+  const b = await Q.stepsIn("ar", ["Domain: x^2=0 → x=0"]);
+  assert.equal(b[0], "أوسع مجال: $x^2=0$ → $x=0$");
+  assert.equal(sent.length, prev + 1, "محفوظة، ما يسأل مرة ثانية");
+  assert.deepEqual(await Q.stepsIn("en", ["f''(x)=6x"]), ["f''(x)=6x"]);
+});
