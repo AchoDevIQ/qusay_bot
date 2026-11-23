@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import "./store.css";
 import { PageTools, TelegramInit } from "./shared";
+import ZoomLayer from "./ZoomLayer";
 
 export const viewport = { width: "device-width", initialScale: 1, maximumScale: 5, userScalable: true };
 
@@ -16,6 +17,8 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
       <TelegramInit />
       <PageTools />
       {children}
+      {/* تكبير الصور بالآيباد (تيليگرام يقفل التكبير بالأصابع) */}
+      <ZoomLayer />
     </>
   );
 }
