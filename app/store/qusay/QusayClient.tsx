@@ -1,6 +1,6 @@
 "use client";
 // «🧠 تصحيح قصي»: مصحح الأستاذ الثاني. يجربه بالسر على أوراق صححها مصحح ويقارن، ومن يرتاح لموضوع يخليه يصححه صدگ
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 import { Inline, MarkedPage, MathText, type MarkedPageT } from "../myexams/AiCompare";
 import VoiceText from "./VoiceText";
@@ -29,6 +29,19 @@ export default function QusayClient() {
   const [allLog, setAllLog] = useState(false);
   const ch = data?.chapters.find((c) => c.slug === slug) ?? data?.chapters[0];
   const fileUrl = (ref: string) => `/api/exams/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
+  // ↩️ رجوع من ورقة الطالب لنفس مكانك بالصفحة، بلا تحميل من جديد (طلبه 2026-11-23). وسحبة الرجوع بالآيباد هم ترجعك للصفحة، مو تطلعك منها
+  const [shut, setShut] = useState<Paper | null>(null);
+  const open = !!data?.paper && data.paper !== shut;
+  const cur = useRef<Paper | null>(null);
+  cur.current = data?.paper ?? null;
+  useEffect(() => {
+    if (!open) return;
+    history.pushState({ qgPaper: 1 }, "");
+    const onPop = () => setShut(cur.current);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [open]);
+  const closePaper = () => { if (history.state?.qgPaper) history.back(); else setShut(cur.current); };
   return (
     <>
       <AdminHeader title="🧠 تصحيح قصي" />
@@ -97,7 +110,7 @@ export default function QusayClient() {
           </>
         )}
       </div>
-      {data?.paper && <PaperView p={data.paper} fileUrl={fileUrl} busy={busy} call={call} close={() => void call({ action: "list" })} />}
+      {data?.paper && data.paper !== shut && <PaperView p={data.paper} fileUrl={fileUrl} busy={busy} call={call} close={closePaper} />}
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
   );
@@ -314,7 +327,7 @@ function QView({ q, photos, fileUrl, teach, busy }: { q: Q; photos: string[]; fi
 function PaperView({ p, fileUrl, busy, call, close }: { p: Paper; fileUrl: (ref: string) => string; busy: boolean; call: Call; close: () => void }) {
   return (
     <div className="exfull" style={{ background: "var(--ink)" }}>
-      <button type="button" className="exbtn" onClick={close}>✖ سد</button>
+      <button type="button" className="exbtn" onClick={close}>↩️ رجوع</button>
       <div className="card expad">
         <div className="exlabel">{p.name} · {p.exam}</div>
         <div className="aig-stats">
@@ -335,6 +348,7 @@ function PaperView({ p, fileUrl, busy, call, close }: { p: Paper; fileUrl: (ref:
           {p.photos.filter((f) => !f.q).map((f) => <img key={f.ref} src={fileUrl(f.ref)} alt="" style={{ width: "100%", minWidth: 0, marginTop: 6 }} />)}
         </div>
       )}
+      <button type="button" className="exbtn" onClick={close}>↩️ رجوع</button>
     </div>
   );
 }
