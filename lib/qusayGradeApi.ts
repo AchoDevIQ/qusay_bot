@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
+  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { docxNotes, notesKind } from "./notesFile.ts";
@@ -27,35 +27,40 @@ async function listData(uid: number) {
   const versions = await find("bank_versions");
   const items = await find("sched_items", { status: "done" });
   // نتائج «تصحيح قصي» لكل الأوراق المصححة أو اللي جربها
+  // كل القراءات سوة مو وحدة ورا وحدة: الصفحة چانت تاخذ دقايق تحمل (طلبه 2026-11-23)
   const results = new Map<number, QgResult>();
-  for (const it of items) { const r = await qgResultOf(it.id); if (r) results.set(it.id, r); }
+  await pmap(items, 40, async (it) => { const r = await qgResultOf(it.id); if (r) results.set(it.id, r); });
+  const queued = new Set(await trialQueue());
   const chapters: { slug: string; chapter: string; exams: Row[] }[] = [];
-  for (const e of exams) {
-    let c = chapters.find((x) => x.slug === e.slug);
-    if (!c) { c = { slug: e.slug, chapter: e.chapter ?? e.slug, exams: [] }; chapters.push(c); }
+  for (const e of exams) if (!chapters.some((x) => x.slug === e.slug)) chapters.push({ slug: e.slug, chapter: e.chapter ?? e.slug, exams: [] });
+  const rows = await pmap(exams, 8, async (e) => {
     const vs = versions.filter((v) => v.exam_id === e.id);
     let why: string | null = vs.length ? null : "ماكو نماذج";
-    for (const v of vs) { const w = await versionWhyNot(v.id); if (w) { why = `نموذج ${v.model}: ${w}`; break; } }
+    const whys = await Promise.all(vs.map((v) => versionWhyNot(v.id)));
+    const bad = vs.findIndex((_, k) => whys[k]);
+    if (bad >= 0) why = `نموذج ${vs[bad].model}: ${whys[bad]}`;
     const trials = items.filter((it) => it.exam_id === e.id && results.get(it.id)?.kind === "trial");
     // درجة المصحح من الورقة هسه: الورقة الجديدة اللي تجربت قبل ما يصححها، درجته تطلع من يصححها
     const both = trials.filter((it) => humanMark(it) !== null).map((it) => ({ ...results.get(it.id)!, human: humanMark(it) }));
     const gaps = both.map((r) => Math.abs(r.total - Number(r.human)));
-    c.exams.push({
+    const tried = (id: number) => results.has(id);
+    return { slug: e.slug, row: {
       id: e.id, title: e.title, why, live: s.live.includes(e.id), mu: mu.has(e.id),
-      human: (await trialCandidates(e.id)).length, fresh: (await trialCandidates(e.id, true)).length, trials: trials.length, waiting: trials.length - both.length,
+      human: pickCandidates(items, tried, queued, e.id).length, fresh: pickCandidates(items, tried, queued, e.id, true).length, trials: trials.length, waiting: trials.length - both.length,
       gap: gaps.length ? r1(gaps.reduce((t, g) => t + g, 0) / gaps.length) : null,
       close: gaps.length ? Math.round((gaps.filter((g) => g <= 3).length / gaps.length) * 100) : null,
       unsure: both.filter((r) => !r.sure).length,
       style: await examStyle(e.id),
       lessons: (await lessonsOf(e.id)).map((x) => ({ id: x.id, at: x.at, q: x.q, step: x.step, from: x.from, to: x.to, max: x.max, why: x.why })),
-    });
-  }
+    } };
+  });
+  for (const r of rows) chapters.find((x) => x.slug === r.slug)!.exams.push(r.row);
   const titles = new Map(exams.map((e) => [e.id as number, String(e.title ?? "")]));
   const trialRows = [];
-  for (const it of items.filter((x) => results.get(x.id)?.kind === "trial").sort((a, b) => String(results.get(b.id)!.at).localeCompare(String(results.get(a.id)!.at))).slice(0, SHOW)) {
+  trialRows.push(...await pmap(items.filter((x) => results.get(x.id)?.kind === "trial").sort((a, b) => String(results.get(b.id)!.at).localeCompare(String(results.get(a.id)!.at))).slice(0, SHOW), 20, async (it) => {
     const r = results.get(it.id)!;
-    trialRows.push({ id: it.id, name: await nameOf(it), exam: titles.get(it.exam_id) ?? "", human: humanMark(it), qusay: r.total, sure: r.sure, iqd: iqd(r.usd), at: r.at });
-  }
+    return { id: it.id, name: await nameOf(it), exam: titles.get(it.exam_id) ?? "", human: humanMark(it), qusay: r.total, sure: r.sure, iqd: iqd(r.usd), at: r.at };
+  }));
   const paid = [...results.values()].slice(-100);
   return {
     on: await qgOn(), key: hasKey(), settings: s, fileToken: fileToken(uid), objStaff: await objStaff(),

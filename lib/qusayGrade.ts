@@ -157,11 +157,12 @@ export async function versionWhyNot(versionId: number): Promise<string | null> {
   const v = await one("bank_versions", { id: versionId });
   if (v?.answer_pdf) return null;
   const miss: number[] = [];
-  for (const q of qs) {
-    if (await rubricFull(q.id)) continue;
-    if ((JSON.parse(q.a_files || "[]") as string[]).some(isImage)) continue;
+  const full = await Promise.all(qs.map((q) => rubricFull(q.id)));
+  qs.forEach((q, k) => {
+    if (full[k]) return;
+    if ((JSON.parse(q.a_files || "[]") as string[]).some(isImage)) return;
     miss.push(q.n);
-  }
+  });
   return miss.length ? `الأسئلة ${miss.join("، ")} ما إلها خطوات ولا صورة حل` : null;
 }
 async function material(versionId: number): Promise<VMat> {
@@ -893,17 +894,27 @@ export async function trialQueue(): Promise<number[]> { const q = await readJson
 /** درجة المصحح البشري على الورقة هسه، إذا صححها */
 export const humanMark = (it: Row) => (it.graded_at && it.grader_id && it.grader_id !== QUSAY_GRADER ? Number(it.total ?? 0) : null);
 /** أوراق هذا الموضوع وبعدها ما تجربت: fresh = الجديدة اللي سلمها الطالب وما صححها أحد (آخرها أول)، وإلا اللي صححها مصحح بشري */
+/** قراءات كثيرة سوة (مو وحدة ورا وحدة): الصفحة چانت تاخذ دقايق تحمل (طلبه 2026-11-23) */
+export async function pmap<T, R>(list: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(list.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, list.length) }, async () => { while (i < list.length) { const k = i++; out[k] = await fn(list[k]); } }));
+  return out;
+}
+/** أوراق الموضوع اللي تگدر تتجرب، من الأوراق ونتائجها اللي انقرت سوة */
+export function pickCandidates(items: Row[], tried: (id: number) => boolean, queued: Set<number>, examId: number, fresh = false): Row[] {
+  const when = (it: Row) => String((fresh ? it.submitted_at : it.graded_at) ?? "");
+  return items.filter((it) => it.exam_id === examId && it.status === "done").sort((a, b) => when(b).localeCompare(when(a))).filter((it) => {
+    if (!it.version_id || queued.has(it.id) || it.grader_id === QUSAY_GRADER) return false;
+    if (fresh ? !!it.graded_at : !it.graded_at || !it.grader_id || it.grader_id === AI_GRADER) return false;
+    return !tried(it.id);
+  });
+}
 export async function trialCandidates(examId: number, fresh = false): Promise<Row[]> {
   const queued = new Set(await trialQueue());
-  const out: Row[] = [];
-  const when = (it: Row) => String((fresh ? it.submitted_at : it.graded_at) ?? "");
-  for (const it of (await find("sched_items", { exam_id: examId, status: "done" })).sort((a, b) => when(b).localeCompare(when(a)))) {
-    if (!it.version_id || queued.has(it.id) || it.grader_id === QUSAY_GRADER) continue;
-    if (fresh ? !!it.graded_at : !it.graded_at || !it.grader_id || it.grader_id === AI_GRADER) continue;
-    if (await qgResultOf(it.id)) continue;
-    out.push(it);
-  }
-  return out;
+  const items = await find("sched_items", { exam_id: examId, status: "done" });
+  const has = new Set((await pmap(items, 40, async (it) => ((await qgResultOf(it.id)) ? it.id : 0))).filter(Boolean));
+  return pickCandidates(items, (id) => has.has(id), queued, examId, fresh);
 }
 /** أوراق التجربة اللي صاحب البوت اختار تتصحح «⚡ هسه» حتى لو الإعداد بالدفعة */
 const nowList = async () => { const l = await readJson<number[]>(NOW, []); return Array.isArray(l) ? l.map(Number) : []; };
