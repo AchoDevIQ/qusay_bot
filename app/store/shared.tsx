@@ -22,7 +22,9 @@ export function scanQr(text: string, onText: (t: string) => boolean | void) {
 
 export function TelegramInit() {
   return (
-    <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" onReady={() => {
+    // ملف تيليگرام من سيرفرنا (public/telegram-web-app.js): telegram.org محجوب بالعراق، وبالآيباد ويا البروكسي الصفحة ما توصله،
+    // فچان ما يشتغل التكبير ولا المربع ⛶ (طلب الأستاذ 2026-11-24). النسخة الأصلية من telegram.org بدون تغيير
+    <Script src="/telegram-web-app.js" strategy="afterInteractive" onReady={() => {
       const w = tg();
       try { w?.ready(); w?.expand(); w?.setHeaderColor("#101929"); w?.setBackgroundColor("#101929"); } catch { /* نسخة تليجرام قديمة */ }
     }} />
