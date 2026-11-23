@@ -202,7 +202,17 @@ export async function qusayAction(body: Row) {
     return await out("🗑 انشالت العلامة من الورقة، والدرجة مثل ما هي", { paper: await paperDetail(Number(body.id)) });
   }
     // ⚖️ قارن: نفس الأوراق يصححها مؤمل وقصي بالسر، وتنقارن بدرجة المصحح البشري
-  if (a === "compare" || a === "compareView" || a === "compareClear" || a === "compareRedoQ") {
+  if (a === "compareSide") {
+    need(await one("bank_exams", { id: exam }), "اختار الموضوع");
+    const Q = await import("./qusayGrade.ts");
+    return await out("", { side: { exam, rows: await Q.compareSide(exam, nameOf) } });
+  }
+  if (a === "compareRedoAll") {
+    need(await one("bank_exams", { id: exam }), "اختار الموضوع");
+    const Q = await import("./qusayGrade.ts");
+    return await out(`🔁 الاثنين يعيدون ${await Q.redoCompare(exam)} ورقة (ورقتين كل دقيقة)، وينحفظ تصحيح كل واحد كامل حتى تشوفهم جنب بعض.`, { cmp: { exam, rows: await Q.compareRows(exam, nameOf) } });
+  }
+    if (a === "compare" || a === "compareView" || a === "compareClear" || a === "compareRedoQ") {
     need(await one("bank_exams", { id: exam }), "اختار الموضوع");
     const Q = await import("./qusayGrade.ts");
     let notice = "";

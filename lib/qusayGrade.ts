@@ -1047,7 +1047,8 @@ async function pollBatches(finish: (uid: number, itemId: number) => Promise<unkn
 
 // ---------- «⚖️ قارن» (طلب الأستاذ 2026-11-23): نفس الأوراق يصححها نظام مؤمل وتصحيح قصي، كل واحد بالسر، وتنقارن بدرجة
 // الأستاذ (لو المصحح) اللي صححها بإيده. ولا شي يتغير بالورقة ولا يوصل للطالب
-export type QgCmpSide = { at: string; total: number; qs: { n: number; score: number; max: number; reason: string }[]; usd: number };
+/** full / pages: التصحيح كامل حتى ينعرض جنب بعض (مؤمل: خطوة خطوة، قصي: العلامات على الورقة) */
+export type QgCmpSide = { at: string; total: number; qs: { n: number; score: number; max: number; reason: string }[]; usd: number; full?: unknown[]; pages?: string[] };
 export type QgCmp = { exam: number; queued: string; mu?: QgCmpSide; qg?: QgCmpSide; muErr?: string; qgErr?: string; tries?: number };
 const CMP_Q = "qg_cmp_q";
 const cmpKey = (id: number) => `qg_cmp_${id}`;
@@ -1088,6 +1089,41 @@ export async function compareRows(examId: number, nameOf: (it: Row) => Promise<s
   }
   return out.sort((a, b) => Number(b.waiting) - Number(a.waiting) || b.id - a.id);
 }
+/** يعيد الاثنين على نفس الأوراق (حتى ينحفظ التصحيح كامل للعرض جنب بعض) */
+export async function redoCompare(examId: number) {
+  const ids: number[] = [];
+  for (const it of await find("sched_items", { exam_id: examId })) {
+    const c = await cmpOf(it.id);
+    if (!c) continue;
+    await kvSet(cmpKey(it.id), JSON.stringify({ exam: c.exam, queued: stamp() } satisfies QgCmp));
+    ids.push(it.id);
+  }
+  const q = await cmpQueue();
+  await kvSet(CMP_Q, JSON.stringify([...q, ...ids.filter((x) => !q.includes(x))]));
+  return ids.length;
+}
+/** «⚖️ الأوراق جنب بعض»: كل ورقة ويا صفحاتها ورسم الأستاذ عليها، وتصحيح مؤمل خطوة خطوة، وعلامات قصي على الورقة */
+export async function compareSide(examId: number, nameOf: (it: Row) => Promise<string>) {
+  const out = [];
+  for (const it of (await find("sched_items", { exam_id: examId, status: "done" })).sort((a, b) => Number(refGrader(b)) - Number(refGrader(a)) || b.id - a.id)) {
+    const c = await cmpOf(it.id);
+    if (!c) continue;
+    const answers = await find("exam_answers", { item_id: it.id }, { order: ["q", "id"] });
+    const inks = new Map((await find("paper_ink", { item_id: it.id })).map((r) => [Number(r.page), String(r.ink ?? "")]));
+    const marks = refGrader(it) ? Object.fromEntries((await find("question_marks", { item_id: it.id })).map((m) => [String(m.q), Number(m.mark)])) : null;
+    const qgFull = (c.qg?.full ?? []) as QgQuestion[];
+    const ink = qgFull.length ? await inkFor(Number(it.exam_id)) : [];
+    out.push({
+      id: it.id, name: await nameOf(it),
+      ref: refGrader(it) ? { total: Number(it.total ?? 0), qs: marks } : null,
+      pages: answers.map((a, i) => ({ ref: String(a.file), q: Number(a.q) || 0, ink: inks.get(i) ?? "" })),
+      mu: c.mu ? { total: c.mu.total, usd: c.mu.usd, qs: c.mu.full ?? c.mu.qs } : null,
+      qg: c.qg ? { total: c.qg.total, usd: c.qg.usd, qs: c.qg.qs, marked: qgFull.length && c.qg.pages ? dropHidden(marksByPage(qgFull, c.qg.pages, undefined, [], ink), []) : [] } : null,
+      muErr: c.muErr ?? "", qgErr: c.qgErr ?? "",
+    });
+  }
+  return out;
+}
 /** «🔁 أعد قصي بس»: نتيجة مؤمل تبقى، وقصي يعيد نفس الأوراق (بعد ما تغير إعداداته لو قواعده) */
 export async function redoQusayCompare(examId: number) {
   const ids: number[] = [];
@@ -1123,7 +1159,8 @@ async function compareTick(s: QgSettings) {
       try {
         const res = await gradeHidden(it);
         const p = await prices();
-        c.mu = { at: stamp(), total: res.reduce((t, q) => t + q.score, 0), qs: res.map((q) => ({ n: q.n, score: q.score, max: q.max, reason: String(q.reason ?? "").slice(0, 300) })), usd: res.reduce((t, q) => t + costOf(q.usage ?? [], p), 0) };
+        c.mu = { at: stamp(), total: res.reduce((t, q) => t + q.score, 0), qs: res.map((q) => ({ n: q.n, score: q.score, max: q.max, reason: String(q.reason ?? "").slice(0, 300) })), usd: res.reduce((t, q) => t + costOf(q.usage ?? [], p), 0),
+          full: res.map((q) => ({ n: q.n, score: q.score, max: q.max, note: String(q.note ?? q.reason ?? "").slice(0, 400), steps: (q.steps ?? []).map((st) => ({ e: String(st.expected ?? "").slice(0, 300), s: String(st.student_tex || st.student || "").slice(0, 300), a: st.awarded, p: st.possible, r: String(st.reason_ar || st.reason || "").slice(0, 300) })) })) };
         delete c.muErr;
       } catch (e) { c.muErr = errText(e); }
     }
@@ -1136,7 +1173,7 @@ async function compareTick(s: QgSettings) {
           const { qs, tokens } = readAnswer(await apiImpl.create(pp.req), pp.mat, pp.unanswered, pp.answerOnly, pp.pages.length);
           const usd = usdOf(tokens, false);
           await addSpend("qusay", usd);
-          c.qg = { at: stamp(), total: qs.reduce((t, q) => t + q.score, 0), qs: qs.map((q) => ({ n: q.n, score: q.score, max: q.max, reason: q.reason.slice(0, 300) })), usd };
+          c.qg = { at: stamp(), total: qs.reduce((t, q) => t + q.score, 0), qs: qs.map((q) => ({ n: q.n, score: q.score, max: q.max, reason: q.reason.slice(0, 300) })), usd, full: qs, pages: pp.pages };
           delete c.qgErr;
         } catch (e) { await chargeFailed(priced(e, false)); c.qgErr = errText(e); }
       } else c.qgErr = err || "ما گدر يجهز الورقة";

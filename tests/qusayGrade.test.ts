@@ -811,6 +811,16 @@ test("⚖️ قارن: نفس الورقة يصححها مؤمل وقصي بال
   assert.equal(tg.slice(before).filter((m) => m.method.startsWith("send") && m.p.chat_id !== 1).length, 0, "ولا شي وصل للطالب");
   const v: any = await qusayAction({ initData: sign(1), action: "compareView", exam: it.exam_id });
   assert.equal(v.cmp.rows.find((r: any) => r.id === id).qg.total, c.qg!.total);
+  // ⚖️ الأوراق جنب بعض: صفحات الورقة ويا رسم المصحح، ومؤمل خطوة خطوة، وقصي بعلاماته على الورقة
+  await put("paper_ink", { item_id: id, page: 0, ink: JSON.stringify({ rot: 0, items: [{ t: "s", c: "#d40000", w: 4, p: [0.1, 0.1, 0.2, 0.2] }] }) });
+  const sd: any = await qusayAction({ initData: sign(1), action: "compareSide", exam: it.exam_id });
+  const sr = sd.side.rows.find((r: any) => r.id === id);
+  assert.equal(sr.ref.total, 40);
+  assert.ok(sr.pages.length >= 1 && sr.pages[0].ink.includes("#d40000"), "رسمه على صفحته");
+  assert.ok(Array.isArray(sr.qg.marked), "علامات قصي على الورقة");
+  assert.ok(sd.on !== undefined, "باقي بيانات الصفحة ما تضيع");
+  const ra: any = await qusayAction({ initData: sign(1), action: "compareRedoAll", exam: it.exam_id });
+  assert.match(ra.notice, /الاثنين يعيدون/);
   const cl: any = await qusayAction({ initData: sign(1), action: "compareClear", exam: it.exam_id });
   assert.match(cl.notice, /انمسحت/);
   assert.equal(await Q.cmpOf(id), null);

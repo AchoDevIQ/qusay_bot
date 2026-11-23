@@ -7,6 +7,9 @@ import VoiceText from "./VoiceText";
 import InkBook, { type InkItem } from "./InkBook";
 
 type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number; style: string; lessons: Lesson[] };
+type MuQ = { n: number; score: number; max: number; note?: string; reason?: string; steps?: { e: string; s: string; a: number; p: number; r: string }[] };
+type SideRow = { id: number; name: string; ref: { total: number; qs: Record<string, number> | null } | null; pages: { ref: string; q: number; ink: string }[];
+  mu: { total: number; usd: number; qs: MuQ[] } | null; qg: { total: number; usd: number; qs: { n: number; score: number; max: number; reason: string }[]; marked: MarkedPageT[] } | null; muErr: string; qgErr: string };
 type CmpSide = { at: string; total: number; qs: { n: number; score: number; max: number; reason: string }[]; usd: number };
 type CmpRow = { id: number; name: string; waiting: boolean; ref: { total: number; qs: Record<string, number> } | null; mu: CmpSide | null; qg: CmpSide | null; muErr: string; qgErr: string };
 type Lesson = { id: number; at: string; q: number; step: string; from: number; to: number; max: number; why: string };
@@ -19,7 +22,7 @@ type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | 
 type Data = {
   on: boolean; key: boolean; settings: { live: number[]; model: "haiku" | "sonnet" | "opus"; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number }; fileToken: string; objStaff: { id: number; name: string }[];
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
-  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; cmp?: { exam: number; rows: CmpRow[] }; notice?: string; inkOf?: { exam: number; items: InkItem[] };
+  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; cmp?: { exam: number; rows: CmpRow[] }; side?: { exam: number; rows: SideRow[] }; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي", obj: "✋ راجع اعتراض" };
@@ -33,6 +36,7 @@ export default function QusayClient() {
   const fileUrl = (ref: string) => `/api/exams/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
   // ↩️ رجوع من ورقة الطالب لنفس مكانك بالصفحة، بلا تحميل من جديد (طلبه 2026-11-23). وسحبة الرجوع بالآيباد هم ترجعك للصفحة، مو تطلعك منها
   const [shut, setShut] = useState<Paper | null>(null);
+  const [sideShut, setSideShut] = useState<Data["side"] | null>(null);
   const open = !!data?.paper && data.paper !== shut;
   const cur = useRef<Paper | null>(null);
   cur.current = data?.paper ?? null;
@@ -113,6 +117,7 @@ export default function QusayClient() {
         )}
       </div>
       {data?.paper && data.paper !== shut && <PaperView p={data.paper} fileUrl={fileUrl} busy={busy} call={call} close={closePaper} />}
+      {data?.side && data.side !== sideShut && <SideView rows={data.side.rows} fileUrl={fileUrl} close={() => setSideShut(data.side ?? null)} />}
       <StatusBar busy={busy} error={data ? error : ""} notice={data?.notice} />
     </>
   );
@@ -297,6 +302,67 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
   );
 }
 
+/** رسم المصحح على الصفحة (خطوط القلم، والكتابة، والختم ✓ ✗) فوك صورة الورقة */
+function InkOverlay({ ink }: { ink: string }) {
+  let items: any[] = [];
+  try { items = JSON.parse(ink || "{}").items ?? []; } catch { items = []; }
+  if (!items.length) return null;
+  return (
+    <svg className="sideink" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden>
+      {items.map((x, i) => x.t === "s" ? (
+        <polyline key={i} fill="none" stroke={x.c || "#d40000"} strokeWidth={Math.max(2, Number(x.w) || 4)} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+          points={(x.p as number[]).reduce((t: string, v: number, k: number) => t + (k % 2 ? `,${v * 1000} ` : `${v * 1000}`), "")} />
+      ) : x.t === "x" ? <text key={i} x={x.x * 1000} y={x.y * 1000} fill={x.c || "#d40000"} fontSize={(Number(x.z) || 0.032) * 1000} textAnchor="end">{String(x.s ?? "")}</text>
+        : x.t === "k" || x.t === "w" ? <text key={i} x={x.x * 1000} y={x.y * 1000} fill="#d40000" fontSize={50} textAnchor="middle">{x.t === "k" ? "✓" : "✗"}</text> : null)}
+    </svg>
+  );
+}
+/** «⚖️ الأوراق جنب بعض» (طلب الأستاذ 2026-11-24): كل طالب ثلاث خانات: تصحيحه هو على الورقة، ومؤمل خطوة خطوة، وقصي بعلاماته على الورقة */
+function SideView({ rows, fileUrl, close }: { rows: SideRow[]; fileUrl: (ref: string) => string; close: () => void }) {
+  const [big, setBig] = useState<number | null>(null);
+  return (
+    <div className="exfull sidefull">
+      <button type="button" className="exbtn" onClick={close}>↩️ رجوع</button>
+      {!rows.length && <div className="empty">ماكو أوراق مقارنة بهذا الموضوع بعد.</div>}
+      {rows.map((r) => (
+        <div key={r.id} className="card expad">
+          <div className="exlabel">{r.name}: إنت <b>{r.ref?.total ?? "—"}</b> · مؤمل <b>{r.mu?.total ?? "—"}</b> · قصي <b>{r.qg?.total ?? "—"}</b>
+            {" "}<button type="button" className="exbtn" onClick={() => setBig(big === r.id ? null : r.id)}>{big === r.id ? "⇆ رجّعها جنب بعض" : "🔎 كبّرها (وحدة تحت وحدة)"}</button></div>
+          <div className={"sidegrid" + (big === r.id ? " sideone" : "")}>
+            <div className="sidecol">
+              <div className="sidehead">✍️ تصحيحك</div>
+              {r.ref ? Object.entries(r.ref.qs ?? {}).map(([n, m]) => <div key={n} className="sideq">س{n}: <b>{m}</b></div>) : <small>ما مصححها إنت</small>}
+              {r.pages.map((p, i) => <div key={i} className="sidepage"><img src={fileUrl(p.ref)} alt="" /><InkOverlay ink={p.ink} /></div>)}
+            </div>
+            <div className="sidecol">
+              <div className="sidehead">🤖 مؤمل</div>
+              {r.muErr && <small className="exbad">⚠️ {r.muErr}</small>}
+              {(r.mu?.qs ?? []).map((q) => (
+                <div key={q.n} className="sideq">
+                  <b>س{q.n}: {q.score} من {q.max}</b>{(q.note || q.reason) && <div><small><Inline text={String(q.note || q.reason)} /></small></div>}
+                  {(q.steps ?? []).map((st, k) => (
+                    <div key={k} className={"sidestep" + (st.a >= st.p ? "" : st.a > 0 ? " half" : " bad")}>
+                      <small>{st.a >= st.p ? "✅" : st.a > 0 ? "◐" : "❌"} {st.a}/{st.p}</small> <MathText text={st.e} />
+                      {st.a < st.p && st.r && <small><Inline text={st.r} /></small>}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="sidecol">
+              <div className="sidehead">🧠 قصي</div>
+              {r.qgErr && <small className="exbad">⚠️ {r.qgErr}</small>}
+              {(r.qg?.qs ?? []).map((q) => <div key={q.n} className="sideq"><b>س{q.n}: {q.score} من {q.max}</b>{q.reason && <div><small><Inline text={q.reason} /></small></div>}</div>)}
+              {(r.qg?.marked ?? []).map((p) => <MarkedPage key={p.ref} src={fileUrl(p.ref)} marks={p.marks} />)}
+            </div>
+          </div>
+        </div>
+      ))}
+      <button type="button" className="exbtn" onClick={close}>↩️ رجوع</button>
+    </div>
+  );
+}
+
 /** ⚖️ المقارنة: كل ورقة بدرجة المرجع (المصحح اللي صححها بإيده) ومؤمل وقصي، وبالآخر منو أقرب وشگد كلف */
 function CompareBox({ exam, n, setN, busy, call }: { exam: number; n: string; setN: (v: string) => void; busy: boolean; call: Call }) {
   const [data, setData] = useState<CmpRow[] | null>(null);
@@ -350,6 +416,8 @@ function CompareBox({ exam, n, setN, busy, call }: { exam: number; n: string; se
             </div>
           );
         })()}
+        <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "compareSide", exam })}>⚖️ شوف الأوراق جنب بعض (تصحيحك، مؤمل، قصي)</button>
+        <button type="button" className="exbtn" disabled={busy} onClick={() => load({ action: "compareRedoAll" })}>🔁 أعد الاثنين على نفس الأوراق</button>
         <button type="button" className="exbtn" disabled={busy} onClick={() => load({ action: "compareRedoQ" })}>🔁 أعد قصي بس على نفس الأوراق (إذا غيرت إعداداته لو قواعده)</button>
         <button type="button" className="exbtn" disabled={busy} onClick={() => load({ action: "compareClear" })}>🗑 امسح نتائج المقارنة بهذا الموضوع</button>
       </>}
