@@ -23,6 +23,7 @@ type CmpRow = { id: number; name: string; exam: string; model: string; teacher: 
 type Data = {
   compare: { rows: CmpRow[]; compared: number; currentGap: number | null; photoGap: number | null };
   aiStudents: { minAvg: number; minPapers: number; chosen: StuRow[]; candidates: StuRow[] };
+  hold?: boolean;
   calib: { n: number; topics: { exam: number; title: string; done: number; of: number; versions: { model: string; done: number; of: number; papers: { name: string; teacher: number | null; ai: number | null }[] }[] }[] };
   on: boolean; linked: boolean; draftQueue: { left: number; failed: string[] }; pending: { id: number; name: string; exam: string; state: string; retry: boolean }[]; ready: number; total: number; graded: number; chapters: Chapter[]; graders: { id: number; name: string }[];
   fileToken: string; money: { today: Sum; month: Sum; all: Sum }; prices: PriceRow[]; log: Log[]; draft?: { id: number; steps: Step[]; alts?: Step[][] }; trial?: { id: number; result: Trial }; notice?: string;
@@ -56,6 +57,14 @@ export default function AiGradeClient() {
             </div>
             <Money data={data} />
             <SpendCard />
+            <div className="card expad">
+              <div className="exlabel">الأوراق اللي مو متأكد منها</div>
+              <select value={data.hold ? "1" : "0"} disabled={busy} onChange={(e) => void call({ action: "hold", hold: e.target.value === "1" })}>
+                <option value="0">✅ يصححها ويبعثها للطالب، ويبلغك بالسؤال والسبب</option>
+                <option value="1">↩️ ترجع للمصحح وما توصل للطالب لحد ما تنشاف</option>
+              </select>
+              <div className="exhint">أوراق التجربة اللي تختار إلها «🤖 نظام التصحيح AI» تنبعث دايماً.</div>
+            </div>
             <Calib key={data.calib.n} calib={data.calib} busy={busy} call={call} />
             <Compare c={data.compare} />
             <AiStudents st={data.aiStudents} busy={busy} call={call} />

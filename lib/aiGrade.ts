@@ -25,7 +25,8 @@ export type Strictness = "lenient" | "standard" | "strict";
 export const STRICTNESS: Strictness[] = ["lenient", "standard", "strict"];
 /** الشدة الأصلية لكل موضوع ما اختار له صاحب البوت شدة (قراره 2026-11-14: الأقل شدة)، حتى الموضوع الجديد */
 export const DEFAULT_STRICT: Strictness = "lenient";
-export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number; students: number[]; strict: Record<string, Strictness> };
+/** hold: الورقة اللي مو متأكد منها ترجع للمصحح (true) لو تنصحح وتنبعث ويتبلغ بالسبب (false). بدون اختيار: من AI_HOLD_UNSURE */
+export type AiSettings = { exams: number[]; unsure: Record<string, number>; calib: number; students: number[]; strict: Record<string, Strictness>; hold?: boolean };
 /** سطر بسجل نظام التصحيح: ورقة صححها، أو ورقة حولها لمصحح، أو خطوات طلعها من صورة حل */
 export type LogRow = { at: string; kind: "sent" | "unsure" | "rubric" | "try" | "failed" | "objection" | "calib"; note?: string; item?: number; sid?: number; name?: string; exam?: string; total?: number; to?: number | null; q?: number; usage: Usage[] };
 
@@ -95,7 +96,8 @@ export async function aiSettings(): Promise<AiSettings> {
   const calib = Number(s.calib);
   const strict: Record<string, Strictness> = {};
   for (const [k, v] of Object.entries(s.strict && typeof s.strict === "object" ? s.strict : {})) if (STRICTNESS.includes(v as Strictness) && v !== DEFAULT_STRICT) strict[k] = v as Strictness;
-  return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {}, calib: Number.isInteger(calib) && calib >= 0 ? calib : CALIB_DEFAULT, students: Array.isArray(s.students) ? s.students.map(Number) : [], strict };
+  return { exams: Array.isArray(s.exams) ? s.exams.map(Number) : [], unsure: s.unsure && typeof s.unsure === "object" ? s.unsure : {}, calib: Number.isInteger(calib) && calib >= 0 ? calib : CALIB_DEFAULT, students: Array.isArray(s.students) ? s.students.map(Number) : [], strict,
+    ...(typeof s.hold === "boolean" ? { hold: s.hold } : {}) };
 }
 /** شدة تصحيح الموضوع (الامتحان). المتساهل إذا ما مختار */
 export async function strictOf(examId: number): Promise<Strictness> {
@@ -129,6 +131,13 @@ export async function aiStudentsState(nameOf: (uid: number) => Promise<string>, 
   }
   cands.sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0) || b.papers - a.papers);
   return { minAvg, minPapers, chosen, candidates: cands.slice(0, 50) };
+}
+/** «الأوراق اللي مو متأكد منها»: ترجع للمصحح، لو تنصحح وتنبعث (طلب الأستاذ 2026-11-24: «خلي مؤمل يصحح كل الأوراق») */
+export const holdUnsure = (s: AiSettings) => s.hold ?? process.env.AI_HOLD_UNSURE === "1";
+export async function setHold(hold: boolean) {
+  const s = await aiSettings();
+  s.hold = hold;
+  await kvSet(SET_KEY, JSON.stringify(s));
 }
 export async function setCalib(n: number) {
   const s = await aiSettings();
@@ -896,7 +905,8 @@ export async function aiGradeTick(finish: (uid: number, itemId: number) => Promi
       // ولا ورقة تنرفض ولا تنتظر مصحح: الورقة اللي بيها ملاحظة (خطوة ما انقرت، الجبر والقراءة مختلفين...) تنصحح كلها
       // وتوصل درجتها للطالب، والمسؤول يتبلغ بالسؤال والسبب. AI_HOLD_UNSURE=1 يرجّع الطريقة القديمة (تحويل للمصحح)
       const flagged = res.filter((q) => q.review);
-      if (flagged.length && process.env.AI_HOLD_UNSURE === "1") { await forward(it, res, usage, nameOf); unsure++; return; }
+      // ورقة التجربة اللي اختارها صاحب البوت لمؤمل: تنبعث دايماً (هو يريد يشوف تصحيحه)
+      if (flagged.length && it.user_id > 0 && holdUnsure(await aiSettings())) { await forward(it, res, usage, nameOf); unsure++; return; }
       for (const q of res) await put("question_marks", { item_id: it.id, q: q.n, mark: q.score });
       await finish(AI_GRADER, it.id);
       const exam = await one("bank_exams", { id: it.exam_id });

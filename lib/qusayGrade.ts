@@ -786,7 +786,9 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
       const s: any = byI.get(k + 1);
       const at = ptOf(s, pages, papers);
       const hw = Math.round(Number(s?.hw) || 0);
-      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0))), note: cleanNote(String(s?.note ?? "")).slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
+      const awarded = Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0)));
+      // خطوة درجتها كاملة ما ينكتب عليها غلط (طالب تجربة 30: «الأس لازم -5» وهو كاتب -5 وانطاه 20 من 20)
+      return { text: p.text, points: p.points, awarded, note: awarded >= p.points ? "" : cleanNote(String(s?.note ?? "")).slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 && awarded < p.points ? { hw } : {}) };
     }) : [];
     // الذكاء رجّع درجة السؤال بس بدون خطوات (طالب تجربة 9: «ممتاز عاشت الأيادي» وصفر): الكامل ينحسب كامل، والباقي يتعاد
     if (plan && answered && !plan.some((_, k) => byI.has(k + 1))) {
