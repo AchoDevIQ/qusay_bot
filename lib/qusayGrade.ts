@@ -1037,6 +1037,94 @@ async function pollBatches(finish: (uid: number, itemId: number) => Promise<unkn
   return done;
 }
 
+// ---------- «⚖️ قارن» (طلب الأستاذ 2026-11-23): نفس الأوراق يصححها نظام مؤمل وتصحيح قصي، كل واحد بالسر، وتنقارن بدرجة
+// الأستاذ (لو المصحح) اللي صححها بإيده. ولا شي يتغير بالورقة ولا يوصل للطالب
+export type QgCmpSide = { at: string; total: number; qs: { n: number; score: number; max: number; reason: string }[]; usd: number };
+export type QgCmp = { exam: number; queued: string; mu?: QgCmpSide; qg?: QgCmpSide; muErr?: string; qgErr?: string; tries?: number };
+const CMP_Q = "qg_cmp_q";
+const cmpKey = (id: number) => `qg_cmp_${id}`;
+export const cmpOf = (id: number) => readJson<QgCmp | null>(cmpKey(id), null);
+const cmpQueue = async () => { const l = await readJson<number[]>(CMP_Q, []); return Array.isArray(l) ? l.map(Number) : []; };
+/** المصحح البشري اللي صحح الورقة (مو مؤمل ولا قصي): درجته هي المرجع */
+export const refGrader = (it: Row) => !!it.graded_at && !!it.grader_id && it.grader_id !== QUSAY_GRADER && it.grader_id !== AI_GRADER;
+/** أوراق الموضوع اللي تنقارن: اللي صححها إنسان أول (حتى نعرف منو أقرب)، بعدها أوراق طلاب التجربة */
+export async function queueCompare(examId: number, n: number) {
+  const want = Math.max(1, Math.min(30, Math.round(n) || 0));
+  const queued = new Set(await cmpQueue());
+  // الأحدث أول
+  const all = (await find("sched_items", { exam_id: examId, status: "done" })).filter((it) => it.version_id && !queued.has(it.id)).sort((a, b) => b.id - a.id);
+  const ready = new Map<number, boolean>();
+  const pick: number[] = [];
+  const order = [...all.filter(refGrader), ...all.filter((it) => !refGrader(it) && it.user_id < 0)];
+  for (const it of order) {
+    if (pick.length >= want) break;
+    if (await cmpOf(it.id)) continue;
+    if (!ready.has(it.version_id)) ready.set(it.version_id, !await versionWhyNot(it.version_id));
+    if (!ready.get(it.version_id)) continue;
+    if (!(await find("exam_answers", { item_id: it.id })).length) continue;
+    pick.push(it.id);
+    await kvSet(cmpKey(it.id), JSON.stringify({ exam: examId, queued: stamp() } satisfies QgCmp));
+  }
+  if (pick.length) await kvSet(CMP_Q, JSON.stringify([...queued, ...pick]));
+  return pick.length;
+}
+/** نتائج المقارنة لموضوع: كل ورقة ويا درجة المرجع ومؤمل وقصي */
+export async function compareRows(examId: number, nameOf: (it: Row) => Promise<string>) {
+  const out = [];
+  const waiting = new Set(await cmpQueue());
+  for (const it of await find("sched_items", { exam_id: examId, status: "done" })) {
+    const c = await cmpOf(it.id);
+    if (!c) continue;
+    const ref = refGrader(it) ? new Map((await find("question_marks", { item_id: it.id })).map((m) => [Number(m.q), Number(m.mark)])) : null;
+    out.push({ id: it.id, name: await nameOf(it), waiting: waiting.has(it.id), ref: ref ? { total: Number(it.total ?? 0), qs: Object.fromEntries(ref) } : null, mu: c.mu ?? null, qg: c.qg ?? null, muErr: c.muErr ?? "", qgErr: c.qgErr ?? "" });
+  }
+  return out.sort((a, b) => Number(b.waiting) - Number(a.waiting) || b.id - a.id);
+}
+export async function clearCompare(examId: number) {
+  const mine = new Set<number>();
+  for (const it of await find("sched_items", { exam_id: examId })) { if (await cmpOf(it.id)) { mine.add(it.id); await kvSet(cmpKey(it.id), "null"); } }
+  await kvSet(CMP_Q, JSON.stringify((await cmpQueue()).filter((x) => !mine.has(x))));
+  return mine.size;
+}
+/** دكة المقارنة: ورقتين بكل دقيقة، كل وحدة بالاثنين */
+async function compareTick(s: QgSettings) {
+  const ids = (await cmpQueue()).slice(0, 2);
+  if (!ids.length) return 0;
+  const { gradeHidden, prices, costOf } = await import("./aiGrade.ts");
+  let n = 0;
+  for (const id of ids) {
+    const c = await cmpOf(id);
+    const it = await one("sched_items", { id });
+    if (!c || !it) { await kvSet(CMP_Q, JSON.stringify((await cmpQueue()).filter((x) => x !== id))); continue; }
+    c.tries = (c.tries ?? 0) + 1;
+    if (!c.mu) {
+      try {
+        const res = await gradeHidden(it);
+        const p = await prices();
+        c.mu = { at: stamp(), total: res.reduce((t, q) => t + q.score, 0), qs: res.map((q) => ({ n: q.n, score: q.score, max: q.max, reason: String(q.reason ?? "").slice(0, 300) })), usd: res.reduce((t, q) => t + costOf(q.usage ?? [], p), 0) };
+        delete c.muErr;
+      } catch (e) { c.muErr = errText(e); }
+    }
+    if (!c.qg) {
+      let err = "";
+      const [pp] = await prepare([{ it, kind: "trial" }], s.effort, async (_j, e) => { err = errText(e); }, false, s.style);
+      if (pp) {
+        try {
+          const { qs, tokens } = readAnswer(await apiImpl.create(pp.req), pp.mat, pp.unanswered, pp.answerOnly, 0);
+          const usd = usdOf(tokens, false);
+          await addSpend("qusay", usd);
+          c.qg = { at: stamp(), total: qs.reduce((t, q) => t + q.score, 0), qs: qs.map((q) => ({ n: q.n, score: q.score, max: q.max, reason: q.reason.slice(0, 300) })), usd };
+          delete c.qgErr;
+        } catch (e) { await chargeFailed(priced(e, false)); c.qgErr = errText(e); }
+      } else c.qgErr = err || "ما گدر يجهز الورقة";
+    }
+    await kvSet(cmpKey(id), JSON.stringify(c));
+    if ((c.mu && c.qg) || (c.tries ?? 0) >= MAX_TRIES) await kvSet(CMP_Q, JSON.stringify((await cmpQueue()).filter((x) => x !== id)));
+    n++;
+  }
+  return n;
+}
+
 /** ورقة تجربة تنتظر «تصحيح قصي»: طالب تجربة، محجوزة إله، ما مصححة، وما تجربت 3 مرات */
 async function testPaperFor(it: Row) {
   if (it.user_id >= 0 || it.grader_id !== QUSAY_GRADER || it.graded_at || !it.version_id) return false;
@@ -1050,6 +1138,7 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
   const received = (await batches()).length ? await pollBatches(finish, s.effort, s.marks, s.style) : 0;
   if (await overCap(s)) return { cap: true, ...(received ? { received } : {}) };
   const marked = await runMarksDemos(s);
+  await compareTick(s);
   const jobs: Job[] = [];
   const take = await liveTaker();
   for (const it of await find("sched_items", { status: "done" }, { order: ["id"] })) {

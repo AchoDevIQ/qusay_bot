@@ -7,6 +7,8 @@ import VoiceText from "./VoiceText";
 import InkBook, { type InkItem } from "./InkBook";
 
 type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number; style: string; lessons: Lesson[] };
+type CmpSide = { at: string; total: number; qs: { n: number; score: number; max: number; reason: string }[]; usd: number };
+type CmpRow = { id: number; name: string; waiting: boolean; ref: { total: number; qs: Record<string, number> } | null; mu: CmpSide | null; qg: CmpSide | null; muErr: string; qgErr: string };
 type Lesson = { id: number; at: string; q: number; step: string; from: number; to: number; max: number; why: string };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Step = { text: string; points: number; awarded: number; note: string };
@@ -17,7 +19,7 @@ type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | 
 type Data = {
   on: boolean; key: boolean; settings: { live: number[]; model: "haiku" | "sonnet" | "opus"; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number }; fileToken: string; objStaff: { id: number; name: string }[];
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
-  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; notice?: string; inkOf?: { exam: number; items: InkItem[] };
+  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; cmp?: { exam: number; rows: CmpRow[] }; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي", obj: "✋ راجع اعتراض" };
@@ -205,6 +207,8 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
   const [fast, setFast] = useState(true);
   const [words, setWords] = useState(e.style);
   const [openLearn, setOpenLearn] = useState(false);
+  const [openCmp, setOpenCmp] = useState(false);
+  const [nc, setNc] = useState("5");
   const [openWords, setOpenWords] = useState(false);
   const [openInk, setOpenInk] = useState(false);
   return (
@@ -269,6 +273,9 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
         <button type="button" className="exbtn" disabled={busy || !words.trim()} onClick={() => void call({ action: "tidy", text: words }).then((d) => { if (d?.tidy) setWords(d.tidy); })}>🪄 رتّب كلام الفويس (بفلوس)</button>
         <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
       </>}
+      {/* ⚖️ قارن مؤمل وقصي على نفس الأوراق (طلبه 2026-11-23) */}
+      <button type="button" className="exbtn" onClick={() => setOpenCmp(!openCmp)}>⚖️ قارن تصحيح مؤمل وتصحيح قصي</button>
+      {openCmp && <CompareBox exam={e.id} n={nc} setN={setNc} busy={busy} call={call} />}
       {/* 🧠 اللي تعلمه من تصحيحاته بـ «✏️ صلّح» */}
       {e.lessons.length > 0 && <button type="button" className="exbtn" onClick={() => setOpenLearn(!openLearn)}>🧠 اللي تعلمه من تصحيحاتك ({e.lessons.length})</button>}
       {openLearn && e.lessons.map((l) => (
@@ -286,6 +293,65 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
           {e.live ? "⏸ رجّع هذا الموضوع للمصححين" : "▶️ خليه يصحح هذا الموضوع صدگ"}
         </button>
       )}
+    </div>
+  );
+}
+
+/** ⚖️ المقارنة: كل ورقة بدرجة المرجع (المصحح اللي صححها بإيده) ومؤمل وقصي، وبالآخر منو أقرب وشگد كلف */
+function CompareBox({ exam, n, setN, busy, call }: { exam: number; n: string; setN: (v: string) => void; busy: boolean; call: Call }) {
+  const [data, setData] = useState<CmpRow[] | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
+  const load = (b: Record<string, unknown>) => void call({ ...b, exam }).then((d) => { if (d?.cmp?.exam === exam) setData(d.cmp.rows); });
+  useEffect(() => { load({ action: "compareView" }); }, [exam]);
+  const rows = data ?? [];
+  const both = rows.filter((r) => r.ref && r.mu && r.qg);
+  const gap = (k: "mu" | "qg") => both.length ? Math.round((both.reduce((t, r) => t + Math.abs(r[k]!.total - r.ref!.total), 0) / both.length) * 10) / 10 : null;
+  const near = (k: "mu" | "qg") => both.length ? Math.round((both.filter((r) => Math.abs(r[k]!.total - r.ref!.total) <= 3).length / both.length) * 100) : null;
+  const cost = (k: "mu" | "qg") => { const l = rows.filter((r) => r[k]); return l.length ? Math.round((l.reduce((t, r) => t + r[k]!.usd, 0) / l.length) * 1600) : null; };
+  const cell = (r: CmpRow, k: "mu" | "qg") => r[k] ? <b>{r[k]!.total}</b> : r[k === "mu" ? "muErr" : "qgErr"] ? <small className="exbad">⚠️ {r[k === "mu" ? "muErr" : "qgErr"]}</small> : <small>⏳</small>;
+  return (
+    <div className="tidyview">
+      <div className="exhint">نفس الأوراق يصححها نظام مؤمل وتصحيح قصي، كل واحد بالسر (ولا شي يوصل للطالب ولا تتغير درجته). أول شي ياخذ الأوراق اللي صححها مصحح بإيده، حتى نعرف منو أقرب لدرجته، وبعدها أوراق طلاب التجربة. صحح إنت كم ورقة بإيدك حتى تكون إنت المرجع.</div>
+      <div className="aig-logrow">
+        <input type="number" inputMode="numeric" min={1} max={30} value={n} onChange={(x) => setN(x.target.value)} style={{ width: 70 }} />
+        <button type="button" className="exbtn" disabled={busy} onClick={() => load({ action: "compare", n: Number(n) })}>⚖️ قارن على {n} ورقة</button>
+        <button type="button" className="exbtn" disabled={busy} onClick={() => load({ action: "compareView" })}>📊 شوف النتائج</button>
+      </div>
+      {!!rows.length && <>
+        <div className="aig-stats">
+          على {both.length} ورقة إلها درجة مصحح: فرق مؤمل عنها <b>{gap("mu") ?? "—"}</b> درجة (قريبة {near("mu") ?? "—"}%) · فرق قصي <b>{gap("qg") ?? "—"}</b> درجة (قريبة {near("qg") ?? "—"}%)
+          <br />كلفة الورقة: مؤمل <b>{cost("mu") ?? "—"}</b> دينار · قصي <b>{cost("qg") ?? "—"}</b> دينار
+        </div>
+        <table className="aig-money">
+          <thead><tr><th>الورقة</th><th>المصحح</th><th>مؤمل</th><th>قصي</th></tr></thead>
+          <tbody>{rows.map((r) => (
+            <tr key={r.id} onClick={() => setOpen(open === r.id ? null : r.id)} style={{ cursor: "pointer" }}>
+              <td>{r.name}{r.waiting ? " ⏳" : ""}</td><td>{r.ref ? <b>{r.ref.total}</b> : <small>ما مصححة</small>}</td><td>{cell(r, "mu")}</td><td>{cell(r, "qg")}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {open !== null && (() => {
+          const r = rows.find((x) => x.id === open);
+          if (!r) return null;
+          const ns = [...new Set([...(r.mu?.qs ?? []), ...(r.qg?.qs ?? [])].map((q) => q.n))].sort((a, b) => a - b);
+          return (
+            <div className="card expad">
+              <div className="exlabel">{r.name}: سؤال سؤال</div>
+              {ns.map((qn) => {
+                const m = r.mu?.qs.find((q) => q.n === qn), g = r.qg?.qs.find((q) => q.n === qn);
+                return (
+                  <div key={qn} className="aig-logrow"><div style={{ minWidth: 0, flex: 1 }}>
+                    <b>س{qn}</b> (من {m?.max ?? g?.max}) · المصحح <b>{r.ref?.qs[String(qn)] ?? "—"}</b> · مؤمل <b>{m?.score ?? "—"}</b> · قصي <b>{g?.score ?? "—"}</b>
+                    {m?.reason && <div><small>مؤمل: <Inline text={m.reason} /></small></div>}
+                    {g?.reason && <div><small>قصي: <Inline text={g.reason} /></small></div>}
+                  </div></div>
+                );
+              })}
+            </div>
+          );
+        })()}
+        <button type="button" className="exbtn" disabled={busy} onClick={() => load({ action: "compareClear" })}>🗑 امسح نتائج المقارنة بهذا الموضوع</button>
+      </>}
     </div>
   );
 }

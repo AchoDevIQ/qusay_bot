@@ -787,3 +787,32 @@ test("خطوات الحل بلغة منهج الطالب: الإنجليزي ي�
   assert.equal(sent.length, prev + 1, "محفوظة، ما يسأل مرة ثانية");
   assert.deepEqual(await Q.stepsIn("en", ["f''(x)=6x"]), ["f''(x)=6x"]);
 });
+
+test("⚖️ قارن: نفس الورقة يصححها مؤمل وقصي بالسر، وتطلع جنب درجة المصحح، وولا شي يتغير بالورقة", async () => {
+  const id = await paper([1, 2]);
+  const it = (await one("sched_items", { id }))!;
+  await put("sched_items", { ...it, graded_at: "2026-11-23 10:00", grader_id: 55, total: 40 });
+  await put("question_marks", { item_id: id, q: 1, mark: 20 });
+  await put("question_marks", { item_id: id, q: 2, mark: 20 });
+  const n: any = await qusayAction({ initData: sign(1), action: "compare", exam: it.exam_id, n: 3 });
+  assert.match(n.notice, /تنتظر المقارنة/);
+  const row = n.cmp.rows.find((r: any) => r.id === id);
+  assert.ok(row.waiting);
+  assert.equal(row.ref.total, 40, "درجة المصحح هي المرجع");
+  // مؤمل (خدمته وهمية) وقصي يصححون بالدكة
+  const A = await import("../lib/aiGrade.ts");
+  const before = tg.length;
+  reply = () => withMarks;
+  await Q.qusayTick(finishByAi);
+  const c = (await Q.cmpOf(id))!;
+  assert.ok(c.qg, "قصي صحح");
+  assert.ok(c.mu || c.muErr, "مؤمل صحح لو كتب ليش ما گدر");
+  assert.equal(Number((await one("sched_items", { id }))!.total), 40, "درجة الورقة ما تغيرت");
+  assert.equal(tg.slice(before).filter((m) => m.method.startsWith("send") && m.p.chat_id !== 1).length, 0, "ولا شي وصل للطالب");
+  const v: any = await qusayAction({ initData: sign(1), action: "compareView", exam: it.exam_id });
+  assert.equal(v.cmp.rows.find((r: any) => r.id === id).qg.total, c.qg!.total);
+  const cl: any = await qusayAction({ initData: sign(1), action: "compareClear", exam: it.exam_id });
+  assert.match(cl.notice, /انمسحت/);
+  assert.equal(await Q.cmpOf(id), null);
+  void A;
+});

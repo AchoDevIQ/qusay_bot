@@ -444,6 +444,8 @@ export async function aiResultOf(itemId: number): Promise<AiQuestion[] | null> {
 }
 
 /** يصحح ورقة وحدة: يرجع درجة كل سؤال، أو يرمي خطأ إذا ما يگدر */
+/** «⚖️ قارن» بصفحة تصحيح قصي (2026-11-23): نظام مؤمل يصحح الورقة بالسر، بدون أي حفظ ولا إرسال */
+export const gradeHidden = (it: Row) => gradePaper(it, false);
 async function gradePaper(it: Row, withExamples = true, photo = false): Promise<AiQuestion[]> {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   if (!qs.length) throw new Error("ماكو أسئلة");
