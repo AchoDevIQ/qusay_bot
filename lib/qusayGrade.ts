@@ -20,18 +20,27 @@ import { stamp } from "./util.ts";
 export const QG_PERM = "qusay";
 /** low: يفكر أقل وأرخص. medium: يفكر أكثر وأدق (الأصل) */
 export type QgEffort = "low" | "medium";
+/** الذكاء اللي يصحح (طلب الأستاذ 2026-11-23: «إذا أكو شي يعلي الجودة قلي، حتى لو أغلى»):
+ *  haiku الأرخص (الأصل)، sonnet أدق بقراءة الخط والرسم وتطبيق قواعده (تقريباً 20 مرة أغلى)، opus الأدق (تقريباً 40 مرة) */
+export type QgModel = "haiku" | "sonnet" | "opus";
+export const QG_MODELS: Record<QgModel, { id: string; p: { in: number; cw: number; cr: number; out: number } }> = {
+  haiku: { id: MODEL, p: { in: 0.1, cw: 0.125, cr: 0.01, out: 0.5 } },
+  sonnet: { id: "claude-sonnet-5-5", p: { in: 2, cw: 2.5, cr: 0.1, out: 10 } },
+  opus: { id: "claude-opus-5-5", p: { in: 4, cw: 5, cr: 0.2, out: 20 } },
+};
 /** live: المواضيع اللي يصححها صدگ. batch: بالدفعة (أرخص بالنص، والدرجة تتأخر، وهي الأصل من 2026-11-21).
  *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل).
  *  unsure: الورقة اللي يشك بيها: «send» يصححها ويبعث درجتها ويكتب السبب بالسجل (الأصل، طلب الأستاذ 2026-11-21)، «graders» ترجع للمصححين */
 /** obj: الاعتراض على أوراقه، «qusay» يراجعه هو أول، «person» يروح لـ objTo (مساعد عنده صلاحية الاعتراضات، 0 = صاحب البوت) */
-export type QgSettings = { live: number[]; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number };
+export type QgSettings = { live: number[]; model: QgModel; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number };
 /** مكان على صور جواب الطالب: p رقم الصورة (من 1)، x من اليسار و y من فوك، من 0 لـ 1000 من عرضها وطولها */
 export type QgPt = { p: number; x: number; y: number };
 /** at: وين مكتوبة الخطوة على ورقة الطالب، حتى تنرسم عليها ✓ أو ✗ حمرة مثل قلم المدرس (بس إذا «🖍 العلامات» شغالة) */
 /** hw: رقم عبارة من «✍️ خط إيدي» تقول نفس الملاحظة، فتنرسم بخط الأستاذ نفسه بدل الخط */
 export type QgStep = { text: string; points: number; awarded: number; note: string; at?: QgPt; hw?: number };
 export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[]; at?: QgPt; hw?: number };
-export type QgTokens = { in: number; cw: number; cr: number; out: number };
+/** m: الذكاء اللي جاوب (من جوابه نفسه)، حتى السعر ينحسب صح */
+export type QgTokens = { in: number; cw: number; cr: number; out: number; m?: string };
 /** نتيجة ورقة: trial تجربة مخفية على ورقة صححها مصحح (human درجته)، live ورقة صححها صدگ (لو رجعها للمصححين إذا ما متأكد) */
 export type QgResult = { at: string; kind: "trial" | "live"; total: number; sure: boolean; qs: QgQuestion[]; usd: number; tokens: QgTokens; batch: boolean; human?: number | null; sent?: boolean; pages?: string[] };
 /** «🖍 جرب العلامات»: تصحيح ثاني لورقة بالعلامات على الورقة، ينحفظ لحاله وما يغير درجتها ولا يوصل شي للطالب */
@@ -78,7 +87,7 @@ export async function qgSettings(): Promise<QgSettings> {
   const cap = Number(s.cap);
   // الإعدادات القديمة (قبل v 2) كانت «هسه» بالأصل: تصير بالدفعة، طلب الأستاذ 2026-11-21
   const v2 = Number(s.v) >= 2;
-  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "", obj: s.obj === "qusay" ? "qusay" : "person", objTo: Number(s.objTo) > 0 ? Number(s.objTo) : 0 };
+  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], model: s.model === "sonnet" || s.model === "opus" ? s.model : "haiku", effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "", obj: s.obj === "qusay" ? "qusay" : "person", objTo: Number(s.objTo) > 0 ? Number(s.objTo) : 0 };
 }
 export async function saveQgSettings(p: Partial<QgSettings>) {
   const s = { ...await qgSettings(), ...p, v: 2 };
@@ -94,7 +103,9 @@ async function addLog(row: QgLog) {
 }
 /** صرفية اليوم (أو الشهر) من السجل */
 export const spentFrom = (log: QgLog[], prefix: string) => log.filter((r) => r.at.startsWith(prefix)).reduce((t, r) => t + (r.usd ?? 0), 0);
-export const usdOf = (t: QgTokens, batch: boolean) => ((t.in * PRICE.in + t.cw * PRICE.cw + t.cr * PRICE.cr + t.out * PRICE.out) / 1_000_000) * (batch ? 0.5 : 1);
+const priceOf = (m?: string) => (m?.includes("opus") ? QG_MODELS.opus.p : m?.includes("sonnet") ? QG_MODELS.sonnet.p : PRICE);
+export const usdOf = (t: QgTokens, batch: boolean) => { const P = priceOf(t.m); return ((t.in * P.in + t.cw * P.cw + t.cr * P.cr + t.out * P.out) / 1_000_000) * (batch ? 0.5 : 1); };
+const modelId = async () => QG_MODELS[(await qgSettings()).model].id;
 
 // ---------- الكلام ويا الذكاء (الفحوصات تبدله بواحد وهمي)
 type Req = Anthropic.MessageCreateParamsNonStreaming;
@@ -468,7 +479,7 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
   body.push({ type: "text", text: `\nGrade questions ${asked.join(", ")}. Return one entry per question, with one step entry per step of the method you chose (i = step number).` });
   const req: Req = {
     // ويا العلامات يكتب أكثر (مربع كل سطر)، و12 ألف چانت تنقطع (2026-11-21). ينحسب بس اللي يكتبه فعلاً
-    model: MODEL, max_tokens: 32000,
+    model: await modelId(), max_tokens: 32000,
     system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) + await topicRules(Number(it.exam_id)) + handText(await inkFor(Number(it.exam_id))) : ""), cache_control: { type: "ephemeral" } }],
     output_config: { effort, format: { type: "json_schema", schema: schemaOf(marks) as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content: [...head, ...body] }],
@@ -620,14 +631,14 @@ export async function qusayJudgeObjection(it: Row, n: number, text: string, oldM
   for (const a of pages) { const b = await readRef(String(a.file)); if (b) content.push(block(b, `جواب سؤال ${n}`)); }
   content.push({ type: "text", text: `\nTHE STUDENT'S OBJECTION:\n${text.slice(0, 1500)}` });
   const req: Req = {
-    model: MODEL, max_tokens: 8000,
+    model: await modelId(), max_tokens: 8000,
     system: [{ type: "text", text: SYSTEM + OBJ_TEXT + styleText(s.style) + await topicRules(Number(it.exam_id)) }],
     output_config: { effort: s.effort, format: { type: "json_schema", schema: OBJ_SCHEMA as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content }],
   };
   const msg = await apiImpl.create(req);
   const u = msg.usage;
-  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 }, false);
+  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0, m: msg.model }, false);
   await addSpend("qusay", usd);
   let j: any = {};
   try { j = JSON.parse(msg.content.map((b) => (b.type === "text" ? b.text : "")).join("")); } catch { throw new Error("جواب الذكاء مو مفهوم"); }
@@ -658,7 +669,7 @@ export async function tidyNotes(text: string): Promise<{ text: string; usd: numb
   if (!raw) throw new Error("ماكو كلام حتى أرتبه");
   const msg = await apiImpl.create({ model: MODEL, max_tokens: 16000, system: TIDY, output_config: { effort: "low" }, messages: [{ role: "user", content: raw }] } as Req);
   const u = msg.usage;
-  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 }, false);
+  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0, m: msg.model }, false);
   await addSpend("qusay", usd);
   if (msg.stop_reason === "max_tokens") throw new Error("الكلام طويل كلش، رتبه على دفعتين");
   const out = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
@@ -680,7 +691,7 @@ export async function readNotesScan(kind: "pdf" | "image", name: string, b64: st
     : { type: "image", source: { type: "base64", media_type: media, data: b64 } };
   const msg = await apiImpl.create({ model: MODEL, max_tokens: 16000, system: SCAN, output_config: { effort: "low" }, messages: [{ role: "user", content: [block, { type: "text", text: "انقل كلامه مثل ما هو." }] }] } as Req);
   const u = msg.usage;
-  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 }, false);
+  const usd = usdOf({ in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0, m: msg.model }, false);
   await addSpend("qusay", usd);
   if (msg.stop_reason === "max_tokens") throw new Error("الملف طويل كلش، قسمه لملفين");
   const out = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
@@ -698,7 +709,7 @@ const priced = (e: unknown, batch: boolean) => { if (e instanceof PaidError) e.u
 async function chargeFailed(e: unknown) { if (e instanceof PaidError && e.usd > 0) { await addSpend("qusay", e.usd); return e.usd; } return undefined; }
 export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<number>, answerOnly: boolean, pages = 0): { qs: QgQuestion[]; tokens: QgTokens } {
   const u = msg.usage;
-  const tokens = { in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0 };
+  const tokens = { in: u.input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, out: u.output_tokens ?? 0, m: msg.model };
   if (msg.stop_reason === "refusal") throw new PaidError("الذكاء رفض يصحح الورقة", tokens);
   if (msg.stop_reason === "max_tokens") throw new PaidError("جواب الذكاء طويل وانگطع", tokens);
   let j: { questions?: any[] } = {};

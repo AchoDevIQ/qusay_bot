@@ -135,6 +135,7 @@ export async function qusayAction(body: Row) {
   if (a === "settings") {
     const p: Row = {};
     if (body.effort === "low" || body.effort === "medium") p.effort = body.effort;
+    if (body.model === "haiku" || body.model === "sonnet" || body.model === "opus") p.model = body.model;
     if (typeof body.batch === "boolean") p.batch = body.batch;
     if (typeof body.carry === "boolean") p.carry = body.carry;
     if (body.unsure === "send" || body.unsure === "graders") p.unsure = body.unsure;
@@ -199,7 +200,7 @@ export async function qusayAction(body: Row) {
   }
   if (a === "marks") {
     try { await queueMarks(Number(body.id)); } catch (e) { fail(e); }
-    return await out(`🖍 تنتظر. خلال دقيقة لو دقيقتين يعيد تصحيحها ويرسم العلامات على الورقة (⚡ هسه، تقريباً 6 دنانير)${(await qgOn()) ? "" : ". شغّل «تصحيح قصي» أول حتى يبدي"}. درجتها الأصلية ما تتغير. بعدها دوس 🔄 حدّث وافتح 👁 مرة ثانية.`, { paper: await paperDetail(Number(body.id)) });
+    return await out(`🖍 تنتظر. خلال دقيقة لو دقيقتين يعيد تصحيحها ويرسم العلامات على الورقة (⚡ هسه، كلفة ورقة وحدة)${(await qgOn()) ? "" : ". شغّل «تصحيح قصي» أول حتى يبدي"}. درجتها الأصلية ما تتغير. بعدها دوس 🔄 حدّث وافتح 👁 مرة ثانية.`, { paper: await paperDetail(Number(body.id)) });
   }
   // «✍️ خط إيدي»: العام (exam=0) أو الخاص بموضوع
   if (a === "inkList" || a === "inkAdd" || a === "inkDel") {

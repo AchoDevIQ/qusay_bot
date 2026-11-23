@@ -15,7 +15,7 @@ type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; h
 type TrialRow = { id: number; name: string; exam: string; human: number | null; qusay: number; sure: boolean; iqd: number; at: string };
 type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
 type Data = {
-  on: boolean; key: boolean; settings: { live: number[]; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number }; fileToken: string; objStaff: { id: number; name: string }[];
+  on: boolean; key: boolean; settings: { live: number[]; model: "haiku" | "sonnet" | "opus"; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number }; fileToken: string; objStaff: { id: number; name: string }[];
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
   trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
@@ -120,6 +120,7 @@ function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["
   const [obj, setObj] = useState(s.obj);
   const [objTo, setObjTo] = useState(s.objTo);
   const [effort, setEffort] = useState(s.effort);
+  const [model, setModel] = useState(s.model);
   const [batch, setBatch] = useState(s.batch);
   const [cap, setCap] = useState(String(s.cap));
   const [carry, setCarry] = useState(s.carry);
@@ -129,6 +130,13 @@ function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["
   return (
     <div className="card expad">
       <div className="exlabel">⚙️ الإعدادات</div>
+      <div className="exhint">الذكاء اللي يصحح (كل ما أدق، أغلى). جربه على نفس أوراق التجربة وقارن قبل ما تشغله صدگ</div>
+      <select value={model} onChange={(e) => setModel(e.target.value as "haiku" | "sonnet" | "opus")}>
+        <option value="haiku">⚡ Haiku: الأرخص (الورقة تقريباً 15 دينار)</option>
+        <option value="sonnet">🎯 Sonnet: أدق بقراءة الخط والرسم وتطبيق قواعدك (تقريباً 20 مرة أغلى، الورقة 250 لحد 300 دينار)</option>
+        <option value="opus">🏆 Opus: الأدق (تقريباً 40 مرة أغلى، الورقة 500 لحد 600 دينار)</option>
+      </select>
+      <div className="exhint">بالدفعة 🌙 كل هذي الأسعار تصير النص.</div>
       <div className="exhint">التفكير</div>
       <select value={effort} onChange={(e) => setEffort(e.target.value as "low" | "medium")}>
         <option value="medium">🧠 يفكر أكثر وأدق (الأصل)</option>
@@ -173,7 +181,7 @@ function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["
       </select>
       <div className="exhint">✍️ طريقتك بالكتابة: اكتب أو احچي (🎤 فويس) أمثلة من ملاحظاتك مثل ما تكتبها على ورقة الطالب، كل وحدة بسطر (مثلاً: «المفروض 23π/12» ، «نسيت تعوض» ، «ركز بالإشارة»). يكتب مثلك بالعلامات الحمرة وبـ 🖍 جرب العلامات</div>
       <VoiceText value={style} onChange={setStyle} />
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", effort, batch, cap: Number(cap), carry, unsure, marks, style, obj, objTo })}>💾 احفظ</button>
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", model, effort, batch, cap: Number(cap), carry, unsure, marks, style, obj, objTo })}>💾 احفظ</button>
     </div>
   );
 }
@@ -337,7 +345,7 @@ function PaperView({ p, fileUrl, busy, call, close }: { p: Paper; fileUrl: (ref:
         {/* 🖍 يعيد تصحيحها بالعلامات الحمرة على الورقة، لحالها: درجتها الأصلية ما تتغير */}
         {p.demo && <div className="exhint">🖍 العلامات على الورقة: صححها مرة ثانية بالعلامات ({p.demo.at}) وانطاها <b>{p.demo.total}</b> · {p.demo.iqd} دينار. شوف «🖍 على الورقة» بكل سؤال.</div>}
         {p.demoWaiting ? <div className="exhint">🖍 تنتظر: خلال دقيقة لو دقيقتين ترسم العلامات. دوس 🔄 حدّث وافتح 👁 مرة ثانية.</div>
-          : <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "marks", id: p.id })}>🖍 {p.demo ? "أعد" : "جرب"} العلامات على هاي الورقة (تقريباً 6 دنانير)</button>}
+          : <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "marks", id: p.id })}>🖍 {p.demo ? "أعد" : "جرب"} العلامات على هاي الورقة (كلفة ورقة وحدة)</button>}
       </div>
       <div className="exhint">✏️ إذا خطوة درجتها غلط: افتح «📝 التصحيح» بالسؤال ← ✏️ صلّح ← الدرجة الصح وليش ← 🧠 احفظ وعلّمه. يصلح هاي الورقة، ويتعلمها لكل ورقة جاية بهذا الموضوع.</div>
       {p.qs.map((q) => <QView key={q.n} q={q} fileUrl={fileUrl} photos={p.photos.filter((f) => f.q === q.n).map((f) => fileUrl(f.ref))} busy={busy}

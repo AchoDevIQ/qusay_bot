@@ -761,3 +761,16 @@ test("🪄 رتّب كلامي: يرجع الكلام مرتب، وينحسب ب
   assert.equal(typeof r.tidy, "string");
   await assert.rejects(qusayAction({ initData: sign(1), action: "tidy", text: "  " }), /ماكو كلام/);
 });
+
+test("الذكاء اللي يصحح يتبدل (Haiku / Sonnet / Opus)، وكل واحد بسعره", async () => {
+  const t = { in: 1_000_000, cw: 0, cr: 0, out: 0 };
+  assert.equal(Q.usdOf(t, false), 0.1);
+  assert.equal(Q.usdOf({ ...t, m: "claude-sonnet-5-5" }, false), 2);
+  assert.equal(Q.usdOf({ ...t, m: "claude-opus-5-5" }, true), 2, "الدفعة نص");
+  const r: any = await qusayAction({ initData: sign(1), action: "settings", model: "sonnet" });
+  assert.equal(r.settings.model, "sonnet");
+  assert.equal(Q.QG_MODELS[(await Q.qgSettings()).model].id, "claude-sonnet-5-5");
+  await qusayAction({ initData: sign(1), action: "settings", model: "nonsense" });
+  assert.equal((await Q.qgSettings()).model, "sonnet", "قيمة غلط ما تنحفظ");
+  await qusayAction({ initData: sign(1), action: "settings", model: "haiku" });
+});
