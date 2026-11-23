@@ -225,6 +225,14 @@ export async function qusayAction(body: Row) {
     return await out(`🖍 تنتظر. خلال دقيقة لو دقيقتين يعيد تصحيحها ويرسم العلامات على الورقة (⚡ هسه، كلفة ورقة وحدة)${(await qgOn()) ? "" : ". شغّل «تصحيح قصي» أول حتى يبدي"}. درجتها الأصلية ما تتغير. بعدها دوس 🔄 حدّث وافتح 👁 مرة ثانية.`, { paper: await paperDetail(Number(body.id)) });
   }
   // «✍️ خط إيدي»: العام (exam=0) أو الخاص بموضوع
+  // 🖋 خذ خطي من الأوراق اللي صححتها بإيدي بهذا الموضوع
+  if (a === "harvestExam") {
+    const ex = Number(body.exam) || 0;
+    need(ex > 0 && await one("bank_exams", { id: ex }), "اختار الموضوع");
+    const { queueExam, examplesOf } = await import("./inkHarvest.ts");
+    const n = await queueExam(ex);
+    return await out(n ? `🖋 ${n} ورقة صححتها بإيدك تنقرا (ورقتين كل دقيقة): علاماتك وملاحظاتك تنضاف لخطك بهذا الموضوع، ودرجاتك تصير أمثلة لتصحيح قصي.` : `ماكو أوراق جديدة صححتها بإيدك بالقلم بهذا الموضوع. عنده هسه ${(await examplesOf(ex)).length} ورقة من تصحيحك.`, { inkOf: { exam: ex, items: await inkList(ex) } });
+  }
   if (a === "inkList" || a === "inkAdd" || a === "inkDel") {
     const ex = Number(body.exam) || 0;
     if (ex) need(await one("bank_exams", { id: ex }), "الموضوع غير موجود");

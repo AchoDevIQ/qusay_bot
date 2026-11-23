@@ -70,6 +70,10 @@ export default function InkBook({ exam, call, busy }: { exam: number; call: Call
         {exam ? "خطك الخاص بهذا الموضوع: ينضاف فوك خطك العام، ويطلع بس بأوراق هذا الموضوع (مثلاً ملاحظات تخص قانون هذا الموضوع)." : "خطك لكل المواضيع."}
         {" "}افتح هاي الصفحة بالآيباد واكتب بالقلم. كل شي تكتبه تشوف شلون يطلع على ورقة الطالب قبل ما ترفعه. ما يكلف فلوس.
       </div>
+      {exam > 0 && <>
+        <div className="exhint">🖋 أو خليه ياخذ خطك وحده: كل ورقة تصححها بإيدك بالقلم بهذا الموضوع، علاماتك (✓ ✗ ؟) وملاحظاتك تنقرا وتنضاف هنا بخطك، ودرجاتك وملاحظاتك تصير أمثلة يتعلم منها تصحيح قصي. الأوراق الجديدة تنقرا وحدها من تحفظ تصحيحها، والقديمة بهذا الزر:</div>
+        <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "harvestExam", exam }).then((d) => { if (d?.inkOf?.exam === exam) setItems(d.inkOf.items); })}>🖋 خذ خطي من الأوراق اللي صححتها</button>
+      </>}
       {KINDS.map((k) => {
         const mine = items.filter((x) => x.kind === k.k);
         return (

@@ -790,6 +790,8 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   const total = paperTotal(view.questions, view.answerOnly);
   await update("sched_items", { id: it.id }, { total, graded_at: stamp() });
   await keepPages(it.id, photos);
+  // 🖋 صححها الأستاذ بإيده: علاماته وملاحظاته تنقرا وتنضاف لخط إيده، ودرجاته تصير مثال لتصحيح قصي
+  if (ADMIN_IDS.includes(uid)) { const { queueHarvest } = await import("./inkHarvest.ts"); await queueHarvest(it.id).catch(() => false); }
   const head = `📝 <b>تم تصحيح امتحان ${view.title}</b>\nالدرجة: <b>${total}</b> من 100`;
   const chosen = commentId ? await one("grade_comments", { id: commentId }) : null;
   const c = chosen ? { text: chosen.text as string, sticker: chosen.sticker_id ? await one("stickers", { id: chosen.sticker_id }) : null }

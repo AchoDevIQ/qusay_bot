@@ -290,7 +290,10 @@ const lessonsText = (l: QgLesson[]) => (l.length ? `
 WHAT QUSAY TAUGHT YOU BY CORRECTING YOUR GRADING (these have the same force as his rules above: whenever the same situation comes up, on any paper and any version, grade it his way):
 ${l.map((x) => `- Question ${x.q}, step «${x.step.slice(0, 160)}»: you gave ${x.from} of ${x.max}; Qusay corrected it to ${x.to} of ${x.max}. His reason: ${x.why}`).join("\n")}` : "");
 /** قواعد الموضوع كلها: ملفه، وبعدها اللي علمه من تصحيحاته */
-export const topicRules = async (examId: number) => topicText(await examStyle(examId)) + lessonsText(await lessonsOf(examId));
+export const topicRules = async (examId: number) => {
+  const { examplesOf, examplesText } = await import("./inkHarvest.ts");
+  return topicText(await examStyle(examId)) + lessonsText(await lessonsOf(examId)) + examplesText(await examplesOf(examId));
+};
 /** التصحيح اللي ينعرض: «🖍 جرب العلامات» الأحدث، وإلا التصحيح نفسه */
 export async function shownResult(id: number) {
   const r = await qgResultOf(id);
@@ -1132,6 +1135,8 @@ async function testPaperFor(it: Row) {
 }
 /** دكة المؤقت (كل دقيقة): يصحح أوراق مواضيعه، ويكمل التجربة، ويستلم الدفعات اللي رجعت */
 export async function qusayTick(finish: (uid: number, itemId: number) => Promise<unknown>) {
+  // 🖋 خط الأستاذ من الأوراق اللي صححها بإيده: يمشي حتى لو تصحيح قصي طافي (رخيص، Haiku)
+  if (keyReady()) { const { harvestTick } = await import("./inkHarvest.ts"); await harvestTick(qgCreate, MODEL).catch((e) => console.error("harvest", e)); }
   if (!await qgOn()) return { off: true };
   if (!keyReady()) return { noKey: true };
   const s = await qgSettings();

@@ -816,3 +816,33 @@ test("⚖️ قارن: نفس الورقة يصححها مؤمل وقصي بال
   assert.equal(await Q.cmpOf(id), null);
   void A;
 });
+
+test("🖋 خطي من أوراقي: علامات الأستاذ بالقلم تنقرا وتنضاف لخط إيده بموضوعها، ودرجاته وملاحظاته تصير أمثلة لتصحيح قصي", async () => {
+  const H = await import("../lib/inkHarvest.ts");
+  const id = await paper([1, 2]);
+  const it = (await one("sched_items", { id }))!;
+  await put("sched_items", { ...it, graded_at: "2026-11-23 11:00", grader_id: 1, total: 25 });
+  await put("question_marks", { item_id: id, q: 1, mark: 10 });
+  await put("question_marks", { item_id: id, q: 2, mark: 15 });
+  // صفحة 0 (س1): ✓ يسار فوك. صفحة 1 (س2): ملاحظة بعيدة
+  const tick = { t: "s", c: "#d40000", w: 5, p: [0.1, 0.1, 0.12, 0.13, 0.16, 0.06] };
+  const note = [{ t: "s", c: "#d40000", w: 5, p: [0.5, 0.7, 0.6, 0.72] }, { t: "s", c: "#d40000", w: 5, p: [0.61, 0.7, 0.7, 0.71] }];
+  await put("paper_ink", { item_id: id, page: 0, ink: JSON.stringify({ rot: 0, items: [tick] }) });
+  await put("paper_ink", { item_id: id, page: 1, ink: JSON.stringify({ rot: 0, items: note }) });
+  assert.equal(await H.queueHarvest(id), true);
+  assert.equal(await H.queueHarvest(id), true, "مرة وحدة بالطابور");
+  const reqs: any[] = [];
+  const create = async (r: any) => { reqs.push(r); return { content: [{ type: "text", text: JSON.stringify({ items: [{ k: 1, kind: "tick", text: "✓" }, { k: 2, kind: "note", text: "نسيت تعوض" }] }) }], usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: "end_turn", model: "claude-haiku-5-5" } as any; };
+  assert.equal(await H.harvestTick(create, "claude-haiku-5-5"), 1);
+  assert.equal(reqs[0].messages[0].content.filter((b: any) => b.type === "image").length, 2, "كل علامة صورة لحالها");
+  const ink = await Q.inkList(Number(it.exam_id));
+  assert.ok(ink.some((x) => x.kind === "tick"), "✓ بخطه");
+  assert.ok(ink.some((x) => x.kind === "note" && x.text === "نسيت تعوض"), "ملاحظته بخطه ويا نصها");
+  const ex = await H.examplesOf(Number(it.exam_id));
+  const mine = ex.find((e) => e.item === id)!;
+  assert.deepEqual(mine.qs.map((q) => [q.n, q.mark, q.notes]), [[1, 10, []], [2, 15, ["نسيت تعوض"]]]);
+  assert.match(await Q.topicRules(Number(it.exam_id)), /HOW QUSAY HIMSELF GRADED[^]*Q2 15\/\d+ \(he wrote: «نسيت تعوض»\)/);
+  assert.equal(await H.queueHarvest(id), false, "الورقة انقرت، ما تنعاد");
+  const r: any = await qusayAction({ initData: sign(1), action: "harvestExam", exam: it.exam_id });
+  assert.match(r.notice, /ماكو أوراق جديدة/);
+});
