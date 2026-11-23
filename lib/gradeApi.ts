@@ -626,8 +626,9 @@ export async function gradeAction(body: Row) {
     await remove("question_marks", { item_id: it.id });
     await remove("paper_ink", { item_id: it.id });
     await clearPaperVoices(it.id);
-    await update("sched_items", { id: it.id }, { grader_id: null });
-    notice = "↩️ رجعت الورقة للقائمة";
+    // ورقة طالب تجربة: تبقى محجوزة إله (تخطيها ما يرجعها للقائمة، فما يأخذها «تصحيح قصي» لو مصحح ثاني، طلبه 2026-11-23)
+    if (!isTest(it)) await update("sched_items", { id: it.id }, { grader_id: null });
+    notice = isTest(it) ? "⏭ تخطيتها. ورقة التجربة تبقى إلك بالقائمة" : "↩️ رجعت الورقة للقائمة";
   } else if (a === "prepare") {
     // قبل الحفظ: المقولة والملصق حتى الصفحة تركب صورة الغلاف
     const { it, obj } = await workPaper(uid, body.id);
@@ -688,7 +689,7 @@ export async function gradeAction(body: Row) {
   } else if (a === "setRate" || a === "settle") {
     return { ...await listData(uid), paper: null, notice: await payAction(uid, body), pay: await payData(uid) };
   } else if (a === "history") {
-    return { ...await listData(uid), paper: null, notice: "", history: await historyOf(uid, body.day) };
+    return { ...await listData(uid), paper: null, notice: "", history: await historyOf(uid, body.day, body.all === true) };
   } else if (a === "objLog") {
     return { ...await listData(uid), paper: null, notice: "", objLog: await objLogOf(uid, body.day, body.q) };
   } else if (a === "reopenObj") {
@@ -1062,11 +1063,13 @@ async function objLogOf(uid: number, rawDay: unknown, rawQ?: unknown) {
 
 /** سجل التصحيح: المصحح يشوف أوراقه، وصاحب البوت يشوف كل الأوراق ومنو صححها، ويا حالة الاعتراضات */
 /** السجل يوم يوم: أول ما يفوت أوراق اليوم، وفوك أيام هذا الشهر يرجع بيها. والمصحح يشوف المبلغ اللي إله */
-async function historyOf(uid: number, rawDay: unknown) {
+/** all: صاحب البوت يشوف أوراق كل المصححين (والذكاء). بالأصل أوراقه هو بس، حتى العد يكون إله (طلبه 2026-11-23) */
+async function historyOf(uid: number, rawDay: unknown, all0 = false) {
   const owner = await isAdmin(uid);
+  const everyone = owner && all0;
   const today = todayStr();
   const day = /^\d{4}-\d{2}-\d{2}$/.test(String(rawDay ?? "")) && String(rawDay) <= today ? String(rawDay) : today;
-  const mine = (await find("sched_items", { status: "done" })).filter((p) => p.graded_at && (owner || p.grader_id === uid));
+  const mine = (await find("sched_items", { status: "done" })).filter((p) => p.graded_at && (everyone || p.grader_id === uid));
   const all = mine.filter((p) => String(p.graded_at).startsWith(day)).sort((a, b) => String(b.graded_at).localeCompare(String(a.graded_at)));
   const rows = all;
   const objs = await find("objections", {});
@@ -1081,7 +1084,7 @@ async function historyOf(uid: number, rawDay: unknown) {
   const due = owner ? null : (await balanceOf(uid)).amount;
   return {
     day, days, prev: `${prev}-01`, next: next ? (next === today.slice(0, 7) ? today : `${next}-01`) : "", due,
-    page: 0, pages: 1, count: all.length, owner,
+    page: 0, pages: 1, count: all.length, owner, everyone,
     rows: await Promise.all(rows.map(async (p) => {
       const mine = objs.filter((o) => o.item_id === p.id);
       return { ...await paperRow(p), objOpen: mine.filter((o) => o.status === "open").length, objOk: mine.filter((o) => o.status === "accepted").length, objNo: mine.filter((o) => o.status === "rejected").length };

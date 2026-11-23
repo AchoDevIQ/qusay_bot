@@ -82,6 +82,28 @@ function png(sh: { w: number; h: number; s: number[][] }) {
   return cv.toBuffer("image/png").toString("base64");
 }
 
+const PAGE_READ = `This is one page of a math teacher's pen marking on a student's paper (Iraqi 6th grade, Arabic): only his pen strokes are drawn, the student's writing is not shown.
+Find every separate mark he made and give its kind, its text, and its box (x0, y0, x1, y1) on a 0–1000 scale of the page width (x, left to right) and height (y, top to bottom). Boxes must not include a neighbouring mark.
+- "tick": a check mark ✓ (any style)
+- "cross": a cross or a loop-cross mark for wrong (often like an α / ∝ loop)
+- "ask": a question mark ؟
+- "praise": a praise word (ممتاز، أحسنت، عاشت إيدك...)
+- "note": a written note to the student (Arabic words, maybe with math): one note = one sentence or one idea; write its text exactly as written, math in phone style (x², 3/x²)
+- "other": a number, a score, a short dash, an underline, an arrow, a circle around something, a scribble, or anything unreadable
+Return {"items":[{"kind":...,"text":...,"box":[x0,y0,x1,y1]}]}.`;
+const PAGE_SCHEMA = { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { kind: { type: "string", enum: ["tick", "cross", "ask", "praise", "note", "other"] }, text: { type: "string" }, box: { type: "array", items: { type: "number" } } }, required: ["kind", "text", "box"], additionalProperties: false } } }, required: ["items"], additionalProperties: false };
+const area = (b: number[] = []) => Math.abs((Number(b[2]) - Number(b[0])) * (Number(b[3]) - Number(b[1]))) || 1e9;
+const priceOf = (m: string, u: Anthropic.Usage) => { const p = m.includes("opus") ? [4, 20] : m.includes("sonnet") ? [2, 10] : [0.1, 0.5]; return (((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) * p[0] + (u.output_tokens ?? 0) * p[1]) / 1_000_000; };
+/** الصفحة كاملة بخطوطه بس (أسود على أبيض) */
+function pagePng(b: Box) {
+  const W = 800, H = 1080;
+  const cv = createCanvas(W, H);
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "#000"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (const st of b.strokes) { ctx.beginPath(); for (let i = 0; i + 1 < st.p.length; i += 2) (i ? ctx.lineTo(st.p[i] * W, st.p[i + 1] * H) : ctx.moveTo(st.p[i] * W, st.p[i + 1] * H)); ctx.stroke(); }
+  return cv.toBuffer("image/png").toString("base64");
+}
 const READ = `These are small pieces of a math teacher's red-pen marking on a student's paper (Iraqi 6th grade, Arabic), each cut out and numbered.
 For each piece say what it is:
 - "tick": a check mark ✓ (any style)
@@ -110,24 +132,45 @@ export async function harvestPaper(itemId: number, create: Create, model: string
   if (!it) return { added: 0 };
   const exam = Number(it.exam_id);
   const pages = await find("paper_ink", { item_id: itemId });
-  const boxes: Box[] = [];
+  // الصفحة كاملة تنرسم وتنبعث، والذكاء يحدد كل علامة بمربعها (✗ يم ملاحظة كانت تنلزگ بيها لما چنا نجمع الخطوط القريبة)
+  const pick: Box[] = [];
+  const items: { k: number; kind: string; text: string }[] = [];
+  let usd = 0;
   for (const r of pages) {
     let j: { items?: unknown[] } = {};
     try { j = JSON.parse(String(r.ink ?? "{}")); } catch { continue; }
-    boxes.push(...clusters(((j.items ?? []) as Stroke[]).filter((x) => x?.t === "s" && Array.isArray(x.p)), Number(r.page)));
-  }
-  const pick = boxes.slice(0, PER_PAPER);
-  const content: Anthropic.ContentBlockParam[] = [];
-  const shapes = pick.map(shapeOf);
-  shapes.forEach((sh, k) => { content.push({ type: "text", text: `[${k + 1}]` }, { type: "image", source: { type: "base64", media_type: "image/png", data: png(sh) } }); });
-  let items: { k: number; kind: string; text: string }[] = [];
-  if (pick.length) {
-    content.push({ type: "text", text: READ });
-    const m = await create({ model, max_tokens: 4000, output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } }, messages: [{ role: "user", content }] } as Anthropic.MessageCreateParamsNonStreaming);
+    const strokes = ((j.items ?? []) as Stroke[]).filter((x) => x?.t === "s" && Array.isArray(x.p) && x.p.length >= 4);
+    if (!strokes.length) continue;
+    const page = Number(r.page);
+    const all: Box = { x0: 0, y0: 0, x1: 1, y1: 1, strokes, page };
+    const img = pagePng(all);
+    const m = await create({ model, max_tokens: 6000, output_config: { effort: "low", format: { type: "json_schema", schema: PAGE_SCHEMA } },
+      messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: img } }, { type: "text", text: PAGE_READ }] }] } as Anthropic.MessageCreateParamsNonStreaming);
     const u = m.usage;
-    await addSpend("pen", (((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) * 0.1 + (u.output_tokens ?? 0) * 0.5) / 1_000_000);
-    try { items = JSON.parse(m.content.map((b) => (b.type === "text" ? b.text : "")).join("")).items ?? []; } catch { items = []; }
+    usd += priceOf(m.model, u);
+    let got: { kind: string; text: string; box: number[] }[] = [];
+    try { got = JSON.parse(m.content.map((b) => (b.type === "text" ? b.text : "")).join("")).items ?? []; } catch { got = []; }
+    // كل خط ينحسب للمربع اللي بيه نصه، وإذا مربعين يغطوه، للأصغر
+    const taken = new Set<Stroke>();
+    for (const g of got.sort((a, b) => area(a.box) - area(b.box))) {
+      const [bx0, by0, bx1, by1] = (g.box ?? []).map((v) => Number(v) / 1000);
+      if (![bx0, by0, bx1, by1].every(Number.isFinite)) continue;
+      const pad = 0.015;
+      const mine = strokes.filter((st) => {
+        if (taken.has(st)) return false;
+        const xs = st.p.filter((_, i) => i % 2 === 0), ys = st.p.filter((_, i) => i % 2 === 1);
+        const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+        return cx >= bx0 - pad && cx <= bx1 + pad && cy >= by0 - pad && cy <= by1 + pad;
+      });
+      if (!mine.length || pick.length >= PER_PAPER) continue;
+      mine.forEach((st) => taken.add(st));
+      const xs = mine.flatMap((st) => st.p.filter((_, i) => i % 2 === 0)), ys = mine.flatMap((st) => st.p.filter((_, i) => i % 2 === 1));
+      pick.push({ x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys), strokes: mine, page });
+      items.push({ k: pick.length, kind: g.kind, text: g.text });
+    }
   }
+  if (usd) await addSpend("pen", usd);
+  const shapes = pick.map(shapeOf);
   // خط إيده بموضوعه: ✓ ✗ ؟ لحد 8 من كل وحدة، والملاحظة مرة وحدة لكل نص. المدح ما ينكتب على الورقة، فما ينضاف
   const { addInk, inkList, INK_MAX } = await import("./qusayGrade.ts");
   let added = 0;

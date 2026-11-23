@@ -832,9 +832,15 @@ test("🖋 خطي من أوراقي: علامات الأستاذ بالقلم ت
   assert.equal(await H.queueHarvest(id), true);
   assert.equal(await H.queueHarvest(id), true, "مرة وحدة بالطابور");
   const reqs: any[] = [];
-  const create = async (r: any) => { reqs.push(r); return { content: [{ type: "text", text: JSON.stringify({ items: [{ k: 1, kind: "tick", text: "✓" }, { k: 2, kind: "note", text: "نسيت تعوض" }] }) }], usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: "end_turn", model: "claude-haiku-5-5" } as any; };
-  assert.equal(await H.harvestTick(create, "claude-haiku-5-5"), 1);
-  assert.equal(reqs[0].messages[0].content.filter((b: any) => b.type === "image").length, 2, "كل علامة صورة لحالها");
+  // الذكاء يشوف الصفحة كاملة ويرجع كل علامة بمربعها (0 لـ 1000)
+  const create = async (r: any) => {
+    reqs.push(r);
+    const items = reqs.length === 1 ? [{ kind: "tick", text: "✓", box: [90, 50, 170, 140] }] : [{ kind: "note", text: "نسيت تعوض", box: [490, 690, 710, 730] }, { kind: "other", text: "", box: [0, 0, 10, 10] }];
+    return { content: [{ type: "text", text: JSON.stringify({ items }) }], usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: "end_turn", model: "claude-sonnet-5-5" } as any;
+  };
+  assert.equal(await H.harvestTick(create, "claude-sonnet-5-5"), 1);
+  assert.equal(reqs.length, 2, "طلب لكل صفحة بيها كتابة");
+  assert.equal(reqs[0].messages[0].content[0].type, "image");
   const ink = await Q.inkList(Number(it.exam_id));
   assert.ok(ink.some((x) => x.kind === "tick"), "✓ بخطه");
   assert.ok(ink.some((x) => x.kind === "note" && x.text === "نسيت تعوض"), "ملاحظته بخطه ويا نصها");

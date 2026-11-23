@@ -1136,7 +1136,7 @@ async function testPaperFor(it: Row) {
 /** دكة المؤقت (كل دقيقة): يصحح أوراق مواضيعه، ويكمل التجربة، ويستلم الدفعات اللي رجعت */
 export async function qusayTick(finish: (uid: number, itemId: number) => Promise<unknown>) {
   // 🖋 خط الأستاذ من الأوراق اللي صححها بإيده: يمشي حتى لو تصحيح قصي طافي (رخيص، Haiku)
-  if (keyReady()) { const { harvestTick } = await import("./inkHarvest.ts"); await harvestTick(qgCreate, MODEL).catch((e) => console.error("harvest", e)); }
+  if (keyReady()) { const { harvestTick } = await import("./inkHarvest.ts"); await harvestTick(qgCreate, await modelId()).catch((e) => console.error("harvest", e)); }
   if (!await qgOn()) return { off: true };
   if (!keyReady()) return { noKey: true };
   const s = await qgSettings();

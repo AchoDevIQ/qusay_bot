@@ -9,7 +9,7 @@ type Row = { id: number; exam: number; general: boolean; optional: boolean; name
 type ObjRow = Row & { qs: number[] };
 type Group = { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; oldest?: string };
 type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
-type History = { day: string; days: { d: string; n: number }[]; prev: string; next: string; due: number | null; count: number; owner: boolean; rows: HistRow[] };
+type History = { day: string; days: { d: string; n: number }[]; prev: string; next: string; due: number | null; count: number; owner: boolean; everyone?: boolean; rows: HistRow[] };
 type ObjQ = { q: number; text: string; old: number; mark: number | null; status: string; reason: string; edited: boolean; by: string; at: string };
 type ObjLog = { q: string; people: { name: string; n: number; ok: number }[]; day: string; days: { d: string; n: number }[]; prev: string; next: string; owner: boolean; count: number; ok: number; no: number; open: number; rows: (Row & { qs: ObjQ[]; at: string; canEdit: boolean; canAnswer: boolean })[] };
 type Rate = { mandatory: number; optional: number; deduct: number; fine: number; weight: number };
@@ -372,11 +372,17 @@ function OutCard({ only, busy, act }: { only: Only; busy: boolean; act: Call }) 
 
 /** سجل التصحيح: كل ورقة ودرجتها وشوكت انصححت، وحالة الاعتراضات عليها */
 function HistoryTab({ h, busy, act }: { h: History; busy: boolean; owner: boolean; act: Call }) {
-  const go = (day: string) => void act({ action: "history", day });
+  const go = (day: string, all = !!h.everyone) => void act({ action: "history", day, all });
   const MONTHS = ["كانون الثاني", "شباط", "آذار", "نيسان", "أيار", "حزيران", "تموز", "آب", "أيلول", "تشرين الأول", "تشرين الثاني", "كانون الأول"];
   return (
     <div className="card">
       <h2>📜 سجل التصحيح</h2>
+      {h.owner && (
+        <div className="seg">
+          <button type="button" className={!h.everyone ? "on" : ""} disabled={busy} onClick={() => go(h.day, false)}>✍️ اللي صححتها أنا</button>
+          <button type="button" className={h.everyone ? "on" : ""} disabled={busy} onClick={() => go(h.day, true)}>👥 كل المصححين والذكاء</button>
+        </div>
+      )}
       {h.due !== null && <div className="expad"><div className="adstats adstats2"><div><b>{iqd(h.due)}</b>المبلغ المستحق إلك</div><div><b>{h.count}</b>ورقة بهذا اليوم</div></div></div>}
       <div className="exline expad gkmonth">
         <button type="button" className="exbtn" disabled={busy} onClick={() => go(h.prev)}>› الشهر اللي قبله</button>

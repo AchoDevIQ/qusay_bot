@@ -78,7 +78,9 @@ test("سجل التصحيح: المصحح أوراقه، وصاحب البوت �
   assert.equal(h.rows.find((x: any) => x.id === a1).objOk, 1);
   await put("staff", { user_id: 31, name: "ثاني", perms: "grade" });
   assert.equal((await g(31, "history")).history.count, 0);
-  assert.equal((await g(1, "history")).history.count, 3);
+  // صاحب البوت: بالأصل أوراقه هو بس (طلبه 2026-11-23)، و«👥 كل المصححين» يطلع الكل
+  assert.equal((await g(1, "history")).history.count, 0);
+  assert.equal((await g(1, "history", { all: true })).history.count, 3);
 });
 
 test("صفحة المساعدين: اللي إله على التصحيح يطلع جنب اسمه، والدفع يصفره ويوصله خبر", async () => {
@@ -208,7 +210,7 @@ test("سجل التصحيح يوم يوم: أوراق اليوم أول، وأي
   assert.equal(h.days[0].d, todayStr());
   assert.equal(typeof h.due, "number");
   assert.ok(h.rows.every((r: any) => String(r.graded).startsWith(todayStr())));
-  const owner = (await g(1, "history", { day: todayStr() })).history;
+  const owner = (await g(1, "history", { day: todayStr(), all: true })).history;
   assert.equal(owner.due, null);
   assert.ok(owner.rows.some((r: any) => r.name === "معترض"));
 });
