@@ -16,6 +16,8 @@ globalThis.fetch = (async (url: string) => {
 const S = await import("../lib/aiSpend.ts");
 const { spendReport, aiSpendAction } = await import("../lib/aiSpendApi.ts");
 const qa = await import("../lib/qaBank.ts");
+// الحل صار بجهتنا (2026-11-23): هالفحوصات تمشي على خدمة وهمية بنفس شكل الطلب القديم
+qa.setQaService(async (route, body) => (await import("../lib/aiGrade.ts")).svc(route, body));
 const { initDb, kvSet } = await import("../lib/db.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 const { stamp } = await import("../lib/util.ts");

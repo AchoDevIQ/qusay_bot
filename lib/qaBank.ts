@@ -25,7 +25,8 @@ export type QaBook = { id: string; chapter: number; lang: "ar" | "en"; kind: QaK
 /** free: من fromBook، اللي انطى حل الملزمة نفسه بلا ذكاء (نفس السؤال بالضبط)
  *  stepBtn: زر «🤔 ما فهمت خطوة» بصفحة الحل (طافي من البداية). teacherBtn: زر «❓ بعدني ما فهمت» يوصل السؤال للأستاذ (شغال من البداية)
  *  explained: كم خطوة انشرحت */
-export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; free?: number; inTok: number; outTok: number; stepBtn?: boolean; teacherBtn?: boolean; explained?: number };
+/** model: الذكاء اللي يحل (⚡ haiku الأصل، 🎯 sonnet، 🏆 opus). الحل صار بجهتنا مو بخدمة مؤمل (2026-11-23) */
+export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; free?: number; inTok: number; outTok: number; stepBtn?: boolean; teacherBtn?: boolean; explained?: number; model?: "haiku" | "sonnet" | "opus" };
 const BOOKS = "qa_books", CFG = "qa_cfg";
 const DEF: QaCfg = { on: false, direct: true, asked: 0, fromBook: 0, solved: 0, inTok: 0, outTok: 0 };
 // Haiku 5.5: 0.10$ داخل و0.50$ طالع لكل مليون توكن
@@ -139,7 +140,7 @@ async function lecturesOf(b: QaBook): Promise<Lecture[]> {
 
 /** فيه ملازم لهذا الفصل، أو أسئلة امتحانات انقرت؟ (والذكاء مربوط) */
 export async function qaReady(chapter: number) {
-  if (!aiLinked() || !(await qaCfg()).on) return false;
+  if (!qaAiOn() || !(await qaCfg()).on) return false;
   if ((await qaBooks()).some((b) => b.chapter === chapter)) return true;
   // الراصد أو دفتر المحاضرات بملازمي
   if ((await find("note_books")).some((b) => chapterNum(b.chapter) === chapter)) return true;
@@ -277,8 +278,24 @@ const joinCtx = (list: Part[], max: number) => {
   }
   return s;
 };
+// ---------- الذكاء اللي يحل: بجهتنا (lib/qaAi.ts) بالذكاء المختار. الفحوصات القديمة تگدر ترجعه لخدمة مؤمل الوهمية بـ setQaService
+type QaService = (route: "/bot/qa" | "/bot/extract", body: Row) => Promise<Row>;
+const ours: QaService = async (route, body) => {
+  const { qgCreate } = await import("./qusayGrade.ts");
+  const { qaAsk, qaRead } = await import("./qaAi.ts");
+  const m = QA_MODELS[(await qaCfg()).model ?? "haiku"];
+  if (route === "/bot/extract") return await qaRead(qgCreate, m, String((body.question_images as string[])[0] ?? ""));
+  return await qaAsk(qgCreate, m, body as Parameters<typeof qaAsk>[2]);
+};
+let qaService: QaService = ours;
+export const setQaService = (f: QaService | null) => { qaService = f ?? ours; };
+const QA_MODELS = { haiku: "claude-haiku-5-5", sonnet: "claude-sonnet-5-5", opus: "claude-opus-5-5" } as const;
+/** الذكاء جاهز يحل: مفتاحه بالسيرفر (أو الفحوصات بدلته) */
+export const qaAiOn = () => qaService !== ours || !!process.env.ANTHROPIC_API_KEY;
 async function call(mode: "find" | "solve" | "explain", context: string, q: QaAsk, lang: "ar" | "en", shown = "") {
-  const r = await svc("/bot/qa", { mode, context, question: (q.text ?? "").slice(0, 4000), image: q.image?.toString("base64"), lang, ...(shown ? { shown } : {}) }, 180_000);
+  const r = await qaService("/bot/qa", { mode, context, question: (q.text ?? "").slice(0, 4000), image: q.image?.toString("base64"), lang, ...(shown ? { shown } : {}) });
+  // ألفاظ الأستاذ بس، حتى لو الذكاء كتب غيرها
+  if (lang === "ar" && r.solution) { const { bookWords } = await import("./qusayGrade.ts"); r.solution = bookWords(String(r.solution)); }
   await addUsage(r.usage ?? []);
   return { found: !!r.found, solution: String(r.solution ?? "").trim() };
 }
@@ -329,7 +346,7 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
     let read = (await kvGet(ik)) ?? "";
     if (!read) {
       try {
-        const r = await svc("/bot/extract", { question_images: [q.image.toString("base64")] }, 120_000);
+        const r = await qaService("/bot/extract", { question_images: [q.image.toString("base64")] });
         await addUsage(r.usage);
         read = String(r.question ?? "").trim();
         if (read) await kvSet(ik, read);
@@ -682,7 +699,10 @@ async function addUsage(usage: any[] = []) {
   await addSpend("qa", usdOf(usage));
 }
 /** كلفة طلب بالدولار (نفس حساب الكارت: التوكنات الداخلة والطالعة) */
-const usdOf = (usage: any[] = []) => usage.reduce((t, u) => t + ((Number(u.input) || 0) * PRICE_IN + (Number(u.output) || 0) * PRICE_OUT) / 1_000_000, 0);
+// كل طلب بسعر الذكاء اللي جاوب (Haiku / Sonnet / Opus)، ويا الكاش
+const PRICES: Record<string, { in: number; out: number; cw: number; cr: number }> = { haiku: { in: 0.1, out: 0.5, cw: 0.125, cr: 0.01 }, sonnet: { in: 2, out: 10, cw: 2.5, cr: 0.1 }, opus: { in: 4, out: 20, cw: 5, cr: 0.2 } };
+const priceOf = (m: unknown) => PRICES[String(m ?? "").includes("opus") ? "opus" : String(m ?? "").includes("sonnet") ? "sonnet" : "haiku"];
+const usdOf = (usage: any[] = []) => usage.reduce((t, u) => { const p = priceOf(u.model); return t + ((Number(u.input) || 0) * p.in + (Number(u.output) || 0) * p.out + (Number(u.cw) || 0) * p.cw + (Number(u.cr) || 0) * p.cr) / 1_000_000; }, 0);
 /** كل صرفية الأسئلة العلمية من البداية (بالدولار) */
 export const qaSpentAll = async () => { const c = await qaCfg(); return (c.inTok * PRICE_IN + c.outTok * PRICE_OUT) / 1_000_000; };
 async function done(source: QaResult["source"], solution: string): Promise<QaResult> {
@@ -703,7 +723,7 @@ export async function saveAnswer(uid: number, question: string, r: QaResult, whe
 /** «🤔 ما فهمت خطوة»: كم مرة على نفس الحل، وكم مرة باليوم للطالب (حتى الكلفة تبقى صغيرة) */
 export const EXPLAIN_PER_ANSWER = 5, EXPLAIN_PER_DAY = 20;
 type Explained = { ask: string; text: string; at: string };
-const canExplain = (a: Row, cfg: QaCfg) => !!cfg.stepBtn && aiLinked() && ["lecture", "topic", "ai", "teacher"].includes(a.source) && !!String(a.solution ?? "").trim();
+const canExplain = (a: Row, cfg: QaCfg) => !!cfg.stepBtn && qaAiOn() && ["lecture", "topic", "ai", "teacher"].includes(a.source) && !!String(a.solution ?? "").trim();
 /** الطالب ما فهم نقطة بالحل اللي شافه: الذكاء يشرحها على طريقة الأستاذ، من شرحه بالملزمة */
 export async function qaExplain(body: Row) {
   const uid = verifyHomeToken(body?.token);
@@ -768,7 +788,7 @@ async function pageData() {
   const list = (await qaBooks()).sort((a, b) => a.chapter - b.chapter || a.lang.localeCompare(b.lang) || a.kind.localeCompare(b.kind));
   const botTopics: Record<number, { id: number; ar: string }[]> = {};
   for (const n of new Set(list.map((b) => b.chapter))) botTopics[n] = (await chapterTopics(n)).map((t) => ({ id: t.id, ar: t.ar }));
-  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, stepBtn: !!cfg.stepBtn, teacherBtn: cfg.teacherBtn !== false, explained: cfg.explained ?? 0, linked: aiLinked(), asked: cfg.asked, fromBook: cfg.fromBook, free: cfg.free ?? 0, solved: cfg.solved, cost, books: list, botTopics } };
+  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, stepBtn: !!cfg.stepBtn, teacherBtn: cfg.teacherBtn !== false, explained: cfg.explained ?? 0, model: cfg.model ?? "haiku", linked: qaAiOn(), asked: cfg.asked, fromBook: cfg.fromBook, free: cfg.free ?? 0, solved: cfg.solved, cost, books: list, botTopics } };
 }
 const DOCX_MAX = 60 * 1024 * 1024;
 export async function qaAction(raw: Row | FormData) {
@@ -825,6 +845,7 @@ export async function qaAction(raw: Row | FormData) {
     if (body.on !== undefined) cfg.on = body.on === true || body.on === "1";
     if (body.direct !== undefined) cfg.direct = body.direct === true || body.direct === "1";
     if (body.stepBtn !== undefined) cfg.stepBtn = body.stepBtn === true || body.stepBtn === "1";
+    if (body.model === "haiku" || body.model === "sonnet" || body.model === "opus") cfg.model = body.model;
     if (body.teacherBtn !== undefined) cfg.teacherBtn = body.teacherBtn === true || body.teacherBtn === "1";
     await saveCfg(cfg);
     notice = "✅ انحفظ";

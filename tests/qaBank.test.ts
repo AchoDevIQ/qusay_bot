@@ -19,6 +19,9 @@ globalThis.fetch = (async (url: string, init: any) => {
 
 const { docxLines } = await import("../lib/docxText.ts");
 const qa = await import("../lib/qaBank.ts");
+// الحل صار بجهتنا (2026-11-23): هالفحوصات تمشي على خدمة وهمية بنفس شكل الطلب القديم
+const { svc } = await import("../lib/aiGrade.ts");
+qa.setQaService((route, body) => svc(route, body));
 const { initDb, find, insert } = await import("../lib/db.ts");
 const { homeToken } = await import("../lib/webAuth.ts");
 await initDb();
@@ -380,4 +383,37 @@ test("🔎 حلول الذكاء: الأستاذ يشوف حل الذكاء وي
   await qa.qaAnswer({ text: "جد جذور 9+40i" }, 1, tid, 1, "ar");
   assert.ok(ai.some((x) => x.body.mode === "solve" && x.body.context.includes("بهذا الموضوع دايماً بالمرافق")));
   await assert.rejects(R.qaReviewAction({ initData: sign(5), action: "list" }), /صلاحية/);
+});
+
+test("الحل بجهتنا (مو خدمة مؤمل): الذكاء المختار، والملزمة بالكاش، وألفاظ الأستاذ، والسعر حسب الذكاء", async () => {
+  const Q = await import("../lib/qusayGrade.ts");
+  const tid = await tidOf("الجذور التربيعية");
+  const reqs: any[] = [];
+  Q.setQgApi({ create: async (r: any) => {
+    reqs.push(r);
+    const find = JSON.stringify(r.output_config.format.schema).includes('"found"');
+    const text = find ? JSON.stringify({ found: false, solution: "" }) : JSON.stringify({ solution: "النقطة $(0,2)$ نقطة قصوى محلية" });
+    return { content: [{ type: "text", text }], usage: { input_tokens: 1000, output_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, stop_reason: "end_turn", model: r.model };
+  } } as any);
+  qa.setQaService(null);
+  await qa.qaAction({ initData: sign(1), action: "settings", model: "sonnet" });
+  const r = await qa.qaAnswer({ text: "جد جذور 21-20i بطريقة الأستاذ" }, 1, tid, 1, "ar");
+  assert.equal(r!.source, "ai");
+  assert.equal(r!.solution, "النقطة $(0,2)$ نقطة نهاية عظمى محلية", "ألفاظ الأستاذ بس");
+  const solve = reqs.find((x) => !JSON.stringify(x.output_config.format.schema).includes('"found"'));
+  assert.equal(solve.model, "claude-sonnet-5-5", "الذكاء المختار");
+  assert.match(solve.system[0].text, /=== BOOKLET ===/);
+  assert.equal(solve.system[0].cache_control.type, "ephemeral");
+  assert.match(solve.system[0].text, /نقطة نهاية عظمى محلية/);
+  // صورة: تنقرا كتابة بطلب صغير، وتروح ويا السؤال
+  reqs.length = 0;
+  Q.setQgApi({ create: async (r: any) => { reqs.push(r); const s = JSON.stringify(r.output_config.format.schema); return { content: [{ type: "text", text: s.includes('"question"') ? JSON.stringify({ question: "جد جذور 7-24i" }) : s.includes('"found"') ? JSON.stringify({ found: false, solution: "" }) : JSON.stringify({ solution: "حل" }) }], usage: { input_tokens: 10, output_tokens: 10 }, stop_reason: "end_turn", model: r.model }; } } as any);
+  const img = await qa.qaAnswer({ image: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]) }, 1, tid, 1, "ar");
+  assert.equal(img!.asked, "جد جذور 7-24i");
+  assert.ok(reqs[0].messages[0].content[0].type === "image");
+  assert.equal(reqs[0].messages[0].content[0].source.media_type, "image/jpeg");
+  await qa.qaAction({ initData: sign(1), action: "settings", model: "haiku" });
+  Q.setQgApi(null);
+  const { svc } = await import("../lib/aiGrade.ts");
+  qa.setQaService((route, body) => svc(route, body));
 });

@@ -29,6 +29,8 @@ globalThis.fetch = (async (url: string, init: any) => {
 }) as typeof fetch;
 const { handleUpdate } = await import("../lib/bot.ts");
 const qa = await import("../lib/qaBank.ts");
+// الحل صار بجهتنا (2026-11-23): هالفحوصات تمشي على خدمة وهمية بنفس شكل الطلب القديم
+qa.setQaService(async (route, body) => (await import("../lib/aiGrade.ts")).svc(route, body));
 const { qaFailTick, qaRetryTick } = await import("../lib/questions.ts");
 const { qaFails } = await import("../lib/qaFails.ts");
 const { initDb, find, one } = await import("../lib/db.ts");

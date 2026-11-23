@@ -135,6 +135,9 @@ const realApi: QgApi = {
 let apiImpl: QgApi = realApi;
 export const setQgApi = (a: QgApi | null) => { apiImpl = a ?? realApi; };
 const keyReady = () => hasKey() || apiImpl !== realApi;
+/** طلب للذكاء من مكان ثاني (حل الأسئلة العلمية، lib/qaAi.ts): نفس المفتاح، والفحوصات تبدله بواحد وهمي */
+export const qgCreate = (req: Req) => apiImpl.create(req);
+export const qgKeyReady = () => keyReady();
 
 // ---------- مادة النموذج: الأسئلة والخطوات (نفسها لكل أوراقه، فتنحفظ بالكاش)
 /** خطوة بيها رسم: رسم الدوال، القطوع، شكل مسألة المعدلات («Drawing»، «Sketch of the ellipse»، «الرسم») */
