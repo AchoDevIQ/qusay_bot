@@ -423,6 +423,22 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
   assert.equal(d2.paper.total, 30, "طالب التجربة: درجة التصحيح الجديد");
   const p2: any = await myPaper(-3, id);
   assert.equal(p2.ai[0].marked[0].marks[1].note, "غلط بالإشارة");
+  // ✏️ صلّح وعلّمه (طلبه 2026-11-23): الدرجة الصح وليش ← تتصلح الورقة، وتصير قاعدة بالموضوع
+  const st1 = d2.paper.qs[0].steps[1];
+  await assert.rejects(qusayAction({ initData: sign(1), action: "teach", id, q: 1, i: 1, mark: st1.points, why: "" }), /اكتب ليش/);
+  await assert.rejects(qusayAction({ initData: sign(1), action: "teach", id, q: 1, i: 1, mark: st1.points + 1, why: "لأن صح" }), /الدرجة من 0/);
+  const tg2: any = await qusayAction({ initData: sign(1), action: "teach", id, q: 1, i: 1, mark: st1.points, why: "الإشارة مو مطلوبة هنا، تنحسب كاملة" });
+  assert.match(tg2.notice, /تعلمها/);
+  assert.equal(tg2.paper.qs[0].steps[1].awarded, st1.points);
+  assert.equal(tg2.paper.qs[0].steps[1].note, "");
+  assert.equal(tg2.paper.total, 30 - st1.awarded + st1.points);
+  const exId = Number((await one("sched_items", { id }))!.exam_id);
+  const exRow: any = tg2.chapters.flatMap((c: any) => c.exams).find((x: any) => x.id === exId);
+  assert.equal(exRow.lessons.length, 1);
+  assert.equal(exRow.lessons[0].why, "الإشارة مو مطلوبة هنا، تنحسب كاملة");
+  assert.match(await Q.topicRules(exId), /QUSAY TAUGHT YOU[^]*corrected it to[^]*الإشارة مو مطلوبة هنا/, "يروح للتصحيح الجاي");
+  await qusayAction({ initData: sign(1), action: "lessonDel", exam: exId, lesson: exRow.lessons[0].id });
+  assert.equal((await Q.lessonsOf(exId)).length, 0);
 });
 
 test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ بأماكنها والطالب الحقيقي يشوفها", async () => {

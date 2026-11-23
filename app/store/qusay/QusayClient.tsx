@@ -6,7 +6,8 @@ import { Inline, MarkedPage, MathText, type MarkedPageT } from "../myexams/AiCom
 import VoiceText from "./VoiceText";
 import InkBook, { type InkItem } from "./InkBook";
 
-type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number; style: string };
+type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number; style: string; lessons: Lesson[] };
+type Lesson = { id: number; at: string; q: number; step: string; from: number; to: number; max: number; why: string };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
 type Step = { text: string; points: number; awarded: number; note: string };
 type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null; marked: MarkedPageT[] | null };
@@ -182,6 +183,7 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
   const [nf, setNf] = useState(String(Math.min(3, Math.max(1, e.fresh))));
   const [fast, setFast] = useState(true);
   const [words, setWords] = useState(e.style);
+  const [openLearn, setOpenLearn] = useState(false);
   const [openWords, setOpenWords] = useState(false);
   const [openInk, setOpenInk] = useState(false);
   return (
@@ -246,6 +248,15 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
         <button type="button" className="exbtn" disabled={busy || !words.trim()} onClick={() => void call({ action: "tidy", text: words }).then((d) => { if (d?.tidy) setWords(d.tidy); })}>🪄 رتّب كلام الفويس (بفلوس)</button>
         <button type="button" className="exbtn" disabled={busy || words === e.style} onClick={() => void call({ action: "examStyle", exam: e.id, style: words })}>💾 احفظ العبارات</button>
       </>}
+      {/* 🧠 اللي تعلمه من تصحيحاته بـ «✏️ صلّح» */}
+      {e.lessons.length > 0 && <button type="button" className="exbtn" onClick={() => setOpenLearn(!openLearn)}>🧠 اللي تعلمه من تصحيحاتك ({e.lessons.length})</button>}
+      {openLearn && e.lessons.map((l) => (
+        <div key={l.id} className="aig-logrow"><div style={{ minWidth: 0, flex: 1 }}>
+          <b>السؤال {l.q}</b> · چان {l.from} وصار {l.to} من {l.max} · <small dir="ltr">{l.at}</small>
+          <MathText text={l.step} />
+          <div>ليش: {l.why}</div>
+        </div><button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "lessonDel", exam: e.id, lesson: l.id })}>🗑</button></div>
+      ))}
       {/* خط إيده الخاص بهذا الموضوع، فوك خطه العام */}
       <button type="button" className="exbtn" onClick={() => setOpenInk(!openInk)}>✍️ خط إيدي لهذا الموضوع</button>
       {openInk && <InkBook exam={e.id} busy={busy} call={call} />}
@@ -259,8 +270,12 @@ function ExamCard({ e, busy, call }: { e: Exam; busy: boolean; call: Call }) {
 }
 
 /** سؤال واحد: زر «📝 التصحيح» وجنبه «📷 ورقة الطالب»، كل واحد يطلع لحاله. الرياضيات بشكل الكتاب (الكسر أفقي، π) */
-function QView({ q, photos, fileUrl }: { q: Q; photos: string[]; fileUrl: (ref: string) => string }) {
+function QView({ q, photos, fileUrl, teach, busy }: { q: Q; photos: string[]; fileUrl: (ref: string) => string; teach?: (i: number, mark: number, why: string) => Promise<unknown>; busy?: boolean }) {
   const marked = !!q.marked?.some((p) => p.marks.length);
+  // «✏️ صلّح وعلّمه»: درجة الخطوة الصح وليش، وجوابه يصير قاعدة بهذا الموضوع
+  const [fix, setFix] = useState<number | null>(null);
+  const [mark, setMark] = useState("");
+  const [why, setWhy] = useState("");
   const [view, setView] = useState<"grade" | "paper" | "marked">(marked ? "marked" : "grade");
   return (
     <div className="card expad">
@@ -278,6 +293,17 @@ function QView({ q, photos, fileUrl }: { q: Q; photos: string[]; fileUrl: (ref: 
             {s.awarded >= s.points ? "✅" : s.awarded > 0 ? "◐" : "❌"} <b>{s.awarded}/{s.points}</b>
             <MathText text={s.text} />
             {s.note && <small><Inline text={s.note} /></small>}
+            {teach && (fix === i ? (
+              <div className="form">
+                <label>✏️ الدرجة الصح لهاي الخطوة (من {s.points})</label>
+                <input type="number" inputMode="numeric" min={0} max={s.points} value={mark} onChange={(x) => setMark(x.target.value)} style={{ width: 90 }} />
+                <label>ليش؟ (هذا اللي يتعلمه ويطبقه بكل ورقة جاية)</label>
+                <VoiceText value={why} onChange={setWhy} rows={3} maxLength={1500} />
+                <button type="button" className="btn" disabled={busy || mark === "" || Number(mark) < 0 || Number(mark) > s.points || why.trim().length < 4}
+                  onClick={() => void teach(i, Number(mark), why).then(() => { setFix(null); setWhy(""); })}>🧠 احفظ وعلّمه</button>
+                <button type="button" className="exbtn" onClick={() => setFix(null)}>✖ إلغاء</button>
+              </div>
+            ) : <button type="button" className="exbtn" disabled={busy} onClick={() => { setFix(i); setMark(String(s.awarded)); setWhy(""); }}>✏️ صلّح</button>)}
           </div></div>
         ))}
       </>}
@@ -300,7 +326,9 @@ function PaperView({ p, fileUrl, busy, call, close }: { p: Paper; fileUrl: (ref:
         {p.demoWaiting ? <div className="exhint">🖍 تنتظر: خلال دقيقة لو دقيقتين ترسم العلامات. دوس 🔄 حدّث وافتح 👁 مرة ثانية.</div>
           : <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "marks", id: p.id })}>🖍 {p.demo ? "أعد" : "جرب"} العلامات على هاي الورقة (تقريباً 6 دنانير)</button>}
       </div>
-      {p.qs.map((q) => <QView key={q.n} q={q} fileUrl={fileUrl} photos={p.photos.filter((f) => f.q === q.n).map((f) => fileUrl(f.ref))} />)}
+      <div className="exhint">✏️ إذا خطوة درجتها غلط: افتح «📝 التصحيح» بالسؤال ← ✏️ صلّح ← الدرجة الصح وليش ← 🧠 احفظ وعلّمه. يصلح هاي الورقة، ويتعلمها لكل ورقة جاية بهذا الموضوع.</div>
+      {p.qs.map((q) => <QView key={q.n} q={q} fileUrl={fileUrl} photos={p.photos.filter((f) => f.q === q.n).map((f) => fileUrl(f.ref))} busy={busy}
+        teach={(i, mark, why) => call({ action: "teach", id: p.id, q: q.n, i, mark, why })} />)}
       {p.photos.some((f) => !f.q) && (
         <div className="card expad">
           <div className="exlabel">صفحات الورقة</div>

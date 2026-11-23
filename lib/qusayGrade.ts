@@ -264,6 +264,55 @@ Praise words in these examples (ممتاز، أحسنت، عاشت إيدك and 
 const exStyleKey = (examId: number) => `qg_style_ex_${examId}`;
 export const examStyle = async (examId: number) => String((await kvGet(exStyleKey(examId))) ?? "");
 export const setExamStyle = (examId: number, text: string) => kvSet(exStyleKey(examId), text.slice(0, STYLE_MAX));
+// ---------- «✏️ صلّح وعلّمه» (طلب الأستاذ 2026-11-23): يصلح درجة خطوة بإيده ويكتب ليش، وجوابه يصير قاعدة بهذا الموضوع
+// يمشي عليها بكل ورقة جاية. محفوظة لحالها (مو بملف الـ Word، حتى رفع ملف جديد ما يمسحها)
+export type QgLesson = { id: number; at: string; item: number; q: number; step: string; from: number; to: number; max: number; why: string };
+const learnKey = (examId: number) => `qg_learn_${examId}`;
+export const lessonsOf = async (examId: number) => { const l = await readJson<QgLesson[]>(learnKey(examId), []); return Array.isArray(l) ? l : []; };
+const lessonsText = (l: QgLesson[]) => (l.length ? `
+
+WHAT QUSAY TAUGHT YOU BY CORRECTING YOUR GRADING (these have the same force as his rules above: whenever the same situation comes up, on any paper and any version, grade it his way):
+${l.map((x) => `- Question ${x.q}, step «${x.step.slice(0, 160)}»: you gave ${x.from} of ${x.max}; Qusay corrected it to ${x.to} of ${x.max}. His reason: ${x.why}`).join("\n")}` : "");
+/** قواعد الموضوع كلها: ملفه، وبعدها اللي علمه من تصحيحاته */
+export const topicRules = async (examId: number) => topicText(await examStyle(examId)) + lessonsText(await lessonsOf(examId));
+/** التصحيح اللي ينعرض: «🖍 جرب العلامات» الأحدث، وإلا التصحيح نفسه */
+export async function shownResult(id: number) {
+  const r = await qgResultOf(id);
+  const demo = await qgMarksOf(id);
+  const fresh = r && demo && (!r.pages?.length || String(demo.at) >= String(r.at)) ? demo : null;
+  return { r, demo, fresh };
+}
+export async function teach(id: number, qn: number, stepIdx: number, mark: number, why: string) {
+  const it = await one("sched_items", { id });
+  if (!it) throw new Error("الورقة غير موجودة");
+  const { r, fresh } = await shownResult(id);
+  if (!r) throw new Error("«تصحيح قصي» بعده ما صحح هاي الورقة");
+  const src = fresh ?? r;
+  const q = src.qs.find((x) => x.n === qn);
+  const st = q?.steps[stepIdx];
+  if (!q || !st) throw new Error("الخطوة غير موجودة");
+  const to = Math.round(Number(mark));
+  if (!(to >= 0 && to <= st.points)) throw new Error(`الدرجة من 0 لحد ${st.points}`);
+  const w = String(why ?? "").replace(/\s+/g, " ").trim().slice(0, 1500);
+  if (w.length < 4) throw new Error("اكتب ليش، حتى يتعلم");
+  const exam = Number(it.exam_id);
+  const list = await lessonsOf(exam);
+  list.push({ id: Math.max(0, ...list.map((x) => x.id)) + 1, at: stamp(), item: id, q: qn, step: st.text, from: st.awarded, to, max: st.points, why: w });
+  await kvSet(learnKey(exam), JSON.stringify(list.slice(-200)));
+  // الورقة نفسها تتصلح بالعرض. الدرجة اللي وصلت للطالب الحقيقي ما تتغير من هنا
+  const sentReal = !fresh && !!r.sent && Number(it.user_id) > 0;
+  if (!sentReal) {
+    st.awarded = to;
+    if (to >= st.points) st.note = "";
+    q.score = q.steps.reduce((t, x) => t + x.awarded, 0);
+    src.total = src.qs.reduce((t, x) => t + x.score, 0);
+    await kvSet(fresh ? mkKey(id) : resKey(id), JSON.stringify(src));
+  }
+  return { sentReal, n: list.length };
+}
+export async function forgetLesson(examId: number, lessonId: number) {
+  await kvSet(learnKey(examId), JSON.stringify((await lessonsOf(examId)).filter((x) => x.id !== lessonId)));
+}
 // ---------- «✍️ خط إيدي»: الأستاذ يكتب بقلم الآيباد ✓ و✗ والمدح والملاحظات، وتنرسم على ورقة الطالب بخطه هو (طلبه 2026-11-21)
 // عام لكل المواضيع، وخاص لكل موضوع (ينضاف فوك العام). ما يصرف فلوس: الرسم بالسيرفر، والملاحظات بس أسماؤها تروح للذكاء
 const inkKey = (exam = 0) => (exam ? `qg_ink_ex_${exam}` : "qg_ink");
@@ -409,7 +458,7 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
   const req: Req = {
     // ويا العلامات يكتب أكثر (مربع كل سطر)، و12 ألف چانت تنقطع (2026-11-21). ينحسب بس اللي يكتبه فعلاً
     model: MODEL, max_tokens: 32000,
-    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) + topicText(await examStyle(Number(it.exam_id))) + handText(await inkFor(Number(it.exam_id))) : ""), cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: SYSTEM + (marks ? MARKS_TEXT + styleText(style) + await topicRules(Number(it.exam_id)) + handText(await inkFor(Number(it.exam_id))) : ""), cache_control: { type: "ephemeral" } }],
     output_config: { effort, format: { type: "json_schema", schema: schemaOf(marks) as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content: [...head, ...body] }],
   };
@@ -561,7 +610,7 @@ export async function qusayJudgeObjection(it: Row, n: number, text: string, oldM
   content.push({ type: "text", text: `\nTHE STUDENT'S OBJECTION:\n${text.slice(0, 1500)}` });
   const req: Req = {
     model: MODEL, max_tokens: 8000,
-    system: [{ type: "text", text: SYSTEM + OBJ_TEXT + styleText(s.style) + topicText(await examStyle(Number(it.exam_id))) }],
+    system: [{ type: "text", text: SYSTEM + OBJ_TEXT + styleText(s.style) + await topicRules(Number(it.exam_id)) }],
     output_config: { effort: s.effort, format: { type: "json_schema", schema: OBJ_SCHEMA as unknown as Record<string, unknown> } },
     messages: [{ role: "user", content }],
   };

@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, type QgResult,
+  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { docxNotes, notesKind } from "./notesFile.ts";
@@ -47,6 +47,7 @@ async function listData(uid: number) {
       close: gaps.length ? Math.round((gaps.filter((g) => g <= 3).length / gaps.length) * 100) : null,
       unsure: both.filter((r) => !r.sure).length,
       style: await examStyle(e.id),
+      lessons: (await lessonsOf(e.id)).map((x) => ({ id: x.id, at: x.at, q: x.q, step: x.step, from: x.from, to: x.to, max: x.max, why: x.why })),
     });
   }
   const titles = new Map(exams.map((e) => [e.id as number, String(e.title ?? "")]));
@@ -81,9 +82,8 @@ async function paperDetail(id: number) {
   const marks = new Map((await find("question_marks", { item_id: id })).map((m) => [Number(m.q), Number(m.mark)]));
   const answers = await find("exam_answers", { item_id: id }, { order: ["q", "id"] });
   // 🖍 العلامات على الورقة: من التصحيح نفسه إذا كانت شغالة، وإلا من «🖍 جرب العلامات» إذا سواها
-  const demo = await qgMarksOf(id);
   // «🖍 جرب العلامات» الأحدث يطلع هو (قبل: الورقة اللي إلها علامات قديمة چانت تعرض القديم وتتجاهل الجديد، طلبه 2026-11-23)
-  const fresh = demo && (!r!.pages?.length || String(demo.at) >= String(r!.at)) ? demo : null;
+  const { demo, fresh } = await shownResult(id);
   const mk = fresh ?? (r!.pages?.length ? { qs: r!.qs, pages: r!.pages } : null);
   const shown = fresh ? fresh.qs : r!.qs;
   const ink = mk ? await inkFor(Number(it!.exam_id)) : [];
@@ -178,6 +178,13 @@ export async function qusayAction(body: Row) {
   if (a === "trialClear") { await clearTrialQueue(); return await out("انمسحت الأوراق اللي تنتظر التجربة"); }
   if (a === "forget") { const n = await forgetTrial(exam); return await out(`انمسحت نتائج ${n} تجربة بهذا الموضوع، تگدر تعيدها`); }
   if (a === "paper") return await out("", { paper: await paperDetail(Number(body.id)) });
+  // «✏️ صلّح وعلّمه»: درجة الخطوة الصح وليش. جوابه يصير قاعدة بهذا الموضوع
+  if (a === "teach") {
+    let r: { sentReal: boolean; n: number } = { sentReal: false, n: 0 };
+    try { r = await teach(Number(body.id), Number(body.q), Number(body.i), Number(body.mark), String(body.why ?? "")); } catch (e) { fail(e); }
+    return await out(`🧠 تعلمها: من هسه يصحح هيچ بهذا الموضوع (${r.n} قاعدة من تصحيحاتك).${r.sentReal ? " الدرجة اللي وصلت للطالب ما تغيرت من هنا." : ""}`, { paper: await paperDetail(Number(body.id)) });
+  }
+  if (a === "lessonDel") { await forgetLesson(exam, Number(body.lesson)); return await out("🗑 انمسحت هاي القاعدة"); }
   if (a === "sendSaved") {
     const { finishByAi } = await import("./gradeApi.ts");
     try { await sendSaved(Number(body.id), finishByAi); } catch (e) { fail(e); }
