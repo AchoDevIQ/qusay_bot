@@ -562,6 +562,10 @@ export async function stepsIn(lang: "ar" | "en", texts: string[]): Promise<strin
   return out;
 }
 
+/** الملاحظة للطالب: بألفاظ الأستاذ، وبلا كلام الذكاء لنفسه («ملاحظة: الدرجة تقديرية»، «ضعيف التأكد») ولا بقايا JSON */
+export const cleanNote = (t: string) => bookWords(String(t ?? "")
+  .replace(/\s*(ملاحظة|ملاحظه)\s*:.*$/s, "").replace(/\s*(ضعيف التأكد|الدرجة تقديرية|الدرجة تحتاج مراجعة)[^.،]*[.،]?/g, "")
+  .replace(/[}\]\[{]+[,.]?\s*$/g, "").replace(/\s+/g, " ").trim());
 /** ألفاظ الأستاذ بس (طلبه 2026-11-23: «أنا ما كاتب قصوى، انت شلون كاتب قصوى؟»): الكلمات اللي مو من كتابه تتبدل */
 export const bookWords = (t: string) => String(t ?? "")
   .replace(/نقطة\s+(?:قصوى|عليا)/g, "نقطة نهاية عظمى").replace(/(نهاية|قيمة)\s+(?:قصوى|عليا)/g, "$1 عظمى")
@@ -772,7 +776,8 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
   const qs = mat.qs.map((m): QgQuestion => {
     if (unanswered.has(m.n)) return { n: m.n, max: m.max, score: 0, answered: false, sure: true, reason: "ما جاوب", method: 1, steps: [] };
     const a = got.get(m.n);
-    if (!a) return { n: m.n, max: m.max, score: 0, answered: true, sure: false, reason: "الذكاء ما رجع درجة هذا السؤال", method: 1, steps: [] };
+    // سؤال جاوبه الطالب والذكاء ما رجع درجته: ما ينحسب صفر أبد (طالب تجربة 31: 24 بدل 81)، الورقة تتعاد
+    if (!a) throw new PaidError(`جواب الذكاء ناقص (السؤال ${m.n} ما رجعت درجته)`, tokens);
     const answered = a.answered !== false;
     const method = Math.max(1, Math.round(Number(a.method) || 1));
     const plan = m.rubric ? (m.rubric.alts[method - 2] ?? m.rubric.steps) : null;
@@ -781,7 +786,7 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
       const s: any = byI.get(k + 1);
       const at = ptOf(s, pages, papers);
       const hw = Math.round(Number(s?.hw) || 0);
-      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0))), note: bookWords(String(s?.note ?? "")).slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
+      return { text: p.text, points: p.points, awarded: Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0))), note: cleanNote(String(s?.note ?? "")).slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
     }) : [];
     // الذكاء رجّع درجة السؤال بس بدون خطوات (طالب تجربة 9: «ممتاز عاشت الأيادي» وصفر): الكامل ينحسب كامل، والباقي يتعاد
     if (plan && answered && !plan.some((_, k) => byI.has(k + 1))) {
@@ -792,7 +797,7 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
     score = answered ? Math.min(m.max, Math.max(0, whole(score))) : 0;
     const at = ptOf(a, pages, papers, true);
     const hw = Math.round(Number(a.hw) || 0);
-    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: bookWords(String(a.reason ?? "")).slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
+    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: cleanNote(String(a.reason ?? "")).slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
   });
   // «أجب عن K»: السؤال اللي ما جاوبه ما يحتاج تأكيد
   if (answerOnly) for (const q of qs) if (!q.answered) q.sure = true;

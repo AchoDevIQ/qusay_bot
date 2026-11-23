@@ -852,3 +852,12 @@ test("🖋 خطي من أوراقي: علامات الأستاذ بالقلم ت
   const r: any = await qusayAction({ initData: sign(1), action: "harvestExam", exam: it.exam_id });
   assert.match(r.notice, /ماكو أوراق جديدة/);
 });
+
+test("سؤال جاوبه الطالب والذكاء ما رجع درجته: الورقة تتعاد، ما ينحسب صفر (طالب تجربة 31)، والملاحظة بلا كلام الذكاء لنفسه", () => {
+  const mat = { qs: [{ n: 1, max: 30, rubric: null, qText: "", qImg: null, model: [] }, { n: 2, max: 35, rubric: null, qText: "", qImg: null, model: [] }], pdf: null };
+  const m = (j: any) => ({ content: [{ type: "text", text: JSON.stringify(j) }], usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: "end_turn" } as any);
+  assert.throws(() => Q.readAnswer(m({ questions: [{ n: 1, answered: true, method: 1, steps: [], score: 24, sure: true, reason: "" }] }), mat as any, new Set(), false), /ناقص \(السؤال 2/);
+  assert.equal(Q.readAnswer(m({ questions: [{ n: 1, answered: true, method: 1, steps: [], score: 24, sure: true, reason: "" }] }), mat as any, new Set([2]), false).qs[1].reason, "ما جاوب", "اللي ما جاوبه الطالب عادي");
+  assert.equal(Q.cleanNote("الجدول غلط والرسم ناقص. ضعيف التأكد من وضوح الرسم. ملاحظة: الدرجة تقديرية"), "الجدول غلط والرسم ناقص.");
+  assert.equal(Q.cleanNote("والرسم ناقص شوية بالفرع الأيسر.}],"), "والرسم ناقص شوية بالفرع الأيسر.");
+});
