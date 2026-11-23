@@ -37,7 +37,7 @@ const ZOOM_KEY = "pageZoom2";
 // الصفحات داخل «فتح أكثر من صفحة»: كل وحدة إلها حجمها، وتتصغر حتى تدخل بمكانها
 const FRAME_ZOOM_KEY = "pageZoomFrame";
 const inFrame = () => { try { return window.self !== window.top; } catch { return true; } };
-type FullApp = { isFullscreen?: boolean; isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; onEvent?(n: string, f: () => void): void; offEvent?(n: string, f: () => void): void };
+type FullApp = { isFullscreen?: boolean; isExpanded?: boolean; isVersionAtLeast?(v: string): boolean; requestFullscreen?(): void; exitFullscreen?(): void; expand?(): void; onEvent?(n: string, f: () => void): void; offEvent?(n: string, f: () => void): void };
 export function PageTools() {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [canFull, setCanFull] = useState(false);
@@ -54,10 +54,13 @@ export function PageTools() {
       const w = tg() as unknown as FullApp | undefined;
       if (w?.isVersionAtLeast) {
         clearInterval(t);
-        if (!w.isVersionAtLeast("8.0") || !w.requestFullscreen) return;
+        // المربع ⛶ يطلع بكل تيليگرام (طلب الأستاذ 2026-11-24: بالحاسبة موجود وبالآيباد لا): إذا ملء الشاشة مو مدعوم
+        // بنسخته (لو انرفض)، يكبّر الصفحة لأعلى طول يگدر عليه
         const changed = () => setFull(!!w.isFullscreen);
+        const failed = () => { try { w.expand?.(); } catch { /* نسخة قديمة */ } };
         w.onEvent?.("fullscreenChanged", changed);
-        off = () => w.offEvent?.("fullscreenChanged", changed);
+        w.onEvent?.("fullscreenFailed", failed);
+        off = () => { w.offEvent?.("fullscreenChanged", changed); w.offEvent?.("fullscreenFailed", failed); };
         setFull(!!w.isFullscreen);
         setCanFull(true);
       } else if (++tries > 25) clearInterval(t);
@@ -85,7 +88,11 @@ export function PageTools() {
     <div className="ptools" role="group" aria-label="حجم الصفحة">
       {!multi && <button type="button" aria-label="تكبير" disabled={zoom === ZOOMS.at(-1)} onClick={() => step(1)}>A+</button>}
       {!multi && <button type="button" aria-label="تصغير" disabled={zoom === ZOOMS[0]} onClick={() => step(-1)}>A−</button>}
-      {canFull && <button type="button" aria-label={full ? "تصغير الشاشة" : "ملء الشاشة"} onClick={() => (full ? w()?.exitFullscreen?.() : w()?.requestFullscreen?.())}>{full ? "↙️" : "⛶"}</button>}
+      {canFull && <button type="button" aria-label={full ? "تصغير الشاشة" : "ملء الشاشة"} onClick={() => {
+        const a = w();
+        if (full) return a?.exitFullscreen?.();
+        try { if (a?.isVersionAtLeast?.("8.0") && a.requestFullscreen) a.requestFullscreen(); else a?.expand?.(); } catch { a?.expand?.(); }
+      }}>{full ? "↙️" : "⛶"}</button>}
     </div>
   );
 }
