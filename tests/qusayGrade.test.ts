@@ -976,3 +976,23 @@ test("✍️ حلك: كل خطوة كتبها الطالب بسطر، والفا
   assert.equal(Q.wLines("$x=1, y$"), "x=1, y", "قطعة بلا = ترجع ويا اللي قبلها");
   assert.equal(Q.wLines(""), "");
 });
+
+test("🎨 الورقة كلها بلون واحد: اللون اللي كاتب بيه أكثر شي، حتى لو قسم من خطه بلون ثاني، والمطبوع هم (طلبه 2026-11-24)", () => {
+  const box = { w: 480, h: 360, s: [[1, 1, 9, 9]] };
+  const ink = [
+    { id: 1, kind: "cross" as const, text: "✗", c: "#d40000", ...box }, { id: 2, kind: "cross" as const, text: "✗", c: "#d40000", ...box },
+    { id: 3, kind: "ask" as const, text: "؟", c: "#7e22ce", ...box },
+  ];
+  const q = { n: 1, max: 10, score: 0, answered: true, sure: true, reason: "", method: 1, at: { p: 1, x: 500, y: 600 }, steps: [
+    { text: "أ", points: 5, awarded: 0, note: "غلط", w: "x=1", at: { p: 1, x: 400, y: 200 } },
+    { text: "ب", points: 3, awarded: 0, note: "ما كتبتها" }, { text: "ج", points: 2, awarded: 0, note: "ما كتبتها" }] };
+  const marks = Q.marksByPage([q], ["a"], undefined, [], ink)[0].marks;
+  const colors = marks.flatMap((m) => [m.sym?.c, m.hand?.c, m.word?.c]).filter(Boolean);
+  assert.ok(colors.length >= 2);
+  assert.deepEqual([...new Set(colors)], ["#d40000"], "البنفسجي صار أحمر مثل الباقي");
+  assert.ok(marks.every((m) => !m.col), "الأحمر هو الأصل");
+  // أكثر خطه بنفسجي: الورقة كلها بنفسجي، والمطبوع هم
+  const purple = ink.map((x) => ({ ...x, c: x.id === 1 ? "#d40000" : "#7e22ce" }));
+  const pm = Q.marksByPage([q], ["a"], undefined, [], purple)[0].marks;
+  assert.ok(pm.every((m) => m.col === "#7e22ce" && (!m.sym || m.sym.c === "#7e22ce")));
+});

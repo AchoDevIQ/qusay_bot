@@ -58,7 +58,7 @@ export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
  *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
 /** rot وsc: ميلان (درجات) وحجم خط الإيد، يتغيرون شوية بكل علامة حتى ما تبين نسخة وحدة (طلب الأستاذ 2026-11-22) */
 /** big: ✓ وحدة كبيرة على السؤال الصح كله. q / i: السؤال ورقم خطوته (i = -1 للسؤال كله)، حتى الأستاذ يدوس عليها ويصلحها */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; col?: string; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj" | "wait"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
@@ -599,6 +599,7 @@ export const bookWords = (t: string) => String(t ?? "")
   .replace(/نقطة\s+(?:دنيا|الدنيا)/g, "نقطة نهاية صغرى").replace(/(نهاية|قيمة)\s+(?:دنيا|الدنيا)/g, "$1 صغرى");
 /** علامات الورقة اللي تنرسم لكل صورة: ✓ للخطوة الصح، ✗ للغلط، ونص الدرجة للناقصة، ودرجة السؤال بدائرة.
  *  only: سؤال واحد. extra: صور السؤال حتى لو ماكو عليها علامة (تطلع بدون رسم) */
+const PAPER_RED = "#d40000";
 export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, extra: string[] = [], ink: InkItem[] = []): { ref: string; marks: PaperMark[] }[] {
   const by = new Map<number, PaperMark[]>();
   // العلامة كلها جوة الصورة، ما تطلع برة الورقة ولا على حافتها (طلب الأستاذ 2026-11-21)
@@ -606,7 +607,12 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   // خط إيد الأستاذ: كل علامة تاخذ وحدة من اللي كاتبها، وتتبدل بالدور (المدح بالورقة الوحدة ما ينعاد نفسه ورا بعض).
   // وكل علامة تميل وتكبر وتصغر شوية، و«ممتاز» يتزحزح عن مكانه، حتى ما تبين نسخة وحدة ملزوگة (طلبه 2026-11-22).
   // الرقم ثابت لنفس الورقة: كل ما تنفتح تطلع نفس الشكل
-  const shape = (x: InkItem): InkShape => ({ w: x.w, h: x.h, s: x.s, ...(x.c ? { c: x.c } : {}), ...(x.wd ? { wd: x.wd } : {}) });
+  // لون واحد للورقة كلها (طلبه 2026-11-24: «كل الورقة تصحح للطالب يكون نفس اللون»): اللون اللي كاتب بيه أكثر شي، وإلا الأحمر.
+  // كل خطه بهاي الورقة يتلون بيه، والعلامات المطبوعة (✓ ✗ والرقعة) هم
+  const counts = new Map<string, number>();
+  for (const x of ink) counts.set(x.c || PAPER_RED, (counts.get(x.c || PAPER_RED) ?? 0) + 1);
+  const col = [...counts].sort((a, b) => b[1] - a[1] || Number(b[0] === PAPER_RED) - Number(a[0] === PAPER_RED))[0]?.[0] ?? PAPER_RED;
+  const shape = (x: InkItem): InkShape => ({ w: x.w, h: x.h, s: x.s, c: col, ...(x.wd ? { wd: x.wd } : {}) });
   const pool = (k: InkKind) => ink.filter((x) => x.kind === k);
   const base = [...pages.join("|")].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
   const rnd = (n: number) => { const v = Math.sin((base % 100000) * 0.731 + n * 12.9898) * 43758.5453; return v - Math.floor(v); };
@@ -635,7 +641,7 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
     const sym = (m.big && m.kind === "miss") || good ? undefined : pick(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick");
     const word = good ? (m.word ?? pick("praise")) : undefined;
     const rot = Math.round((rnd(n + 2) - 0.5) * (good ? 18 : 12)), sc = Math.round((0.88 + rnd(n + 3) * 0.24) * 100) / 100;
-    by.set(pt.p, [...(by.get(pt.p) ?? []), { x, y, ...m, ...(sym ? { sym } : {}), ...(word ? { word } : {}), ...(sym || word ? { rot, sc } : {}) }]);
+    by.set(pt.p, [...(by.get(pt.p) ?? []), { x, y, ...m, ...(col !== PAPER_RED ? { col } : {}), ...(sym ? { sym } : {}), ...(word ? { word } : {}), ...(sym || word ? { rot, sc } : {}) }]);
   };
   // الطالب اللي جاب 100: «ممتاز» بخطه على أول سؤال بس (طلبه 2026-11-24). من مدحه اللي كاتب بيه «ممتاز»، وإلا أي مدح كاتبه، وإلا بالرقعة
   const done = qs.filter((q) => q.answered);

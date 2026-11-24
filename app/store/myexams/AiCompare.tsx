@@ -21,7 +21,7 @@ export const INK_COLORS: { c: string; t: string }[] = [
 /** سمك الخط على ورقة الطالب (بكسل)، لكل اختيار */
 export const INK_WIDTH: Record<1 | 2 | 3, number> = { 1: 1.7, 2: 2.6, 3: 3.8 };
 /** sym ✓/✗، word المدح، hand الملاحظة: بخط إيد الأستاذ إذا كاتبها بـ «✍️ خط إيدي» */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; col?: string; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
 export type MarkedPageT = { ref: string; marks: PaperMark[] };
 export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay"; marked?: MarkedPageT[] };
 
@@ -66,18 +66,18 @@ export function MarkedPage({ src, marks, onTap, picked }: { src: string; marks: 
       <img src={src} alt="ورقة الطالب" />
       {marks.map((m, i) => m.big && m.box ? (
         // ✓ الكبيرة: على عرض الصفحة كلها، من الزاوية اليسرى جوة للزاوية اليمنى فوك
-        <div key={i} className={"mkfull" + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ top: `${m.box.y0 / 10}%`, height: `${(m.box.y1 - m.box.y0) / 10}%` }}
+        <div key={i} className={"mkfull" + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ top: `${m.box.y0 / 10}%`, height: `${(m.box.y1 - m.box.y0) / 10}%`, ...(m.col ? { color: m.col } : {}) }}
           onClick={onTap ? () => onTap(m, i) : undefined}>
           {m.sym ? <InkSvg sh={m.sym} fill /> : <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden><path d="M3 62 Q14 74 26 96 Q55 40 97 4" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" /></svg>}
         </div>
       ) : m.big && m.kind === "miss" ? (
         // «الحل ناقص» كبيرة وحدة بخطه (لو بالرقعة إذا ما كاتبها) بدل «ما كتبتها» على كل خطوة
-        <div key={i} className={"mk mkshort" + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}
+        <div key={i} className={"mk mkshort" + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%`, ...(m.col ? { color: m.col } : {}) }}
           onClick={onTap ? () => onTap(m, i) : undefined}>
-          {m.hand ? <InkSvg sh={m.hand} cap={60} width={4} /> : <b>{m.note || "الحل ناقص"}</b>}
+          {m.hand ? <InkSvg sh={m.hand} cap={60} width={4} /> : <b style={m.col ? { color: m.col } : undefined}>{m.note || "الحل ناقص"}</b>}
         </div>
       ) : (
-        <div key={i} className={"mk mk-" + m.kind + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}
+        <div key={i} className={"mk mk-" + m.kind + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%`, ...(m.col ? { color: m.col } : {}) }}
           onClick={onTap ? () => onTap(m, i) : undefined}>
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : (
             // خط إيده يميل ويكبر ويصغر شوية بكل علامة، حتى ما تبين نسخة وحدة
@@ -88,7 +88,7 @@ export function MarkedPage({ src, marks, onTap, picked }: { src: string; marks: 
           )}
           {/* الملاحظة بآخر الصفحة تنكتب فوك العلامة، لا تنزل برة الورقة وتنخفي (طلبه 2026-11-23) */}
           {m.hand ? <span className={"mknote mkhand" + (m.x > 500 ? " mkleft" : "") + (m.y > 740 ? " mkup" : "")}><InkSvg sh={m.hand} cap={45} /></span>
-            : m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "") + (m.y > 740 ? " mkup" : "")}><Inline text={m.note} /></span>}
+            : m.note && <span className={"mknote" + (m.x > 500 ? " mkleft" : "") + (m.y > 740 ? " mkup" : "")} style={m.col ? { color: m.col } : undefined}><Inline text={m.note} /></span>}
         </div>
       ))}
     </div>
