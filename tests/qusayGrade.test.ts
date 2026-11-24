@@ -497,6 +497,7 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
   const [g] = Q.marksByPage([good], ["a"]);
   assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.big, m.word]), [["ok", "", true, undefined]], "السؤال الصح كله: ✓ وحدة كبيرة بس، بلا مدح وبلا ✓ على كل خطوة");
   assert.deepEqual([g.marks[0].x, g.marks[0].y], [500, 500], "بنص شغله");
+  assert.deepEqual(g.marks[0].box, { y0: 0, y1: 1000 }, "✓ الكبيرة تنمد على شغل السؤال كله بالصفحة");
   // مؤمل: خطوة 0 من 0 بلا مكان وملاحظتها «صح»، والسؤال 20 من 20: ✓ كبيرة بس، مو «؟ الحل ناقص» (ورقة 289، 2026-11-24)
   const zero = { ...good, at: { p: 1, x: 500, y: 600 }, steps: [...good.steps, { text: "ج", points: 0, awarded: 0, note: "صح" }] };
   assert.deepEqual(Q.marksByPage([zero], ["a"])[0].marks.map((m) => [m.kind, m.big]), [["ok", true]]);

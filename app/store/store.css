@@ -531,3 +531,6 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .zoombar span{min-width:64px;text-align:center;font-weight:700}
 .zoomscroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
 .zoomin{margin:0 auto;line-height:0}.zoomin>*{width:100%!important;cursor:default}
+
+/* ✓ الكبيرة على عرض الصفحة كلها (طلبه 2026-11-24) */
+.mkfull{position:absolute;left:3%;width:94%;color:#d40000;pointer-events:none;filter:drop-shadow(0 0 1px #fff)}.mkfull>svg{display:block;width:100%;height:100%}.mkfull.mktap{pointer-events:auto;cursor:pointer}

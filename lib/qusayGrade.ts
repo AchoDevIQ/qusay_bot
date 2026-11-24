@@ -57,7 +57,7 @@ export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
  *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
 /** rot وsc: ميلان (درجات) وحجم خط الإيد، يتغيرون شوية بكل علامة حتى ما تبين نسخة وحدة (طلب الأستاذ 2026-11-22) */
 /** big: ✓ وحدة كبيرة على السؤال الصح كله. q / i: السؤال ورقم خطوته (i = -1 للسؤال كله)، حتى الأستاذ يدوس عليها ويصلحها */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
@@ -212,7 +212,7 @@ For every question you get the teacher's marking scheme: numbered steps with poi
 Grade the student's answer question by question:
 - Award each step its points only when the student's own work clearly shows that step done correctly. A correct final answer with no supporting work earns only the steps it actually shows.
 - Any mathematically valid method earns full credit. Pick the method (1 = main, 2+ = alternatives) that fits the student's work best and grade against its steps.
-- Follow-through: when a step is done correctly but uses a wrong value carried from the student's own earlier mistake, award about half of that step's points, as a whole number.
+- ONE MISTAKE IS PENALIZED ONCE (the teacher's firm rule): take points only in the step where the mistake first happens. A later step that is done correctly but uses a wrong value carried from that earlier mistake gets its FULL points and an EMPTY note; never take points or write a note again for the same mistake. Example: the student finds $y=-\\frac{1}{2}$ instead of $y=-\\frac{1}{\\sqrt{2}}$ (that step loses its points, with a note), then writes the final root with that same $-\\frac{1}{2}$: the final root step is full, with no note. Take points in a later step only for a NEW mistake made in that step itself.
 - Every awarded value is a WHOLE number (0, 1, 2, ...). Never give fractions such as 2.5 or 8.5.
 - Ignore crossed-out work. Do not reward work that is only copied from the question.
 - A step is earned by its CONTENT, in any order or equivalent form. Example: the symmetry test may check the origin first and the y-axis second, or write f(-x) on another line; if the test and its conclusion are there, the step is full.
@@ -627,7 +627,14 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       else if (s.note) unplaced.push(s);
     }
     // ماكو مدح ولا ذم على الورقة (طلبه 2026-11-23: المقولة توصله لحالها مع الدرجة): ✓ كبيرة بس
-    if (allRight) { add(praiseAt, { kind: "ok", text: "", big: true, q: q.n, i: -1 }); continue; }
+    // ✓ الكبيرة على عرض الصفحة كلها، من الزاوية اليسرى جوة للزاوية اليمنى فوك، على طول شغل السؤال بهاي الصفحة (طلبه 2026-11-24)
+    if (allRight) {
+      const ys = placed.filter((s) => s.at!.p === praiseAt?.p).map((s) => s.at!.y);
+      let y0 = ys.length ? Math.max(0, Math.min(...ys) - 70) : 50, y1 = ys.length ? Math.min(1000, Math.max(...ys) + 30) : 950;
+      if (y1 - y0 < 300) { const c = (y0 + y1) / 2; y0 = Math.max(0, c - 150); y1 = Math.min(1000, y0 + 300); y0 = Math.max(0, y1 - 300); }
+      add(praiseAt, { kind: "ok", text: "", big: true, box: { y0: Math.round(y0), y1: Math.round(y1) }, q: q.n, i: -1 });
+      continue;
+    }
     // الخطوات اللي ما كتبها الطالب (ما إلها مكان): «؟» تحت آخر جوابه (مو ✗ على سطر صح، طلبه 2026-11-22)، ويمها شنو ناقص
     if (unplaced.length || !drawn) {
       const note = unplaced.length ? unplaced.map((s) => s.note).join("، ") : q.reason;

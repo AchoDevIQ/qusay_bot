@@ -21,7 +21,7 @@ export const INK_COLORS: { c: string; t: string }[] = [
 /** سمك الخط على ورقة الطالب (بكسل)، لكل اختيار */
 export const INK_WIDTH: Record<1 | 2 | 3, number> = { 1: 1.7, 2: 2.6, 3: 3.8 };
 /** sym ✓/✗، word المدح، hand الملاحظة: بخط إيد الأستاذ إذا كاتبها بـ «✍️ خط إيدي» */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
 export type MarkedPageT = { ref: string; marks: PaperMark[] };
 export type AiQ = { n: number; score: number; max: number; note: string; photos: string[]; steps: AiStep[]; by?: "qusay"; marked?: MarkedPageT[] };
 
@@ -37,13 +37,19 @@ export function inkPath(p: number[]) {
   return d + `L${p[p.length - 2]} ${p[p.length - 1]}`;
 }
 /** كتابة الأستاذ بالأحمر، مقصوصة على حجمها (بدون فراغ المربع) وخلفيتها شفافة */
-export function InkSvg({ sh, k = INK_PX, color = "currentColor", width, cap }: { sh: InkShape; k?: number; color?: string; width?: number; cap?: number }) {
+export function InkSvg({ sh, k = INK_PX, color = "currentColor", width, cap, fill }: { sh: InkShape; k?: number; color?: string; width?: number; cap?: number; fill?: boolean }) {
   // لونه وسمكه اللي اختارهم الأستاذ وهو يكتب. الخط القديم بدونهم: لون العلامة وسمك وسط
   const stroke = INK_COLORS.some((x) => x.c === sh.c) ? sh.c! : color, sw = width ?? INK_WIDTH[sh.wd ?? 2] ?? 2.6;
   const all = sh.s.flat();
   const xs = all.filter((_, i) => i % 2 === 0), ys = all.filter((_, i) => i % 2 === 1);
   if (!xs.length) return null;
   const pad = 8, x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad, w = Math.max(...xs) - x0 + pad, h = Math.max(...ys) - y0 + pad;
+  // fill: تنمد على المكان كله (الصح الكبيرة على عرض الصفحة)، وخطها أثخن
+  if (fill) return (
+    <svg className="mkink" viewBox={`${x0} ${y0} ${w} ${h}`} preserveAspectRatio="none" width="100%" height="100%" aria-hidden>
+      {sh.s.map((p, i) => <path key={i} d={inkPath(p)} fill="none" stroke={stroke} strokeWidth={Math.max(sw, 5)} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
+    </svg>
+  );
   return (
     // cap: أكبر عرض كنسبة من عرض الورقة (cqw)، حتى الصح ما يطلع أكبر من سطر الطالب بالشاشة الصغيرة (طلبه 2026-11-23)
     <svg className="mkink" viewBox={`${x0} ${y0} ${w} ${h}`} width={w * k} height={h * k} aria-hidden
@@ -58,7 +64,13 @@ export function MarkedPage({ src, marks, onTap, picked }: { src: string; marks: 
   return (
     <div className="mkpage">
       <img src={src} alt="ورقة الطالب" />
-      {marks.map((m, i) => (
+      {marks.map((m, i) => m.big && m.box ? (
+        // ✓ الكبيرة: على عرض الصفحة كلها، من الزاوية اليسرى جوة للزاوية اليمنى فوك
+        <div key={i} className={"mkfull" + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ top: `${m.box.y0 / 10}%`, height: `${(m.box.y1 - m.box.y0) / 10}%` }}
+          onClick={onTap ? () => onTap(m, i) : undefined}>
+          {m.sym ? <InkSvg sh={m.sym} fill /> : <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden><path d="M3 62 Q14 74 26 96 Q55 40 97 4" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" /></svg>}
+        </div>
+      ) : (
         <div key={i} className={"mk mk-" + m.kind + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}
           onClick={onTap ? () => onTap(m, i) : undefined}>
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : (
