@@ -193,6 +193,8 @@ export default function BoardClient() {
     lesson.current.board = s.board; lesson.current.frame = s.frame; lesson.current.head = s.head;
     setColor(isLight(s.board) ? "#000000" : "#FFFFFF");
     const im = new Image(); im.onload = () => { logo.current = im; redrawFrame(); }; im.src = "/app-logo.png";
+    // خط التطبيق: السبورة تنرسم من جديد أول ما يوصل، حتى الاسم والكتابة تطلع بخطنا مو بالخط الرسمي
+    void Promise.allSettled([document.fonts.load("700 40px QAppAr", "قصي العميري"), document.fonts.load("400 40px QAppAr", "اب"), document.fonts.load("700 40px QAppEn", "Ab1")]).then(() => { redrawFrame(); redrawInk(); });
     // مسودة ما انحفظت (التطبيق انسد فجأة)
     try { const d = cleanLesson(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null")); if (d && d.pages.some((p) => p.items.length || p.bg)) { lesson.current = d; undo.current = d.pages.map(() => []); redo.current = d.pages.map(() => []); setDirty(true); } } catch { /* */ }
     layout();
@@ -822,7 +824,7 @@ function MicPanel({ onCancel, onPlace }: { onCancel: () => void; onPlace: (t: st
 
 const CSS = `
 .ptools{display:none!important}
-.qb{position:fixed;inset:0;z-index:30;background:#0d1320;display:flex;flex-direction:column;user-select:none;-webkit-user-select:none;font-family:${"Tahoma, 'Segoe UI', Arial, sans-serif"};touch-action:none;overscroll-behavior:none}
+.qb{position:fixed;inset:0;z-index:30;background:#0d1320;display:flex;flex-direction:column;user-select:none;-webkit-user-select:none;font-family:QAppEn,QAppAr,Cairo,Tahoma,Arial,sans-serif;touch-action:none;overscroll-behavior:none}
 .qb-area{position:relative;flex:1;min-height:0;overflow:hidden}
 .qb-c{position:absolute;inset:0;width:100%;height:100%;display:block}
 .qb-live{touch-action:none;cursor:crosshair}
@@ -890,6 +892,7 @@ const CSS = `
 .qb-dbtns .ok{background:#2e9d57}.qb-dbtns .bad{background:#d23b3b}.qb-dbtns .gray{background:#4a5468}
 .qb-dbtns button:disabled{opacity:.4}
 .qb-in,.qb-mic textarea{width:100%;box-sizing:border-box;background:#0f1522;color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:12px;font-size:20px;font-family:inherit}
+.qb button,.qb input,.qb textarea{font-family:inherit}
 .qb-mic{width:min(720px,calc(100vw - 32px))}
 .qb-mic textarea{font-size:24px;min-height:140px;resize:vertical}
 .qb-toast{position:fixed;top:56px;left:50%;transform:translateX(-50%);background:#1F2738;color:#fff;border:1px solid #F6C94A;padding:12px 20px;border-radius:12px;font-size:17px;z-index:50;max-width:calc(100vw - 32px)}

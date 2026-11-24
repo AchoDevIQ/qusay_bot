@@ -24,7 +24,9 @@ await initDb();
 
 test("📝 الألوان: 98 لون، والأشكال والمجسمات كخطوط والمخفي متقطع", () => {
   assert.equal(E.palette().length, 98);
-  assert.equal(E.FRAMES.length, 13);
+  assert.equal(E.FRAMES.length, 23, "10 مزخرفة + 13 القديمة");
+  assert.equal(E.FRAMES.filter((f) => f.deco).length, 10);
+  assert.equal(E.DEFAULT_FRAME, "d-navy", "بلا خشب من البداية");
   assert.equal(E.BOARDS.length, 8);
   const cube = E.buildShape("cube", [0, 0], [200, 200], 5);
   assert.equal(cube.solid.length, 3);

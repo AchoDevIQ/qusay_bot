@@ -53,8 +53,20 @@ export const BOARDS: { c: string; t: string }[] = [
   { c: "#1F4E3D", t: "أخضر" }, { c: "#1D4E5F", t: "فيروزي" }, { c: "#293B60", t: "كحلي" }, { c: "#0F2A47", t: "أزرق غامق" },
   { c: "#2B2B2B", t: "أسود" }, { c: "#3E2A1E", t: "بني" }, { c: "#4A1F2E", t: "عنابي" }, { c: "#F8F8F4", t: "سبورة بيضة" },
 ];
-export type Frame = { id: string; t: string; wood?: [string, string, number]; grad?: string[]; light: boolean };
+/** deco: إطار مزخرف بأربع جهاته بدل الخشب (طلبه 2026-11-25): وجه سادة وحواليه شريط بلون وخطوط ذهبية.
+ *  bar: لون الشريط («board» يعني نفس لون السبورة، فتطلع الخطوط بس) */
+export type Frame = { id: string; t: string; wood?: [string, string, number]; grad?: string[]; deco?: { bar: string; style: string }; light: boolean };
 export const FRAMES: Frame[] = [
+  { id: "d-navy", t: "كحلي وذهبي", deco: { bar: "#141F33", style: "lines" }, light: false },
+  { id: "d-gold", t: "ذهبي فاخر", deco: { bar: "gold", style: "lines" }, light: true },
+  { id: "d-black", t: "أسود وذهبي", deco: { bar: "#111111", style: "lines" }, light: false },
+  { id: "d-wine", t: "عنابي وذهبي", deco: { bar: "#4A1F2E", style: "lines" }, light: false },
+  { id: "d-line", t: "خط ذهبي ناعم", deco: { bar: "board", style: "line" }, light: false },
+  { id: "d-double", t: "خطين ذهبيين", deco: { bar: "board", style: "double" }, light: false },
+  { id: "d-corners", t: "زوايا ذهبية", deco: { bar: "board", style: "corners" }, light: false },
+  { id: "d-math", t: "رموز الرياضيات", deco: { bar: "#141F33", style: "math" }, light: false },
+  { id: "d-modern", t: "حديث متدرج", deco: { bar: "modern", style: "modern" }, light: false },
+  { id: "d-chalk", t: "طباشير", deco: { bar: "board", style: "chalk" }, light: false },
   { id: "oak", t: "بلوط فاتح", wood: ["#D9B07A", "#A8763F", 0.55], light: true },
   { id: "walnut", t: "جوز غامق", wood: ["#7A5236", "#3B2415", 0.5], light: false },
   { id: "mahogany", t: "ماهوجني", wood: ["#A3532F", "#561F10", 0.6], light: false },
@@ -69,7 +81,7 @@ export const FRAMES: Frame[] = [
   { id: "white", t: "أبيض", grad: ["#FFFFFF", "#E4E6E8", "#F6F7F8", "#C9CDD1"], light: true },
   { id: "none", t: "بدون إطار", light: false },
 ];
-export const DEFAULT_BOARD = "#1F4E3D", DEFAULT_FRAME = "classic";
+export const DEFAULT_BOARD = "#1F4E3D", DEFAULT_FRAME = "d-navy";
 export const frameOf = (id: string) => FRAMES.find((f) => f.id === id) ?? FRAMES.find((f) => f.id === DEFAULT_FRAME)!;
 export const insetOf = (id: string) => (frameOf(id).id === "none" ? 0 : FRAME);
 /** السبورة فاتحة؟ (القلم الأبيض يصير أسود عليها) */
