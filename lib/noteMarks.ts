@@ -420,7 +420,19 @@ async function linkTo(m: Row, otherId: number) {
  *  (نفس رقم link)، اللي ناقصه فيديو الحل لو فيديو التوضيح ياخذه من المربوطين، والتوضيح بلغة ملزمته (نفس الاسم).
  *  other: فيديو توضيح ما إله نسخة بلغة الملزمة (يحتاج الأستاذ يرفع نسخته) */
 export async function syncLinked() {
-  const marks = (await find("note_marks")).filter((m) => m.link != null);
+  // التوضيح بلغة ثانية (ما چان إله نسخة بلغة الملزمة): من تنرفع نسخته بلغتها، تنبدل وحدها (حتى بالأزرار مو المربوطة)
+  const all = await find("note_marks");
+  const bookLang = new Map((await find("note_books")).map((b) => [b.id, b.lang === "en" ? "en" : "ar"]));
+  const vids = await find("note_videos");
+  let swapped = 0;
+  for (const m of all.filter((x) => x.video_id)) {
+    const v = vids.find((x) => x.id === m.video_id);
+    const lang = bookLang.get(m.book_id) ?? "ar";
+    if (!v || v.lang === lang) continue;
+    const own = vids.find((x) => x.name === v.name && x.lang === lang);
+    if (own) { await update("note_marks", { id: m.id }, { video_id: own.id }); m.video_id = own.id; swapped++; }
+  }
+  const marks = all.filter((m) => m.link != null);
   const books = new Map((await find("note_books")).map((b) => [b.id, b.lang === "en" ? "en" : "ar"]));
   const videos = await find("note_videos");
   const groups = new Map<unknown, Row[]>();
@@ -435,13 +447,17 @@ export async function syncLinked() {
       if (!m.solution && sol) { patch.solution = sol; solutionsAdded++; }
       if (!m.video_id && names.length) {
         const lang = books.get(m.book_id) ?? "ar";
+        // بلغة الملزمة، وإذا ما إله نسخة بلغتها ينحط مثل ما هو: أغلب التوضيحات عربي وإنگليزي بنفس الفيديو (طلب الأستاذ
+        // 2026-11-24). ومن تنرفع نسخة بلغتها تنبدل وحدها (فوك)
         const v = names.map((n) => videos.find((x) => x.name === n && x.lang === lang)).find(Boolean);
-        if (v) { patch.video_id = v.id; videosAdded++; } else other.add(names[0]);
+        const any = v ?? names.map((n) => videos.find((x) => x.name === n)).find(Boolean);
+        if (any) { patch.video_id = any.id; videosAdded++; }
+        if (!v) other.add(names[0]);
       }
       if (Object.keys(patch).length) await update("note_marks", { id: m.id }, patch);
     }
   }
-  return { videosAdded, solutionsAdded, other: [...other] };
+  return { videosAdded: videosAdded + swapped, solutionsAdded, other: [...other] };
 }
 
 /** يحفظ الزر. يرجع عدد الأزرار المربوطة بيه بالملازم الثانية اللي تحدثت وياه */

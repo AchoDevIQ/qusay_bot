@@ -256,11 +256,11 @@ test("🔗 وين ما ينلگى فيديو السؤال، ينحط بكل ال
   let s = await syncLinked();
   assert.equal((await one2("note_marks", { id: A }))!.solution, "https://youtu.be/W7hH5Vyt_no", "فيديو الحل لكل الأزرار");
   assert.equal((await one2("note_marks", { id: W }))!.solution, "https://youtu.be/W7hH5Vyt_no");
-  assert.equal((await one2("note_marks", { id: A }))!.video_id, null, "ماكو نسخة عربية بعد");
+  assert.equal((await one2("note_marks", { id: A }))!.video_id, en, "ماكو نسخة عربية بعد: ينحط مثل ما هو (عربي وإنگليزي بنفس الفيديو)");
   assert.ok(s.other.includes("الكنافة"), "ينذكر إنه يحتاج نسخة عربية");
   // يرفع النسخة العربية: تنحط وحدها على الزرين العربيين
   const r = await admin("videoUpload", { file: mp4("الكنافة_عربي.mp4") });
-  assert.match(r.notice, /انحط على 2 زر/);
+  assert.match(r.notice, /انحط على 2 زر/, "النسخة العربية تبدل الثنائية على الزرين العربيين");
   const ar = r.videos.find((v: any) => v.name === "الكنافة" && v.lang === "ar").id;
   assert.equal((await one2("note_marks", { id: A }))!.video_id, ar);
   assert.equal((await one2("note_marks", { id: W }))!.video_id, ar);
