@@ -14,7 +14,7 @@ type Notebook = { book: number; page: number; pages: number[]; y: number; q: str
 /** ex: الشروح اللي طلبها على هذا الحل. explain: كم مرة بعد يگدر يسأل (0: الزر ما يطلع). teacher: زر «❓ بعدني ما فهمت» شغال */
 type Explained = { ask: string; text: string; at: string };
 /** page: انسأل من صفحة «❓ سؤال علمي»، فزر «بعدني ما فهمت» بالصفحة نفسها. sentTo: رقم سؤاله إذا وصل للأستاذ */
-type Ans = { question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid; notebook?: Notebook; ex?: Explained[]; explain?: number; teacher?: boolean; page?: boolean; sentTo?: number };
+type Ans = { similar?: { text: string; where: string }; question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid; notebook?: Notebook; ex?: Explained[]; explain?: number; teacher?: boolean; page?: boolean; sentTo?: number };
 
 const tgPlatform = platformNow;
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
@@ -225,13 +225,25 @@ export default function AnswerClient() {
             </div>
             {a.rasid ? <BookSolution book={a.rasid.book} title="📝 الحل النموذجي من الراصد" hint={`${a.rasid.topic}${a.rasid.q ? ` · ${a.rasid.q}` : ""}`} pages={[a.rasid.page]} sol marks={a.rasid.marks} />
               : a.notebook ? <BookSolution book={a.notebook.book} title="📘 حل الأستاذ من دفتر المحاضرات" hint={`${a.notebook.where ? `${a.notebook.where} · ` : ""}صفحة ${a.notebook.page}`} pages={a.notebook.pages} y={a.notebook.y} marks={a.notebook.marks} /> : (
+              <>
+              {/* سؤال مشابه من الملزمة ويا حله، وبعده حل سؤاله (طلبه 2026-11-24) */}
+              {a.similar && (
+                <div className="card">
+                  <h2>{rtl ? "📗 سؤال مشابه من الملزمة" : "📗 A similar question from the booklet"}</h2>
+                  <div className="expad anssol">
+                    {a.similar.where && <div className="exhint">{a.similar.where}</div>}
+                    {a.similar.text.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l, i) => <Line key={i} text={l} rtl={rtl} />)}
+                  </div>
+                </div>
+              )}
               <div className="card">
-                <h2>{a.source === "ai" ? t.ai : a.source === "teacher" ? (rtl ? "✏️ حل الأستاذ" : "✏️ The teacher's solution") : t.book}</h2>
+                <h2>{a.similar ? (rtl ? "📘 حل سؤالك" : "📘 Your question's solution") : a.source === "ai" ? t.ai : a.source === "teacher" ? (rtl ? "✏️ حل الأستاذ" : "✏️ The teacher's solution") : t.book}</h2>
                 <div className="expad anssol">
                   {a.solution.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l, i) => <Line key={i} text={l} rtl={rtl} />)}
                 </div>
                 {a.source === "ai" && t.aiNote && <div className="expad exhint">{t.aiNote}</div>}
               </div>
+              </>
             )}
             {!a.rasid && !a.notebook && <StepHelp a={a} t={t} rtl={rtl} onDone={(ex, left) => setA({ ...a, ex, explain: left })} />}
             {a.teacher !== false && (a.page ? <ToTeacher a={a} setA={setA} en={!rtl} /> : <div className="exhint" style={{ textAlign: "center", margin: "6px 0 18px" }}>{t.help}</div>)}

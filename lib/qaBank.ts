@@ -268,7 +268,8 @@ export type QaAsk = { text?: string; image?: Buffer; read?: boolean };
 /** rasid: الحل صفحة «📘 الحل النموذجي» من الراصد اللي بملازمي (book رقم الملزمة، page رقم الصفحة) */
 /** notebook: الحل صفحات «دفتر المحاضرات» بملازمي من بداية السؤال (y مكانه بأول صفحة)، ويا زر فيديوهاته (mark) */
 /** teacher: حل صلّحه الأستاذ لنفس السؤال قبل (🔎 حلول الذكاء)، يوصل ببلاش. asked: نص السؤال (بعد قراءة الصورة)، fk: بصمته */
-export type QaResult = { source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; asked?: string; fk?: string; rasid?: { book: number } & RasidHit; notebook?: { book: number; where: string } & BookHit };
+/** similar: سؤال مشابه من ملزمته ويا حله (لمن السؤال ما موجود بالملزمة وانحل بنفس طريقة سؤال يشبهه) */
+export type QaResult = { source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; asked?: string; fk?: string; similar?: { text: string; where: string }; rasid?: { book: number } & RasidHit; notebook?: { book: number; where: string } & BookHit };
 type Part = { kind: QaKind | "tests"; l: Lecture };
 const joinCtx = (list: Part[], max: number) => {
   let s = "";
@@ -298,7 +299,7 @@ async function call(mode: "find" | "solve" | "explain", context: string, q: QaAs
   // ألفاظ الأستاذ بس، حتى لو الذكاء كتب غيرها
   if (lang === "ar" && r.solution) { const { bookWords } = await import("./qusayGrade.ts"); r.solution = bookWords(String(r.solution)); }
   await addUsage(r.usage ?? []);
-  return { found: !!r.found, solution: String(r.solution ?? "").trim() };
+  return { found: !!r.found, solution: String(r.solution ?? "").trim(), similar: Number(r.similar) || 0 };
 }
 
 /** جواب سؤال الطالب: من المحاضرة، أو من الموضوع، أو حل على طريقة الأستاذ. null إذا ماكو ملازم لهذا الموضوع */
@@ -435,9 +436,15 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
     }
   }
   // ٥. ما موجود: يحله على طريقة الأستاذ، والأمثلة أقرب أسئلة محلولة (أو محاضرته إذا ماكو قريب)
-  const examples = top.length ? blocksCtx(top.map((x) => x.b)) : joinCtx(lecture ? mine.filter((x) => x.l.lecture === lecture) : mine, LECTURE_MAX);
+  // الأمثلة مرقمة سؤال سؤال: أقرب الأسئلة، لو (ماكو قريب) أسئلة محاضرته كلها، حتى الحل يگول ياهو المشابه
+  const pool = top.length ? top.map((x) => x.b) : lecture ? splitBlocks(mine.filter((x) => x.l.lecture === lecture)).slice(0, 30) : [];
+  const examples = pool.length ? blocksCtx(pool) : joinCtx(lecture ? mine.filter((x) => x.l.lecture === lecture) : mine, LECTURE_MAX);
   const s = await call("solve", (await lessonsCtx(tid)) + (examples || joinCtx(mine, LECTURE_MAX)), ask, lang);
-  return s.solution ? save(await done("ai", s.solution)) : null;
+  if (!s.solution) return null;
+  // 📘 سؤال مشابه من الملزمة ويا حله (طلبه 2026-11-24): يطلع للطالب قبل حل سؤاله
+  const sim = s.similar >= 1 && s.similar <= pool.length ? pool[s.similar - 1] : null;
+  const similar = sim ? { text: cleanSolution(sim.text.split("\n")), where: sim.kind === "tests" ? sim.topic : `${QA_KIND[sim.kind as QaKind]} — ${sim.topic}${sim.lecture ? ` · المحاضرة ${sim.lecture}` : ""}` } : null;
+  return save({ ...await done("ai", s.solution), ...(similar?.text ? { similar } : {}) });
 }
 
 // ---------- البحث بالملزمة بدون ذكاء: الملزمة تتقسم أسئلة (س1، مثال، Q1...)، وكل سؤال إله درجة قرب من سؤال الطالب
@@ -692,7 +699,8 @@ export function cleanSolution(lines: string[]): string {
   return out.filter(Boolean).join("\n");
 }
 function blocksCtx(list: Block[]) {
-  return list.map((b) => b.kind === "tests" ? `### أسئلة الامتحانات — ${b.topic}\n${b.text}` : `### ${QA_KIND[b.kind as QaKind]} — ${b.topic} المحاضرة ${b.lecture}\n${b.text}`).join("\n\n");
+  // مرقمة [1] [2]...: الحل يگول ياهو السؤال المشابه، فيطلع للطالب ويا حله
+  return list.map((b, i) => b.kind === "tests" ? `### [${i + 1}] أسئلة الامتحانات — ${b.topic}\n${b.text}` : `### [${i + 1}] ${QA_KIND[b.kind as QaKind]} — ${b.topic} المحاضرة ${b.lecture}\n${b.text}`).join("\n\n");
 }
 async function addUsage(usage: any[] = []) {
   const cfg = await qaCfg();
@@ -717,7 +725,7 @@ async function done(source: QaResult["source"], solution: string): Promise<QaRes
 // ---------- الجواب المحفوظ للطالب (صفحة الحل)
 export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar", ctx: { chapter?: number; tid?: number; lecture?: number; photo?: string; page?: boolean; img?: string } = {}) {
   const id = randomUUID().replace(/-/g, "").slice(0, 16);
-  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.asked ? { asked: r.asked.slice(0, 4000) } : {}), ...(r.fk ? { fk: r.fk } : {}), ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), lang, ...ctx, at: new Date().toISOString() }));
+  await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.asked ? { asked: r.asked.slice(0, 4000) } : {}), ...(r.fk ? { fk: r.fk } : {}), ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), ...(r.similar ? { similar: r.similar } : {}), lang, ...ctx, at: new Date().toISOString() }));
   // 🔎 حلول الذكاء: كل حل كتبه الذكاء ينضاف لقائمة الأستاذ حتى يشوفه ويصلحه
   if (AI_SOURCES.includes(r.source)) await indexAnswer({ id, at: new Date().toISOString().slice(0, 16).replace("T", " "), uid, tid: Number(ctx.tid) || 0, source: r.source, q: (r.asked || question).slice(0, 160) });
   return id;
@@ -795,7 +803,7 @@ export async function answerView(body: Row) {
   const cfg = await qaCfg();
   const ex: Explained[] = Array.isArray(a.ex) ? a.ex : [];
   return {
-    question: a.question, where: a.where, source: a.source, solution: a.solution, lang: a.lang === "en" ? "en" : "ar", ...(rasid ? { rasid } : {}), ...(notebook ? { notebook } : {}),
+    question: a.question, where: a.where, source: a.source, solution: a.solution, lang: a.lang === "en" ? "en" : "ar", ...(rasid ? { rasid } : {}), ...(notebook ? { notebook } : {}), ...(a.similar ? { similar: a.similar } : {}),
     ex, explain: canExplain(a, cfg) && a.uid === uid ? EXPLAIN_PER_ANSWER - ex.length : 0, teacher: cfg.teacherBtn !== false,
     // سأل من الصفحة: «❓ بعدني ما فهمت» زر بالصفحة نفسها، مو بالبوت
     page: !!a.page && a.uid === uid, sentTo: a.sentTo ?? 0,

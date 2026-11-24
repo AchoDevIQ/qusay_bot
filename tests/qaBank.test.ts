@@ -429,3 +429,21 @@ test("📷 سؤال بالصورة: القراية تعرف موضوعه، وا�
   assert.ok(asks.length > 0);
   assert.ok(asks.every((c) => c.body.image && c.body.read === true), "الصورة نفسها تروح، والكتابة قراية بس");
 });
+
+test("📗 سؤال مشابه: الحل يگول ياهو السؤال المشابه من الأمثلة المرقمة، فيطلع للطالب ويا حله قبل حل سؤاله", async () => {
+  const tid = await tidOf("الجذور التربيعية");
+  reply = (b) => b.mode === "solve" ? { solution: "$x=4$", similar: 1 } : { found: false, solution: "" };
+  ai.length = 0;
+  const r = await qa.qaAnswer({ text: "جد الجذور التربيعية للعدد 9+40i" }, 1, tid, 2, "ar");
+  const solve = ai.find((c) => c.body.mode === "solve")!;
+  assert.ok(solve, "انحل");
+  assert.match(solve.body.context, /### \[1\]/, "الأمثلة مرقمة");
+  {
+    assert.ok(r!.similar?.text, "السؤال المشابه ويا حله");
+    assert.match(r!.similar!.where, /المحاضرة|الجذور/);
+  }
+  // الحل ما گال مشابه: ماكو
+  reply = (b) => b.mode === "solve" ? { solution: "$x=5$", similar: 0 } : { found: false, solution: "" };
+  const r2 = await qa.qaAnswer({ text: "جد الجذور التربيعية للعدد 11+60i" }, 1, tid, 2, "ar");
+  assert.equal(r2!.similar, undefined);
+});

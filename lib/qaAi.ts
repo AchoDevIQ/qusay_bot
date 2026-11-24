@@ -32,7 +32,8 @@ const SOLVE = (how: string) => `The student asks the question ${how}. It is not 
 Solve it exactly the way the teacher solves this kind of question in the booklet: the same method, the same order of steps, the same Arabic phrases and notation.
 If the booklet starts with the teacher's rules from his corrections, follow them: they come before your own choices.
 Do not use any method that does not appear in the booklet. Check the arithmetic carefully; the answer must be correct.
-If the question is not a math question of this topic, or cannot be read, say so in one short line.`;
+If the question is not a math question of this topic, or cannot be read, say so in one short line.
+"similar": the booklet questions may be numbered «[1]», «[2]»... If one of them is the SAME kind of question as the student's (same request and method, only the numbers or the function differ), put its number; otherwise 0.`;
 const EXPLAIN = (how: string, shown: string) => `The student already got this solution of his question:
 === WHAT HE SAW ===
 ${shown || "(not given)"}
@@ -51,7 +52,7 @@ Never write [unclear] or guess words: if a word is hard to read, write your best
 If there is no readable math question in the photo, return an empty question.`;
 
 const FIND_SCHEMA = { type: "object", properties: { found: { type: "boolean" }, solution: { type: "string" } }, required: ["found", "solution"], additionalProperties: false };
-const SOLVE_SCHEMA = { type: "object", properties: { solution: { type: "string" } }, required: ["solution"], additionalProperties: false };
+const SOLVE_SCHEMA = { type: "object", properties: { solution: { type: "string" }, similar: { type: "integer" } }, required: ["solution", "similar"], additionalProperties: false };
 const READ_SCHEMA = { type: "object", properties: { question: { type: "string" } }, required: ["question"], additionalProperties: false };
 
 const media = (b64: string) => (b64.startsWith("iVBOR") ? "image/png" : b64.startsWith("UklGR") ? "image/webp" : "image/jpeg");
@@ -80,7 +81,7 @@ export async function qaAsk(create: Create, model: string, b: { mode: "find" | "
     messages: [{ role: "user", content }],
   } as Anthropic.MessageCreateParamsNonStreaming);
   const out = json(m);
-  return { found: b.mode === "find" ? !!out.found : true, solution: String(out.solution ?? "").trim(), usage: [useOf(m)] };
+  return { found: b.mode === "find" ? !!out.found : true, solution: String(out.solution ?? "").trim(), similar: Number(out.similar) || 0, usage: [useOf(m)] };
 }
 
 /** نفس «/bot/extract» القديم لصورة سؤال الطالب: السؤال كتابة، مرة وحدة */
