@@ -13,7 +13,8 @@ type Rasid = { book: number; page: number; topic: string; q: string; marks: Mark
 type Notebook = { book: number; page: number; pages: number[]; y: number; q: string; where: string; marks: Mark[] };
 /** ex: الشروح اللي طلبها على هذا الحل. explain: كم مرة بعد يگدر يسأل (0: الزر ما يطلع). teacher: زر «❓ بعدني ما فهمت» شغال */
 type Explained = { ask: string; text: string; at: string };
-type Ans = { question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid; notebook?: Notebook; ex?: Explained[]; explain?: number; teacher?: boolean };
+/** page: انسأل من صفحة «❓ سؤال علمي»، فزر «بعدني ما فهمت» بالصفحة نفسها. sentTo: رقم سؤاله إذا وصل للأستاذ */
+type Ans = { question: string; where: string; source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; lang?: "ar" | "en"; error?: string; rasid?: Rasid; notebook?: Notebook; ex?: Explained[]; explain?: number; teacher?: boolean; page?: boolean; sentTo?: number };
 
 const tgPlatform = platformNow;
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
@@ -151,6 +152,28 @@ function StepHelp({ a, t, rtl, onDone }: { a: Ans; t: (typeof TXT)["ar"]; rtl: b
   );
 }
 
+/** «❓ بعدني ما فهمت، وصّل سؤالي للأستاذ»: سؤاله (الكتابة والصورة) يروح للأستاذ، والجواب يوصله بالبوت */
+function ToTeacher({ a, setA, en }: { a: Ans; setA: (x: Ans) => void; en: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (a.sentTo) return <div className="fdok" style={{ textAlign: "center", margin: "6px 0 18px" }}>{en ? `✅ Your question (#${a.sentTo}) reached the teacher. The answer comes to you in the bot.` : `✅ وصل سؤالك (رقم #${a.sentTo}) للأستاذ، والجواب يوصلك بالبوت.`}</div>;
+  async function go() {
+    haptic(); setBusy(true); setErr("");
+    try {
+      const q = new URLSearchParams(location.search);
+      const res = await fetch("/api/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: q.get("t") ?? "", id: q.get("a") ?? "", action: "teacher" }) });
+      const j = await res.json();
+      if (!res.ok) setErr(j.error ?? "صار خطأ"); else setA({ ...a, sentTo: j.sentTo });
+    } catch { setErr("ماكو اتصال، حاول مرة ثانية"); } finally { setBusy(false); }
+  }
+  return (
+    <div style={{ margin: "6px 0 18px" }}>
+      <button type="button" className="btn ghost" disabled={busy} onClick={() => void go()}>{en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ"}</button>
+      {err && <div className="exbad">⚠️ {err}</div>}
+    </div>
+  );
+}
+
 export default function AnswerClient() {
   const [a, setA] = useState<Ans | null>(null);
   const [error, setError] = useState("");
@@ -196,7 +219,7 @@ export default function AnswerClient() {
               </div>
             )}
             {!a.rasid && !a.notebook && <StepHelp a={a} t={t} rtl={rtl} onDone={(ex, left) => setA({ ...a, ex, explain: left })} />}
-            {a.teacher !== false && <div className="exhint" style={{ textAlign: "center", margin: "6px 0 18px" }}>{t.help}</div>}
+            {a.teacher !== false && (a.page ? <ToTeacher a={a} setA={setA} en={!rtl} /> : <div className="exhint" style={{ textAlign: "center", margin: "6px 0 18px" }}>{t.help}</div>)}
           </>
         )}
       </div>

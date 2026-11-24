@@ -143,6 +143,8 @@ export async function homeAction(body: Row) {
     return { url: adminPageLink("myexams", id) };
   }
   if (a === "notes") return { url: adminPageLink("notes", id) };
+  // ❓ سؤال علمي: صفحة بشكل الأستاذ (طلبه 2026-11-24). اللي بعده ما مسجل، يسجل بالبوت أول مثل قبل
+  if (a === "ask" && await student(id)) { await setSession(id, "", {}); await logActivity(id, "❓ فتح سؤال علمي"); return { url: adminPageLink("ask", id) }; }
   if (a === "vote") {
     // صفحة «🗳 التصويت»: نفسها بالتطبيق والبوت، يصوت منها
     await logActivity(id, "🗳 فتح التصويت");

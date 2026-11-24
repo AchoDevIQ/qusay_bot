@@ -1,6 +1,7 @@
 // الأسئلة العلمية: الطالب يسأل، وكل سؤال ينفتحله موضوع بمجموعة الأساتذة
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { find, insert, kvGet, kvSet, one, remove, setSession, type Row } from "./db.ts";
+import { need } from "./webApi.ts";
 import { canAsk, logActivity } from "./access.ts";
 import { ADMIN_IDS, BTN_ASK, BTN_MYQ, TOKEN } from "./config.ts";
 import { answerFromBooklets, autoReady, bookletCfg, replyText } from "./booklets.ts";
@@ -293,6 +294,84 @@ async function studentHead(q: Row, s: Row, title: string) {
 }
 
 /** أول رسالة بالسؤال: يفتح موضوع بالمجموعة وينقلها */
+// ---------- ❓ السؤال العلمي بصفحة بشكل الأستاذ (طلبه 2026-11-24: «ما أريده اختيارات بوت»): الفصل والموضوع والمحاضرة
+// أزرار، والسؤال كتابة لو صورة. الحل ينفتح بنفس الصفحة، وإذا ما انحل يروح للأستاذ بالمجموعة مثل البوت بالضبط
+type AskBody = { tid?: unknown; lec?: unknown; text?: unknown };
+/** شنو يگدر يختار: فصوله ومواضيعها ومحاضراتها، ولو مقفول ليش */
+export async function askInfo(uid: number) {
+  const s = await student(uid);
+  const en = isEn(s);
+  if (!s) return { en, need: "reg" as const };
+  if (await examInProgress(uid)) return { en, closed: LOCK_TEXT };
+  if (HOME_PAGE && !await canAsk(uid)) return { en, closed: en ? "ℹ️ Scientific questions open when you buy lectures or exams from the 🛒 store." : "ℹ️ الأسئلة العلمية تنفتح لمن تشتري محاضرات أو امتحانات من 🛒 المتجر." };
+  if (!await groupId()) return { en, closed: "⚠️ قسم الأسئلة العلمية غير مفعّل حالياً." };
+  if (!await qOpenNow()) return { en, closed: "⏰ استقبال الأسئلة مغلق هسه.\n\n" + hoursText(await qHours()).replace(/<[^>]+>/g, "") };
+  const chs = await askChapters(uid);
+  if (!chs.length) return { en, closed: en ? "ℹ️ You can ask about the chapters you bought (lectures or exams)." : "ℹ️ تگدر تسأل بالفصول اللي مشتري محاضراتها لو امتحاناتها." };
+  return {
+    en,
+    chapters: await Promise.all(chs.map(async (c) => ({
+      id: Number(c.id), label: chLabel(c, en),
+      topics: (await topics(Number(c.id))).map((t) => ({ id: Number(t.id), name: String(en ? t.en || t.ar : t.ar), lectures: Number(t.lectures) || 0 })),
+    }))),
+  };
+}
+/** الطالب دز سؤاله من الصفحة: answer رقم الحل (ينفتح بنفس الصفحة)، لو sent رقم سؤاله اللي راح للأستاذ */
+export async function askFromPage(uid: number, b: AskBody, image: Buffer | null): Promise<{ answer?: string; sent?: number; closed?: string }> {
+  const info = await askInfo(uid);
+  if (!("chapters" in info) || !info.chapters) return { closed: "closed" in info ? info.closed : "سجّل معلوماتك أول" };
+  const s = (await student(uid))!;
+  const en = isEn(s);
+  const t = await topic(Number(b.tid));
+  if (!t || !info.chapters.some((c) => c.id === Number(t.chapter_id))) return { closed: en ? "Choose your topic" : "اختار الموضوع" };
+  const lec = Number(b.lec) || 0;
+  if (t.lectures > 0 && (lec < 1 || lec > t.lectures)) return { closed: en ? "Choose the lecture" : "اختار المحاضرة" };
+  const text = String(b.text ?? "").trim().slice(0, 2000);
+  if (!text && !image) return { closed: en ? "Write your question or add a photo" : "اكتب سؤالك لو صوّره" };
+  // الصورة تنحفظ، حتى إذا گال «بعدني ما فهمت» توصل للأستاذ نفسها
+  const { files } = await import("./files.ts");
+  const { createHash } = await import("node:crypto");
+  const img = image ? `qa/ask/${createHash("sha1").update(image).digest("hex").slice(0, 20)}.jpg` : "";
+  if (image) await files().write(img, image, "image/jpeg");
+  // الجواب الآلي: نفس اللي بالبوت (ملزمتك، الراصد، الدفتر، لو الذكاء على طريقتك)
+  const n = await chapterNo(t.chapter_id);
+  let aiFail = "";
+  if (n && await qaReady(n)) {
+    let r: QaResult | null = null;
+    try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined }, n, Number(t.id), lec, en ? "en" : "ar", uid); }
+    catch (e) { console.error("qa page", e); aiFail = failWhy(e); }
+    if (r && (r.source !== "ai" || (await qaCfg()).direct)) {
+      const where = `${t.ar}${lec ? ` — المحاضرة ${lec}` : ""}`;
+      const shown = en ? `${t.en || t.ar}${lec ? ` — Lecture ${lec}` : ""}` : where;
+      const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar", { chapter: n, tid: Number(t.id), lecture: lec, page: true, ...(img ? { img } : {}) });
+      await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي من الصفحة (${where})` : `📘 وصله حل سؤاله من الصفحة (${where}، ${r.source})`);
+      return { answer: id };
+    }
+  }
+  return { sent: await toTeacher(uid, Number(t.id), lec, text, image, aiFail) };
+}
+/** السؤال يروح للأستاذ بالمجموعة (موضوع جديد بيه الكتابة والصورة)، مثل سؤال البوت بالضبط */
+export async function toTeacher(uid: number, tid: number, lec: number, text: string, image: Buffer | null, aiFail = ""): Promise<number> {
+  const g = await groupId();
+  const s = await student(uid);
+  need(g && s, "قسم الأسئلة العلمية غير مفعّل حالياً");
+  const qid = await insert("questions", { user_id: uid, chapter_id: (await topic(tid))?.chapter_id ?? null, topic_id: tid, lecture: lec || 0, status: "open", created: stamp(), updated: stamp() });
+  const q = (await question(qid))!;
+  const r: any = await api("createForumTopic", { chat_id: g, name: await topicTitle(q) });
+  if (!r) { await remove("questions", { id: qid }); need(false, "ما گدرت أوصل سؤالك هسه، حاول بعد شوية"); }
+  const th = r.message_thread_id;
+  await setQ(qid, { thread_id: th });
+  const head = await studentHead(q, s!, `❓ <b>سؤال جديد #${qid}</b>`) +
+    "\n\n✍️ اكتب جوابك هنا بهذا الموضوع (كتابة أو صورة أو صوت) ويوصل للطالب مباشرة.\nلمن تخلص جوابك اضغط «✅ خلصت» حتى يختفي السؤال من عندك.";
+  await api("sendMessage", { chat_id: g, message_thread_id: th, text: head, parse_mode: "HTML" });
+  if (image) await upload("sendPhoto", { chat_id: String(g), message_thread_id: String(th), ...(text ? { caption: text.slice(0, 1000) } : {}) }, "photo", image, "question.jpg", "image/jpeg");
+  else await api("sendMessage", { chat_id: g, message_thread_id: th, text });
+  if (aiFail) await api("sendMessage", { chat_id: g, message_thread_id: th, parse_mode: "HTML", text: `🤖 الذكاء ما گدر يجاوب هذا السؤال (${esc(aiFail)}). جاوبه إنت.` });
+  await logActivity(uid, `❓ سأل سؤال علمي #${qid} (من الصفحة)`);
+  await send(uid, `✅ <b>وصل سؤالك</b> (رقم <b>#${qid}</b>)\n📍 ${esc(await qWhere(q, isEn(s)))}\n\nراح يوصلك الجواب هنا. وتگدر تشوف أسئلتك من «${BTN_MYQ}».`);
+  return qid;
+}
+
 export async function qNewMessage(chat: number, uid: number, m: Row, data: Row) {
   // دخل امتحان وهو بنص السؤال: ما يوصل شي لحد ما يخلص
   if (await examInProgress(uid)) { await setSession(uid, "", {}); await send(chat, LOCK_TEXT, { replyKb: await mainKb(uid) }); return; }

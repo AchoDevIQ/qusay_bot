@@ -71,12 +71,13 @@ test("القائمة ترجع اسمه، وامتحاناتي تطلع بس لم
 });
 
 test("كل مربع يوصل الطالب لمكانه بالمحادثة", async () => {
-  for (const [action, re] of [["ask", /الأسئلة العلمية/], ["me", /علي حسن/], ["myq", /سؤال|أسئلت/]] as const) {
+  for (const [action, re] of [["me", /علي حسن/], ["myq", /سؤال|أسئلت/]] as const) {
     flush();
     assert.deepEqual(await act(action), { close: true }, action);
     assert.match(calls.map((c) => c.p.text ?? c.p.caption ?? "").join("\n"), re, action);
   }
   assert.match((await act("exams") as any).url, /\/store\/myexams/);   // امتحاناتي صارت صفحة
+  assert.match((await act("ask") as any).url, /\/store\/ask\?/);   // السؤال العلمي صار صفحة (طلبه 2026-11-24)
   await assert.rejects(act("bad"), (e: any) => e.status === 400);
   flush();
 });

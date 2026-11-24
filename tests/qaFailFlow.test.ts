@@ -144,3 +144,24 @@ test("صاحب البوت خفّى «❓ بعدني ما فهمت»: الحل ي
   assert.match(m.p.reply_markup.inline_keyboard[0][0].text, /افتح الحل/);
   await qa.qaAction({ initData: sign(1), action: "settings", teacherBtn: true });
 });
+
+test("❓ السؤال من الصفحة: يختار الفصل والموضوع والمحاضرة، والحل ينفتح بالصفحة، و«بعدني ما فهمت» يوصله للأستاذ مرة وحدة", async () => {
+  down = false;
+  const { askInfo, askFromPage } = await import("../lib/questions.ts");
+  const { homeToken } = await import("../lib/webAuth.ts");
+  const info: any = await askInfo(2);
+  assert.ok(info.chapters?.length, "فصوله تطلع");
+  assert.ok(info.chapters[0].topics.length, "ومواضيعها");
+  const t = (await find("topics")).find((x) => x.ar === "الجذور التربيعية")!;
+  const r = await askFromPage(2, { tid: t.id, lec: 1, text: "جد الجذور التربيعية للعدد 7-24i" }, null);
+  assert.match(String(r.answer), /^[a-f0-9]{16}$/, "انحل، ورقم الحل يرجع للصفحة");
+  const v: any = await qa.answerView({ token: homeToken(2), id: r.answer });
+  assert.equal(v.page, true);
+  const before = (await find("questions")).length;
+  const s1: any = await qa.answerToTeacher({ token: homeToken(2), id: r.answer });
+  assert.ok(s1.sentTo > 0);
+  assert.equal((await find("questions")).length, before + 1, "سؤاله بالمجموعة");
+  assert.equal(((await qa.answerToTeacher({ token: homeToken(2), id: r.answer })) as any).sentTo, s1.sentTo, "ما يتكرر");
+  assert.ok((await askFromPage(2, { tid: 0, text: "x" }, null)).closed, "بلا موضوع ما ينبعث");
+  assert.ok((await askFromPage(2, { tid: t.id, lec: 1, text: "" }, null)).closed, "بلا سؤال ما ينبعث");
+});

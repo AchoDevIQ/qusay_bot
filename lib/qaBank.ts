@@ -715,7 +715,7 @@ async function done(source: QaResult["source"], solution: string): Promise<QaRes
 }
 
 // ---------- الجواب المحفوظ للطالب (صفحة الحل)
-export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar", ctx: { chapter?: number; tid?: number; lecture?: number; photo?: string } = {}) {
+export async function saveAnswer(uid: number, question: string, r: QaResult, where: string, lang: "ar" | "en" = "ar", ctx: { chapter?: number; tid?: number; lecture?: number; photo?: string; page?: boolean; img?: string } = {}) {
   const id = randomUUID().replace(/-/g, "").slice(0, 16);
   await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.asked ? { asked: r.asked.slice(0, 4000) } : {}), ...(r.fk ? { fk: r.fk } : {}), ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), lang, ...ctx, at: new Date().toISOString() }));
   // 🔎 حلول الذكاء: كل حل كتبه الذكاء ينضاف لقائمة الأستاذ حتى يشوفه ويصلحه
@@ -764,6 +764,23 @@ export async function qaExplain(body: Row) {
   const c = await qaCfg(); c.explained = (c.explained ?? 0) + 1; await saveCfg(c);
   return { ex: next, left: EXPLAIN_PER_ANSWER - next.length };
 }
+/** «❓ بعدني ما فهمت، وصّل سؤالي للأستاذ» من صفحة الحل (سؤال انسأل من الصفحة): يروح للأستاذ بالمجموعة، مرة وحدة */
+export async function answerToTeacher(body: Row) {
+  const uid = verifyHomeToken(body?.token);
+  need(uid !== null, "الرابط قديم", 401);
+  const id = String(body.id ?? "");
+  need(/^[a-f0-9]{16}$/.test(id), "الحل غير موجود", 404);
+  const key = `qa_ans_${id}`;
+  const a = JSON.parse((await kvGet(key)) ?? "null");
+  need(a && a.uid === uid && a.page, "الحل غير موجود", 404);
+  need((await qaCfg()).teacherBtn !== false, "هذا الزر مطفي");
+  if (a.sentTo) return { sentTo: a.sentTo };
+  const img = a.img ? await files().read(String(a.img)) : null;
+  const { toTeacher } = await import("./questions.ts");
+  const qid = await toTeacher(uid!, Number(a.tid) || 0, Number(a.lecture) || 0, String(a.question || a.asked || ""), img);
+  await kvSet(key, JSON.stringify({ ...a, sentTo: qid }));
+  return { sentTo: qid };
+}
 export async function answerView(body: Row) {
   const uid = verifyHomeToken(body?.token);
   need(uid !== null, "الرابط قديم. افتح الحل من رسالة البوت", 401);
@@ -780,6 +797,8 @@ export async function answerView(body: Row) {
   return {
     question: a.question, where: a.where, source: a.source, solution: a.solution, lang: a.lang === "en" ? "en" : "ar", ...(rasid ? { rasid } : {}), ...(notebook ? { notebook } : {}),
     ex, explain: canExplain(a, cfg) && a.uid === uid ? EXPLAIN_PER_ANSWER - ex.length : 0, teacher: cfg.teacherBtn !== false,
+    // سأل من الصفحة: «❓ بعدني ما فهمت» زر بالصفحة نفسها، مو بالبوت
+    page: !!a.page && a.uid === uid, sentTo: a.sentTo ?? 0,
   };
 }
 
