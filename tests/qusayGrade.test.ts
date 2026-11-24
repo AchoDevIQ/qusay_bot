@@ -16,7 +16,8 @@ fs.mkdirSync(path.join(tmp, "ans"), { recursive: true });
 fs.writeFileSync(path.join(tmp, "ans", "a.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]));
 const tg: { method: string; p: any }[] = [];
 globalThis.fetch = (async (url: string, init: any) => {
-  const p = init?.body instanceof FormData ? {} : JSON.parse(init?.body ?? "{}");
+  // الصور (FormData): الكتابة والأزرار تنقرا هم
+  const p = init?.body instanceof FormData ? Object.fromEntries([...init.body.entries()].filter(([, v]: any) => typeof v === "string").map(([k, v]: any) => [k, k === "reply_markup" ? JSON.parse(v) : v])) : JSON.parse(init?.body ?? "{}");
   tg.push({ method: String(url).split("/").pop()!, p });
   return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }));
 }) as typeof fetch;
@@ -527,6 +528,48 @@ test("⏸ الورقة تنتظر خطه: بيها عبارة بعده ما كا
   assert.equal((await Q.qgResultOf(id3))!.sent, true, "انبعثت بالرقعة");
   assert.equal((await qusayAction({ initData: sign(1), action: "list" }) as any).inkWait.length, 0);
   for (const x of await Q.inkList(exam)) await Q.removeInk(exam, x.id);
+  await Q.saveQgSettings({ marks: false });
+});
+
+test("⏸ ويا كل عبارة صورة ورقة الطالب وثلاث خيارات: ✍️ بخطي، 🔤 بالرقعة، 🚫 لا تكتب شي", async () => {
+  await Q.saveQgSettings({ marks: true, wait: true });
+  const { handleUpdate } = await import("../lib/bot.ts");
+  const say = (t: string) => { reply = () => JSON.parse(JSON.stringify(withMarks).replace("غلط بالإشارة", t)); };
+  // ورقة بيها عبارة: يوصل ويا العبارة رسالة (صورة الورقة لو كتابة) بثلاث أزرار
+  say("عبارة للخيارات");
+  const prev = tg.length;
+  const id = await paper([1, 2]);
+  await Q.qusayTick(finishByAi);
+  const exam = Number((await one("sched_items", { id }))!.exam_id);
+  const p1 = (await Q.inkWaitList()).find((x) => x.exam === exam)!.phrases[0];
+  assert.equal(p1.t, "عبارة للخيارات");
+  const per = tg.slice(prev).filter((m) => /شلون تريدها/.test(String(m.p.caption ?? m.p.text ?? "")));
+  assert.equal(per.length, 1);
+  const kb = per[0].p.reply_markup.inline_keyboard;
+  assert.match(kb[0][0].web_app.url, new RegExp(`&ink=${exam}&ph=${p1.h}$`));
+  assert.deepEqual(kb[1].map((x: any) => x.callback_data), [`qip:${exam}:${p1.h}:r`, `qip:${exam}:${p1.h}:n`]);
+  // 🚫 من البوت: الورقة تنبعث، والعلامة تبقى بلا كلام
+  await handleUpdate({ update_id: 992, callback_query: { id: "c", from: { id: 1, is_bot: false, first_name: "x" }, chat_instance: "x", data: `qip:${exam}:${p1.h}:n`, message: { message_id: 5, chat: { id: 1, type: "private" }, date: 1, text: "" } } } as any);
+  const res = (await Q.qgResultOf(id))!;
+  assert.equal(res.sent, true);
+  let marks = Q.marksByPage(res.qs, res.pages!, undefined, [], await Q.inkFor(exam)).flatMap((pg) => pg.marks);
+  assert.ok(!marks.some((m) => m.note === p1.t), "ما انكتبت");
+  assert.ok(marks.some((m) => m.kind === "bad"), "العلامة باقية");
+  // 🔤 من الصفحة لعبارة ثانية
+  say("عبارة ثانية للخيارات");
+  const id2 = await paper([1, 2]);
+  await Q.qusayTick(finishByAi);
+  const p2 = (await Q.inkWaitList()).find((x) => x.exam === exam)!.phrases[0];
+  const r: any = await qusayAction({ initData: sign(1), action: "waitDecide", exam, h: p2.h, d: "r" });
+  assert.match(r.notice, /انبعثت 1 ورقة/);
+  const res2 = (await Q.qgResultOf(id2))!;
+  marks = Q.marksByPage(res2.qs, res2.pages!, undefined, [], await Q.inkFor(exam)).flatMap((pg) => pg.marks);
+  assert.ok(marks.some((m) => m.note === p2.t && !m.hand), "بالرقعة");
+  // ورقة جديدة بنفس العبارة: محسومة، فتنبعث على طول
+  const id3 = await paper([1, 2]);
+  await Q.qusayTick(finishByAi);
+  assert.equal((await Q.qgResultOf(id3))!.sent, true);
+  await kvSet(`qg_phr_${exam}`, "{}");
   await Q.saveQgSettings({ marks: false });
 });
 

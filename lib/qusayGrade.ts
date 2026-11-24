@@ -14,7 +14,8 @@ import { MODEL, hasKey } from "./booklets.ts";
 import { addSpend } from "./aiSpend.ts";
 import { answerOnlyOf, SKIP } from "./answerOnly.ts";
 import { ADMIN_IDS } from "./config.ts";
-import { send } from "./telegram.ts";
+import { send, upload } from "./telegram.ts";
+import { createHash } from "node:crypto";
 import { stamp } from "./util.ts";
 
 export const QG_PERM = "qusay";
@@ -53,7 +54,8 @@ export const INK_COLOR_LIST = ["#d40000", "#1d4ed8", "#15803d", "#111111", "#7e2
 /** tick ✓، cross ✗، praise مدح (أحسنت، ممتاز…)، note ملاحظة (نسيت تعوض…). text: شنو مكتوب بيها */
 /** ask: «؟» بخطه، بآخر الحل الناقص (طلبه 2026-11-22) */
 export type InkKind = "tick" | "cross" | "praise" | "note" | "ask";
-export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
+/** skip: اختياره لعبارة ما كتبها بخطه: r تنكتب بالرقعة، n ما تنكتب (تبقى العلامة بلا كلام) */
+export type InkItem = InkShape & { id: number; kind: InkKind; text: string; skip?: "r" | "n" };
 /** علامة وحدة تنرسم على صورة الورقة: ✓ ✗ نص درجة، أو درجة السؤال بدائرة.
  *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
 /** rot وsc: ميلان (درجات) وحجم خط الإيد، يتغيرون شوية بكل علامة حتى ما تبين نسخة وحدة (طلب الأستاذ 2026-11-22) */
@@ -360,7 +362,18 @@ export const INK_KINDS: InkKind[] = ["tick", "cross", "praise", "note", "ask"];
 export const INK_MAX = 80;
 export const inkList = (exam = 0) => readJson<InkItem[]>(inkKey(exam), []);
 /** كل خط إيده اللي ينفع لموضوع: العام والخاص */
-export const inkFor = async (exam: number) => [...await inkList(), ...(exam ? await inkList(exam) : [])];
+export const inkFor = async (exam: number): Promise<InkItem[]> => [...await inkList(), ...(exam ? await inkList(exam) : []),
+  // العبارات اللي اختار إلها «🔤 بالرقعة» لو «🚫 لا تكتب شي» (بهذا الموضوع)
+  ...(exam ? Object.values(await decisionsOf(exam)).map((d, i) => ({ id: -1 - i, kind: "note" as const, text: d.t, w: 1000, h: 360, s: [], skip: d.d })) : [])];
+/** اختياره لكل عبارة بموضوع: بالرقعة لو لا تنكتب (طلبه 2026-11-24) */
+const decKey = (exam: number) => `qg_phr_${exam}`;
+export const decisionsOf = (exam: number) => readJson<Record<string, { t: string; d: "r" | "n" }>>(decKey(exam), {});
+export const phraseKey = (t: string) => createHash("sha1").update(normNote(t)).digest("hex").slice(0, 8);
+export async function decidePhrase(exam: number, t: string, d: "r" | "n") {
+  const all = await decisionsOf(exam);
+  all[phraseKey(t)] = { t, d };
+  await kvSet(decKey(exam), JSON.stringify(all));
+}
 /** يفحص اللي إجا من الصفحة ويحفظه: خطوط بأرقام، بحدود المربع، ومو كبيرة */
 export async function addInk(exam: number, raw: any): Promise<InkItem> {
   const kind = String(raw?.kind) as InkKind;
@@ -397,7 +410,7 @@ export async function removeInk(exam: number, id: number) {
 }
 /** ملاحظاته المكتوبة بخطه تروح للذكاء بأسمائها بس، حتى إذا ملاحظة تطلع نفس وحدة منها يختار رقمها */
 const handText = (ink: InkItem[]) => {
-  const notes = ink.filter((x) => x.kind === "note");
+  const notes = ink.filter((x) => x.kind === "note" && !x.skip);
   return notes.length ? `
 
 QUSAY'S HANDWRITTEN NOTES: Qusay wrote these notes by hand; the student sees his real handwriting when you pick one.
@@ -610,7 +623,7 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   // لون واحد للورقة كلها (طلبه 2026-11-24: «كل الورقة تصحح للطالب يكون نفس اللون»): اللون اللي كاتب بيه أكثر شي، وإلا الأحمر.
   // كل خطه بهاي الورقة يتلون بيه، والعلامات المطبوعة (✓ ✗ والرقعة) هم
   const counts = new Map<string, number>();
-  for (const x of ink) counts.set(x.c || PAPER_RED, (counts.get(x.c || PAPER_RED) ?? 0) + 1);
+  for (const x of ink) if (!x.skip) counts.set(x.c || PAPER_RED, (counts.get(x.c || PAPER_RED) ?? 0) + 1);
   const col = [...counts].sort((a, b) => b[1] - a[1] || Number(b[0] === PAPER_RED) - Number(a[0] === PAPER_RED))[0]?.[0] ?? PAPER_RED;
   const shape = (x: InkItem): InkShape => ({ w: x.w, h: x.h, s: x.s, c: col, ...(x.wd ? { wd: x.wd } : {}) });
   const pool = (k: InkKind) => ink.filter((x) => x.kind === k);
@@ -623,7 +636,12 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   const fullQ = (q: QgQuestion) => q.answered && ((q.max > 0 && q.score >= q.max) || (q.steps.length > 0 && q.steps.every((s) => s.points <= 0 || s.awarded >= s.points)));
   const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => {
     if (!pt) return;
-    if (m.note && !m.hand) { const same = ink.find((x) => x.kind === "note" && normNote(x.text) === normNote(m.note!)); if (same) m = { ...m, hand: shape(same) }; }
+    if (m.note && !m.hand) {
+      const same = ink.find((x) => x.kind === "note" && normNote(x.text) === normNote(m.note!));
+      // اختار «🚫 لا تكتب شي»: العلامة تبقى بلا كلام. «🔤 بالرقعة»: تبقى مطبوعة. وإلا بخطه
+      if (same?.skip === "n") m = { ...m, note: undefined };
+      else if (same && !same.skip) m = { ...m, hand: shape(same) };
+    }
     const n = ++count * 3;
     const good = m.kind === "good";
     // «ممتاز» يتزحزح لحد 35 يمين ويسار و25 فوك وجوة، والباقي يبقى بمكان خطوته
@@ -1033,13 +1051,15 @@ export async function phrasesOf(res: QgResult, exam: number): Promise<string[]> 
   if (!res.pages?.length) return [];
   const ink = await inkFor(exam);
   const out = new Set<string>();
-  for (const pg of marksByPage(res.qs, res.pages, undefined, [], ink)) for (const m of pg.marks) if (m.note && !m.hand) out.add(m.note);
+  const dec = await decisionsOf(exam);
+  for (const pg of marksByPage(res.qs, res.pages, undefined, [], ink)) for (const m of pg.marks) if (m.note && !m.hand && !dec[phraseKey(m.note)]) out.add(m.note);
   return [...out];
 }
 /** الأوراق اللي تنتظر خطه، لكل موضوع: كم ورقة، والعبارات من الأكثر تكرار */
 /** ويا كل عبارة: ورقة الطالب اللي انكتبت عليها والعلامات، والعلامة نفسها (k)، ورقم السؤال، والخطوة، وشنو كتب الطالب.
  *  حتى يفهم شنو يقصد قبل ما يكتبها بأسلوبه (طلبه 2026-11-24: «اريد ويا الكتابة صورة بالحل مال الطالب») */
 export type PhraseEx = { item: number; ref: string; marks: PaperMark[]; k: number; q: number; step: string; w: string };
+/** h: رقم قصير للعبارة (للأزرار بالبوت والرابط) */
 export async function inkWaitList() {
   const by = new Map<number, { papers: number; ph: Map<string, { n: number; ex: PhraseEx }> }>();
   for (const w of await waits()) {
@@ -1048,10 +1068,11 @@ export async function inkWaitList() {
     const g = by.get(w.exam) ?? { papers: 0, ph: new Map<string, { n: number; ex: PhraseEx }>() };
     g.papers++;
     const ink = await inkFor(w.exam);
+    const dec = await decisionsOf(w.exam);
     const seen = new Set<string>();
     for (const pg of marksByPage(r.qs, r.pages, undefined, [], ink)) {
       pg.marks.forEach((m, k) => {
-        if (!m.note || m.hand || seen.has(m.note)) return;
+        if (!m.note || m.hand || seen.has(m.note) || dec[phraseKey(m.note)]) return;
         seen.add(m.note);
         const old = g.ph.get(m.note);
         if (old) { old.n++; return; }
@@ -1062,7 +1083,14 @@ export async function inkWaitList() {
     }
     by.set(w.exam, g);
   }
-  return await Promise.all([...by].map(async ([exam, g]) => ({ exam, title: await examTitle(exam), papers: g.papers, phrases: [...g.ph].sort((a, b) => b[1].n - a[1].n).map(([t, v]) => ({ t, n: v.n, ex: v.ex })) })));
+  return await Promise.all([...by].map(async ([exam, g]) => ({ exam, title: await examTitle(exam), papers: g.papers, phrases: [...g.ph].sort((a, b) => b[1].n - a[1].n).map(([t, v]) => ({ t, h: phraseKey(t), n: v.n, ex: v.ex })) })));
+}
+/** «🔤 بالرقعة» لو «🚫 لا تكتب شي» لعبارة (من البوت لو الصفحة): ينحفظ للموضوع، والأوراق اللي خلصت عباراتها تنبعث */
+export async function decideWait(exam: number, h: string, d: "r" | "n", finish: (uid: number, itemId: number) => Promise<unknown>) {
+  const p = (await inkWaitList()).find((x) => x.exam === exam)?.phrases.find((x) => x.h === h);
+  if (!p) return { ok: false, sent: 0 };
+  await decidePhrase(exam, p.t, d);
+  return { ok: true, sent: await releaseWaits(exam, false, finish) };
 }
 /** يبعث أوراق موضوع: ruqaa كلها (العبارات الناقصة بالرقعة)، وإلا بس اللي صارت كل عباراتها بخطه */
 export async function releaseWaits(exam: number, ruqaa: boolean, finish: (uid: number, itemId: number) => Promise<unknown>) {
@@ -1087,11 +1115,12 @@ export async function releaseWaits(exam: number, ruqaa: boolean, finish: (uid: n
 /** تنبيه لصاحب البوت (واللي عنده صلاحية تصحيح قصي): أول مرة، وكل 3 ساعات تذكير لحد ما يدوس */
 async function waitNotice(exam: number, remind: boolean) {
   const last = await readJson<Record<string, number>>(WAIT_NOTE, {});
-  if (Date.now() - (last[exam] ?? 0) < (remind ? REMIND : NOTE_GAP)) return;
+  // الرسالة الكبيرة: أول مرة، وبعدين كل 30 دقيقة (أوراق جديدة) لو كل 3 ساعات (تذكير). صور العبارات الجديدة: كل مرة تطلع عبارة جديدة
+  const summary = Date.now() - (last[exam] ?? 0) >= (remind ? REMIND : NOTE_GAP);
+  if (!summary && remind) return;
   const g = (await inkWaitList()).find((x) => x.exam === exam);
   if (!g || !g.phrases.length) return;
-  last[exam] = Date.now();
-  await kvSet(WAIT_NOTE, JSON.stringify(last));
+  if (summary) { last[exam] = Date.now(); await kvSet(WAIT_NOTE, JSON.stringify(last)); }
   const { staffIds } = await import("./data.ts");
   const { adminPageLink } = await import("./keyboards.ts");
   const { esc, plainMath } = await import("./util.ts");
@@ -1102,9 +1131,26 @@ async function waitNotice(exam: number, remind: boolean) {
 ${top}${more}
 
 تكتبها هسه، لو تنبعث للطلاب بخط الرقعة؟ الأوراق تنتظرك لحد ما تختار.`;
-  for (const a of await staffIds("qusay")) {
-    await send(a, text, { kb: [[{ text: "✍️ راح أكتبها", web_app: { url: `${adminPageLink("qusay", a)}&ink=${exam}` } }], [{ text: "📤 دزها بالرقعة", callback_data: `qiw:${exam}` }]] });
+  const to = await staffIds("qusay");
+  if (summary) for (const a of to) {
+    await send(a, text, { kb: [[{ text: "✍️ راح أكتبها", web_app: { url: `${adminPageLink("qusay", a)}&ink=${exam}` } }], [{ text: "📤 دزها كلها بالرقعة", callback_data: `qiw:${exam}` }]] });
   }
+  // ويا كل عبارة جديدة (أول مرة بس): صورة ورقة الطالب، وثلاث خيارات (طلبه 2026-11-24)
+  if (remind) return;
+  const sentKey = `qg_phr_sent_${exam}`;
+  const shown = new Set(await readJson<string[]>(sentKey, []));
+  const fresh = g.phrases.filter((p) => !shown.has(p.h)).slice(0, 5);
+  for (const p of fresh) {
+    shown.add(p.h);
+    const pic = p.ex ? await readRef(p.ex.ref) : null;
+    const cap = `✍️ <b>السؤال ${p.ex?.q ?? ""}</b>${p.n > 1 ? ` · ${p.n} مرات` : ""}\nراح ينكتب للطالب: «${esc(plainMath(p.t))}»${p.ex?.w ? `\nالطالب كاتب: ${esc(plainMath(p.ex.w)).slice(0, 300)}` : ""}\n\nشلون تريدها؟`;
+    for (const a of to) {
+      const kb = [[{ text: "✍️ بخطي", web_app: { url: `${adminPageLink("qusay", a)}&ink=${exam}&ph=${p.h}` } }], [{ text: "🔤 بالرقعة", callback_data: `qip:${exam}:${p.h}:r` }, { text: "🚫 لا تكتب شي", callback_data: `qip:${exam}:${p.h}:n` }]];
+      if (pic && await upload("sendPhoto", { chat_id: String(a), caption: cap, parse_mode: "HTML", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", pic, "page.jpg", "image/jpeg")) continue;
+      await send(a, cap, { kb });
+    }
+  }
+  await kvSet(sentKey, JSON.stringify([...shown]));
 }
 /** تذكير كل 3 ساعات بكل موضوع بيه أوراق تنتظر */
 async function waitReminders() {

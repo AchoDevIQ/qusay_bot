@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, inkWaitList, releaseWaits, spentFrom, trialCandidates, trialQueue, versionWhyNot, stepsIn, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
+  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, inkWaitList, releaseWaits, decideWait, spentFrom, trialCandidates, trialQueue, versionWhyNot, stepsIn, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { docxNotes, notesKind } from "./notesFile.ts";
@@ -230,6 +230,13 @@ export async function qusayAction(body: Row) {
   }
   if (a === "lessonDel") { await forgetLesson(exam, Number(body.lesson)); return await out("🗑 انمسحت هاي القاعدة"); }
   // ⏸ عبارة كتبها بخطه للأوراق اللي تنتظره: تنحفظ بخط الموضوع، والأوراق اللي صارت كلها بخطه تنبعث هسه
+  if (a === "waitDecide") {
+    need(exam > 0 && (body.d === "r" || body.d === "n"), "اختار");
+    const { finishByAi } = await import("./gradeApi.ts");
+    const r = await decideWait(exam, String(body.h ?? ""), body.d, finishByAi);
+    need(r.ok, "هاي العبارة ما تنتظر بعد");
+    return await out(`${body.d === "r" ? "🔤 تنكتب بالرقعة" : "🚫 ما تنكتب، تبقى العلامة بس"}${r.sent ? `، وانبعثت ${r.sent} ورقة` : ""}`);
+  }
   if (a === "waitInk" || a === "waitSend") {
     need(exam > 0, "اختار الموضوع");
     const { finishByAi } = await import("./gradeApi.ts");

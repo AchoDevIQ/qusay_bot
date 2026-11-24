@@ -26,7 +26,7 @@ type Data = {
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 type PhraseEx = { item: number; ref: string; marks: MarkT[]; k: number; q: number; step: string; w: string };
-type InkWait = { exam: number; title: string; papers: number; phrases: { t: string; n: number; ex?: PhraseEx }[] };
+type InkWait = { exam: number; title: string; papers: number; phrases: { t: string; h: string; n: number; ex?: PhraseEx }[] };
 /** ورقة الطالب اللي انكتبت عليها العبارة، والعلامة نفسها محوطة، ورقم السؤال والخطوة وشنو كتب الطالب */
 function PhraseExample({ ex, fileUrl }: { ex: PhraseEx; fileUrl: (ref: string) => string }) {
   return (
@@ -145,6 +145,15 @@ function InkWaitCard({ waits, busy, call, fileUrl }: { waits: InkWait[]; busy: b
   // من التنبيه («✍️ راح أكتبها»): الموضوع اللي إجه منه يطلع أول
   const want = typeof window === "undefined" ? 0 : Number(new URLSearchParams(location.search).get("ink")) || 0;
   const list = [...waits].sort((a, b) => Number(b.exam === want) - Number(a.exam === want));
+  // من «✍️ بخطي» بالبوت: الورقة البيضة لهاي العبارة تنفتح على طول (مرة وحدة)
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current) return;
+    opened.current = true;
+    const ph = new URLSearchParams(location.search).get("ph");
+    const w = waits.find((x) => x.exam === want), p = w?.phrases.find((x) => x.h === ph);
+    if (w && p) setWriting({ exam: w.exam, t: p.t, ex: p.ex });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (writing) {
     return (
       <div className="card expad">
@@ -167,7 +176,11 @@ function InkWaitCard({ waits, busy, call, fileUrl }: { waits: InkWait[]; busy: b
               <div className="aig-logrow">
                 <div dir="auto"><Inline text={p.t} />{p.n > 1 && <small> · {p.n} مرات</small>}</div>
                 {p.ex && <button type="button" className="exbtn" onClick={() => setLook(look === p.t ? "" : p.t)}>{look === p.t ? "⬆️ سد" : "📷 وين؟"}</button>}
-                <button type="button" className="exbtn" disabled={busy} onClick={() => setWriting({ exam: w.exam, t: p.t, ex: p.ex })}>✍️ اكتبها</button>
+              </div>
+              <div className="aig-logrow">
+                <button type="button" className="exbtn" disabled={busy} onClick={() => setWriting({ exam: w.exam, t: p.t, ex: p.ex })}>✍️ بخطي</button>
+                <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "waitDecide", exam: w.exam, h: p.h, d: "r" })}>🔤 بالرقعة</button>
+                <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "waitDecide", exam: w.exam, h: p.h, d: "n" })}>🚫 لا تكتب شي</button>
               </div>
               {look === p.t && p.ex && <PhraseExample ex={p.ex} fileUrl={fileUrl} />}
             </div>

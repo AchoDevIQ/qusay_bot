@@ -164,6 +164,16 @@ async function onCallback(q: Row) {
     note = await regCb(chat, uid, mid, d, st, data, q.from);
   } else if (d.startsWith("of:")) {
     note = await officeCb(chat, uid, d);
+  } else if (d.startsWith("qip:")) {
+    // ✍️ عبارة تنتظر خطه: «🔤 بالرقعة» لو «🚫 لا تكتب شي»
+    if (await can(uid, "qusay")) {
+      const [, ex, h, dd] = d.split(":");
+      const { decideWait } = await import("./qusayGrade.ts");
+      const { finishByAi } = await import("./gradeApi.ts");
+      const r = await decideWait(Number(ex), h, dd === "n" ? "n" : "r", finishByAi);
+      note = !r.ok ? "✅ انحسمت قبل" : `${dd === "n" ? "🚫 ما تنكتب" : "🔤 بالرقعة"}${r.sent ? ` · انبعثت ${r.sent} ورقة` : ""}`;
+      if (mid) await api("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [[{ text: note, callback_data: "gs:done" }]] } });
+    } else note = "ما عندك صلاحية";
   } else if (d.startsWith("qiw:")) {
     // ⏸ «📤 دزها بالرقعة»: أوراق «تصحيح قصي» اللي تنتظر خطه تنبعث هسه، والعبارات الناقصة بالرقعة
     if (await can(uid, "qusay")) {
