@@ -10,8 +10,8 @@ type Info = { en: boolean; need?: "reg"; closed?: string; chapters?: Chapter[] }
 
 const token = () => (typeof window === "undefined" ? "" : new URLSearchParams(location.search).get("t") ?? "");
 const T = {
-  ar: { title: "❓ سؤال علمي", ch: "الفصل", topic: "الموضوع", lec: "المحاضرة", lecN: (n: number) => `المحاضرة ${n}`, q: "سؤالك", qHint: "اكتب سؤالك هنا، لو صوّره تحت 👇", photo: "📷 صوّر السؤال", photo2: "📷 بدّل الصورة", del: "🗑 شيل الصورة", send: "📤 دز سؤالي", wait: "⏳ لحظة، دا يدور على حل سؤالك...", sent: (n: number) => `✅ وصل سؤالك (رقم #${n}) للأستاذ.\nراح يوصلك الجواب بالبوت، وتگدر تشوفه من «📂 أسئلتي».`, again: "❓ سؤال ثاني", reg: "حتى تسأل، سجّل معلوماتك أول من البوت.", loading: "جاري التحميل...", net: "ماكو اتصال، حاول مرة ثانية", pick: "اختار", empty: "اكتب سؤالك لو صوّره" },
-  en: { title: "❓ Scientific question", ch: "Chapter", topic: "Topic", lec: "Lecture", lecN: (n: number) => `Lecture ${n}`, q: "Your question", qHint: "Write your question here, or take a photo below 👇", photo: "📷 Take a photo", photo2: "📷 Change the photo", del: "🗑 Remove the photo", send: "📤 Send my question", wait: "⏳ One moment, looking for your solution...", sent: (n: number) => `✅ Your question (#${n}) reached the teacher.\nThe answer comes to you in the bot, and you can see it in «📂 My questions».`, again: "❓ Another question", reg: "To ask, register your details first in the bot.", loading: "Loading...", net: "No connection, try again", pick: "Choose", empty: "Write your question or take a photo" },
+  ar: { title: "❓ سؤال علمي", ch: "الفصل", topic: "الموضوع", lec: "المحاضرة", lecN: (n: number) => `المحاضرة ${n}`, q: "سؤالك", qHint: "اكتب سؤالك هنا، لو صوّره تحت 👇", photo: "📷 صوّر السؤال", photo2: "📷 بدّل الصورة", del: "🗑 شيل الصورة", send: "📤 دز سؤالي", wait: "📤 ...", queued: "✅ وصل سؤالك.\nراح يوصلك الجواب بإشعار (بالبوت والتطبيق).", sent: (n: number) => `✅ وصل سؤالك (رقم #${n}) للأستاذ.\nراح يوصلك الجواب بالبوت، وتگدر تشوفه من «📂 أسئلتي».`, again: "❓ سؤال ثاني", reg: "حتى تسأل، سجّل معلوماتك أول من البوت.", loading: "جاري التحميل...", net: "ماكو اتصال، حاول مرة ثانية", pick: "اختار", empty: "اكتب سؤالك لو صوّره" },
+  en: { title: "❓ Scientific question", ch: "Chapter", topic: "Topic", lec: "Lecture", lecN: (n: number) => `Lecture ${n}`, q: "Your question", qHint: "Write your question here, or take a photo below 👇", photo: "📷 Take a photo", photo2: "📷 Change the photo", del: "🗑 Remove the photo", send: "📤 Send my question", wait: "📤 ...", queued: "✅ Your question arrived.\nThe answer comes to you as a notification (in the bot and the app).", sent: (n: number) => `✅ Your question (#${n}) reached the teacher.\nThe answer comes to you in the bot, and you can see it in «📂 My questions».`, again: "❓ Another question", reg: "To ask, register your details first in the bot.", loading: "Loading...", net: "No connection, try again", pick: "Choose", empty: "Write your question or take a photo" },
 };
 
 /** الصورة تصغر قبل ما تنرفع (أخف وأسرع، وتكفي للقراية) */
@@ -73,9 +73,7 @@ export default function AskClient() {
       const res = await fetch("/api/ask", { method: "POST", body: fd });
       const j = await res.json();
       if (!res.ok || j.closed) { setError(j.error ?? j.closed ?? T.ar.net); return; }
-      // انحل: صفحة الحل نفسها (بنفس الرابط والإذن)
-      if (j.answer) { location.href = `/store/answer?t=${encodeURIComponent(token())}&a=${j.answer}`; return; }
-      if (j.sent) setSent(j.sent);
+      if (j.queued) setSent(1);
     } catch { setError(t.net); } finally { setBusy(false); }
   }
   function again() { setSent(0); setText(""); setPic(null); setPreview(""); setError(""); }
@@ -94,7 +92,7 @@ export default function AskClient() {
         {info?.closed && <div className="card expad" style={{ whiteSpace: "pre-line" }}>{info.closed}</div>}
         {sent > 0 && (
           <div className="card expad">
-            <div className="fdok" style={{ whiteSpace: "pre-line" }}>{t.sent(sent)}</div>
+            <div className="fdok" style={{ whiteSpace: "pre-line" }}>{t.queued}</div>
             <button type="button" className="btn" onClick={again}>{t.again}</button>
           </div>
         )}

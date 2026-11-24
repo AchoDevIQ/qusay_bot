@@ -221,7 +221,7 @@ export async function uploadAnswer(form: FormData, s: SchedSettings) {
   await checkPhone(uid!, form.get("pf"));
   await checkStopped(uid!, form.get("item"));
   const it = await liveRoom(uid!, form.get("item"), s);
-  need(await kvGet(oathKey(it.id)), "كمل جملة القسم أول، وبعدها تنفتح الكاميرا");
+  need(await kvGet(oathKey(it.id)), "رتب جملة القسم أول، وبعدها تنفتح الكاميرا");
   const q = Number(form.get("q"));
   need(await one("bank_questions", { version_id: it.version_id, n: q }), "السؤال غير موجود");
   const f = form.get("file");

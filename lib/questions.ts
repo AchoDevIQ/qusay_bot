@@ -152,8 +152,8 @@ async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: numb
     : r.source === "rasid"
     ? (en ? "📝 <b>Your question is in the teacher's Rasid</b>\nTap the button to see his model solution." : "📝 <b>سؤالك موجود بالراصد</b>\nدوس الزر تشوف الحل النموذجي مال الأستاذ.")
     : en
-    ? (r.source === "ai" ? "📘 <b>Here is your solution</b>\nTap the button to see it step by step." : "📘 <b>Your question is solved in the teacher's booklet</b>\nTap the button to see the solution step by step.")
-    : (r.source === "ai" ? "📘 <b>عيوني، تفضل هذا الحل</b>\nدوس الزر تشوف الحل خطوة خطوة." : "📘 <b>سؤالك محلول بملزمة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة.");
+    ? "📘 <b>Here is your solution</b>\nTap the button to see it step by step."
+    : "📘 <b>عيوني، تفضل هذا الحل</b>\nدوس الزر تشوف الحل خطوة خطوة.";
   const head = qid ? (en ? `💬 <b>About your question #${qid}</b>\n` : `💬 <b>بخصوص سؤالك #${qid}</b>\n`) : "";
   await send(chat, head + msg, { kb });
   await logActivity(uid, (qid ? `🔁 #${qid} بعد ما رجع الذكاء: ` : "") + (r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : r.source === "rasid" ? `📝 وصله الحل النموذجي من الراصد (${r.rasid?.topic ?? where} ${r.rasid?.q ?? ""})` : r.source === "notebook" ? `📘 وصله حل سؤاله من دفتر المحاضرات (${r.notebook?.where || where} ص${r.notebook?.page ?? ""})` : `📘 وصله حل سؤاله من الملزمة (${where})`));
@@ -316,8 +316,11 @@ export async function askInfo(uid: number) {
     }))),
   };
 }
-/** الطالب دز سؤاله من الصفحة: answer رقم الحل (ينفتح بنفس الصفحة)، لو sent رقم سؤاله اللي راح للأستاذ */
-export async function askFromPage(uid: number, b: AskBody, image: Buffer | null): Promise<{ answer?: string; sent?: number; closed?: string }> {
+/** الطالب دز سؤاله من الصفحة: ينحفظ وينتظر بالطابور (queued). الجواب يوصله بإشعار (طلبه 2026-11-24: «ما نكتب له شيء،
+ *  هو يدز السؤال وينتظر، ويوصل إشعار إنه جاوبك»). الطابور يمشي كل دقيقة (askPageTick) */
+const ASK_Q = "qa_page_q";
+type AskJob = { uid: number; tid: number; lec: number; text: string; img: string; at: string };
+export async function askFromPage(uid: number, b: AskBody, image: Buffer | null): Promise<{ queued?: boolean; closed?: string }> {
   const info = await askInfo(uid);
   if (!("chapters" in info) || !info.chapters) return { closed: "closed" in info ? info.closed : "سجّل معلوماتك أول" };
   const s = (await student(uid))!;
@@ -333,6 +336,33 @@ export async function askFromPage(uid: number, b: AskBody, image: Buffer | null)
   const { createHash } = await import("node:crypto");
   const img = image ? `qa/ask/${createHash("sha1").update(image).digest("hex").slice(0, 20)}.jpg` : "";
   if (image) await files().write(img, image, "image/jpeg");
+  const q = JSON.parse((await kvGet(ASK_Q)) || "[]") as AskJob[];
+  await kvSet(ASK_Q, JSON.stringify([...q, { uid, tid: Number(t.id), lec, text, img, at: stamp() }]));
+  await logActivity(uid, "❓ دز سؤال علمي من الصفحة");
+  return { queued: true };
+}
+/** كل دقيقة: أسئلة الصفحة تنجاوب (نفس طريق البوت: ملزمتك، الراصد، الدفتر، لو الذكاء)، والحل يوصل بإشعار بزر يفتحه.
+ *  اللي ما انحل يروح للأستاذ بالمجموعة */
+export async function askPageTick(limit = 4) {
+  const all = JSON.parse((await kvGet(ASK_Q)) || "[]") as AskJob[];
+  if (!all.length) return 0;
+  const jobs = all.slice(0, limit);
+  await kvSet(ASK_Q, JSON.stringify(all.slice(limit)));
+  const { files } = await import("./files.ts");
+  for (const j of jobs) {
+    try {
+      const image = j.img ? await files().read(j.img) : null;
+      await answerJob(j, image);
+    } catch (e) { console.error("ask page", j.uid, e); }
+  }
+  return jobs.length;
+}
+async function answerJob(j: AskJob, image: Buffer | null) {
+  const { uid, lec, text, img } = j;
+  const s = await student(uid);
+  const t = await topic(j.tid);
+  if (!s || !t) return;
+  const en = isEn(s);
   // الجواب الآلي: نفس اللي بالبوت (ملزمتك، الراصد، الدفتر، لو الذكاء على طريقتك)
   const n = await chapterNo(t.chapter_id);
   let aiFail = "";
@@ -345,10 +375,13 @@ export async function askFromPage(uid: number, b: AskBody, image: Buffer | null)
       const shown = en ? `${t.en || t.ar}${lec ? ` — Lecture ${lec}` : ""}` : where;
       const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar", { chapter: n, tid: Number(t.id), lecture: lec, page: true, ...(img ? { img } : {}) });
       await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي من الصفحة (${where})` : `📘 وصله حل سؤاله من الصفحة (${where}، ${r.source})`);
-      return { answer: id };
+      // إشعار بالبوت والتطبيق: جواب سؤالك وصل، وزر يفتحه. ما بيه شي يبين منين انحل
+      await send(uid, en ? `📘 <b>The answer to your question arrived</b>\n📍 ${esc(shown)}\nTap the button to see it.` : `📘 <b>وصل جواب سؤالك</b>\n📍 ${esc(shown)}\nدوس الزر تشوف الحل.`,
+        { kb: [[{ text: en ? "📘 Open the answer" : "📘 افتح الجواب", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }]] });
+      return;
     }
   }
-  return { sent: await toTeacher(uid, Number(t.id), lec, text, image, aiFail) };
+  await toTeacher(uid, Number(t.id), lec, text, image, aiFail);
 }
 /** السؤال يروح للأستاذ بالمجموعة (موضوع جديد بيه الكتابة والصورة)، مثل سؤال البوت بالضبط */
 export async function toTeacher(uid: number, tid: number, lec: number, text: string, image: Buffer | null, aiFail = ""): Promise<number> {

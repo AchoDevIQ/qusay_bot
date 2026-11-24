@@ -57,6 +57,8 @@ export async function cronTick(key: unknown) {
   if (aiHeld && Date.now() - aiHeld < AI_STALE) { out.aiBusy = true; return out; }
   await kvSet(AI_LOCK, String(Date.now()));
   try {
+    // ❓ أسئلة صفحة «سؤال علمي» أول شي، حتى الطالب ما ينتظر هواية
+    await step("askPage", async () => (await import("./questions.ts")).askPageTick());
     await step("ai", () => aiGradeTick(finishByAi, paperName));
     // «تصحيح قصي»: مصحح الأستاذ الثاني، طافي إلا إذا شغله من صفحته
     await step("qusay", async () => (await import("./qusayGrade.ts")).qusayTick(finishByAi));

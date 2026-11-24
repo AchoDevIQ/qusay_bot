@@ -532,7 +532,7 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.equal(opened.room.sworn, false);
   assert.match(opened.room.oath, /^أني الطالب .+ أقسم بالله أنني لن أغش في هذا الامتحان$/);
   assert.deepEqual(opened.room.pages, []);   // الأسئلة ما تنفتح قبل القسم
-  await assert.rejects(upload(90, item, 1), /كمل جملة القسم/);
+  await assert.rejects(upload(90, item, 1), /رتب جملة القسم/);
   await assert.rejects(act(90, "oath", { item }), /رتب جملة القسم كاملة/);            // بدون ما يرتبها
   await assert.rejects(act(90, "oath", { item, text: "أني الطالب أقسم بالله" }), /رتب جملة القسم كاملة/);   // ناقصة
   // الهمزة والتاء المربوطة والمسافات ما تفرق

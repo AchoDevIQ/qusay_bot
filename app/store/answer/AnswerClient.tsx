@@ -98,13 +98,28 @@ function BookSolution({ book, title, hint, pages, sol, y, marks }: { book: numbe
 }
 
 const TXT = {
-  ar: { title: "📘 حل سؤالك", q: "❓ سؤالك", photo: "📷 سؤالك بالصورة اللي دزيتها", ai: "📘 الحل", book: "📘 حل الأستاذ من الملزمة", aiNote: "", help: "إذا بعدك ما فهمت، ارجع للبوت ودوس «❓ بعدني ما فهمت» ويوصل سؤالك للأستاذ.", step: "🤔 ما فهمت خطوة", stepHint: "اكتب شنو ما فهمت بالحل، مثلاً: «ليش صارت سالب بالسطر الثالث؟»", send: "اشرحلي", wait: "⏳ دا يشرحها...", you: "❓ سألت", left: (n: number) => `باقي ${n} مرة على هذا الحل`, loading: "جاري التحميل...", net: "ماكو اتصال، حاول مرة ثانية", err: "صار خطأ" },
-  en: { title: "📘 Your solution", q: "❓ Your question", photo: "📷 Your question is in the photo you sent", ai: "📘 The solution", book: "📘 The teacher's solution from the booklet", aiNote: "", help: "Still not clear? Go back to the bot and tap «❓ Still not clear» to send your question to the teacher.", step: "🤔 I didn't get a step", stepHint: "Write what you did not understand, e.g. «why did it become negative in line 3?»", send: "Explain", wait: "⏳ Explaining...", you: "❓ You asked", left: (n: number) => `${n} more on this solution`, loading: "Loading...", net: "No connection, try again", err: "Something went wrong" },
+  ar: { title: "📘 حل سؤالك", q: "❓ سؤالك", photo: "📷 سؤالك بالصورة اللي دزيتها", ai: "📘 الحل", book: "📘 الحل", aiNote: "", help: "إذا بعدك ما فهمت، ارجع للبوت ودوس «❓ بعدني ما فهمت» ويوصل سؤالك للأستاذ.", step: "🤔 ما فهمت خطوة", stepHint: "اكتب شنو ما فهمت بالحل، مثلاً: «ليش صارت سالب بالسطر الثالث؟»", send: "اشرحلي", wait: "⏳ دا يشرحها...", you: "❓ سألت", left: (n: number) => `باقي ${n} مرة على هذا الحل`, loading: "جاري التحميل...", net: "ماكو اتصال، حاول مرة ثانية", err: "صار خطأ" },
+  en: { title: "📘 Your solution", q: "❓ Your question", photo: "📷 Your question is in the photo you sent", ai: "📘 The solution", book: "📘 The solution", aiNote: "", help: "Still not clear? Go back to the bot and tap «❓ Still not clear» to send your question to the teacher.", step: "🤔 I didn't get a step", stepHint: "Write what you did not understand, e.g. «why did it become negative in line 3?»", send: "Explain", wait: "⏳ Explaining...", you: "❓ You asked", left: (n: number) => `${n} more on this solution`, loading: "Loading...", net: "No connection, try again", err: "Something went wrong" },
 };
 
 /** سطر الحل: إذا كله رياضيات بدون $ ينكتب معادلة، وإذا بيه كلام وبين $ $ رياضيات ينكتب جملة */
-function Line({ text, rtl }: { text: string; rtl: boolean }) {
-  if (text.includes("$") || /[؀-ۿ]/.test(text) || /[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(text)) return <div className="ansline" dir={rtl ? "rtl" : "ltr"}><Inline text={text} /></div>;
+/** كلام عربي داخل معادلة الـ Word (مثل «اما 2a» بالمصفوفة، «وحدة مربعة»): ينكتب \text{} حتى المعادلة تنرسم مو تطلع
+ *  «\begin{matrix}» للطالب، والكلمتين أو أكثر ترجع لترتيبها (الـ Word يخزنها معكوسة: «مربعة وحدة»). وكلام عربي ورا
+ *  معادلة بأول السطر هم معكوس («البؤرتين بين المسافة») (طلبه 2026-11-24) */
+const AR_RUN = /[؀-ۿ][؀-ۿ\s]*[؀-ۿ]|[؀-ۿ]+/g;
+export function fixWordLine(text: string) {
+  let out = text.replace(/\$([^$]+)\$/g, (_, m: string) => "$" + m.replace(AR_RUN, (run) => {
+    const w = run.trim().split(/\s+/);
+    return `\\text{${(w.length > 1 ? w.reverse() : w).join(" ")}}`;
+  }) + "$");
+  if (out.trim().startsWith("$")) out = out.replace(/\$\s+([؀-ۿ][؀-ۿ\s]*)$/, (_, a: string) => `$ ${a.trim().split(/\s+/).reverse().join(" ")}`);
+  return out;
+}
+/** السطر اللي يبدي بمعادلة لو إنگليزي يبدي من اليسار، والعربي من اليمين (طلبه 2026-11-24) */
+function Line({ text: raw, rtl }: { text: string; rtl: boolean }) {
+  const text = fixWordLine(raw);
+  const ltr = /^\s*(\$|[A-Za-z0-9\\(])/.test(text);
+  if (text.includes("$") || /[؀-ۿ]/.test(text) || /[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(text)) return <div className="ansline" dir={ltr ? "ltr" : rtl || /[؀-ۿ]/.test(text) ? "rtl" : "ltr"}><Inline text={text} /></div>;
   return <div className="ansline"><MathText text={text} /></div>;
 }
 
