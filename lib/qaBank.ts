@@ -319,7 +319,8 @@ export async function readForCheck(image: Buffer, tid: number) {
   const t = await one("topics", { id: tid });
   const read = await readPhoto(image, String(t?.ar ?? ""));
   const { lineToPhone } = await import("./notesFile.ts");
-  return read.split("\n").map((l) => lineToPhone(l)).filter((l) => l.trim()).join("\n");
+  // «pi» تصير π، حتى الطالب يشوف نفس كتابتنا
+  return read.split("\n").map((l) => lineToPhone(l).replace(/(^|[^A-Za-z])pi(?![A-Za-z])/g, "$1π")).filter((l) => l.trim()).join("\n");
 }
 /** جواب سؤال الطالب: من المحاضرة، أو من الموضوع، أو حل على طريقة الأستاذ. null إذا ماكو ملازم لهذا الموضوع */
 /** tid: موضوع البوت اللي اختاره الطالب. مواضيع الملزمة المربوطة بيه بس تدخل */

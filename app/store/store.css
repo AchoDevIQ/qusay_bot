@@ -538,3 +538,6 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .inkex{margin:6px 0 10px;padding:8px;border:1px dashed var(--line,#c9d6ee);border-radius:10px}
 /* كلام عربي داخل معادلة («اما 2a»): ينعزل حتى الرقم ما يتقلب وياه (2026-11-24) */
 .katex .mord.text{unicode-bidi:isolate}
+/* «✍️ تأكد من سؤالك»: كتابة كبيرة يگدر يصلّح بيها الرقم، والمرتب تحته أكبر (2026-11-24) */
+.askfix{font-size:20px;line-height:1.7;min-height:140px;unicode-bidi:plaintext}
+.tidyview .tidyline{font-size:19px;padding:4px 0}

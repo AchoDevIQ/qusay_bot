@@ -40,3 +40,9 @@ test("معادلة انكسرت بـ $ جوة أقواسها: تصير معاد�
   assert.equal(out.split("$").length, 3, "زوج $ واحد");
   assert.ok(out.includes(String.raw`\overset{ \text{اما} 2a}{ \text{او} 2b}`), out);
 });
+
+test("كتابة الموبايل: cos(π/9) بقوس مو cosπ/9 (وإلا cos كلها على 9)، و«i sin» بفراغ", async () => {
+  const { lineToPhone } = await import("../lib/notesFile.ts");
+  assert.equal(lineToPhone(String.raw`$1+\cos\frac{\pi}{9}+i\sin\frac{\pi}{9}$`), "1+cos(π/9)+i sin(π/9)");
+  assert.equal(lineToPhone(String.raw`$\sin x$`), "sin x");
+});

@@ -124,8 +124,11 @@ export default function AskClient() {
             <div className="form">
               <label>{t.check}</label>
               <div className="exhint">{check.trim() ? t.checkHint : t.noRead}</div>
-              {preview && <img src={preview} alt="" style={{ width: "100%", borderRadius: 10, border: "1px solid #cbd5e1" }} />}
-              <textarea rows={Math.min(10, Math.max(3, check.split("\n").length + 1))} dir="auto" value={check} onChange={(e) => setCheck(e.target.value)} disabled={busy} />
+              {/* الصورة: تدوس عليها وتكبر (وتقرّب بإصبعين)، حتى يقارن الأرقام زين */}
+              {preview && <img src={preview} alt="" className="eximg" style={{ width: "100%", borderRadius: 10, border: "1px solid #cbd5e1", cursor: "zoom-in" }} />}
+              {preview && <div className="exhint">{info?.en ? "👆 Tap the photo to enlarge it" : "👆 دوس على الصورة حتى تكبر"}</div>}
+              {/* مربع كبير وكتابة كبيرة: كل سطر من سؤاله بسطر، والمعادلة من اليسار */}
+              <textarea className="askfix" rows={Math.min(14, Math.max(4, check.split("\n").length * 2 + 1))} dir="auto" value={check} onChange={(e) => setCheck(e.target.value)} disabled={busy} />
               {check.trim() && (
                 <div className="tidyview">
                   <div className="exhint">{t.look}</div>

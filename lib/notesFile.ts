@@ -19,6 +19,7 @@ const raise = (x: string, map: Record<string, string>, mark: string) => (/^['′
   // وأس أطول من حرف واحد ينحط بقوس: e^(-x)dx مو e^-xdx (وين يخلص الأس؟)
   : /^([A-Za-z]|\d+(\.\d+)?)$/.test(x) || /^\((?:[^()]|\([^()]*\))*\)$/.test(x) ? `${mark}${x}` : `${mark}(${x})`);
 
+const TRIG = new Set(["sin", "cos", "tan", "cot", "sec", "csc", "log", "ln"]);
 /** LaTeX (من معادلات Word) → كتابة الموبايل: \frac{3}{x^{2}} → 3/x² ، \sqrt{x+1} → √(x+1) */
 export function texToPhone(tex: string): string {
   let i = 0;
@@ -53,6 +54,14 @@ export function texToPhone(tex: string): string {
       else if (k === "\\") out += "، ";
       else if (k === "begin" || k === "end") group();
       else if (k === "overline" || k === "text" || k === "mathrm" || k === "operatorname") out += group();
+      // sin و cos...: «i sin» مو «isin»، والكسر بعدها بقوس: cos(π/9) مو cosπ/9 (وإلا ينقرا cos كلها على 9)
+      else if (TRIG.has(k)) {
+        const pre = /[A-Za-z0-9)]$/.test(out) ? " " : "";
+        let j = i; while (s[j] === " ") j++;
+        const fr = /^\\[dt]?frac/.exec(s.slice(j));
+        if (fr) { i = j + fr[0].length; const a2 = group(), b2 = group(); out += `${pre}${k}(${wrap(a2)}/${wrap(b2)})`; }
+        else out += `${pre}${k} `;
+      }
       else out += CMD[k] ?? k + (/^[A-Za-z{]/.test(s[i] ?? "") ? " " : "");
     } else if (c === "^") {
       i++; out = out.replace(/\s+$/, "");
