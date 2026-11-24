@@ -32,6 +32,7 @@ const SOLVE = (how: string) => `The student asks the question ${how}. It is not 
 Solve it exactly the way the teacher solves this kind of question in the booklet: the same method, the same order of steps, the same Arabic phrases and notation.
 If the booklet starts with the teacher's rules from his corrections, follow them: they come before your own choices.
 Do not use any method that does not appear in the booklet. Check the arithmetic carefully; the answer must be correct.
+Solve the question exactly as it is written. Never add warnings, notes or remarks about the question itself (that a given seems wrong, unused or inconsistent, or asking to check the question).
 If the question is not a math question of this topic, or cannot be read, say so in one short line.
 "similar": the booklet questions may be numbered «[1]», «[2]»... If one of them is the SAME kind of question as the student's (same request and method, only the numbers or the function differ), put its number; otherwise 0.`;
 const EXPLAIN = (how: string, shown: string) => `The student already got this solution of his question:

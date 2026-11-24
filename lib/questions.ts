@@ -365,16 +365,18 @@ export async function sendAnswerPdf(uid: number, id: string) {
   const en = a.lang === "en";
   const { answerPdf } = await import("./documents.ts");
   const pdf = await answerPdf({ name: String((await student(uid))?.name ?? ""), where: String(a.where ?? ""), question: String(a.question || a.asked || ""), solution: String(a.solution), ...(a.similar ? { similar: a.similar } : {}), lang: en ? "en" : "ar", date: stamp() });
-  if (!pdf) return false;
+  if (!pdf) { console.error("answer pdf: the file was not made", id); return false; }
   const kb: Kb = (await qaCfg()).teacherBtn !== false ? [[btn(en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", `qa2t:${id}`)]] : [];
   const ok = await upload("sendDocument", { chat_id: String(uid), protect_content: "true", ...(kb.length ? { reply_markup: JSON.stringify({ inline_keyboard: kb }) } : {}) }, "document", pdf, en ? "solution.pdf" : "حل_سؤالك.pdf", "application/pdf");
-  if (!ok) return false;
+  if (!ok) { console.error("answer pdf: the file was not sent", id); return false; }
   await answerVideos(uid, a);
   return true;
 }
 /** فيديو السؤال من الدفتر لو الراصد (التوضيح والحل)، ورا ملف الحل */
 async function answerVideos(uid: number, a: Row) {
   const { sendMarkVideos, marksFor } = await import("./noteMarks.ts");
+  // السؤال المشابه من الدفتر: فيديوهاته (مثل الكنافة)
+  if (a.similar?.mark) await sendMarkVideos(uid, Number(a.similar.mark.book), Number(a.similar.mark.mark)).catch((e) => console.error("similar videos", uid, e));
   const book = Number(a.notebook?.book ?? a.rasid?.book ?? 0);
   if (!book) return;
   const ids = a.notebook ? (a.notebook.mark ? [Number(a.notebook.mark)] : []) : (await marksFor(book)).filter((m) => m.page === Number(a.rasid.page)).map((m) => Number(m.id));

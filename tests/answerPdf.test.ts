@@ -34,3 +34,9 @@ test("سطر الـ Word: «اما 2a» داخل المعادلة ينكتب \\t
   assert.equal(fixWordLine("$2c=4\\sqrt{5} وحدة$ البؤرتين بين المسافة"), "$2c=4\\sqrt{5} \\text{وحدة}$ المسافة بين البؤرتين");
   assert.equal(fixWordLine("عبارة يقطع جزءا طوله 8"), "عبارة يقطع جزءا طوله 8", "السطر العربي ما يتغير");
 });
+
+test("معادلة انكسرت بـ $ جوة أقواسها: تصير معادلة وحدة والعربي بيها \\text، فما تطلع «\\overset» كتابة للطالب", () => {
+  const out = fixWordLine(String.raw`$\overset{$ اما $2a}{$ او $2b}=8 \to \left(4,0\right)$`);
+  assert.equal(out.split("$").length, 3, "زوج $ واحد");
+  assert.ok(out.includes(String.raw`\overset{ \text{اما} 2a}{ \text{او} 2b}`), out);
+});

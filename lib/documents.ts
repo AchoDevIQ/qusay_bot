@@ -555,7 +555,7 @@ export async function answerPdf(d: AnswerDoc): Promise<Buffer | null> {
     fs.writeFileSync(hp, answerHtml(d, await pageFonts(), katexCss, (tex) => katex.renderToString(tex, { throwOnError: false, output: "html" }), fixWordLine), "utf8");
     const ok = await htmlToPdf(hp, pp);
     fs.rmSync(hp, { force: true });
-    if (!ok) return null;
+    if (!ok) { console.error("answer pdf: the browser did not make the file"); return null; }
     const pdf = fs.readFileSync(pp);
     fs.rmSync(pp, { force: true });
     return pdf;

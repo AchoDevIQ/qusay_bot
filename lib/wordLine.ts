@@ -3,6 +3,8 @@
 // معادلة بأول السطر هم معكوس («البؤرتين بين المسافة»). نفسه بصفحة الحل وبملف الـ PDF (طلب الأستاذ 2026-11-24)
 const AR_RUN = /[؀-ۿ][؀-ۿ\s]*[؀-ۿ]|[؀-ۿ]+/g;
 export function fixWordLine(text: string) {
+  // معادلة انكسرت بـ $ جوة أقواسها («\overset{$ اما $2a}{$ او $2b}»): كلها معادلة وحدة، والعربي بيها \text
+  if (/\{\s*\$|\$\s*\}/.test(text)) text = "$" + text.replace(/\$/g, " ").replace(/\s+/g, " ").trim() + "$";
   let out = text.replace(/\$([^$]+)\$/g, (_, m: string) => "$" + m.replace(AR_RUN, (run) => {
     const w = run.trim().split(/\s+/);
     return `\\text{${(w.length > 1 ? w.reverse() : w).join(" ")}}`;

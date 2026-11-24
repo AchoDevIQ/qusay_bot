@@ -269,7 +269,7 @@ export type QaAsk = { text?: string; image?: Buffer; read?: boolean; checked?: b
 /** notebook: الحل صفحات «دفتر المحاضرات» بملازمي من بداية السؤال (y مكانه بأول صفحة)، ويا زر فيديوهاته (mark) */
 /** teacher: حل صلّحه الأستاذ لنفس السؤال قبل (🔎 حلول الذكاء)، يوصل ببلاش. asked: نص السؤال (بعد قراءة الصورة)، fk: بصمته */
 /** similar: سؤال مشابه من ملزمته ويا حله (لمن السؤال ما موجود بالملزمة وانحل بنفس طريقة سؤال يشبهه) */
-export type QaResult = { source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; asked?: string; fk?: string; similar?: { text: string; where: string }; rasid?: { book: number } & RasidHit; notebook?: { book: number; where: string } & BookHit };
+export type QaResult = { source: "lecture" | "topic" | "ai" | "rasid" | "notebook" | "teacher"; solution: string; asked?: string; fk?: string; similar?: { text: string; where: string; mark?: { book: number; mark: number } }; rasid?: { book: number } & RasidHit; notebook?: { book: number; where: string } & BookHit };
 type Part = { kind: QaKind | "tests"; l: Lecture };
 const joinCtx = (list: Part[], max: number) => {
   let s = "";
@@ -398,6 +398,19 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
     try { h = rasidFind(text, await rasidIndex(b), sameT, qWords(text, topicSet)); } catch (e) { console.error("qa rasid", e); }
     if (h) { await free(); return save({ ...await done("rasid", bookText()), rasid: { book: Number(b.id), ...h } }); }
   }
+  /** سؤال بـ«دفتر المحاضرات»: الملزمة والزر (فيديوهاته) */
+  const markOf = async (t: string) => {
+    for (const b of rasids.filter((x) => x.kind !== "rasid")) {
+      try {
+        const toc = await bookToc(b);
+        const inTopic = topicPages(toc, Number(b.pages), sameT) ?? (() => true);
+        const marks = (await find("note_marks", { book_id: b.id })).map((m) => ({ id: Number(m.id), page: Number(m.page), y: Number(m.y), label: m.label }));
+        const h = bookFind(t, await bookRows(b), marks, inTopic, qWords(t, topicSet));
+        if (h?.mark) return { book: Number(b.id), mark: Number(h.mark) };
+      } catch (e) { console.error("qa similar mark", e); }
+    }
+    return null;
+  };
   // ٢.٦ نفس سؤال بـ«دفتر المحاضرات» بملازمي: صفحاته نفسها من بداية السؤال، ويا فيديوهاته، ببلاش
   for (const b of rasids.filter((x) => x.kind !== "rasid")) {
     let h: BookHit | null = null;
@@ -457,8 +470,17 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
   if (!s.solution) return null;
   // 📘 سؤال مشابه من الملزمة ويا حله (طلبه 2026-11-24): يطلع للطالب قبل حل سؤاله
   const sim = s.similar >= 1 && s.similar <= pool.length ? pool[s.similar - 1] : null;
-  const similar = sim ? { text: cleanSolution(sim.text.split("\n")), where: sim.kind === "tests" ? sim.topic : `${QA_KIND[sim.kind as QaKind]} — ${sim.topic}${sim.lecture ? ` · المحاضرة ${sim.lecture}` : ""}` } : null;
-  return save({ ...await done("ai", s.solution), ...(similar?.text ? { similar } : {}) });
+  // سؤال واحد بس، الأقرب لسؤاله ويا حله (طلبه 2026-11-24: «انطاني أسئلة مشابهة هواية، أريد أقرب واحد»)
+  let simText = "";
+  if (sim) {
+    const qs = sim.kind === "tests" ? [] : bookQuestions(sim.text, sim.lecture);
+    const best = qs.map((x) => ({ x, s: blockScore(text, { head: x.text, lecture: sim.lecture }, lecture) })).sort((a, b) => b.s - a.s)[0]?.x;
+    simText = best ? cleanSolution([best.text, ...best.sol]) : cleanSolution(sim.text.split("\n").slice(0, 30));
+  }
+  // وإذا السؤال المشابه بدفتر المحاضرات: فيديوهاته توصل ويا الحل
+  const simMark = simText ? await markOf(simText.split("\n").slice(0, 3).join(" ")) : null;
+  const similar = sim && simText ? { text: simText, where: sim.kind === "tests" ? sim.topic : `${QA_KIND[sim.kind as QaKind]} — ${sim.topic}${sim.lecture ? ` · المحاضرة ${sim.lecture}` : ""}`, ...(simMark ? { mark: simMark } : {}) } : null;
+  return save({ ...await done("ai", s.solution), ...(similar ? { similar } : {}) });
 }
 
 // ---------- البحث بالملزمة بدون ذكاء: الملزمة تتقسم أسئلة (س1، مثال، Q1...)، وكل سؤال إله درجة قرب من سؤال الطالب
