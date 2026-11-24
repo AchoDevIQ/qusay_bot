@@ -227,7 +227,7 @@ DRAWINGS (graphs of functions, parabola / ellipse / hyperbola sketches, the figu
 
 Set sure=false for a question when you cannot read the handwriting, part of the answer is cut off or missing from the photo, the work matches no method and you cannot judge it, or you hesitate between two marks. Being unsure is fine: a human grader will then check the paper. Do not guess.
 
-For each step, "w" is what the STUDENT wrote for that step, copied from the photo: math as LaTeX between $ signs, the student's own Arabic or English words kept, one short line. Copy the student's own values exactly, even wrong ones; never correct them and never copy the marking scheme. If the student did not write that step, "w" is "".
+For each step, "w" is what the STUDENT wrote for that step, copied from the photo: math as LaTeX between $ signs, the student's own Arabic or English words kept. Every line the student wrote (every new equation or result) is its own line: separate lines with " ; " exactly like the marking scheme does, never join two equations with a comma. Copy the student's own values exactly, even wrong ones; never correct them and never copy the marking scheme. If the student did not write that step, "w" is "".
 Write "reason" and each step "note" in short, simple Arabic (Iraqi style), for the teacher and the student: what the student did right or wrong. Keep them brief.
 "reason" names EVERY part of the question that lost points, all of them, briefly (e.g. "ناقص إشارة المشتقة الأولى والثانية والجدول والرسم"), so the student knows everything that is missing and does not object to a correct mark.
 HOW A NOTE MUST READ (the teacher's own rules):
@@ -568,6 +568,29 @@ export async function stepsIn(lang: "ar" | "en", texts: string[]): Promise<strin
 export const cleanNote = (t: string) => bookWords(String(t ?? "")
   .replace(/\s*(ملاحظة|ملاحظه)\s*:.*$/s, "").replace(/\s*(ضعيف التأكد|الدرجة تقديرية|الدرجة تحتاج مراجعة)[^.،]*[.،]?/g, "")
   .replace(/[}\]\[{]+[,.]?\s*$/g, "").replace(/\s+/g, " ").trim());
+/** كتابة الطالب بالتفصيل: كل خطوة جديدة بسطر (طلبه 2026-11-24: «فارزة هي خطوة جديدة المفروض بسطر جديد»).
+ *  الفارزة اللي برة الأقواس بين معادلتين تصير سطر جديد («;»)، والفارزة جوة (1,6) تبقى */
+export function wLines(w: string) {
+  const t = String(w ?? "").replace(/\$/g, "").trim();
+  if (!t) return "";
+  const out: string[] = [];
+  let cur = "", depth = 0, bar = false;
+  for (const ch of t) {
+    if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch)) depth = Math.max(0, depth - 1);
+    else if (ch === "|") bar = !bar;
+    if ((ch === "," || ch === "،" || ch === ";") && depth === 0 && !bar) { out.push(cur); cur = ""; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  // قطعة بلا «=» وبلا كلام (مثل «y» لحالها) ترجع ويا اللي قبلها
+  const lines: string[] = [];
+  for (const p of out.map((x) => x.trim()).filter(Boolean)) {
+    if (lines.length && !/[=<>≠≤≥]|[؀-ۿ]|\\(?:Rightarrow|to)/.test(p)) lines[lines.length - 1] += ", " + p;
+    else lines.push(p);
+  }
+  return lines.join(" ; ");
+}
 /** ألفاظ الأستاذ بس (طلبه 2026-11-23: «أنا ما كاتب قصوى، انت شلون كاتب قصوى؟»): الكلمات اللي مو من كتابه تتبدل */
 export const bookWords = (t: string) => String(t ?? "")
   .replace(/نقطة\s+(?:قصوى|عليا)/g, "نقطة نهاية عظمى").replace(/(نهاية|قيمة)\s+(?:قصوى|عليا)/g, "$1 عظمى")

@@ -920,3 +920,11 @@ test("🖍 تصحيح مؤمل على الورقة: طلب صغير يلگى م�
   const q1 = p.ai.find((q: any) => q.n === 1);
   assert.ok(q1.marked.some((pg: any) => pg.marks.some((m: any) => m.big)), "السؤال الكامل ✓ كبيرة");
 });
+
+test("✍️ حلك: كل خطوة كتبها الطالب بسطر، والفارزة جوة الأقواس تبقى (طلبه 2026-11-24)", () => {
+  assert.equal(Q.wLines("$x^2+4x+4+4y-6x=-3$, $(x-1)^2=|y-6|-1$"), "x^2+4x+4+4y-6x=-3 ; (x-1)^2=|y-6|-1");
+  assert.equal(Q.wLines("$h=1, p=\frac{1}{4}, k=6$، الرأس $(1,6)$"), "h=1 ; p=\frac{1}{4} ; k=6 ; الرأس (1,6)");
+  assert.equal(Q.wLines("$F(1, \frac{37}{4})$"), "F(1, \frac{37}{4})");
+  assert.equal(Q.wLines("$x=1, y$"), "x=1, y", "قطعة بلا = ترجع ويا اللي قبلها");
+  assert.equal(Q.wLines(""), "");
+});
