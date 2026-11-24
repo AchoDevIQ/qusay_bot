@@ -357,9 +357,9 @@ async function notifyAnswer(uid: number, text: string, kb: Kb, ans?: string) {
  *  الحل اللي هو صفحات من الملزمة بلا كتابة، لو الملف ما انسوى: الرسالة وزر صفحة الحل مثل قبل */
 async function deliverAnswer(uid: number, text: string, kb: Kb, ans?: string) {
   if (ans) { try { if (await sendAnswerPdf(uid, ans)) return; } catch (e) { console.error("answer pdf", uid, e); } }
-  await send(uid, text, { kb });
-  // فيديو السؤال يوصل حتى ويا الرسالة (الحل صفحات من الملزمة)
-  if (ans) { const a = JSON.parse((await kvGet(`qa_ans_${ans}`)) || "null"); if (a) await answerVideos(uid, a).catch((e) => console.error("answer videos", uid, e)); }
+  // أزرار فيديو السؤال حتى ويا الرسالة (الحل صفحات من الملزمة)
+  const a = ans ? JSON.parse((await kvGet(`qa_ans_${ans}`)) || "null") : null;
+  await send(uid, text, { kb: a ? [...await videoButtons(uid, a, a.lang === "en").catch(() => [] as Kb), ...kb] : kb });
 }
 export async function sendAnswerPdf(uid: number, id: string) {
   const a = JSON.parse((await kvGet(`qa_ans_${id}`)) || "null");
@@ -368,21 +368,32 @@ export async function sendAnswerPdf(uid: number, id: string) {
   const { answerPdf } = await import("./documents.ts");
   const pdf = await answerPdf({ name: String((await student(uid))?.name ?? ""), where: String(a.where ?? ""), question: String(a.question || a.asked || ""), solution: String(a.solution), ...(a.similar ? { similar: a.similar } : {}), lang: en ? "en" : "ar", date: stamp() });
   if (!pdf) { console.error("answer pdf: the file was not made", id); return false; }
-  const kb: Kb = (await qaCfg()).teacherBtn !== false ? [[btn(en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", `qa2t:${id}`)]] : [];
+  const kb: Kb = [...await videoButtons(uid, a, en), ...((await qaCfg()).teacherBtn !== false ? [[btn(en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", `qa2t:${id}`)]] : [])];
   const ok = await upload("sendDocument", { chat_id: String(uid), protect_content: "true", ...(kb.length ? { reply_markup: JSON.stringify({ inline_keyboard: kb }) } : {}) }, "document", pdf, en ? "solution.pdf" : "حل_سؤالك.pdf", "application/pdf");
   if (!ok) { console.error("answer pdf: the file was not sent", id); return false; }
-  await answerVideos(uid, a);
   return true;
 }
 /** فيديو السؤال من الدفتر لو الراصد (التوضيح والحل)، ورا ملف الحل */
-async function answerVideos(uid: number, a: Row) {
-  const { sendMarkVideos, marksFor } = await import("./noteMarks.ts");
-  // السؤال المشابه من الدفتر: فيديوهاته (مثل الكنافة)
-  if (a.similar?.mark) await sendMarkVideos(uid, Number(a.similar.mark.book), Number(a.similar.mark.mark)).catch((e) => console.error("similar videos", uid, e));
-  const book = Number(a.notebook?.book ?? a.rasid?.book ?? 0);
-  if (!book) return;
-  const ids = a.notebook ? (a.notebook.mark ? [Number(a.notebook.mark)] : []) : (await marksFor(book)).filter((m) => m.page === Number(a.rasid.page)).map((m) => Number(m.id));
-  for (const m of ids) await sendMarkVideos(uid, book, m).catch((e) => console.error("answer videos", uid, e));
+/** أزرار فيديو السؤال (الحل والتوضيح) تحت ملف الحل: تنفتح بمشغّل الملزمة، ورابط يوتيوب ما يبين (طلب الأستاذ 2026-11-24).
+ *  من الدفتر لو الراصد، والسؤال المشابه (مثل الكنافة) */
+async function videoButtons(uid: number, a: Row, en: boolean): Promise<Kb> {
+  const { marksFor } = await import("./noteMarks.ts");
+  const refs: { book: number; mark: number; sim?: boolean }[] = [];
+  if (a.notebook?.mark) refs.push({ book: Number(a.notebook.book), mark: Number(a.notebook.mark) });
+  else if (a.rasid?.book) for (const m of (await marksFor(Number(a.rasid.book))).filter((x) => x.page === Number(a.rasid.page))) refs.push({ book: Number(a.rasid.book), mark: m.id });
+  if (a.similar?.mark) refs.push({ book: Number(a.similar.mark.book), mark: Number(a.similar.mark.mark), sim: true });
+  const rows: Kb = [];
+  for (const r of refs) {
+    const m = await one("note_marks", { id: r.mark, book_id: r.book });
+    if (!m) continue;
+    const link = (kind: string) => `${adminPageLink("vid", uid)}&book=${r.book}&mark=${r.mark}&kind=${kind}`;
+    const tag = r.sim ? (en ? " (similar question)" : " (السؤال المشابه)") : "";
+    const row: Kb[number] = [];
+    if (m.solution) row.push({ text: (en ? "🎬 Solution video" : "🎬 فيديو حل السؤال") + tag, web_app: { url: link("solution") } });
+    if (m.video_id) row.push({ text: (en ? "▶️ Explainer video" : "▶️ فيديو توضيح السؤال") + tag, web_app: { url: link("video") } });
+    if (row.length) rows.push(row);
+  }
+  return rows;
 }
 /** «❓ بعدني ما فهمت» تحت ملف الحل: سؤاله (الكتابة والصورة) يروح للأستاذ بالمجموعة، مرة وحدة */
 export async function answerToTeacherBot(uid: number, id: string) {
