@@ -297,7 +297,7 @@ async function studentHead(q: Row, s: Row, title: string) {
 /** أول رسالة بالسؤال: يفتح موضوع بالمجموعة وينقلها */
 // ---------- ❓ السؤال العلمي بصفحة بشكل الأستاذ (طلبه 2026-11-24: «ما أريده اختيارات بوت»): الفصل والموضوع والمحاضرة
 // أزرار، والسؤال كتابة لو صورة. الحل ينفتح بنفس الصفحة، وإذا ما انحل يروح للأستاذ بالمجموعة مثل البوت بالضبط
-type AskBody = { tid?: unknown; lec?: unknown; text?: unknown };
+type AskBody = { tid?: unknown; lec?: unknown; text?: unknown; checked?: unknown };
 /** شنو يگدر يختار: فصوله ومواضيعها ومحاضراتها، ولو مقفول ليش */
 export async function askInfo(uid: number) {
   const s = await student(uid);
@@ -320,7 +320,7 @@ export async function askInfo(uid: number) {
 /** الطالب دز سؤاله من الصفحة: ينحفظ وينتظر بالطابور (queued). الجواب يوصله بإشعار (طلبه 2026-11-24: «ما نكتب له شيء،
  *  هو يدز السؤال وينتظر، ويوصل إشعار إنه جاوبك»). الطابور يمشي كل دقيقة (askPageTick) */
 const ASK_Q = "qa_page_q";
-type AskJob = { uid: number; tid: number; lec: number; text: string; img: string; at: string };
+type AskJob = { uid: number; tid: number; lec: number; text: string; img: string; at: string; checked?: boolean };
 export async function askFromPage(uid: number, b: AskBody, image: Buffer | null): Promise<{ queued?: boolean; closed?: string }> {
   const info = await askInfo(uid);
   if (!("chapters" in info) || !info.chapters) return { closed: "closed" in info ? info.closed : "سجّل معلوماتك أول" };
@@ -338,7 +338,8 @@ export async function askFromPage(uid: number, b: AskBody, image: Buffer | null)
   const img = image ? `qa/ask/${createHash("sha1").update(image).digest("hex").slice(0, 20)}.jpg` : "";
   if (image) await files().write(img, image, "image/jpeg");
   const q = JSON.parse((await kvGet(ASK_Q)) || "[]") as AskJob[];
-  await kvSet(ASK_Q, JSON.stringify([...q, { uid, tid: Number(t.id), lec, text, img, at: stamp() }]));
+  const checked = b.checked === true || b.checked === "1";
+  await kvSet(ASK_Q, JSON.stringify([...q, { uid, tid: Number(t.id), lec, text, img, at: stamp(), ...(checked ? { checked } : {}) }]));
   await logActivity(uid, "❓ دز سؤال علمي من الصفحة");
   return { queued: true };
 }
@@ -430,7 +431,7 @@ async function answerJob(j: AskJob, image: Buffer | null) {
   let aiFail = "";
   if (n && await qaReady(n)) {
     let r: QaResult | null = null;
-    try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined }, n, Number(t.id), lec, en ? "en" : "ar", uid); }
+    try { r = await qaAnswer({ text: text || undefined, image: image ?? undefined, ...(j.checked ? { checked: true } : {}) }, n, Number(t.id), lec, en ? "en" : "ar", uid); }
     catch (e) { console.error("qa page", e); aiFail = failWhy(e); }
     if (r && (r.source !== "ai" || (await qaCfg()).direct)) {
       const where = `${t.ar}${lec ? ` — المحاضرة ${lec}` : ""}`;

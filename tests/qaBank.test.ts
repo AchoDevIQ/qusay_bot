@@ -447,3 +447,20 @@ test("📗 سؤال مشابه: الحل يگول ياهو السؤال المش
   const r2 = await qa.qaAnswer({ text: "جد الجذور التربيعية للعدد 11+60i" }, 1, tid, 2, "ar");
   assert.equal(r2!.similar, undefined);
 });
+
+test("✍️ تأكد من سؤالك: قراية الصورة ترجع بكتابة الموبايل، والسؤال اللي صلّحه الطالب ينحل بكتابته، والصورة ما تنقرا مرة ثانية", async () => {
+  const tid = await tidOf("الجذور التربيعية");
+  reply = (b) => b.question_images ? { question: String.raw`جد قيمة $\sin\frac{\pi}{7}$ و $x^{2}$` } : { found: false, solution: "حل" };
+  ai.length = 0;
+  const img = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 7, 7, 7, 9]);
+  const phone = await qa.readForCheck(img, tid);
+  assert.match(phone, /π\/7/);
+  assert.match(phone, /x²/);
+  assert.doesNotMatch(phone, /\$|\frac/);
+  // الطالب صلّحها π/9، ودز
+  ai.length = 0;
+  await qa.qaAnswer({ text: "جد قيمة sin π/9 و x²", image: img, checked: true }, 1, tid, 1, "ar");
+  assert.equal(ai.filter((c) => c.route === "/bot/extract").length, 0, "ما تنقرا مرة ثانية");
+  const asks = ai.filter((c) => c.route === "/bot/qa");
+  assert.ok(asks.length && asks.every((c) => c.body.read !== true && /π\/9/.test(c.body.question)), "كتابته هي سؤاله");
+});

@@ -263,8 +263,8 @@ export async function examQueueTick(limit = EXAM_PER_TICK) {
   return { done: got.length, failed: bad.length, left: left.length };
 }
 
-/** read: الكتابة قراية الصورة (ممكن بيها غلط)، والصورة هي الأصل */
-export type QaAsk = { text?: string; image?: Buffer; read?: boolean };
+/** read: الكتابة قراية الصورة (ممكن بيها غلط)، والصورة هي الأصل. checked: الطالب شاف القراية وصلّحها، فكتابته هي سؤاله */
+export type QaAsk = { text?: string; image?: Buffer; read?: boolean; checked?: boolean };
 /** rasid: الحل صفحة «📘 الحل النموذجي» من الراصد اللي بملازمي (book رقم الملزمة، page رقم الصفحة) */
 /** notebook: الحل صفحات «دفتر المحاضرات» بملازمي من بداية السؤال (y مكانه بأول صفحة)، ويا زر فيديوهاته (mark) */
 /** teacher: حل صلّحه الأستاذ لنفس السؤال قبل (🔎 حلول الذكاء)، يوصل ببلاش. asked: نص السؤال (بعد قراءة الصورة)، fk: بصمته */
@@ -302,6 +302,25 @@ async function call(mode: "find" | "solve" | "explain", context: string, q: QaAs
   return { found: !!r.found, solution: String(r.solution ?? "").trim(), similar: Number(r.similar) || 0 };
 }
 
+/** صورة سؤال الطالب تصير كتابة (مرة وحدة لكل صورة: تنحفظ). topic: اسم الموضوع حتى القراية تعرف اختصاراته */
+export async function readPhoto(image: Buffer, topic: string) {
+  const ik = `qa_img2_${sha(image)}`;
+  let read = (await kvGet(ik)) ?? "";
+  if (!read) {
+    const r = await qaService("/bot/extract", { question_images: [image.toString("base64")], topic });
+    await addUsage(r.usage);
+    read = String(r.question ?? "").trim();
+    if (read) await kvSet(ik, read);
+  }
+  return read;
+}
+/** «تأكد من سؤالك» (طلب الأستاذ 2026-11-24: انقرت π/9 = π/7): قراية الصورة بكتابة الموبايل (π/9، x²، 3/x²) حتى الطالب يصلّح الرقم الغلط */
+export async function readForCheck(image: Buffer, tid: number) {
+  const t = await one("topics", { id: tid });
+  const read = await readPhoto(image, String(t?.ar ?? ""));
+  const { lineToPhone } = await import("./notesFile.ts");
+  return read.split("\n").map((l) => lineToPhone(l)).filter((l) => l.trim()).join("\n");
+}
 /** جواب سؤال الطالب: من المحاضرة، أو من الموضوع، أو حل على طريقة الأستاذ. null إذا ماكو ملازم لهذا الموضوع */
 /** tid: موضوع البوت اللي اختاره الطالب. مواضيع الملزمة المربوطة بيه بس تدخل */
 /** uid: الطالب اللي سأل، حتى الراصد مال فصله يدخل بالبحث */
@@ -343,17 +362,9 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
   // ١. صورة السؤال تنقرا كتابة مرة وحدة (طلب صغير)، ونفس الصورة ما تنقرا مرتين
   let text = (q.text ?? "").trim();
   let readErr: unknown = null;
-  if (q.image) {
-    const ik = `qa_img2_${sha(q.image)}`;
-    let read = (await kvGet(ik)) ?? "";
-    if (!read) {
-      try {
-        const r = await qaService("/bot/extract", { question_images: [q.image.toString("base64")], topic: names[0] ?? "" });
-        await addUsage(r.usage);
-        read = String(r.question ?? "").trim();
-        if (read) await kvSet(ik, read);
-      } catch (e) { console.error("qa read", e); readErr = e; }
-    }
+  if (q.image && !q.checked) {
+    let read = "";
+    try { read = await readPhoto(q.image, names[0] ?? ""); } catch (e) { console.error("qa read", e); readErr = e; }
     text = [read, text].filter(Boolean).join("\n");
   }
   // ✏️ نفس السؤال صلّح حله الأستاذ قبل (🔎 حلول الذكاء): حله يوصل ببلاش، قبل أي بحث أو ذكاء
@@ -425,7 +436,7 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
   const ranked = blocks.map((b) => ({ b, s: blockScore(text, b, lecture) })).sort((x, y) => y.s - x.s);
   const top = ranked.slice(0, TOP_BLOCKS).filter((x) => x.s > 0);
   // الصورة تروح ويا الكتابة المقروة، حتى إذا القراية غلطت برقم يلگاه بالملزمة من الصورة نفسها
-  const ask: QaAsk = q.image ? { text, image: q.image, read: true } : { text };
+  const ask: QaAsk = q.image ? { text, image: q.image, read: !q.checked } : { text };
   const close = top.length && top[0].s >= CLOSE;
   if (close) {
     const r = await call("find", blocksCtx(top.map((x) => x.b)), ask, lang);
