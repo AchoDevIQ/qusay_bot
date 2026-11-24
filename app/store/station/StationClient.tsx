@@ -262,7 +262,8 @@ export default function StationClient() {
               <b>{last.name}</b>
               {last.printed && <div className="exhint exbad">⚠️ هذا الطالب مطبوع له ليبل</div>}
               <div className="exhint">{last.exam}</div>
-              <button type="button" className="exbtn adtop" onClick={() => void reprint(last.item)}>🏷 اطبع ليبل مرة ثانية</button>
+              {last.print === "ipad" ? <div className="exhint">📱 يمتحن بالآيباد: انسجل حضوره بس، ما ينطبعله ليبل</div>
+                : <button type="button" className="exbtn adtop" onClick={() => void reprint(last.item)}>🏷 اطبع ليبل مرة ثانية</button>}
             </div>
           )}
         </div>

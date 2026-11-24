@@ -132,7 +132,10 @@ export async function stationAction(body: Row) {
   if (body.action === "reprint") {
     const it = await one("sched_items", { id: Number(body.item) });
     need(it, "الامتحان غير موجود", 404);
-    return { job: await jobOf(await itemCard(it!)) };
+    const card = await itemCard(it!);
+    // طالب الآيباد حضوري بس يمتحن بالآيباد: ينسجل حضوره، وما ينطبعله شي أبد
+    need(card.print !== "ipad", "هذا الطالب يمتحن بالآيباد، ما ينطبعله ليبل");
+    return { job: await jobOf(card) };
   }
   if (body.action === "test") return { job: await jobOf({ item: 0, uid: 0, name: "محمد علي حسين عمر", exam: "فقط مسائل التقريب والمعدلات الزمنية والتطبيقات على النهايات", center: "معهد قصي العميري", at: stamp() }) };
   need(body.action === "next", "أمر غير معروف");
@@ -428,6 +431,7 @@ export async function attendAction(body: Row) {
   if (a === "queue") {
     const it = await one("sched_items", { id: Number(body.item) });
     need(it, "الامتحان غير موجود", 404);
+    need((await itemCard(it!)).print !== "ipad", "هذا الطالب يمتحن بالآيباد، ما ينطبعله ليبل");
     await enqueue(uid, it!.id);
     return { ...await pageData(uid), card: { ...await itemCard(it!), already: true, queued: true }, notice: "🖨 انرسل للطابعة" };
   }

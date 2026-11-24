@@ -139,6 +139,8 @@ test("الحضوري بالآيباد: يختاره بنفسه، ما ينطبع
   const r = await at(40, "scan", { code: ip.studentCode(82) });
   assert.equal(r.card.print, "ipad");
   assert.ok(!r.card.queued);
+  // ولا حتى بزر «اطبع الليبل»: ينسجل حضوره بس
+  await assert.rejects(at(40, "queue", { item: it82 }), /يمتحن بالآيباد/);
   assert.equal((await me(82, "info")).items.find((i: any) => i.id === it82).state, "open");
   // من التلفون (شاشة ضيقة) ما ينفتح: بالآيباد بس
   await assert.rejects(me(82, "openExam", { item: it82 }), /الآيباد بس/);
