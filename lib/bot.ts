@@ -164,6 +164,15 @@ async function onCallback(q: Row) {
     note = await regCb(chat, uid, mid, d, st, data, q.from);
   } else if (d.startsWith("of:")) {
     note = await officeCb(chat, uid, d);
+  } else if (d.startsWith("qiw:")) {
+    // ⏸ «📤 دزها بالرقعة»: أوراق «تصحيح قصي» اللي تنتظر خطه تنبعث هسه، والعبارات الناقصة بالرقعة
+    if (await can(uid, "qusay")) {
+      const { releaseWaits } = await import("./qusayGrade.ts");
+      const { finishByAi } = await import("./gradeApi.ts");
+      const n = await releaseWaits(Number(d.slice(4)), true, finishByAi);
+      note = n ? `📤 انبعثت ${n} ورقة` : "✅ انبعثت قبل";
+      if (mid) await api("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [[{ text: note, callback_data: "gs:done" }]] } });
+    } else note = "ما عندك صلاحية";
   } else if (d.startsWith("qh:")) {
     if (await can(uid, "q")) {
       const qq = await question(Number(d.slice(3)));

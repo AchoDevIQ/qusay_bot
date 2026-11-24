@@ -450,7 +450,7 @@ test("🖍 جرب العلامات: يعيد تصحيح ورقة طالب الت
 
 test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ بأماكنها والطالب الحقيقي يشوفها", async () => {
   const { myPaper } = await import("../lib/examRoom.ts");
-  await Q.saveQgSettings({ marks: true });
+  await Q.saveQgSettings({ marks: true, wait: false });
   const id = await paper([1, 2]);
   reply = () => withMarks;
   await Q.qusayTick(finishByAi);
@@ -474,6 +474,54 @@ test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ ب
   assert.match(t.notice, /درجة الطالب صارت/);
   assert.ok(tg.slice(prev).some((m) => m.p.chat_id === 90 && /الأستاذ راجع ورقتك/.test(m.p.text)), "وصل للطالب");
   assert.equal((await Q.qgResultOf(id))!.qs[0].score, res.qs[0].score + gain, "يشوف الخطوة متصلحة");
+});
+
+test("⏸ الورقة تنتظر خطه: بيها عبارة بعده ما كاتبها، فما تنبعث ويوصله تنبيه بزرين. يكتبها فتنبعث وحدها، لو «📤 دزها بالرقعة»", async () => {
+  await Q.saveQgSettings({ marks: true, wait: true });
+  const id = await paper([1, 2]);
+  reply = () => withMarks;
+  const prev = tg.length;
+  await Q.qusayTick(finishByAi);
+  const res = (await Q.qgResultOf(id))!;
+  assert.equal(res.sent, undefined, "ما انبعثت");
+  assert.equal((await one("sched_items", { id }))!.graded_at ?? null, null);
+  assert.equal((await one("sched_items", { id }))!.grader_id, QUSAY_GRADER, "محجوزة، ما تروح للمصححين");
+  const phrases = await Q.phrasesOf(res, Number((await one("sched_items", { id }))!.exam_id));
+  assert.ok(phrases.length > 0);
+  const note = tg.slice(prev).find((m) => /تنتظر خطك/.test(String(m.p.text ?? "")))!;
+  assert.ok(note, "وصله تنبيه");
+  const kb = note.p.reply_markup.inline_keyboard;
+  assert.match(kb[0][0].web_app.url, /\/store\/qusay\?.*&ink=\d+$/);
+  assert.match(kb[1][0].callback_data, /^qiw:\d+$/);
+  // التنبيه ما يتكرر بنفس الدقيقة
+  await Q.qusayTick(finishByAi);
+  assert.equal(tg.slice(prev).filter((m) => /تنتظر خطك/.test(String(m.p.text ?? ""))).length, 1);
+  // الصفحة: الموضوع وعباراته، ويكتبها وحدة وحدة
+  const exam = Number((await one("sched_items", { id }))!.exam_id);
+  const page: any = await qusayAction({ initData: sign(1), action: "list" });
+  assert.deepEqual(page.inkWait.find((w: any) => w.exam === exam).phrases.map((x: any) => x.t), phrases);
+  for (const [k, t] of phrases.entries()) {
+    const r: any = await qusayAction({ initData: sign(1), action: "waitInk", exam, item: { text: t, w: 1000, h: 360, s: [[10, 10, 50, 50]], c: "#d40000", wd: 2 } });
+    if (k < phrases.length - 1) assert.equal((await Q.qgResultOf(id))!.sent, undefined, "باقي عبارة");
+    else assert.match(r.notice, /انبعثت 1 ورقة/);
+  }
+  assert.equal((await Q.qgResultOf(id))!.sent, true, "انبعثت بخطه");
+  assert.ok((await one("sched_items", { id }))!.graded_at);
+  // ورقة ثانية بنفس العبارات: صارت بخطه، فتنبعث على طول
+  const id2 = await paper([1, 2]);
+  await Q.qusayTick(finishByAi);
+  assert.equal((await Q.qgResultOf(id2))!.sent, true);
+  // عبارة جديدة: تنتظر، و«📤 دزها بالرقعة» يبعثها
+  const { handleUpdate } = await import("../lib/bot.ts");
+  const id3 = await paper([1, 2]);
+  reply = () => JSON.parse(JSON.stringify(withMarks).replace("غلط بالإشارة", "عبارة جديدة ما مكتوبة"));
+  await Q.qusayTick(finishByAi);
+  assert.equal((await Q.qgResultOf(id3))!.sent, undefined);
+  await handleUpdate({ update_id: 991, callback_query: { id: "c", from: { id: 1, is_bot: false, first_name: "x" }, chat_instance: "x", data: `qiw:${exam}`, message: { message_id: 5, chat: { id: 1, type: "private" }, date: 1, text: "" } } } as any);
+  assert.equal((await Q.qgResultOf(id3))!.sent, true, "انبعثت بالرقعة");
+  assert.equal((await qusayAction({ initData: sign(1), action: "list" }) as any).inkWait.length, 0);
+  for (const x of await Q.inkList(exam)) await Q.removeInk(exam, x.id);
+  await Q.saveQgSettings({ marks: false });
 });
 
 test("درجات صحيحة بس: النص يروح لصالح الطالب، وماكو 8.5", () => {

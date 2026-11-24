@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, spentFrom, trialCandidates, trialQueue, versionWhyNot, stepsIn, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
+  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, inkWaitList, releaseWaits, spentFrom, trialCandidates, trialQueue, versionWhyNot, stepsIn, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { docxNotes, notesKind } from "./notesFile.ts";
@@ -69,6 +69,8 @@ async function listData(uid: number) {
     sent: log.filter((r) => r.kind === "sent").length, unsure: log.filter((r) => r.kind === "unsure").length,
     trialLeft: (await trialQueue()).length, batches: await pendingBatches(),
     chapters, trials: trialRows,
+    // ⏸ أوراق تنتظر خطه
+    inkWait: await inkWaitList(),
     // «✅ ابعث درجته»: الورقة اللي رجعها للمصححين ودرجتها محفوظة وبعدها ما انصححت
     log: await Promise.all(log.slice(-SHOW).reverse().map(async (r) => {
       let canSend = false;
@@ -145,6 +147,7 @@ export async function qusayAction(body: Row) {
     if (typeof body.carry === "boolean") p.carry = body.carry;
     if (body.unsure === "send" || body.unsure === "graders") p.unsure = body.unsure;
     if (typeof body.marks === "boolean") p.marks = body.marks;
+    if (typeof body.wait === "boolean") p.wait = body.wait;
     if (typeof body.style === "string") p.style = body.style.slice(0, STYLE_MAX);
     if (body.cap !== undefined) { const c = Number(body.cap); need(c > 0 && c <= 100, "الحد اليومي بين 0.1 و 100 دولار"); p.cap = c; }
     if (body.obj === "qusay" || body.obj === "person") p.obj = body.obj;
@@ -226,6 +229,14 @@ export async function qusayAction(body: Row) {
     return await out(notice, { cmp: { exam, rows: await Q.compareRows(exam, nameOf) } });
   }
   if (a === "lessonDel") { await forgetLesson(exam, Number(body.lesson)); return await out("🗑 انمسحت هاي القاعدة"); }
+  // ⏸ عبارة كتبها بخطه للأوراق اللي تنتظره: تنحفظ بخط الموضوع، والأوراق اللي صارت كلها بخطه تنبعث هسه
+  if (a === "waitInk" || a === "waitSend") {
+    need(exam > 0, "اختار الموضوع");
+    const { finishByAi } = await import("./gradeApi.ts");
+    if (a === "waitInk") { try { await addInk(exam, { ...body.item, kind: "note" }); } catch (e) { fail(e); } }
+    const sent = await releaseWaits(exam, a === "waitSend", finishByAi);
+    return await out(a === "waitSend" ? `📤 انبعثت ${sent} ورقة، والعبارات اللي ما كتبتها بالرقعة` : `✅ انرفعت بخطك${sent ? `، وانبعثت ${sent} ورقة صارت كلها بخطك` : ""}`);
+  }
   if (a === "sendSaved") {
     const { finishByAi } = await import("./gradeApi.ts");
     try { await sendSaved(Number(body.id), finishByAi); } catch (e) { fail(e); }

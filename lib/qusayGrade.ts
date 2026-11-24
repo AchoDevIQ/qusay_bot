@@ -32,7 +32,7 @@ export const QG_MODELS: Record<QgModel, { id: string; p: { in: number; cw: numbe
  *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل).
  *  unsure: الورقة اللي يشك بيها: «send» يصححها ويبعث درجتها ويكتب السبب بالسجل (الأصل، طلب الأستاذ 2026-11-21)، «graders» ترجع للمصححين */
 /** obj: الاعتراض على أوراقه، «qusay» يراجعه هو أول، «person» يروح لـ objTo (مساعد عنده صلاحية الاعتراضات، 0 = صاحب البوت) */
-export type QgSettings = { live: number[]; model: QgModel; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number };
+export type QgSettings = { live: number[]; model: QgModel; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number; wait: boolean };
 /** مكان على صور جواب الطالب: p رقم الصورة (من 1)، x من اليسار و y من فوك، من 0 لـ 1000 من عرضها وطولها */
 export type QgPt = { p: number; x: number; y: number };
 /** at: وين مكتوبة الخطوة على ورقة الطالب، حتى تنرسم عليها ✓ أو ✗ حمرة مثل قلم المدرس (بس إذا «🖍 العلامات» شغالة) */
@@ -59,7 +59,7 @@ export type InkItem = InkShape & { id: number; kind: InkKind; text: string };
 /** rot وsc: ميلان (درجات) وحجم خط الإيد، يتغيرون شوية بكل علامة حتى ما تبين نسخة وحدة (طلب الأستاذ 2026-11-22) */
 /** big: ✓ وحدة كبيرة على السؤال الصح كله. q / i: السؤال ورقم خطوته (i = -1 للسؤال كله)، حتى الأستاذ يدوس عليها ويصلحها */
 export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
-export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
+export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj" | "wait"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
 const resKey = (id: number) => `qg_res_${id}`;
@@ -89,7 +89,7 @@ export async function qgSettings(): Promise<QgSettings> {
   const cap = Number(s.cap);
   // الإعدادات القديمة (قبل v 2) كانت «هسه» بالأصل: تصير بالدفعة، طلب الأستاذ 2026-11-21
   const v2 = Number(s.v) >= 2;
-  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], model: s.model === "sonnet" || s.model === "opus" ? s.model : "haiku", effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "", obj: s.obj === "qusay" ? "qusay" : "person", objTo: Number(s.objTo) > 0 ? Number(s.objTo) : 0 };
+  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], model: s.model === "sonnet" || s.model === "opus" ? s.model : "haiku", effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "", obj: s.obj === "qusay" ? "qusay" : "person", objTo: Number(s.objTo) > 0 ? Number(s.objTo) : 0, wait: s.wait !== false };
 }
 export async function saveQgSettings(p: Partial<QgSettings>) {
   const s = { ...await qgSettings(), ...p, v: 2 };
@@ -365,7 +365,7 @@ export const inkFor = async (exam: number) => [...await inkList(), ...(exam ? aw
 export async function addInk(exam: number, raw: any): Promise<InkItem> {
   const kind = String(raw?.kind) as InkKind;
   if (!INK_KINDS.includes(kind)) throw new Error("اختار شنو تكتب");
-  const text = kind === "tick" ? "✓" : kind === "cross" ? "✗" : kind === "ask" ? "؟" : String(raw?.text ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const text = kind === "tick" ? "✓" : kind === "cross" ? "✗" : kind === "ask" ? "؟" : String(raw?.text ?? "").replace(/\s+/g, " ").trim().slice(0, kind === "note" ? 200 : 60);
   if (!text) throw new Error("اكتب شنو مكتوب بالعبارة");
   const w = Math.round(Number(raw?.w)), h = Math.round(Number(raw?.h));
   if (!(w >= 100 && w <= 1500 && h >= 100 && h <= 1500)) throw new Error("مربع الكتابة غلط");
@@ -568,6 +568,8 @@ export async function stepsIn(lang: "ar" | "en", texts: string[]): Promise<strin
 export const cleanNote = (t: string) => bookWords(String(t ?? "")
   .replace(/\s*(ملاحظة|ملاحظه)\s*:.*$/s, "").replace(/\s*(ضعيف التأكد|الدرجة تقديرية|الدرجة تحتاج مراجعة)[^.،]*[.،]?/g, "")
   .replace(/[}\]\[{]+[,.]?\s*$/g, "").replace(/\s+/g, " ").trim());
+/** الملاحظة وخطه يتطابقن بالكلام، بلا فراغات ولا $ ولا فوارز */
+export const normNote = (t: string) => String(t ?? "").replace(/[\s$،,.:]/g, "");
 /** كتابة الطالب بالتفصيل: كل خطوة جديدة بسطر (طلبه 2026-11-24: «فارزة هي خطوة جديدة المفروض بسطر جديد»).
  *  الفارزة اللي برة الأقواس بين معادلتين تصير سطر جديد («;»)، والفارزة جوة (1,6) تبقى */
 export function wLines(w: string) {
@@ -615,6 +617,7 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   const fullQ = (q: QgQuestion) => q.answered && ((q.max > 0 && q.score >= q.max) || (q.steps.length > 0 && q.steps.every((s) => s.points <= 0 || s.awarded >= s.points)));
   const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => {
     if (!pt) return;
+    if (m.note && !m.hand) { const same = ink.find((x) => x.kind === "note" && normNote(x.text) === normNote(m.note!)); if (same) m = { ...m, hand: shape(same) }; }
     const n = ++count * 3;
     const good = m.kind === "good";
     // «ممتاز» يتزحزح لحد 35 يمين ويسار و25 فوك وجوة، والباقي يبقى بمكان خطوته
@@ -983,6 +986,18 @@ async function settle(p: Prepared, msg: Anthropic.Message, batch: boolean, finis
     await addLog({ at: stamp(), kind: "unsure", item: it.id, name, exam, total, usd, note: why });
     return;
   }
+  // ⏸ بيها عبارات بعده ما كاتبها بخطه: الورقة تنتظره، ويوصله تنبيه يكتبها لو يدزها بالرقعة (طلبه 2026-11-24)
+  if (res.pages?.length && (await qgSettings()).wait) {
+    const ph = await phrasesOf(res, Number(it.exam_id));
+    if (ph.length) {
+      await kvSet(resKey(it.id), JSON.stringify(res));
+      const l = await waits();
+      if (!l.some((w) => w.id === it.id)) await kvSet(WAIT, JSON.stringify([...l, { id: it.id, exam: Number(it.exam_id), at: stamp(), answerOnly: p.answerOnly }]));
+      await addLog({ at: stamp(), kind: "wait", item: it.id, name, exam, total, usd, note: `⏸ تنتظر خطك: ${ph.length} عبارة${sure ? "" : ` · ⚠️ ما متأكد: ${why}`}` });
+      await waitNotice(Number(it.exam_id), false).catch((e) => console.error("ink wait notice", e));
+      return;
+    }
+  }
   await sendResult(it.id, res, p.answerOnly, finish);
   await addLog({ at: stamp(), kind: "sent", item: it.id, name, exam, total, usd, ...(sure ? {} : { note: `⚠️ ما متأكد، وصححها: ${why}` }) });
 }
@@ -1000,6 +1015,81 @@ async function sendResult(id: number, res: QgResult, answerOnly: boolean, finish
     throw e;
   }
 }
+// ---------- ⏸ الورقة تنتظر خطه (طلب الأستاذ 2026-11-24): «تصحيح قصي» يصححها، وإذا بيها ملاحظات بعده ما كاتبها بخطه
+// ما تنبعث. يوصله تنبيه بالعبارات (الأكثر تكرار أول) وزرين: «✍️ راح أكتبها» لو «📤 دزها بالرقعة». الورقة تنتظر لحد ما يدوس،
+// وكل 3 ساعات يوصله تذكير. من يكتب كل عبارات ورقة، تنبعث وحدها بخطه
+const WAIT = "qg_inkwait", WAIT_NOTE = "qg_inkwait_note";
+type Wait = { id: number; exam: number; at: string; answerOnly: boolean };
+const waits = () => readJson<Wait[]>(WAIT, []);
+const NOTE_GAP = 30 * 60_000, REMIND = 3 * 3600_000;
+/** العبارات اللي تنرسم على الورقة بالخط المطبوع (بعده ما كاتبها بخطه) */
+export async function phrasesOf(res: QgResult, exam: number): Promise<string[]> {
+  if (!res.pages?.length) return [];
+  const ink = await inkFor(exam);
+  const out = new Set<string>();
+  for (const pg of marksByPage(res.qs, res.pages, undefined, [], ink)) for (const m of pg.marks) if (m.note && !m.hand) out.add(m.note);
+  return [...out];
+}
+/** الأوراق اللي تنتظر خطه، لكل موضوع: كم ورقة، والعبارات من الأكثر تكرار */
+export async function inkWaitList() {
+  const by = new Map<number, { papers: number; ph: Map<string, number> }>();
+  for (const w of await waits()) {
+    const r = await qgResultOf(w.id);
+    if (!r || r.sent) continue;
+    const g = by.get(w.exam) ?? { papers: 0, ph: new Map<string, number>() };
+    g.papers++;
+    for (const t of await phrasesOf(r, w.exam)) g.ph.set(t, (g.ph.get(t) ?? 0) + 1);
+    by.set(w.exam, g);
+  }
+  return await Promise.all([...by].map(async ([exam, g]) => ({ exam, title: await examTitle(exam), papers: g.papers, phrases: [...g.ph].sort((a, b) => b[1] - a[1]).map(([t, n]) => ({ t, n })) })));
+}
+/** يبعث أوراق موضوع: ruqaa كلها (العبارات الناقصة بالرقعة)، وإلا بس اللي صارت كل عباراتها بخطه */
+export async function releaseWaits(exam: number, ruqaa: boolean, finish: (uid: number, itemId: number) => Promise<unknown>) {
+  const mine = (await waits()).filter((w) => w.exam === exam);
+  const done = new Set<number>();
+  let sent = 0;
+  for (const w of mine) {
+    const r = await qgResultOf(w.id);
+    const it = await one("sched_items", { id: w.id });
+    if (!r || !it || it.graded_at || r.sent || it.grader_id !== QUSAY_GRADER) { done.add(w.id); continue; }
+    if (!ruqaa && (await phrasesOf(r, exam)).length) continue;
+    done.add(w.id);
+    try {
+      await sendResult(w.id, r, w.answerOnly, finish);
+      sent++;
+      await addLog({ at: stamp(), kind: "sent", item: w.id, name: await nameOfRow(it), exam: await examTitle(exam), total: r.total, note: ruqaa ? "📤 انبعثت، والعبارات الناقصة بالرقعة" : "✍️ انبعثت بخطك" });
+    } catch (e) { console.error("ink wait send", w.id, e); }
+  }
+  await kvSet(WAIT, JSON.stringify((await waits()).filter((w) => !done.has(w.id))));
+  return sent;
+}
+/** تنبيه لصاحب البوت (واللي عنده صلاحية تصحيح قصي): أول مرة، وكل 3 ساعات تذكير لحد ما يدوس */
+async function waitNotice(exam: number, remind: boolean) {
+  const last = await readJson<Record<string, number>>(WAIT_NOTE, {});
+  if (Date.now() - (last[exam] ?? 0) < (remind ? REMIND : NOTE_GAP)) return;
+  const g = (await inkWaitList()).find((x) => x.exam === exam);
+  if (!g || !g.phrases.length) return;
+  last[exam] = Date.now();
+  await kvSet(WAIT_NOTE, JSON.stringify(last));
+  const { staffIds } = await import("./data.ts");
+  const { adminPageLink } = await import("./keyboards.ts");
+  const { esc, plainMath } = await import("./util.ts");
+  const top = g.phrases.slice(0, 6).map((p) => `• ${esc(plainMath(p.t))}${p.n > 1 ? ` (${p.n} مرات)` : ""}`).join("\n");
+  const more = g.phrases.length > 6 ? `\n• و${g.phrases.length - 6} غيرها` : "";
+  const text = `${remind ? "⏰ <b>تذكير</b>\n" : ""}✍️ <b>${g.papers} ${g.papers > 1 ? "أوراق" : "ورقة"} «${esc(g.title)}» تنتظر خطك</b>
+صححها تصحيح قصي، بس بيها ${g.phrases.length} عبارة بعدك ما كاتبها بخط إيدك:
+${top}${more}
+
+تكتبها هسه، لو تنبعث للطلاب بخط الرقعة؟ الأوراق تنتظرك لحد ما تختار.`;
+  for (const a of await staffIds("qusay")) {
+    await send(a, text, { kb: [[{ text: "✍️ راح أكتبها", web_app: { url: `${adminPageLink("qusay", a)}&ink=${exam}` } }], [{ text: "📤 دزها بالرقعة", callback_data: `qiw:${exam}` }]] });
+  }
+}
+/** تذكير كل 3 ساعات بكل موضوع بيه أوراق تنتظر */
+async function waitReminders() {
+  for (const exam of new Set((await waits()).map((w) => w.exam))) await waitNotice(exam, true).catch((e) => console.error("ink wait remind", e));
+}
+
 /** «✅ ابعث درجته»: ورقة رجعها للمصححين لأنه ما متأكد، صاحب البوت يبعث درجته المحفوظة بدون ما يصرف مرة ثانية */
 export async function sendSaved(id: number, finish: (uid: number, itemId: number) => Promise<unknown>) {
   const r = await qgResultOf(id);
@@ -1319,6 +1409,8 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
   if (keyReady()) { const { harvestTick } = await import("./inkHarvest.ts"); await harvestTick(qgCreate, await modelId()).catch((e) => console.error("harvest", e)); }
   // 🖍 تصحيح مؤمل على الورقة: يمشي حتى لو تصحيح قصي طافي
   if (keyReady()) await muMarksTick().catch((e) => console.error("mu marks", e));
+  // ⏸ أوراق تنتظر خطه: تذكير كل 3 ساعات (حتى لو تصحيح قصي طافي)
+  await waitReminders().catch((e) => console.error("ink wait", e));
   if (!await qgOn()) return { off: true };
   if (!keyReady()) return { noKey: true };
   const s = await qgSettings();

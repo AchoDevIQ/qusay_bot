@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 import { Inline, MarkedPage, MathText, type MarkedPageT, type PaperMark as MarkT } from "../myexams/AiCompare";
 import VoiceText from "./VoiceText";
-import InkBook, { type InkItem } from "./InkBook";
+import InkBook, { BOX, Pad, type InkItem } from "./InkBook";
 
 type Exam = { id: number; title: string; why: string | null; live: boolean; mu: boolean; human: number; fresh: number; waiting: number; trials: number; gap: number | null; close: number | null; unsure: number; style: string; lessons: Lesson[] };
 type MuQ = { n: number; score: number; max: number; note?: string; reason?: string; steps?: { e: string; s: string; a: number; p: number; r: string }[] };
@@ -18,14 +18,15 @@ type Step = { text: string; points: number; awarded: number; note: string };
 type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null; marked: MarkedPageT[] | null };
 type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; human: number | null; total: number; sure: boolean; iqd: number; batch: boolean; sent: boolean; qs: Q[]; photos: { q: number; ref: string }[]; demo: { at: string; total: number; iqd: number } | null; demoWaiting: boolean };
 type TrialRow = { id: number; name: string; exam: string; human: number | null; qusay: number; sure: boolean; iqd: number; at: string };
-type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
+type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj" | "wait"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
 type Data = {
-  on: boolean; key: boolean; settings: { live: number[]; model: "haiku" | "sonnet" | "opus"; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number }; fileToken: string; objStaff: { id: number; name: string }[];
+  on: boolean; key: boolean; settings: { live: number[]; model: "haiku" | "sonnet" | "opus"; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number; wait: boolean }; fileToken: string; objStaff: { id: number; name: string }[];
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
-  trialLeft: number; batches: number; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; cmp?: { exam: number; rows: CmpRow[] }; side?: { exam: number; rows: SideRow[] }; notice?: string; inkOf?: { exam: number; items: InkItem[] };
+  trialLeft: number; batches: number; inkWait: InkWait[]; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; cmp?: { exam: number; rows: CmpRow[] }; side?: { exam: number; rows: SideRow[] }; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
-const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي", obj: "✋ راجع اعتراض" };
+type InkWait = { exam: number; title: string; papers: number; phrases: { t: string; n: number }[] };
+const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي", obj: "✋ راجع اعتراض", wait: "⏸ تنتظر خطك" };
 const num = (n: number) => n.toLocaleString("en-US");
 
 export default function QusayClient() {
@@ -60,6 +61,7 @@ export default function QusayClient() {
               مصححك الثاني، بروحه وبعيد عن نظام التصحيح AI مال مؤمل. يقرا ورقة الطالب كلها بمرة وحدة ويصححها على خطوات الحل اللي كتبتها.
               جربه بالسر على أوراق الطلاب (ما يوصل شي للطالب)، لو ارفع ورقة طالب تجربة من 🎓 الطلاب ← 📷 ورقة تجربة ← 🧠 تصحيح قصي. كل اللي يصححه يطلع تحت بـ «📋 السجل».
             </div>
+            {data.inkWait?.length > 0 && <InkWaitCard waits={data.inkWait} busy={busy} call={call} />}
             <div className="card expad">
               <div className="exlabel">التشغيل</div>
               {!data.key && <div className="exbad">⚠️ مفتاح الذكاء الاصطناعي مو محطوط بالسيرفر، فما يگدر يشتغل.</div>}
@@ -123,6 +125,41 @@ export default function QusayClient() {
   );
 }
 
+/** ⏸ أوراق تنتظر خطك: لكل موضوع العبارات (الأكثر تكرار أول)، يم كل وحدة ✍️ تفتح الورقة البيضة والعبارة فوكها.
+ *  من تكتب كل عبارات ورقة تنبعث وحدها. «📤 دز الباقي بالرقعة» يبعث الكل هسه (طلبه 2026-11-24) */
+function InkWaitCard({ waits, busy, call }: { waits: InkWait[]; busy: boolean; call: Call }) {
+  const [writing, setWriting] = useState<{ exam: number; t: string } | null>(null);
+  // من التنبيه («✍️ راح أكتبها»): الموضوع اللي إجه منه يطلع أول
+  const want = typeof window === "undefined" ? 0 : Number(new URLSearchParams(location.search).get("ink")) || 0;
+  const list = [...waits].sort((a, b) => Number(b.exam === want) - Number(a.exam === want));
+  if (writing) {
+    return (
+      <div className="card expad">
+        <Pad kind="note" label={writing.t} busy={busy} onCancel={() => setWriting(null)}
+          onUpload={(s, c, wd) => void call({ action: "waitInk", exam: writing.exam, item: { text: writing.t, w: BOX.note.w, h: BOX.note.h, s, c, wd } }).then((d) => { if (d) setWriting(null); })} />
+      </div>
+    );
+  }
+  return (
+    <div className="card expad">
+      <div className="exlabel">⏸ أوراق تنتظر خطك</div>
+      <div className="exhint">صححها تصحيح قصي، بس بيها عبارات بعدك ما كاتبها بخط إيدك. دوس ✍️ يم العبارة واكتبها بالقلم مرة وحدة، وتبقى إلك بكل الأوراق الجاية. من تخلص عبارات الورقة تنبعث وحدها بخطك.</div>
+      {list.map((w) => (
+        <div key={w.exam} className="inkkind">
+          <div className="aig-logrow"><b>{w.title}</b><small>{w.papers} {w.papers > 1 ? "أوراق" : "ورقة"} · {w.phrases.length} عبارة</small></div>
+          {w.phrases.map((p) => (
+            <div key={p.t} className="aig-logrow">
+              <div dir="auto"><Inline text={p.t} />{p.n > 1 && <small> · {p.n} مرات</small>}</div>
+              <button type="button" className="exbtn" disabled={busy} onClick={() => setWriting({ exam: w.exam, t: p.t })}>✍️ اكتبها</button>
+            </div>
+          ))}
+          <button type="button" className="btn ghost" disabled={busy} onClick={() => { if (confirm("تنبعث هسه كل أوراق هذا الموضوع، والعبارات اللي ما كتبتها تطلع بخط الرقعة؟")) void call({ action: "waitSend", exam: w.exam }); }}>📤 دز الباقي بالرقعة</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["objStaff"]; busy: boolean; call: Call }) {
   const [obj, setObj] = useState(s.obj);
   const [objTo, setObjTo] = useState(s.objTo);
@@ -134,6 +171,7 @@ function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["
   const [unsure, setUnsure] = useState(s.unsure);
   const [marks, setMarks] = useState(s.marks);
   const [style, setStyle] = useState(s.style);
+  const [wait, setWait] = useState(s.wait);
   return (
     <div className="card expad">
       <div className="exlabel">⚙️ الإعدادات</div>
@@ -186,9 +224,14 @@ function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["
         <option value="0">⏸ طافية: الطالب يشوف التصحيح خطوات بس (الأصل)</option>
         <option value="1">🖍 شغالة: كل ورقة يصححها تطلع للطالب مصححة بالأحمر</option>
       </select>
+      <div className="exhint">⏸ الورقة اللي بيها عبارات بعدك ما كاتبها بخط إيدك</div>
+      <select value={wait ? "1" : "0"} onChange={(e) => setWait(e.target.value === "1")}>
+        <option value="1">⏸ تنتظرك: يوصلك تنبيه تكتبها لو تدزها بالرقعة (الأصل)</option>
+        <option value="0">📤 تنبعث على طول، والعبارات بالرقعة</option>
+      </select>
       <div className="exhint">✍️ طريقتك بالكتابة: اكتب أو احچي (🎤 فويس) أمثلة من ملاحظاتك مثل ما تكتبها على ورقة الطالب، كل وحدة بسطر (مثلاً: «المفروض 23π/12» ، «نسيت تعوض» ، «ركز بالإشارة»). يكتب مثلك بالعلامات الحمرة وبـ 🖍 جرب العلامات</div>
       <VoiceText value={style} onChange={setStyle} />
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", model, effort, batch, cap: Number(cap), carry, unsure, marks, style, obj, objTo })}>💾 احفظ</button>
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", model, effort, batch, cap: Number(cap), carry, unsure, marks, style, obj, objTo, wait })}>💾 احفظ</button>
     </div>
   );
 }

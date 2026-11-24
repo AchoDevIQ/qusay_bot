@@ -2,7 +2,7 @@
 // «✍️ خط إيدي»: الأستاذ يكتب بقلم الآيباد على ورقة بيضة ✓ و✗ والمدح والملاحظات، يشوفها شلون تطلع على ورقة الطالب،
 // وبعدين يرفعها. التصحيح الأحمر يرسمها بخطه هو بدل الخط. عام لكل المواضيع (exam=0)، وخاص لكل موضوع (طلبه 2026-11-21)
 import { useEffect, useRef, useState } from "react";
-import { INK_COLORS, InkSvg, inkPath, type InkShape } from "../myexams/AiCompare";
+import { INK_COLORS, Inline, InkSvg, inkPath, type InkShape } from "../myexams/AiCompare";
 import VoiceText from "./VoiceText";
 
 type Kind = "tick" | "cross" | "praise" | "note" | "ask";
@@ -11,7 +11,7 @@ type Call = (b: Record<string, unknown>) => Promise<{ inkOf?: { exam: number; it
 
 const RED = "#d40000";
 /** مربع الكتابة: ✓ و✗ مربع، والكلام عريض. السطر 120 (نفس سطر الورقة)، وخط الكتابة على 240 */
-const BOX: Record<Kind, { w: number; h: number }> = { tick: { w: 480, h: 360 }, cross: { w: 480, h: 360 }, ask: { w: 480, h: 360 }, praise: { w: 1000, h: 360 }, note: { w: 1000, h: 360 } };
+export const BOX: Record<Kind, { w: number; h: number }> = { tick: { w: 480, h: 360 }, cross: { w: 480, h: 360 }, ask: { w: 480, h: 360 }, praise: { w: 1000, h: 360 }, note: { w: 1000, h: 360 } };
 const LINE = 240;
 /** كم وحدة نقترح يكتب من كل نوع (أكثر من وحدة حتى ما تتكرر نفس الشكل بكل الأوراق) */
 const KINDS: { k: Kind; t: string; want: number; how: string }[] = [
@@ -125,7 +125,7 @@ function tgSwipes(on: boolean) {
 /** ورقة بيضة للقلم: يكتب، يرجع خط، يمسح الكل، و«👁 شوف» يطلعها على ورقة طالب بحجمها الحقيقي قبل الرفع.
  *  القلم ناعم وما يقطع (طلب الأستاذ 2026-11-22): كل نقاط القلم (حتى اللي بين إطارين)، يرسم بس القطعة الجديدة،
  *  وإذا الجهاز قطع اللمسة يبقى الخط مو ينمسح. ويختار اللون والسمك */
-function Pad({ kind, label, busy, onCancel, onUpload }: { kind: Kind; label: string; busy: boolean; onCancel: () => void; onUpload: (s: number[][], c: string, wd: 1 | 2 | 3) => void }) {
+export function Pad({ kind, label, busy, onCancel, onUpload }: { kind: Kind; label: string; busy: boolean; onCancel: () => void; onUpload: (s: number[][], c: string, wd: 1 | 2 | 3) => void }) {
   const { w, h } = BOX[kind];
   const cv = useRef<HTMLCanvasElement>(null);
   const [strokes, setStrokes] = useState<number[][]>([]);
@@ -189,7 +189,7 @@ function Pad({ kind, label, busy, onCancel, onUpload }: { kind: Kind; label: str
     const sh = { w, h, s: strokes, c: pen.c, wd: pen.wd };
     return (
       <div className="inkbox">
-        <div className="exlabel">👁 هيچ تطلع «{label}» على ورقة الطالب</div>
+        <div className="exlabel">👁 هيچ تطلع «<Inline text={label} />» على ورقة الطالب</div>
         <div className="inkpaper">
           <div className="inkstu">z = 2(cos 23π/12 + i sin 23π/12)</div>
           <span className="inkon"><InkSvg sh={sh} /></span>
@@ -205,7 +205,7 @@ function Pad({ kind, label, busy, onCancel, onUpload }: { kind: Kind; label: str
   }
   return (
     <div className="inkbox">
-      <div className="exlabel">✍️ اكتب «{label}» بالقلم</div>
+      <div className="exlabel">✍️ اكتب «<Inline text={label} />» بالقلم</div>
       <div className="exhint">اكتبها على السطر بحجمها الطبيعي، مثل ما تكتبها على دفتر الطالب. ما يهم وين بالمربع: تنقص على قدها وحدها.</div>
       <canvas ref={cv} width={w} height={h} className="inkpad" style={{ aspectRatio: `${w} / ${h}`, maxWidth: kind === "tick" || kind === "cross" ? 340 : 700 }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up} />
