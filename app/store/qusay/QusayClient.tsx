@@ -25,7 +25,19 @@ type Data = {
   trialLeft: number; batches: number; inkWait: InkWait[]; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; cmp?: { exam: number; rows: CmpRow[] }; side?: { exam: number; rows: SideRow[] }; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
-type InkWait = { exam: number; title: string; papers: number; phrases: { t: string; n: number }[] };
+type PhraseEx = { item: number; ref: string; marks: MarkT[]; k: number; q: number; step: string; w: string };
+type InkWait = { exam: number; title: string; papers: number; phrases: { t: string; n: number; ex?: PhraseEx }[] };
+/** ورقة الطالب اللي انكتبت عليها العبارة، والعلامة نفسها محوطة، ورقم السؤال والخطوة وشنو كتب الطالب */
+function PhraseExample({ ex, fileUrl }: { ex: PhraseEx; fileUrl: (ref: string) => string }) {
+  return (
+    <div className="inkex">
+      <div className="exhint">السؤال {ex.q}{ex.step && <> · الخطوة: <MathText text={ex.step} /></>}</div>
+      {ex.w && <div className="exhint">✍️ الطالب كاتب: <MathText text={ex.w} /></div>}
+      <MarkedPage src={fileUrl(ex.ref)} marks={ex.marks} picked={ex.k} />
+      <div className="exhint">العبارة محوطة بخط أزرق. دوس على الورقة حتى تكبر.</div>
+    </div>
+  );
+}
 const KIND: Record<Log["kind"], string> = { sent: "✅ صحح ووصلت الدرجة", unsure: "↩️ ما متأكد، رجعها للمصححين", failed: "⚠️ ما گدر", trial: "🧪 تجربة", cap: "⛔ الحد اليومي", obj: "✋ راجع اعتراض", wait: "⏸ تنتظر خطك" };
 const num = (n: number) => n.toLocaleString("en-US");
 
@@ -61,7 +73,7 @@ export default function QusayClient() {
               مصححك الثاني، بروحه وبعيد عن نظام التصحيح AI مال مؤمل. يقرا ورقة الطالب كلها بمرة وحدة ويصححها على خطوات الحل اللي كتبتها.
               جربه بالسر على أوراق الطلاب (ما يوصل شي للطالب)، لو ارفع ورقة طالب تجربة من 🎓 الطلاب ← 📷 ورقة تجربة ← 🧠 تصحيح قصي. كل اللي يصححه يطلع تحت بـ «📋 السجل».
             </div>
-            {data.inkWait?.length > 0 && <InkWaitCard waits={data.inkWait} busy={busy} call={call} />}
+            {data.inkWait?.length > 0 && <InkWaitCard waits={data.inkWait} busy={busy} call={call} fileUrl={fileUrl} />}
             <div className="card expad">
               <div className="exlabel">التشغيل</div>
               {!data.key && <div className="exbad">⚠️ مفتاح الذكاء الاصطناعي مو محطوط بالسيرفر، فما يگدر يشتغل.</div>}
@@ -127,14 +139,17 @@ export default function QusayClient() {
 
 /** ⏸ أوراق تنتظر خطك: لكل موضوع العبارات (الأكثر تكرار أول)، يم كل وحدة ✍️ تفتح الورقة البيضة والعبارة فوكها.
  *  من تكتب كل عبارات ورقة تنبعث وحدها. «📤 دز الباقي بالرقعة» يبعث الكل هسه (طلبه 2026-11-24) */
-function InkWaitCard({ waits, busy, call }: { waits: InkWait[]; busy: boolean; call: Call }) {
-  const [writing, setWriting] = useState<{ exam: number; t: string } | null>(null);
+function InkWaitCard({ waits, busy, call, fileUrl }: { waits: InkWait[]; busy: boolean; call: Call; fileUrl: (ref: string) => string }) {
+  const [writing, setWriting] = useState<{ exam: number; t: string; ex?: PhraseEx } | null>(null);
+  const [look, setLook] = useState("");
   // من التنبيه («✍️ راح أكتبها»): الموضوع اللي إجه منه يطلع أول
   const want = typeof window === "undefined" ? 0 : Number(new URLSearchParams(location.search).get("ink")) || 0;
   const list = [...waits].sort((a, b) => Number(b.exam === want) - Number(a.exam === want));
   if (writing) {
     return (
       <div className="card expad">
+        {writing.ex && <PhraseExample ex={writing.ex} fileUrl={fileUrl} />}
+        <div className="exhint">اكتبها بأسلوبك، مو لازم نفس الكلام حرفياً. بس خلي المعنى نفسه.</div>
         <Pad kind="note" label={writing.t} busy={busy} onCancel={() => setWriting(null)}
           onUpload={(s, c, wd) => void call({ action: "waitInk", exam: writing.exam, item: { text: writing.t, w: BOX.note.w, h: BOX.note.h, s, c, wd } }).then((d) => { if (d) setWriting(null); })} />
       </div>
@@ -148,9 +163,13 @@ function InkWaitCard({ waits, busy, call }: { waits: InkWait[]; busy: boolean; c
         <div key={w.exam} className="inkkind">
           <div className="aig-logrow"><b>{w.title}</b><small>{w.papers} {w.papers > 1 ? "أوراق" : "ورقة"} · {w.phrases.length} عبارة</small></div>
           {w.phrases.map((p) => (
-            <div key={p.t} className="aig-logrow">
-              <div dir="auto"><Inline text={p.t} />{p.n > 1 && <small> · {p.n} مرات</small>}</div>
-              <button type="button" className="exbtn" disabled={busy} onClick={() => setWriting({ exam: w.exam, t: p.t })}>✍️ اكتبها</button>
+            <div key={p.t}>
+              <div className="aig-logrow">
+                <div dir="auto"><Inline text={p.t} />{p.n > 1 && <small> · {p.n} مرات</small>}</div>
+                {p.ex && <button type="button" className="exbtn" onClick={() => setLook(look === p.t ? "" : p.t)}>{look === p.t ? "⬆️ سد" : "📷 وين؟"}</button>}
+                <button type="button" className="exbtn" disabled={busy} onClick={() => setWriting({ exam: w.exam, t: p.t, ex: p.ex })}>✍️ اكتبها</button>
+              </div>
+              {look === p.t && p.ex && <PhraseExample ex={p.ex} fileUrl={fileUrl} />}
             </div>
           ))}
           <button type="button" className="btn ghost" disabled={busy} onClick={() => { if (confirm("تنبعث هسه كل أوراق هذا الموضوع، والعبارات اللي ما كتبتها تطلع بخط الرقعة؟")) void call({ action: "waitSend", exam: w.exam }); }}>📤 دز الباقي بالرقعة</button>

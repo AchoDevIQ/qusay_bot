@@ -500,6 +500,12 @@ test("⏸ الورقة تنتظر خطه: بيها عبارة بعده ما كا
   const exam = Number((await one("sched_items", { id }))!.exam_id);
   const page: any = await qusayAction({ initData: sign(1), action: "list" });
   assert.deepEqual(page.inkWait.find((w: any) => w.exam === exam).phrases.map((x: any) => x.t), phrases);
+  // ويا كل عبارة ورقة الطالب والعلامة نفسها، حتى يفهم شنو يقصد
+  const ex = page.inkWait.find((w: any) => w.exam === exam).phrases[0].ex;
+  assert.equal(ex.item, id);
+  assert.equal(ex.ref, "ans/a.jpg");
+  assert.equal(ex.marks[ex.k].note, phrases[0]);
+  assert.ok(ex.q > 0);
   for (const [k, t] of phrases.entries()) {
     const r: any = await qusayAction({ initData: sign(1), action: "waitInk", exam, item: { text: t, w: 1000, h: 360, s: [[10, 10, 50, 50]], c: "#d40000", wd: 2 } });
     if (k < phrases.length - 1) assert.equal((await Q.qgResultOf(id))!.sent, undefined, "باقي عبارة");

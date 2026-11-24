@@ -1037,17 +1037,32 @@ export async function phrasesOf(res: QgResult, exam: number): Promise<string[]> 
   return [...out];
 }
 /** الأوراق اللي تنتظر خطه، لكل موضوع: كم ورقة، والعبارات من الأكثر تكرار */
+/** ويا كل عبارة: ورقة الطالب اللي انكتبت عليها والعلامات، والعلامة نفسها (k)، ورقم السؤال، والخطوة، وشنو كتب الطالب.
+ *  حتى يفهم شنو يقصد قبل ما يكتبها بأسلوبه (طلبه 2026-11-24: «اريد ويا الكتابة صورة بالحل مال الطالب») */
+export type PhraseEx = { item: number; ref: string; marks: PaperMark[]; k: number; q: number; step: string; w: string };
 export async function inkWaitList() {
-  const by = new Map<number, { papers: number; ph: Map<string, number> }>();
+  const by = new Map<number, { papers: number; ph: Map<string, { n: number; ex: PhraseEx }> }>();
   for (const w of await waits()) {
     const r = await qgResultOf(w.id);
-    if (!r || r.sent) continue;
-    const g = by.get(w.exam) ?? { papers: 0, ph: new Map<string, number>() };
+    if (!r || r.sent || !r.pages?.length) continue;
+    const g = by.get(w.exam) ?? { papers: 0, ph: new Map<string, { n: number; ex: PhraseEx }>() };
     g.papers++;
-    for (const t of await phrasesOf(r, w.exam)) g.ph.set(t, (g.ph.get(t) ?? 0) + 1);
+    const ink = await inkFor(w.exam);
+    const seen = new Set<string>();
+    for (const pg of marksByPage(r.qs, r.pages, undefined, [], ink)) {
+      pg.marks.forEach((m, k) => {
+        if (!m.note || m.hand || seen.has(m.note)) return;
+        seen.add(m.note);
+        const old = g.ph.get(m.note);
+        if (old) { old.n++; return; }
+        const qq = r.qs.find((x) => x.n === m.q);
+        const st = qq && m.i !== undefined && m.i >= 0 ? qq.steps[m.i] : undefined;
+        g.ph.set(m.note, { n: 1, ex: { item: w.id, ref: pg.ref, marks: pg.marks, k, q: m.q ?? 0, step: st?.text ?? "", w: wLines(st?.w ?? "") } });
+      });
+    }
     by.set(w.exam, g);
   }
-  return await Promise.all([...by].map(async ([exam, g]) => ({ exam, title: await examTitle(exam), papers: g.papers, phrases: [...g.ph].sort((a, b) => b[1] - a[1]).map(([t, n]) => ({ t, n })) })));
+  return await Promise.all([...by].map(async ([exam, g]) => ({ exam, title: await examTitle(exam), papers: g.papers, phrases: [...g.ph].sort((a, b) => b[1].n - a[1].n).map(([t, v]) => ({ t, n: v.n, ex: v.ex })) })));
 }
 /** يبعث أوراق موضوع: ruqaa كلها (العبارات الناقصة بالرقعة)، وإلا بس اللي صارت كل عباراتها بخطه */
 export async function releaseWaits(exam: number, ruqaa: boolean, finish: (uid: number, itemId: number) => Promise<unknown>) {
