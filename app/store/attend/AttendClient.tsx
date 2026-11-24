@@ -128,6 +128,9 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
           {c.print === "ipad" && <div className="exhint atok">📱 يمتحن بالآيباد: لا تطبعله شي. أسئلته انفتحت بالآيباد مالته.</div>}
           {c.queued && <div className="exhint atok">🖨 الليبل انرسل لمحطة الطباعة</div>}
           {c.printed && !c.queued && <div className="exhint exbad">⚠️ هذا الطالب مطبوع له ليبل</div>}
+          {c.print === "ipad" && <div className="atrow">
+            <button type="button" className="exbtn" disabled={busy} onClick={() => { if (data.station?.active) void call({ action: "queue", item: c.item, force: true }); else openOutside(printUrl("label", c.label)); }}>🔓 استثناء: نسى الآيباد، اطبعله ليبل</button>
+          </div>}
           {c.print !== "ipad" && <div className="atrow">
             <button type="button" className={c.print === "label" ? "btn" : "exbtn"} disabled={busy} onClick={() => { if (data.station?.active) void call({ action: "queue", item: c.item }); else openOutside(printUrl("label", c.label)); }}>{c.printed ? "🏷 اطبع ليبل مرة ثانية" : "🏷 اطبع الليبل"}</button>
             <button type="button" className={c.print === "paper" ? "btn" : "exbtn"} onClick={() => openOutside(printUrl("paper", c.paper))}>📄 اطبع ورقته كاملة</button>

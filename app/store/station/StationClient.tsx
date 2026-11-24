@@ -147,9 +147,9 @@ export default function StationClient() {
     if (r.job) { setStatus(`🖨 دا يطبع: ${c.name}`); await write(r.job); await api({ action: "printed", id: c.item }); setStatus(`✅ انطبع: ${c.name}`); }
     else setStatus(`✅ انسجل ${c.name} باستثناء`);
   });
-  const reprint = (item: number) => once(async () => {
+  const reprint = (item: number, force = false) => once(async () => {
     if (!ch.current) { setStatus("⚠️ اتصل بالطابعة أول"); return; }
-    const r = await api({ action: "reprint", item });
+    const r = await api({ action: "reprint", item, force });
     if (r.job) { setStatus(`🖨 دا يطبع: ${r.job.name}`); await write(r.job); setStatus(`✅ انطبع: ${r.job.name}`); }
   });
   const testLabel = () => once(async () => {
@@ -262,8 +262,10 @@ export default function StationClient() {
               <b>{last.name}</b>
               {last.printed && <div className="exhint exbad">⚠️ هذا الطالب مطبوع له ليبل</div>}
               <div className="exhint">{last.exam}</div>
-              {last.print === "ipad" ? <div className="exhint">📱 يمتحن بالآيباد: انسجل حضوره بس، ما ينطبعله ليبل</div>
-                : <button type="button" className="exbtn adtop" onClick={() => void reprint(last.item)}>🏷 اطبع ليبل مرة ثانية</button>}
+              {last.print === "ipad" ? <>
+                <div className="exhint">📱 يمتحن بالآيباد: انسجل حضوره بس، ما ينطبعله ليبل</div>
+                <button type="button" className="exbtn adtop" onClick={() => void reprint(last.item, true)}>🔓 استثناء: نسى الآيباد، اطبعله ليبل</button>
+              </> : <button type="button" className="exbtn adtop" onClick={() => void reprint(last.item)}>🏷 اطبع ليبل مرة ثانية</button>}
             </div>
           )}
         </div>
