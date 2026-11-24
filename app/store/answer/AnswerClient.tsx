@@ -97,8 +97,8 @@ function BookSolution({ book, title, hint, pages, sol, y, marks }: { book: numbe
 }
 
 const TXT = {
-  ar: { title: "📘 حل سؤالك", q: "❓ سؤالك", photo: "📷 سؤالك بالصورة اللي دزيتها", ai: "🤖 الحل على طريقة الأستاذ", book: "📘 حل الأستاذ من الملزمة", aiNote: "هذا السؤال ما موجود بالملزمة، فانحل بنفس طريقة الأستاذ.", help: "إذا بعدك ما فهمت، ارجع للبوت ودوس «❓ بعدني ما فهمت» ويوصل سؤالك للأستاذ.", step: "🤔 ما فهمت خطوة", stepHint: "اكتب شنو ما فهمت بالحل، مثلاً: «ليش صارت سالب بالسطر الثالث؟»", send: "اشرحلي", wait: "⏳ دا يشرحها...", you: "❓ سألت", left: (n: number) => `باقي ${n} مرة على هذا الحل`, loading: "جاري التحميل...", net: "ماكو اتصال، حاول مرة ثانية", err: "صار خطأ" },
-  en: { title: "📘 Your solution", q: "❓ Your question", photo: "📷 Your question is in the photo you sent", ai: "🤖 Solved the teacher's way", book: "📘 The teacher's solution from the booklet", aiNote: "This question is not in the booklet, so it was solved with the teacher's method.", help: "Still not clear? Go back to the bot and tap «❓ Still not clear» to send your question to the teacher.", step: "🤔 I didn't get a step", stepHint: "Write what you did not understand, e.g. «why did it become negative in line 3?»", send: "Explain", wait: "⏳ Explaining...", you: "❓ You asked", left: (n: number) => `${n} more on this solution`, loading: "Loading...", net: "No connection, try again", err: "Something went wrong" },
+  ar: { title: "📘 حل سؤالك", q: "❓ سؤالك", photo: "📷 سؤالك بالصورة اللي دزيتها", ai: "📘 الحل", book: "📘 حل الأستاذ من الملزمة", aiNote: "", help: "إذا بعدك ما فهمت، ارجع للبوت ودوس «❓ بعدني ما فهمت» ويوصل سؤالك للأستاذ.", step: "🤔 ما فهمت خطوة", stepHint: "اكتب شنو ما فهمت بالحل، مثلاً: «ليش صارت سالب بالسطر الثالث؟»", send: "اشرحلي", wait: "⏳ دا يشرحها...", you: "❓ سألت", left: (n: number) => `باقي ${n} مرة على هذا الحل`, loading: "جاري التحميل...", net: "ماكو اتصال، حاول مرة ثانية", err: "صار خطأ" },
+  en: { title: "📘 Your solution", q: "❓ Your question", photo: "📷 Your question is in the photo you sent", ai: "📘 The solution", book: "📘 The teacher's solution from the booklet", aiNote: "", help: "Still not clear? Go back to the bot and tap «❓ Still not clear» to send your question to the teacher.", step: "🤔 I didn't get a step", stepHint: "Write what you did not understand, e.g. «why did it become negative in line 3?»", send: "Explain", wait: "⏳ Explaining...", you: "❓ You asked", left: (n: number) => `${n} more on this solution`, loading: "Loading...", net: "No connection, try again", err: "Something went wrong" },
 };
 
 /** سطر الحل: إذا كله رياضيات بدون $ ينكتب معادلة، وإذا بيه كلام وبين $ $ رياضيات ينكتب جملة */
@@ -192,7 +192,7 @@ export default function AnswerClient() {
                 <div className="expad anssol">
                   {a.solution.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l, i) => <Line key={i} text={l} rtl={rtl} />)}
                 </div>
-                {a.source === "ai" && <div className="expad exhint">{t.aiNote}</div>}
+                {a.source === "ai" && t.aiNote && <div className="expad exhint">{t.aiNote}</div>}
               </div>
             )}
             {!a.rasid && !a.notebook && <StepHelp a={a} t={t} rtl={rtl} onDone={(ex, left) => setA({ ...a, ex, explain: left })} />}

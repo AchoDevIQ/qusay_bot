@@ -14,7 +14,16 @@ import { api, edit, send, upload, type Kb } from "./telegram.ts";
 import { btn, chunk, cut, esc, stamp, words } from "./util.ts";
 import { startReg } from "./student.ts";
 
-const chaptersKb = async (en: boolean): Promise<Kb> => (await chapters()).map((c) => [btn(chLabel(c, en), `qc:${c.id}`)]);
+/** فصول الطالب اللي مشتري محاضراتها لو امتحاناتها (طلبه 2026-11-24)، وصاحب البوت كل الفصول */
+const ORDS = ["الاول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس"];
+async function askChapters(uid: number) {
+  const all = await chapters();
+  if (!HOME_PAGE || ADMIN_IDS.includes(uid)) return all;
+  const { ownedChapters } = await import("./notes.ts");
+  const labels = (await ownedChapters(uid)).map((l) => l.replace(/[أإآ]/g, "ا"));
+  return all.filter((c) => labels.some((l) => l.includes(ORDS[Number(c.ord) - 1] ?? "~")));
+}
+const chaptersKb = async (en: boolean, uid: number): Promise<Kb> => (await askChapters(uid)).map((c) => [btn(chLabel(c, en), `qc:${c.id}`)]);
 const isEn = (s: Row | null) => !!s && s.curr === "إنجليزي";
 
 export async function askStart(chat: number, uid: number) {
@@ -28,18 +37,21 @@ export async function askStart(chat: number, uid: number) {
   if (HOME_PAGE && !await canAsk(uid)) { await send(chat, "ℹ️ الأسئلة العلمية تنفتح لمن تشتري محاضرات أو امتحانات من 🛒 المتجر."); return; }
   if (!await groupId()) { await send(chat, "⚠️ قسم الأسئلة العلمية غير مفعّل حالياً."); return; }
   if (!await qOpenNow()) { await send(chat, "⏰ <b>استقبال الأسئلة مغلق هسه.</b>\n\n" + hoursText(await qHours())); return; }
+  const kbCh = await chaptersKb(isEn(s), uid);
+  if (!kbCh.length) { await send(chat, isEn(s) ? "ℹ️ You can ask about the chapters you bought (lectures or exams)." : "ℹ️ تگدر تسأل بالفصول اللي مشتري محاضراتها لو امتحاناتها."); return; }
   await setSession(uid, "q:pick", {});
-  await send(chat, "❓ <b>سؤال علمي</b>\nاختر الفصل:", { kb: await chaptersKb(isEn(s)) });
+  await send(chat, "❓ <b>سؤال علمي</b>\nاختر الفصل:", { kb: kbCh });
 }
 
 export async function qCb(chat: number, uid: number, mid: number, d: string): Promise<string | null> {
   const en = isEn(await student(uid));
   if (d.startsWith("qc:")) {
     const chid = Number(d.slice(3));
+    if (!(await askChapters(uid)).some((c) => Number(c.id) === chid)) return en ? "You did not buy this chapter" : "هذا الفصل مو مشتريه";
     await setSession(uid, "q:pick", { c: chid });
     await edit(chat, mid, "❓ اختر الموضوع:", [...(await topics(chid)).map((t) => [btn(en ? t.en || t.ar : t.ar, `qt:${t.id}`)]), [btn("⬅️ رجوع للفصول", "qb:ch")]]);
   } else if (d === "qb:ch") {
-    await edit(chat, mid, "❓ <b>سؤال علمي</b>\nاختر الفصل:", await chaptersKb(en));
+    await edit(chat, mid, "❓ <b>سؤال علمي</b>\nاختر الفصل:", await chaptersKb(en, uid));
   } else if (d.startsWith("qt:")) {
     const t = await topic(Number(d.slice(3)));
     if (!t) return "الموضوع غير موجود";
@@ -139,8 +151,8 @@ async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: numb
     : r.source === "rasid"
     ? (en ? "📝 <b>Your question is in the teacher's Rasid</b>\nTap the button to see his model solution." : "📝 <b>سؤالك موجود بالراصد</b>\nدوس الزر تشوف الحل النموذجي مال الأستاذ.")
     : en
-    ? (r.source === "ai" ? "🤖 <b>Your question is solved the teacher's way</b>\nTap the button to see the solution step by step." : "📘 <b>Your question is solved in the teacher's booklet</b>\nTap the button to see the solution step by step.")
-    : (r.source === "ai" ? "🤖 <b>حليت سؤالك على طريقة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة." : "📘 <b>سؤالك محلول بملزمة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة.");
+    ? (r.source === "ai" ? "📘 <b>Here is your solution</b>\nTap the button to see it step by step." : "📘 <b>Your question is solved in the teacher's booklet</b>\nTap the button to see the solution step by step.")
+    : (r.source === "ai" ? "📘 <b>عيوني، تفضل هذا الحل</b>\nدوس الزر تشوف الحل خطوة خطوة." : "📘 <b>سؤالك محلول بملزمة الأستاذ</b>\nدوس الزر تشوف الحل خطوة خطوة.");
   const head = qid ? (en ? `💬 <b>About your question #${qid}</b>\n` : `💬 <b>بخصوص سؤالك #${qid}</b>\n`) : "";
   await send(chat, head + msg, { kb });
   await logActivity(uid, (qid ? `🔁 #${qid} بعد ما رجع الذكاء: ` : "") + (r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : r.source === "rasid" ? `📝 وصله الحل النموذجي من الراصد (${r.rasid?.topic ?? where} ${r.rasid?.q ?? ""})` : r.source === "notebook" ? `📘 وصله حل سؤاله من دفتر المحاضرات (${r.notebook?.where || where} ص${r.notebook?.page ?? ""})` : `📘 وصله حل سؤاله من الملزمة (${where})`));

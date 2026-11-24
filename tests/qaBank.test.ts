@@ -417,3 +417,15 @@ test("الحل بجهتنا (مو خدمة مؤمل): الذكاء المختا�
   const { svc } = await import("../lib/aiGrade.ts");
   qa.setQaService((route, body) => svc(route, body));
 });
+
+test("📷 سؤال بالصورة: القراية تعرف موضوعه، والبحث والحل يشوفون الصورة نفسها مو بس القراية (انقرت 8 = 4، طلبه 2026-11-24)", async () => {
+  const tid = await tidOf("الجذور التربيعية");
+  reply = (b) => b.question_images ? { question: "جد الجذور التربيعية للعدد 4-77i" } : { found: false, solution: "حل" };
+  ai.length = 0;
+  await qa.qaAnswer({ image: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 8, 7, 6, 5]) }, 1, tid, 1, "ar");
+  const read = ai.find((c) => c.route === "/bot/extract")!;
+  assert.equal(read.body.topic, "الجذور التربيعية");
+  const asks = ai.filter((c) => c.route === "/bot/qa");
+  assert.ok(asks.length > 0);
+  assert.ok(asks.every((c) => c.body.image && c.body.read === true), "الصورة نفسها تروح، والكتابة قراية بس");
+});

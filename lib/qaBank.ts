@@ -263,7 +263,8 @@ export async function examQueueTick(limit = EXAM_PER_TICK) {
   return { done: got.length, failed: bad.length, left: left.length };
 }
 
-export type QaAsk = { text?: string; image?: Buffer };
+/** read: الكتابة قراية الصورة (ممكن بيها غلط)، والصورة هي الأصل */
+export type QaAsk = { text?: string; image?: Buffer; read?: boolean };
 /** rasid: الحل صفحة «📘 الحل النموذجي» من الراصد اللي بملازمي (book رقم الملزمة، page رقم الصفحة) */
 /** notebook: الحل صفحات «دفتر المحاضرات» بملازمي من بداية السؤال (y مكانه بأول صفحة)، ويا زر فيديوهاته (mark) */
 /** teacher: حل صلّحه الأستاذ لنفس السؤال قبل (🔎 حلول الذكاء)، يوصل ببلاش. asked: نص السؤال (بعد قراءة الصورة)، fk: بصمته */
@@ -284,7 +285,7 @@ const ours: QaService = async (route, body) => {
   const { qgCreate } = await import("./qusayGrade.ts");
   const { qaAsk, qaRead } = await import("./qaAi.ts");
   const m = QA_MODELS[(await qaCfg()).model ?? "haiku"];
-  if (route === "/bot/extract") return await qaRead(qgCreate, m, String((body.question_images as string[])[0] ?? ""));
+  if (route === "/bot/extract") return await qaRead(qgCreate, m, String((body.question_images as string[])[0] ?? ""), String(body.topic ?? ""));
   return await qaAsk(qgCreate, m, body as Parameters<typeof qaAsk>[2]);
 };
 let qaService: QaService = ours;
@@ -293,7 +294,7 @@ const QA_MODELS = { haiku: "claude-haiku-5-5", sonnet: "claude-sonnet-5-5", opus
 /** الذكاء جاهز يحل: مفتاحه بالسيرفر (أو الفحوصات بدلته) */
 export const qaAiOn = () => qaService !== ours || !!process.env.ANTHROPIC_API_KEY;
 async function call(mode: "find" | "solve" | "explain", context: string, q: QaAsk, lang: "ar" | "en", shown = "") {
-  const r = await qaService("/bot/qa", { mode, context, question: (q.text ?? "").slice(0, 4000), image: q.image?.toString("base64"), lang, ...(shown ? { shown } : {}) });
+  const r = await qaService("/bot/qa", { mode, context, question: (q.text ?? "").slice(0, 4000), image: q.image?.toString("base64"), lang, ...(shown ? { shown } : {}), ...(q.read ? { read: true } : {}) });
   // ألفاظ الأستاذ بس، حتى لو الذكاء كتب غيرها
   if (lang === "ar" && r.solution) { const { bookWords } = await import("./qusayGrade.ts"); r.solution = bookWords(String(r.solution)); }
   await addUsage(r.usage ?? []);
@@ -342,11 +343,11 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
   let text = (q.text ?? "").trim();
   let readErr: unknown = null;
   if (q.image) {
-    const ik = `qa_img_${sha(q.image)}`;
+    const ik = `qa_img2_${sha(q.image)}`;
     let read = (await kvGet(ik)) ?? "";
     if (!read) {
       try {
-        const r = await qaService("/bot/extract", { question_images: [q.image.toString("base64")] });
+        const r = await qaService("/bot/extract", { question_images: [q.image.toString("base64")], topic: names[0] ?? "" });
         await addUsage(r.usage);
         read = String(r.question ?? "").trim();
         if (read) await kvSet(ik, read);
@@ -419,7 +420,8 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
   const blocks = splitBlocks(mine);
   const ranked = blocks.map((b) => ({ b, s: blockScore(text, b, lecture) })).sort((x, y) => y.s - x.s);
   const top = ranked.slice(0, TOP_BLOCKS).filter((x) => x.s > 0);
-  const ask: QaAsk = { text };
+  // الصورة تروح ويا الكتابة المقروة، حتى إذا القراية غلطت برقم يلگاه بالملزمة من الصورة نفسها
+  const ask: QaAsk = q.image ? { text, image: q.image, read: true } : { text };
   const close = top.length && top[0].s >= CLOSE;
   if (close) {
     const r = await call("find", blocksCtx(top.map((x) => x.b)), ask, lang);

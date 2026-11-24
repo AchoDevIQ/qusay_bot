@@ -63,7 +63,9 @@ const byOrder = (a: Row, b: Row) => sectionRank(a) - sectionRank(b) || (a.ord ??
 export async function myBooks(uid: number): Promise<Row[]> {
   const all = (await find("note_books")).sort(byOrder);
   if (await isAdmin(uid)) return all;
-  const chapters = new Set(await ownedChapters(uid));
+  // صاحب البوت بـ«👁 شوف كطالب»: كل ملازم منهجه، حتى يجرب الراصد والدفتر وفيديوهاتهن بلا ما يشتري (طلبه 2026-11-24)
+  const { ADMIN_IDS } = await import("./config.ts");
+  const chapters = new Set(ADMIN_IDS.includes(uid) ? all.map((b) => b.chapter) : await ownedChapters(uid));
   if (!chapters.size) return [];
   const lang = (await student(uid))?.curr === "إنجليزي" ? "en" : "ar";
   return all.filter((b) => chapters.has(b.chapter) && (b.lang === "all" || b.lang === lang));

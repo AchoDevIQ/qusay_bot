@@ -103,7 +103,7 @@ test("الذكاء واقف: السؤال للأستاذ، تنبيه لصاحب
   assert.equal(r.answered, 1);
   const stu = calls.find((c) => c.p.chat_id === 2 && c.method === "sendMessage")!;
   assert.match(stu.p.text, new RegExp(`بخصوص سؤالك #${q.id}`));
-  assert.match(stu.p.text, /حليت سؤالك على طريقة الأستاذ/);
+  assert.match(stu.p.text, /عيوني، تفضل هذا الحل/);
   assert.deepEqual(stu.p.reply_markup.inline_keyboard[1].map((x: any) => x.callback_data), [`qf:${q.id}`]);
   assert.ok(to(-1001).some((x) => x.includes("رجع الذكاء يشتغل، وجاوب الطالب هسه")));
   assert.ok(to(1).some((x) => x.includes("✅ <b>رجع الذكاء يشتغل، وجاوب هذول الطلاب (1)")));
@@ -139,7 +139,7 @@ test("صاحب البوت خفّى «❓ بعدني ما فهمت»: الحل ي
   await msg(2, "❓ سؤال علمي"); await cb(2, `qc:${ch.id}`); await cb(2, `qt:${t.id}`); await cb(2, `ql:${t.id}:1`);
   calls.length = 0;
   await msg(2, "جد الجذور التربيعية للعدد 9-40i");
-  const m = calls.find((c) => c.p.chat_id === 2 && /حليت سؤالك/.test(String(c.p.text)))!;
+  const m = calls.find((c) => c.p.chat_id === 2 && /تفضل هذا الحل/.test(String(c.p.text)))!;
   assert.equal(m.p.reply_markup.inline_keyboard.length, 1);
   assert.match(m.p.reply_markup.inline_keyboard[0][0].text, /افتح الحل/);
   await qa.qaAction({ initData: sign(1), action: "settings", teacherBtn: true });
