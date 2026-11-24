@@ -148,7 +148,7 @@ test("ورا أول امتحان لازم يربط ولي الأمر: الحسا
   await start(50, "شلونكم، شكد درجته؟");                      // ولي الأمر يكتب: يطلعله «مو للمراسلة» ومعرف الأستاذ
   const reply = calls.find((c) => c.method === "sendMessage" && c.p.chat_id === 50)!.p.text;
   assert.match(reply, /هذا البوت مو للمراسلة/);
-  assert.match(reply, /راسلوا الأستاذ قصي العميري/);
+  assert.match(reply, /راسلوا قصي العميري/);
   assert.equal((await home(12)).link, null);
   calls.length = 0;
   await start(51, `/start ${param}`);                      // ولي أمر ثاني مرفوض

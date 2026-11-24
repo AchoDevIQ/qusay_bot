@@ -157,7 +157,7 @@ test("📩 رسالة من صفحة الطلاب: للطالب أو لولي أ�
   const msg = sent.find((x) => x.m === "sendMessage");
   assert.equal(msg.p.chat_id, 700);
   assert.equal(msg.p.protect_content, true);
-  assert.match(msg.p.text, /رسالة من الأستاذ قصي العميري[\s\S]*ادرس زين/);
+  assert.match(msg.p.text, /رسالة من قصي العميري[\s\S]*ادرس زين/);
   await put("guardians", { guardian_id: 9700, student_id: 700, created: "x" });
   sent.length = 0;
   await studentUpload(form(1, { id: "700", to: "guardian", text: "ابنكم ممتاز" }, true));

@@ -63,7 +63,7 @@ export async function ownerHandle(): Promise<string> {
 export async function notForChatText() {
   const h = await ownerHandle();
   const { ADMIN_IDS } = await import("./config.ts");
-  return `⚠️ <b>هذا البوت مو للمراسلة</b>\nعليه بس توصلكم درجات ابنكم أو بنتكم أول بأول، والرسائل اللي تنكتب هنا محد يقراها.\nإذا تريدون تستفسرون عن أي شي، راسلوا الأستاذ قصي العميري على هذا المعرف 👇\n${h || `<a href="tg://user?id=${ADMIN_IDS[0]}">قصي العميري</a>`}`;
+  return `⚠️ <b>هذا البوت مو للمراسلة</b>\nعليه بس توصلكم درجات ابنكم أو بنتكم أول بأول، والرسائل اللي تنكتب هنا محد يقراها.\nإذا تريدون تستفسرون عن أي شي، راسلوا قصي العميري على هذا المعرف 👇\n${h || `<a href="tg://user?id=${ADMIN_IDS[0]}">قصي العميري</a>`}`;
 }
 /** رسالة الطالب بالمحادثة: الرسالة الجاهزة، وزرين «حوّل» و«انسخ» */
 export async function sendGuardianAsk(sid: number) {

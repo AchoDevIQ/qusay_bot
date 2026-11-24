@@ -111,8 +111,8 @@ async function messageAction(uid: number, form: FormData) {
   need(text || voice, "اكتب رسالة أو سجل صوت");
   const g = toGuardian ? await guardianOf(id) : null;
   need(!toGuardian || g, "ولي أمره مو مربوط بالبوت. تگدر تراسله بالواتساب");
-  const head = toGuardian ? `📩 <b>رسالة من الأستاذ قصي العميري</b>
-بخصوص الطالب: <b>${esc(st!.name)}</b>` : "📩 <b>رسالة من الأستاذ قصي العميري</b>";
+  const head = toGuardian ? `📩 <b>رسالة من قصي العميري</b>
+بخصوص الطالب: <b>${esc(st!.name)}</b>` : "📩 <b>رسالة من قصي العميري</b>";
   await deliverMsg(toGuardian ? g!.guardian_id : id, `${head}${text ? `
 
 ${esc(text)}` : ""}`, voice);

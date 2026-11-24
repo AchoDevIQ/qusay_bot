@@ -298,7 +298,7 @@ function MsgPanel({ s, busy }: { s: S; busy: boolean }) {
         <button type="button" className="btn" disabled={busy || rec || (!text.trim() && !voice)} onClick={() => void send()}>📤 دز {to === "guardian" ? "لولي أمره" : "للطالب"}</button>
         <button type="button" className="exbtn" disabled={rec} onClick={() => setOpen(false)}>إلغاء</button>
       </div>
-      <div className="exhint">توصل بالبوت باسم «الأستاذ قصي العميري»، ومحمية ما تنحول. وتنكتب بسجل الطالب.</div>
+      <div className="exhint">توصل بالبوت باسم «قصي العميري»، ومحمية ما تنحول. وتنكتب بسجل الطالب.</div>
     </div>
   );
 }
