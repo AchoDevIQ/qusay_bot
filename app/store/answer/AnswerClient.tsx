@@ -3,6 +3,7 @@
 // طالب المنهج الإنگليزي يشوف الصفحة كلها بالإنگليزي
 import { useEffect, useState } from "react";
 import { Inline, MathText } from "../myexams/AiCompare";
+import { fixWordLine } from "../../../lib/wordLine.ts";
 import { VideoBox } from "../notes/NotesClient";
 import { deviceId, haptic, platform, platformNow } from "../shared";
 
@@ -103,18 +104,6 @@ const TXT = {
 };
 
 /** سطر الحل: إذا كله رياضيات بدون $ ينكتب معادلة، وإذا بيه كلام وبين $ $ رياضيات ينكتب جملة */
-/** كلام عربي داخل معادلة الـ Word (مثل «اما 2a» بالمصفوفة، «وحدة مربعة»): ينكتب \text{} حتى المعادلة تنرسم مو تطلع
- *  «\begin{matrix}» للطالب، والكلمتين أو أكثر ترجع لترتيبها (الـ Word يخزنها معكوسة: «مربعة وحدة»). وكلام عربي ورا
- *  معادلة بأول السطر هم معكوس («البؤرتين بين المسافة») (طلبه 2026-11-24) */
-const AR_RUN = /[؀-ۿ][؀-ۿ\s]*[؀-ۿ]|[؀-ۿ]+/g;
-export function fixWordLine(text: string) {
-  let out = text.replace(/\$([^$]+)\$/g, (_, m: string) => "$" + m.replace(AR_RUN, (run) => {
-    const w = run.trim().split(/\s+/);
-    return `\\text{${(w.length > 1 ? w.reverse() : w).join(" ")}}`;
-  }) + "$");
-  if (out.trim().startsWith("$")) out = out.replace(/\$\s+([؀-ۿ][؀-ۿ\s]*)$/, (_, a: string) => `$ ${a.trim().split(/\s+/).reverse().join(" ")}`);
-  return out;
-}
 /** السطر اللي يبدي بمعادلة لو إنگليزي يبدي من اليسار، والعربي من اليمين (طلبه 2026-11-24) */
 function Line({ text: raw, rtl }: { text: string; rtl: boolean }) {
   const text = fixWordLine(raw);
@@ -164,6 +153,27 @@ function StepHelp({ a, t, rtl, onDone }: { a: Ans; t: (typeof TXT)["ar"]; rtl: b
         </div>
       )}
     </>
+  );
+}
+
+/** «📄 دزلي الحل PDF»: ملف الحل بهيدر يوصله بالبوت والتطبيق */
+function PdfBtn({ en }: { en: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  async function go() {
+    haptic(); setBusy(true); setMsg(en ? "⏳ ..." : "⏳ ...");
+    try {
+      const q = new URLSearchParams(location.search);
+      const res = await fetch("/api/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: q.get("t") ?? "", id: q.get("a") ?? "", action: "pdf" }) });
+      const j = await res.json();
+      setMsg(res.ok ? j.notice : `⚠️ ${j.error ?? ""}`);
+    } catch { setMsg(en ? "⚠️ No connection, try again" : "⚠️ ماكو اتصال، حاول مرة ثانية"); } finally { setBusy(false); }
+  }
+  return (
+    <div style={{ margin: "6px 0 10px", textAlign: "center" }}>
+      <button type="button" className="btn" disabled={busy} onClick={() => void go()}>{en ? "📄 Send me the solution as PDF" : "📄 دزلي الحل PDF"}</button>
+      {msg && <div className="exhint">{msg}</div>}
+    </div>
   );
 }
 
@@ -245,6 +255,7 @@ export default function AnswerClient() {
               </div>
               </>
             )}
+            {!a.rasid && !a.notebook && <PdfBtn en={!rtl} />}
             {!a.rasid && !a.notebook && <StepHelp a={a} t={t} rtl={rtl} onDone={(ex, left) => setA({ ...a, ex, explain: left })} />}
             {a.teacher !== false && (a.page ? <ToTeacher a={a} setA={setA} en={!rtl} /> : <div className="exhint" style={{ textAlign: "center", margin: "6px 0 18px" }}>{t.help}</div>)}
           </>

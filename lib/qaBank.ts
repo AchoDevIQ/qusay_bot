@@ -772,6 +772,26 @@ export async function qaExplain(body: Row) {
   const c = await qaCfg(); c.explained = (c.explained ?? 0) + 1; await saveCfg(c);
   return { ex: next, left: EXPLAIN_PER_ANSWER - next.length };
 }
+/** «📄 دزلي الحل PDF»: ملف الحل بهيدر (العربي كحلي وذهبي، الإنگليزي رصاصي وبرتقالي) يوصل للطالب بالبوت والتطبيق، محمي */
+export async function answerPdfSend(body: Row) {
+  const uid = verifyHomeToken(body?.token);
+  need(uid !== null, "الرابط قديم", 401);
+  const id = String(body.id ?? "");
+  need(/^[a-f0-9]{16}$/.test(id), "الحل غير موجود", 404);
+  const a = JSON.parse((await kvGet(`qa_ans_${id}`)) ?? "null");
+  need(a && a.uid === uid, "الحل غير موجود", 404);
+  need(String(a.solution ?? "").trim(), "هذا الحل صفحات من ملزمتك، مو كتابة");
+  const en = a.lang === "en";
+  const { student } = await import("./data.ts");
+  const { answerPdf } = await import("./documents.ts");
+  const { upload } = await import("./telegram.ts");
+  const { stamp } = await import("./util.ts");
+  const pdf = await answerPdf({ name: String((await student(uid!))?.name ?? ""), where: String(a.where ?? ""), question: String(a.question || a.asked || ""), solution: String(a.solution), ...(a.similar ? { similar: a.similar } : {}), lang: en ? "en" : "ar", date: stamp() });
+  need(pdf, en ? "Could not make the file, try again" : "ما گدرت أسوي الملف، حاول مرة ثانية");
+  const ok = await upload("sendDocument", { chat_id: String(uid), caption: en ? "📄 Your solution" : "📄 حل سؤالك", protect_content: "true" }, "document", pdf!, en ? "solution.pdf" : "حل_سؤالك.pdf", "application/pdf");
+  need(ok, en ? "Could not send the file, try again" : "ما وصل الملف، حاول مرة ثانية");
+  return { notice: en ? "📄 The file reached you in the bot" : "📄 وصلك الملف بالبوت" };
+}
 /** «❓ بعدني ما فهمت، وصّل سؤالي للأستاذ» من صفحة الحل (سؤال انسأل من الصفحة): يروح للأستاذ بالمجموعة، مرة وحدة */
 export async function answerToTeacher(body: Row) {
   const uid = verifyHomeToken(body?.token);

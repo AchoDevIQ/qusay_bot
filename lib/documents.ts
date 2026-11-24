@@ -504,3 +504,60 @@ export async function receiptPage(oid: number, framed = false): Promise<string |
   // زر الطباعة فوك الوصل، وتنفتح الطباعة وحدها أول ما تتحمل الصفحة
   return html.replace(/<body([^>]*)>/i, `<body$1>${bar}`).replace(/<\/body>/i, `<script>setTimeout(function(){try{window.print()}catch(e){}},600)</script></body>`);
 }
+
+// ---------- 📄 حل السؤال العلمي كملف PDF بهيدر (طلب الأستاذ 2026-11-24): العربي كحلي وذهبي، والإنگليزي رصاصي وبرتقالي.
+// اسمه «قصي العميري» بلا «أستاذ». سؤال الطالب، والسؤال المشابه من الملزمة (إذا اكو)، وحل سؤاله
+export type AnswerDoc = { name: string; where: string; question: string; solution: string; similar?: { text: string; where: string }; lang: "ar" | "en"; date: string };
+export function answerHtml(d: AnswerDoc, css: string, katexCss: string, katexHtml: (tex: string) => string, fix: (l: string) => string) {
+  const ar = d.lang === "ar";
+  const c = ar ? { main: "#1f2a44", accent: "#e0b23a", light: "#f6f1e2" } : { main: "#2b2b2b", accent: "#e67e22", light: "#fbeee2" };
+  const T = ar
+    ? { sub: "رياضيات السادس الإعدادي · حل سؤالك", st: "الطالب", dt: "التاريخ", q: "❓ سؤالك", sim: "📗 سؤال مشابه من الملزمة", sol: d.similar ? "📘 حل سؤالك" : "📘 الحل", ft: "هذا الملف إلك بس، لا تنشره" }
+    : { sub: "Grade 6 Mathematics · Your solution", st: "Student", dt: "Date", q: "❓ Your question", sim: "📗 A similar question from the booklet", sol: d.similar ? "📘 Your question's solution" : "📘 The solution", ft: "This file is for you only, do not share it" };
+  const line = (raw: string) => {
+    const l = fix(raw.trim());
+    const html = l.split(/(\$[^$]+\$)/).map((p) => (p.startsWith("$") && p.endsWith("$") && p.length > 2 ? `<span class=k>${katexHtml(p.slice(1, -1))}</span>` : esc(p))).join("");
+    return `<div class="ln${/^\s*(\$|[A-Za-z0-9\(])/.test(l) ? " lr" : ""}">${html}</div>`;
+  };
+  const lines = (t: string) => t.split(/\n+/).filter((x) => x.trim()).map(line).join("");
+  const box = (title: string, body: string, sim = false) => `<div class="box${sim ? " sim" : ""}"><h3>${esc(title)}</h3><div class=bd>${body}</div></div>`;
+  return `<!doctype html><html lang=${d.lang} dir=${ar ? "rtl" : "ltr"}><head><meta charset=utf-8><style>${css}${katexCss}
+@page{size:A4;margin:0}html,body{margin:0;background:#fff}body{font-family:${FONT_STACK};color:#1c1c1c}
+.hd{background:${c.main};color:#fff;padding:20px 30px 16px;display:flex;align-items:center;gap:16px;border-bottom:6px solid ${c.accent}}
+.hd img{width:70px;height:70px;border-radius:50%;background:#fff;padding:4px}.t1{font-size:27px;font-weight:800;color:${c.accent}}.t2{font-size:15px;opacity:.9;margin-top:3px}
+.side{margin-inline-start:auto;font-size:13px;opacity:.85;line-height:1.7;max-width:40%}
+.meta{display:flex;gap:10px;padding:10px 30px;background:${c.light};font-size:13px}.meta span{background:#fff;border:1px solid ${c.accent};border-radius:20px;padding:3px 12px}.meta b{color:${c.main}}
+.box{margin:16px 30px 0;border:1.5px solid ${c.main};border-radius:12px;overflow:hidden;break-inside:avoid-page}.box h3{margin:0;background:${c.main};color:#fff;font-size:16px;padding:7px 14px}
+.box.sim h3{background:${c.accent};color:${c.main}}.bd{padding:8px 16px 12px;font-size:15px;line-height:2}
+.ln{padding:2px 0;border-bottom:1px dashed #ddd}.ln:last-child{border:0}.ln.lr{direction:ltr;text-align:${ar ? "right" : "left"}}
+.k{direction:ltr;unicode-bidi:isolate;display:inline-block;margin:0 3px}.k .text{unicode-bidi:isolate;direction:rtl}bdi{unicode-bidi:isolate;direction:ltr}
+.ft{margin:22px 30px 18px;padding-top:8px;font-size:11px;color:#777;display:flex;justify-content:space-between;border-top:2px solid ${c.accent}}
+</style></head><body>
+<div class=hd>${logoTag()}<div><div class=t1>قصي العميري</div><div class=t2>${esc(T.sub)}</div></div><div class=side>${esc(d.where)}</div></div>
+<div class=meta><span>${T.st}: <b>${esc(d.name)}</b></span><span>${T.dt}: <b><bdi>${esc(d.date)}</bdi></b></span></div>
+${box(T.q, d.question.trim() ? lines(d.question) : `<div class=ln>${ar ? "📷 سؤالك بالصورة اللي دزيتها" : "📷 Your question is in your photo"}</div>`)}
+${d.similar ? box(T.sim, (d.similar.where ? `<div class=ln style="color:#777">${esc(d.similar.where)}</div>` : "") + lines(d.similar.text), true) : ""}
+${box(T.sol, lines(d.solution))}
+<div class=ft><span>QMath · قصي العميري</span><span>${esc(T.ft)}</span></div>
+</body></html>`;
+}
+/** ملف الـ PDF نفسه. null إذا المتصفح ما اشتغل */
+export async function answerPdf(d: AnswerDoc): Promise<Buffer | null> {
+  try {
+    ensureDir();
+    const katex = (await import("katex")).default;
+    const { fixWordLine } = await import("./wordLine.ts");
+    const kdir = path.join(process.cwd(), "node_modules", "katex", "dist");
+    const fontsUrl = "file:///" + path.join(kdir, "fonts").replace(/\\/g, "/").replace(/^\/+/, "") + "/";
+    const katexCss = fs.readFileSync(path.join(kdir, "katex.min.css"), "utf8").replace(/url\(fonts\//g, `url(${fontsUrl}`);
+    const tag = `ans_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const hp = path.join(PDF_DIR, `${tag}.html`), pp = path.join(PDF_DIR, `${tag}.pdf`);
+    fs.writeFileSync(hp, answerHtml(d, await pageFonts(), katexCss, (tex) => katex.renderToString(tex, { throwOnError: false, output: "html" }), fixWordLine), "utf8");
+    const ok = await htmlToPdf(hp, pp);
+    fs.rmSync(hp, { force: true });
+    if (!ok) return null;
+    const pdf = fs.readFileSync(pp);
+    fs.rmSync(pp, { force: true });
+    return pdf;
+  } catch (e) { console.error(e); return null; }
+}
