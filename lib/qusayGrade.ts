@@ -589,7 +589,7 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
   const pick = (k: InkKind) => { const l = pool(k); if (!l.length) return undefined; const i = turn.get(k) ?? base % l.length; turn.set(k, i + 1); return shape(l[i % l.length]); };
   const handOf = (id?: number) => { const x = id ? ink.find((i) => i.id === id && i.kind === "note") : undefined; return x ? shape(x) : undefined; };
   let count = 0;
-  const fullQ = (q: QgQuestion) => q.answered && (q.steps.length ? q.steps.every((s) => s.awarded >= s.points && s.points > 0) : q.score >= q.max);
+  const fullQ = (q: QgQuestion) => q.answered && ((q.max > 0 && q.score >= q.max) || (q.steps.length > 0 && q.steps.every((s) => s.points <= 0 || s.awarded >= s.points)));
   const add = (pt: QgPt | undefined, m: Omit<PaperMark, "x" | "y">) => {
     if (!pt) return;
     const n = ++count * 3;
@@ -605,11 +605,17 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       if (!clash(v)) { x = v; break; }
     }
     // «الحل ناقص» الكبيرة كلمة بس، بلا «؟»
-    const sym = m.big && m.kind === "miss" ? undefined : pick(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick");
-    const word = good ? pick("praise") : undefined;
+    // «الحل ناقص» الكبيرة كلمة بس بلا «؟»، والمدح كلمة بس بلا ✓
+    const sym = (m.big && m.kind === "miss") || good ? undefined : pick(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick");
+    const word = good ? (m.word ?? pick("praise")) : undefined;
     const rot = Math.round((rnd(n + 2) - 0.5) * (good ? 18 : 12)), sc = Math.round((0.88 + rnd(n + 3) * 0.24) * 100) / 100;
     by.set(pt.p, [...(by.get(pt.p) ?? []), { x, y, ...m, ...(sym ? { sym } : {}), ...(word ? { word } : {}), ...(sym || word ? { rot, sc } : {}) }]);
   };
+  // الطالب اللي جاب 100: «ممتاز» بخطه على أول سؤال بس (طلبه 2026-11-24). من مدحه اللي كاتب بيه «ممتاز»، وإلا أي مدح كاتبه، وإلا بالرقعة
+  const done = qs.filter((q) => q.answered);
+  const perfect = done.length > 0 && done.every(fullQ) && done.reduce((t, q) => t + q.score, 0) >= 100;
+  const firstQ = perfect ? Math.min(...done.map((q) => q.n)) : -1;
+  const praiseInk = (() => { const l = pool("praise").filter((x) => /ممتاز/.test(x.text)); const all = l.length ? l : pool("praise"); return all.length ? shape(all[base % all.length]) : undefined; })();
   for (const q of qs) {
     if (only !== undefined && q.n !== only) continue;
     if (!q.answered) continue;
@@ -643,6 +649,8 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       let y0 = ys.length ? Math.max(0, Math.min(...ys) - 70) : 50, y1 = ys.length ? Math.min(1000, Math.max(...ys) + 30) : 950;
       if (y1 - y0 < 300) { const c = (y0 + y1) / 2; y0 = Math.max(0, c - 150); y1 = Math.min(1000, y0 + 300); y0 = Math.max(0, y1 - 300); }
       add(praiseAt, { kind: "ok", text: "", big: true, box: { y0: Math.round(y0), y1: Math.round(y1) }, q: q.n, i: -1 });
+      // «ممتاز» فوك يسار الصح الكبيرة (الصح تصعد لليمين)
+      if (q.n === firstQ && praiseAt) add({ p: praiseAt.p, x: 270, y: Math.round(y0) + 60 }, { kind: "good", text: "ممتاز", q: q.n, i: -2, ...(praiseInk ? { word: praiseInk } : {}) });
       continue;
     }
     if (many) {

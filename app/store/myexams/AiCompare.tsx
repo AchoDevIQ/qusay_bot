@@ -82,7 +82,7 @@ export function MarkedPage({ src, marks, onTap, picked }: { src: string; marks: 
           {m.kind === "score" ? <span className="mkscore">{m.text}</span> : (
             // خط إيده يميل ويكبر ويصغر شوية بكل علامة، حتى ما تبين نسخة وحدة
             <span className="mkjit" style={m.rot || m.sc ? { transform: `rotate(${m.rot ?? 0}deg) scale(${m.sc ?? 1})` } : undefined}>
-              {m.sym ? <InkSvg sh={m.sym} cap={m.big ? 20 : 9} /> : m.kind === "bad" ? <Cross /> : m.kind === "miss" ? <b className="mkask">؟</b> : m.big ? <span className="mkbig"><Tick /></span> : <Tick />}
+              {m.sym ? <InkSvg sh={m.sym} cap={m.big ? 20 : 9} /> : m.kind === "good" ? null : m.kind === "bad" ? <Cross /> : m.kind === "miss" ? <b className="mkask">؟</b> : m.big ? <span className="mkbig"><Tick /></span> : <Tick />}
               {m.word ? <InkSvg sh={m.word} cap={30} /> : m.text && <b className={m.kind === "good" ? "mkgood" : "mkhalf"}>{m.text}</b>}
             </span>
           )}

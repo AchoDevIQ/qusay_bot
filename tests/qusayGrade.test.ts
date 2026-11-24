@@ -516,6 +516,14 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
   const word = { id: 9, kind: "note" as const, text: "الحل ناقص", w: 1000, h: 360, s: [[1, 2, 3, 4]] };
   const [mm] = Q.marksByPage([many], ["a"], undefined, [], [word]);
   assert.deepEqual(mm.marks.map((m) => [m.kind, !!m.big, m.note ?? "", m.x, m.y, !!m.hand]), [["bad", false, "ناقص i", 400, 200, false], ["miss", true, "الحل ناقص", 500, 370, true]]);
+  // جاب 100: «ممتاز» بخطه على أول سؤال بس، بلا ✓ يمها. وإذا مو 100 ماكو مدح
+  const qa = { n: 1, max: 50, score: 50, answered: true, sure: true, reason: "", method: 1, steps: [{ text: "أ", points: 50, awarded: 50, note: "", at: { p: 1, x: 500, y: 300 } }] };
+  const qb = { ...qa, n: 2, steps: [{ ...qa.steps[0], at: { p: 2, x: 500, y: 300 } }] };
+  const praise = [{ id: 1, kind: "praise" as const, text: "أحسنت", w: 1000, h: 360, s: [[1, 1, 2, 2]] }, { id: 2, kind: "praise" as const, text: "ممتاز", w: 1000, h: 360, s: [[5, 5, 9, 9]] }];
+  const pp = Q.marksByPage([qa, qb], ["a", "b"], undefined, [], praise);
+  assert.deepEqual(pp.map((pg) => pg.marks.map((m) => [m.kind, m.text, m.word?.s[0][0] ?? null, !!m.sym])), [[["ok", "", null, false], ["good", "ممتاز", 5, false]], [["ok", "", null, false]]]);
+  const p99 = Q.marksByPage([qa, { ...qb, score: 49, steps: [{ ...qb.steps[0], awarded: 49 }] }], ["a", "b"], undefined, [], praise);
+  assert.ok(!p99.flatMap((pg) => pg.marks).some((m) => m.kind === "good"), "مو 100: ماكو مدح");
   // «الحل ناقص» اللي كتبها بمربع «؟ الحل ناقص» تنفع هم
   const [ma] = Q.marksByPage([many], ["a"], undefined, [], [{ ...word, kind: "ask" as const, text: "؟" }]);
   assert.ok(ma.marks.find((m) => m.big)!.hand, "بخطه من مربع ؟");
