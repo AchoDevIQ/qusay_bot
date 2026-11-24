@@ -1,5 +1,5 @@
 // 📝 رسم السبورة على الـ canvas: الإطار والخشب، الخلفية، الكتابة والتظليل والنص
-import { FRAME, H, frameOf, insetOf, woodPixels, wrapWidth, type Item, type TextItem } from "../../../lib/board/engine.ts";
+import { FRAME, HEAD_H, H, frameOf, headOf, insetOf, isLight, woodPixels, wrapWidth, type Item, type TextItem } from "../../../lib/board/engine.ts";
 
 export const FONT = `"Segoe UI", Tahoma, "Noto Naskh Arabic", Arial, sans-serif`;
 
@@ -37,11 +37,13 @@ export function framePreview(id: string): string {
 }
 
 /** الإطار ولون السبورة. ctx محوّل لوحدات السبورة (W × 1080) */
-export function paintFrame(ctx: CanvasRenderingContext2D, W: number, board: string, frameId: string, logo: HTMLImageElement | null) {
+export function paintFrame(ctx: CanvasRenderingContext2D, W: number, board: string, frameId: string, logo: HTMLImageElement | null, head = "none") {
   const f = frameOf(frameId), F = insetOf(frameId);
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = board;
   ctx.fillRect(F, F, W - 2 * F, H - 2 * F);
+  const hd = headOf(head);
+  if (hd !== "none") drawHeader(ctx, W, F, hd, logo, board);
   if (!F) return;
   type Bar = { x: number; y: number; w: number; h: number; side: "t" | "b" | "l" | "r" };
   const bars: Bar[] = [{ x: 0, y: 0, w: F, h: H, side: "l" }, { x: W - F, y: 0, w: F, h: H, side: "r" }, { x: 0, y: 0, w: W, h: F, side: "t" }, { x: 0, y: H - F, w: W, h: F, side: "b" }];
@@ -79,7 +81,8 @@ export function paintFrame(ctx: CanvasRenderingContext2D, W: number, board: stri
   // خط برا غامق، وظل خفيف جوة
   ctx.strokeStyle = "rgba(0,0,0,0.85)"; ctx.lineWidth = 2; ctx.strokeRect(1, 1, W - 2, H - 2);
   ctx.strokeStyle = "rgba(0,0,0,0.44)"; ctx.lineWidth = 3; ctx.strokeRect(F + 1.5, F + 1.5, W - 2 * F - 3, H - 2 * F - 3);
-  // اللوحة باسمه: اللوگو والاسم بنص الشريط الفوقاني
+  // اللوحة باسمه: اللوگو والاسم بنص الشريط الفوقاني (إذا ماكو هيدر، لأن الهيدر بيه اسمه)
+  if (hd !== "none") return;
   ctx.save();
   ctx.font = `600 21px ${FONT}`;
   ctx.direction = "rtl";
@@ -132,8 +135,15 @@ export function strokePath(ctx: CanvasRenderingContext2D, p: number[], smooth: b
   }
   ctx.lineTo(p[p.length - 2], p[p.length - 1]);
 }
-export function drawItem(ctx: CanvasRenderingContext2D, it: Item) {
+export type ImgOf = (ref: string) => HTMLImageElement | null;
+export function drawItem(ctx: CanvasRenderingContext2D, it: Item, imgOf?: ImgOf) {
   if (it.k === "text") { drawText(ctx, it); return; }
+  if (it.k === "img") {
+    const im = imgOf?.(it.r);
+    if (im?.naturalWidth) ctx.drawImage(im, it.x, it.y, it.w, it.h);
+    else { ctx.save(); ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.setLineDash([10, 8]); ctx.strokeRect(it.x, it.y, it.w, it.h); ctx.restore(); }
+    return;
+  }
   ctx.save();
   ctx.strokeStyle = it.c;
   ctx.lineWidth = it.w;
@@ -144,7 +154,7 @@ export function drawItem(ctx: CanvasRenderingContext2D, it: Item) {
   ctx.restore();
 }
 /** كل الصفحة: الخلفية، التظليل تحت، الكتابة، والنص */
-export function drawPage(ctx: CanvasRenderingContext2D, W: number, frameId: string, items: Item[], bg: HTMLImageElement | null) {
+export function drawPage(ctx: CanvasRenderingContext2D, W: number, frameId: string, items: Item[], bg: HTMLImageElement | null, imgOf?: ImgOf) {
   const F = insetOf(frameId);
   ctx.save();
   ctx.beginPath(); ctx.rect(F, F, W - 2 * F, H - 2 * F); ctx.clip();
@@ -153,8 +163,148 @@ export function drawPage(ctx: CanvasRenderingContext2D, W: number, frameId: stri
     const w = bg.naturalWidth * s, h = bg.naturalHeight * s;
     ctx.drawImage(bg, F + (aw - w) / 2, F + (ah - h) / 2, w, h);
   }
+  for (const it of items) if (it.k === "img") drawItem(ctx, it, imgOf);
   for (const it of items) if (it.k === "hl") drawItem(ctx, it);
-  for (const it of items) if (it.k !== "hl") drawItem(ctx, it);
+  for (const it of items) if (it.k !== "hl" && it.k !== "img") drawItem(ctx, it);
   ctx.restore();
 }
 export { FRAME };
+
+// ---------- 🏷 الهيدرات: اسمه واللوگو فوك السبورة، 10 أشكال (طلبه 2026-11-25)
+const GOLD = ["#F6C94A", "#D9A62E", "#F3D27A"];
+function goldGrad(ctx: CanvasRenderingContext2D, x0: number, x1: number) {
+  const g = ctx.createLinearGradient(x0, 0, x1, 0);
+  g.addColorStop(0, GOLD[0]); g.addColorStop(0.5, GOLD[1]); g.addColorStop(1, GOLD[2]);
+  return g;
+}
+/** الاسم واللوگو: من اليمين (بداية السطر العربي) أو بالنص */
+function nameLogo(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, x: number, cy: number, size: number, color: string | CanvasGradient, align: "right" | "center", chalk = false, disc = "") {
+  const name = "قصي العميري";
+  ctx.save();
+  ctx.font = `700 ${size}px ${FONT}`;
+  ctx.direction = "rtl"; ctx.textBaseline = "middle";
+  const tw = ctx.measureText(name).width, lw = logo ? size * 1.45 : 0, gap = logo ? size * 0.35 : 0;
+  const total = tw + lw + gap;
+  const right = align === "right" ? x : x + total / 2;
+  // لوگو ذهبي على خلفية ذهبية ما يبين: دائرة كحلية وراه
+  if (logo && disc) { ctx.fillStyle = disc; ctx.beginPath(); ctx.arc(right - lw / 2, cy, lw / 2 + 3, 0, Math.PI * 2); ctx.fill(); }
+  if (logo) ctx.drawImage(logo, right - lw, cy - lw / 2, lw, lw);
+  ctx.textAlign = "right";
+  ctx.fillStyle = color;
+  if (chalk) {
+    ctx.globalAlpha = 0.35;
+    for (const [dx, dy] of [[1.2, 0.6], [-0.8, 1], [0.5, -1.1]]) ctx.fillText(name, right - lw - gap + dx, cy + dy);
+    ctx.globalAlpha = 0.92;
+  }
+  ctx.fillText(name, right - lw - gap, cy + 1);
+  ctx.restore();
+  return total;
+}
+export function drawHeader(ctx: CanvasRenderingContext2D, W: number, F: number, id: string, logo: HTMLImageElement | null, board: string) {
+  const x0 = F, x1 = W - F, y = F, h = HEAD_H, cy = y + h / 2, w = x1 - x0;
+  const light = isLight(board);
+  const ink = light ? "#1F2A44" : "#F6C94A";
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x0, y, w, h + 30); ctx.clip();
+  switch (id) {
+    case "navy": {
+      ctx.fillStyle = "#141F33"; ctx.fillRect(x0, y, w, h);
+      ctx.fillStyle = goldGrad(ctx, x0, x1); ctx.fillRect(x0, y + h - 5, w, 5);
+      nameLogo(ctx, logo, x1 - 26, cy - 2, 34, goldGrad(ctx, x1 - 400, x1), "right");
+      break;
+    }
+    case "gold": {
+      const g = ctx.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0, "#F7D774"); g.addColorStop(0.45, "#E2B547"); g.addColorStop(1, "#B8862B");
+      ctx.fillStyle = g; ctx.fillRect(x0, y, w, h);
+      ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.fillRect(x0, y, w, 3);
+      ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.fillRect(x0, y + h - 3, w, 3);
+      nameLogo(ctx, logo, x1 - 26, cy, 34, "#3B2508", "right", false, "#141F33");
+      break;
+    }
+    case "line": {
+      nameLogo(ctx, logo, x1 - 26, cy - 4, 32, ink, "right");
+      const g = ctx.createLinearGradient(x0, 0, x1, 0);
+      g.addColorStop(0, "rgba(246,201,74,0)"); g.addColorStop(0.25, "rgba(246,201,74,.9)"); g.addColorStop(1, "rgba(246,201,74,1)");
+      ctx.fillStyle = g; ctx.fillRect(x0 + 20, y + h - 6, w - 40, 3);
+      break;
+    }
+    case "ribbon": {
+      const rw = Math.min(620, w - 80), rx = (x0 + x1) / 2 - rw / 2, ry = y + 6, rh = h - 22;
+      ctx.fillStyle = "#8a6417";
+      for (const s of [-1, 1]) {
+        const ex = s < 0 ? rx - 46 : rx + rw + 46, ix = s < 0 ? rx + 10 : rx + rw - 10;
+        ctx.beginPath(); ctx.moveTo(ix, ry + 12); ctx.lineTo(ex, ry + 12); ctx.lineTo(ex - s * 22, ry + 12 + rh / 2); ctx.lineTo(ex, ry + 12 + rh); ctx.lineTo(ix, ry + 12 + rh); ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = "#141F33"; ctx.fillRect(rx, ry, rw, rh);
+      ctx.strokeStyle = goldGrad(ctx, rx, rx + rw); ctx.lineWidth = 3; ctx.strokeRect(rx + 4, ry + 4, rw - 8, rh - 8);
+      nameLogo(ctx, logo, (x0 + x1) / 2, ry + rh / 2, 30, goldGrad(ctx, rx, rx + rw), "center");
+      break;
+    }
+    case "badge": {
+      ctx.font = `700 30px ${FONT}`;
+      const bw = ctx.measureText("قصي العميري").width + 30 * 1.45 + 30 * 0.35 + 60, bx = (x0 + x1) / 2 - bw / 2, by = y + 10, bh = h - 22;
+      ctx.fillStyle = light ? "#141F33" : "rgba(0,0,0,.35)";
+      ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fill();
+      ctx.strokeStyle = goldGrad(ctx, bx, bx + bw); ctx.lineWidth = 3; ctx.stroke();
+      nameLogo(ctx, logo, (x0 + x1) / 2, by + bh / 2, 30, "#F6C94A", "center");
+      break;
+    }
+    case "corner": {
+      const cw = 470;
+      ctx.fillStyle = "#141F33";
+      ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x1 - cw, y); ctx.lineTo(x1 - cw + 50, y + h); ctx.lineTo(x1, y + h); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = goldGrad(ctx, x1 - cw, x1); ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(x1 - cw, y); ctx.lineTo(x1 - cw + 50, y + h); ctx.lineTo(x1, y + h); ctx.stroke();
+      nameLogo(ctx, logo, x1 - 24, cy, 32, goldGrad(ctx, x1 - cw, x1), "right");
+      break;
+    }
+    case "math": {
+      ctx.fillStyle = light ? "rgba(20,31,51,.08)" : "rgba(0,0,0,.25)"; ctx.fillRect(x0, y, w, h);
+      ctx.font = `28px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const sym = ["π", "√", "∑", "∫", "∞", "θ", "Δ", "÷", "±", "≤", "x²", "ƒ", "e", "∩"];
+      ctx.fillStyle = light ? "rgba(20,31,51,.18)" : "rgba(246,201,74,.22)";
+      for (let i = 0, x = x0 + 30; x < x1 - 420; i++, x += 62) ctx.fillText(sym[i % sym.length], x, cy + (i % 2 ? 12 : -12));
+      ctx.fillStyle = goldGrad(ctx, x0, x1); ctx.fillRect(x0, y + h - 3, w, 3);
+      nameLogo(ctx, logo, x1 - 26, cy, 32, ink, "right");
+      break;
+    }
+    case "double": {
+      ctx.fillStyle = goldGrad(ctx, x0, x1);
+      ctx.fillRect(x0 + 30, y + 8, w - 60, 2.5); ctx.fillRect(x0 + 30, y + 14, w - 60, 1.2);
+      ctx.fillRect(x0 + 30, y + h - 12, w - 60, 1.2); ctx.fillRect(x0 + 30, y + h - 7, w - 60, 2.5);
+      nameLogo(ctx, logo, (x0 + x1) / 2, cy, 30, ink, "center");
+      break;
+    }
+    case "chalk": {
+      const c = light ? "#2b2b2b" : "#F4F1E8";
+      nameLogo(ctx, logo, x1 - 30, cy - 4, 36, c, "right", true);
+      ctx.strokeStyle = c; ctx.globalAlpha = 0.6; ctx.lineWidth = 3; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x1 - 30, y + h - 8);
+      for (let x = x1 - 30; x > x1 - 460; x -= 20) ctx.lineTo(x, y + h - 8 + Math.sin(x * 0.07) * 2);
+      ctx.stroke();
+      break;
+    }
+    case "modern": {
+      const g = ctx.createLinearGradient(x0, y, x1, y + h);
+      g.addColorStop(0, "#0F2A47"); g.addColorStop(1, "#1D4E5F");
+      ctx.fillStyle = g; ctx.fillRect(x0, y, w, h);
+      ctx.fillStyle = goldGrad(ctx, x0, x0 + 200);
+      ctx.beginPath(); ctx.moveTo(x0 + 120, y); ctx.lineTo(x0 + 150, y); ctx.lineTo(x0 + 110, y + h); ctx.lineTo(x0 + 80, y + h); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x0 + 170, y); ctx.lineTo(x0 + 180, y); ctx.lineTo(x0 + 140, y + h); ctx.lineTo(x0 + 130, y + h); ctx.fill();
+      nameLogo(ctx, logo, x1 - 26, cy, 34, "#FFFFFF", "right");
+      break;
+    }
+  }
+  ctx.restore();
+}
+/** معاينة الهيدر بالقائمة */
+export function headPreview(id: string, logo: HTMLImageElement | null, board: string): string {
+  const c = document.createElement("canvas"); c.width = 520; c.height = 46;
+  const x = c.getContext("2d")!;
+  const k = 520 / 1100;
+  x.scale(k, k);
+  x.fillStyle = board; x.fillRect(0, 0, 1100, 100);
+  if (id !== "none") drawHeader(x, 1100, 0, id, logo, board);
+  return c.toDataURL();
+}

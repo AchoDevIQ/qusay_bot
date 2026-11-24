@@ -101,3 +101,24 @@ test("📝 يدز شرحه بس لطلاب محاضرات الفصل، ويسأ�
   assert.equal(mine.lessons.length, 1);
   assert.equal((await boardAction({ t: T, action: "get", id: saved.id })).lesson.pages[0].items.length, 1);
 });
+
+test("✋ التحريك: دوسة تختار، مربع يختار، والحركة والتكبير نسخة جديدة. الصورة ما تنمسح بالممحاة. والهيدرات 10", () => {
+  const a: any = { k: "ink", c: "#FFFFFF", w: 4, p: [100, 100, 300, 100] };
+  const t: any = { k: "text", c: "#FFFFFF", s: 40, x: 900, y: 50, t: "مرحبا", bw: 120, bh: 54 };
+  const img: any = { k: "img", r: "boards/1/bg/x.jpg", x: 400, y: 400, w: 200, h: 100 };
+  const items = [a, t, img];
+  assert.equal(E.hitItem(items, 200, 104), a, "دوسة قريبة من الخط");
+  assert.equal(E.hitItem(items, 850, 70), t);
+  assert.equal(E.hitItem(items, 500, 450), img);
+  assert.equal(E.hitItem(items, 700, 700), null);
+  assert.deepEqual(E.inRect(items, { x0: 0, y0: 0, x1: 320, y1: 200 }), [a]);
+  const m: any = E.moved(a, 10, 20);
+  assert.deepEqual(m.p, [110, 120, 310, 120]);
+  assert.deepEqual(a.p, [100, 100, 300, 100], "الأصل ما يتغير (للتراجع)");
+  const big: any = E.scaled(img, 400, 400, 2);
+  assert.deepEqual([big.w, big.h, big.x, big.y], [400, 200, 400, 400]);
+  assert.ok(E.eraseAlong(items, [500, 450], [500, 450], 80).items.includes(img), "الممحاة ما تشيل الصورة");
+  assert.equal(E.HEADS.filter((h) => h.id !== "none").length, 10);
+  assert.equal(E.cleanLesson({ pages: [{ items: [img] }], head: "gold" })!.head, "gold");
+  assert.equal(E.cleanLesson({ pages: [{ items: [] }], head: "x" })!.head, "none");
+});

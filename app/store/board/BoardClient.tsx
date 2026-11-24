@@ -2,15 +2,15 @@
 // 📝 سبورة قصي العميري (طلبه 2026-11-25، BOARD_SPEC.md): نفس سبورة الويندوز، بالتطبيق، عند الأستاذ وعند الطالب بنفس الخيارات.
 // الكف يمسح (التماس أكبر من الحد)، والقلم بالآيباد يكتب واليد ما تكتب وهو نازل. كل الكتابة والأزرار بالعربي
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, hlWidth, insetOf, isLight, isPalm, palette, shapeStrokes, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
+import { BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, insetOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
 import { pageToken } from "../adminPage";
 import { pdfClient } from "../pdfClient";
-import { drawItem, drawPage, framePreview, paintFrame, textLines } from "./boardDraw";
+import { drawItem, drawPage, framePreview, headPreview, paintFrame, textLines } from "./boardDraw";
 import { IC } from "./icons";
 
-type Tool = "pen" | "hl" | "eraser" | "shape";
+type Tool = "pen" | "hl" | "eraser" | "shape" | "move";
 type Step = { add: Item[]; remove: Item[] };
-type Contact = { mode: "ink" | "erase" | "shape" | "ignore"; stroke?: InkStroke; start: [number, number]; last: [number, number]; size: number; pen: boolean };
+type Contact = { mode: "ink" | "erase" | "shape" | "ignore" | "select" | "drag" | "resize"; stroke?: InkStroke; start: [number, number]; last: [number, number]; size: number; pen: boolean; anchor?: [number, number] };
 type Meta = { id: string; title: string; at: string; pages: number; chapter?: number };
 type State = { teacher: boolean; name: string; lessons: Meta[]; inbox: Meta[]; sent: Meta[] };
 type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings";
@@ -20,10 +20,10 @@ const BAR = 74;                       // ارتفاع شريط الأدوات (�
 const PAL = palette();
 const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"];
 const SET_KEY = "qboard_settings", DRAFT_KEY = "qboard_draft";
-type Settings = { board: string; frame: string; palm: number; eraser: number; width: number };
+type Settings = { board: string; frame: string; head: string; palm: number; eraser: number; width: number };
 const tablet = () => typeof window !== "undefined" && Math.max(window.screen.width, window.screen.height) < 1400;
 const loadSettings = (): Settings => {
-  const d: Settings = { board: DEFAULT_BOARD, frame: DEFAULT_FRAME, palm: tablet() ? 70 : 200, eraser: 80, width: 5 };
+  const d: Settings = { board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "none", palm: tablet() ? 70 : 200, eraser: 80, width: 5 };
   try { return { ...d, ...JSON.parse(localStorage.getItem(SET_KEY) ?? "{}") }; } catch { return d; }
 };
 
@@ -67,7 +67,7 @@ export default function BoardClient() {
   const [tool, setTool] = useState<Tool>("pen");
   const [shape, setShape] = useState("line");
   const [color, setColor] = useState("#FFFFFF");
-  const [set, setSet] = useState<Settings>(() => ({ board: DEFAULT_BOARD, frame: DEFAULT_FRAME, palm: 200, eraser: 80, width: 5 }));
+  const [set, setSet] = useState<Settings>(() => ({ board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "none", palm: 200, eraser: 80, width: 5 }));
   const [pop, setPop] = useState<Pop>("");
   const [popAt, setPopAt] = useState(0);
   const [ask, setAsk] = useState<Ask>(null);
@@ -78,6 +78,12 @@ export default function BoardClient() {
   const [lastTouch, setLastTouch] = useState("-");
   const [mic, setMic] = useState(false);
   const pendingText = useRef<{ t: string; s: number } | null>(null);
+  // ✋ التحريك: اللي مختاره هسه، ومربع الاختيار وهو يسحب، والنسخ المتحركة قبل ما ينزل إصبعه
+  const sel = useRef<Item[]>([]);
+  const [selN, setSelN] = useState(0);
+  const band = useRef<Box | null>(null);
+  const ghost = useRef<Item[] | null>(null);
+  const setSel = (l: Item[]) => { sel.current = l; setSelN(l.length); };
   const [placing, setPlacing] = useState(false);
   const toolRef = useRef({ tool, shape, color, set });
   toolRef.current = { tool, shape, color, set };
@@ -107,13 +113,13 @@ export default function BoardClient() {
   };
   const redrawFrame = useCallback(() => {
     const x = ctxOf(frameC.current);
-    if (x) paintFrame(x, geo.current.W, lesson.current.board, lesson.current.frame, logo.current);
+    if (x) paintFrame(x, geo.current.W, lesson.current.board, lesson.current.frame, logo.current, lesson.current.head);
   }, []);
   const redrawInk = useCallback(() => {
     const x = ctxOf(inkC.current);
     if (!x) return;
     x.clearRect(0, 0, geo.current.W, H);
-    drawPage(x, geo.current.W, lesson.current.frame, page().items, bgOf(page().bg));
+    drawPage(x, geo.current.W, lesson.current.frame, page().items, bgOf(page().bg), bgOf);
   }, [bgOf]); // eslint-disable-line react-hooks/exhaustive-deps
   const inkQueued = useRef(false);
   const queueInk = () => { if (inkQueued.current) return; inkQueued.current = true; requestAnimationFrame(() => { inkQueued.current = false; redrawInk(); }); };
@@ -131,6 +137,17 @@ export default function BoardClient() {
       x.save(); x.beginPath(); x.rect(F, F, geo.current.W - 2 * F, H - 2 * F); x.clip();
       for (const c of contacts.current.values()) if (c.stroke) drawItem(x, c.stroke);
       for (const c of contacts.current.values()) if (c.mode === "shape") for (const s of shapeStrokes(toolRef.current.shape, c.start, c.last, toolRef.current.color, toolRef.current.set.width)) drawItem(x, s);
+      if (ghost.current) for (const it of ghost.current) drawItem(x, it, bgOf);
+      const sb = ghost.current ? unionBox(ghost.current) : unionBox(sel.current);
+      if (sb) {
+        x.save(); x.strokeStyle = "#F6C94A"; x.lineWidth = 3; x.setLineDash([14, 10]);
+        x.strokeRect(sb.x0 - 8, sb.y0 - 8, sb.x1 - sb.x0 + 16, sb.y1 - sb.y0 + 16);
+        x.setLineDash([]); x.fillStyle = "#F6C94A";
+        for (const [cx, cy] of [[sb.x0 - 8, sb.y0 - 8], [sb.x1 + 8, sb.y0 - 8], [sb.x0 - 8, sb.y1 + 8], [sb.x1 + 8, sb.y1 + 8]]) { x.beginPath(); x.arc(cx, cy, 13, 0, Math.PI * 2); x.fill(); }
+        x.restore();
+      }
+      const bd = band.current;
+      if (bd) { x.save(); x.strokeStyle = "rgba(246,201,74,.9)"; x.fillStyle = "rgba(246,201,74,.12)"; x.lineWidth = 2; x.setLineDash([10, 8]); x.fillRect(Math.min(bd.x0, bd.x1), Math.min(bd.y0, bd.y1), Math.abs(bd.x1 - bd.x0), Math.abs(bd.y1 - bd.y0)); x.strokeRect(Math.min(bd.x0, bd.x1), Math.min(bd.y0, bd.y1), Math.abs(bd.x1 - bd.x0), Math.abs(bd.y1 - bd.y0)); x.restore(); }
       const m = eraserMark.current;
       if (m) {
         x.fillStyle = "rgba(255,255,255,0.24)"; x.strokeStyle = "rgba(255,255,255,0.86)"; x.lineWidth = 3;
@@ -162,6 +179,7 @@ export default function BoardClient() {
     const s = Math.min(1, Wn / l.w), dx = (Wn - l.w * s) / 2, dy = (H - H * s) / 2;
     for (const pg of l.pages) for (const it of pg.items) {
       if (it.k === "text") { it.x = it.x * s + dx; it.y = it.y * s + dy; it.s *= s; it.bw *= s; it.bh *= s; }
+      else if (it.k === "img") { it.x = it.x * s + dx; it.y = it.y * s + dy; it.w *= s; it.h *= s; }
       else { it.w *= s; for (let i = 0; i < it.p.length; i += 2) { it.p[i] = it.p[i] * s + dx; it.p[i + 1] = it.p[i + 1] * s + dy; } }
     }
     l.w = Wn;
@@ -171,7 +189,7 @@ export default function BoardClient() {
   useEffect(() => {
     const s = loadSettings();
     setSet(s);
-    lesson.current.board = s.board; lesson.current.frame = s.frame;
+    lesson.current.board = s.board; lesson.current.frame = s.frame; lesson.current.head = s.head;
     setColor(isLight(s.board) ? "#000000" : "#FFFFFF");
     const im = new Image(); im.onload = () => { logo.current = im; redrawFrame(); }; im.src = "/app-logo.png";
     // مسودة ما انحفظت (التطبيق انسد فجأة)
@@ -218,8 +236,8 @@ export default function BoardClient() {
     page().items = items;
     markDirty(); redrawInk();
   };
-  const doUndo = () => { if (contacts.current.size) return; const s = undo.current[pageIx.current].pop(); if (!s) return; apply(s.remove, s.add); redo.current[pageIx.current].push(s); };
-  const doRedo = () => { if (contacts.current.size) return; const s = redo.current[pageIx.current].pop(); if (!s) return; apply(s.add, s.remove); undo.current[pageIx.current].push(s); };
+  const doUndo = () => { if (contacts.current.size) return; setSel([]); const s = undo.current[pageIx.current].pop(); if (!s) return; apply(s.remove, s.add); redo.current[pageIx.current].push(s); };
+  const doRedo = () => { if (contacts.current.size) return; setSel([]); const s = redo.current[pageIx.current].pop(); if (!s) return; apply(s.add, s.remove); undo.current[pageIx.current].push(s); };
   const clearAll = () => {
     if (!page().items.length) return;
     pending.current = { add: [], remove: [...page().items] };
@@ -268,6 +286,7 @@ export default function BoardClient() {
       return;
     }
     if (force || t === "eraser" || palm) { startErase(c, p, palm); return; }
+    if (t === "move") { startMove(c, p); return; }
     if (t === "shape") { c.mode = "shape"; return; }
     c.stroke = { k: t === "hl" ? "hl" : "ink", c: col, w: t === "hl" ? hlWidth(s.width) : s.width, p: [p[0], p[1]] };
     redrawLive();
@@ -288,6 +307,7 @@ export default function BoardClient() {
       c.last = pts[pts.length - 1];
       return;
     }
+    if (c.mode === "select" || c.mode === "drag" || c.mode === "resize") { const p = pts[pts.length - 1]; c.last = p; moveTo(c, p); redrawLive(); return; }
     for (const p of pts) {
       if (c.mode === "erase") eraseAt(c, c.last, p);
       else if (c.stroke) { if (Math.hypot(p[0] - c.last[0], p[1] - c.last[1]) < 0.8) continue; c.stroke.p.push(p[0], p[1]); }
@@ -301,7 +321,8 @@ export default function BoardClient() {
     if (!c) return;
     contacts.current.delete(e.pointerId);
     setLastTouch(`${Math.round(maxT.current[0])} × ${Math.round(maxT.current[1])}`);
-    if (c.stroke) {
+    if (c.mode === "select" || c.mode === "drag" || c.mode === "resize") endMove(c);
+    else if (c.stroke) {
       if (c.stroke.p.length === 2) c.stroke.p.push(c.stroke.p[0] + 0.5, c.stroke.p[1] + 0.5);
       page().items.push(c.stroke); noteAdd(c.stroke);
     } else if (c.mode === "shape") {
@@ -313,10 +334,58 @@ export default function BoardClient() {
     redrawInk(); redrawLive();
   };
 
+  // ---------- ✋ التحريك: دوسة على كتابة أو صورة تختارها، أو اسحب مربع حوالين أكثر من شي. بعدها اسحبها لمكان ثاني، أو كبّرها من الزاوية
+  const near = (b: Box, p: [number, number], pad: number) => p[0] >= b.x0 - pad && p[0] <= b.x1 + pad && p[1] >= b.y0 - pad && p[1] <= b.y1 + pad;
+  const startMove = (c: Contact, p: [number, number]) => {
+    const sb = unionBox(sel.current);
+    if (sb) {
+      const corners: [number, number, number, number][] = [[sb.x0 - 8, sb.y0 - 8, sb.x1, sb.y1], [sb.x1 + 8, sb.y0 - 8, sb.x0, sb.y1], [sb.x0 - 8, sb.y1 + 8, sb.x1, sb.y0], [sb.x1 + 8, sb.y1 + 8, sb.x0, sb.y0]];
+      const hit = corners.find(([cx, cy]) => Math.hypot(p[0] - cx, p[1] - cy) < 34);
+      if (hit) { c.mode = "resize"; c.anchor = [hit[2], hit[3]]; lift(); return; }
+      if (near(sb, p, 12)) { c.mode = "drag"; lift(); return; }
+    }
+    const it = hitItem(page().items, p[0], p[1]);
+    if (it) { setSel([it]); c.mode = "drag"; lift(); return; }
+    setSel([]); c.mode = "select"; band.current = { x0: p[0], y0: p[1], x1: p[0], y1: p[1] }; redrawLive();
+  };
+  /** المختار يطلع من الصفحة وقت السحب (يترسم متحرك فوك)، ويرجع بمكانه الجديد من ينزل الإصبع */
+  const lift = () => { ghost.current = sel.current; page().items = page().items.filter((x) => !sel.current.includes(x)); redrawInk(); redrawLive(); };
+  const moveTo = (c: Contact, p: [number, number]) => {
+    if (c.mode === "select") { band.current = { x0: c.start[0], y0: c.start[1], x1: p[0], y1: p[1] }; return; }
+    if (c.mode === "drag") { const dx = p[0] - c.start[0], dy = p[1] - c.start[1]; ghost.current = sel.current.map((it) => moved(it, dx, dy)); return; }
+    if (c.mode === "resize" && c.anchor) {
+      const d0 = Math.hypot(c.start[0] - c.anchor[0], c.start[1] - c.anchor[1]) || 1, d1 = Math.hypot(p[0] - c.anchor[0], p[1] - c.anchor[1]);
+      const k = Math.max(0.1, Math.min(10, d1 / d0));
+      ghost.current = sel.current.map((it) => scaled(it, c.anchor![0], c.anchor![1], k));
+    }
+  };
+  const endMove = (c: Contact) => {
+    if (c.mode === "select") {
+      const b = band.current; band.current = null;
+      if (b) setSel(inRect(page().items, b));
+      return;
+    }
+    const now = ghost.current ?? sel.current; ghost.current = null;
+    const changed = Math.hypot(c.last[0] - c.start[0], c.last[1] - c.start[1]) > 2;
+    if (!changed) { page().items.push(...sel.current); return; }
+    page().items.push(...now);
+    for (const x of sel.current) noteRemove(x);
+    for (const x of now) noteAdd(x);
+    setSel(now);
+  };
+  const deleteSel = () => {
+    if (!sel.current.length) return;
+    pending.current = { add: [], remove: [...sel.current] };
+    page().items = page().items.filter((x) => !sel.current.includes(x));
+    setSel([]); commit(); redrawInk(); redrawLive();
+  };
+  const pickTool = (t: Tool) => { setTool(t); if (t !== "move") { setSel([]); redrawLive(); } setPop(""); };
+
   // ---------- الصفحات
   const goTo = (i: number) => {
     if (i < 0 || i >= lesson.current.pages.length || contacts.current.size) return;
-    pageIx.current = i; sync(); redrawInk();
+    setSel([]);
+    pageIx.current = i; sync(); redrawInk(); redrawLive();
   };
   const addPage = (bg: string | null = null, at = pageIx.current + 1) => {
     lesson.current.pages.splice(at, 0, { items: [], bg });
@@ -335,7 +404,8 @@ export default function BoardClient() {
     lesson.current = l; pageIx.current = 0;
     undo.current = l.pages.map(() => []); redo.current = l.pages.map(() => []);
     setLessonId(id); setTitle(t); setDirty(false);
-    setSet((s) => ({ ...s, board: l.board, frame: l.frame }));
+    setSet((s) => ({ ...s, board: l.board, frame: l.frame, head: headOf(l.head) }));
+    setSel([]);
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ }
     sync(); redrawFrame(); redrawInk();
   };
@@ -348,7 +418,7 @@ export default function BoardClient() {
       { t: "رجوع", kind: "gray", run: () => setAsk(null) },
     ] });
   };
-  const newLesson = () => guard(() => loadLesson(emptyLesson(geo.current.W, set.board, set.frame), "", ""));
+  const newLesson = () => guard(() => loadLesson({ ...emptyLesson(geo.current.W, set.board, set.frame), head: set.head }, "", ""));
 
   // ---------- الحفظ والفتح
   async function save(name: string, after?: () => void) {
@@ -356,7 +426,12 @@ export default function BoardClient() {
     try {
       const l = { ...lesson.current, title: name };
       // الخلفيات اللي بعدها بالجهاز بس (blob/data) لازم ترتفع أول
-      for (const pg of l.pages) if (pg.bg && (pg.bg.startsWith("blob:") || pg.bg.startsWith("data:"))) { const b = await (await fetch(pg.bg)).blob(); const ref = await upload(b); imgs.current.set(ref, imgs.current.get(pg.bg)!); pg.bg = ref; }
+      const local = (r?: string | null) => !!r && (r.startsWith("blob:") || r.startsWith("data:"));
+      const up = async (r: string) => { const b = await (await fetch(r)).blob(); const ref = await upload(b); imgs.current.set(ref, imgs.current.get(r)!); return ref; };
+      for (const pg of l.pages) {
+        if (local(pg.bg)) pg.bg = await up(pg.bg!);
+        for (const it of pg.items) if (it.k === "img" && local(it.r)) it.r = await up(it.r);
+      }
       const r = await api({ action: "save", id: lessonId, title: name, lesson: l });
       setLessonId(r.id); setTitle(name); setSt(r); setDirty(false);
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ }
@@ -423,8 +498,15 @@ export default function BoardClient() {
       const k = Math.min(1, 2400 / Math.max(im.naturalWidth, im.naturalHeight));
       const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
       const x = c.getContext("2d")!; x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
-      page().bg = URL.createObjectURL(await canvasBlob(c));
-      markDirty(); redrawInk();
+      // الصورة تنحط بنص السبورة كشي يتحرك ويكبر ويصغر (أداة «تحريك»)
+      const r = URL.createObjectURL(await canvasBlob(c));
+      const F = insetOf(lesson.current.frame), aw = geo.current.W - 2 * F, ah = H - 2 * F;
+      const k2 = Math.min(aw * 0.6 / c.width, ah * 0.6 / c.height);
+      const it: Item = { k: "img", r, w: c.width * k2, h: c.height * k2, x: F + (aw - c.width * k2) / 2, y: F + (ah - c.height * k2) / 2 };
+      page().items.push(it);
+      pending.current = { add: [it], remove: [] }; commit();
+      setTool("move"); setSel([it]);
+      redrawInk(); redrawLive();
     } catch (e) { say(`صار خطأ: ${(e as Error).message}`); } finally { setBusy(""); }
   }
 
@@ -437,10 +519,11 @@ export default function BoardClient() {
       for (const pg of lesson.current.pages) {
         const c = document.createElement("canvas"); c.width = Math.round(Wn * k); c.height = Math.round(H * k);
         const x = c.getContext("2d")!; x.scale(k, k);
-        paintFrame(x, Wn, lesson.current.board, lesson.current.frame, logo.current);
+        paintFrame(x, Wn, lesson.current.board, lesson.current.frame, logo.current, lesson.current.head);
+        for (const it of pg.items) if (it.k === "img") { const im = bgOf(it.r); if (im && !im.complete) await new Promise((r) => { im.onload = r; im.onerror = r; }); }
         const bg = bgOf(pg.bg);
         if (bg && !bg.complete) await new Promise((r) => { bg.onload = r; bg.onerror = r; });
-        drawPage(x, Wn, lesson.current.frame, pg.items, bg);
+        drawPage(x, Wn, lesson.current.frame, pg.items, bg, bgOf);
         urls.push(c.toDataURL("image/jpeg", 0.9));
       }
       const w = window.open("", "_blank");
@@ -501,6 +584,7 @@ export default function BoardClient() {
     if (!isLight(c) && color.toUpperCase() === "#000000") setColor("#FFFFFF");
     redrawFrame();
   };
+  const setHead = (h: string) => { lesson.current.head = h; setSet((s) => ({ ...s, head: h })); markDirty(); redrawFrame(); };
   const setFrame = (f: string) => { lesson.current.frame = f; setSet((s) => ({ ...s, frame: f })); markDirty(); redrawFrame(); redrawInk(); };
   const pickColor = (c: string) => { setColor(c); if (tool === "eraser" || tool === "shape") setTool("pen"); setPop(""); };
   const open = (p: Pop, el: HTMLElement) => { const r = el.getBoundingClientRect(); setPopAt(Math.max(8, Math.min(window.innerWidth - 8, r.left + r.width / 2))); setPop((x) => (x === p ? "" : p)); };
@@ -520,7 +604,12 @@ export default function BoardClient() {
   });
   const frames = FRAMES;
   const [previews, setPreviews] = useState<Record<string, string>>({});
-  useEffect(() => { if (pop === "board" && !Object.keys(previews).length) setPreviews(Object.fromEntries(frames.map((f) => [f.id, framePreview(f.id)]))); }, [pop]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [heads, setHeads] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (pop !== "board") return;
+    if (!Object.keys(previews).length) setPreviews(Object.fromEntries(frames.map((f) => [f.id, framePreview(f.id)])));
+    setHeads(Object.fromEntries(HEADS.map((h) => [h.id, headPreview(h.id, logo.current, set.board)])));
+  }, [pop, set.board]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="qb" dir="rtl" onContextMenu={(e) => e.preventDefault()}>
@@ -530,6 +619,12 @@ export default function BoardClient() {
         <canvas ref={inkC} className="qb-c" />
         <canvas ref={liveC} className="qb-c qb-live" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp} />
         {placing && <div className="qb-hint">دوس على السبورة بالمكان اللي تريد تبدي منه الكتابة</div>}
+        {tool === "move" && !selN && <div className="qb-hint">دوس على كتابة أو صورة، أو اسحب مربع حوالين اللي تريد تحركه</div>}
+        {tool === "move" && selN > 0 && <div className="qb-selbar">
+          <span>اسحبه لمكان ثاني، أو كبّره من الدوائر الذهبية</span>
+          <button type="button" className="bad" onClick={deleteSel}>🗑 احذف</button>
+          <button type="button" onClick={() => { setSel([]); redrawLive(); }}>✖ خلص</button>
+        </div>}
       </div>
 
       <div className="qb-bar">
@@ -537,9 +632,10 @@ export default function BoardClient() {
           <Btn id="menu" icon={IC.menu} t="القائمة" on={pop === "menu"} run={(el) => open("menu", el)} />
           <Btn icon={IC.pdf} t="فتح PDF" run={() => pdfInput.current?.click()} />
           <span className="qb-sep" />
-          <Btn icon={IC.pen} t="قلم" on={tool === "pen"} run={() => { setTool("pen"); setPop(""); }} />
-          <Btn icon={IC.hl} t="تظليل" on={tool === "hl"} run={() => { setTool("hl"); setPop(""); }} />
-          <Btn id="eraser" icon={IC.eraser} t="ممحاة" on={tool === "eraser"} run={(el) => { setTool("eraser"); open("eraser", el); }} />
+          <Btn icon={IC.pen} t="قلم" on={tool === "pen"} run={() => pickTool("pen")} />
+          <Btn icon={IC.hl} t="تظليل" on={tool === "hl"} run={() => pickTool("hl")} />
+          <Btn id="eraser" icon={IC.eraser} t="ممحاة" on={tool === "eraser"} run={(el) => { pickTool("eraser"); open("eraser", el); }} />
+          <Btn icon={IC.hand} t="تحريك" on={tool === "move"} run={() => pickTool("move")} />
           <Btn id="shapes" icon={IC.shapes} t="أشكال" on={tool === "shape" && SHAPES.some((s) => s.id === shape)} run={(el) => open("shapes", el)} />
           <Btn id="solids" icon={IC.solids} t="مجسمات" on={tool === "shape" && SOLIDS.some((s) => s.id === shape)} run={(el) => open("solids", el)} />
           <Btn id="board" icon={IC.board} t="السبورة" on={pop === "board"} run={(el) => open("board", el)} />
@@ -583,10 +679,12 @@ export default function BoardClient() {
           </div>}
           {pop === "colors" && <><div className="qb-ptitle">اختار لون القلم</div><div className="qb-pal">{PAL.map((c, i) => <button key={i} type="button" aria-label="لون" className={color.toUpperCase() === c ? "on" : ""} style={{ background: c }} onClick={() => pickColor(c)} />)}</div></>}
           {pop === "eraser" && <><div className="qb-ptitle">حجم الممحاة</div><div className="qb-row">{ERASERS.map((x) => <button key={x.n} type="button" className={`qb-chip${set.eraser === x.n ? " on" : ""}`} onClick={() => { setSet((s) => ({ ...s, eraser: x.n })); setPop(""); }}><i style={{ width: x.n / 4, height: x.n / 4 }} />{x.t}</button>)}</div></>}
-          {(pop === "shapes" || pop === "solids") && <div className="qb-row qb-wrap">{(pop === "shapes" ? SHAPES : SOLIDS).map((x) => <button key={x.id} type="button" className={`qb-chip${tool === "shape" && shape === x.id ? " on" : ""}`} onClick={() => { setShape(x.id); setTool("shape"); setPop(""); }}><ShapeIcon id={x.id} />{x.t}</button>)}</div>}
+          {(pop === "shapes" || pop === "solids") && <div className="qb-row qb-wrap">{(pop === "shapes" ? SHAPES : SOLIDS).map((x) => <button key={x.id} type="button" className={`qb-chip${tool === "shape" && shape === x.id ? " on" : ""}`} onClick={() => { setShape(x.id); pickTool("shape"); }}><ShapeIcon id={x.id} />{x.t}</button>)}</div>}
           {pop === "board" && <div className="qb-boardpick">
             <div className="qb-ptitle">لون السبورة</div>
             <div className="qb-row qb-wrap">{BOARDS.map((b) => <button key={b.c} type="button" aria-label={b.t} className={`qb-sw${set.board === b.c ? " on" : ""}`} style={{ background: b.c }} onClick={() => setBoard(b.c)} />)}</div>
+            <div className="qb-ptitle">الهيدر (اسمك واللوگو فوك)</div>
+            <div className="qb-heads">{HEADS.map((h) => <button key={h.id} type="button" className={set.head === h.id ? "on" : ""} onClick={() => setHead(h.id)}>{heads[h.id] ? <img src={heads[h.id]} alt="" /> : <span className="qb-noprev" />}<span>{h.t}</span></button>)}</div>
             <div className="qb-ptitle">الإطار</div>
             <div className="qb-frames">{frames.map((f) => <button key={f.id} type="button" className={set.frame === f.id ? "on" : ""} onClick={() => setFrame(f.id)}>{previews[f.id] ? <img src={previews[f.id]} alt="" /> : <span className="qb-noprev" />}<span>{f.t}</span></button>)}</div>
           </div>}
@@ -733,6 +831,15 @@ const CSS = `
 .qb-frames button{background:#283247;border:1px solid rgba(255,255,255,.2);border-radius:10px;color:#fff;padding:6px;display:flex;flex-direction:column;gap:4px;align-items:stretch;font-size:14px;cursor:pointer}
 .qb-frames img,.qb-noprev{width:100%;height:24px;border-radius:4px;display:block;object-fit:cover}
 .qb-menu{display:flex;flex-direction:column;min-width:260px}
+.qb-heads{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;width:min(560px,calc(100vw - 48px));margin-bottom:6px}
+.qb-heads button{background:#283247;border:1px solid rgba(255,255,255,.2);border-radius:10px;color:#fff;padding:6px;display:flex;flex-direction:column;gap:4px;align-items:stretch;font-size:14px;cursor:pointer}
+.qb-heads img{width:100%;height:auto;border-radius:4px;display:block}
+.qb-heads button.on{box-shadow:0 0 0 3px #F6C94A;border-color:#F6C94A}
+.qb-selbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;background:#1F2738;border:1px solid #F6C94A;border-radius:14px;padding:8px 12px;color:#fff;font-size:15px;z-index:5}
+.qb-selbar button{min-height:44px;border:0;border-radius:10px;background:#4a5468;color:#fff;font-size:16px;font-weight:700;padding:0 14px;cursor:pointer}
+.qb-selbar button.bad{background:#d23b3b}
+.qb-selbar span{white-space:nowrap}
+@media (max-width:700px){.qb-selbar span{display:none}.qb-selbar button{min-height:36px;font-size:14px}}
 .qb-menu button{background:transparent;border:0;color:#fff;text-align:right;font-size:17px;padding:12px 14px;border-radius:8px;cursor:pointer}
 .qb-menu button:hover{background:#283247}
 .qb-menu button.gold{color:#F6C94A;font-weight:700}
@@ -762,8 +869,8 @@ const CSS = `
 .qb-mic textarea{font-size:24px;min-height:140px;resize:vertical}
 .qb-toast{position:fixed;top:56px;left:50%;transform:translateX(-50%);background:#1F2738;color:#fff;border:1px solid #F6C94A;padding:12px 20px;border-radius:12px;font-size:17px;z-index:50;max-width:calc(100vw - 32px)}
 .qb-splash{position:fixed;inset:0;background:#141B2B;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:60}
-.qb-splash img{width:220px;height:220px;object-fit:contain}
-.qb-splash b{color:#F6C94A;font-size:56px}
-.qb-splash span{color:#aab3c5;font-size:22px}
+.qb-splash img{width:min(220px,38vh);height:min(220px,38vh);object-fit:contain}
+.qb-splash b{color:#F6C94A;font-size:min(56px,9vh)}
+.qb-splash span{color:#aab3c5;font-size:min(22px,4vh)}
 @media (max-width:900px){.qb-btn{width:52px}.qb-t{font-size:11px}.qb-pal{grid-template-columns:repeat(14,24px)}.qb-pal button{width:24px;height:24px}}
 `;

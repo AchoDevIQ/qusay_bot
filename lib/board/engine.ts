@@ -8,9 +8,27 @@ export const FRAME = 40;
 export type Pt = number[];   // [x0, y0, x1, y1, ...]
 export type InkStroke = { k: "ink" | "hl"; c: string; w: number; p: Pt; fit?: 0 };
 export type TextItem = { k: "text"; c: string; s: number; x: number; y: number; t: string; bw: number; bh: number };
-export type Item = InkStroke | TextItem;
+export type ImageItem = { k: "img"; r: string; x: number; y: number; w: number; h: number };
+export type Item = InkStroke | TextItem | ImageItem;
 export type Page = { items: Item[]; bg?: string | null };
-export type Lesson = { v: 1; w: number; board: string; frame: string; pages: Page[]; title?: string };
+export type Lesson = { v: 1; w: number; board: string; frame: string; head?: string; pages: Page[]; title?: string };
+
+// ---------- 🏷 الهيدرات: شريط فوك السبورة باسمه واللوگو (طلبه 2026-11-25، يختار من 10)
+export const HEADS: { id: string; t: string }[] = [
+  { id: "none", t: "بدون هيدر" },
+  { id: "navy", t: "كحلي وذهبي" },
+  { id: "gold", t: "ذهبي فاخر" },
+  { id: "line", t: "خط ذهبي ناعم" },
+  { id: "ribbon", t: "شريط معلّق" },
+  { id: "badge", t: "شارة بالنص" },
+  { id: "corner", t: "زاوية فوك يمين" },
+  { id: "math", t: "رموز الرياضيات" },
+  { id: "double", t: "خطين ذهبيين" },
+  { id: "chalk", t: "طباشير" },
+  { id: "modern", t: "حديث متدرج" },
+];
+export const HEAD_H = 76;
+export const headOf = (id?: string) => (HEADS.some((h) => h.id === id) ? String(id) : "none");
 
 // ---------- الألوان
 export const QUICK = ["#FFFFFF", "#FFE600", "#FF3B30", "#2F9BFF", "#34C759", "#000000"];
@@ -230,6 +248,8 @@ export function eraseAlong(items: Item[], a: P2, b: P2, size: number): { items: 
   const bx0 = Math.min(a[0], b[0]) - half, bx1 = Math.max(a[0], b[0]) + half, by0 = Math.min(a[1], b[1]) - half, by1 = Math.max(a[1], b[1]) + half;
   const removed: Item[] = [], added: Item[] = [], out: Item[] = [];
   for (const it of items) {
+    // الصورة ما تنمسح بالممحاة ولا بالكف (تنشال بس من «تحريك» ← احذف)
+    if (it.k === "img") { out.push(it); continue; }
     if (it.k === "text") {
       const r = textBox(it);
       if (r.x1 >= bx0 && r.x0 <= bx1 && r.y1 >= by0 && r.y0 <= by1) { removed.push(it); continue; }
@@ -275,10 +295,61 @@ export function cleanLesson(x: unknown): Lesson | null {
   const pages: Page[] = j.pages.map((pg) => ({
     bg: typeof pg?.bg === "string" && pg.bg.length < 300 ? pg.bg : null,
     items: (Array.isArray(pg?.items) ? pg.items : []).slice(0, 20000).flatMap((it: any): Item[] => {
+      if (it?.k === "img" && typeof it.r === "string" && it.r.length < 300) return [{ k: "img", r: it.r, x: num(it.x), y: num(it.y), w: Math.max(10, num(it.w, 100)), h: Math.max(10, num(it.h, 100)) }];
       if (it?.k === "text") return [{ k: "text", c: col(it.c), s: num(it.s, 56), x: num(it.x), y: num(it.y), t: String(it.t ?? "").slice(0, 4000), bw: num(it.bw), bh: num(it.bh) }];
       if ((it?.k === "ink" || it?.k === "hl") && Array.isArray(it.p) && it.p.length >= 2) return [{ k: it.k, c: col(it.c), w: Math.max(1, Math.min(200, num(it.w, 5))), p: it.p.slice(0, 40000).map((v: unknown) => Math.round(num(v) * 10) / 10), ...(it.fit === 0 ? { fit: 0 as const } : {}) }];
       return [];
     }),
   }));
-  return { v: 1, w: Math.max(400, Math.min(4000, num(j.w, 1920))), board: BOARDS.some((b) => b.c === j.board) ? String(j.board) : DEFAULT_BOARD, frame: FRAMES.some((f) => f.id === j.frame) ? String(j.frame) : DEFAULT_FRAME, pages, ...(typeof j.title === "string" ? { title: j.title.slice(0, 120) } : {}) };
+  return { v: 1, w: Math.max(400, Math.min(4000, num(j.w, 1920))), board: BOARDS.some((b) => b.c === j.board) ? String(j.board) : DEFAULT_BOARD, frame: FRAMES.some((f) => f.id === j.frame) ? String(j.frame) : DEFAULT_FRAME, head: headOf(j.head), pages, ...(typeof j.title === "string" ? { title: j.title.slice(0, 120) } : {}) };
+}
+
+// ---------- ✋ التحريك: يختار كتابة أو صورة (دوسة عليها أو مربع حواليها) ويحركها
+export type Box = { x0: number; y0: number; x1: number; y1: number };
+export function itemBox(it: Item): Box {
+  if (it.k === "text") return textBox(it);
+  if (it.k === "img") return { x0: it.x, y0: it.y, x1: it.x + it.w, y1: it.y + it.h };
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < it.p.length; i += 2) { x0 = Math.min(x0, it.p[i]); x1 = Math.max(x1, it.p[i]); y0 = Math.min(y0, it.p[i + 1]); y1 = Math.max(y1, it.p[i + 1]); }
+  const h = it.w / 2;
+  return { x0: x0 - h, y0: y0 - h, x1: x1 + h, y1: y1 + h };
+}
+export const unionBox = (items: Item[]): Box | null => items.length ? items.map(itemBox).reduce((a, b) => ({ x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) })) : null;
+const segDist = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
+  const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy;
+  const t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+};
+/** أعلى شي تحت النقطة (الأخير بالرسم فوك) */
+export function hitItem(items: Item[], x: number, y: number, tol = 14): Item | null {
+  for (let k = items.length - 1; k >= 0; k--) {
+    const it = items[k];
+    if (it.k !== "ink" && it.k !== "hl") { const b = itemBox(it); if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) return it; continue; }
+    const p = it.p, r = it.w / 2 + tol;
+    if (p.length === 2) { if (Math.hypot(x - p[0], y - p[1]) <= r) return it; continue; }
+    for (let i = 2; i < p.length; i += 2) if (segDist(x, y, p[i - 2], p[i - 1], p[i], p[i + 1]) <= r) return it;
+  }
+  return null;
+}
+/** كل شي داخل المربع (نقطة منه بس تكفي للخط) */
+export function inRect(items: Item[], r: Box): Item[] {
+  const x0 = Math.min(r.x0, r.x1), x1 = Math.max(r.x0, r.x1), y0 = Math.min(r.y0, r.y1), y1 = Math.max(r.y0, r.y1);
+  return items.filter((it) => {
+    if (it.k !== "ink" && it.k !== "hl") { const b = itemBox(it); return b.x1 >= x0 && b.x0 <= x1 && b.y1 >= y0 && b.y0 <= y1; }
+    for (let i = 0; i < it.p.length; i += 2) if (it.p[i] >= x0 && it.p[i] <= x1 && it.p[i + 1] >= y0 && it.p[i + 1] <= y1) return true;
+    return false;
+  });
+}
+/** نسخة متحركة (النسخة القديمة تبقى للتراجع) */
+export function moved(it: Item, dx: number, dy: number): Item {
+  if (it.k === "text") return { ...it, x: it.x + dx, y: it.y + dy };
+  if (it.k === "img") return { ...it, x: it.x + dx, y: it.y + dy };
+  return { ...it, p: it.p.map((v, i) => v + (i % 2 ? dy : dx)) };
+}
+/** تكبير وتصغير حول نقطة (مسكة الزاوية) */
+export function scaled(it: Item, ox: number, oy: number, s: number): Item {
+  const f = (x: number, y: number) => [ox + (x - ox) * s, oy + (y - oy) * s];
+  if (it.k === "img") { const [x, y] = f(it.x, it.y); return { ...it, x, y, w: it.w * s, h: it.h * s }; }
+  if (it.k === "text") { const [x, y] = f(it.x, it.y); return { ...it, x, y, s: it.s * s, bw: it.bw * s, bh: it.bh * s }; }
+  return { ...it, w: Math.max(1, it.w * s), p: it.p.map((v, i) => (i % 2 ? oy + (v - oy) * s : ox + (v - ox) * s)) };
 }
