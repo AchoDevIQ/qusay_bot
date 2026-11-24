@@ -240,3 +240,31 @@ test("questionTag: short name of the question for the video bar under the page",
   assert.equal(questionTag("1) f(x) = (x - 1)"), "");
   assert.equal(questionTag(null), "");
 });
+
+test("🔗 وين ما ينلگى فيديو السؤال، ينحط بكل الأزرار المربوطة بيه (بلغة ملزمتها)، وإذا ما إله نسخة بلغتها ينذكر", async () => {
+  const one2 = (await import("../lib/db.ts")).one;
+  const { syncLinked } = await import("../lib/noteMarks.ts");
+  const a = await insert("note_books", { title: "دفتر", chapter: "الفصل الثامن", lang: "ar", file: "s8a", pages: 5, created: "1" });
+  const e = await insert("note_books", { title: "Book", chapter: "الفصل الثامن", lang: "en", file: "s8e", pages: 5, created: "1" });
+  const w = await insert("note_books", { title: "وزاري", chapter: "الفصل الثامن", lang: "ar", file: "s8w", pages: 5, created: "1" });
+  const vids = (await admin("videoUpload", { file: mp4("الكنافة_English_عربي.mp4") })).videos;
+  const en = vids.find((v: any) => v.name === "الكنافة" && v.lang === "en").id;
+  // الفيديو بالإنگليزي بس، والأزرار مربوطة (نفس السؤال) بس العربي ناقصه
+  const E = await insert("note_marks", { book_id: e, page: 2, y: 0.2, label: "kunafa", video_id: en, solution: "https://youtu.be/W7hH5Vyt_no", auto: 0, link: 900 });
+  const A = await insert("note_marks", { book_id: a, page: 2, y: 0.2, label: "الكنافة", video_id: null, solution: null, auto: 0, link: 900 });
+  const W = await insert("note_marks", { book_id: w, page: 1, y: 0.3, label: "الكنافة وزاري", video_id: null, solution: null, auto: 0, link: 900 });
+  let s = await syncLinked();
+  assert.equal((await one2("note_marks", { id: A }))!.solution, "https://youtu.be/W7hH5Vyt_no", "فيديو الحل لكل الأزرار");
+  assert.equal((await one2("note_marks", { id: W }))!.solution, "https://youtu.be/W7hH5Vyt_no");
+  assert.equal((await one2("note_marks", { id: A }))!.video_id, null, "ماكو نسخة عربية بعد");
+  assert.ok(s.other.includes("الكنافة"), "ينذكر إنه يحتاج نسخة عربية");
+  // يرفع النسخة العربية: تنحط وحدها على الزرين العربيين
+  const r = await admin("videoUpload", { file: mp4("الكنافة_عربي.mp4") });
+  assert.match(r.notice, /انحط على 2 زر/);
+  const ar = r.videos.find((v: any) => v.name === "الكنافة" && v.lang === "ar").id;
+  assert.equal((await one2("note_marks", { id: A }))!.video_id, ar);
+  assert.equal((await one2("note_marks", { id: W }))!.video_id, ar);
+  assert.equal((await one2("note_marks", { id: E }))!.video_id, en);
+  s = await syncLinked();
+  assert.deepEqual([s.videosAdded, s.solutionsAdded, s.other.includes("الكنافة")], [0, 0, false]);
+});

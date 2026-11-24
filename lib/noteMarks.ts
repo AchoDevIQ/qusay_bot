@@ -336,7 +336,8 @@ export async function addVideo(f: Blob & { name?: string }) {
   const old = await one("note_videos", { name, lang });
   if (old) { await update("note_videos", { id: old.id }, { file, tg: null, size: buf.length, created: stamp() }); return `🔁 انبدل «${name}»`; }
   await insert("note_videos", { name, lang, file, tg: null, size: buf.length, created: stamp() });
-  return `✅ انرفع «${name}» (${lang === "en" ? "إنجليزي" : "عربي"})`;
+  const s = await syncLinked();
+  return `✅ انرفع «${name}» (${lang === "en" ? "إنجليزي" : "عربي"})${s.videosAdded ? `، وانحط على ${s.videosAdded} زر لنفس السؤال بالملازم` : ""}`;
 }
 /** يحذف الفيديو التوضيحي، ويختفي زره من الملازم (زر الحل يبقى) */
 export async function deleteVideo(id: number) {
@@ -413,6 +414,34 @@ async function linkTo(m: Row, otherId: number) {
   if (Object.keys(fill).length) await update("note_marks", { id: m.id }, fill);
   const now = (await one("note_marks", { id: m.id }))!;
   return await spread(now, {});
+}
+
+/** نفس السؤال بكل الملازم (طلب الأستاذ 2026-11-24: «وين ما تلگى فيديو السؤال، بكل مكان لازم تخليه»): كل زرين مربوطين
+ *  (نفس رقم link)، اللي ناقصه فيديو الحل لو فيديو التوضيح ياخذه من المربوطين، والتوضيح بلغة ملزمته (نفس الاسم).
+ *  other: فيديو توضيح ما إله نسخة بلغة الملزمة (يحتاج الأستاذ يرفع نسخته) */
+export async function syncLinked() {
+  const marks = (await find("note_marks")).filter((m) => m.link != null);
+  const books = new Map((await find("note_books")).map((b) => [b.id, b.lang === "en" ? "en" : "ar"]));
+  const videos = await find("note_videos");
+  const groups = new Map<unknown, Row[]>();
+  for (const m of marks) groups.set(m.link, [...(groups.get(m.link) ?? []), m]);
+  let videosAdded = 0, solutionsAdded = 0;
+  const other = new Set<string>();
+  for (const g of groups.values()) {
+    const sol = g.find((m) => m.solution)?.solution;
+    const names = [...new Set(g.map((m) => videos.find((v) => v.id === m.video_id)?.name).filter(Boolean))] as string[];
+    for (const m of g) {
+      const patch: Row = {};
+      if (!m.solution && sol) { patch.solution = sol; solutionsAdded++; }
+      if (!m.video_id && names.length) {
+        const lang = books.get(m.book_id) ?? "ar";
+        const v = names.map((n) => videos.find((x) => x.name === n && x.lang === lang)).find(Boolean);
+        if (v) { patch.video_id = v.id; videosAdded++; } else other.add(names[0]);
+      }
+      if (Object.keys(patch).length) await update("note_marks", { id: m.id }, patch);
+    }
+  }
+  return { videosAdded, solutionsAdded, other: [...other] };
 }
 
 /** يحفظ الزر. يرجع عدد الأزرار المربوطة بيه بالملازم الثانية اللي تحدثت وياه */

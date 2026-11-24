@@ -14,7 +14,7 @@ import { isAdmin, student } from "./data.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
 import { files } from "./files.ts";
-import { addVideo, autoMarks, relocateMarks, bookMarksAdmin, deleteMark, deleteVideo, explainerClip, marksFor, pasteSolutions, saveMark, sendMark, videoList } from "./noteMarks.ts";
+import { addVideo, autoMarks, relocateMarks, bookMarksAdmin, deleteMark, deleteVideo, explainerClip, marksFor, pasteSolutions, saveMark, sendMark, syncLinked, videoList } from "./noteMarks.ts";
 import { chapterLabel, firstRoundOnly } from "./orderRules.ts";
 import { labelChapters } from "./scheduleRules.ts";
 import { stamp } from "./util.ts";
@@ -361,7 +361,7 @@ export async function noteAdmin(raw: Row | FormData) {
     need(book, "الملزمة غير موجودة");
     let notice = "";
     if (a === "autoMarks") { const r = await autoMarks(book!); notice = "composed" in r ? "⚠️ هاي الملزمة كل صفحة بيها سؤال، فأزرارها ما تنحط بالتدوير. الصق ملف الأزرار الجاهز من «📋 الصق روابط الحل»" : `✅ انحطت ${r.marks} زر على الأسئلة، وانربط ${r.linked} فيديو توضيحي`; }
-    if (a === "markSave") { const n = await saveMark(book!, body); notice = `💾 انحفظ${n ? `، وتحدّث وياه ${n} زر لنفس السؤال بالملازم الثانية` : ""}`; }
+    if (a === "markSave") { const n = await saveMark(book!, body); const s = await syncLinked(); const all = n + s.videosAdded + s.solutionsAdded; notice = `💾 انحفظ${all ? `، وتحدّث وياه ${all} زر لنفس السؤال بالملازم الثانية` : ""}`; }
     if (a === "markDelete") { await deleteMark(book!, Number(body.id)); notice = "🗑 انحذف الزر"; }
     if (a === "solutionsPaste") {
       const r = await pasteSolutions(book!, String(body.text ?? ""));
