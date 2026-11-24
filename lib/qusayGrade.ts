@@ -612,8 +612,9 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
     if (!q.answered) continue;
     // العلامة بس على الخطوة الغلط ويا ملاحظتها، وبدون أرقام على الورقة. الخطوة الصح ما ياخذ ✓ (طلبه 2026-11-23: الصحات الكثيرة
     // تلخبط الطالب، ✓ على سطر غلط يحسبها صح). السؤال الصح كله: ✓ وحدة كبيرة بنصه، ويمها المدح إذا هو أول سؤال كامل
-    const full = (s: QgStep) => s.awarded >= s.points && s.points > 0;
-    const allRight = q.steps.length ? q.steps.every(full) : q.score >= q.max;
+    // خطوة درجتها صفر (0 من 0) ما تنحسب ناقصة، والسؤال اللي أخذ درجته كاملة ✓ كبيرة بس (مؤمل انطى 20 من 20 وطلع «الحل ناقص»، 2026-11-24)
+    const full = (s: QgStep) => s.points <= 0 || s.awarded >= s.points;
+    const allRight = (q.max > 0 && q.score >= q.max) || (q.steps.length ? q.steps.every(full) : false);
     const placed = q.steps.filter((s) => s.at);
     const mid = placed.length ? { p: placed[Math.floor(placed.length / 2)].at!.p, x: Math.round(placed.reduce((t, s) => t + s.at!.x, 0) / placed.length), y: Math.round(placed.reduce((t, s) => t + s.at!.y, 0) / placed.length) } : undefined;
     const praiseAt = allRight ? mid ?? q.at : undefined;
@@ -1191,7 +1192,10 @@ async function compareTick(s: QgSettings) {
 // يلگى مكان كل خطوة بصفحات الطالب، والعلامات تنرسم بنفس رسم «تصحيح قصي» (الغلط بس، والسؤال الكامل ✓ كبيرة)
 const MU_Q = "mu_mk_q";
 const muKey = (id: number) => `mu_mk_${id}`;
-export const muMarksOf = (id: number) => readJson<{ qs: QgQuestion[]; pages: string[] } | null>(muKey(id), null);
+/** ملاحظات مؤمل عربي بس: الإنگليزي ما يطلع للطالب أبداً */
+const arOnly = (t: string) => (/[؀-ۿ]/.test(t) ? t : "");
+const muArabic = (d: { qs: QgQuestion[]; pages: string[] } | null) => d && { ...d, qs: d.qs.map((q) => ({ ...q, reason: arOnly(q.reason), steps: q.steps.map((s) => ({ ...s, note: arOnly(s.note) })) })) };
+export const muMarksOf = async (id: number) => muArabic(await readJson<{ qs: QgQuestion[]; pages: string[] } | null>(muKey(id), null));
 const LOCATE = `These are photos of a student's math exam answers (Iraqi 6th grade). Each photo is preceded by its label [Image k].
 For every listed step, find where on the photos the student wrote that step (or where it should have been) and return its position:
 p = the image number, x and y = position on that image from 0 to 1000 (x left to right, y top to bottom), at the END of the line where the step is written.
@@ -1228,8 +1232,8 @@ export async function muMarksFor(itemId: number) {
     const at = pt(g?.at);
     const byI = new Map((g?.steps ?? []).map((s: any) => [Number(s.i), s]));
     return {
-      n: q.n, max: q.max, score: q.score, answered: q.steps.length > 0, sure: !q.review, reason: cleanNote(String(q.note ?? q.reason ?? "")), method: q.method ?? 1,
-      steps: q.steps.map((st, i) => { const a = pt(byI.get(i + 1)); return { text: String(st.expected ?? ""), points: st.possible, awarded: st.awarded, note: cleanNote(String(st.reason_ar || st.reason || "")).slice(0, 200), ...(a ? { at: a } : {}) }; }),
+      n: q.n, max: q.max, score: q.score, answered: q.steps.length > 0, sure: !q.review, reason: arOnly(cleanNote(String(q.note ?? q.reason ?? ""))), method: q.method ?? 1,
+      steps: q.steps.map((st, i) => { const a = pt(byI.get(i + 1)); return { text: String(st.expected ?? ""), points: st.possible, awarded: st.awarded, note: arOnly(cleanNote(String(st.reason_ar || st.reason || ""))).slice(0, 200), ...(a ? { at: a } : {}) }; }),
       ...(at ? { at } : {}),
     };
   });

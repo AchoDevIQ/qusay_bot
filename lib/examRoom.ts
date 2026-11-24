@@ -354,11 +354,11 @@ async function aiShown(it: Row) {
     const mine = saved ? methodSteps(saved, q.method) : null;
     const sameCount = !!mine && mine.length === q.steps.length;
     return {
-      n: q.n, score: q.score, max: q.max, note: q.note ?? "",
+      n: q.n, score: q.score, max: q.max, note: /[؀-ۿ]/.test(String(q.note ?? "")) ? q.note ?? "" : "",
       photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
       ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink) } : {}),
       steps: q.steps.map((st, i) => ({ status: st.status, awarded: st.awarded, possible: st.possible,
-        expected: sameCount ? mine![i].text : st.expected, student: st.student_tex || st.student, reason: st.reason_ar || st.reason_en || st.reason,
+        expected: sameCount ? mine![i].text : st.expected, student: st.student_tex || st.student, reason: [st.reason_ar, st.reason].find((t) => /[؀-ۿ]/.test(String(t ?? ""))) ?? "", // عربي بس، الإنگليزي ما يطلع للطالب
         // خطوة ما انقرت: الطالب يشوف رسالة «أرسل صورة ثانية» بدل كتابة ما تنقرا
         failed: !!st.analysis_failed, message: st.student_message ?? "" })),
     };

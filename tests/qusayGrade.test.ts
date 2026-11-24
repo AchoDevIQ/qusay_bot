@@ -497,6 +497,9 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
   const [g] = Q.marksByPage([good], ["a"]);
   assert.deepEqual(g.marks.map((m) => [m.kind, m.text, m.big, m.word]), [["ok", "", true, undefined]], "السؤال الصح كله: ✓ وحدة كبيرة بس، بلا مدح وبلا ✓ على كل خطوة");
   assert.deepEqual([g.marks[0].x, g.marks[0].y], [500, 500], "بنص شغله");
+  // مؤمل: خطوة 0 من 0 بلا مكان وملاحظتها «صح»، والسؤال 20 من 20: ✓ كبيرة بس، مو «؟ الحل ناقص» (ورقة 289، 2026-11-24)
+  const zero = { ...good, at: { p: 1, x: 500, y: 600 }, steps: [...good.steps, { text: "ج", points: 0, awarded: 0, note: "صح" }] };
+  assert.deepEqual(Q.marksByPage([zero], ["a"])[0].marks.map((m) => [m.kind, m.big]), [["ok", true]]);
   // الطالب ما كتب الخطوات (مثل س5: 3 من 15): «؟» وملاحظاتها تحت آخر جوابه
   const miss = { n: 5, max: 15, score: 3, answered: true, sure: true, reason: "ناقص", method: 1, at: { p: 1, x: 600, y: 700 },
     steps: [{ text: "أ", points: 5, awarded: 3, note: "", at: undefined }, { text: "ب", points: 10, awarded: 0, note: "ما كملت الحل" }] };
