@@ -508,6 +508,14 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
     steps: [{ text: "أ", points: 5, awarded: 3, note: "", at: undefined }, { text: "ب", points: 10, awarded: 0, note: "ما كملت الحل" }] };
   const [m5] = Q.marksByPage([miss], ["a"]);
   assert.deepEqual(m5.marks.map((m) => [m.kind, m.x, m.y, m.note]), [["miss", 600, 745, "ما كملت الحل"]]);
+  // خطوتين أو أكثر ما كاتبها (س5 بطالب تجربة: «ما كتبتها» على كل خطوة): «الحل ناقص» كبيرة وحدة بخطه، والغلط المكتوب يبقى ✗ (طلبه 2026-11-24)
+  const many = { n: 5, max: 20, score: 1, answered: true, sure: true, reason: "", method: 1, at: { p: 1, x: 600, y: 300 }, steps: [
+    { text: "أ", points: 2, awarded: 1, note: "ناقص i", w: "$\sqrt{2-4\sqrt{2}}=x+yi$", at: { p: 1, x: 400, y: 200 } },
+    { text: "ب", points: 3, awarded: 0, note: "ما كتبتها", at: { p: 1, x: 400, y: 400 } },
+    { text: "ج", points: 2, awarded: 0, note: "ما كتبتها" }, { text: "د", points: 2, awarded: 0, note: "ما كتبتها" }] };
+  const word = { id: 9, kind: "note" as const, text: "الحل ناقص", w: 1000, h: 360, s: [[1, 2, 3, 4]] };
+  const [mm] = Q.marksByPage([many], ["a"], undefined, [], [word]);
+  assert.deepEqual(mm.marks.map((m) => [m.kind, !!m.big, m.note ?? "", m.x, m.y, !!m.hand]), [["bad", false, "ناقص i", 400, 200, false], ["miss", true, "الحل ناقص", 500, 370, true]]);
   // ماكو ولا ملاحظة: سبب السؤال
   const [m6] = Q.marksByPage([{ ...miss, steps: miss.steps.map((st) => ({ ...st, note: "" })) }], ["a"]);
   assert.equal(m6.marks[0].note, "ناقص");

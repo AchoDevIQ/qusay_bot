@@ -604,7 +604,8 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       for (let k = 0; k < 6 && clash(v); k++) v = inside(v + dir * 30, 70);
       if (!clash(v)) { x = v; break; }
     }
-    const sym = pick(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick");
+    // «الحل ناقص» الكبيرة كلمة بس، بلا «؟»
+    const sym = m.big && m.kind === "miss" ? undefined : pick(m.kind === "bad" ? "cross" : m.kind === "miss" ? "ask" : "tick");
     const word = good ? pick("praise") : undefined;
     const rot = Math.round((rnd(n + 2) - 0.5) * (good ? 18 : 12)), sc = Math.round((0.88 + rnd(n + 3) * 0.24) * 100) / 100;
     by.set(pt.p, [...(by.get(pt.p) ?? []), { x, y, ...m, ...(sym ? { sym } : {}), ...(word ? { word } : {}), ...(sym || word ? { rot, sc } : {}) }]);
@@ -622,8 +623,15 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
     const praiseAt = allRight ? mid ?? q.at : undefined;
     let drawn = 0;
     const unplaced: QgStep[] = [];
+    // الخطوة اللي الطالب ما كتبها: من كتابته (w) إذا انقرت، وبالتصحيح القديم الخطوة اللي ما إلها مكان.
+    // خطوتين ناقصات أو أكثر: «الحل ناقص» كبيرة وحدة بخطه، مو «ما كتبتها» على كل وحدة (طلبه 2026-11-24)
+    const hasW = q.steps.some((s) => s.w !== undefined);
+    const notWritten = (s: QgStep) => s.awarded <= 0 && (hasW ? !s.w : !s.at);
+    const many = q.steps.filter((s) => !full(s) && notWritten(s)).length >= 2;
     for (const [i, s] of q.steps.entries()) {
       if (full(s)) continue;
+      if (many && notWritten(s)) continue;
+      if (hasW && notWritten(s)) { if (s.note) unplaced.push(s); continue; }
       const hand = handOf(s.hw);
       if (s.at) { add(s.at, { kind: "bad", text: "", q: q.n, i, ...(s.note ? { note: shortNote(s.note) } : {}), ...(hand ? { hand } : {}) }); drawn++; }
       else if (s.note) unplaced.push(s);
@@ -637,8 +645,13 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       add(praiseAt, { kind: "ok", text: "", big: true, box: { y0: Math.round(y0), y1: Math.round(y1) }, q: q.n, i: -1 });
       continue;
     }
+    if (many) {
+      const word = ink.find((x) => x.kind === "note" && /الحل\s*ناقص/.test(x.text));
+      const end = q.at ? { p: q.at.p, x: 500, y: Math.min(1000, q.at.y + 70) } : placed.length ? { ...placed[placed.length - 1].at!, x: 500 } : undefined;
+      add(end, { kind: "miss", big: true, text: "", q: q.n, i: -1, note: "الحل ناقص", ...(word ? { hand: shape(word) } : {}) });
+    }
     // الخطوات اللي ما كتبها الطالب (ما إلها مكان): «؟» تحت آخر جوابه (مو ✗ على سطر صح، طلبه 2026-11-22)، ويمها شنو ناقص
-    if (unplaced.length || !drawn) {
+    if (unplaced.length || (!drawn && !many)) {
       const note = unplaced.length ? unplaced.map((s) => s.note).join("، ") : q.reason;
       // ملاحظة وحدة مكتوبة بخطه تنرسم بخطه، وأكثر من وحدة تنكتب بالخط
       const hand = unplaced.length === 1 ? handOf(unplaced[0].hw) : unplaced.length ? undefined : handOf(q.hw);

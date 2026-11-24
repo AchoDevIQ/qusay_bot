@@ -70,6 +70,12 @@ export function MarkedPage({ src, marks, onTap, picked }: { src: string; marks: 
           onClick={onTap ? () => onTap(m, i) : undefined}>
           {m.sym ? <InkSvg sh={m.sym} fill /> : <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden><path d="M3 62 Q14 74 26 96 Q55 40 97 4" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" /></svg>}
         </div>
+      ) : m.big && m.kind === "miss" ? (
+        // «الحل ناقص» كبيرة وحدة بخطه (لو بالرقعة إذا ما كاتبها) بدل «ما كتبتها» على كل خطوة
+        <div key={i} className={"mk mkshort" + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}
+          onClick={onTap ? () => onTap(m, i) : undefined}>
+          {m.hand ? <InkSvg sh={m.hand} cap={60} width={4} /> : <b>{m.note || "الحل ناقص"}</b>}
+        </div>
       ) : (
         <div key={i} className={"mk mk-" + m.kind + (onTap ? " mktap" : "") + (picked === i ? " mkpicked" : "")} style={{ left: `${m.x / 10}%`, top: `${m.y / 10}%` }}
           onClick={onTap ? () => onTap(m, i) : undefined}>

@@ -534,3 +534,4 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 
 /* ✓ الكبيرة على عرض الصفحة كلها (طلبه 2026-11-24) */
 .mkfull{position:absolute;left:3%;width:94%;color:#d40000;pointer-events:none;filter:drop-shadow(0 0 1px #fff)}.mkfull>svg{display:block;width:100%;height:100%}.mkfull.mktap{pointer-events:auto;cursor:pointer}
+.mkshort b{font-family:var(--mkfont);font-size:clamp(28px,8cqw,64px);white-space:nowrap;color:#d40000;text-shadow:0 0 3px #fff,0 0 3px #fff;direction:rtl}
