@@ -26,7 +26,7 @@ export type QaBook = { id: string; chapter: number; lang: "ar" | "en"; kind: QaK
  *  stepBtn: زر «🤔 ما فهمت خطوة» بصفحة الحل (طافي من البداية). teacherBtn: زر «❓ بعدني ما فهمت» يوصل السؤال للأستاذ (شغال من البداية)
  *  explained: كم خطوة انشرحت */
 /** model: الذكاء اللي يحل (⚡ haiku الأصل، 🎯 sonnet، 🏆 opus). الحل صار بجهتنا مو بخدمة مؤمل (2026-11-23) */
-export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; free?: number; inTok: number; outTok: number; stepBtn?: boolean; teacherBtn?: boolean; explained?: number; model?: "haiku" | "sonnet" | "opus" };
+export type QaCfg = { on: boolean; direct: boolean; asked: number; fromBook: number; solved: number; cached?: number; free?: number; inTok: number; outTok: number; stepBtn?: boolean; teacherBtn?: boolean; explained?: number; model?: "haiku" | "sonnet" | "opus"; delayH?: number };
 const BOOKS = "qa_books", CFG = "qa_cfg";
 const DEF: QaCfg = { on: false, direct: true, asked: 0, fromBook: 0, solved: 0, inTok: 0, outTok: 0 };
 // Haiku 5.5: 0.10$ داخل و0.50$ طالع لكل مليون توكن
@@ -809,7 +809,7 @@ async function pageData() {
   const list = (await qaBooks()).sort((a, b) => a.chapter - b.chapter || a.lang.localeCompare(b.lang) || a.kind.localeCompare(b.kind));
   const botTopics: Record<number, { id: number; ar: string }[]> = {};
   for (const n of new Set(list.map((b) => b.chapter))) botTopics[n] = (await chapterTopics(n)).map((t) => ({ id: t.id, ar: t.ar }));
-  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, stepBtn: !!cfg.stepBtn, teacherBtn: cfg.teacherBtn !== false, explained: cfg.explained ?? 0, model: cfg.model ?? "haiku", linked: qaAiOn(), asked: cfg.asked, fromBook: cfg.fromBook, free: cfg.free ?? 0, solved: cfg.solved, cost, books: list, botTopics } };
+  return { exams: await examState(), qa: { on: cfg.on, direct: cfg.direct, stepBtn: !!cfg.stepBtn, teacherBtn: cfg.teacherBtn !== false, explained: cfg.explained ?? 0, model: cfg.model ?? "haiku", delayH: cfg.delayH ?? 0, linked: qaAiOn(), asked: cfg.asked, fromBook: cfg.fromBook, free: cfg.free ?? 0, solved: cfg.solved, cost, books: list, botTopics } };
 }
 const DOCX_MAX = 60 * 1024 * 1024;
 export async function qaAction(raw: Row | FormData) {
@@ -868,6 +868,8 @@ export async function qaAction(raw: Row | FormData) {
     if (body.stepBtn !== undefined) cfg.stepBtn = body.stepBtn === true || body.stepBtn === "1";
     if (body.model === "haiku" || body.model === "sonnet" || body.model === "opus") cfg.model = body.model;
     if (body.teacherBtn !== undefined) cfg.teacherBtn = body.teacherBtn === true || body.teacherBtn === "1";
+    // ⏱ الجواب يوصل للطالب مباشرة لو بعد ساعات (طلبه 2026-11-24: حتى ما يحس إنه ذكاء)
+    if (body.delayH !== undefined) { const h = Number(body.delayH); need(Number.isFinite(h) && h >= 0 && h <= 72, "الساعات من 0 لـ 72"); cfg.delayH = Math.round(h * 2) / 2; }
     await saveCfg(cfg);
     notice = "✅ انحفظ";
   } else need(a === "list", "أمر غير معروف");

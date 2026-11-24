@@ -4,7 +4,7 @@
 import { Confirm, StatusBar, useAdminApi } from "../adminPage";
 
 type Book = { id: string; chapter: number; lang: "ar" | "en"; kind: "main" | "extra" | "exams"; name: string; topics: { topic: string; lectures: number[]; tid?: number | null }[]; chars: number; created: string };
-type Data = { exams?: { left: number; done: number; total: number; failed: string[] }; qa: { on: boolean; direct: boolean; model?: "haiku" | "sonnet" | "opus"; stepBtn?: boolean; teacherBtn?: boolean; explained?: number; linked: boolean; asked: number; fromBook: number; free?: number; solved: number; cost: number; books: Book[]; botTopics: Record<number, { id: number; ar: string }[]> }; notice: string };
+type Data = { exams?: { left: number; done: number; total: number; failed: string[] }; qa: { on: boolean; direct: boolean; model?: "haiku" | "sonnet" | "opus"; delayH?: number; stepBtn?: boolean; teacherBtn?: boolean; explained?: number; linked: boolean; asked: number; fromBook: number; free?: number; solved: number; cost: number; books: Book[]; botTopics: Record<number, { id: number; ar: string }[]> }; notice: string };
 const KIND: Record<Book["kind"], string> = { main: "أسئلة وأمثلة الكتاب", extra: "الأسئلة الإثرائية", exams: "الأسئلة الوزارية" };
 
 export default function QaCard() {
@@ -23,6 +23,10 @@ export default function QaCard() {
               {!qa.linked && <div className="exbad">⚠️ خدمة الذكاء مو مربوطة بالسيرفر.</div>}
               <label className="adcheck adflat"><input type="checkbox" checked={qa.on} disabled={busy} onChange={(e) => void call({ action: "settings", on: e.target.checked })} /><span>شغّل الجواب من ملازم Word</span></label>
               <label className="adcheck adflat"><input type="checkbox" checked={qa.direct} disabled={busy} onChange={(e) => void call({ action: "settings", direct: e.target.checked })} /><span>السؤال اللي ما موجود بالملزمة: الحل على طريقتك يوصل للطالب مباشرة (إذا مطفي: السؤال يوصلك إنت)</span></label>
+              <div className="exhint">⏱ متى يوصل الجواب للطالب (حتى ما يحس إنه آلي)</div>
+              <select value={String(qa.delayH ?? 0)} disabled={busy} onChange={(e) => void call({ action: "settings", delayH: Number(e.target.value) })}>
+                {[0, 0.5, 1, 2, 3, 4, 6, 8, 12, 24].map((h) => <option key={h} value={String(h)}>{h === 0 ? "⚡ مباشرة" : h === 0.5 ? "بعد نص ساعة" : h === 1 ? "بعد ساعة" : h === 2 ? "بعد ساعتين" : `بعد ${h} ساعات`}</option>)}
+              </select>
               <div className="exhint">🎯 الذكاء اللي يحل الأسئلة اللي ما محلولة بملازمك (المحلولة ببلاش دايماً). كل ما أدق، أغلى:</div>
               <select value={qa.model ?? "haiku"} disabled={busy} onChange={(e) => void call({ action: "settings", model: e.target.value })}>
                 <option value="haiku">⚡ Haiku: الأرخص</option>

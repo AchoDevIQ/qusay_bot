@@ -173,3 +173,22 @@ test("❓ السؤال من الصفحة: يختار الفصل والموضوع
   assert.ok((await askFromPage(2, { tid: t.id, lec: 1, text: "" }, null)).closed, "بلا سؤال ما ينبعث");
   assert.equal(await askPageTick(), 0);
 });
+
+test("⏱ الجواب يوصل بعد الساعات اللي اختارها الأستاذ، مو مباشرة (طلبه 2026-11-24)", async () => {
+  down = false;
+  const { askFromPage, askPageTick } = await import("../lib/questions.ts");
+  const { kvGet, kvSet } = await import("../lib/db.ts");
+  await qa.qaAction({ initData: sign(1), action: "settings", delayH: 2 });
+  const t = (await find("topics")).find((x) => x.ar === "الجذور التربيعية")!;
+  calls.length = 0;
+  await askFromPage(2, { tid: t.id, lec: 1, text: "جد الجذور التربيعية للعدد 5+12i" }, null);
+  await askPageTick();
+  assert.ok(!calls.some((c) => c.p.chat_id === 2 && /وصل جواب سؤالك/.test(String(c.p.text))), "بعده ما وصل");
+  // صار وقته
+  const due = JSON.parse((await kvGet("qa_due")) || "[]");
+  assert.equal(due.length, 1);
+  await kvSet("qa_due", JSON.stringify(due.map((d: any) => ({ ...d, due: Date.now() - 1 }))));
+  await askPageTick();
+  assert.ok(calls.some((c) => c.p.chat_id === 2 && /وصل جواب سؤالك/.test(String(c.p.text))), "وصل بوقته");
+  await qa.qaAction({ initData: sign(1), action: "settings", delayH: 0 });
+});

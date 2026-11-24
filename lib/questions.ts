@@ -130,13 +130,13 @@ async function qaAuto(chat: number, uid: number, m: Row, data: Row, en: boolean)
   if (r.source === "ai" && !(await qaCfg()).direct) return false;
   await kvSet(`qauto_${uid}`, JSON.stringify({ mid: m.message_id, t: data.t, l: data.l || 0 }));
   await setSession(uid, "", {});
-  await deliverQa(chat, uid, r, t, Number(data.l) || 0, en, text, 0, (m.photo as Row[] | undefined)?.at(-1)?.file_id);
-  await send(chat, "👆", { replyKb: await mainKb(uid) });
+  const later = await deliverQa(chat, uid, r, t, Number(data.l) || 0, en, text, 0, (m.photo as Row[] | undefined)?.at(-1)?.file_id);
+  await send(chat, later ? (en ? "✅ Your question arrived. The answer comes to you here." : "✅ وصل سؤالك. راح يوصلك الجواب هنا.") : "👆", { replyKb: await mainKb(uid) });
   return true;
 }
 
 /** يوصل للطالب زر «📘 افتح الحل». qid: سؤاله اللي بالمجموعة (الذكاء جاوبه بعد ما رجع يشتغل)، فـ«بعدني ما فهمت» يرجع لنفس السؤال */
-async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: number, en: boolean, text: string, qid = 0, photo?: string) {
+async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: number, en: boolean, text: string, qid = 0, photo?: string): Promise<boolean> {
   const where = `${t.ar}${l ? ` — المحاضرة ${l}` : ""}`;
   const shown = en ? `${t.en || t.ar}${l ? ` — Lecture ${l}` : ""}` : where;
   // موضوعه ومحاضرته ينحفظن ويا الحل، حتى «🤔 ما فهمت خطوة» ياخذ شرح الأستاذ من نفس الملزمة
@@ -155,8 +155,9 @@ async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: numb
     ? "📘 <b>Here is your solution</b>\nTap the button to see it step by step."
     : "📘 <b>عيوني، تفضل هذا الحل</b>\nدوس الزر تشوف الحل خطوة خطوة.";
   const head = qid ? (en ? `💬 <b>About your question #${qid}</b>\n` : `💬 <b>بخصوص سؤالك #${qid}</b>\n`) : "";
-  await send(chat, head + msg, { kb });
+  const later = await notifyAnswer(chat, head + msg, kb);
   await logActivity(uid, (qid ? `🔁 #${qid} بعد ما رجع الذكاء: ` : "") + (r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : r.source === "rasid" ? `📝 وصله الحل النموذجي من الراصد (${r.rasid?.topic ?? where} ${r.rasid?.q ?? ""})` : r.source === "notebook" ? `📘 وصله حل سؤاله من دفتر المحاضرات (${r.notebook?.where || where} ص${r.notebook?.page ?? ""})` : `📘 وصله حل سؤاله من الملزمة (${where})`));
+  return later;
 }
 
 // ---------- الذكاء ما جاوب (الرصيد خلص أو الخدمة واقفة): تنبيه لصاحب البوت، والبوت يرجع يجرب وحده
@@ -341,9 +342,31 @@ export async function askFromPage(uid: number, b: AskBody, image: Buffer | null)
   await logActivity(uid, "❓ دز سؤال علمي من الصفحة");
   return { queued: true };
 }
+/** إشعار الجواب للطالب: مباشرة، لو بعد الساعات اللي اختارها الأستاذ («⏱ متى يوصل الجواب»). true: تأجل */
+const DUE = "qa_due";
+type Due = { uid: number; text: string; kb: Kb; due: number };
+async function notifyAnswer(uid: number, text: string, kb: Kb) {
+  const h = Number((await qaCfg()).delayH) || 0;
+  if (h <= 0) { await send(uid, text, { kb }); return false; }
+  const l = JSON.parse((await kvGet(DUE)) || "[]") as Due[];
+  await kvSet(DUE, JSON.stringify([...l, { uid, text, kb, due: Date.now() + h * 3600_000 }]));
+  return true;
+}
+/** كل دقيقة: الأجوبة اللي صار وقتها توصل */
+async function dueTick() {
+  const l = JSON.parse((await kvGet(DUE)) || "[]") as Due[];
+  if (!l.length) return 0;
+  const now = Date.now();
+  const ready = l.filter((d) => d.due <= now);
+  if (!ready.length) return 0;
+  await kvSet(DUE, JSON.stringify(l.filter((d) => d.due > now)));
+  for (const d of ready) await send(d.uid, d.text, { kb: d.kb }).catch((e) => console.error("qa due", d.uid, e));
+  return ready.length;
+}
 /** كل دقيقة: أسئلة الصفحة تنجاوب (نفس طريق البوت: ملزمتك، الراصد، الدفتر، لو الذكاء)، والحل يوصل بإشعار بزر يفتحه.
  *  اللي ما انحل يروح للأستاذ بالمجموعة */
 export async function askPageTick(limit = 4) {
+  await dueTick();
   const all = JSON.parse((await kvGet(ASK_Q)) || "[]") as AskJob[];
   if (!all.length) return 0;
   const jobs = all.slice(0, limit);
@@ -376,8 +399,8 @@ async function answerJob(j: AskJob, image: Buffer | null) {
       const id = await saveAnswer(uid, text, r, shown, en ? "en" : "ar", { chapter: n, tid: Number(t.id), lecture: lec, page: true, ...(img ? { img } : {}) });
       await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي من الصفحة (${where})` : `📘 وصله حل سؤاله من الصفحة (${where}، ${r.source})`);
       // إشعار بالبوت والتطبيق: جواب سؤالك وصل، وزر يفتحه. ما بيه شي يبين منين انحل
-      await send(uid, en ? `📘 <b>The answer to your question arrived</b>\n📍 ${esc(shown)}\nTap the button to see it.` : `📘 <b>وصل جواب سؤالك</b>\n📍 ${esc(shown)}\nدوس الزر تشوف الحل.`,
-        { kb: [[{ text: en ? "📘 Open the answer" : "📘 افتح الجواب", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }]] });
+      await notifyAnswer(uid, en ? `📘 <b>The answer to your question arrived</b>\n📍 ${esc(shown)}\nTap the button to see it.` : `📘 <b>وصل جواب سؤالك</b>\n📍 ${esc(shown)}\nدوس الزر تشوف الحل.`,
+        [[{ text: en ? "📘 Open the answer" : "📘 افتح الجواب", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }]]);
       return;
     }
   }
