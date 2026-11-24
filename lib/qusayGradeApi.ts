@@ -6,7 +6,7 @@ import { aiSettings } from "./aiGrade.ts";
 import { hasKey } from "./booklets.ts";
 import {
   IQD, QG_PERM, STYLE_MAX, clearTrialQueue, examStyle, setExamStyle, forgetTrial, pendingBatches, qgLog, qgOn, qgResultOf, qgRetry, qgSettings, queueTrial,
-  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, inkWaitList, releaseWaits, decideWait, spentFrom, trialCandidates, trialQueue, versionWhyNot, stepsIn, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
+  humanMark, marksByPage, addInk, inkFor, inkList, removeInk, marksWaiting, qgMarksOf, queueMarks, saveQgSettings, sendSaved, setQgOn, inkWaitList, releaseWaits, decideWait, spentFrom, trialCandidates, trialQueue, versionWhyNot, stepsIn, setStepWords, hiddenMarks, hideMark, dropHidden, pmap, pickCandidates, lessonsOf, teach, forgetLesson, shownResult, type QgResult,
 } from "./qusayGrade.ts";
 import { stamp } from "./util.ts";
 import { docxNotes, notesKind } from "./notesFile.ts";
@@ -96,7 +96,7 @@ async function paperDetail(id: number) {
   // كله بالعربي حتى بصفحتك (طلبه 2026-11-23): خطواتك الإنجليزية تنعرض مترجمة بكلمات الكتاب
   const flat = await stepsIn("ar", raw.flatMap((q) => q.steps.map((st) => st.text)));
   let k = 0;
-  const shown = raw.map((q) => ({ ...q, steps: q.steps.map((st) => ({ ...st, text: flat[k++] })) }));
+  const shown = raw.map((q) => ({ ...q, steps: q.steps.map((st) => ({ ...st, text: flat[k++], orig: st.text })) }));
   const ink = mk ? await inkFor(Number(it!.exam_id)) : [];
   const hidden = await hiddenMarks(id);
   return {
@@ -148,6 +148,7 @@ export async function qusayAction(body: Row) {
     if (body.unsure === "send" || body.unsure === "graders") p.unsure = body.unsure;
     if (typeof body.marks === "boolean") p.marks = body.marks;
     if (typeof body.wait === "boolean") p.wait = body.wait;
+    if (typeof body.recheck === "boolean") p.recheck = body.recheck;
     if (typeof body.style === "string") p.style = body.style.slice(0, STYLE_MAX);
     if (body.cap !== undefined) { const c = Number(body.cap); need(c > 0 && c <= 100, "الحد اليومي بين 0.1 و 100 دولار"); p.cap = c; }
     if (body.obj === "qusay" || body.obj === "person") p.obj = body.obj;
@@ -191,7 +192,11 @@ export async function qusayAction(body: Row) {
   }
   if (a === "trialClear") { await clearTrialQueue(); return await out("انمسحت الأوراق اللي تنتظر التجربة"); }
   if (a === "forget") { const n = await forgetTrial(exam); return await out(`انمسحت نتائج ${n} تجربة بهذا الموضوع، تگدر تعيدها`); }
-  if (a === "paper") return await out("", { paper: await paperDetail(Number(body.id)) });
+  if (a === "paper") {
+    // من «🔍 فحص الأسبوع»: تنحسب شافها
+    await (await import("./qusayWeekly.ts")).weekSeen(Number(body.id)).catch(() => undefined);
+    return await out("", { paper: await paperDetail(Number(body.id)) });
+  }
   // «✏️ صلّح وعلّمه»: درجة الخطوة الصح وليش. جوابه يصير قاعدة بهذا الموضوع
   if (a === "teach") {
     let r: Awaited<ReturnType<typeof teach>> = { official: null, n: 0 };
@@ -199,6 +204,11 @@ export async function qusayAction(body: Row) {
     // درجته وصلت: تتغير الرسمية، ويوصله هو وولي أمره (مثل الاعتراض المقبول)
     const fx = r.official ? await (await import("./gradeApi.ts")).ownerFixMark(Number(body.id), r.official.q, r.official.mark) : null;
     return await out(`🧠 تعلمها: من هسه يصحح هيچ بهذا الموضوع (${r.n} قاعدة من تصحيحاتك).${fx ? ` ودرجة الطالب صارت ${fx.total} من 100، ووصله هو وولي أمره.` : ""}`, { paper: await paperDetail(Number(body.id)) });
+  }
+  // «📝 كلام الخطوة»: كلماته هو بدل ترجمة الخطوة. تنحفظ لكل ورقة جاية بهذا السؤال، ويصحح ويكتب ملاحظاته بيها
+  if (a === "stepWords") {
+    try { await setStepWords(String(body.orig ?? ""), String(body.text ?? "")); } catch (e) { fail(e); }
+    return await out("📝 انحفظ كلامك لهاي الخطوة. من هسه يصحح ويكتب ملاحظاته بيه", { paper: await paperDetail(Number(body.id)) });
   }
   if (a === "hideMark") {
     try { await hideMark(Number(body.id), String(body.key ?? "")); } catch (e) { fail(e); }

@@ -14,13 +14,13 @@ type CmpSide = { at: string; total: number; qs: { n: number; score: number; max:
 type CmpRow = { id: number; name: string; waiting: boolean; ref: { total: number; qs: Record<string, number> } | null; mu: CmpSide | null; qg: CmpSide | null; muErr: string; qgErr: string };
 type Lesson = { id: number; at: string; q: number; step: string; from: number; to: number; max: number; why: string };
 type Chapter = { slug: string; chapter: string; exams: Exam[] };
-type Step = { text: string; points: number; awarded: number; note: string };
+type Step = { text: string; points: number; awarded: number; note: string; eq?: 1; orig?: string };
 type Q = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: Step[]; human: number | null; marked: MarkedPageT[] | null };
 type Paper = { id: number; name: string; exam: string; kind: "trial" | "live"; human: number | null; total: number; sure: boolean; iqd: number; batch: boolean; sent: boolean; qs: Q[]; photos: { q: number; ref: string }[]; demo: { at: string; total: number; iqd: number } | null; demoWaiting: boolean };
 type TrialRow = { id: number; name: string; exam: string; human: number | null; qusay: number; sure: boolean; iqd: number; at: string };
 type Log = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj" | "wait"; item?: number; name?: string; exam?: string; total?: number; iqd: number | null; note?: string; canSend?: boolean };
 type Data = {
-  on: boolean; key: boolean; settings: { live: number[]; model: "haiku" | "sonnet" | "opus"; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number; wait: boolean }; fileToken: string; objStaff: { id: number; name: string }[];
+  on: boolean; key: boolean; settings: { live: number[]; model: "haiku" | "sonnet" | "opus"; effort: "low" | "medium"; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number; wait: boolean; recheck: boolean }; fileToken: string; objStaff: { id: number; name: string }[];
   spent: { today: number; month: number; all: number; capIqd: number }; perPaper: number | null; sent: number; unsure: number;
   trialLeft: number; batches: number; inkWait: InkWait[]; chapters: Chapter[]; trials: TrialRow[]; log: Log[]; tidy?: string; paper?: Paper; cmp?: { exam: number; rows: CmpRow[] }; side?: { exam: number; rows: SideRow[] }; notice?: string; inkOf?: { exam: number; items: InkItem[] };
 };
@@ -61,6 +61,14 @@ export default function QusayClient() {
     return () => window.removeEventListener("popstate", onPop);
   }, [open]);
   const closePaper = () => { if (history.state?.qgPaper) history.back(); else setShut(cur.current); };
+  // من رسالة «🔍 فحص الأسبوع»: الورقة تنفتح على طول (مرة وحدة)
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!data || asked.current) return;
+    asked.current = true;
+    const id = Number(new URLSearchParams(location.search).get("paper")) || 0;
+    if (id) void call({ action: "paper", id });
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <AdminHeader title="🧠 تصحيح قصي" />
@@ -204,6 +212,7 @@ function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["
   const [marks, setMarks] = useState(s.marks);
   const [style, setStyle] = useState(s.style);
   const [wait, setWait] = useState(s.wait);
+  const [recheck, setRecheck] = useState(s.recheck);
   return (
     <div className="card expad">
       <div className="exlabel">⚙️ الإعدادات</div>
@@ -261,9 +270,14 @@ function Settings({ s, staff, busy, call }: { s: Data["settings"]; staff: Data["
         <option value="1">⏸ تنتظرك: يوصلك تنبيه تكتبها لو تدزها بالرقعة (الأصل)</option>
         <option value="0">📤 تنبعث على طول، والعبارات بالرقعة</option>
       </select>
+      <div className="exhint">🔍 السؤال اللي شك بيه: يصححه مرة ثانية لحاله بتركيز. إذا بعده شاك، الدرجة تبقى لمصلحة الطالب ويطلع «⚠️ ما متأكد» حتى تشوفه</div>
+      <select value={recheck ? "1" : "0"} onChange={(e) => setRecheck(e.target.value === "1")}>
+        <option value="0">⏸ طافية (الأصل)</option>
+        <option value="1">🔍 شغالة: تزيد كلفة الورقة اللي بيها شك تقريباً 1 لـ 3 دنانير لكل سؤال (أكثر شي سؤالين)</option>
+      </select>
       <div className="exhint">✍️ طريقتك بالكتابة: اكتب أو احچي (🎤 فويس) أمثلة من ملاحظاتك مثل ما تكتبها على ورقة الطالب، كل وحدة بسطر (مثلاً: «المفروض 23π/12» ، «نسيت تعوض» ، «ركز بالإشارة»). يكتب مثلك بالعلامات الحمرة وبـ 🖍 جرب العلامات</div>
       <VoiceText value={style} onChange={setStyle} />
-      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", model, effort, batch, cap: Number(cap), carry, unsure, marks, style, obj, objTo, wait })}>💾 احفظ</button>
+      <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "settings", model, effort, batch, cap: Number(cap), carry, unsure, marks, style, obj, objTo, wait, recheck })}>💾 احفظ</button>
     </div>
   );
 }
@@ -500,8 +514,11 @@ function CompareBox({ exam, n, setN, busy, call }: { exam: number; n: string; se
 }
 
 /** سؤال واحد: زر «📝 التصحيح» وجنبه «📷 ورقة الطالب»، كل واحد يطلع لحاله. الرياضيات بشكل الكتاب (الكسر أفقي، π) */
-function QView({ q, photos, fileUrl, teach, hide, busy }: { q: Q; photos: string[]; fileUrl: (ref: string) => string; teach?: (i: number, mark: number, why: string) => Promise<unknown>; hide?: (key: string) => Promise<unknown>; busy?: boolean }) {
+function QView({ q, photos, fileUrl, teach, hide, words, busy }: { q: Q; photos: string[]; fileUrl: (ref: string) => string; teach?: (i: number, mark: number, why: string) => Promise<unknown>; hide?: (key: string) => Promise<unknown>; words?: (orig: string, text: string) => Promise<unknown>; busy?: boolean }) {
   const marked = !!q.marked?.some((p) => p.marks.length);
+  // «📝 كلام الخطوة»: خطوات الحل تنكتب بكلمات ملزمته، ويعدلها هو (طلبه 2026-11-25)
+  const [edit, setEdit] = useState<number | null>(null);
+  const [wtxt, setWtxt] = useState("");
   // «✏️ صلّح وعلّمه»: درجة الخطوة الصح وليش، وجوابه يصير قاعدة بهذا الموضوع
   const [fix, setFix] = useState<number | null>(null);
   const [mark, setMark] = useState("");
@@ -562,6 +579,13 @@ function QView({ q, photos, fileUrl, teach, hide, busy }: { q: Q; photos: string
             {s.awarded >= s.points ? "✅" : s.awarded > 0 ? "◐" : "❌"} <b>{s.awarded}/{s.points}</b>
             <MathText text={s.text} />
             {s.note && <small><Inline text={s.note} /></small>}
+            {s.eq && <small>🔢 نفس القيمة بشكل ثاني، فرجعت كاملة</small>}
+            {words && s.orig && (edit === i ? <div className="form">
+              <label>📝 كلام هاي الخطوة بكلماتك (يصحح ويكتب ملاحظاته بيه، بكل ورقة جاية بهذا الموضوع)</label>
+              <textarea rows={3} value={wtxt} onChange={(e) => setWtxt(e.target.value)} />
+              <button type="button" className="btn" disabled={busy || wtxt.trim().length < 2} onClick={() => void words(s.orig!, wtxt).then(() => setEdit(null))}>💾 احفظ كلامي</button>
+              <button type="button" className="exbtn" onClick={() => setEdit(null)}>✖ إلغاء</button>
+            </div> : <button type="button" className="exbtn" disabled={busy} onClick={() => { setEdit(i); setWtxt(s.text); }}>📝 كلام الخطوة</button>)}
             {teach && (fix === i && !tap ? form(i) : <button type="button" className="exbtn" disabled={busy} onClick={() => { setTap(null); open(i); }}>✏️ صلّح</button>)}
           </div></div>
         ))}
@@ -587,7 +611,8 @@ function PaperView({ p, fileUrl, busy, call, close }: { p: Paper; fileUrl: (ref:
       </div>
       <div className="exhint">✏️ إذا خطوة درجتها غلط: افتح «📝 التصحيح» بالسؤال ← ✏️ صلّح ← الدرجة الصح وليش ← 🧠 احفظ وعلّمه. يصلح هاي الورقة، ويتعلمها لكل ورقة جاية بهذا الموضوع.</div>
       {p.qs.map((q) => <QView key={q.n} q={q} fileUrl={fileUrl} photos={p.photos.filter((f) => f.q === q.n).map((f) => fileUrl(f.ref))} busy={busy}
-        teach={(i, mark, why) => call({ action: "teach", id: p.id, q: q.n, i, mark, why })} hide={(key) => call({ action: "hideMark", id: p.id, key })} />)}
+        teach={(i, mark, why) => call({ action: "teach", id: p.id, q: q.n, i, mark, why })} hide={(key) => call({ action: "hideMark", id: p.id, key })}
+        words={(orig, text) => call({ action: "stepWords", id: p.id, orig, text })} />)}
       {p.photos.some((f) => !f.q) && (
         <div className="card expad">
           <div className="exlabel">صفحات الورقة</div>

@@ -1045,3 +1045,21 @@ test("🎨 الورقة كلها بلون واحد: اللون اللي كاتب
   const pm = Q.marksByPage([q], ["a"], undefined, [], purple)[0].marks;
   assert.ok(pm.every((m) => m.col === "#7e22ce" && (!m.sym || m.sym.c === "#7e22ce")));
 });
+
+test("🔍 فحص الأسبوع: ورقتين من كل موضوع توصلك بأزرار، والأسبوع الجاي يگلك شگد صلّحت", async () => {
+  const W = await import("../lib/qusayWeekly.ts");
+  const ex = await insert("bank_exams", { title: "موضوع الفحص", chapter: 3 });
+  const now = Date.now() + 400 * 24 * 3600_000;
+  for (const u of [701, 702, 703]) {
+    await put("students", { user_id: u, name: `طالب ${u}`, created: "x" });
+    await insert("sched_items", { user_id: u, exam_id: ex, at: stamp(), status: "done", grader_id: QUSAY_GRADER, graded_at: stamp(new Date(now - 3600_000)), total: 80 });
+  }
+  const before = tg.length;
+  assert.deepEqual(await W.weeklyTick(now, 23), null, "بالليل ما يوصل");
+  const r = await W.weeklyTick(now, 10);
+  assert.ok(r && r.sent >= 2);
+  const msg = tg.slice(before).find((m) => String(m.p.text ?? "").includes("فحص هذا الأسبوع"));
+  assert.ok(msg, "وصلت الرسالة");
+  assert.ok(JSON.stringify(msg!.p.reply_markup).includes("paper="), "أزرار تفتح الورقة");
+  assert.equal(await W.weeklyTick(now + 3600_000, 10), null, "مرة بالأسبوع بس");
+});

@@ -6,6 +6,7 @@
 // (التعليمات وخطوات كل سؤال ودرجتها) نفسه لكل أوراق النموذج، فينحفظ عند الذكاء (كاش) وبالورقة الثانية يندفع عشره.
 // الورقة اللي يشك بيها (خط ما ينقرا، صورة ناقصة، طريقة غريبة) ما ينطيها درجة: ترجع للمصححين.
 // «🌙 بالدفعة»: الأوراق تروح سوا للذكاء وترجع خلال ساعة تقريباً (أكثر شي يوم)، وكلفتها النص.
+import { restoreSameValues } from "./sameValue.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import { find, kvGet, kvSet, one, put, remove, tx, update, type Row } from "./db.ts";
 import { AI_GRADER, QUSAY_GRADER } from "./data.ts";
@@ -33,14 +34,14 @@ export const QG_MODELS: Record<QgModel, { id: string; p: { in: number; cw: numbe
  *  cap: أكثر شي يصرف باليوم بالدولار. carry: الزايد عن الحد يتأجل لباچر وما يروح للمصححين (الأصل).
  *  unsure: الورقة اللي يشك بيها: «send» يصححها ويبعث درجتها ويكتب السبب بالسجل (الأصل، طلب الأستاذ 2026-11-21)، «graders» ترجع للمصححين */
 /** obj: الاعتراض على أوراقه، «qusay» يراجعه هو أول، «person» يروح لـ objTo (مساعد عنده صلاحية الاعتراضات، 0 = صاحب البوت) */
-export type QgSettings = { live: number[]; model: QgModel; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number; wait: boolean };
+export type QgSettings = { live: number[]; model: QgModel; effort: QgEffort; batch: boolean; cap: number; carry: boolean; unsure: "send" | "graders"; marks: boolean; style: string; obj: "qusay" | "person"; objTo: number; wait: boolean; recheck: boolean };
 /** مكان على صور جواب الطالب: p رقم الصورة (من 1)، x من اليسار و y من فوك، من 0 لـ 1000 من عرضها وطولها */
 export type QgPt = { p: number; x: number; y: number };
 /** at: وين مكتوبة الخطوة على ورقة الطالب، حتى تنرسم عليها ✓ أو ✗ حمرة مثل قلم المدرس (بس إذا «🖍 العلامات» شغالة) */
 /** hw: رقم عبارة من «✍️ خط إيدي» تقول نفس الملاحظة، فتنرسم بخط الأستاذ نفسه بدل الخط */
 /** w: شنو كاتب الطالب بهاي الخطوة (ينعرض بالتفصيل مثل مؤمل) */
-export type QgStep = { text: string; points: number; awarded: number; note: string; w?: string; at?: QgPt; hw?: number };
-export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[]; at?: QgPt; hw?: number };
+export type QgStep = { text: string; points: number; awarded: number; note: string; w?: string; at?: QgPt; hw?: number; eq?: 1 };
+export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[]; at?: QgPt; hw?: number; second?: 1 };
 /** m: الذكاء اللي جاوب (من جوابه نفسه)، حتى السعر ينحسب صح */
 export type QgTokens = { in: number; cw: number; cr: number; out: number; m?: string };
 /** نتيجة ورقة: trial تجربة مخفية على ورقة صححها مصحح (human درجته)، live ورقة صححها صدگ (لو رجعها للمصححين إذا ما متأكد) */
@@ -91,7 +92,7 @@ export async function qgSettings(): Promise<QgSettings> {
   const cap = Number(s.cap);
   // الإعدادات القديمة (قبل v 2) كانت «هسه» بالأصل: تصير بالدفعة، طلب الأستاذ 2026-11-21
   const v2 = Number(s.v) >= 2;
-  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], model: s.model === "sonnet" || s.model === "opus" ? s.model : "haiku", effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "", obj: s.obj === "qusay" ? "qusay" : "person", objTo: Number(s.objTo) > 0 ? Number(s.objTo) : 0, wait: s.wait !== false };
+  return { live: Array.isArray(s.live) ? s.live.map(Number).filter(Number.isInteger) : [], model: s.model === "sonnet" || s.model === "opus" ? s.model : "haiku", effort: s.effort === "low" ? "low" : "medium", batch: v2 ? !!s.batch : true, cap: cap > 0 ? Math.min(cap, 100) : DEFAULT_CAP, carry: v2 && s.carry !== undefined ? !!s.carry : true, unsure: s.unsure === "graders" ? "graders" : "send", marks: s.marks === true, style: typeof s.style === "string" ? s.style.slice(0, STYLE_MAX) : "", obj: s.obj === "qusay" ? "qusay" : "person", objTo: Number(s.objTo) > 0 ? Number(s.objTo) : 0, wait: s.wait !== false, recheck: s.recheck === true };
 }
 export async function saveQgSettings(p: Partial<QgSettings>) {
   const s = { ...await qgSettings(), ...p, v: 2 };
@@ -226,6 +227,8 @@ Grade the student's answer question by question:
 - If a question has no answer anywhere in the student's pages, set answered=false and score 0.
 
 DRAWINGS (graphs of functions, parabola / ellipse / hyperbola sketches, the figure of a word problem): a step that asks for a drawing is graded by looking at the student's drawing itself, compared with the teacher's drawing in the model solution (when given) and with the values found in the earlier steps. Check the main features: the axes; the special points the curve must pass through (intercepts, critical / turning points, inflection points, table points, vertices, foci, centre) placed at about the right places; the asymptotes; and the right shape (where it rises and falls, concave up or down, symmetry, which way it opens). Hand drawings are rough: never take points for neatness or exact scale. Full drawing points when the main features are right, part of them when only some are right, 0 when there is no drawing or it does not match. A drawing step is never earned by written work alone: no drawing means 0 for that step. If you cannot see the drawing clearly in the photo, set sure=false.
+
+BENEFIT OF THE DOUBT (the teacher's firm rule: he compared you with his own marks and you were too strict, mostly on drawings, tables, asymptotes, denominators and English-curriculum papers): take points ONLY when you are sure the work is wrong or missing. When a drawing, a table, an asymptote, a sign line or a value is roughly right, written in an unusual but possibly valid way, or you are not sure whether it is wrong (unclear photo, rough sketch, handwriting you cannot read for certain), AWARD the points and set sure=false for that question; in "reason" say briefly what you were not sure about, so the teacher checks it himself. A wrong deduction hurts the student more than a missed one.
 
 Set sure=false for a question when you cannot read the handwriting, part of the answer is cut off or missing from the photo, the work matches no method and you cannot judge it, or you hesitate between two marks. Being unsure is fine: a human grader will then check the paper. Do not guess.
 
@@ -461,13 +464,18 @@ async function buildRequest(it: Row, mat: VMat, effort: QgEffort, marks = false,
   if (!answers.length) throw new Error("ماكو صور جواب بالورقة");
   // حرف النسخة (A، B…): شرح الأستاذ بعبارات الموضوع ممكن يخص نسخة («بالنسخة B السؤال 3 …»)
   const ver = String((await one("bank_versions", { id: it.version_id }))?.model ?? "");
-  const head: Anthropic.ContentBlockParam[] = [{ type: "text", text: `MARKING SCHEME (the same for every student of this exam version)${ver ? `. This paper is exam version ${ver} (النسخة ${ver}): when the teacher's notes talk about a version, apply what he says about version ${ver}` : ""}:` }];
+  // 📝 الخطوات بكلمات ملزمته (مترجمة مرة وحدة ومحفوظة، أو كلامه هو إذا عدلها)، حتى الملاحظات تطلع بكلماته مو بترجمة الذكاء (طلبه 2026-11-25)
+  const allSteps = mat.qs.flatMap((q) => (q.rubric ? [q.rubric.steps, ...q.rubric.alts].flat().map((x) => x.text) : []));
+  const arSteps = new Map<string, string>();
+  (await stepsIn("ar", allSteps)).forEach((t, k) => arSteps.set(allSteps[k], t));
+  const stepsAr = (steps: { text: string; points: number }[]) => stepsText(steps.map((x) => ({ ...x, text: arSteps.get(x.text) || x.text })));
+  const head: Anthropic.ContentBlockParam[] = [{ type: "text", text: `MARKING SCHEME (the same for every student of this exam version). The steps are written in the teacher's own Arabic book words: use exactly these words in every note${ver ? `. This paper is exam version ${ver} (النسخة ${ver}): when the teacher's notes talk about a version, apply what he says about version ${ver}` : ""}:` }];
   for (const q of mat.qs) {
     let t = `\n=== Question ${q.n} — maximum ${q.max} points ===`;
     if (q.qText) t += `\nQuestion text: ${q.qText}`;
     if (q.rubric) {
-      t += `\nMethod 1 steps:\n${stepsText(q.rubric.steps)}`;
-      q.rubric.alts.forEach((a, k) => { t += `\nMethod ${k + 2} steps:\n${stepsText(a)}`; });
+      t += `\nMethod 1 steps:\n${stepsAr(q.rubric.steps)}`;
+      q.rubric.alts.forEach((a, k) => { t += `\nMethod ${k + 2} steps:\n${stepsAr(a)}`; });
     } else t += q.model.length ? "\nNo steps written: grade against the teacher's model solution image(s) below, fairly by parts." : "\nNo steps written: grade against this question's part of the teacher's model solution PDF.";
     head.push({ type: "text", text: t });
     if (q.qImg) head.push(block(q.qImg, `صورة السؤال ${q.n}`));
@@ -557,10 +565,21 @@ const TRANS = (lang: "ar" | "en") => `You translate the steps of a math marking 
 Keep every formula, symbol, number, arrow (→), semicolon (;) and set notation exactly as written; translate only the words.
 ${lang === "ar" ? "Use these book terms: local maximum point = نقطة نهاية عظمى محلية; local minimum point = نقطة نهاية صغرى محلية; inflection point = نقطة انقلاب; critical point = نقطة حرجة; vertical asymptote = المحاذي العمودي; horizontal asymptote = المحاذي الأفقي; domain = أوسع مجال; intercepts = نقاط التقاطع مع المحورين; symmetric about the y-axis = متناظرة حول محور الصادات; about the origin = حول نقطة الأصل; increasing / decreasing = تزايد / تناقص; concave up / concave down = تقعر / تحدب; sign line / sign of f' = خط الاختبار; table = الجدول; graph = الرسم; denominator = المقام." : "Use the English book's terms (local maximum point, inflection point, vertical asymptote, domain, concave up / down, ...)."}
 Return {"items": [...]} with one translated string per input step, in the same order.`;
+/** «📝 كلام الخطوة»: كلماته هو لخطوة (بدل الترجمة)، لكل ورقة جاية بيها نفس الخطوة */
+const ownKey = (t: string) => trKey("own", t);
+export async function setStepWords(orig: string, text: string) {
+  const o = orig.trim(), t = text.trim();
+  if (!o) throw new Error("الخطوة مو معروفة");
+  if (t.length < 2 || t.length > 800) throw new Error("اكتب كلام الخطوة (لحد 800 حرف)");
+  await kvSet(ownKey(o), t);
+}
 export async function stepsIn(lang: "ar" | "en", texts: string[]): Promise<string[]> {
   const out = [...texts];
   const miss: number[] = [];
   await Promise.all(texts.map(async (t, k) => {
+    // كلامه هو أول شي (بالعربي): يغلب الترجمة
+    const own = lang === "ar" ? await kvGet(ownKey(t.trim())) : null;
+    if (own) { out[k] = own; return; }
     if (!needsTr(lang, t)) return;
     const c = await kvGet(trKey(lang, t));
     if (c) out[k] = c; else miss.push(k);
@@ -879,11 +898,13 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
       if ((Number(a.score) || 0) >= m.max) for (const st of steps) st.awarded = st.points;
       else throw new PaidError(`جواب الذكاء ناقص (السؤال ${m.n} بلا خطوات)`, tokens);
     }
+    // 🔢 نفس القيمة بشكل ثاني (6/4 و3/2): الكود يرجّع الخطوة كاملة، الذكاء ما يحسب (طلبه 2026-11-25)
+    const eq = answered ? restoreSameValues(steps) : 0;
     let score = plan ? steps.reduce((t, s) => t + s.awarded, 0) : Number(a.score) || 0;
     score = answered ? Math.min(m.max, Math.max(0, whole(score))) : 0;
     const at = ptOf(a, pages, papers, true);
     const hw = Math.round(Number(a.hw) || 0);
-    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: cleanNote(String(a.reason ?? "")).slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
+    return { n: m.n, max: m.max, score, answered, sure: a.sure !== false, reason: eq && score >= m.max ? "" : cleanNote(String(a.reason ?? "")).slice(0, 500), method: plan ? method : 1, steps, ...(at ? { at } : {}), ...(hw > 0 ? { hw } : {}) };
   });
   // «أجب عن K»: السؤال اللي ما جاوبه ما يحتاج تأكيد
   if (answerOnly) for (const q of qs) if (!q.answered) q.sure = true;
@@ -972,6 +993,32 @@ async function prepare(jobs: Job[], effort: QgEffort, onFail: (j: Job, e: unknow
   }
   return out;
 }
+/** 🔍 نظرة ثانية: كل سؤال شك بيه (لحد سؤالين بالورقة) يتصحح لحاله مرة ثانية بصوره بس.
+ *  إذا صار متأكد ناخذ تصحيحه، وإذا بعده شاك تبقى الدرجة لمصلحة الطالب والسؤال معلّم «ما متأكد» حتى تشوفه. يرجع كلفتها */
+const RECHECK_MAX = 2;
+const SECOND = `
+SECOND LOOK: the first grading of this question was NOT sure. Look again, slowly and carefully, at the student's work for this question only: read every digit and every line, compare with the steps, and decide each step. Follow the teacher's rules above (benefit of the doubt, one mistake penalized once). Set sure=true only if you are now certain of every step.`;
+async function secondLook(p: Prepared, qs: QgQuestion[]): Promise<number> {
+  let usd = 0;
+  for (const q of qs.filter((x) => x.answered && !x.sure && x.steps.length).slice(0, RECHECK_MAX)) {
+    try {
+      const m = p.mat.qs.find((x) => x.n === q.n);
+      if (!m) continue;
+      const sub: VMat = { qs: [m], pdf: p.mat.pdf };
+      const { req, unanswered } = await buildRequest(p.job.it, sub, "medium");
+      const content = req.messages[0].content as Anthropic.ContentBlockParam[];
+      content.push({ type: "text", text: SECOND });
+      const r = readAnswer(await apiImpl.create(req), sub, unanswered, p.answerOnly, 0);
+      usd += usdOf(r.tokens, false);
+      const q2 = r.qs[0];
+      if (!q2?.sure || q2.method !== q.method) continue;
+      q.steps.forEach((st, k) => { const s2 = q2.steps[k]; if (!s2) return; st.awarded = s2.awarded; st.note = s2.note; if (s2.eq) st.eq = 1; else delete st.eq; });
+      q.score = Math.min(q.max, q.steps.reduce((t, x) => t + x.awarded, 0));
+      q.reason = q2.reason; q.sure = true; q.second = 1;
+    } catch (e) { console.error("qusay second look", q.n, e); await chargeFailed(e); }
+  }
+  return usd;
+}
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 200);
 async function failed(job: Job, e: unknown) {
   const { it } = job;
@@ -988,8 +1035,10 @@ async function settle(p: Prepared, msg: Anthropic.Message, batch: boolean, finis
   let read: ReturnType<typeof readAnswer>;
   try { read = readAnswer(msg, p.mat, p.unanswered, p.answerOnly, p.marks ? p.pages.length : 0); } catch (e) { throw priced(e, batch); }
   const { qs, tokens } = read;
-  const usd = usdOf(tokens, batch);
+  let usd = usdOf(tokens, batch);
   await addSpend("qusay", usd);
+  // 🔍 نظرة ثانية على الأسئلة اللي شك بيها (إذا مشغلها): يصححها لحالها مرة ثانية بتركيز (طلبه 2026-11-25)
+  if ((await qgSettings()).recheck) { const extra = await secondLook(p, qs); if (extra) { usd += extra; await addSpend("qusay", extra); } }
   const total = qs.reduce((t, q) => t + q.score, 0);
   const sure = qs.every((q) => q.sure);
   const name = await nameOfRow(it), exam = await examTitle(it.exam_id);
@@ -1479,6 +1528,8 @@ export async function qusayTick(finish: (uid: number, itemId: number) => Promise
   // ⏸ أوراق تنتظر خطه: تذكير كل 3 ساعات (حتى لو تصحيح قصي طافي)
   await waitReminders().catch((e) => console.error("ink wait", e));
   if (!await qgOn()) return { off: true };
+  // 🔍 فحص الأسبوع: ورقتين من كل موضوع توصلك تشوفها، وتقرير شگد صلّحت (ببلاش)
+  await (await import("./qusayWeekly.ts")).weeklyTick().catch((e) => console.error("qusay weekly", e));
   if (!keyReady()) return { noKey: true };
   const s = await qgSettings();
   const received = (await batches()).length ? await pollBatches(finish, s.effort, s.marks, s.style) : 0;
