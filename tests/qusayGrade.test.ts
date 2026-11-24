@@ -516,6 +516,9 @@ test("🖍 العلامة ما تطلع برة الصورة", () => {
   const word = { id: 9, kind: "note" as const, text: "الحل ناقص", w: 1000, h: 360, s: [[1, 2, 3, 4]] };
   const [mm] = Q.marksByPage([many], ["a"], undefined, [], [word]);
   assert.deepEqual(mm.marks.map((m) => [m.kind, !!m.big, m.note ?? "", m.x, m.y, !!m.hand]), [["bad", false, "ناقص i", 400, 200, false], ["miss", true, "الحل ناقص", 500, 370, true]]);
+  // «الحل ناقص» اللي كتبها بمربع «؟ الحل ناقص» تنفع هم
+  const [ma] = Q.marksByPage([many], ["a"], undefined, [], [{ ...word, kind: "ask" as const, text: "؟" }]);
+  assert.ok(ma.marks.find((m) => m.big)!.hand, "بخطه من مربع ؟");
   // ماكو ولا ملاحظة: سبب السؤال
   const [m6] = Q.marksByPage([{ ...miss, steps: miss.steps.map((st) => ({ ...st, note: "" })) }], ["a"]);
   assert.equal(m6.marks[0].note, "ناقص");

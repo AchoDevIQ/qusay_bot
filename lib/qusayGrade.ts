@@ -646,9 +646,11 @@ export function marksByPage(qs: QgQuestion[], pages: string[], only?: number, ex
       continue;
     }
     if (many) {
-      const word = ink.find((x) => x.kind === "note" && /الحل\s*ناقص/.test(x.text));
+      // خطه: «الحل ناقص» اللي كتبها بمربع «؟ الحل ناقص» (كتبها كلمة، 3 مرات)، لو ملاحظة بنفس الكلام
+      const note = ink.find((x) => x.kind === "note" && /الحل\s*ناقص/.test(x.text));
+      const word = note ? shape(note) : pick("ask");
       const end = q.at ? { p: q.at.p, x: 500, y: Math.min(1000, q.at.y + 70) } : placed.length ? { ...placed[placed.length - 1].at!, x: 500 } : undefined;
-      add(end, { kind: "miss", big: true, text: "", q: q.n, i: -1, note: "الحل ناقص", ...(word ? { hand: shape(word) } : {}) });
+      add(end, { kind: "miss", big: true, text: "", q: q.n, i: -1, note: "الحل ناقص", ...(word ? { hand: word } : {}) });
     }
     // الخطوات اللي ما كتبها الطالب (ما إلها مكان): «؟» تحت آخر جوابه (مو ✗ على سطر صح، طلبه 2026-11-22)، ويمها شنو ناقص
     if (unplaced.length || (!drawn && !many)) {
