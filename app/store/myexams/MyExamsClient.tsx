@@ -12,7 +12,7 @@ import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import PenPage, { hasPenDraft, type PenHead } from "./PenPage";
 import { donePicking, pickingNow } from "../picking";
 
-type Item = { id: number; status?: string; exam?: number; skippable?: boolean; optional?: boolean; total?: number | null; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; ipad?: boolean; catchup?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
+type Item = { id: number; status?: string; exam?: number; skippable?: boolean; optional?: boolean; total?: number | null; gwait?: boolean; title: string; chapter: string; minutes: number; lectures?: string[]; at: string; exc?: string | null; retake?: boolean; ipad?: boolean; catchup?: boolean; state: "locked" | "open" | "missed" | "done" | "center" | "past" | "notbought" };
 type PlacePreview = { items: { title: string; at: string; locked: boolean }[]; waiting: number };
 type Preview = { items: { title: string; at: string; skip?: boolean }[]; days: number; maxPerDay: number; perWeek: number };
 type Info = {
@@ -158,7 +158,7 @@ export default function MyExamsClient() {
         {info && info.late.length > 0 && <LateAsk info={info} busy={busy} call={call} />}
         {info?.guardWait && (info.guardWait.pending.length > 0 || info.guardWait.old) && (
           <div className="card"><div className="hmlink">
-            <div>✍️ <b>ولي أمرك بعده ما استلم {info.guardWait.pending.length > 1 ? `${info.guardWait.pending.length} درجات` : "درجتك"}.</b> الورقة المصححة والاعتراض ينفتحن ورا ما يدوس «✅ استلمت». {info.guardWait.old ? "ولأن مرت 3 أيام، المتجر والتصويت والمنافسة مقفولين هسه. الدراسة والامتحانات مفتوحة دايماً." : "إذا مرت 3 أيام وما استلم، المتجر والتصويت والمنافسة ينقفلن."}</div>
+            <div>✍️ <b>ولي أمرك بعده ما استلم {info.guardWait.pending.length > 1 ? `${info.guardWait.pending.length} درجات` : "درجتك"}.</b> الدرجة والورقة المصححة والاعتراض ينفتحن ورا ما يدوس «✅ استلمت». {info.guardWait.old ? "ولأن مرت 3 أيام، المتجر والتصويت والمنافسة مقفولين هسه. الدراسة والامتحانات مفتوحة دايماً." : "إذا مرت 3 أيام وما استلم، المتجر والتصويت والمنافسة ينقفلن."}</div>
             {info.guardWait.travel ? <div className="exhint">✈️ القفل مأجّل لحد {info.guardWait.travel}</div> : <button type="button" className="btn ghost" disabled={busy} onClick={() => void call({ action: "askTravel" })}>✈️ ولي أمري مسافر</button>}
           </div></div>
         )}
@@ -861,7 +861,7 @@ function List({ info, busy, enter, paper, file, off, cmd }: { info: Info; busy: 
             </tr>
           ))}
           <tr className={`mxexamrow ${i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}`} id={i.id === now?.id && !(i.lectures ?? []).length ? "mx-now" : undefined}>
-            <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxexam">📝 امتحان</span><b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
+            <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxexam">📝 امتحان</span><b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}{i.gwait && <span className="adentag">👨‍👧 الدرجة عند ولي أمرك</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.skippable && (
                 <div className="hint adtop">هذا الامتحان مو إجباري. تگدر تحذفه من جدولك، فيصعد جدولك:

@@ -746,12 +746,14 @@ async function itemsView(uid: number, s: SchedSettings) {
   const ipad = inPerson && await ipadExam(uid);
   const lec = await lectureMap();
   // وين ينقدم: الإدارة تگدر تفتحه «إلكتروني من بيته» لو «بمركزه بالآيباد»، والتعويض حسب اختياره
+  // درجة ولي أمره بعده ما استلمها: الرقم ما يطلع للطالب (طلب الأستاذ 2026-11-24)
+  const gw = new Set((await guardWaitOf(uid))?.pending ?? []);
   const placeOf = (i: Row) => (i.catch_place === "online" ? "online" : i.catch_place === "ipad" ? "ipad" : i.kind === "catchup" ? "online" : ipad ? "ipad" : inPerson ? "paper" : "online");
   return (await find("sched_items", { user_id: uid }, { order: ["at"] })).filter((i) => i.status !== "skipped").map((i) => {
     const e = exams.get(i.exam_id);
     const state = roomState(i, s, now);
     // الحضوري ينقدم بالمركز، فبعد موعده يكفي نگول انتهى
-    return { id: i.id, exam: i.exam_id as number, optional: i.kind === "optional", catchup: i.kind === "catchup", total: i.graded_at ? i.total : null, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of,
+    return { id: i.id, exam: i.exam_id as number, optional: i.kind === "optional", catchup: i.kind === "catchup", total: i.graded_at && !gw.has(Number(i.id)) ? i.total : null, gwait: !!i.graded_at && gw.has(Number(i.id)), title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", minutes: e?.minutes ?? 75, lectures: i.kind === "optional" ? [] : lec.get(i.exam_id) ?? [], at: i.at, exc: i.exc_state ?? null, status: i.status, retake: !!i.retake_of,
       // بالآيباد بالمركز: ينتظر الحضور، ومن ينسجل تنفتح أسئلته (التعويض الحضوري هم)
       ipad: placeOf(i) === "ipad", away: i.catch_place === "online",
       state: placeOf(i) === "online" ? state : placeOf(i) === "ipad" ? ipadState(i.status, state) : inPerson && state !== "locked" ? "past" : inPerson ? "center" : state };
@@ -764,6 +766,8 @@ async function optionalList(uid: number, bought: Row[]) {
   return bought.filter((e) => versions.some((v) => v.exam_id === e.id) && !taken.has(e.id)).map((e) => ({ exam: e.id, title: e.title, chapter: e.chapter, minutes: e.minutes ?? 75 }));
 }
 async function studentInfo(uid: number) {
+  // درجات كانت تنتظر ولي الأمر وهسه ما تنتظر (انفك الربط، لو حظر البوت): توصله
+  try { await (await import("./gradeApi.ts")).releaseStudent(uid); } catch (e) { console.error(e); }
   const s = await schedSettings();
   await closeMissed(uid, s);
   const st = await student(uid);

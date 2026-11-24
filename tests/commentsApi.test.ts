@@ -94,11 +94,22 @@ test("لمن تخلص الورقة: الطالب توصله بطاقة الدر�
   await g("finish");
   // بالفحص ماكو متصفح يرسم البطاقة، فتوصل نص بنفس الكلام والأزرار. والأوراق ما توصل للبوت
   assert.equal(calls.filter((x) => x.method === "sendMediaGroup" || x.method === "sendPhoto").length, 0);
+  // الطالب عنده ولي أمر: توصله رسالة بلا رقم، ودرجته توصله ورا ما ولي أمره يدوس «✅ استلمت» (طلب الأستاذ 2026-11-24)
+  const waitMsg = calls.find((x) => x.method === "sendMessage" && String(x.p.chat_id) === "50")!;
+  assert.doesNotMatch(waitMsg.p.text, /60/);
+  assert.match(waitMsg.p.text, /تم تصحيح ورقتك[\s\S]*بعد ما ولي أمرك يدوس/);
+  const toParent = calls.find((x) => x.method === "sendMessage" && String(x.p.chat_id) === "51")!;
+  const { guardianSeen } = await import("../lib/guardianWatch.ts");
+  const { releaseStudent } = await import("../lib/gradeApi.ts");
+  calls.length = 0;
+  await releaseStudent(50);
+  assert.equal(calls.filter((x) => String(x.p?.chat_id) === "50").length, 0, "قبل الاستلام ما يوصله شي");
+  assert.match(await guardianSeen(51, id), /^✅/);
+  await releaseStudent(50);
   const toStudent = calls.find((x) => x.method === "sendMessage" && String(x.p.chat_id) === "50")!;
   assert.match(toStudent.p.text, /60<\/b> من 100[\s\S]*💬 «/);
   assert.equal(toStudent.p.protect_content, true);
   assert.match(toStudent.p.reply_markup.inline_keyboard[0][0].web_app.url, new RegExp(`&paper=${id}$`));
-  const toParent = calls.find((x) => x.method === "sendMessage" && String(x.p.chat_id) === "51")!;
   assert.match(toParent.p.text, /60<\/b> من 100[\s\S]*علي حسن محمد كاظم/);
   assert.doesNotMatch(toParent.p.text, /💬/);
   assert.equal(toParent.p.reply_markup.inline_keyboard[0][0].callback_data, `gs:${id}`);

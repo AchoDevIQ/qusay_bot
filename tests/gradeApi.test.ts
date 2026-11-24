@@ -84,7 +84,8 @@ test("التصحيح: الصلاحية، أول مصحح ياخذ الورقة،
   calls.length = 0;
   const done = await g(20, "finish", { id });
   assert.match(done.notice, /75 من 100/);
-  assert.ok(calls.some((c) => c.p.chat_id === 50 && /75/.test(c.p.text)));
+  // عنده ولي أمر: الطالب توصله «تم تصحيح ورقتك» بلا رقم، والرقم بعد ما ولي أمره يدوس استلمت
+  assert.ok(calls.some((c) => c.p.chat_id === 50 && /تم تصحيح ورقتك/.test(c.p.text) && !/75/.test(c.p.text)));
   assert.ok(calls.some((c) => c.p.chat_id === 51 && /75/.test(c.p.text)));
   assert.equal((await one("sched_items", { id }))!.total, 75);
   await assert.rejects(g(20, "mark", { id, q: 1, mark: 1 }), /مخلصة/);

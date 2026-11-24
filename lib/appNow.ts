@@ -10,6 +10,7 @@ import { plain } from "./appPush.ts";
 import { schedSettings } from "./schedApi.ts";
 import { addDays, ampm, prettyDay } from "./scheduleRules.ts";
 import { stamp, todayStr } from "./util.ts";
+import { paperWaits } from "./guardianLock.ts";
 
 export type NowCard = { kind: "exam" | "vote" | "notice" | "grade" | "order" | "next"; title: string; text: string; go: "exams" | "inbox" | "orders"; hot?: boolean; id?: number };
 const MAX = 8;
@@ -48,7 +49,8 @@ export async function nowCards(uid: number, now = stamp()): Promise<NowCard[]> {
   // ٤. درجة طلعت بآخر يومين
   const since = `${addDays(today, -2)} ${now.slice(11, 16)}`;
   for (const i of items.filter((x) => x.graded_at && String(x.graded_at) >= since).reverse().slice(0, 2)) {
-    out.push({ kind: "grade", id: Number(i.id), title: "✅ طلعت درجتك", text: `${title(i)}: ${Number(i.total) || 0} من 100`, go: "exams" });
+    const waits = await paperWaits(uid, Number(i.id));
+    out.push({ kind: "grade", id: Number(i.id), title: "✅ طلعت درجتك", text: waits ? `${title(i)}: توصلك أول ما ولي أمرك يستلمها` : `${title(i)}: ${Number(i.total) || 0} من 100`, go: "exams" });
   }
   // ٥. طلب بعده يتجهز
   for (const o of (await find("orders", { user_id: uid })).filter((x) => !Number(x.printed) && String(x.created ?? "") >= addDays(today, -30))) {

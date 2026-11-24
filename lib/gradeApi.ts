@@ -19,6 +19,8 @@ import { rescanPaper } from "./rescan.ts";
 import { addVoice, clearPaperVoices, dropFromPaper, dropSaved, examVoices, paperVoices, sendPaperVoices, useVoice } from "./gradeVoices.ts";
 import { CALIB_PERM, aiCalibIds, aiHeld, aiJudgeObjection, aiPartialOf, aiQuestions, aiResultOf } from "./aiGrade.ts";
 import { guardianSent, holdGrade, nextHeld, SEEN_CAPTION, seenButton, unseenBefore } from "./guardianWatch.ts";
+import { paperWaits } from "./guardianLock.ts";
+import { editWaitText, holdForStudent, setWaiting, waitText, waitingOf } from "./gradeWait.ts";
 import { plainMath, stamp, todayStr } from "./util.ts";
 import { gradeCardPng } from "./documents.ts";
 import { prettyAt } from "./scheduleRules.ts";
@@ -218,18 +220,20 @@ export async function ownerFixMark(itemId: number, q: number, mark: number) {
   await update("sched_items", { id: itemId }, { total });
   if (isTest(it)) return { total, old };
   const view = await paperRow(it);
-  await send(it.user_id, `✏️ <b>الأستاذ راجع ورقتك</b>
-امتحان: ${esc(view.title)}
-
-السؤال ${q}: صارت درجته <b>${mark}</b>${old !== null ? ` بدل ${old}` : ""}
-
-درجتك الجديدة: <b>${total}</b> من 100`, { extra: { protect_content: true } });
   const g = await guardianOf(it.user_id);
   if (g) {
     await send(g.guardian_id, `📝 <b>تعديل درجة</b>
 الأستاذ راجع ورقة الطالب <b>${esc(view.name)}</b> في امتحان <b>${esc(view.title)}</b>، وصارت درجته <b>${total}</b> من 100.`, { kb: seenButton(it.id), extra: { protect_content: true } });
     await guardianSent(it.user_id, g.guardian_id, it.id);
   }
+  // الطالب: الدرجة الجديدة توصله ورا ما ولي أمره يستلمها
+  if (await paperWaits(it.user_id, it.id)) { await send(it.user_id, editWaitText(esc(view.title))); await holdForStudent(it.user_id, { id: it.id, kind: "edit" }); }
+  else await send(it.user_id, `✏️ <b>الأستاذ راجع ورقتك</b>
+امتحان: ${esc(view.title)}
+
+السؤال ${q}: صارت درجته <b>${mark}</b>${old !== null ? ` بدل ${old}` : ""}
+
+درجتك الجديدة: <b>${total}</b> من 100`, { extra: { protect_content: true } });
   await logActivity(it.user_id, `✏️ الأستاذ صلّح درجة السؤال ${q} بامتحان ${view.title}: ${old ?? "—"} ← ${mark}. الدرجة ${total}`);
   return { total, old };
 }
@@ -774,7 +778,8 @@ async function finishEdit(uid: number, it: Row, photos: Buffer[]) {
   await logActivity(it.user_id, `✏️ ${await staffName(uid)} عدل تصحيح امتحان ${view.title}: ${old} ← ${total}`);
   if (total === old) return `✅ انحفظ التعديل، والدرجة بقت ${total} من 100`;
   const text = `✏️ <b>تعديل درجة</b>\nامتحان: <b>${esc(view.title)}</b>\nدرجتك صارت <b>${total}</b> من 100 (كانت ${old}).`;
-  await send(it.user_id, text);
+  if (await paperWaits(it.user_id, it.id)) { await send(it.user_id, editWaitText(esc(view.title))); await holdForStudent(it.user_id, { id: it.id, kind: "edit" }); }
+  else await send(it.user_id, text);
   const g = await guardianOf(it.user_id);
   if (g) await send(g.guardian_id, `✏️ <b>تعديل درجة</b>\nدرجة الطالب <b>${esc(String(view.name))}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`);
   try { await runCheckpoints(it.user_id); } catch (e) { console.error(e); }
@@ -809,9 +814,6 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   const studentCard = sticker || c?.text ? (await gradeCardPng(it.id, { ...cardInfo, sticker, quote: c?.text }, "_s")) ?? card : card;
   const deliver = deliverCard;
   {
-    const paperBtn: Kb = [[{ text: "📂 شوف ورقتك المصححة", web_app: { url: `${adminPageLink("myexams", it.user_id)}&paper=${it.id}` } }]];
-    await deliver(it.user_id, "", paperBtn, studentCard, `${text}\n\n👇 دوس الزر تشوف ورقتك المصححة ودرجة كل سؤال. وإذا تشوف درجة سؤال مو صحيحة، تعترض عليه من هناك.`);
-    await sendPaperVoices(it.user_id, it.id);
     const g = await guardianOf(it.user_id);
     if (g) {
       // ولي الأمر: البطاقة بدون مقولة، ووياها زر «✅ استلمت الدرجة». إذا اللي قبلها بعده ما داس عليها، هاي تنتظر
@@ -825,6 +827,14 @@ ${SEEN_CAPTION}`);
         await guardianSent(it.user_id, g.guardian_id, it.id);
       }
     }
+    // الطالب: درجته توصله ورا ما ولي أمره يستلمها (إذا عنده ولي أمر يستلم)، وبدالها رسالة بلا رقم
+    if (await paperWaits(it.user_id, it.id)) {
+      await send(it.user_id, waitText(view.title));
+      await holdForStudent(it.user_id, { id: it.id, kind: "card", c: c?.text ?? "", sticker: (c?.sticker?.id as number | undefined) ?? null });
+    } else {
+      await deliver(it.user_id, "", paperBtnOf(it), studentCard, `${text}\n\n${PAPER_HINT}`);
+      await sendPaperVoices(it.user_id, it.id);
+    }
     await logActivity(it.user_id, `📝 تم تصحيح امتحان ${view.title}: ${total} من 100`);
     try { await runCheckpoints(it.user_id); } catch (e) { console.error(e); }
   }
@@ -836,6 +846,37 @@ async function deliverCard(chat: number, caption: string, kb: Kb, pic: Buffer | 
   if (pic && await upload("sendPhoto", { chat_id: String(chat), ...(caption ? { caption, parse_mode: "HTML" } : {}), protect_content: "true", reply_markup: JSON.stringify({ inline_keyboard: kb }) }, "photo", pic, "grade.png", "image/png")) return;
   await send(chat, fallback, { kb, extra: { protect_content: true } });
 }
+const paperBtnOf = (it: Row): Kb => [[{ text: "📂 شوف ورقتك المصححة", web_app: { url: `${adminPageLink("myexams", it.user_id)}&paper=${it.id}` } }]];
+const PAPER_HINT = "👇 دوس الزر تشوف ورقتك المصححة ودرجة كل سؤال. وإذا تشوف درجة سؤال مو صحيحة، تعترض عليه من هناك.";
+
+/** ولي الأمر استلم (لو انفك ربطه، لو حظر البوت): درجات الطالب اللي كانت تنتظر توصله هسه */
+export async function releaseStudent(sid: number) {
+  const list = await waitingOf(sid);
+  if (!list.length) return;
+  const keep = [];
+  for (const w of list) {
+    if (await paperWaits(sid, w.id)) { keep.push(w); continue; }
+    const it = await one("sched_items", { id: w.id });
+    if (!it || it.total === null || it.total === undefined) continue;
+    try {
+      const st = await student(sid);
+      const e = await one("bank_exams", { id: it.exam_id });
+      const exam = titleFor(e, st?.curr) || String(e?.title ?? "امتحان");
+      const total = Number(it.total);
+      if (w.kind === "edit") { await send(sid, `✏️ <b>تعديل درجة</b>\nامتحان: <b>${esc(exam)}</b>\nدرجتك صارت <b>${total}</b> من 100.`, { extra: { protect_content: true } }); continue; }
+      const when = String(it.started_at || it.attended_at || it.at || "");
+      const info = { name: String(st?.name ?? ""), exam, center: (await examLabel(sid)).replace(/^حضوري — /, ""), total, at: when.length >= 16 ? prettyAt(when) : when };
+      const sticker = await stickerData(w.sticker ? await one("stickers", { id: w.sticker }) : null);
+      const card = await gradeCardPng(it.id, info);
+      const sc = sticker || w.c ? (await gradeCardPng(it.id, { ...info, sticker, quote: w.c || undefined }, "_s")) ?? card : card;
+      const head = `📝 <b>تم تصحيح امتحان ${esc(exam)}</b>\nالدرجة: <b>${total}</b> من 100`;
+      await deliverCard(sid, "", paperBtnOf(it), sc, `${w.c ? `${head}\n┈┈┈┈┈┈┈┈┈┈┈┈\n💬 «${esc(w.c)}»\n┈┈┈┈┈┈┈┈┈┈┈┈` : head}\n\n${PAPER_HINT}`);
+      await sendPaperVoices(sid, it.id);
+    } catch (e) { console.error("release grade", w.id, e); keep.push(w); }
+  }
+  await setWaiting(sid, keep);
+}
+
 /** ولي الأمر داس «استلمت»: الدرجة اللي كانت تنتظر توصله هسه (وحدة وحدة، كل وحدة يدوس استلمت عليها) */
 export async function releaseHeld(sid: number) {
   const g = await guardianOf(sid);

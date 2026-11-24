@@ -151,7 +151,7 @@ async function onCallback(q: Row) {
     if (d !== "gs:done" && note.startsWith("✅")) {
       if (mid) await api("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [[{ text: "✅ استلمت", callback_data: "gs:done" }]] } });
       // الدرجة اللي كانت تنتظر هذا الاستلام توصل هسه
-      try { const it = await one("sched_items", { id: Number(d.slice(3)) }); const { releaseHeld } = await import("./gradeApi.ts"); if (it) await releaseHeld(Number(it.user_id)); } catch (e) { console.error(e); }
+      try { const it = await one("sched_items", { id: Number(d.slice(3)) }); const { releaseHeld, releaseStudent } = await import("./gradeApi.ts"); if (it) { await releaseStudent(Number(it.user_id)); await releaseHeld(Number(it.user_id)); } } catch (e) { console.error(e); }
     }
   } else if (d.startsWith("gtr:")) {
     // صاحب البوت يقرر طلب «ولي أمري مسافر»
