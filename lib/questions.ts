@@ -358,10 +358,12 @@ async function notifyAnswer(uid: number, text: string, kb: Kb, ans?: string) {
 async function deliverAnswer(uid: number, text: string, kb: Kb, ans?: string) {
   if (ans) { try { if (await sendAnswerPdf(uid, ans)) return; } catch (e) { console.error("answer pdf", uid, e); } }
   await send(uid, text, { kb });
+  // فيديو السؤال يوصل حتى ويا الرسالة (الحل صفحات من الملزمة)
+  if (ans) { const a = JSON.parse((await kvGet(`qa_ans_${ans}`)) || "null"); if (a) await answerVideos(uid, a).catch((e) => console.error("answer videos", uid, e)); }
 }
 export async function sendAnswerPdf(uid: number, id: string) {
   const a = JSON.parse((await kvGet(`qa_ans_${id}`)) || "null");
-  if (!a || !String(a.solution ?? "").trim()) return false;
+  if (!a || !String(a.solution ?? "").trim()) { if (a) console.error("answer pdf: no written solution", id, a.source); return false; }
   const en = a.lang === "en";
   const { answerPdf } = await import("./documents.ts");
   const pdf = await answerPdf({ name: String((await student(uid))?.name ?? ""), where: String(a.where ?? ""), question: String(a.question || a.asked || ""), solution: String(a.solution), ...(a.similar ? { similar: a.similar } : {}), lang: en ? "en" : "ar", date: stamp() });

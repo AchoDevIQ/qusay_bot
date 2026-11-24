@@ -392,11 +392,29 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
   const sameT = (x: string) => names.some((n) => sameTopic(n, x)) || bestTopic(x, [{ id: tid, ar: names[0] ?? "", en: names[1] ?? "" }]) === tid;
   const free = async () => { const c = await qaCfg(); c.free = (c.free ?? 0) + 1; await saveCfg(c); };
   // حل الأستاذ المكتوب لنفس السؤال من ملزمة الـ Word (ببلاش)، حتى جواب الراصد والدفتر ينكتب بملف الحل هم
-  const bookText = () => (mine.length ? exactMatch(text, mine, [...names, ...new Set(mine.map((x) => x.l.topic))])?.solution ?? "" : "");
+  // نفس السؤال بالضبط، وإلا (السؤال موجود بأكثر من ملزمة) أقرب سؤال بالملزمة بالأرقام نفسها
+  const bookText = () => {
+    if (!mine.length) return "";
+    const ex = exactMatch(text, mine, [...names, ...new Set(mine.map((x) => x.l.topic))])?.solution;
+    if (ex) return ex;
+    const best = splitBlocks(mine).map((b) => ({ b, s: blockScore(text, b, lecture) })).sort((x, y) => y.s - x.s)[0];
+    if (!best || best.s < 0.8) return "";
+    const qs = best.b.kind === "tests" ? [] : bookQuestions(best.b.text, best.b.lecture);
+    const q = qs.map((x) => ({ x, s: blockScore(text, { head: x.text, lecture: best.b.lecture }, lecture) })).sort((x, y) => y.s - x.s)[0];
+    return q && q.s >= 0.8 ? cleanSolution(q.x.sol) : "";
+  };
+  // ما طلع ببلاش: الذكاء ينسخ حل الأستاذ من أقرب أسئلة الملزمة (طلب «find» صغير، أقل من دينار)، حتى ملف الـ PDF بيه الحل
+  const bookTextAi = async () => {
+    const free0 = bookText();
+    if (free0 || !mine.length) return free0;
+    const top = splitBlocks(mine).map((b) => ({ b, s: blockScore(text, b, lecture) })).sort((x, y) => y.s - x.s).slice(0, TOP_BLOCKS).filter((x) => x.s > 0);
+    const ctx = top.length ? blocksCtx(top.map((x) => x.b)) : joinCtx(lecture ? mine.filter((x) => x.l.lecture === lecture) : mine, LECTURE_MAX);
+    try { const r = await call("find", ctx, { text }, lang); return r.found ? r.solution : ""; } catch (e) { console.error("qa book text", e); return ""; }
+  };
   for (const b of rasids.filter((x) => x.kind === "rasid")) {
     let h: RasidHit | null = null;
     try { h = rasidFind(text, await rasidIndex(b), sameT, qWords(text, topicSet)); } catch (e) { console.error("qa rasid", e); }
-    if (h) { await free(); return save({ ...await done("rasid", bookText()), rasid: { book: Number(b.id), ...h } }); }
+    if (h) { await free(); return save({ ...await done("rasid", await bookTextAi()), rasid: { book: Number(b.id), ...h } }); }
   }
   /** سؤال بـ«دفتر المحاضرات»: الملزمة والزر (فيديوهاته) */
   const markOf = async (t: string) => {
@@ -427,7 +445,7 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
         where = [t?.t, l?.t].filter(Boolean).join(" · ");
       }
     } catch (e) { console.error("qa notebook", e); }
-    if (h) { await free(); return save({ ...await done("notebook", bookText()), notebook: { book: Number(b.id), where, ...h } }); }
+    if (h) { await free(); return save({ ...await done("notebook", await bookTextAi()), notebook: { book: Number(b.id), where, ...h } }); }
   }
   // ٢.٧ نفس السؤال انسأل قبل: الجواب المحفوظ (بعد الراصد والدفتر، حتى فيديو السؤال ما يفوت. طلبه 2026-11-24)
   try {
