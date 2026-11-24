@@ -155,7 +155,7 @@ async function deliverQa(chat: number, uid: number, r: QaResult, t: Row, l: numb
     ? "📘 <b>Here is your solution</b>\nTap the button to see it step by step."
     : "📘 <b>عيوني، تفضل هذا الحل</b>\nدوس الزر تشوف الحل خطوة خطوة.";
   const head = qid ? (en ? `💬 <b>About your question #${qid}</b>\n` : `💬 <b>بخصوص سؤالك #${qid}</b>\n`) : "";
-  const later = await notifyAnswer(chat, head + msg, kb);
+  const later = await notifyAnswer(chat, head + msg, kb, id);
   await logActivity(uid, (qid ? `🔁 #${qid} بعد ما رجع الذكاء: ` : "") + (r.source === "ai" ? `🤖 انحل سؤاله العلمي على طريقة الأستاذ (${where})` : r.source === "rasid" ? `📝 وصله الحل النموذجي من الراصد (${r.rasid?.topic ?? where} ${r.rasid?.q ?? ""})` : r.source === "notebook" ? `📘 وصله حل سؤاله من دفتر المحاضرات (${r.notebook?.where || where} ص${r.notebook?.page ?? ""})` : `📘 وصله حل سؤاله من الملزمة (${where})`));
   return later;
 }
@@ -344,13 +344,52 @@ export async function askFromPage(uid: number, b: AskBody, image: Buffer | null)
 }
 /** إشعار الجواب للطالب: مباشرة، لو بعد الساعات اللي اختارها الأستاذ («⏱ متى يوصل الجواب»). true: تأجل */
 const DUE = "qa_due";
-type Due = { uid: number; text: string; kb: Kb; due: number };
-async function notifyAnswer(uid: number, text: string, kb: Kb) {
+type Due = { uid: number; text: string; kb: Kb; ans?: string; due: number };
+async function notifyAnswer(uid: number, text: string, kb: Kb, ans?: string) {
   const h = Number((await qaCfg()).delayH) || 0;
-  if (h <= 0) { await send(uid, text, { kb }); return false; }
+  if (h <= 0) { await deliverAnswer(uid, text, kb, ans); return false; }
   const l = JSON.parse((await kvGet(DUE)) || "[]") as Due[];
-  await kvSet(DUE, JSON.stringify([...l, { uid, text, kb, due: Date.now() + h * 3600_000 }]));
+  await kvSet(DUE, JSON.stringify([...l, { uid, text, kb, ...(ans ? { ans } : {}), due: Date.now() + h * 3600_000 }]));
   return true;
+}
+/** الجواب يوصل ملف PDF بس، بلا كتابة (طلب الأستاذ 2026-11-24)، وتحته فيديو السؤال (التوضيح والحل) إذا إله.
+ *  الحل اللي هو صفحات من الملزمة بلا كتابة، لو الملف ما انسوى: الرسالة وزر صفحة الحل مثل قبل */
+async function deliverAnswer(uid: number, text: string, kb: Kb, ans?: string) {
+  if (ans) { try { if (await sendAnswerPdf(uid, ans)) return; } catch (e) { console.error("answer pdf", uid, e); } }
+  await send(uid, text, { kb });
+}
+export async function sendAnswerPdf(uid: number, id: string) {
+  const a = JSON.parse((await kvGet(`qa_ans_${id}`)) || "null");
+  if (!a || !String(a.solution ?? "").trim()) return false;
+  const en = a.lang === "en";
+  const { answerPdf } = await import("./documents.ts");
+  const pdf = await answerPdf({ name: String((await student(uid))?.name ?? ""), where: String(a.where ?? ""), question: String(a.question || a.asked || ""), solution: String(a.solution), ...(a.similar ? { similar: a.similar } : {}), lang: en ? "en" : "ar", date: stamp() });
+  if (!pdf) return false;
+  const kb: Kb = (await qaCfg()).teacherBtn !== false ? [[btn(en ? "❓ Still not clear: send my question to the teacher" : "❓ بعدني ما فهمت، وصّل سؤالي للأستاذ", `qa2t:${id}`)]] : [];
+  const ok = await upload("sendDocument", { chat_id: String(uid), protect_content: "true", ...(kb.length ? { reply_markup: JSON.stringify({ inline_keyboard: kb }) } : {}) }, "document", pdf, en ? "solution.pdf" : "حل_سؤالك.pdf", "application/pdf");
+  if (!ok) return false;
+  await answerVideos(uid, a);
+  return true;
+}
+/** فيديو السؤال من الدفتر لو الراصد (التوضيح والحل)، ورا ملف الحل */
+async function answerVideos(uid: number, a: Row) {
+  const { sendMarkVideos, marksFor } = await import("./noteMarks.ts");
+  const book = Number(a.notebook?.book ?? a.rasid?.book ?? 0);
+  if (!book) return;
+  const ids = a.notebook ? (a.notebook.mark ? [Number(a.notebook.mark)] : []) : (await marksFor(book)).filter((m) => m.page === Number(a.rasid.page)).map((m) => Number(m.id));
+  for (const m of ids) await sendMarkVideos(uid, book, m).catch((e) => console.error("answer videos", uid, e));
+}
+/** «❓ بعدني ما فهمت» تحت ملف الحل: سؤاله (الكتابة والصورة) يروح للأستاذ بالمجموعة، مرة وحدة */
+export async function answerToTeacherBot(uid: number, id: string) {
+  const key = `qa_ans_${id}`;
+  const a = JSON.parse((await kvGet(key)) || "null");
+  need(a && a.uid === uid, "الحل غير موجود");
+  if (a.sentTo) return Number(a.sentTo);
+  const { files } = await import("./files.ts");
+  const img = a.img ? await files().read(String(a.img)) : a.photo ? await photoOf({ photo: [{ file_id: a.photo }] }) : null;
+  const qid = await toTeacher(uid, Number(a.tid) || 0, Number(a.lecture) || 0, String(a.question || a.asked || ""), img);
+  await kvSet(key, JSON.stringify({ ...a, sentTo: qid }));
+  return qid;
 }
 /** كل دقيقة: الأجوبة اللي صار وقتها توصل */
 async function dueTick() {
@@ -360,7 +399,7 @@ async function dueTick() {
   const ready = l.filter((d) => d.due <= now);
   if (!ready.length) return 0;
   await kvSet(DUE, JSON.stringify(l.filter((d) => d.due > now)));
-  for (const d of ready) await send(d.uid, d.text, { kb: d.kb }).catch((e) => console.error("qa due", d.uid, e));
+  for (const d of ready) await deliverAnswer(d.uid, d.text, d.kb, d.ans).catch((e) => console.error("qa due", d.uid, e));
   return ready.length;
 }
 /** كل دقيقة: أسئلة الصفحة تنجاوب (نفس طريق البوت: ملزمتك، الراصد، الدفتر، لو الذكاء)، والحل يوصل بإشعار بزر يفتحه.
@@ -400,7 +439,7 @@ async function answerJob(j: AskJob, image: Buffer | null) {
       await logActivity(uid, r.source === "ai" ? `🤖 انحل سؤاله العلمي من الصفحة (${where})` : `📘 وصله حل سؤاله من الصفحة (${where}، ${r.source})`);
       // إشعار بالبوت والتطبيق: جواب سؤالك وصل، وزر يفتحه. ما بيه شي يبين منين انحل
       await notifyAnswer(uid, en ? `📘 <b>The answer to your question arrived</b>\n📍 ${esc(shown)}\nTap the button to see it.` : `📘 <b>وصل جواب سؤالك</b>\n📍 ${esc(shown)}\nدوس الزر تشوف الحل.`,
-        [[{ text: en ? "📘 Open the answer" : "📘 افتح الجواب", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }]]);
+        [[{ text: en ? "📘 Open the answer" : "📘 افتح الجواب", web_app: { url: `${adminPageLink("answer", uid)}&a=${id}` } }]], id);
       return;
     }
   }

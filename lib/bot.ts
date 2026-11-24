@@ -165,6 +165,14 @@ async function onCallback(q: Row) {
     note = await regCb(chat, uid, mid, d, st, data, q.from);
   } else if (d.startsWith("of:")) {
     note = await officeCb(chat, uid, d);
+  } else if (d.startsWith("qa2t:")) {
+    // «❓ بعدني ما فهمت» تحت ملف الحل: سؤاله يروح للأستاذ
+    try {
+      const { answerToTeacherBot } = await import("./questions.ts");
+      const qid = await answerToTeacherBot(uid, d.slice(5));
+      note = `✅ وصل سؤالك (#${qid}) للأستاذ`;
+      if (mid) await api("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [[{ text: note, callback_data: "gs:done" }]] } });
+    } catch (e) { note = e instanceof Error ? e.message : "صار خطأ"; }
   } else if (d.startsWith("qip:")) {
     // ✍️ عبارة تنتظر خطه: «🔤 بالرقعة» لو «🚫 لا تكتب شي»
     if (await can(uid, "qusay")) {

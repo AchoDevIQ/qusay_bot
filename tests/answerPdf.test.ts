@@ -17,6 +17,9 @@ test("📄 ملف الحل: هيدر بلون للعربي ولون للإنگل
   assert.ok(ar.indexOf("📗 سؤال مشابه من الملزمة") < ar.indexOf("📘 حل سؤالك"), "المشابه أول");
   assert.match(ar, /\\text\{وحدة مربعة\}/, "الكلام العربي بالمعادلة بترتيبه");
   assert.match(ar, /dir=rtl/);
+  assert.doesNotMatch(ar, /رياضيات السادس/, "بلا «رياضيات السادس» بالهيدر");
+  assert.match(ar, /\.ln\.lr\{direction:ltr;text-align:left\}/, "المعادلة من اليسار مثل الملزمة");
+  assert.doesNotMatch(ar, /break-inside:avoid-page\}\.box h3/, "مربع الحل ينقسم على صفحتين، مو ينزل كله");
   const en = answerHtml({ ...base, lang: "en" }, "", "", tex, fixWordLine);
   assert.match(en, /#2b2b2b/);
   assert.match(en, /#e67e22/);

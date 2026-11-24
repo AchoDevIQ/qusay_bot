@@ -375,22 +375,17 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
   // ٢. نفس السؤال انسأل قبل بنفس الموضوع وبنفس اللغة: الجواب المحفوظ يرجع بلا كلفة
   // المفتاح نص السؤال كامل (نفس الأرقام ممكن طلب ثاني: «جد» غير «اثبت»)، والملازم الحالية: إذا تبدلت ملزمة ينحل من جديد
   const ck = `qa_cache_${sha(`${tid}|${lang}|${all.map((b) => b.id).sort().join(",")}|${rasids.map((b) => b.file).sort().join(",")}|${text.replace(/\s+/g, " ").toLowerCase()}`)}`;
-  try {
-    const hit = JSON.parse((await kvGet(ck)) ?? "null");
-    // صفحة الراصد المحفوظة: بس للطالب اللي الراصد بملازمه
-    const ref = hit?.rasid ?? hit?.notebook;
-    const okRasid = !ref || rasids.some((b) => b.id === ref.book);
-    if ((hit?.solution || ref) && okRasid) { const c = await qaCfg(); c.cached = (c.cached ?? 0) + 1; await saveCfg(c); return { source: hit.source, solution: hit.solution ?? "", ...(hit.rasid ? { rasid: hit.rasid } : {}), ...(hit.notebook ? { notebook: hit.notebook } : {}) }; }
-  } catch { /* نكمل */ }
   const save = async (r: QaResult) => { await kvSet(ck, JSON.stringify(r)); return r; };
   // ٢.٥ نفس سؤال بالراصد: «📘 الحل النموذجي» مال صفحته نفسها، ببلاش
   const topicSet = new Set(names.flatMap((n) => norm(n).map(stem)));
   const sameT = (x: string) => names.some((n) => sameTopic(n, x)) || bestTopic(x, [{ id: tid, ar: names[0] ?? "", en: names[1] ?? "" }]) === tid;
   const free = async () => { const c = await qaCfg(); c.free = (c.free ?? 0) + 1; await saveCfg(c); };
+  // حل الأستاذ المكتوب لنفس السؤال من ملزمة الـ Word (ببلاش)، حتى جواب الراصد والدفتر ينكتب بملف الحل هم
+  const bookText = () => (mine.length ? exactMatch(text, mine, [...names, ...new Set(mine.map((x) => x.l.topic))])?.solution ?? "" : "");
   for (const b of rasids.filter((x) => x.kind === "rasid")) {
     let h: RasidHit | null = null;
     try { h = rasidFind(text, await rasidIndex(b), sameT, qWords(text, topicSet)); } catch (e) { console.error("qa rasid", e); }
-    if (h) { await free(); return save({ ...await done("rasid", ""), rasid: { book: Number(b.id), ...h } }); }
+    if (h) { await free(); return save({ ...await done("rasid", bookText()), rasid: { book: Number(b.id), ...h } }); }
   }
   // ٢.٦ نفس سؤال بـ«دفتر المحاضرات» بملازمي: صفحاته نفسها من بداية السؤال، ويا فيديوهاته، ببلاش
   for (const b of rasids.filter((x) => x.kind !== "rasid")) {
@@ -408,8 +403,16 @@ async function qaAnswerCore(q: QaAsk, chapter: number, tid: number, lecture: num
         where = [t?.t, l?.t].filter(Boolean).join(" · ");
       }
     } catch (e) { console.error("qa notebook", e); }
-    if (h) { await free(); return save({ ...await done("notebook", ""), notebook: { book: Number(b.id), where, ...h } }); }
+    if (h) { await free(); return save({ ...await done("notebook", bookText()), notebook: { book: Number(b.id), where, ...h } }); }
   }
+  // ٢.٧ نفس السؤال انسأل قبل: الجواب المحفوظ (بعد الراصد والدفتر، حتى فيديو السؤال ما يفوت. طلبه 2026-11-24)
+  try {
+    const hit = JSON.parse((await kvGet(ck)) ?? "null");
+    // صفحة الراصد المحفوظة: بس للطالب اللي الراصد بملازمه
+    const ref = hit?.rasid ?? hit?.notebook;
+    const okRasid = !ref || rasids.some((b) => b.id === ref.book);
+    if ((hit?.solution || ref) && okRasid) { const c = await qaCfg(); c.cached = (c.cached ?? 0) + 1; await saveCfg(c); return { source: hit.source, solution: hit.solution ?? "", ...(hit.rasid ? { rasid: hit.rasid } : {}), ...(hit.notebook ? { notebook: hit.notebook } : {}) }; }
+  } catch { /* نكمل */ }
   if (!mine.length) return null;
   // ٣. نفس سؤال الملزمة بالضبط (نفس الرياضيات ونفس الطلب، وسؤال واحد بس يطابق): حل الأستاذ نفسه ببلاش، بلا ذكاء
   const ex = exactMatch(text, mine, [...names, ...new Set(mine.map((x) => x.l.topic))]);

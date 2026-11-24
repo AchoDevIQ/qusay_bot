@@ -512,8 +512,8 @@ export function answerHtml(d: AnswerDoc, css: string, katexCss: string, katexHtm
   const ar = d.lang === "ar";
   const c = ar ? { main: "#1f2a44", accent: "#e0b23a", light: "#f6f1e2" } : { main: "#2b2b2b", accent: "#e67e22", light: "#fbeee2" };
   const T = ar
-    ? { sub: "رياضيات السادس الإعدادي · حل سؤالك", st: "الطالب", dt: "التاريخ", q: "❓ سؤالك", sim: "📗 سؤال مشابه من الملزمة", sol: d.similar ? "📘 حل سؤالك" : "📘 الحل", ft: "هذا الملف إلك بس، لا تنشره" }
-    : { sub: "Grade 6 Mathematics · Your solution", st: "Student", dt: "Date", q: "❓ Your question", sim: "📗 A similar question from the booklet", sol: d.similar ? "📘 Your question's solution" : "📘 The solution", ft: "This file is for you only, do not share it" };
+    ? { sub: "حل سؤالك", st: "الطالب", dt: "التاريخ", q: "❓ سؤالك", sim: "📗 سؤال مشابه من الملزمة", sol: d.similar ? "📘 حل سؤالك" : "📘 الحل", ft: "هذا الملف إلك بس، لا تنشره" }
+    : { sub: "Your solution", st: "Student", dt: "Date", q: "❓ Your question", sim: "📗 A similar question from the booklet", sol: d.similar ? "📘 Your question's solution" : "📘 The solution", ft: "This file is for you only, do not share it" };
   const line = (raw: string) => {
     const l = fix(raw.trim());
     const html = l.split(/(\$[^$]+\$)/).map((p) => (p.startsWith("$") && p.endsWith("$") && p.length > 2 ? `<span class=k>${katexHtml(p.slice(1, -1))}</span>` : esc(p))).join("");
@@ -527,9 +527,9 @@ export function answerHtml(d: AnswerDoc, css: string, katexCss: string, katexHtm
 .hd img{width:70px;height:70px;border-radius:50%;background:#fff;padding:4px}.t1{font-size:27px;font-weight:800;color:${c.accent}}.t2{font-size:15px;opacity:.9;margin-top:3px}
 .side{margin-inline-start:auto;font-size:13px;opacity:.85;line-height:1.7;max-width:40%}
 .meta{display:flex;gap:10px;padding:10px 30px;background:${c.light};font-size:13px}.meta span{background:#fff;border:1px solid ${c.accent};border-radius:20px;padding:3px 12px}.meta b{color:${c.main}}
-.box{margin:16px 30px 0;border:1.5px solid ${c.main};border-radius:12px;overflow:hidden;break-inside:avoid-page}.box h3{margin:0;background:${c.main};color:#fff;font-size:16px;padding:7px 14px}
+.box{margin:16px 30px 0;border:1.5px solid ${c.main};border-radius:12px;overflow:hidden}.box h3{break-after:avoid-page}.box h3{margin:0;background:${c.main};color:#fff;font-size:16px;padding:7px 14px}
 .box.sim h3{background:${c.accent};color:${c.main}}.bd{padding:8px 16px 12px;font-size:15px;line-height:2}
-.ln{padding:2px 0;border-bottom:1px dashed #ddd}.ln:last-child{border:0}.ln.lr{direction:ltr;text-align:${ar ? "right" : "left"}}
+.ln{padding:2px 0;border-bottom:1px dashed #ddd;break-inside:avoid-page}.ln:last-child{border:0}.ln.lr{direction:ltr;text-align:left}
 .k{direction:ltr;unicode-bidi:isolate;display:inline-block;margin:0 3px}.k .text{unicode-bidi:isolate;direction:rtl}bdi{unicode-bidi:isolate;direction:ltr}
 .ft{margin:22px 30px 18px;padding-top:8px;font-size:11px;color:#777;display:flex;justify-content:space-between;border-top:2px solid ${c.accent}}
 </style></head><body>

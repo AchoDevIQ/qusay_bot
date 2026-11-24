@@ -278,6 +278,20 @@ export async function sendMark(uid: number, bookId: number, markId: unknown, kin
   need(m!.video_id && await one("note_videos", { id: m!.video_id }), "الفيديو التوضيحي مو موجود لهذا السؤال");
   return { notice: "▶️ فيديو توضيح السؤال", clip: true };
 }
+/** فيديو سؤال الزر للمحادثة (ورا ملف حل السؤال العلمي): التوضيح، وفيديو الحل */
+export async function sendMarkVideos(uid: number, bookId: number, markId: number) {
+  const m = await one("note_marks", { id: markId, book_id: bookId });
+  if (!m) return 0;
+  let n = 0;
+  if (m.video_id) { await sendExplainer(uid, m); n++; }
+  if (m.solution) {
+    const yt = parseYouTube(String(m.solution));
+    if (yt) await api("sendMessage", { chat_id: uid, text: "🎬", protect_content: true, reply_markup: { inline_keyboard: [[{ text: "🎬 فيديو حل السؤال", url: `https://youtu.be/${yt}` }]] } });
+    else await sendSolution(uid, String(m.solution));
+    n++;
+  }
+  return n;
+}
 /** احتياط: إذا الفيديو التوضيحي ما اشتغل جوّا الملزمة، يوصله بالمحادثة محمي */
 async function sendExplainer(uid: number, m: Row) {
   const v = m.video_id && await one("note_videos", { id: m.video_id });
