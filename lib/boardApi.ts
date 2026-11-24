@@ -13,7 +13,7 @@ import { stamp } from "./util.ts";
 export const BOARD_PERM = "board";
 const MAX_JSON = 15 * 1024 * 1024, MAX_BG = 8 * 1024 * 1024, MAX_LESSONS = 300;
 type Meta = { id: string; title: string; at: string; pages: number };
-type Sent = { id: string; ref: string; title: string; chapter: number; at: string; pages: number };
+type Sent = { id: string; ref: string; title: string; chapter: number; at: string; pages: number; topic?: string; lecture?: number };
 const listKey = (uid: number) => `board_list_${uid}`;
 const SENT = "board_sent";
 const lessonRef = (uid: number, id: string) => `boards/${uid}/${id}.json`;
@@ -65,8 +65,8 @@ export async function boardAction(body: any) {
   const state = async () => ({
     teacher, name: teacher ? "" : String(s?.name ?? ""),
     lessons: (await myList(uid)).slice().reverse(),
-    inbox: teacher ? [] : (await inboxOf(uid)).map((x) => ({ id: x.id, title: x.title, at: x.at, pages: x.pages, chapter: x.chapter })),
-    sent: teacher ? (await sentList()).slice(-50).reverse().map((x) => ({ id: x.id, title: x.title, at: x.at, chapter: x.chapter })) : [],
+    inbox: teacher ? [] : (await inboxOf(uid)).map((x) => ({ id: x.id, title: x.title, at: x.at, pages: x.pages, chapter: x.chapter, topic: x.topic ?? "", lecture: x.lecture ?? 0 })),
+    sent: teacher ? (await sentList()).slice(-50).reverse().map((x) => ({ id: x.id, title: x.title, at: x.at, chapter: x.chapter, topic: x.topic ?? "", lecture: x.lecture ?? 0 })) : [],
   });
   if (a === "state") return await state();
   if (a === "get") {
@@ -99,7 +99,18 @@ export async function boardAction(body: any) {
     await kvSet(listKey(uid), JSON.stringify((await myList(uid)).filter((x) => x.id !== id)));
     return { ...await state(), notice: "🗑 انحذف" };
   }
-  // ---------- الأستاذ بس: يدز شرحه لطلاب محاضرات الفصل
+  // ---------- الأستاذ بس: يدز شرحه لطلاب محاضرات الفصل، ويختار الموضوع والمحاضرة اللي ينزل وياها (طلبه 2026-11-25)
+  if (a === "targets") {
+    need(teacher, "بس الأستاذ يدز", 403);
+    const { chapters } = await import("./data.ts");
+    const topics = await find("topics", { active: 1 }, { order: ["ord"] });
+    return {
+      chapters: (await chapters()).filter((c) => Number(c.ord) >= 1 && Number(c.ord) <= 5).map((c) => ({
+        ch: Number(c.ord), name: String(c.ar ?? ""),
+        topics: topics.filter((t) => Number(t.chapter_id) === Number(c.id)).map((t) => ({ id: Number(t.id), name: String(t.ar ?? ""), lectures: Math.max(0, Number(t.lectures) || 0) })),
+      })),
+    };
+  }
   if (a === "count") {
     need(teacher, "بس الأستاذ يدز", 403);
     const ch = Number(body.chapter);
@@ -117,7 +128,11 @@ export async function boardAction(body: any) {
     const l = await readLesson(lessonRef(uid, id));
     const sid = randomUUID(), ref = `boards/sent/${sid}.json`;
     await saveJson(ref, l);
-    const row: Sent = { id: sid, ref, title: meta!.title, chapter: ch, at: stamp(), pages: l.pages.length };
+    // الموضوع والمحاضرة اللي ينزل وياها الشرح (اختياري)
+    const tp = Number(body.topic) ? (await find("topics", { id: Number(body.topic) }))[0] : null;
+    const lec = Math.max(0, Math.round(Number(body.lecture) || 0));
+    const row: Sent = { id: sid, ref, title: meta!.title, chapter: ch, at: stamp(), pages: l.pages.length, ...(tp ? { topic: String(tp.ar ?? "") } : {}), ...(tp && lec ? { lecture: lec } : {}) };
+    const where = [`الفصل ${ORD[ch]}`, row.topic, row.lecture ? `المحاضرة ${row.lecture}` : ""].filter(Boolean).join(" · ");
     await kvSet(SENT, JSON.stringify([...(await sentList()), row].slice(-500)));
     const to = await lectureBuyers(ch);
     const { send } = await import("./telegram.ts");
@@ -125,7 +140,7 @@ export async function boardAction(body: any) {
     let n = 0;
     for (const u of to) {
       try {
-        await send(u, `📝 <b>شرح جديد على السبورة</b>\n${meta!.title}\n\nافتحه واكتب عليه بسبورتك.`, { kb: [[{ text: "📝 افتح الشرح", web_app: { url: `${adminPageLink("board", u)}&inbox=${sid}` } }]] });
+        await send(u, `📝 <b>شرح جديد على السبورة</b>\n${meta!.title}\n${where}\n\nافتحه واكتب عليه بسبورتك.`, { kb: [[{ text: "📝 افتح الشرح", web_app: { url: `${adminPageLink("board", u)}&inbox=${sid}` } }]] });
         n++;
       } catch (e) { console.error("board send", u, e); }
     }

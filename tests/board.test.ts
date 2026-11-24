@@ -79,8 +79,14 @@ test("📝 يدز شرحه بس لطلاب محاضرات الفصل، ويسأ�
   const saved = await boardAction({ t: T, action: "save", title: "القطع المكافئ", lesson });
   assert.ok(saved.id);
   assert.equal((await boardAction({ t: T, action: "count", chapter: 1 })).count, 2);
-  const r = await boardAction({ t: T, action: "send", id: saved.id, chapter: 1 });
+  // يختار الفصل والموضوع والمحاضرة اللي ينزل وياها
+  const ch1 = await insert("chapters", { ord: 1, ar: "الأعداد المركبة", active: 1 });
+  const tp = await insert("topics", { chapter_id: ch1, ord: 1, ar: "ديموافر", lectures: 3, active: 1 });
+  const tg = await boardAction({ t: T, action: "targets" });
+  assert.deepEqual(tg.chapters.flatMap((c: any) => c.topics).find((x: any) => x.id === tp), { id: tp, name: "ديموافر", lectures: 3 });
+  const r = await boardAction({ t: T, action: "send", id: saved.id, chapter: 1, topic: tp, lecture: 2 });
   assert.match(r.notice, /2 طالب/);
+  assert.ok(sent.every((m) => m.text.includes("ديموافر · المحاضرة 2")), "الرسالة بيها الموضوع والمحاضرة");
   const to = sent.map((m) => m.chat);
   assert.ok(to.includes("501") && to.includes("503"));
   assert.ok(!to.includes("502") && !to.includes("504"));
@@ -90,6 +96,7 @@ test("📝 يدز شرحه بس لطلاب محاضرات الفصل، ويسأ�
   const st = await boardAction({ t: homeToken(501), action: "state" });
   assert.equal(st.teacher, false);
   assert.equal(st.inbox.length, 1);
+  assert.deepEqual([st.inbox[0].topic, st.inbox[0].lecture], ["ديموافر", 2]);
   const got = await boardAction({ t: homeToken(501), action: "inbox", id: st.inbox[0].id });
   assert.equal(got.lesson.pages[0].items.length, 1);
   assert.equal((await boardAction({ t: homeToken(502), action: "state" })).inbox.length, 0);

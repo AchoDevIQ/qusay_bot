@@ -11,7 +11,8 @@ import { IC } from "./icons";
 type Tool = "pen" | "hl" | "eraser" | "shape" | "move";
 type Step = { add: Item[]; remove: Item[] };
 type Contact = { mode: "ink" | "erase" | "shape" | "ignore" | "select" | "drag" | "resize"; stroke?: InkStroke; start: [number, number]; last: [number, number]; size: number; pen: boolean; anchor?: [number, number] };
-type Meta = { id: string; title: string; at: string; pages: number; chapter?: number };
+type Meta = { id: string; title: string; at: string; pages: number; chapter?: number; topic?: string; lecture?: number };
+type Target = { ch: number; name: string; topics: { id: number; name: string; lectures: number }[] };
 type State = { teacher: boolean; name: string; lessons: Meta[]; inbox: Meta[]; sent: Meta[] };
 type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings";
 type Ask = { text: string; buttons: { t: string; kind: "ok" | "bad" | "gray"; run: () => void }[]; input?: { value: string; set: (v: string) => void } } | null;
@@ -537,19 +538,42 @@ export default function BoardClient() {
   const sendDialog = () => {
     setPop("");
     if (!lessonId || dirty) { setAsk({ text: "احفظ الشرح أول حتى تدزه", buttons: [{ t: "احفظ", kind: "ok", run: () => saveDialog(() => window.setTimeout(sendDialog, 50)) }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); return; }
-    setAsk({ text: "لطلاب محاضرات أي فصل؟", buttons: [
-      ...[1, 2, 3, 4, 5].map((ch) => ({ t: `الفصل ${ORD[ch]}`, kind: "gray" as const, run: () => void confirmSend(ch) })),
-      { t: "رجوع", kind: "gray", run: () => setAsk(null) },
+    // الفصل ← الموضوع ← المحاضرة، وبعدها يگله العدد ويسأله تريد تدزه؟
+    setBusy("لحظة...");
+    void api({ action: "targets" }).then((r: { chapters: Target[] }) => {
+      setBusy("");
+      const chs = r.chapters.length ? r.chapters : [1, 2, 3, 4, 5].map((ch) => ({ ch, name: "", topics: [] }));
+      setAsk({ text: "بأي فصل ينزل الشرح؟", buttons: [
+        ...chs.map((c) => ({ t: `الفصل ${ORD[c.ch]}`, kind: "gray" as const, run: () => pickTopic(c) })),
+        { t: "رجوع", kind: "gray", run: () => setAsk(null) },
+      ] });
+    }).catch((e) => { setBusy(""); say(`صار خطأ: ${(e as Error).message}`); });
+  };
+  const pickTopic = (c: Target) => {
+    if (!c.topics.length) { void confirmSend(c.ch, null, 0); return; }
+    setAsk({ text: `الفصل ${ORD[c.ch]}: بأي موضوع؟`, buttons: [
+      ...c.topics.map((t) => ({ t: t.name, kind: "gray" as const, run: () => pickLecture(c, t) })),
+      { t: "بدون موضوع", kind: "gray", run: () => void confirmSend(c.ch, null, 0) },
+      { t: "رجوع", kind: "gray", run: () => sendDialog() },
     ] });
   };
-  async function confirmSend(ch: number) {
+  const pickLecture = (c: Target, t: Target["topics"][number]) => {
+    if (t.lectures <= 0) { void confirmSend(c.ch, t, 0); return; }
+    setAsk({ text: `${t.name}: ويا أي محاضرة؟`, buttons: [
+      ...Array.from({ length: t.lectures }, (_, k) => ({ t: `المحاضرة ${k + 1}`, kind: "gray" as const, run: () => void confirmSend(c.ch, t, k + 1) })),
+      { t: "كل الموضوع", kind: "gray", run: () => void confirmSend(c.ch, t, 0) },
+      { t: "رجوع", kind: "gray", run: () => pickTopic(c) },
+    ] });
+  };
+  async function confirmSend(ch: number, t: Target["topics"][number] | null, lec: number) {
     setAsk(null); setBusy("لحظة...");
     try {
       const { count } = await api({ action: "count", chapter: ch });
       setBusy("");
       if (!count) { say(`ماكو طلاب اشتروا محاضرات الفصل ${ORD[ch]}`); return; }
-      setAsk({ text: `تريد أدز «${title}» لـ ${count} طالب اشتروا محاضرات الفصل ${ORD[ch]}؟`, buttons: [
-        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonId, chapter: ch }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
+      const where = [`الفصل ${ORD[ch]}`, t?.name, lec ? `المحاضرة ${lec}` : ""].filter(Boolean).join(" · ");
+      setAsk({ text: `تريد أدز «${title}» (${where}) لـ ${count} طالب اشتروا محاضرات الفصل ${ORD[ch]}؟`, buttons: [
+        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonId, chapter: ch, topic: t?.id ?? 0, lecture: lec }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
         { t: "لا", kind: "bad", run: () => setAsk(null) },
       ] });
     } catch (e) { setBusy(""); say(`صار خطأ: ${(e as Error).message}`); }
@@ -697,7 +721,7 @@ export default function BoardClient() {
           {pop === "inbox" && <div className="qb-list">
             <div className="qb-ptitle">📥 شروحات الأستاذ</div>
             {!st?.inbox.length && <div className="qb-empty">بعد ما وصلك شرح</div>}
-            {st?.inbox.map((m) => <div key={m.id} className="qb-li"><button type="button" onClick={() => guard(() => void openInbox(m.id))}><b>{m.title}</b><small>{m.at} · الفصل {ORD[m.chapter ?? 0]} · {m.pages} صفحة</small></button></div>)}
+            {st?.inbox.map((m) => <div key={m.id} className="qb-li"><button type="button" onClick={() => guard(() => void openInbox(m.id))}><b>{m.title}</b><small>{[`الفصل ${ORD[m.chapter ?? 0]}`, m.topic, m.lecture ? `المحاضرة ${m.lecture}` : ""].filter(Boolean).join(" · ")} · {m.pages} صفحة · {m.at}</small></button></div>)}
           </div>}
           {pop === "settings" && <div className="qb-set">
             <div className="qb-ptitle">إعدادات الكف والممحاة</div>
