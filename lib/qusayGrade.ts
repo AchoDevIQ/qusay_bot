@@ -37,7 +37,8 @@ export type QgSettings = { live: number[]; model: QgModel; effort: QgEffort; bat
 export type QgPt = { p: number; x: number; y: number };
 /** at: وين مكتوبة الخطوة على ورقة الطالب، حتى تنرسم عليها ✓ أو ✗ حمرة مثل قلم المدرس (بس إذا «🖍 العلامات» شغالة) */
 /** hw: رقم عبارة من «✍️ خط إيدي» تقول نفس الملاحظة، فتنرسم بخط الأستاذ نفسه بدل الخط */
-export type QgStep = { text: string; points: number; awarded: number; note: string; at?: QgPt; hw?: number };
+/** w: شنو كاتب الطالب بهاي الخطوة (ينعرض بالتفصيل مثل مؤمل) */
+export type QgStep = { text: string; points: number; awarded: number; note: string; w?: string; at?: QgPt; hw?: number };
 export type QgQuestion = { n: number; max: number; score: number; answered: boolean; sure: boolean; reason: string; method: number; steps: QgStep[]; at?: QgPt; hw?: number };
 /** m: الذكاء اللي جاوب (من جوابه نفسه)، حتى السعر ينحسب صح */
 export type QgTokens = { in: number; cw: number; cr: number; out: number; m?: string };
@@ -226,6 +227,7 @@ DRAWINGS (graphs of functions, parabola / ellipse / hyperbola sketches, the figu
 
 Set sure=false for a question when you cannot read the handwriting, part of the answer is cut off or missing from the photo, the work matches no method and you cannot judge it, or you hesitate between two marks. Being unsure is fine: a human grader will then check the paper. Do not guess.
 
+For each step, "w" is what the STUDENT wrote for that step, copied from the photo: math as LaTeX between $ signs, the student's own Arabic or English words kept, one short line. Copy the student's own values exactly, even wrong ones; never correct them and never copy the marking scheme. If the student did not write that step, "w" is "".
 Write "reason" and each step "note" in short, simple Arabic (Iraqi style), for the teacher and the student: what the student did right or wrong. Keep them brief.
 "reason" names EVERY part of the question that lost points, all of them, briefly (e.g. "ناقص إشارة المشتقة الأولى والثانية والجدول والرسم"), so the student knows everything that is missing and does not object to a correct mark.
 HOW A NOTE MUST READ (the teacher's own rules):
@@ -425,7 +427,7 @@ const SCHEMA = {
           n: { type: "integer" },
           answered: { type: "boolean" },
           method: { type: "integer" },
-          steps: { type: "array", items: { type: "object", properties: { i: { type: "integer" }, awarded: { type: "number" }, note: { type: "string" } }, required: ["i", "awarded", "note"], additionalProperties: false } },
+          steps: { type: "array", items: { type: "object", properties: { i: { type: "integer" }, w: { type: "string" }, awarded: { type: "number" }, note: { type: "string" } }, required: ["i", "w", "awarded", "note"], additionalProperties: false } },
           score: { type: "number" },
           sure: { type: "boolean" },
           reason: { type: "string" },
@@ -796,7 +798,8 @@ export function readAnswer(msg: Anthropic.Message, mat: VMat, unanswered: Set<nu
       const hw = Math.round(Number(s?.hw) || 0);
       const awarded = Math.min(p.points, Math.max(0, whole(Number(s?.awarded) || 0)));
       // خطوة درجتها كاملة ما ينكتب عليها غلط (طالب تجربة 30: «الأس لازم -5» وهو كاتب -5 وانطاه 20 من 20)
-      return { text: p.text, points: p.points, awarded, note: awarded >= p.points ? "" : cleanNote(String(s?.note ?? "")).slice(0, 300), ...(at ? { at } : {}), ...(hw > 0 && awarded < p.points ? { hw } : {}) };
+      const w = String(s?.w ?? "").trim().slice(0, 400);
+      return { text: p.text, points: p.points, awarded, note: awarded >= p.points ? "" : cleanNote(String(s?.note ?? "")).slice(0, 300), ...(w ? { w } : {}), ...(at ? { at } : {}), ...(hw > 0 && awarded < p.points ? { hw } : {}) };
     }) : [];
     // الذكاء رجّع درجة السؤال بس بدون خطوات (طالب تجربة 9: «ممتاز عاشت الأيادي» وصفر): الكامل ينحسب كامل، والباقي يتعاد
     if (plan && answered && !plan.some((_, k) => byI.has(k + 1))) {

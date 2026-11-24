@@ -331,7 +331,7 @@ async function qusayShown(it: Row) {
     n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
     photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
     ...(mk ? { marked: qg.dropHidden(qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink), hidden) } : {}),
-    steps: q.steps.map((st, si) => ({ status: "", awarded: st.awarded, possible: st.points, expected: tr[qi][si], student: st.note, reason: st.note })), by: "qusay" as const,
+    steps: q.steps.map((st, si) => ({ status: "", awarded: st.awarded, possible: st.points, expected: tr[qi][si], student: st.w ?? "", reason: st.note })), by: "qusay" as const,
   }));
 }
 /** تصحيح نظام التصحيح AI اللي يشوفه الطالب: كل الورقة إذا هو صححها، أو بس أسئلته إذا حوّل الباقي لمصحح */

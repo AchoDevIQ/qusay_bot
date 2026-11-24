@@ -141,6 +141,8 @@ export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: s
   if (!q) return null;
   const marked = hasMarks(q);
   const mark = (s: AiStep) => (s.awarded >= s.possible && s.possible > 0 ? "ok" : s.awarded <= 0 ? "bad" : "half");
+  // التفصيل مثل مؤمل (طلبه 2026-11-24): «✍️ حلك» شنو كاتب الطالب بكل خطوة، وتحته ليش نقص. تصحيح قصي القديم بدون كتابة الطالب: الملاحظة بس
+  const typed = q.by !== "qusay" || q.steps.some((s) => s.student);
   return (
     <div className="card aic">
       {/* «تصحيح قصي»: مثل ورقة صححها المدرس، بدون روبوت (طلب الأستاذ 2026-11-21) */}
@@ -160,8 +162,8 @@ export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: s
         <div className="expad">{q.photos.map((p) => <img key={p} className="eximg" src={fileUrl(p)} alt={`جواب السؤال ${q.n}`} />)}</div>
       ) : (
         <div className="expad">
-          {/* «تصحيح قصي»: صورة الجواب بس بزر «📷 ورقتي»، مو جوة التصحيح (طلب الأستاذ 2026-11-21) */}
-          {!!q.photos.length && q.by !== "qusay" && (
+          {/* صورة الجواب صغيرة فوك، تندس وتكبر: مثل مؤمل لكل المصححين (طلب الأستاذ 2026-11-24، بدال طلب 2026-11-21) */}
+          {!!q.photos.length && (
             <div className="aicthumbs">
               {q.photos.map((p) => <button type="button" key={p} onClick={() => setBig(p)}><img src={fileUrl(p)} alt="جوابك" /></button>)}
               <small>اضغط على الصورة حتى تكبر</small>
@@ -170,16 +172,16 @@ export default function AiCompare({ qs, fileUrl }: { qs: AiQ[]; fileUrl: (ref: s
           {q.note && <div className="exhint">💬 <Inline text={q.note} /></div>}
           <div className="aicgrid">
             <div className="aiccol">📐 الحل النموذجي</div>
-            <div className="aiccol">{q.by === "qusay" ? "📝 التصحيح" : "✍️ حلك"}</div>
+            <div className="aiccol">{typed ? "✍️ حلك" : "📝 التصحيح"}</div>
             {q.steps.map((s, i) => (
               <div key={i} className="aicrow">
                 <div className="aiccell"><MathText text={s.expected} /></div>
                 <div className={"aiccell " + mark(s)}>
-                  {q.by === "qusay" ? (s.student ? <div dir="auto"><Inline text={s.student} /></div> : mark(s) === "ok" ? <span className="aicok">✓</span> : <span className="aicmiss">—</span>) : s.failed || (s.student && !canRender(s.student))
+                  {!typed ? (s.reason ? <div dir="auto"><Inline text={s.reason} /></div> : mark(s) === "ok" ? <span className="aicok">✓</span> : <span className="aicmiss">—</span>) : s.failed || (s.student && !canRender(s.student))
                     ? <div className="aicfail">⚠️ {s.message || FAIL_TEXT}</div>
                     : s.student ? <MathText text={s.student} /> : <span className="aicmiss">ما مكتوب</span>}
                   <div className="aicmark">{mark(s) === "ok" ? "✅" : mark(s) === "bad" ? "❌" : "🟡"} {s.awarded} / {s.possible}</div>
-                  {q.by !== "qusay" && mark(s) !== "ok" && !s.failed && s.reason && <small><Inline text={s.reason} /></small>}
+                  {typed && mark(s) !== "ok" && !s.failed && s.reason && <small><Inline text={s.reason} /></small>}
                 </div>
               </div>
             ))}

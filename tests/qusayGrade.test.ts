@@ -478,7 +478,7 @@ test("🖍 العلامات شغالة: كل ورقة يصححها تنحفظ ب
 
 test("درجات صحيحة بس: النص يروح لصالح الطالب، وماكو 8.5", () => {
   const ans = () => ({ questions: [
-    { n: 1, answered: true, method: 1, steps: [{ i: 1, awarded: 7.5, note: "" }, { i: 2, awarded: 10.4, note: "" }], score: 17.9, sure: true, reason: "" },
+    { n: 1, answered: true, method: 1, steps: [{ i: 1, w: "$y=-\frac{1}{2}$", awarded: 7.5, note: "" }, { i: 2, w: " ", awarded: 10.4, note: "" }], score: 17.9, sure: true, reason: "" },
     { n: 2, answered: true, method: 1, steps: [{ i: 1, awarded: 0.5, note: "" }], score: 0.5, sure: true, reason: "" },
   ] });
   const r = Q.readAnswer({ content: [{ type: "text", text: JSON.stringify(ans()) }], usage: { input_tokens: 1, output_tokens: 1 } } as any,
@@ -486,6 +486,8 @@ test("درجات صحيحة بس: النص يروح لصالح الطالب، و
   assert.deepEqual(r.qs.map((q) => q.steps.map((s) => s.awarded)), [[8, 10], [1]]);
   assert.deepEqual(r.qs.map((q) => q.score), [18, 1]);
   assert.ok(r.qs.every((q) => Number.isInteger(q.score)));
+  // شنو كاتب الطالب بكل خطوة ينحفظ للتفصيل (مثل مؤمل)، والفارغ ما ينحفظ
+  assert.deepEqual(r.qs[0].steps.map((s) => s.w), ["$y=-\frac{1}{2}$", undefined]);
 });
 
 test("🖍 العلامة ما تطلع برة الصورة", () => {
