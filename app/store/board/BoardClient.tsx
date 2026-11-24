@@ -671,6 +671,7 @@ export default function BoardClient() {
             <button type="button" onClick={() => { setPop(""); pdfInput.current?.click(); }}>فتح ملف PDF</button>
             <button type="button" onClick={() => { setPop(""); imgInput.current?.click(); }}>إدراج صورة</button>
             <button type="button" onClick={() => { setPop(""); void printAll(); }}>طباعة / حفظ كـ PDF</button>
+            {lesson.current.pages[pageIx.current]?.bg && <button type="button" onClick={() => { setPop(""); setAsk({ text: "تشيل صفحة الملف (الخلفية) من هاي الصفحة؟ كتابتك تبقى", buttons: [{ t: "شيلها", kind: "bad", run: () => { setAsk(null); page().bg = null; markDirty(); redrawInk(); } }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); }}>شيل الخلفية من هاي الصفحة</button>}
             <button type="button" onClick={() => { setPop(""); setAsk({ text: "تحذف هاي الصفحة؟", buttons: [{ t: "احذف", kind: "bad", run: () => { setAsk(null); deletePage(); } }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); }}>حذف هاي الصفحة</button>
             {st?.teacher && <button type="button" className="gold" onClick={sendDialog}>📤 إرسال للطلاب</button>}
             {st && !st.teacher && <button type="button" className="gold" onClick={() => setPop("inbox")}>📥 شروحات الأستاذ{st.inbox.length ? ` (${st.inbox.length})` : ""}</button>}
