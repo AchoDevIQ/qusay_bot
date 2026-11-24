@@ -118,7 +118,8 @@ async function onMessage(m: Row) {
     if (st.startsWith("a:") && text && await onAdminText(chat, uid, text, st, data)) return;
   }
   // ولي الأمر يكتب أو يدز صورة للبوت: البوت مو للمراسلة، ويطلعله معرف الأستاذ
-  if (!text.startsWith("/start") && await isGuardian(uid) && !await student(uid) && !await isStaff(uid) && !await myOffice(uid)) {
+  // «👁 شوف كطالب»: صاحب البوت (ولو هو ولي أمر طالب تجربة) يجرب مثل الطالب، فما يوگفه «البوت مو للمراسلة»
+  if (!text.startsWith("/start") && await isGuardian(uid) && !await student(uid) && !await isStaff(uid) && !await myOffice(uid) && !await viewingAsStudent(uid)) {
     await send(chat, await notForChatText());
     return;
   }

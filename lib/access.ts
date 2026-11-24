@@ -1,5 +1,6 @@
 // اللي يفتحه الشراء للطالب، ربط ولي الأمر، وسجل عمليات الطالب
 import { find, insert, kvGet, kvSet, one, put, type Row } from "./db.ts";
+import { ADMIN_IDS } from "./config.ts";
 import { firstRoundOnly } from "./orderRules.ts";
 import { stamp } from "./util.ts";
 import { guardianCode, verifyGuardianCode } from "./webAuth.ts";
@@ -20,6 +21,8 @@ async function liveItems(uid: number): Promise<string[]> {
 /** الافتراضي: المحاضرات والامتحانات تعطي حق السؤال، وصاحب البوت يغيرها لكل منتج */
 export const askDefault = (p: Row) => (p.ask === null || p.ask === undefined ? firstRoundOnly(p.name) : !!p.ask);
 export async function canAsk(uid: number) {
+  // صاحب البوت يگدر يسأل دايماً، حتى يجرب بـ«👁 شوف كطالب» بلا ما يشتري (طلبه 2026-11-24)
+  if (ADMIN_IDS.includes(uid)) return true;
   const names = await liveItems(uid);
   if (!names.length) return false;
   const byName = new Map((await find("products")).map((p) => [String(p.name), p]));

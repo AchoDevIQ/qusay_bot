@@ -5,7 +5,7 @@ import { getSession, one, put, setSession, type Row } from "./db.ts";
 import { canAsk, childrenOf, guardianCopy, guardianLink, guardianOf, guardianText, logActivity, needsGuardian } from "./access.ts";
 import { allowUpdate } from "./bot.ts";
 import { BTN_ME } from "./config.ts";
-import { hasExamMenu, student } from "./data.ts";
+import { hasExamMenu, student, viewingAsStudent } from "./data.ts";
 import { sendProfileCard } from "./documents.ts";
 import { examsMenu } from "./exams.ts";
 import { adminPageLink, homeLink, mainKb, regLink, storeLink } from "./keyboards.ts";
@@ -73,7 +73,8 @@ export async function homeAction(body: Row) {
   if (a === "list") {
     const s = await student(id);
     if (!s) {
-      const kids = await childrenOf(id);
+      // «👁 شوف كطالب»: صاحب البوت ولي أمر طالب تجربة، بس هسه يجرب مثل الطالب (طلبه 2026-11-24)
+      const kids = await viewingAsStudent(id) ? [] : await childrenOf(id);
       if (kids.length) return { name: "", exams: false, ask: false, myq: false, children: await Promise.all(kids.map(async (k) => (await student(k.student_id))?.name ?? "—")) };
       return { name: "", exams: false, ask: true, myq: false, fresh: true, show: [...await shown()] };
     }
