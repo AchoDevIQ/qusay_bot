@@ -58,9 +58,9 @@ export async function homeAction(body: Row) {
   // البوت احتياط للتطبيق: المربع اللي ما فتحه صاحب البوت لهذا الطالب ما يشتغل (طلب المتجر يتبع المتجر)
   // من التطبيق كلشي مفتوح: الإخفاء لتليگرام بس
   const fromApp = typeof body.device === "string" && body.device.startsWith("app-") && isAppKey(id, body.device.slice(4));
-  const shown = async () => (fromApp ? new Set(["shop", "ask", "myq", "me", "exams", "notes", "vote"]) : await visibleTiles(id));
+  const shown = async () => (fromApp ? new Set(["shop", "ask", "myq", "me", "exams", "notes", "vote", "board"]) : await visibleTiles(id));
   const tile = a === "order" || a === "stockWait" ? "shop" : a;
-  if (["shop", "ask", "myq", "me", "exams", "notes", "vote"].includes(tile)) need((await shown()).has(tile as never), "هذا القسم مو مفتوح هسه", 403);
+  if (["shop", "ask", "myq", "me", "exams", "notes", "vote", "board"].includes(tile)) need((await shown()).has(tile as never), "هذا القسم مو مفتوح هسه", 403);
   // سلّم أول امتحان وبعده ما ربط ولي أمره: كلشي مقفول لحد ما يربطه
   if (a === "ask" || a === "exams" || a === "notes") need(!await needsGuardian(id), "🔒 اربط ولي أمرك أول، من القائمة الرئيسية");
   // بنين لو بنات والصف ناقصات (طالب قديم): بطاقتها فوك بالرئيسية، وامتحاناتي ما يرتبها لحد ما يختار
@@ -89,7 +89,7 @@ export async function homeAction(body: Row) {
       // من التطبيق: ولي الأمر يربط برمزه على هذا التلفون (صفحة «👨‍👧 ولي الأمر»)، مو برابط تليگرام
       appGuard: fromApp,
       // «عبد» وحدها ما تصير نداء: عبد الله تبقى كلمتين
-      name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id), vote: (await openFor(id)).length,
+      name: String(s.name).split(" ").slice(0, String(s.name).startsWith("عبد ") ? 2 : 1).join(" "), exams: await hasExamMenu(id) || (await scheduleChapters(id)).length > 0, ask: await canAsk(id), myq: !!await one("questions", { user_id: id }), notes: await hasBooks(id), board: true, vote: (await openFor(id)).length,
       link: needLink ? await guardianLink(id) : null,
       // نفس رسالة المحادثة بالضبط، باسمه الكامل
       linkText: needLink ? guardianText(String(s.name).trim()) : null,
@@ -143,6 +143,8 @@ export async function homeAction(body: Row) {
     return { url: adminPageLink("myexams", id) };
   }
   if (a === "notes") return { url: adminPageLink("notes", id) };
+  // 📝 السبورة: نفس سبورة الأستاذ، وشروحاته اللي دزها توصل هنا (طلبه 2026-11-25)
+  if (a === "board") { await logActivity(id, "📝 فتح السبورة"); return { url: adminPageLink("board", id) }; }
   // ❓ سؤال علمي: صفحة بشكل الأستاذ (طلبه 2026-11-24). اللي بعده ما مسجل، يسجل بالبوت أول مثل قبل
   if (a === "ask" && await student(id)) { await setSession(id, "", {}); await logActivity(id, "❓ فتح سؤال علمي"); return { url: adminPageLink("ask", id) }; }
   if (a === "vote") {

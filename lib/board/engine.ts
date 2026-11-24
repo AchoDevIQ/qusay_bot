@@ -1,0 +1,284 @@
+// 📝 سبورة قصي العميري (طلبه 2026-11-25): نفس سبورة الويندوز مالته (BOARD_SPEC.md)، بس بالتطبيق، عنده وعند الطالب.
+// هذا الملف حساب بس (بلا شاشة): الخطوط، الأشكال والمجسمات، المسح اللي يقسم الخط، الألوان، الإطارات، ونسيج الخشب.
+// كل القياسات بوحدات السبورة: الارتفاع 1080، والعرض 1080 × نسبة الشاشة
+
+export const H = 1080;
+export const FRAME = 40;
+
+export type Pt = number[];   // [x0, y0, x1, y1, ...]
+export type InkStroke = { k: "ink" | "hl"; c: string; w: number; p: Pt; fit?: 0 };
+export type TextItem = { k: "text"; c: string; s: number; x: number; y: number; t: string; bw: number; bh: number };
+export type Item = InkStroke | TextItem;
+export type Page = { items: Item[]; bg?: string | null };
+export type Lesson = { v: 1; w: number; board: string; frame: string; pages: Page[]; title?: string };
+
+// ---------- الألوان
+export const QUICK = ["#FFFFFF", "#FFE600", "#FF3B30", "#2F9BFF", "#34C759", "#000000"];
+export const WIDTHS = [3, 5, 10];
+export const ERASERS: { n: number; t: string }[] = [{ n: 40, t: "صغيرة" }, { n: 80, t: "وسط" }, { n: 160, t: "كبيرة" }];
+const hex2 = (v: number) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0").toUpperCase();
+export function hsv(h: number, s: number, v: number) {
+  const f = (n: number) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return `#${hex2(f(5) * 255)}${hex2(f(3) * 255)}${hex2(f(1) * 255)}`;
+}
+/** اللوحة الكاملة: 14 لون × 6 درجات + 14 رصاصي = 98 */
+export function palette(): string[] {
+  const shades: [number, number][] = [[1, 0.35], [1, 0.55], [1, 0.8], [1, 1], [0.6, 1], [0.3, 1]];
+  const out: string[] = [];
+  for (const [s, v] of shades) for (let i = 0; i < 14; i++) out.push(hsv((i * 360) / 14, s, v));
+  for (let i = 0; i < 14; i++) { const g = hex2((i * 255) / 13); out.push(`#${g}${g}${g}`); }
+  return out;
+}
+
+// ---------- لون السبورة والإطارات
+export const BOARDS: { c: string; t: string }[] = [
+  { c: "#1F4E3D", t: "أخضر" }, { c: "#1D4E5F", t: "فيروزي" }, { c: "#293B60", t: "كحلي" }, { c: "#0F2A47", t: "أزرق غامق" },
+  { c: "#2B2B2B", t: "أسود" }, { c: "#3E2A1E", t: "بني" }, { c: "#4A1F2E", t: "عنابي" }, { c: "#F8F8F4", t: "سبورة بيضة" },
+];
+export type Frame = { id: string; t: string; wood?: [string, string, number]; grad?: string[]; light: boolean };
+export const FRAMES: Frame[] = [
+  { id: "oak", t: "بلوط فاتح", wood: ["#D9B07A", "#A8763F", 0.55], light: true },
+  { id: "walnut", t: "جوز غامق", wood: ["#7A5236", "#3B2415", 0.5], light: false },
+  { id: "mahogany", t: "ماهوجني", wood: ["#A3532F", "#561F10", 0.6], light: false },
+  { id: "teak", t: "ساج ذهبي", wood: ["#CF9A47", "#8A5A20", 0.45], light: true },
+  { id: "classic", t: "خشب كلاسيكي", wood: ["#B07A45", "#6A4020", 0.55], light: false },
+  { id: "ebony", t: "أبنوس أسود", wood: ["#4A3A30", "#120D0A", 0.65], light: false },
+  { id: "pine", t: "صنوبر", wood: ["#EBD199", "#C29A5B", 0.4], light: true },
+  { id: "cherry", t: "كرز", wood: ["#B8673F", "#68291A", 0.55], light: false },
+  { id: "gold", t: "ذهبي", grad: ["#F7D774", "#C9962B", "#F3CF6A", "#9C6F17"], light: true },
+  { id: "black", t: "أسود عصري", grad: ["#3A3A3A", "#151515", "#262626", "#0A0A0A"], light: false },
+  { id: "silver", t: "فضي", grad: ["#F1F3F5", "#AEB5BD", "#DDE1E5", "#8D949C"], light: true },
+  { id: "white", t: "أبيض", grad: ["#FFFFFF", "#E4E6E8", "#F6F7F8", "#C9CDD1"], light: true },
+  { id: "none", t: "بدون إطار", light: false },
+];
+export const DEFAULT_BOARD = "#1F4E3D", DEFAULT_FRAME = "classic";
+export const frameOf = (id: string) => FRAMES.find((f) => f.id === id) ?? FRAMES.find((f) => f.id === DEFAULT_FRAME)!;
+export const insetOf = (id: string) => (frameOf(id).id === "none" ? 0 : FRAME);
+/** السبورة فاتحة؟ (القلم الأبيض يصير أسود عليها) */
+export function isLight(c: string) {
+  const n = parseInt(c.replace("#", ""), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160;
+}
+
+// ---------- نسيج الخشب (نفس Wood.Make بالويندوز): العروق على طول الخشبة، ويتكرر بلا فاصل
+const hash = (n: number) => { n = ((n << 13) ^ n) | 0; return 1 - ((Math.imul(n, (Math.imul(Math.imul(n, n), 15731) + 789221) | 0) + 1376312589) & 0x7fffffff) / 1073741824; };
+const smooth = (x: number, seed: number) => {
+  const i = Math.floor(x), f = x - i;
+  const a = hash(i * 57 + seed * 131), b = hash((i + 1) * 57 + seed * 131);
+  return a + (b - a) * (f * f * (3 - 2 * f));
+};
+const rgb = (c: string) => { const n = parseInt(c.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+/** بكسلات RGBA للخشب، عرض w وارتفاع h */
+export function woodPixels(w: number, h: number, light: string, dark: string, seed: number, rings: number): Uint8ClampedArray {
+  const L = rgb(light), D = rgb(dark);
+  const px = new Uint8ClampedArray(w * h * 4);
+  let r = seed * 9301 + 49297;
+  const rnd = () => { r = (r * 9301 + 49297) % 233280; return r / 233280; };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const xs = (2 * Math.PI * x) / w;
+    const warp = 3.2 * Math.sin(xs + seed) + 1.6 * Math.sin(xs * 3 + seed * 1.7) + 0.5 * Math.sin(xs * 7 + seed * 0.3);
+    const yy = y + warp;
+    const bands = smooth(yy * 0.045 * rings, seed) * 0.55 + smooth(yy * 0.13, seed + 7) * 0.28;
+    const fibers = smooth(yy * 0.9, seed + 19) * 0.13 + smooth(yy * 2.3, seed + 23) * 0.06;
+    const ring = Math.sin(yy * 0.22 * rings + smooth(y * 0.03, seed + 3) * 5);
+    const sheen = 0.05 * Math.sin(xs * 2 + y * 0.01 + seed);
+    const t = Math.max(0, Math.min(1, 0.5 + 0.1 * ring + bands + fibers + sheen + (rnd() - 0.5) * 0.05));
+    const i = (y * w + x) * 4;
+    px[i] = D[0] + (L[0] - D[0]) * t; px[i + 1] = D[1] + (L[1] - D[1]) * t; px[i + 2] = D[2] + (L[2] - D[2]) * t; px[i + 3] = 255;
+  }
+  return px;
+}
+
+// ---------- الأشكال والمجسمات (نفس BuildShape بالويندوز)
+export const SHAPES: { id: string; t: string }[] = [
+  { id: "line", t: "خط" }, { id: "arrow", t: "سهم" }, { id: "rect", t: "مستطيل" }, { id: "ellipse", t: "دائرة" }, { id: "triangle", t: "مثلث" }, { id: "righttri", t: "قائم" },
+];
+export const SOLIDS: { id: string; t: string }[] = [
+  { id: "cube", t: "متوازي مستطيلات" }, { id: "cylinder", t: "أسطوانة" }, { id: "cone", t: "مخروط" }, { id: "pyramid", t: "هرم" }, { id: "sphere", t: "كرة" }, { id: "prism", t: "منشور ثلاثي" },
+];
+type P2 = [number, number];
+const arc = (cx: number, cy: number, rx: number, ry: number, t0: number, t1: number, n: number): P2[] =>
+  Array.from({ length: n + 1 }, (_, i) => { const t = t0 + ((t1 - t0) * i) / n; return [cx + rx * Math.cos(t), cy + ry * Math.sin(t)] as P2; });
+const rot = (v: P2, deg: number): P2 => { const a = (deg * Math.PI) / 180; return [v[0] * Math.cos(a) - v[1] * Math.sin(a), v[0] * Math.sin(a) + v[1] * Math.cos(a)]; };
+
+/** خطوط الشكل من نقطة البداية للنهاية: solid خطوط كاملة، dashed مخفية (تنرسم متقطعة) */
+export function buildShape(kind: string, a: P2, b: P2, penWidth: number): { solid: P2[][]; dashed: P2[][] } {
+  const solid: P2[][] = [], dashed: P2[][] = [];
+  const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
+  const w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, PI = Math.PI;
+  switch (kind) {
+    case "line": solid.push([a, b]); break;
+    case "arrow": {
+      solid.push([a, b]);
+      const vx = a[0] - b[0], vy = a[1] - b[1], len = Math.hypot(vx, vy);
+      if (len < 1) break;
+      const v: P2 = [vx / len, vy / len], hl = Math.max(24, penWidth * 6);
+      const r1 = rot(v, 28), r2 = rot(v, -28);
+      solid.push([[b[0] + r1[0] * hl, b[1] + r1[1] * hl], b, [b[0] + r2[0] * hl, b[1] + r2[1] * hl]]);
+      break;
+    }
+    case "rect": solid.push([[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]); break;
+    case "ellipse": solid.push(arc(cx, cy, w / 2, h / 2, 0, 2 * PI, 90)); break;
+    case "triangle": solid.push([[cx, y0], [x1, y1], [x0, y1], [cx, y0]]); break;
+    case "righttri": solid.push([[x0, y0], [x0, y1], [x1, y1], [x0, y0]]); break;
+    case "cube": {
+      const d = Math.min(w, h) * 0.3;
+      const FL = x0, FR = x1 - d, FT = y0 + d, FB = y1, BL = x0 + d, BR = x1, BT = y0, BB = y1 - d;
+      solid.push([[FL, FT], [FR, FT], [FR, FB], [FL, FB], [FL, FT]]);
+      solid.push([[FL, FT], [BL, BT], [BR, BT], [BR, BB], [FR, FB]]);
+      solid.push([[FR, FT], [BR, BT]]);
+      dashed.push([[BL, BT], [BL, BB], [BR, BB]]);
+      dashed.push([[FL, FB], [BL, BB]]);
+      break;
+    }
+    case "cylinder": {
+      const rx = w / 2, ry = Math.min(h * 0.15, w * 0.22), top = y0 + ry, bot = y1 - ry;
+      solid.push(arc(cx, top, rx, ry, 0, 2 * PI, 90));
+      solid.push(arc(cx, bot, rx, ry, 0, PI, 45));
+      dashed.push(arc(cx, bot, rx, ry, PI, 2 * PI, 45));
+      solid.push([[x0, top], [x0, bot]]); solid.push([[x1, top], [x1, bot]]);
+      break;
+    }
+    case "cone": {
+      const rx = w / 2, ry = Math.min(h * 0.15, w * 0.22), bot = y1 - ry;
+      solid.push(arc(cx, bot, rx, ry, 0, PI, 45));
+      dashed.push(arc(cx, bot, rx, ry, PI, 2 * PI, 45));
+      solid.push([[x0, bot], [cx, y0], [x1, bot]]);
+      dashed.push([[cx, y0], [cx, bot]]);
+      break;
+    }
+    case "pyramid": {
+      const d = w * 0.28, dy = Math.min(h * 0.25, d * 0.6);
+      const A: P2 = [x0, y1], B: P2 = [x1 - d, y1], C: P2 = [x1, y1 - dy], D: P2 = [x0 + d, y1 - dy], P: P2 = [cx, y0];
+      solid.push([A, B, C]); solid.push([A, P, B]); solid.push([P, C]);
+      dashed.push([C, D, A]); dashed.push([P, D]);
+      break;
+    }
+    case "sphere": {
+      const r = Math.min(w, h) / 2;
+      solid.push(arc(cx, cy, r, r, 0, 2 * PI, 120));
+      solid.push(arc(cx, cy, r, r * 0.28, 0, PI, 50));
+      dashed.push(arc(cx, cy, r, r * 0.28, PI, 2 * PI, 50));
+      break;
+    }
+    case "prism": {
+      const d = Math.min(w, h) * 0.3;
+      const F1: P2 = [x0, y1], F2: P2 = [x1 - d, y1], F3: P2 = [x0 + (w - d) / 2, y0 + d];
+      const off = (p: P2): P2 => [p[0] + d, p[1] - d];
+      const B1 = off(F1), B2 = off(F2), B3 = off(F3);
+      solid.push([F1, F2, F3, F1]); solid.push([F3, B3, B2, F2]);
+      dashed.push([B3, B1, B2]); dashed.push([F1, B1]);
+      break;
+    }
+  }
+  return { solid, dashed };
+}
+
+/** خط متقطع: قطع طول on وفراغ off */
+export function dash(pts: P2[], on: number, off: number): P2[][] {
+  const res: P2[][] = [];
+  if (pts.length < 2) return res;
+  let drawing = true, remain = on, cur: P2[] = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len <= 0) continue;
+    let t = 0;
+    while (len - t > remain) {
+      t += remain;
+      const q: P2 = [a[0] + ((b[0] - a[0]) * t) / len, a[1] + ((b[1] - a[1]) * t) / len];
+      if (drawing) { cur.push(q); res.push(cur); } else cur = [q];
+      drawing = !drawing;
+      remain = drawing ? on : off;
+    }
+    remain -= len - t;
+    if (drawing) cur.push(b);
+  }
+  if (drawing && cur.length > 1) res.push(cur);
+  return res;
+}
+
+/** الشكل كخطوط عادية (تنمسح وتتراجع مثل الكتابة) */
+export function shapeStrokes(kind: string, a: P2, b: P2, color: string, width: number): InkStroke[] {
+  if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 4) return [];
+  const { solid, dashed } = buildShape(kind, a, b, width);
+  const d = Math.max(10, width * 3);
+  for (const line of dashed) solid.push(...dash(line, d, d * 0.8));
+  return solid.filter((l) => l.length >= 2).map((l) => ({ k: "ink", c: color, w: width, p: l.flat(), fit: 0 }));
+}
+
+// ---------- المسح: الممحاة مربع، والخط اللي تمر عليه ينقسم (مو ينمسح كله). النص ينمسح كله
+const DENSE = 2;
+/** نقاط أكثر على طول الخط حتى المسح يقص بدقة */
+export function densify(p: Pt, step = DENSE): Pt {
+  if (p.length < 4) return p.slice();
+  const out = [p[0], p[1]];
+  for (let i = 2; i < p.length; i += 2) {
+    const ax = p[i - 2], ay = p[i - 1], bx = p[i], by = p[i + 1], len = Math.hypot(bx - ax, by - ay);
+    const n = Math.max(1, Math.ceil(len / step));
+    for (let k = 1; k <= n; k++) out.push(ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n);
+  }
+  return out;
+}
+export const textBox = (t: TextItem) => ({ x0: t.x - t.bw, y0: t.y, x1: t.x, y1: t.y + t.bh });
+/** مسح على طول الحركة من a لـ b بمربع ضلعه size. يرجع البنود الجديدة، واللي انشالت، واللي انضافت (للتراجع) */
+export function eraseAlong(items: Item[], a: P2, b: P2, size: number): { items: Item[]; removed: Item[]; added: Item[] } {
+  const half = size / 2;
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const n = Math.max(1, Math.ceil(len / Math.max(2, half / 2)));
+  const centers: P2[] = Array.from({ length: n + 1 }, (_, k) => [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+  const bx0 = Math.min(a[0], b[0]) - half, bx1 = Math.max(a[0], b[0]) + half, by0 = Math.min(a[1], b[1]) - half, by1 = Math.max(a[1], b[1]) + half;
+  const removed: Item[] = [], added: Item[] = [], out: Item[] = [];
+  for (const it of items) {
+    if (it.k === "text") {
+      const r = textBox(it);
+      if (r.x1 >= bx0 && r.x0 <= bx1 && r.y1 >= by0 && r.y0 <= by1) { removed.push(it); continue; }
+      out.push(it); continue;
+    }
+    const pad = half + it.w / 2;
+    // سريع: إذا مربع الخط كله بعيد عن الممحاة ما نلمسه (المربع، مو النقاط: خط طويل بنقطتين يمر من نصها)
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < it.p.length; i += 2) { x0 = Math.min(x0, it.p[i]); x1 = Math.max(x1, it.p[i]); y0 = Math.min(y0, it.p[i + 1]); y1 = Math.max(y1, it.p[i + 1]); }
+    if (x1 < bx0 - it.w || x0 > bx1 + it.w || y1 < by0 - it.w || y0 > by1 + it.w) { out.push(it); continue; }
+    const p = densify(it.p);
+    const hit = (x: number, y: number) => centers.some(([cx, cy]) => Math.abs(x - cx) <= pad && Math.abs(y - cy) <= pad);
+    const parts: number[][] = [];
+    let cur: number[] = [];
+    let any = false;
+    for (let i = 0; i < p.length; i += 2) {
+      if (hit(p[i], p[i + 1])) { any = true; if (cur.length >= 4) parts.push(cur); cur = []; }
+      else cur.push(p[i], p[i + 1]);
+    }
+    if (!any) { out.push(it); continue; }
+    if (cur.length >= 4) parts.push(cur);
+    removed.push(it);
+    for (const part of parts) { const s: InkStroke = { ...it, p: part }; added.push(s); out.push(s); }
+  }
+  return { items: out, removed, added };
+}
+
+/** الكف: التماس أكبر من الحد (بوحدات السبورة) */
+export const isPalm = (w: number, h: number, threshold: number) => w > threshold || h > threshold;
+/** عرض التظليل */
+export const hlWidth = (pen: number) => Math.max(18, pen * 5);
+/** عرض النص قبل ما يلف للسطر الثاني */
+export const wrapWidth = (right: number) => Math.max(200, Math.min(1400, right - 60));
+
+/** درس فاضي */
+export const emptyLesson = (w: number, board = DEFAULT_BOARD, frame = DEFAULT_FRAME): Lesson => ({ v: 1, w, board, frame, pages: [{ items: [] }] });
+/** فحص درس جاي من برا (ملف محفوظ أو مستلم): يشيل أي شي غريب */
+export function cleanLesson(x: unknown): Lesson | null {
+  const j = x as Partial<Lesson> | null;
+  if (!j || !Array.isArray(j.pages) || !j.pages.length || j.pages.length > 400) return null;
+  const col = (c: unknown) => (typeof c === "string" && /^#[0-9A-Fa-f]{6}$/.test(c) ? c : "#FFFFFF");
+  const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
+  const pages: Page[] = j.pages.map((pg) => ({
+    bg: typeof pg?.bg === "string" && pg.bg.length < 300 ? pg.bg : null,
+    items: (Array.isArray(pg?.items) ? pg.items : []).slice(0, 20000).flatMap((it: any): Item[] => {
+      if (it?.k === "text") return [{ k: "text", c: col(it.c), s: num(it.s, 56), x: num(it.x), y: num(it.y), t: String(it.t ?? "").slice(0, 4000), bw: num(it.bw), bh: num(it.bh) }];
+      if ((it?.k === "ink" || it?.k === "hl") && Array.isArray(it.p) && it.p.length >= 2) return [{ k: it.k, c: col(it.c), w: Math.max(1, Math.min(200, num(it.w, 5))), p: it.p.slice(0, 40000).map((v: unknown) => Math.round(num(v) * 10) / 10), ...(it.fit === 0 ? { fit: 0 as const } : {}) }];
+      return [];
+    }),
+  }));
+  return { v: 1, w: Math.max(400, Math.min(4000, num(j.w, 1920))), board: BOARDS.some((b) => b.c === j.board) ? String(j.board) : DEFAULT_BOARD, frame: FRAMES.some((f) => f.id === j.frame) ? String(j.frame) : DEFAULT_FRAME, pages, ...(typeof j.title === "string" ? { title: j.title.slice(0, 120) } : {}) };
+}

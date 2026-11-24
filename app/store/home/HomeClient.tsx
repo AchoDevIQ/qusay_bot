@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { closeApp, haptic, openOutside, deviceId } from "../shared";
 import BasicsCard, { type Basics } from "../BasicsCard";
 
-type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[]; show?: string[]; needSched?: boolean; appGuard?: boolean; basics?: Basics | null };
+type List = { name: string; exams: boolean; ask: boolean; myq: boolean; notes?: boolean; board?: boolean; vote?: number; fresh?: boolean; link?: string | null; linkText?: string | null; linkCopy?: string | null; children?: string[]; show?: string[]; needSched?: boolean; appGuard?: boolean; basics?: Basics | null };
 type Reply = List & { url?: string; close?: boolean; error?: string };
 
 const svg = (body: ReactNode) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{body}</svg>;
@@ -96,6 +96,8 @@ export default function HomeClient() {
     { key: "me", title: "معلوماتي" },
     ...(data?.exams ? [{ key: "exams", title: "امتحاناتي" }] : []),
     ...(data?.notes ? [{ key: "notes", title: "ملازمي" }] : []),
+    // 📝 السبورة: يكتب عليها، وشروحات الأستاذ توصله هنا
+    ...(data?.board ? [{ key: "board", title: "السبورة", note: "اكتب وارسم، وشروحات الأستاذ" }] : []),
     // التصويت يطلع بس إذا أكو تصويت مفتوح إله وبعده ما صوت
     ...(data?.vote ? [{ key: "vote", title: "التصويت", note: data.vote > 1 ? `${data.vote} تصويتات تنتظر صوتك` : "تصويت ينتظر صوتك" }] : []),
     // مربع «طلب كلمة مرور جديدة» (key: "pass") مخفي لحد ما نربط التطبيق، بطلب المستخدم

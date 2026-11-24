@@ -24,7 +24,7 @@ const rule = (mode: string, o: object = {}) => ({ mode, centers: [], gender: "",
 const save = (r: object) => kvSet("student_vis", JSON.stringify(r));
 
 test("قبل أي اختيار (بالفحص) كلشي ظاهر، ومن تخفي يختفي", async () => {
-  assert.equal((await visibleTiles(21)).size, 7);
+  assert.equal((await visibleTiles(21)).size, 8, "الثمانية مع 📝 السبورة");
   await save({ shop: rule("off"), notes: rule("all") });
   const v = await visibleTiles(21);
   assert.ok(!v.has("shop"));
@@ -61,7 +61,7 @@ test("القائمة تطلع بس المفتوح، والمخفي ما يشتغ
 
 test("صاحب البوت وطلاب التجربة يشوفون كلشي", async () => {
   await save({});
-  assert.equal((await visibleTiles(1)).size, 7);
-  assert.equal((await visibleTiles(-3)).size, 7);
+  assert.equal((await visibleTiles(1)).size, 8);
+  assert.equal((await visibleTiles(-3)).size, 8);
   assert.equal((await visibleTiles(21)).size, 0);
 });

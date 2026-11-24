@@ -18,6 +18,7 @@ export const VIS_TILES = [
   { key: "exams", title: "📝 امتحاناتي" },
   { key: "notes", title: "📚 ملازمي" },
   { key: "vote", title: "🗳 التصويت" },
+  { key: "board", title: "📝 السبورة" },
 ] as const;
 export type TileKey = (typeof VIS_TILES)[number]["key"];
 /** شغلات التطبيق مو مربعات: الرسائل الصوتية بالمحادثة. من البداية مسدودة */

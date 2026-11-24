@@ -28,6 +28,16 @@ export async function canAsk(uid: number) {
   const byName = new Map((await find("products")).map((p) => [String(p.name), p]));
   return names.some((n) => { const p = byName.get(n); return p ? askDefault(p) : firstRoundOnly(n); });
 }
+const ORDW: [RegExp, number][] = [[/الفصل\s*ال[اأ]ول|الفصل\s*1(?!\d)/, 1], [/الفصل\s*الثاني|الفصل\s*2(?!\d)/, 2], [/الفصل\s*الثالث|الفصل\s*3(?!\d)/, 3], [/الفصل\s*الرابع|الفصل\s*4(?!\d)/, 4], [/الفصل\s*الخامس|الفصل\s*5(?!\d)/, 5]];
+/** 📝 الفصول اللي اشترى محاضراتها (محاضرات بس، أو محاضرات وامتحانات). الدفتر والامتحانات بس ما تنحسب */
+export async function lectureChapters(uid: number): Promise<number[]> {
+  const out = new Set<number>();
+  for (const n of await liveItems(uid)) {
+    if (!n.includes("محاضر") || n.includes("دفتر")) continue;
+    for (const [re, ch] of ORDW) if (re.test(n)) out.add(ch);
+  }
+  return [...out].sort();
+}
 export const boughtLectures = async (uid: number) => (await liveItems(uid)).some((n) => n.includes("محاضر") && !n.includes("دفتر"));
 export const boughtCourse = async (uid: number) => (await liveItems(uid)).some(firstRoundOnly);
 

@@ -44,7 +44,8 @@ export function PageTools() {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [canFull, setCanFull] = useState(false);
   const [full, setFull] = useState(false);
-  const multi = (usePathname() ?? "").startsWith("/store/multi");
+  // السبورة (والمتعددة) ما تتكبر: التكبير يخربط مكان الكتابة تحت الإصبع
+  const multi = /^\/store\/(multi|board)/.test(usePathname() ?? "");
   useEffect(() => {
     try {
       const saved = Number(localStorage.getItem(inFrame() ? FRAME_ZOOM_KEY : ZOOM_KEY));

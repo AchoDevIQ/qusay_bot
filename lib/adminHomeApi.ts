@@ -50,6 +50,8 @@ async function homeData(uid: number) {
   if (await can(uid, "qareview")) { const { revList } = await import("./qaReview.ts"); const n = (await revList()).filter((x) => !x.state).length; people.push({ page: "qareview", icon: "🔎", title: "حلول الذكاء", note: n ? `${n} حل ما شفته` : "شفت كل الحلول", hot: n > 0 }); }
   // 💰 الصرفية بالمجمل وكل شي لحاله (طلبه 2026-11-23)
   if (await isAdmin(uid) || await can(uid, "spend")) people.push({ page: "spend", icon: "💰", title: "الصرفية", note: "شگد صرف الذكاء: الأسئلة العلمية والامتحانات" });
+  // 📝 السبورة: يكتب ويشرح، ويدز شرحه لطلاب محاضرات الفصل (طلبه 2026-11-25)
+  if (await can(uid, "board")) people.push({ page: "board", icon: "📝", title: "السبورة", note: "اكتب واشرح، ودز شرحك لطلاب المحاضرات" });
   if (await can(uid, "qusay")) people.push({ page: "qusay", icon: "🧠", title: "تصحيح قصي", note: "مصححك الثاني الرخيص: جربه بالسر وقارن" });
   if (await can(uid, "competition")) { const n = await pendingGroups(); people.push({ page: "competition", icon: "🏆", title: "المنافسة", note: n ? `${n} مجموعة تنتظر موافقتك` : "المجاميع وترتيب المراكز", hot: n > 0 }); }
   if (await can(uid, "birthdays")) { const n = await birthdaysToday(); people.push({ page: "birthdays", icon: "🎂", title: "أعياد الميلاد", note: n ? `اليوم: ${n}` : "ماكو اليوم", hot: n > 0 }); }
