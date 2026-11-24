@@ -1,6 +1,6 @@
 "use client";
 // باب الكادر بدون تليگرام: الرابط الخاص (ينحفظ بالجهاز) + رمز سري ← لوحة التحكم، أو المكتبة، والرسائل، والإشعارات
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type State = { hasPin: boolean; label: string; vapid: string };
 type Open = { t: string; admin: boolean; office: boolean; student?: boolean };
@@ -26,9 +26,42 @@ export default function DoorClient() {
     let k = new URLSearchParams(location.search).get("d") ?? "";
     try { if (k) localStorage.setItem("qm_door", k); else k = localStorage.getItem("qm_door") ?? ""; } catch { /* */ }
     setD(k);
-    if (!k) { setError("افتح الرابط اللي دزه إلك صاحب البوت"); return; }
+    if (!k) { setNoLink(true); return; }
     void call({ action: "state" }, k).then((r) => r && setSt(r));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ماكو رابط محفوظ (مثل تطبيق جهاز البيع أول مرة): يلصق الرابط أو يصور رمزه المربع
+  const [noLink, setNoLink] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [cam, setCam] = useState(false);
+  const video = useRef<HTMLVideoElement>(null);
+  function takeLink(text: string) {
+    const m = /[?&]d=([^&\s#]+)/.exec(text.trim()) ?? /^(k[\w.-]+)$/.exec(text.trim());
+    if (!m) { setError("هذا مو رابط الدخول. انسخ الرابط كامل من صاحب البوت"); return false; }
+    location.href = `/store/door?d=${m[1]}`;
+    return true;
+  }
+  useEffect(() => {
+    if (!cam) return;
+    let stop = false, stream: MediaStream | null = null;
+    void (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        const v = video.current!; v.srcObject = stream; await v.play();
+        const jsQR = (await import("jsqr")).default;
+        const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true })!;
+        while (!stop) {
+          if (v.videoWidth) {
+            c.width = v.videoWidth; c.height = v.videoHeight; g.drawImage(v, 0, 0);
+            const r = jsQR(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+            if (r?.data && takeLink(r.data)) { stop = true; break; }
+          }
+          await new Promise((ok) => setTimeout(ok, 250));
+        }
+      } catch { setError("الكاميرا ما اشتغلت. الصق الرابط بداله"); setCam(false); }
+    })();
+    return () => { stop = true; stream?.getTracks().forEach((t) => t.stop()); };
+  }, [cam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const digits = (v: string) => v.replace(/[^\d٠-٩]/g, "").slice(0, 4);
   const go = (page: string) => { if (open) location.href = `/store/${page}?t=${encodeURIComponent(open.t)}`; };
@@ -50,6 +83,16 @@ export default function DoorClient() {
       <div className="wrap">
         {error && <div className="card warn exerr">⚠️ {error}</div>}
         {notice && <div className="card"><div className="form"><div className="exhint">{notice}</div></div></div>}
+        {noLink && !st && (
+          <div className="card"><div className="form">
+            <div className="exhint">أول مرة على هذا الجهاز: صوّر الرمز المربع اللي دزه إلك صاحب البوت، أو الصق الرابط.</div>
+            {cam ? <video ref={video} playsInline muted style={{ width: "100%", borderRadius: 12, background: "#000" }} />
+              : <button type="button" className="btn" onClick={() => { setError(""); setCam(true); }}>📷 صوّر الرمز</button>}
+            <label>أو الصق الرابط</label>
+            <input value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="الرابط" dir="ltr" />
+            <button type="button" className="btn ghost" disabled={!paste.trim()} onClick={() => takeLink(paste)}>➡️ ادخل بالرابط</button>
+          </div></div>
+        )}
         {st && !open && !st.hasPin && (
           <div className="card"><div className="form">
             <div className="exhint">أول مرة: حط رمز سري من 4 أرقام، تفتح بيه صفحاتك من هذا الجهاز بدون تليگرام.</div>

@@ -2,7 +2,7 @@
 import path from "node:path";
 import puppeteer from "puppeteer-core";
 
-export type RenderJob = { pdf: true } | { png: { w: number; h: number } };
+export type RenderJob = { pdf: true } | { png: { w: number; h: number; scale?: number } };
 const LIMIT_MS = 40_000;
 
 export async function browserRender(executablePath: string, flags: string[], htmlPath: string, out: string, job: RenderJob) {
@@ -10,7 +10,7 @@ export async function browserRender(executablePath: string, flags: string[], htm
   try {
     const page = await browser.newPage();
     page.setDefaultTimeout(LIMIT_MS);
-    if ("png" in job) await page.setViewport({ width: job.png.w, height: job.png.h, deviceScaleFactor: 2 });
+    if ("png" in job) await page.setViewport({ width: job.png.w, height: job.png.h, deviceScaleFactor: job.png.scale ?? 2 });
     await page.goto("file:///" + path.resolve(htmlPath).replace(/\\/g, "/").replace(/^\/+/, ""), { waitUntil: "load" });
     if ("pdf" in job) await page.pdf({ path: out, printBackground: true, preferCSSPageSize: true });
     else await page.screenshot({ path: out as `${string}.png` });

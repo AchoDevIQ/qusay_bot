@@ -501,8 +501,48 @@ export async function receiptPage(oid: number, framed = false): Promise<string |
   if (!o) return null;
   const html = framed ? await receiptFramedHtml(o, orderItems(o)) : await receiptPaperHtml(o, orderItems(o));
   const bar = `<div class="noprint" style="position:sticky;top:0;background:#141F33;padding:10px;text-align:center;z-index:9"><button onclick="window.print()" style="font:700 20px Cairo,sans-serif;padding:12px 28px;border:0;border-radius:12px;background:#FFC947;color:#141F33">🖨 اطبع الوصل</button> <button onclick="history.back()" style="font:700 16px Cairo,sans-serif;padding:12px 18px;border:0;border-radius:12px;background:#fff;color:#141F33">رجوع</button></div><style>@media print{.noprint{display:none!important}}</style>`;
-  // زر الطباعة فوك الوصل، وتنفتح الطباعة وحدها أول ما تتحمل الصفحة
-  return html.replace(/<body([^>]*)>/i, `<body$1>${bar}`).replace(/<\/body>/i, `<script>setTimeout(function(){try{window.print()}catch(e){}},600)</script></body>`);
+  // زر الطباعة فوك الوصل، وتنفتح الطباعة وحدها أول ما تتحمل الصفحة.
+  // داخل تطبيق جهاز البيع window.print ما يشتغل بالصفحة، فنطلب الطباعة من التطبيق نفسه
+  const pr = "function qprint(){try{if(window.QApp&&QApp.systemPrint)QApp.systemPrint();else window.print()}catch(e){}}";
+  return html.replace(/<body([^>]*)>/i, `<body$1>${bar.replace('onclick="window.print()"', 'onclick="qprint()"')}`)
+    .replace(/<\/body>/i, `<script>${pr}setTimeout(qprint,600)</script></body>`);
+}
+
+/** 🖨 وصل طابعة الجهاز صورة بعرض الطابعة (384 نقطة = 48 ملم)، حتى تطبيق جهاز البيع يطبعه فوراً بلا نافذة الطباعة.
+ *  null إذا البيعة مو موجودة أو المتصفح ما اشتغل */
+export async function receiptPng(oid: number): Promise<Buffer | null> {
+  const o = await one("orders", { id: oid, printed: 3 });
+  if (!o) return null;
+  const items = orderItems(o);
+  ensureDir();
+  const tag = `rcp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const hp = path.join(PDF_DIR, `${tag}.html`), pp = path.join(PDF_DIR, `${tag}.png`);
+  // الوصل عرضه 58 ملم (220 نقطة بالمتصفح)، يتكبر حتى يصير 384 نقطة
+  const W = 220, S = 384 / W, H = Math.round((130 + 17 * items.length) * 3.78) + 40;
+  // الصفحة عربية، فالوصل يلتصق باليمين إذا المتصفح فتح أعرض من 220: نثبته باليسار حتى يطلع بالصورة
+  fs.writeFileSync(hp, (await receiptPaperHtml(o, items)).replace("</style>", "html,body{background:#fff}body{position:absolute;left:0;top:0}</style>"), "utf8");
+  try {
+    const ok = await render(pp, "qstore_rcpt", ["--hide-scrollbars", `--force-device-scale-factor=${S}`, `--window-size=${W},${H}`, "--screenshot=" + path.resolve(pp)], hp, { png: { w: W, h: H, scale: S } });
+    if (!ok) { console.error("receipt png: the browser did not make the image"); return null; }
+    return await trimReceipt(fs.readFileSync(pp));
+  } finally { fs.rmSync(hp, { force: true }); fs.rmSync(pp, { force: true }); }
+}
+/** يگص الفراغ الأبيض اللي تحت الوصل، ويخلي العرض 384 بالضبط */
+export async function trimReceipt(png: Buffer): Promise<Buffer> {
+  const { createCanvas, loadImage } = await import("@napi-rs/canvas");
+  const img = await loadImage(png);
+  const w = 384, h0 = Math.round(img.height * (w / img.width));
+  const c = createCanvas(w, h0), g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, w, h0);
+  g.drawImage(img, 0, 0, w, h0);
+  const px = g.getImageData(0, 0, w, h0).data;
+  let last = 0;
+  for (let y = h0 - 1; y >= 0 && !last; y--) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (px[i] + px[i + 1] + px[i + 2] < 600) { last = y; break; } }
+  const h = Math.min(h0, last + 24);
+  const out = createCanvas(w, h), o = out.getContext("2d");
+  o.fillStyle = "#fff"; o.fillRect(0, 0, w, h);
+  o.drawImage(c, 0, 0);
+  return out.toBuffer("image/png");
 }
 
 // ---------- 📄 حل السؤال العلمي كملف PDF بهيدر (طلب الأستاذ 2026-11-24): العربي كحلي وذهبي، والإنگليزي رصاصي وبرتقالي.

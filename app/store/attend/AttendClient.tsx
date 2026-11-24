@@ -5,6 +5,7 @@ import { AdminHeader, StatusBar, pageAuth, useAdminApi } from "../adminPage";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import { openOutside, scanQr } from "../shared";
 import RescanList, { type Rescan } from "./RescanList";
+import { deviceApp } from "../../../lib/deviceApp.ts";
 
 type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper" | "ipad"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean; late?: boolean; printed?: boolean };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
@@ -146,6 +147,7 @@ function Station({ station }: { station: { active: boolean; token: string } }) {
     <div className="card expad">
       <div className="exlabel">🖨 طابعة الليبل بالبلوتوث</div>
       <div className="exhint">{station.active ? "✅ المحطة شغالة: الليبلات تروح للطابعة وحدها." : "انسخ الرابط، وافتحه بمتصفح Bluefy، ودوس «اتصل بالطابعة». بعدها الكاميرا تنفتح، وكل كود طالب تشوفه ينسجل حضوره وينطبع ليبله. الرابط ينتهي بنهاية اليوم، وكل يوم امتحان تنسخ رابط جديد."}</div>
+      {deviceApp() && <button type="button" className="btn agbtn adtop" onClick={() => { location.href = link; }}>🖨 شغّل المحطة على هذا الجهاز</button>}
       <button type="button" className="btn agbtn adtop" onClick={() => void copy()}>{copied ? "✅ انتسخ الرابط" : "📋 انسخ رابط المحطة"}</button>
     </div>
   );

@@ -3,6 +3,7 @@
 // أول ما يبين كود الطالب ينسجل حضوره وينطبع ليبله مباشرة
 import jsQR from "jsqr";
 import { useEffect, useRef, useState } from "react";
+import { deviceApp } from "../../../lib/deviceApp.ts";
 
 const SERVICES = ["000018f0-0000-1000-8000-00805f9b34fb", "e7810a71-73ae-499d-8c15-faa9aef0c3f2"];
 const MM = 8;   // 8 نقاط بالملم
@@ -72,6 +73,14 @@ export default function StationClient() {
     } finally { attaching.current = false; }
   }
   async function connect() {
+    // تطبيق جهاز البيع (طابعة ليبل داخلية): ماكو بلوتوث، الطباعة تروح للطابعة مباشرة
+    const app = deviceApp();
+    if (app) {
+      if (!app.printerReady()) { setStatus("⚠️ طابعة الجهاز مو جاهزة، طفي التطبيق وشغله مرة ثانية"); return; }
+      ch.current = { device: true };
+      setReady(true); setStatus("✅ طابعة الجهاز جاهزة"); setCamera(true);
+      return;
+    }
     const bt = (navigator as any).bluetooth;
     if (!bt) { setStatus("⚠️ افتح هاي الصفحة بمتصفح Bluefy"); return; }
     try {
@@ -82,6 +91,12 @@ export default function StationClient() {
     } catch (e) { setStatus(`⚠️ ما انربطت: ${why(e)}`); }
   }
   async function write(job: Job) {
+    if (ch.current?.device) {
+      const err = deviceApp()!.printTspl(job.b64);
+      if (err) throw new Error(`الطابعة: ${err}`);
+      setCount((n) => n + 1);
+      return;
+    }
     const bytes = Uint8Array.from(atob(job.b64), (x) => x.charCodeAt(0));
     for (let i = 0; i < bytes.length;) {
       const part = bytes.slice(i, i + chunk.current);

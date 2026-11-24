@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { RET_DISC_LABEL, lineTotal, partsLine, type MoneyParts, type PriceLine } from "../../../lib/orderRules.ts";
 import { AdminHeader, MoneyBreakdown, PriceReport, StatusBar, pageAuth, useAdminApi } from "../adminPage";
+import { deviceApp } from "../../../lib/deviceApp.ts";
 
 type Sale = { id: number; time: string; name: string; total: number; seller: string; items: string };
 type St = { id: number; name: string; phone: string; gov: string; rd?: [number, number][] };
@@ -17,13 +18,30 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
 function Receipts({ id, busy, call, big }: { id: number; busy: boolean; call: Call; big?: boolean }) {
   const btn = big ? "btn agbtn" : "exbtn";
+  const [msg, setMsg] = useState("");
   // بدون تليجرام (رابط ورمز): الوصل ينفتح بالصفحة نفسها وينطبع مباشرة بطابعة الجهاز
   const auth = typeof window === "undefined" ? "" : pageAuth();
   if (auth.startsWith("tk:")) {
-    const open = (kind: string) => { location.href = `/api/receipt?t=${encodeURIComponent(auth.slice(3))}&id=${id}&kind=${kind}`; };
+    const url = (kind: string, png = false) => `/api/receipt?t=${encodeURIComponent(auth.slice(3))}&id=${id}&kind=${kind}${png ? "&fmt=png" : ""}`;
+    const open = (kind: string) => { location.href = url(kind); };
+    // تطبيق جهاز البيع: الوصل صورة تنطبع فوراً بطابعة الجهاز، بلا نافذة الطباعة. إذا ما نجح يفتح الوصل بالطريقة القديمة
+    const app = deviceApp();
+    async function direct() {
+      setMsg("⏳ دا يطبع...");
+      try {
+        const res = await fetch(url("paper", true));
+        if (!res.ok) throw new Error(await res.text());
+        const b = new Uint8Array(await res.arrayBuffer());
+        let s = ""; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+        const err = app!.printImage(btoa(s));
+        if (err) throw new Error(err);
+        setMsg("✅ انطبع الوصل");
+      } catch (e) { setMsg(`⚠️ ما انطبع مباشرة (${(e as Error).message || "خطأ"})، دا أفتح الطباعة العادية`); setTimeout(() => open("paper"), 1500); }
+    }
     return (
       <div className={big ? "adform" : "adreceipts"}>
-        <button type="button" aria-label="اطبع الوصل" className={btn} onClick={() => open("paper")}>🖨{big ? " اطبع الوصل بطابعة الجهاز" : ""}</button>
+        <button type="button" aria-label="اطبع الوصل" className={btn} onClick={() => (app ? void direct() : open("paper"))}>🖨{big ? " اطبع الوصل بطابعة الجهاز" : ""}</button>
+        {msg && big && <div className="exhint">{msg}</div>}
         <button type="button" aria-label="وصل بإطار" className={btn} onClick={() => open("framed")}>📄{big ? " وصل بإطار للطابعة الكبيرة" : ""}</button>
         {!big && <button type="button" aria-label="وصل ملون" className={btn} disabled={busy} onClick={() => void call({ action: "receipt", id, kind: "color" })}>🖼</button>}
       </div>

@@ -1,7 +1,7 @@
 // وصل البيعة يفتح بالمتصفح ويطبع مباشرة (جهاز البيع بطابعته، بدون تليجرام): t = رابط صفحة المبيعات، id = البيعة
 import { one } from "../../../lib/db.ts";
 import { can, myOffice } from "../../../lib/data.ts";
-import { receiptPage } from "../../../lib/documents.ts";
+import { receiptPage, receiptPng } from "../../../lib/documents.ts";
 import { ensure } from "../../../lib/webApi.ts";
 import { verifyInitData } from "../../../lib/webAuth.ts";
 
@@ -19,6 +19,11 @@ export async function GET(req: Request) {
   const id = Number(u.searchParams.get("id"));
   const o = await one("orders", { id, printed: 3 });
   if (!o || (off && o.office_id !== off.id)) return no("البيعة غير موجودة", 404);
+  // تطبيق جهاز البيع: الوصل صورة، يطبعها هو مباشرة
+  if (u.searchParams.get("fmt") === "png") {
+    const png = await receiptPng(id);
+    return png ? new Response(new Uint8Array(png), { headers: { "Content-Type": "image/png", "Cache-Control": "no-store" } }) : no("ما گدرنا نسوي صورة الوصل", 500);
+  }
   const html = await receiptPage(id, u.searchParams.get("kind") === "framed");
   return html ? new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }) : no("البيعة غير موجودة", 404);
 }
