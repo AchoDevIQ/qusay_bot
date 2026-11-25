@@ -30,7 +30,7 @@ const SET_KEY = "qboard_settings", DRAFT_KEY = "qboard_draft";
 type Settings = { board: string; frame: string; head: string; palm: number; eraser: number; width: number };
 const tablet = () => typeof window !== "undefined" && Math.max(window.screen.width, window.screen.height) < 1400;
 const loadSettings = (): Settings => {
-  const d: Settings = { board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "navy", palm: tablet() ? 70 : 200, eraser: 80, width: 5 };
+  const d: Settings = { board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "nb-charcoal", palm: tablet() ? 70 : 200, eraser: 80, width: 5 };
   try { return { ...d, ...JSON.parse(localStorage.getItem(SET_KEY) ?? "{}") }; } catch { return d; }
 };
 
@@ -74,7 +74,7 @@ export default function BoardClient() {
   const [tool, setTool] = useState<Tool>("pen");
   const [shape, setShape] = useState("line");
   const [color, setColor] = useState("#FFFFFF");
-  const [set, setSet] = useState<Settings>(() => ({ board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "navy", palm: 200, eraser: 80, width: 5 }));
+  const [set, setSet] = useState<Settings>(() => ({ board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "nb-charcoal", palm: 200, eraser: 80, width: 5 }));
   const [pop, setPop] = useState<Pop>("");
   const [popAt, setPopAt] = useState(0);
   const [ask, setAsk] = useState<Ask>(null);
@@ -131,6 +131,19 @@ export default function BoardClient() {
   const inkQueued = useRef(false);
   const queueInk = () => { if (inkQueued.current) return; inkQueued.current = true; requestAnimationFrame(() => { inkQueued.current = false; redrawInk(); }); };
   const eraserMark = useRef<{ x: number; y: number; s: number } | null>(null);
+  /** قطعة كحلية بإطار ذهبي ولوگو قصي عليها: المساحة، وتحت الإصبع وقت التحريك */
+  const logoBlock = (x: CanvasRenderingContext2D, cx: number, cy: number, s: number) => {
+    x.save();
+    x.fillStyle = "rgba(20,31,51,0.82)"; x.strokeStyle = "#F6C94A"; x.lineWidth = 3;
+    x.beginPath(); x.roundRect(cx - s / 2, cy - s / 2, s, s, Math.min(14, s / 6)); x.fill(); x.stroke();
+    const lg = logo.current;
+    if (lg && lg.naturalWidth) {
+      const W0 = lg.naturalWidth, H0 = lg.naturalHeight, sw = W0 * 0.57, sh = H0 * 0.62;
+      const k = (s * 0.84) / Math.max(sw, sh);
+      x.drawImage(lg, W0 * 0.225, H0 * 0.225, sw, sh, cx - (sw * k) / 2, cy - (sh * k) / 2, sw * k, sh * k);
+    }
+    x.restore();
+  };
   const liveQueued = useRef(false);
   const redrawLive = () => {
     if (liveQueued.current) return;
@@ -155,19 +168,12 @@ export default function BoardClient() {
       }
       const bd = band.current;
       if (bd) { x.save(); x.strokeStyle = "rgba(246,201,74,.9)"; x.fillStyle = "rgba(246,201,74,.12)"; x.lineWidth = 2; x.setLineDash([10, 8]); x.fillRect(Math.min(bd.x0, bd.x1), Math.min(bd.y0, bd.y1), Math.abs(bd.x1 - bd.x0), Math.abs(bd.y1 - bd.y0)); x.strokeRect(Math.min(bd.x0, bd.x1), Math.min(bd.y0, bd.y1), Math.abs(bd.x1 - bd.x0), Math.abs(bd.y1 - bd.y0)); x.restore(); }
+      // ✋ التحريك: اللوگو تحت الإصبع كأنه هو اللي يسحب الشي
+      for (const c of contacts.current.values()) if (c.mode === "drag" || c.mode === "resize") logoBlock(x, c.last[0], c.last[1], 64);
       const m = eraserMark.current;
       if (m) {
         // المساحة بشكل لوگو قصي: قطعة كحلية بإطار ذهبي واللوگو عليها (نفس مكان المسح بالضبط)
-        x.save();
-        x.fillStyle = "rgba(20,31,51,0.82)"; x.strokeStyle = "#F6C94A"; x.lineWidth = 3;
-        x.beginPath(); x.roundRect(m.x - m.s / 2, m.y - m.s / 2, m.s, m.s, Math.min(14, m.s / 6)); x.fill(); x.stroke();
-        const lg = logo.current;
-        if (lg && lg.naturalWidth) {
-          const W0 = lg.naturalWidth, H0 = lg.naturalHeight, sw = W0 * 0.57, sh = H0 * 0.62;
-          const k = (m.s * 0.84) / Math.max(sw, sh);
-          x.drawImage(lg, W0 * 0.225, H0 * 0.225, sw, sh, m.x - (sw * k) / 2, m.y - (sh * k) / 2, sw * k, sh * k);
-        }
-        x.restore();
+        logoBlock(x, m.x, m.y, m.s);
       }
       x.restore();
     });

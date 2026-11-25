@@ -13,6 +13,21 @@ export type Item = InkStroke | TextItem | ImageItem;
 export type Page = { items: Item[]; bg?: string | null };
 export type Lesson = { v: 1; w: number; board: string; frame: string; head?: string; pages: Page[]; title?: string };
 
+// ---------- 📓 هيدرات الدفتر: نفس الشكل، لون الشريط يتغير
+export const NOTEBOOK: { id: string; t: string; bg: string; bg2: string }[] = [
+  { id: "nb-charcoal", t: "دفتر فحمي", bg: "#252527", bg2: "#38383B" },
+  { id: "nb-navy", t: "دفتر كحلي", bg: "#121C2F", bg2: "#1F2E4A" },
+  { id: "nb-black", t: "دفتر أسود", bg: "#0A0A0B", bg2: "#1C1C1E" },
+  { id: "nb-wine", t: "دفتر خمري", bg: "#3A0E18", bg2: "#5A1828" },
+  { id: "nb-emerald", t: "دفتر زمردي", bg: "#0A2F25", bg2: "#145142" },
+  { id: "nb-royal", t: "دفتر أزرق ملكي", bg: "#0D2655", bg2: "#1A3F85" },
+  { id: "nb-purple", t: "دفتر بنفسجي", bg: "#26163C", bg2: "#3F2763" },
+  { id: "nb-brown", t: "دفتر بني", bg: "#2E2017", bg2: "#4A3526" },
+  { id: "nb-teal", t: "دفتر فيروزي", bg: "#0B303A", bg2: "#16505E" },
+  { id: "nb-slate", t: "دفتر رصاصي", bg: "#2A303B", bg2: "#434B5A" },
+];
+export const SLOGAN = "معاً لنغيّر الفكر الخاطئ عن الرياضيات";
+
 // ---------- 🏷 الهيدرات: شريط فوك السبورة باسمه واللوگو (طلبه 2026-11-25، يختار من 10)
 export const HEADS: { id: string; t: string }[] = [
   { id: "none", t: "بدون هيدر" },
@@ -26,6 +41,8 @@ export const HEADS: { id: string; t: string }[] = [
   { id: "double", t: "خطين ذهبيين" },
   { id: "chalk", t: "طباشير" },
   { id: "modern", t: "حديث متدرج" },
+  // 📓 مثل هيدر دفتر المحاضرات (طلبه 2026-11-25): لوگو بمربع + «قصي العميري» يسار، خط ذهبي مايل، وشعاره يمين. نفس التصميم بعشر ألوان
+  ...NOTEBOOK.map((n) => ({ id: n.id, t: `📓 ${n.t}` })),
 ];
 export const HEAD_H = 76;
 export const headOf = (id?: string) => (HEADS.some((h) => h.id === id) ? String(id) : "none");

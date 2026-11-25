@@ -131,7 +131,9 @@ test("✋ التحريك: دوسة تختار، مربع يختار، والحر
   const big: any = E.scaled(img, 400, 400, 2);
   assert.deepEqual([big.w, big.h, big.x, big.y], [400, 200, 400, 400]);
   assert.ok(E.eraseAlong(items, [500, 450], [500, 450], 80).items.includes(img), "الممحاة ما تشيل الصورة");
-  assert.equal(E.HEADS.filter((h) => h.id !== "none").length, 10);
+  assert.equal(E.HEADS.filter((h) => h.id !== "none").length, 20);
+  assert.equal(E.HEADS.filter((h) => h.id.startsWith("nb-")).length, 10, "هيدرات الدفتر عشرة");
+  assert.equal(E.headOf("nb-wine"), "nb-wine");
   assert.equal(E.cleanLesson({ pages: [{ items: [img] }], head: "gold" })!.head, "gold");
   assert.equal(E.cleanLesson({ pages: [{ items: [] }], head: "x" })!.head, "none");
 });

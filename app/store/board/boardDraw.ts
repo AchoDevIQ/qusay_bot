@@ -1,5 +1,5 @@
 // 📝 رسم السبورة على الـ canvas: الإطار والخشب، الخلفية، الكتابة والتظليل والنص
-import { FRAME, HEAD_H, H, frameOf, headOf, insetOf, isLight, woodPixels, wrapWidth, type Item, type TextItem, topOf, areaOf } from "../../../lib/board/engine.ts";
+import { FRAME, HEAD_H, H, NOTEBOOK, SLOGAN, frameOf, headOf, insetOf, isLight, woodPixels, wrapWidth, type Item, type TextItem, topOf, areaOf } from "../../../lib/board/engine.ts";
 
 // خط التطبيق نفسه (نفس الخط اللي يختاره من «✍️ الخط»)، مو الخط الرسمي
 export const FONT = `QAppEn, QAppAr, Cairo, Tahoma, Arial, sans-serif`;
@@ -320,6 +320,8 @@ export function drawHeader(ctx: CanvasRenderingContext2D, W: number, F: number, 
   const ink = light ? "#1F2A44" : "#F6C94A";
   ctx.save();
   ctx.beginPath(); ctx.rect(x0, y, w, h + 30); ctx.clip();
+  const nb = NOTEBOOK.find((n) => n.id === id);
+  if (nb) { notebookHead(ctx, x0, x1, y, h, nb, logo); ctx.restore(); return; }
   switch (id) {
     case "navy": {
       ctx.fillStyle = "#141F33"; ctx.fillRect(x0, y, w, h);
@@ -411,6 +413,41 @@ export function drawHeader(ctx: CanvasRenderingContext2D, W: number, F: number, 
     }
   }
   ctx.restore();
+}
+/** 📓 هيدر الدفتر: اللوگو بمربع ذهبي و«قصي العميري» يسار، خط ذهبي مايل، والشعار يمين. نفس ارتفاع باقي الهيدرات حتى البطن يبقى كبير */
+function notebookHead(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, h: number, c: { bg: string; bg2: string }, logo: HTMLImageElement | null) {
+  const w = x1 - x0, k = Math.max(0.6, Math.min(1, w / 1300));
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, c.bg2); g.addColorStop(1, c.bg);
+  ctx.fillStyle = g; ctx.fillRect(x0, y, w, h);
+  ctx.fillStyle = goldGrad(ctx, x0, x1); ctx.fillRect(x0, y + h - 3, w, 3);
+  // اللوگو بمربع بإطار ذهبي
+  const s = h - 22, bx = x0 + 16, by = y + 9;
+  ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.roundRect(bx, by, s, s, 9); ctx.fill();
+  ctx.strokeStyle = goldGrad(ctx, bx, bx + s); ctx.lineWidth = 2.5; ctx.stroke();
+  if (logo && logo.naturalWidth) {
+    const W0 = logo.naturalWidth, H0 = logo.naturalHeight, sw = W0 * 0.57, sh = H0 * 0.62, f = (s - 10) / Math.max(sw, sh);
+    ctx.drawImage(logo, W0 * 0.225, H0 * 0.225, sw, sh, bx + s / 2 - (sw * f) / 2, by + s / 2 - (sh * f) / 2, sw * f, sh * f);
+  }
+  // الاسم يم اللوگو
+  ctx.textBaseline = "middle"; ctx.direction = "rtl"; ctx.textAlign = "left";
+  ctx.font = `700 ${Math.round(30 * k)}px ${FONT}`;
+  const nx = bx + s + 16, nw = ctx.measureText("قصي العميري").width;
+  ctx.fillStyle = "#FFFFFF"; ctx.fillText("قصي العميري", nx, y + h / 2 - 1);
+  // الخط الذهبي المايل
+  const sx = nx + nw + 46 * k;
+  ctx.fillStyle = goldGrad(ctx, sx, sx + 60);
+  ctx.beginPath(); ctx.moveTo(sx, y + h - 3); ctx.lineTo(sx + 34, y); ctx.lineTo(sx + 56, y); ctx.lineTo(sx + 22, y + h - 3); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 0.55;
+  ctx.beginPath(); ctx.moveTo(sx + 32, y + h - 3); ctx.lineTo(sx + 66, y); ctx.lineTo(sx + 72, y); ctx.lineTo(sx + 38, y + h - 3); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+  // الشعار يمين، يصغر إذا الشاشة ضيقة حتى ما يدوس على الخط
+  let fs = Math.round(28 * k);
+  ctx.font = `700 ${fs}px ${FONT}`;
+  const room = x1 - 24 - (sx + 90);
+  while (fs > 14 && ctx.measureText(SLOGAN).width > room) { fs -= 1; ctx.font = `700 ${fs}px ${FONT}`; }
+  ctx.textAlign = "right"; ctx.fillStyle = goldGrad(ctx, x1 - 500, x1);
+  ctx.fillText(SLOGAN, x1 - 24, y + h / 2 - 1);
 }
 /** معاينة الهيدر بالقائمة */
 export function headPreview(id: string, logo: HTMLImageElement | null, board: string): string {
