@@ -78,8 +78,8 @@ export default function PathClient() {
   };
   const stepView = (s: Step, k: number) => s.kind === "lec" ? (
     <button key={k} type="button" className={`qp-step lec ${s.state}`} onClick={() => openLec(s)}>
-      <span className="qp-ic">{s.state === "done" ? "✅" : s.state === "open" ? "▶️" : "🔒"}</span>
-      <span className="qp-t"><b>🎬 {s.title}</b><small>{s.state === "done" ? "كملتها" : s.state === "open" ? (s.pct ? `وصلت ${s.pct}٪، كمّلها للآخر` : "هسه دورها") : s.state === "buy" ? "اشتري المحاضرات" : "تنفتح بعد اللي قبلها"}</small></span>
+      <span className={`qp-ic${s.state === "open" ? " play" : ""}`}>{s.state === "done" ? "✓" : s.state === "open" ? "▶" : "🔒"}</span>
+      <span className="qp-t"><b>🎬 {s.title}</b>{(s.state !== "open" || s.pct > 0) && <small>{s.state === "done" ? "كملتها" : s.state === "open" ? `وصلت ${s.pct}٪، كمّلها للآخر` : s.state === "buy" ? "اشتري المحاضرات" : "تنفتح بعد اللي قبلها"}</small>}</span>
     </button>
   ) : s.kind === "exam" ? (
     <a key={k} className={`qp-step exam ${s.state}`} href={s.state === "buy" ? undefined : examsLink()}>
@@ -106,9 +106,13 @@ export default function PathClient() {
       {!err && !p && <div className="qp-msg">جاري التحميل...</div>}
       {p && !p.sections.length && <div className="qp-msg">بعده ما أكو محاضرات بهذا الفصل</div>}
       {p && splitAtCp(p.sections).map((part, i) => part.band ? (
-        <div key={`b${i}`} className="qp-band">
-          <span className="qp-bico">🚦</span>
-          <span className="qp-t"><b>سيطرة{part.band.title ? ` بعد «${part.band.title}»` : ""}</b><small>آخر {part.band.count} امتحانات: لازم المجموع {part.band.min} أو أكثر{part.band.absent ? `، وإذا غاب ${part.band.absent} تنوقف المنصة` : ""}</small></span>
+        <div key={`b${i}`} className="qp-gate">
+          <i className="qp-stripes" />
+          <div className="qp-gin">
+            <span className="qp-bico">🛡</span>
+            <span className="qp-t"><b>سيطرة{part.band.title ? ` بعد «${part.band.title}»` : ""}</b><small>آخر {part.band.count} امتحانات: لازم المجموع {part.band.min} أو أكثر{part.band.absent ? `، وإذا غاب ${part.band.absent} تنوقف المنصة` : ""}</small></span>
+          </div>
+          <i className="qp-stripes" />
         </div>
       ) : renderSec(part.sec!, part.i!))}
       {p?.teacher && <a className="qp-link" href={`/store/checkpoints?t=${encodeURIComponent(token())}`}>⛔ الموقوفين، ورسالة الإيقاف وصورته</a>}
@@ -270,25 +274,27 @@ const CSS = `
 .qp-ch{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 0}
 .qp-ch button{flex:none;min-height:44px;border:1px solid #D5DAE5;background:#fff;border-radius:22px;padding:0 16px;font:inherit;font-weight:700;color:#141F33}
 .qp-ch button.on{background:#141F33;color:#F6C94A;border-color:#141F33}
-.qp-stop{margin:14px 16px 0;background:#FFE9E9;border:1px solid #F5B5B5;color:#8A1F1F;border-radius:12px;padding:12px;font-weight:700;line-height:1.7}
+.qp-stop{margin:14px 16px 0;background:#141F33;border:2px solid #F6C94A;color:#F6C94A;border-radius:12px;padding:12px;font-weight:700;line-height:1.7}
 .qp-sec{margin:14px 16px 0;background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(20,31,51,.08);overflow:hidden;border:1px solid #E6E9F0}
-.qp-sec.gen{border-color:#F6C94A}
+.qp-sec.gen{border-color:#141F33}
 .qp-head{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:10px 14px;background:none;border:0;font:inherit;color:inherit;text-align:right}
 .qp-head b{flex:1;font-size:17px}.qp-head small{color:#6B7488;font-weight:700}
 .qp-num{width:32px;height:32px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#141F33;color:#F6C94A;font-weight:800}
-.qp-sec.done .qp-num{background:#2E9E5B;color:#fff}
+.qp-sec.done .qp-num{background:#F6C94A;color:#141F33}
 .qp-arr{color:#8A93A6}
 .qp-steps{border-top:1px solid #EEF0F5;padding:6px 10px 10px}
-.qp-step{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;margin-top:6px;padding:8px 10px;border-radius:12px;background:#F7F8FB;border:1px solid transparent;font:inherit;color:inherit;text-align:right}
-.qp-step.lec.open{background:#FFF8E1;border-color:#F6C94A}
+.qp-step{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;margin-top:6px;padding:8px 10px;border-radius:12px;background:#fff;border:1px solid #E6E9F0;font:inherit;color:inherit;text-align:right}
+.qp-step.lec.open{background:#fff;border:1px solid #E6E9F0;border-right:5px solid #F6C94A}
 .qp-step.lec.locked,.qp-step.lec.buy{opacity:.55}
-.qp-step.exam{background:#EEF3FF}.qp-step.exam.open{background:#E3F8EA;border-color:#2E9E5B}
-.qp-step.cp{background:#FFF1E6;border:1px dashed #E67E22}
-.qp-ic{font-size:20px;width:28px;text-align:center;flex:none}
+.qp-step.exam{background:#F5F6FA}.qp-step.exam.open{background:#fff;border:2px solid #F6C94A}
+.qp-step.cp{background:#fff;border:1px dashed #141F33}
+.qp-ic{font-size:18px;width:34px;height:34px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;color:#141F33}
+.qp-step.lec.done .qp-ic{background:#141F33;color:#F6C94A;font-weight:800}
+.qp-ic.play{background:#141F33;color:#F6C94A;font-size:15px}
 .qp-t{display:flex;flex-direction:column;min-width:0}.qp-t b{font-size:15px}.qp-t small{color:#5C667A;font-size:13px;line-height:1.5}
 .qp-go{display:flex;flex-direction:column;gap:4px;margin:14px 16px 0;padding:16px;border-radius:14px;background:#141F33;color:#F6C94A;font-weight:800;font-size:18px;text-decoration:none;box-shadow:0 4px 14px rgba(20,31,51,.25)}.qp-go small{color:#C9D1E0;font-weight:600;font-size:13px}
 a.qp-step{text-decoration:none}
-.qp-addcp{flex:none;margin-inline-start:auto;min-height:40px;border:1px dashed #E67E22;background:#fff;color:#B35900;border-radius:10px;padding:0 10px;font:inherit;font-weight:700;font-size:13px}
+.qp-addcp{flex:none;margin-inline-start:auto;min-height:40px;border:1px dashed #141F33;background:#fff;color:#141F33;border-radius:10px;padding:0 10px;font:inherit;font-weight:700;font-size:13px}
 .qp-link{display:block;margin:18px 16px 0;text-align:center;color:#141F33;font-weight:700}
 .qp-dlg{position:fixed;inset:0;z-index:20;background:rgba(10,15,25,.55);display:flex;align-items:flex-end;justify-content:center}
 .qp-box{width:min(560px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:18px 16px 22px;display:flex;flex-direction:column;gap:8px}
@@ -305,8 +311,10 @@ a.qp-step{text-decoration:none}
 .qp-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .qp-btns button{flex:1;min-height:50px;border-radius:12px;border:1px solid #D5DAE5;background:#fff;font:inherit;font-weight:800}
 .qp-btns .ok{background:#141F33;color:#F6C94A;border-color:#141F33}.qp-btns .bad{color:#B00020;border-color:#F2B8B5}
-.qp-band{display:flex;align-items:center;gap:12px;margin:14px 16px 0;padding:14px 16px;border-radius:14px;background:linear-gradient(90deg,#E67E22,#F6A04D);color:#fff;box-shadow:0 2px 10px rgba(230,126,34,.35)}
-.qp-band .qp-t small{color:#FFF3E6}.qp-band .qp-t b{font-size:17px}
+.qp-gate{margin:14px 16px 0;border-radius:14px;overflow:hidden;background:#141F33;color:#fff;box-shadow:0 2px 10px rgba(20,31,51,.25)}
+.qp-stripes{display:block;height:10px;background:repeating-linear-gradient(-45deg,#F6C94A 0 12px,#141F33 12px 24px)}
+.qp-gin{display:flex;align-items:center;gap:12px;padding:12px 16px}
+.qp-gate .qp-t b{font-size:17px;color:#F6C94A}.qp-gate .qp-t small{color:#C9D1E0}
 .qp-bico{font-size:26px}
 .qp-pics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
 .qp-pic{display:flex;flex-direction:column;gap:6px;border:1px solid #E6E9F0;border-radius:12px;padding:10px}
