@@ -95,7 +95,7 @@ export default function PathClient() {
       <header>
         <img src="/app-logo.png" alt="" />
         <div style={{ flex: 1 }}><b>مسارك ويا قصي العميري</b>{progress && progress.all > 0 && <small>خلصت {progress.done} من {progress.all} محاضرة</small>}</div>
-        <a className="qp-alarm" href={`/store/alarm?t=${encodeURIComponent(token())}${new URLSearchParams(location.search).get("app") ? `&app=${encodeURIComponent(new URLSearchParams(location.search).get("app")!)}` : ""}`} aria-label="منبه امتحاناتي">⏰</a>
+        <a className="qp-alarm" href="/store/alarm" onClick={(e) => { e.preventDefault(); const app = new URLSearchParams(location.search).get("app"); location.href = `/store/alarm?t=${encodeURIComponent(token())}${app ? `&app=${encodeURIComponent(app)}` : ""}`; }} aria-label="منبه امتحاناتي">⏰</a>
       </header>
       {progress && progress.all > 0 && <div className="qp-bar"><i style={{ width: `${(100 * progress.done) / progress.all}%` }} /></div>}
       {/* معاينة الأستاذ: داتا التجربة لو الحقيقية */}
