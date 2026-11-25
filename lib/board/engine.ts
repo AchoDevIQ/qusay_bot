@@ -80,8 +80,13 @@ export const BOARDS: { c: string; t: string }[] = [
 /** deco: إطار مزخرف بدل الخشب (طلبه 2026-11-25): ثلاث جهات بس (يمين ويسار وجوه)، الفوك يبقى للهيدر مالته
  *  حتى ما يصير طبقتين فوك وتقل مساحة الكتابة. شريط بلون وخطوط ذهبية (أو فضية أو ذهبي وردي).
  *  bar: لون الشريط («board» يعني نفس لون السبورة، فتطلع الخطوط بس) */
-export type Frame = { id: string; t: string; wood?: [string, string, number]; grad?: string[]; deco?: { bar: string; style: string; line?: "gold" | "silver" | "rose" }; light: boolean };
+/** slim: إطار نحيف (طلبه 2026-11-25: «الجوانب ثخينة وماخذة عرض»). الهيدر يمتد على العرض كله فوك الإطار، فالزاوية نظيفة. w: عرضه. bar "head": بلون الهيدر */
+export type Frame = { id: string; t: string; wood?: [string, string, number]; grad?: string[]; deco?: { bar: string; style: string; line?: "gold" | "silver" | "rose" }; light: boolean; w?: number; slim?: boolean };
 export const FRAMES: Frame[] = [
+  { id: "s-match", t: "نحيف بلون الهيدر", deco: { bar: "head", style: "slim" }, light: false, w: 14, slim: true },
+  { id: "s-match2", t: "نحيف بلون الهيدر وخطين", deco: { bar: "head", style: "slim2" }, light: false, w: 16, slim: true },
+  { id: "s-gold", t: "خط ذهبي نحيف بس", deco: { bar: "board", style: "slim" }, light: false, w: 10, slim: true },
+  { id: "s-silver", t: "نحيف بلون الهيدر وخط فضي", deco: { bar: "head", style: "slim", line: "silver" }, light: false, w: 14, slim: true },
   { id: "d-navy", t: "كحلي وذهبي", deco: { bar: "#141F33", style: "lines" }, light: false },
   { id: "d-gold", t: "ذهبي فاخر", deco: { bar: "gold", style: "lines" }, light: true },
   { id: "d-black", t: "أسود وذهبي", deco: { bar: "#111111", style: "lines" }, light: false },
@@ -117,9 +122,9 @@ export const FRAMES: Frame[] = [
   { id: "white", t: "أبيض", grad: ["#FFFFFF", "#E4E6E8", "#F6F7F8", "#C9CDD1"], light: true },
   { id: "none", t: "بدون إطار", light: false },
 ];
-export const DEFAULT_BOARD = "#1F4E3D", DEFAULT_FRAME = "d-navy";
+export const DEFAULT_BOARD = "#1F4E3D", DEFAULT_FRAME = "s-match";
 export const frameOf = (id: string) => FRAMES.find((f) => f.id === id) ?? FRAMES.find((f) => f.id === DEFAULT_FRAME)!;
-export const insetOf = (id: string) => (frameOf(id).id === "none" ? 0 : FRAME);
+export const insetOf = (id: string) => { const f = frameOf(id); return f.id === "none" ? 0 : f.w ?? FRAME; };
 /** من وين تبدي السبورة من فوك: الإطارات المزخرفة ما إلها ضلع فوك (الفوك للهيدر) */
 export const topOf = (id: string) => (frameOf(id).deco ? 0 : insetOf(id));
 /** مساحة الكتابة داخل الإطار */

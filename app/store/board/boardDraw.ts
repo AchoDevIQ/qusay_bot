@@ -32,7 +32,7 @@ export function framePreview(id: string): string {
   const c = document.createElement("canvas"); c.width = 240; c.height = 28;
   const x = c.getContext("2d")!;
   if (f.wood) x.drawImage(woodTiles(id)!.h, 0, 0, 1024, 96, 0, 0, 240, 28);
-  else if (f.deco) { const k = 28 / FRAME; x.scale(k, k); x.translate(0, -(H - FRAME)); paintDeco(x, 240 / k, FRAME, f.deco, "#1F4E3D"); }
+  else if (f.deco) { const F0 = insetOf(id), k = 28 / FRAME; x.fillStyle = "#1F4E3D"; x.fillRect(0, 0, 240, 28); x.scale(k, k); x.translate(0, -(H - FRAME)); paintDeco(x, 240 / k, F0, f.deco, "#1F4E3D"); }
   else if (f.grad) { const g = x.createLinearGradient(0, 0, 0, 28); f.grad.forEach((s, i) => g.addColorStop(i / (f.grad!.length - 1), s)); x.fillStyle = g; x.fillRect(0, 0, 240, 28); }
   else { x.strokeStyle = "#8a93a6"; x.setLineDash([6, 5]); x.strokeRect(2, 2, 236, 24); }
   return c.toDataURL();
@@ -45,6 +45,8 @@ export function paintFrame(ctx: CanvasRenderingContext2D, W: number, board: stri
   ctx.fillStyle = board;
   ctx.fillRect(F, T, W - 2 * F, H - F - T);
   const hd = headOf(head);
+  // النحيف: الإطار أول، وبعده الهيدر على العرض كله فوكه، فالهيدر والإطار قطعة وحدة
+  if (f.slim && f.deco) { paintDeco(ctx, W, F, f.deco, board, headBg(hd)); if (hd !== "none") drawHeader(ctx, W, 0, hd, logo, board, 0); return; }
   if (hd !== "none") drawHeader(ctx, W, F, hd, logo, board, T);
   if (!F) return;
   type Bar = { x: number; y: number; w: number; h: number; side: "t" | "b" | "l" | "r" };
@@ -104,7 +106,13 @@ function plate(ctx: CanvasRenderingContext2D, W: number, F: number, logo: HTMLIm
   ctx.restore();
 }
 /** الإطارات المزخرفة: ثلاث جهات (يمين ويسار وجوه) بلا خشب. الفوك مفتوح للهيدر */
-function paintDeco(ctx: CanvasRenderingContext2D, W: number, F: number, d: { bar: string; style: string; line?: string }, board: string) {
+/** لون الإطار النحيف «بلون الهيدر»: لون شريط الهيدر نفسه */
+function headBg(hd: string) {
+  const nb = NOTEBOOK.find((n) => n.id === hd);
+  return nb ? nb.bg : hd === "gold" ? "gold" : hd === "modern" ? "modern" : "#141F33";
+}
+function paintDeco(ctx: CanvasRenderingContext2D, W: number, F: number, d: { bar: string; style: string; line?: string }, board: string, head = "#141F33") {
+  if (d.bar === "head") d = { ...d, bar: head };
   const metal = (x0: number, x1: number) => {
     const g = ctx.createLinearGradient(x0, 0, x1, 0);
     const st = d.line === "silver" ? ["#F1F3F5", "#AEB5BD", "#DDE1E5"] : d.line === "rose" ? ["#F6CDB4", "#B76E79", "#EDB9A4"] : ["#F6C94A", "#D9A62E", "#F3D27A"];
@@ -134,6 +142,9 @@ function paintDeco(ctx: CanvasRenderingContext2D, W: number, F: number, d: { bar
   };
   ctx.save();
   switch (d.style) {
+    // النحيف: خط ذهبي رفيع على حافة البطن (يلتقي بخط الهيدر الذهبي)
+    case "slim": u(F - 1.2, 2.2); break;
+    case "slim2": u(F - 1, 1.8); u(4, 1.2, soft); break;
     case "lines":
       u(5, 2, d.bar === "gold" ? "#5A3D0C" : gold);
       u(F - 3, 4, d.bar === "gold" ? "#141F33" : gold);

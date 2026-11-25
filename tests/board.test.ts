@@ -24,13 +24,15 @@ await initDb();
 
 test("📝 الألوان: 98 لون، والأشكال والمجسمات كخطوط والمخفي متقطع", () => {
   assert.equal(E.palette().length, 98);
-  assert.equal(E.FRAMES.length, 34, "21 مزخرفة + 13 القديمة");
+  assert.equal(E.FRAMES.length, 38, "4 نحيفة + 21 مزخرفة + 13 القديمة");
   assert.ok(E.BOARDS.length >= 40, "ألوان بطن السبورة هواية");
   assert.equal(E.topOf("d-navy"), 0, "المزخرف بلا ضلع فوك: الفوك للهيدر");
   assert.equal(E.topOf("oak"), E.FRAME);
   assert.deepEqual(E.areaOf("d-navy", 1920), { x: 40, y: 0, w: 1840, h: 1040 });
-  assert.equal(E.FRAMES.filter((f) => f.deco).length, 21);
-  assert.equal(E.DEFAULT_FRAME, "d-navy", "بلا خشب من البداية");
+  assert.equal(E.FRAMES.filter((f) => f.deco).length, 25);
+  assert.equal(E.DEFAULT_FRAME, "s-match", "النحيف بلون الهيدر من البداية");
+  assert.deepEqual(E.areaOf("s-match", 1920), { x: 14, y: 0, w: 1892, h: 1066 }, "النحيف ياخذ أقل عرض");
+  assert.equal(E.insetOf("s-gold"), 10);
   const cube = E.buildShape("cube", [0, 0], [200, 200], 5);
   assert.equal(cube.solid.length, 3);
   assert.equal(cube.dashed.length, 2);
