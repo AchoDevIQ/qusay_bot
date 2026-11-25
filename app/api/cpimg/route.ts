@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // صور شخصيات السيطرة: نفس الصورة لكل الطلاب، فتنفتح بدون توقيع
-const IMG = /^checkpoints\/[\w-]+\.(png|jpg|webp)$/;
+const IMG = /^checkpoints\/[\w-]+\.(png|jpg|webp|mp4)$/;
 export async function GET(req: Request) {
   await ensure();
   const ref = new URL(req.url).searchParams.get("ref") ?? "";
@@ -13,5 +13,5 @@ export async function GET(req: Request) {
   const body = await files().read(ref);
   if (!body) return new Response("no", { status: 404 });
   const ext = ref.split(".").pop();
-  return new Response(new Uint8Array(body), { headers: { "Content-Type": ext === "jpg" ? "image/jpeg" : `image/${ext}`, "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" } });
+  return new Response(new Uint8Array(body), { headers: { "Content-Type": ext === "mp4" ? "video/mp4" : ext === "jpg" ? "image/jpeg" : `image/${ext}`, "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" } });
 }

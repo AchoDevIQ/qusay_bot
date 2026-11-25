@@ -34,7 +34,8 @@ const PER_EXAM = 100;
 const MAX_TEXT = 2000;
 export const TAGS = ["{الاسم}", "{الموقوف}", "{السبب}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{المطلوب}", "{الغياب}"];
 export const BAND_TAGS = ["{الاسم}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{النسبة}"];
-const IMG = /^checkpoints\/[\w-]+\.(png|jpg|webp)$/;
+// صورة أو فيديو قصير (طلبه 2026-11-25: «مو بس صورة، أضيف فيديو بالسيطرة»)
+const IMG = /^checkpoints\/[\w-]+\.(png|jpg|webp|mp4)$/;
 export const cpImageUrl = (ref: string | null) => (ref && IMG.test(ref) ? `/api/cpimg?ref=${encodeURIComponent(ref)}` : "");
 const LOW = "عدم تحقيق الدرجة المطلوبة للعبور";
 const ABSENT = "كثرة الغيابات";
@@ -98,6 +99,11 @@ async function sendPicture(chat: number, ref: string | null, bubble = "") {
   const buf = await files().read(ref);
   if (!buf) return false;
   const ext = ref.split(".").pop()!;
+  // فيديو: يوصل بالمحادثة والكتابة تحته
+  if (ext === "mp4") {
+    try { if (await upload("sendVideo", { chat_id: String(chat), ...(bubble.trim() ? { caption: bubble.trim().slice(0, 1000) } : {}) }, "video", buf, "c.mp4", "video/mp4")) return true; } catch (e) { console.error(e); }
+    return false;
+  }
   // الكتابة بفقاعة على الصورة. إذا طويلة هواية أو ما انرسمت، الصورة لحالها والكتابة تنرسل بعدها
   if (bubble.trim() && bubble.length <= BUBBLE_MAX) {
     const png = await bubblePng(buf, ext === "jpg" ? "image/jpeg" : `image/${ext}`, bubble.trim(), `${chat}_${Date.now()}`);
@@ -372,17 +378,18 @@ const textOf = (raw: unknown) => {
   return t;
 };
 
-const IMG_MAX = 5 * 1024 * 1024;
+const IMG_MAX = 5 * 1024 * 1024, VIDEO_MAX = 20 * 1024 * 1024;
 /** صورة شخصية مرفوعة: PNG أو JPG أو WEBP */
 async function savePicture(f: unknown) {
   need(f instanceof Blob && f.size > 0, "اختار صورة");
-  need((f as Blob).size <= IMG_MAX, "الصورة لازم أصغر من 5 ميگا");
   const buf = Buffer.from(await (f as Blob).arrayBuffer());
-  const ext = buf[0] === 0x89 && buf[1] === 0x50 ? "png" : buf[0] === 0xff && buf[1] === 0xd8 ? "jpg" : buf.subarray(8, 12).toString() === "WEBP" ? "webp" : "";
-  need(ext, "الصورة لازم PNG أو JPG أو WEBP");
+  const video = buf.subarray(4, 8).toString() === "ftyp";
+  need((f as Blob).size <= (video ? VIDEO_MAX : IMG_MAX), video ? "الفيديو لازم أصغر من 20 ميگا (خليه قصير)" : "الصورة لازم أصغر من 5 ميگا");
+  const ext = video ? "mp4" : buf[0] === 0x89 && buf[1] === 0x50 ? "png" : buf[0] === 0xff && buf[1] === 0xd8 ? "jpg" : buf.subarray(8, 12).toString() === "WEBP" ? "webp" : "";
+  need(ext, "لازم صورة (PNG أو JPG أو WEBP) أو فيديو MP4");
   // اسمها من محتواها: نفس الصورة بأكثر من سيطرة تبقى نفسها، حتى ما توصل للطالب مرتين
   const ref = `checkpoints/${createHash("sha256").update(buf).digest("hex").slice(0, 32)}.${ext}`;
-  await files().write(ref, buf, ext === "jpg" ? "image/jpeg" : `image/${ext}`);
+  await files().write(ref, buf, ext === "mp4" ? "video/mp4" : ext === "jpg" ? "image/jpeg" : `image/${ext}`);
   return ref;
 }
 

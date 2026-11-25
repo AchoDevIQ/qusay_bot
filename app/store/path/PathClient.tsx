@@ -167,8 +167,8 @@ function CpDialog({ step, onClose, onSaved }: { step: Extract<Step, { kind: "exa
           <div className="qp-dh">تجيك القائمة مرة وحدة، بعد ما آخر امتحان بهالسيطرة ينصحح كله.</div>
         </>}
         {step.cp && <div className="qp-pics">
-          <Pic label="🏆 صورة المتفوقين" hint={`توصل اللي جابوا معدل ${step.cp.honor?.min ?? 95} فما فوق، ويا تهنئة`} url={step.cp.topImg} onPick={(f) => void upload("top", f)} onDrop={() => void upload("top", null)} busy={busy} />
-          <Pic label="⛔ صورة الموقوفين" hint="توصل اللي توقف عليه بهالسيطرة (بدل الصورة العامة)" url={step.cp.stopImg} onPick={(f) => void upload("stop", f)} onDrop={() => void upload("stop", null)} busy={busy} />
+          <Pic label="🏆 صورة أو فيديو المتفوقين" hint={`توصل اللي جابوا معدل ${step.cp.honor?.min ?? 95} فما فوق، ويا تهنئة`} url={step.cp.topImg} onPick={(f) => void upload("top", f)} onDrop={() => void upload("top", null)} busy={busy} />
+          <Pic label="⛔ صورة أو فيديو الموقوفين" hint="توصل اللي توقف عليه بهالسيطرة (بدل الصورة العامة)" url={step.cp.stopImg} onPick={(f) => void upload("stop", f)} onDrop={() => void upload("stop", null)} busy={busy} />
         </div>}
         {!step.cp && <div className="qp-dh">بعد ما تحفظ السيطرة، تگدر تحط صورة للمتفوقين وصورة للموقوفين.</div>}
         {err && <div className="qp-err">{err}</div>}
@@ -186,9 +186,9 @@ function Pic({ label, hint, url, onPick, onDrop, busy }: { label: string; hint: 
   return (
     <div className="qp-pic">
       <b>{label}</b><small>{hint}</small>
-      {url ? <img src={url} alt="" /> : <span className="qp-nopic">ماكو صورة</span>}
+      {url ? (/\.mp4/.test(decodeURIComponent(url)) ? <video src={url} controls playsInline /> : <img src={url} alt="" />) : <span className="qp-nopic">ماكو صورة ولا فيديو</span>}
       <div className="qp-chips">
-        <label className="qp-up">{url ? "🔄 بدّلها" : "🖼 اختار صورة"}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onPick(f); }} /></label>
+        <label className="qp-up">{url ? "🔄 بدّلها" : "🖼 صورة أو 🎬 فيديو"}<input type="file" accept="image/png,image/jpeg,image/webp,video/mp4" hidden disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onPick(f); }} /></label>
         {url && <button type="button" disabled={busy} onClick={onDrop}>🗑 شيلها</button>}
       </div>
     </div>
@@ -265,7 +265,7 @@ a.qp-step{text-decoration:none}
 .qp-pics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
 .qp-pic{display:flex;flex-direction:column;gap:6px;border:1px solid #E6E9F0;border-radius:12px;padding:10px}
 .qp-pic small{color:#5C667A;font-size:12px;line-height:1.5}
-.qp-pic img{width:100%;max-height:140px;object-fit:contain;border-radius:8px;background:#F5F6FA}
+.qp-pic img,.qp-pic video{width:100%;max-height:160px;object-fit:contain;border-radius:8px;background:#F5F6FA}
 .qp-nopic{display:flex;align-items:center;justify-content:center;height:80px;border:1px dashed #D5DAE5;border-radius:8px;color:#8A93A6;font-size:13px}
 .qp-up{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid #D5DAE5;border-radius:10px;font-weight:700;cursor:pointer}
 @media (max-width:480px){.qp-pics{grid-template-columns:1fr}}
