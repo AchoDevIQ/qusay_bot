@@ -7,10 +7,10 @@ import { pageAuth, pageToken } from "../adminPage";
 type Step =
   | { kind: "lec"; id: string; title: string; n: number; state: "done" | "open" | "locked" | "buy"; pct: number }
   | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; since?: number; from?: string; cp?: Cp | null }
-  | { kind: "cp"; exam: number; min: number; absent: number; count: number };
+  | { kind: "cp"; exam: number; min: number; absent: number; count: number; title?: string };
 type Section = { name: string; general?: boolean; steps: Step[] };
 type Honor = { min: number; bday?: boolean; addr?: boolean };
-type Cp = { min: number; absent: number; honor: Honor | null };
+type Cp = { min: number; absent: number; honor: Honor | null; stopImg?: string; topImg?: string };
 type Path = { ch: number; chapters: { ch: number; name: string }[]; lecturesBought: boolean; sections: Section[]; stopped: boolean; pickTimes?: boolean; teacher?: boolean };
 
 // الرمز من الرابط، أو المحفوظ بالصفحة (لوحة التحكم تفتح صفحاتها بدون الرمز بالرابط)
@@ -55,6 +55,33 @@ export default function PathClient() {
       location.href = `qmath://lecture/${s.id}`;
     }).catch((e) => say((e as Error).message));
   };
+  const renderSec = (sec: Section, i: number) => {
+    const lecs = sec.steps.filter((x) => x.kind === "lec") as Extract<Step, { kind: "lec" }>[];
+    const done = lecs.length && lecs.every((x) => x.state === "done");
+    return (
+      <section key={i} className={`qp-sec${sec.general ? " gen" : ""}${done ? " done" : ""}`}>
+        <button type="button" className="qp-head" onClick={() => setOpen((o) => ({ ...o, [i]: !o[i] }))}>
+          <span className="qp-num">{done ? "✓" : sec.general ? "📝" : "📘"}</span>
+          <b>{sec.name}</b>
+          {lecs.length > 0 && <small>{lecs.filter((x) => x.state === "done").length}/{lecs.length}</small>}
+          <span className="qp-arr">{open[i] ? "▴" : "▾"}</span>
+        </button>
+        {open[i] && <div className="qp-steps">{sec.steps.map((s, k) => stepView(s, k))}</div>}
+      </section>
+    );
+  };
+  const stepView = (s: Step, k: number) => s.kind === "lec" ? (
+    <button key={k} type="button" className={`qp-step lec ${s.state}`} onClick={() => openLec(s)}>
+      <span className="qp-ic">{s.state === "done" ? "✅" : s.state === "open" ? "▶️" : "🔒"}</span>
+      <span className="qp-t"><b>🎬 {s.title}</b><small>{s.state === "done" ? "كملتها" : s.state === "open" ? (s.pct ? `وصلت ${s.pct}٪، كمّلها للآخر` : "هسه دورها") : s.state === "buy" ? "اشتري المحاضرات" : "تنفتح بعد اللي قبلها"}</small></span>
+    </button>
+  ) : s.kind === "exam" ? (
+    <a key={k} className={`qp-step exam ${s.state}`} href={s.state === "buy" ? undefined : examsLink()}>
+      <span className="qp-ic">📝</span>
+      <span className="qp-t"><b>{s.title}</b><small>{EXAM[s.state] ?? s.state}{s.state === "locked" ? `: ${when(s.at)}` : ""}{s.state === "graded" && s.total !== null && s.total !== undefined ? ` ${s.total}` : ""}</small></span>
+      {p?.teacher && <button type="button" className="qp-addcp" onClick={(e) => { e.preventDefault(); setCpFor(s); }}>{s.cp ? "✏️ السيطرة" : "＋ إنشاء سيطرة"}</button>}
+    </a>
+  ) : null;
   const progress = p ? (() => { const l = p.sections.flatMap((s) => s.steps.filter((x) => x.kind === "lec")) as Extract<Step, { kind: "lec" }>[]; return { done: l.filter((x) => x.state === "done").length, all: l.length }; })() : null;
   return (
     <div className="qp" dir="rtl">
@@ -72,39 +99,12 @@ export default function PathClient() {
       {err && <div className="qp-msg">{err}</div>}
       {!err && !p && <div className="qp-msg">جاري التحميل...</div>}
       {p && !p.sections.length && <div className="qp-msg">بعده ما أكو محاضرات بهذا الفصل</div>}
-      {p?.sections.map((sec, i) => {
-        const lecs = sec.steps.filter((x) => x.kind === "lec") as Extract<Step, { kind: "lec" }>[];
-        const done = lecs.length && lecs.every((x) => x.state === "done");
-        return (
-          <section key={i} className={`qp-sec${sec.general ? " gen" : ""}${done ? " done" : ""}`}>
-            <button type="button" className="qp-head" onClick={() => setOpen((o) => ({ ...o, [i]: !o[i] }))}>
-              <span className="qp-num">{done ? "✓" : sec.general ? "📝" : i + 1}</span>
-              <b>{sec.name}</b>
-              {lecs.length > 0 && <small>{lecs.filter((x) => x.state === "done").length}/{lecs.length}</small>}
-              <span className="qp-arr">{open[i] ? "▴" : "▾"}</span>
-            </button>
-            {open[i] && <div className="qp-steps">
-              {sec.steps.map((s, k) => s.kind === "lec" ? (
-                <button key={k} type="button" className={`qp-step lec ${s.state}`} onClick={() => openLec(s)}>
-                  <span className="qp-ic">{s.state === "done" ? "✅" : s.state === "open" ? "▶️" : "🔒"}</span>
-                  <span className="qp-t"><b>🎬 {s.title}</b><small>{s.state === "done" ? "كملتها" : s.state === "open" ? (s.pct ? `وصلت ${s.pct}٪، كمّلها للآخر` : "هسه دورها") : s.state === "buy" ? "اشتري المحاضرات" : "تنفتح بعد اللي قبلها"}</small></span>
-                </button>
-              ) : s.kind === "exam" ? (
-                <a key={k} className={`qp-step exam ${s.state}`} href={s.state === "buy" ? undefined : examsLink()}>
-                  <span className="qp-ic">📝</span>
-                  <span className="qp-t"><b>{s.title}</b><small>{EXAM[s.state] ?? s.state}{s.state === "locked" ? `: ${when(s.at)}` : ""}{s.state === "graded" && s.total !== null && s.total !== undefined ? ` ${s.total}` : ""}</small></span>
-                  {p?.teacher && <button type="button" className="qp-addcp" onClick={(e) => { e.preventDefault(); setCpFor(s); }}>{s.cp ? "✏️ السيطرة" : "＋ إنشاء سيطرة"}</button>}
-                </a>
-              ) : (
-                <div key={k} className="qp-step cp">
-                  <span className="qp-ic">🚦</span>
-                  <span className="qp-t"><b>سيطرة</b><small>آخر {s.count} امتحانات: لازم مجموعك {s.min} أو أكثر{s.absent ? `، وإذا غبت ${s.absent} مرات تنوقف المنصة` : ""}</small></span>
-                </div>
-              ))}
-            </div>}
-          </section>
-        );
-      })}
+      {p && splitAtCp(p.sections).map((part, i) => part.band ? (
+        <div key={`b${i}`} className="qp-band">
+          <span className="qp-bico">🚦</span>
+          <span className="qp-t"><b>سيطرة{part.band.title ? ` بعد «${part.band.title}»` : ""}</b><small>آخر {part.band.count} امتحانات: لازم المجموع {part.band.min} أو أكثر{part.band.absent ? `، وإذا غاب ${part.band.absent} تنوقف المنصة` : ""}</small></span>
+        </div>
+      ) : renderSec(part.sec!, part.i!))}
       {p?.teacher && <a className="qp-link" href={`/store/checkpoints?t=${encodeURIComponent(token())}`}>⛔ الموقوفين، ورسالة الإيقاف وصورته</a>}
       {cpFor && <CpDialog step={cpFor} onClose={() => setCpFor(null)} onSaved={(t) => { setCpFor(null); say(t); load(p?.ch); }} />}
       {msg && <div className="qp-toast">{msg}</div>}
@@ -132,6 +132,18 @@ function CpDialog({ step, onClose, onSaved }: { step: Extract<Step, { kind: "exa
       onSaved(j.notice || "✅ انحفظت");
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
+  const upload = async (kind: "top" | "stop", f: File | null) => {
+    setBusy(true); setErr("");
+    try {
+      const fd = new FormData();
+      fd.set("initData", pageAuth()); fd.set("action", "cpImage"); fd.set("exam", String(step.id)); fd.set("kind", kind);
+      if (f) fd.set("file", f); else fd.set("dropImage", "1");
+      const r = await fetch("/api/checkpoints", { method: "POST", body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j.error || "صار خطأ");
+      onSaved(j.notice || "✅ انحفظت");
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
   const save = () => void call({ action: "saveCp", exam: step.id, min: Number(min) || 0, absent, honor: honorOn ? { min: Number(hMin) || 0, bday, addr } : null });
   return (
     <div className="qp-dlg" onClick={onClose}>
@@ -154,6 +166,11 @@ function CpDialog({ step, onClose, onSaved }: { step: Extract<Step, { kind: "exa
           <label className="qp-check"><input type="checkbox" checked={addr} onChange={(e) => setAddr(e.target.checked)} /> 🏠 ويا عنوانهم الكامل (حتى تسويلهم هدية ومفاجأة)</label>
           <div className="qp-dh">تجيك القائمة مرة وحدة، بعد ما آخر امتحان بهالسيطرة ينصحح كله.</div>
         </>}
+        {step.cp && <div className="qp-pics">
+          <Pic label="🏆 صورة المتفوقين" hint={`توصل اللي جابوا معدل ${step.cp.honor?.min ?? 95} فما فوق، ويا تهنئة`} url={step.cp.topImg} onPick={(f) => void upload("top", f)} onDrop={() => void upload("top", null)} busy={busy} />
+          <Pic label="⛔ صورة الموقوفين" hint="توصل اللي توقف عليه بهالسيطرة (بدل الصورة العامة)" url={step.cp.stopImg} onPick={(f) => void upload("stop", f)} onDrop={() => void upload("stop", null)} busy={busy} />
+        </div>}
+        {!step.cp && <div className="qp-dh">بعد ما تحفظ السيطرة، تگدر تحط صورة للمتفوقين وصورة للموقوفين.</div>}
         {err && <div className="qp-err">{err}</div>}
         <div className="qp-btns">
           <button type="button" className="ok" disabled={busy} onClick={save}>💾 حفظ السيطرة</button>
@@ -163,6 +180,37 @@ function CpDialog({ step, onClose, onSaved }: { step: Extract<Step, { kind: "exa
       </div>
     </div>
   );
+}
+
+function Pic({ label, hint, url, onPick, onDrop, busy }: { label: string; hint: string; url?: string; onPick: (f: File) => void; onDrop: () => void; busy: boolean }) {
+  return (
+    <div className="qp-pic">
+      <b>{label}</b><small>{hint}</small>
+      {url ? <img src={url} alt="" /> : <span className="qp-nopic">ماكو صورة</span>}
+      <div className="qp-chips">
+        <label className="qp-up">{url ? "🔄 بدّلها" : "🖼 اختار صورة"}<input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onPick(f); }} /></label>
+        {url && <button type="button" disabled={busy} onClick={onDrop}>🗑 شيلها</button>}
+      </div>
+    </div>
+  );
+}
+
+/** الأقسام تنقسم عند كل سيطرة: الموضوع، بعده شريط السيطرة الطويل، بعده باقي الموضوع (تكملة) */
+function splitAtCp(sections: Section[]): { sec?: Section; i?: number; band?: Extract<Step, { kind: "cp" }> }[] {
+  const out: { sec?: Section; i?: number; band?: Extract<Step, { kind: "cp" }> }[] = [];
+  let i = 0;
+  for (const sec of sections) {
+    let cur: Step[] = [], first = true;
+    for (const st of sec.steps) {
+      if (st.kind === "cp") {
+        if (cur.length) out.push({ sec: { ...sec, name: first ? sec.name : `${sec.name} (تكملة)`, steps: cur }, i: i++ });
+        out.push({ band: st });
+        cur = []; first = false;
+      } else cur.push(st);
+    }
+    if (cur.length) out.push({ sec: { ...sec, name: first ? sec.name : `${sec.name} (تكملة)`, steps: cur }, i: i++ });
+  }
+  return out;
 }
 
 const CSS = `
@@ -211,6 +259,16 @@ a.qp-step{text-decoration:none}
 .qp-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .qp-btns button{flex:1;min-height:50px;border-radius:12px;border:1px solid #D5DAE5;background:#fff;font:inherit;font-weight:800}
 .qp-btns .ok{background:#141F33;color:#F6C94A;border-color:#141F33}.qp-btns .bad{color:#B00020;border-color:#F2B8B5}
+.qp-band{display:flex;align-items:center;gap:12px;margin:14px 16px 0;padding:14px 16px;border-radius:14px;background:linear-gradient(90deg,#E67E22,#F6A04D);color:#fff;box-shadow:0 2px 10px rgba(230,126,34,.35)}
+.qp-band .qp-t small{color:#FFF3E6}.qp-band .qp-t b{font-size:17px}
+.qp-bico{font-size:26px}
+.qp-pics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.qp-pic{display:flex;flex-direction:column;gap:6px;border:1px solid #E6E9F0;border-radius:12px;padding:10px}
+.qp-pic small{color:#5C667A;font-size:12px;line-height:1.5}
+.qp-pic img{width:100%;max-height:140px;object-fit:contain;border-radius:8px;background:#F5F6FA}
+.qp-nopic{display:flex;align-items:center;justify-content:center;height:80px;border:1px dashed #D5DAE5;border-radius:8px;color:#8A93A6;font-size:13px}
+.qp-up{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid #D5DAE5;border-radius:10px;font-weight:700;cursor:pointer}
+@media (max-width:480px){.qp-pics{grid-template-columns:1fr}}
 .qp-msg{max-width:600px;margin:40px auto;padding:0 16px;text-align:center;font-size:18px;line-height:1.8}
 .qp-toast{position:fixed;left:16px;right:16px;bottom:20px;background:#141F33;color:#fff;border-radius:12px;padding:12px 14px;text-align:center;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 `;

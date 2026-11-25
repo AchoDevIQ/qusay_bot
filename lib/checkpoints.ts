@@ -22,7 +22,8 @@ const picsOf = (b: Band) => [...new Set([...(b.images ?? []), ...(b.image ? [b.i
 /** honor: قائمة المتفوقين PDF لصاحب البوت (طلبه 2026-11-25): معدل كل امتحان min من 100 فما فوق،
  * bday: بس اللي عيد ميلادهم صادف بفترة امتحانات هالسيطرة، addr: ويا عنوانهم الكامل (حتى يسويلهم هدية ومفاجأة) */
 export type Honor = { min: number; bday?: boolean; addr?: boolean };
-export type Rule = { min: number; absent: number; bands?: Band[]; honor?: Honor | null };
+/** stopImg: صورة اللي توقف عليه بهالسيطرة (بدل صورة الإيقاف العامة)، topImg: صورة المتفوقين (توصلهم ويا تهنئة) */
+export type Rule = { min: number; absent: number; bands?: Band[]; honor?: Honor | null; stopImg?: string | null; topImg?: string | null };
 /** طريقتين: «marks» كل سيطرة إلها شرطها ونتائجها بالدرجات، «percent» نسبة وحدة لكل السيطرات */
 export type Mode = "marks" | "percent";
 type Pct = { min: number; absent: number; bands: Band[] };
@@ -184,6 +185,11 @@ export async function runCheckpoints(uid: number) {
     if (!low && !many) {
       await logActivity(uid, `🚦 عبر سيطرة ${g.chapter} بعد ${g.title}: ${score} من ${n * PER_EXAM}، غياب ${absent}`);
       await rewardStudent(uid, st, band, pic, { "الفصل": g.chapter, "العدد": n, "الدرجة": score, "الكلي": n * PER_EXAM, "النسبة": `${pctScore}%` });
+      // 🏆 المتفوق (معدل قائمة المتفوقين، أو 95 إذا ما محددها): صورة المتفوقين ويا تهنئة
+      const r = cfg.rules[String(g.exam)];
+      if (r?.topImg && score >= (r.honor?.min ?? 95) * n) {
+        try { await sendPicture(uid, r.topImg, `🏆 عاشت إيدك يا ${st.name ?? ""}، إنت من المتفوقين بسيطرة ${g.chapter}: ${score} من ${n * PER_EXAM}`); } catch (e) { console.error(e); }
+      }
       continue;
     }
     await stopStudent(uid, st, cfg, { chapter: g.chapter, block: g.exam, every: n, score, need: g.min, absent, reason: [low && LOW, many && ABSENT].filter(Boolean).join(" و") });
@@ -231,7 +237,7 @@ async function stopStudent(uid: number, st: Row, cfg: Cfg, x: { chapter: string;
   await logActivity(uid, `⛔ توقفت عليه ${what}: ${x.reason} (سيطرة ${x.chapter}، ${x.score} من ${row.max}، غياب ${x.absent})`);
   const v = { "الاسم": st.name ?? "", "الموقوف": what, "السبب": x.reason, "الفصل": x.chapter, "العدد": x.every, "الدرجة": x.score, "الكلي": row.max, "المطلوب": x.need, "الغياب": x.absent };
   const safe = async (chat: number, text: string) => { try { await send(chat, text); } catch (e) { console.error(e); } };
-  await sendPicture(uid, cfg.stopImage, plain(cfg.stopBubble, v));
+  await sendPicture(uid, cfg.rules[String(x.block)]?.stopImg || cfg.stopImage, plain(cfg.stopBubble, v));
   await safe(uid, fill(cfg.student, v));
   const g = await guardianOf(uid);
   if (g) await safe(g.guardian_id, fill(cfg.guardian, v));   // ولي الأمر: الكتابة بس، بدون صورة
@@ -438,6 +444,15 @@ export async function checkpointsAction(raw: Row | FormData) {
     cfg.stopImage = body.dropImage === "1" ? null : await savePicture(body.file);
     await saveCfg(cfg);
     notice = cfg.stopImage ? "✅ انحفظت شخصية الإيقاف" : "🗑 انشالت شخصية الإيقاف";
+  } else if (a === "cpImage") {
+    // صورة المتفوقين أو الموقوفين لسيطرة وحدة (من «مساري»)
+    const cfg = await loadCfg();
+    const r = cfg.rules[String(Number(body.exam))];
+    need(r, "سوّي السيطرة أول، وبعدها حط الصورة");
+    const kind = body.kind === "top" ? "topImg" : "stopImg";
+    r[kind] = body.dropImage === "1" ? null : await savePicture(body.file);
+    await saveCfg(cfg);
+    notice = r[kind] ? (kind === "topImg" ? "✅ انحفظت صورة المتفوقين" : "✅ انحفظت صورة الموقوفين") : "🗑 انشالت الصورة";
   } else if (a === "saveCp" || a === "delCp") {
     const id = Number(body.exam);
     const ch = (await pageData()).chapters.find((c) => c.exams.some((e) => e.id === id));
@@ -458,7 +473,7 @@ export async function checkpointsAction(raw: Row | FormData) {
       // قائمة المتفوقين (اختياري): معدل من 100، وعيد الميلاد والعنوان
       const h = body.honor as Row | null | undefined;
       const honor: Honor | null = h && Number(h.min) > 0 ? { min: intOf(h.min, 1, PER_EXAM, "معدل المتفوقين من 1 إلى 100"), ...(h.bday ? { bday: true } : {}), ...(h.addr ? { addr: true } : {}) } : body.honor === undefined ? old?.honor ?? null : null;
-      cfg.rules[String(id)] = { ...rule, bands: cfg.rules[String(id)]?.bands ?? [], honor };
+      cfg.rules[String(id)] = { ...rule, bands: cfg.rules[String(id)]?.bands ?? [], honor, stopImg: old?.stopImg ?? null, topImg: old?.topImg ?? null };
       if (honor) await kvSet(`cp_honor_${id}`, "");
       notice = `✅ انحفظت السيطرة بعد ${e.title}`;
     }

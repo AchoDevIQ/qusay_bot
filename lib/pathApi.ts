@@ -50,8 +50,8 @@ export type PathTopic = { name: string; lectures: PathLec[] };
 export type PathExam = { id: number; title: string };
 export type Step =
   | { kind: "lec"; id: string; title: string; n: number; state: "done" | "open" | "locked" | "buy"; pct: number }
-  | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; since?: number; from?: string; cp?: { min: number; absent: number; honor: { min: number; bday?: boolean; addr?: boolean } | null } | null }
-  | { kind: "cp"; exam: number; min: number; absent: number; count: number };
+  | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; since?: number; from?: string; cp?: { min: number; absent: number; honor: { min: number; bday?: boolean; addr?: boolean } | null; stopImg?: string; topImg?: string } | null }
+  | { kind: "cp"; exam: number; min: number; absent: number; count: number; title?: string };
 export type Section = { name: string; general?: boolean; steps: Step[] };
 
 /** يرتب محاضرات الفصل (بالمواضيع) وامتحاناته (بترتيب الجدول) بمسار واحد، كل موضوع قسم لحاله */
@@ -141,7 +141,7 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
     lectures: t.lectures.filter((l) => l.track === lang && !l.draft).map((l, k) => ({ id: l.id, title: l.title, n: lecNumber(l.title) || k + 1 })),
   })).filter((t) => t.lectures.length);
   // الامتحانات بترتيب الجدول (اللي تدخل الجدول بس)
-  const { bookExams, loadCfg } = await import("./checkpoints.ts");
+  const { bookExams, loadCfg, cpImageUrl } = await import("./checkpoints.ts");
   const exams: PathExam[] = ((await bookExams()).get(chapterOf(ch)) ?? []).map((e) => ({ id: Number(e.id), title: String(e.title ?? "") }));
   const { sections } = buildPath(topics, exams);
   // حالة الطالب
@@ -182,10 +182,10 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
       }
       const own = cfg.rules[String(x.exam.id)];
       // الأستاذ: كل امتحان بيه «＋ إنشاء سيطرة»، ويعرف كم امتحان تشمل (من بعد السيطرة اللي قبلها)
-      const teach = admin ? { since, from, cp: own ? { min: own.min, absent: own.absent, honor: own.honor ?? null } : null } : {};
+      const teach = admin ? { since, from, cp: own ? { min: own.min, absent: own.absent, honor: own.honor ?? null, stopImg: cpImageUrl(own.stopImg ?? null), topImg: cpImageUrl(own.topImg ?? null) } : null } : {};
       const steps: Step[] = [{ kind: "exam", id: x.exam.id, title: x.exam.title, state, at, total, ...teach }];
       const rule = cfg.mode === "percent" ? (own ? { min: Math.ceil(cfg.pct.min * since), absent: cfg.pct.absent } : null) : own;
-      if (rule) { steps.push({ kind: "cp", exam: x.exam.id, min: rule.min, absent: rule.absent, count: since }); since = 0; }
+      if (rule) { steps.push({ kind: "cp", exam: x.exam.id, min: rule.min, absent: rule.absent, count: since, title: x.exam.title }); since = 0; }
       return steps;
     }),
   }));
