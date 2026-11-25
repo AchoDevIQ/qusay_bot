@@ -110,7 +110,7 @@ export default function PathClient() {
           <i className="qp-stripes" />
           <div className="qp-gin">
             <span className="qp-bico">🛡</span>
-            <span className="qp-t"><b>سيطرة{part.band.title ? ` بعد «${part.band.title}»` : ""}</b><small>آخر {part.band.count} امتحانات: لازم المجموع {part.band.min} أو أكثر{part.band.absent ? `، وإذا غاب ${part.band.absent} تنوقف المنصة` : ""}</small></span>
+            <span className="qp-t"><b>سيطرة{part.band.title ? ` بعد «${part.band.title}»` : ""}</b><small>{cpRule(part.band)}</small></span>
           </div>
           <i className="qp-stripes" />
         </div>
@@ -226,6 +226,11 @@ function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kin
   );
 }
 
+/** شرط السيطرة بكلام الطالب (طلبه 2026-11-25): «حتى ما تنسد عليك المنصة، لازم بهاي الـ8 امتحانات تجيب 400 أو أكثر، وغياباتك أقل من 2» */
+const cpRule = (c: { count: number; min: number; absent: number }) => {
+  const parts = [c.min > 0 ? `تجيب ${c.min} أو أكثر` : "", c.absent > 0 ? `غياباتك تكون أقل من ${c.absent}` : ""].filter(Boolean);
+  return parts.length ? `حتى ما تنسد عليك المنصة، لازم بهاي ${c.count > 1 ? `الـ${c.count} امتحانات` : "الامتحان"} ${parts.join("، و")}` : "";
+};
 /** رسالة البوت: أسطرها بـ<br> */
 const br = (t: string) => t.split(String.fromCharCode(10)).join("<br>");
 function Media({ url }: { url: string }) {
