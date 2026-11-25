@@ -155,14 +155,14 @@ function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kin
     <div className="qp-dlg" onClick={onClose}>
       <div className="qp-box" onClick={(e) => e.stopPropagation()}>
         <b className="qp-dt">🚦 سيطرة بعد «{step.title}»</b>
-        <div className="qp-dh">تشمل <b>{n}</b> امتحان{n > 1 ? `ات، من «${step.from}» لحد هذا` : ""}. المجموع الكلي <b>{max}</b>. وبعدها الحساب يتصفّى ويبدي من جديد.</div>
+        <div className="qp-dh">تشمل <b>{n}</b> امتحان{n > 1 ? `ات، من «${step.from}» لحد هذا` : ""}. المجموع الكلي <b>{max}</b>. وبعدها الدرجات تتصفّى وتبدي من جديد، بس <b>الغيابات تنجمع</b>: غياب السيطرات اللي قبلها بنفس الفصل ينحسب هنا هم.</div>
         <label className="qp-l">أقل مجموع يعبر بيه (من {max})
           <input inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, ""))} />
         </label>
         <div className="qp-dh">اللي يجيب أقل من {Number(min) || 0}، تنوقف عليه المنصة. 0 = المجموع ما يوقف.</div>
         <div className="qp-l">يوقف إذا غاب</div>
         <div className="qp-chips">{Array.from({ length: n + 1 }, (_, i) => i).map((i) => <button key={i} type="button" className={absent === i ? "on" : ""} onClick={() => setAbsent(i)}>{i === 0 ? "ما يوقف" : `${i}`}</button>)}</div>
-        <div className="qp-dh">{absent ? `إذا غاب ${absent} من ${n} أو أكثر، تنوقف المنصة (يعني لازم يحضر ${n - absent + 1} على الأقل).` : "الغياب وحده ما يوقف."}</div>
+        <div className="qp-dh">{absent ? `إذا صار مجموع غياباته ${absent} أو أكثر (ويا غياباته بالسيطرات اللي عبرها قبل بهذا الفصل)، تنوقف المنصة.` : "الغياب وحده ما يوقف."}</div>
         <label className="qp-check"><input type="checkbox" checked={honorOn} onChange={(e) => setHonorOn(e.target.checked)} /> 🏆 دزلي قائمة المتفوقين PDF</label>
         {honorOn && <>
           <div className="qp-l">معدلهم بكل امتحان (من 100) فما فوق</div>

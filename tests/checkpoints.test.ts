@@ -279,3 +279,21 @@ test("🏆 قائمة المتفوقين: تنحفظ ويا السيطرة، و�
   await honorReports("2026-03-02 10:00");
   assert.equal(calls.filter((c) => c.method === "sendDocument").length, 0, "مرة وحدة بس");
 });
+
+test("🚦 الغيابات تنجمع: غاب مرة بالسيطرة الأولى (عبرها) ومرة بالثانية، والحد 2، فينوقف بالثانية", async () => {
+  const ex2: number[] = [];
+  for (let i = 1; i <= 4; i++) ex2.push(await insert("bank_exams", { slug: "c2", chapter: "الفصل الثاني", ord: i, title: `ثاني ${i}`, minutes: 60, pos: 2 }));
+  await cp("saveCp", { exam: ex2[1], min: 0, absent: 2 });
+  await cp("saveCp", { exam: ex2[3], min: 0, absent: 2 });
+  await put("students", { user_id: 91, name: "غياب متجمع", exam: "إلكتروني", created: "2026-01-01 00:00:00" });
+  const g = (n: number, total: number) => insert("sched_items", { user_id: 91, exam_id: ex2[n], at: `2026-03-0${n + 1} 10:00:00`, status: "done", total, graded_at: "x", submitted_at: "x" });
+  const m = (n: number) => insert("sched_items", { user_id: 91, exam_id: ex2[n], at: `2026-03-0${n + 1} 10:00:00`, status: "missed" });
+  await m(0); await g(1, 80);
+  await runCheckpoints(91);
+  assert.equal(await activeStop(91), null, "غياب واحد بالأولى: يعبر");
+  await g(2, 90); await m(3);
+  await runCheckpoints(91);
+  const st = await activeStop(91);
+  assert.ok(st, "بالثانية غياب واحد + الغياب القديم = 2: ينوقف");
+  assert.equal(Number(st!.absent), 2);
+});

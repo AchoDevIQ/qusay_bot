@@ -161,14 +161,19 @@ export async function runCheckpoints(uid: number) {
       return isMissed(i!) ? { mark: 0, absent: 1 } : null;
     });
     const old = done.get(`${g.chapter}|${g.exam}`);
-    const score = res.reduce((n, x) => n + (x?.mark ?? 0), 0), absent = res.reduce((n, x) => n + (x?.absent ?? 0), 0);
+    const score = res.reduce((n, x) => n + (x?.mark ?? 0), 0), own = res.reduce((n, x) => n + (x?.absent ?? 0), 0);
+    // الغيابات تنجمع (طلبه 2026-11-25): غياب سيطرة عبرها بنفس الفصل ما يروح، ينحسب ويا هاي. الدرجات بس تتصفّى.
+    // (سيطرة توقف عليها وانفك الإيقاف: غياباتها ما تنجمع، حتى ما يرجع ينوقف بنفس الغياب)
+    const carry = segs.filter((x) => x.chapter === g.chapter && segs.indexOf(x) < segs.indexOf(g))
+      .reduce((n, x) => { const d = done.get(`${x.chapter}|${x.exam}`); return n + (d && Number(d.passed) === 1 ? Number(d.absent) || 0 : 0); }, 0);
+    const absent = own + carry;
     const n = g.ids.length;
     const low = g.min > 0 && score < g.min, many = g.absent > 0 && absent >= g.absent;
     if (old) {
       // انحسبت قبل: إذا امتحن بعدها امتحان منها (درجة بمكان الغياب)، تنحسب من جديد
-      if (Number(old.passed) === 2 || res.some((x) => x === null) || (Number(old.score) === score && Number(old.absent) === absent)) continue;
+      if (Number(old.passed) === 2 || res.some((x) => x === null) || (Number(old.score) === score && Number(old.absent) === own)) continue;
       const pass = !low && !many;
-      await update("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam }, { score, absent, passed: pass ? 1 : 0 });
+      await update("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam }, { score, absent: own, passed: pass ? 1 : 0 });
       await logActivity(uid, `🚦 سيطرة ${g.chapter} بعد ${g.title} انحسبت من جديد: ${score} من ${n * PER_EXAM}، غياب ${absent}`);
       if (stop && stop.chapter === g.chapter && Number(stop.block) === g.exam) {
         if (pass) { await autoLift(uid, st, stop, g, score, absent); stop = null; }
@@ -187,7 +192,7 @@ export async function runCheckpoints(uid: number) {
     const pctScore = Math.round((score * 100) / (n * PER_EXAM));
     const band = low || many ? null : cfg.mode === "percent" ? bandOf(cfg.pct.bands, pctScore) : bandOf(cfg.rules[String(g.exam)]?.bands, score);
     const pic = band ? await freshPicture(uid, band) : null;
-    await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: low || many ? 0 : 1, score, absent, created: now, band: band?.id ?? null, image: pic, seen: null });
+    await put("checkpoint_done", { user_id: uid, chapter: g.chapter, block: g.exam, passed: low || many ? 0 : 1, score, absent: own, created: now, band: band?.id ?? null, image: pic, seen: null });
     if (!low && !many) {
       await logActivity(uid, `🚦 عبر سيطرة ${g.chapter} بعد ${g.title}: ${score} من ${n * PER_EXAM}، غياب ${absent}`);
       await rewardStudent(uid, st, band, pic, { "الفصل": g.chapter, "العدد": n, "الدرجة": score, "الكلي": n * PER_EXAM, "النسبة": `${pctScore}%` });
