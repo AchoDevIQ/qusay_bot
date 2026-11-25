@@ -297,3 +297,12 @@ test("🚦 الغيابات تنجمع: غاب مرة بالسيطرة الأو�
   assert.ok(st, "بالثانية غياب واحد + الغياب القديم = 2: ينوقف");
   assert.equal(Number(st!.absent), 2);
 });
+
+test("🏫 رسالة الإيقاف: معهد الطالب وأيامه وأوقاته", async () => {
+  const { instituteOf } = await import("../lib/checkpoints.ts");
+  const cid = await insert("centers", { area_id: 1, name: "معهد التجربة", gender: "بنين", active: 1 });
+  await put("place_slots", { center_id: cid, slots: JSON.stringify([{ d: 5, t: "16:00" }, { d: 5, t: "14:00" }, { d: 1, t: "10:30" }]) });
+  const r = await instituteOf({ center_id: cid });
+  assert.equal(r.name, "معهد التجربة");
+  assert.equal(r.times, "• الثلاثاء: 10:30 صباحاً\n• السبت: 2:00 مساءً، 4:00 مساءً");
+});

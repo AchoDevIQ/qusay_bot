@@ -32,7 +32,7 @@ type Seg = Rule & { exam: number; chapter: string; title: string; from: string; 
 const KEY = "checkpoints_v2";
 const PER_EXAM = 100;
 const MAX_TEXT = 2000;
-export const TAGS = ["{الاسم}", "{الموقوف}", "{السبب}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{المطلوب}", "{الغياب}"];
+export const TAGS = ["{الاسم}", "{الموقوف}", "{السبب}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{المطلوب}", "{الغياب}", "{المعهد}", "{الأوقات}"];
 export const BAND_TAGS = ["{الاسم}", "{الفصل}", "{العدد}", "{الدرجة}", "{الكلي}", "{النسبة}"];
 // صورة أو فيديو قصير (طلبه 2026-11-25: «مو بس صورة، أضيف فيديو بالسيطرة»)
 const IMG = /^checkpoints\/[\w-]+\.(png|jpg|webp|mp4)$/;
@@ -42,8 +42,8 @@ const ABSENT = "كثرة الغيابات";
 
 export const DEFAULT_BUBBLE = "وقف حبيبي وين رايح؟\nانت مخالف لأن ما عبرت الدرجة المسموحة";
 const BUBBLE_MAX = 220;
-export const DEFAULT_STUDENT = "⛔ توقفت عليك {الموقوف}\n\nالسبب: {السبب}\n\nسيطرة {الفصل}، آخر {العدد} امتحانات:\nمجموعك {الدرجة} من {الكلي}، والمطلوب {المطلوب}\nغياباتك: {الغياب}\n\nحتى ترجع لازم يحضر ولي أمرك ويا قصي العميري.";
-export const DEFAULT_GUARDIAN = "⛔ توقفت {الموقوف} على الطالب {الاسم}\n\nالسبب: {السبب}\n\nسيطرة {الفصل}، آخر {العدد} امتحانات:\nمجموعه {الدرجة} من {الكلي}، والمطلوب {المطلوب}\nغياباته: {الغياب}\n\nحتى يرجع لازم تحضر ويا قصي العميري.";
+export const DEFAULT_STUDENT = "⛔ توقفت عليك {الموقوف}\n\nالسبب: {السبب}\n\nسيطرة {الفصل}، آخر {العدد} امتحانات:\nمجموعك {الدرجة} من {الكلي}، والمطلوب {المطلوب}\nغياباتك: {الغياب}\n\nحتى ترجعلك المحاضرات والامتحانات، لازم يحضر ولي أمرك إلى {المعهد} بهاي الأيام والأوقات:\n{الأوقات}";
+export const DEFAULT_GUARDIAN = "⛔ توقفت {الموقوف} على الطالب {الاسم}\n\nالسبب: {السبب}\n\nسيطرة {الفصل}، آخر {العدد} امتحانات:\nمجموعه {الدرجة} من {الكلي}، والمطلوب {المطلوب}\nغياباته: {الغياب}\n\nحتى ترجع المحاضرات والامتحانات للطالب، يرجى حضوركم إلى {المعهد} بهاي الأيام والأوقات:\n{الأوقات}";
 
 export async function loadCfg(): Promise<Cfg> {
   let saved: Partial<Cfg> = {};
@@ -91,6 +91,18 @@ export const lecturesStopped = async (uid: number) => !!(await activeStop(uid))?
 /** المتفوق: للطالب (ويا صورته أو الفيديو) ولولي أمره */
 export const topText = (name: string, ch: string, score: number, max: number) => `🏆 عاشت إيدك يا ${name}، إنت من المتفوقين بسيطرة ${ch}: ${score} من ${max}`;
 export const topGuardian = (name: string, ch: string, score: number, max: number) => `🏆 ابنكم ${esc(name)} من المتفوقين بسيطرة ${esc(ch)}: جاب ${score} من ${max}. عاشت إيده 🌹`;
+/** معهد الطالب (مركزه) وأيامه وأوقاته، حتى ولي الأمر يعرف شوكت يحضر. ما إله مركز: معهد قصي العميري */
+export async function instituteOf(st: Row | null): Promise<{ name: string; times: string }> {
+  const { DAY_NAMES, ampm } = await import("./scheduleRules.ts");
+  const centers = await find("centers");
+  const c = centers.find((x) => Number(x.id) === Number(st?.center_id)) ?? centers.find((x) => String(x.name ?? "").includes("قصي"));
+  const raw = c ? (await find("place_slots", { center_id: c.id }))[0]?.slots : null;
+  let slots: { d: number; t: string }[] = [];
+  try { slots = JSON.parse(String(raw ?? "[]")); } catch { /* */ }
+  const days = [...new Set(slots.map((x) => x.d))].sort((a, b) => a - b);
+  const times = days.map((d) => `• ${DAY_NAMES[d] ?? ""}: ${slots.filter((x) => x.d === d).map((x) => x.t).sort().map(ampm).join("، ")}`).join("\n");
+  return { name: String(c?.name ?? "المعهد"), times: times || "راجع المعهد بأوقات الدوام" };
+}
 const whatOf = (s: Row) => (s.lectures ? "الامتحانات والمحاضرات" : "الامتحانات");
 
 const fill = (text: string, v: Record<string, string | number>) => esc(text).replace(/\{([^{}]+)\}/g, (m, k) => (k in v ? esc(String(v[k])) : m));
@@ -251,7 +263,8 @@ async function stopStudent(uid: number, st: Row, cfg: Cfg, x: { chapter: string;
   await insert("student_stops", row);
   const what = whatOf(row);
   await logActivity(uid, `⛔ توقفت عليه ${what}: ${x.reason} (سيطرة ${x.chapter}، ${x.score} من ${row.max}، غياب ${x.absent})`);
-  const v = { "الاسم": st.name ?? "", "الموقوف": what, "السبب": x.reason, "الفصل": x.chapter, "العدد": x.every, "الدرجة": x.score, "الكلي": row.max, "المطلوب": x.need, "الغياب": x.absent };
+  const inst = await instituteOf(st);
+  const v = { "المعهد": inst.name, "الأوقات": inst.times, "الاسم": st.name ?? "", "الموقوف": what, "السبب": x.reason, "الفصل": x.chapter, "العدد": x.every, "الدرجة": x.score, "الكلي": row.max, "المطلوب": x.need, "الغياب": x.absent };
   const safe = async (chat: number, text: string) => { try { await send(chat, text); } catch (e) { console.error(e); } };
   await sendPicture(uid, cfg.rules[String(x.block)]?.stopImg || cfg.stopImage, plain(cfg.stopBubble, v));
   await safe(uid, fill(cfg.student, v));
@@ -472,7 +485,8 @@ export async function checkpointsAction(raw: Row | FormData) {
     const name = String((tuid ? (await student(tuid))?.name : "") || "اسم الطالب");
     const n = seg!.ids.length, max = n * PER_EXAM;
     const low = Math.max(0, (seg!.min || max / 2) - 30);
-    const v = { "الاسم": name, "الموقوف": "الامتحانات والمحاضرات", "السبب": LOW, "الفصل": seg!.chapter, "العدد": n, "الدرجة": low, "الكلي": max, "المطلوب": seg!.min, "الغياب": 0 };
+    const inst = await instituteOf(tuid ? await student(tuid) : null);
+    const v = { "المعهد": inst.name, "الأوقات": inst.times, "الاسم": name, "الموقوف": "الامتحانات والمحاضرات", "السبب": LOW, "الفصل": seg!.chapter, "العدد": n, "الدرجة": low, "الكلي": max, "المطلوب": seg!.min, "الغياب": 0 };
     const topScore = Math.min(max, Math.ceil((r.honor?.min ?? 95) * n));
     return { preview: {
       stop: { media: cpImageUrl(r.stopImg || cfg.stopImage), bubble: plain(cfg.stopBubble, v), student: fill(cfg.student, v), guardian: fill(cfg.guardian, v) },
