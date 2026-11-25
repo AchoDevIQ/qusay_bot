@@ -59,6 +59,8 @@ export default function PathClient() {
         <div><b>مسارك ويا قصي العميري</b>{progress && progress.all > 0 && <small>خلصت {progress.done} من {progress.all} محاضرة</small>}</div>
       </header>
       {progress && progress.all > 0 && <div className="qp-bar"><i style={{ width: `${(100 * progress.done) / progress.all}%` }} /></div>}
+      {/* معاينة الأستاذ: داتا التجربة لو الحقيقية */}
+      {p && p.chapters.length === 5 && <nav className="qp-ch">{(["prod", "staging"] as const).map((e) => <button key={e} type="button" className={(new URLSearchParams(location.search).get("env") ?? "prod") === e ? "on" : ""} onClick={() => { const q = new URLSearchParams(location.search); q.set("env", e); location.search = q.toString(); }}>{e === "prod" ? "محاضرات التطبيق الحقيقية" : "داتا التجربة"}</button>)}</nav>}
       {p && p.chapters.length > 1 && <nav className="qp-ch">{p.chapters.map((c) => <button key={c.ch} type="button" className={c.ch === p.ch ? "on" : ""} onClick={() => load(c.ch)}>{c.name}</button>)}</nav>}
       {p?.pickTimes && <a className="qp-go" href={examsLink()}>🗓 أول شي: اختار أوقات امتحاناتك<small>دوس هنا، وبعدها ينفتحلك مسارك كله</small></a>}
       {p?.stopped && <div className="qp-stop">⛔ المنصة موقوفة عليك بسبب السيطرة. شوف رسالتها بالمحادثة، وراجع الإدارة.</div>}

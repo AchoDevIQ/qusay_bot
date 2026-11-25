@@ -84,6 +84,7 @@ async function homeData(uid: number) {
     const stopped = await stoppedCount();
     people.push({ page: "lectures", icon: "📺", title: "محاضرات الامتحانات", note: "السكة: المحاضرات قبل كل امتحان" });
     people.push({ page: "rent", icon: "🏢", title: "المراكز: الحضور والإيجار", note: "المدراء والتقرير الشهري والدفع" });
+    people.push({ page: "path", icon: "🛤", title: "مساري (معاينة)", note: "شلون يشوف الطالب مساره: المحاضرات والامتحانات والسيطرة" });
     people.push({ page: "checkpoints", icon: "🚦", title: "السيطرة", note: stopped ? `${stopped} طالب موقوف` : "ماكو موقوفين", hot: stopped > 0 });
   }
   if (await isAdmin(uid)) setup.unshift({ page: "tests", icon: "✅", title: "تست التطبيق", note: "الصح والباقي والمشاكل" });
