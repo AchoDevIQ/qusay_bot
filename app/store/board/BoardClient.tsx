@@ -3,6 +3,7 @@
 // الكف يمسح (التماس أكبر من الحد)، والقلم بالآيباد يكتب واليد ما تكتب وهو نازل. كل الكتابة والأزرار بالعربي
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Splash, { Outro } from "./Splash";
+import { plot } from "../../../lib/board/plot.ts";
 import { BOXES, STAMPS, makeBox, makeCover, makeStamp, type BoxKind } from "./makers";
 import { SLOGAN, CURVES, GRIDS, NOTEBOOK, curveOf, type Grid, BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, areaOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
 import { pageToken } from "../adminPage";
@@ -22,7 +23,7 @@ type AppCh = { ch: number; name: string; topics: AppTopic[] };
 const TRACK = { arabic: "عربي", english: "انگليزي" } as const;
 type Target = { ch: number; name: string; topics: { id: number; name: string; lectures: number }[] };
 type State = { teacher: boolean; name: string; lessons: Meta[]; inbox: Meta[]; sent: Meta[]; appEnv?: string };
-type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings" | "sent" | "boxes";
+type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings" | "sent" | "boxes" | "plot";
 type Ask = { text: string; buttons: { t: string; kind: "ok" | "bad" | "gray"; run: () => void }[]; input?: { value: string; set: (v: string) => void } } | null;
 
 const BAR = 74;                       // ارتفاع شريط الأدوات (بكسل الشاشة)
@@ -560,6 +561,32 @@ export default function BoardClient() {
     setTool("move"); setSel([it]);
     redrawInk(); redrawLive();
   }
+  // ---------- 📈 رسم دالة: المحاور والتدريج بلون الكتابة، والمنحني بلون القلم، كلها خطوط تتحرك وتنمسح
+  const [plotEq, setPlotEq] = useState("x^2-4x+3");
+  const [plotFrom, setPlotFrom] = useState("-5");
+  const [plotTo, setPlotTo] = useState("5");
+  const [plotY, setPlotY] = useState(["", ""]);
+  const doPlot = () => {
+    try {
+      const A = areaOf(lesson.current.frame, geo.current.W);
+      const w = Math.min(A.w * 0.55, 1000), h = Math.min(A.h * 0.62, 620);
+      const box = { x: A.x + (A.w - w) / 2, y: A.y + (A.h - h) / 2 + 20, w, h };
+      const num = (v: string) => Number(v.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[−–]/g, "-"));
+      const yr = plotY[0].trim() && plotY[1].trim() ? [num(plotY[0]), num(plotY[1])] as [number, number] : undefined;
+      const out = plot(plotEq, num(plotFrom), num(plotTo), box, set.width, yr);
+      const axisC = isLight(lesson.current.board) ? "#141F33" : "#FFFFFF";
+      const curveC = color.toUpperCase() === axisC ? "#F6C94A" : color;
+      const x = ctxOf(liveC.current)!;
+      const items: Item[] = [
+        ...out.strokes.map((st): Item => ({ k: "ink", c: st.axis ? axisC : curveC, w: st.w, p: st.p, fit: 0 })),
+        ...out.labels.map((lb): Item => { const lay = textLines(x, lb.t, lb.s, lb.x + 400); return { k: "text", c: axisC, s: lb.s, x: lb.x + lay.w, y: lb.y, t: lb.t, bw: lay.w, bh: lay.h }; }),
+      ];
+      page().items.push(...items);
+      pending.current = { add: items, remove: [] }; commit();
+      setPop(""); setTool("move"); setSel(items);
+      redrawInk(); redrawLive();
+    } catch (e) { say(`📈 ${(e as Error).message}`); }
+  };
   // ---------- 📦 الصناديق والأختام وصفحة الغلاف
   const [boxText, setBoxText] = useState("");
   useEffect(() => { titleNow.current = title; redrawInk(); }, [title]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -826,6 +853,16 @@ export default function BoardClient() {
           </div>}
           {pop === "colors" && <><div className="qb-ptitle">اختار لون القلم</div><div className="qb-pal">{PAL.map((c, i) => <button key={i} type="button" aria-label="لون" className={color.toUpperCase() === c ? "on" : ""} style={{ background: c }} onClick={() => pickColor(c)} />)}</div></>}
           {pop === "eraser" && <><div className="qb-ptitle">حجم الممحاة</div><div className="qb-row">{ERASERS.map((x) => <button key={x.n} type="button" className={`qb-chip${set.eraser === x.n ? " on" : ""}`} onClick={() => { setSet((s) => ({ ...s, eraser: x.n })); setPop(""); }}><i style={{ width: x.n / 4, height: x.n / 4 }} />{x.t}</button>)}</div></>}
+          {pop === "shapes" && <button type="button" className="qb-chip gold" onClick={() => setPop("plot")}>📈 رسم دالة (تكتب المعادلة وترسمها)</button>}
+          {pop === "plot" && <div className="qb-list">
+            <div className="qb-ptitle">📈 رسم دالة</div>
+            <input className="qb-in" dir="ltr" value={plotEq} onChange={(e) => setPlotEq(e.target.value)} placeholder="y = x^2 - 4x + 3" />
+            <div className="qb-row qb-wrap"><span className="qb-note">x من</span><input className="qb-in qb-num" dir="ltr" inputMode="decimal" value={plotFrom} onChange={(e) => setPlotFrom(e.target.value)} /><span className="qb-note">إلى</span><input className="qb-in qb-num" dir="ltr" inputMode="decimal" value={plotTo} onChange={(e) => setPlotTo(e.target.value)} /></div>
+            <div className="qb-row qb-wrap"><span className="qb-note">y من</span><input className="qb-in qb-num" dir="ltr" inputMode="decimal" placeholder="وحده" value={plotY[0]} onChange={(e) => setPlotY([e.target.value, plotY[1]])} /><span className="qb-note">إلى</span><input className="qb-in qb-num" dir="ltr" inputMode="decimal" placeholder="وحده" value={plotY[1]} onChange={(e) => setPlotY([plotY[0], e.target.value])} /></div>
+            <div className="qb-row qb-wrap">{["x^2-4x+3", "x^3-3x", "sin(x)", "1/x", "sqrt(x)", "|x-1|", "2^x", "ln(x)"].map((q) => <button key={q} type="button" className="qb-chip" dir="ltr" onClick={() => setPlotEq(q)}>{q}</button>)}</div>
+            <button type="button" className="qb-chip gold" onClick={doPlot}>ارسمها</button>
+            <div className="qb-note">الرسمة تنحط بنص السبورة ومختارة: اسحبها وكبّرها، والمنحني بلون قلمك. ^ للأس، sqrt للجذر، |…| للمطلقة، pi للـ π.</div>
+          </div>}
           {(pop === "shapes" || pop === "solids") && <div className="qb-row qb-wrap">{(pop === "shapes" ? SHAPES : SOLIDS).map((x) => <button key={x.id} type="button" className={`qb-chip${tool === "shape" && shape === x.id ? " on" : ""}`} onClick={() => { setShape(x.id); pickTool("shape"); }}><ShapeIcon id={x.id} />{x.t}</button>)}</div>}
           {pop === "board" && <div className="qb-boardpick">
             <div className="qb-ptitle">لون السبورة</div>
@@ -995,6 +1032,7 @@ const CSS = `
 .qb-ptitle{font-size:15px;color:#F6C94A;margin:2px 2px 8px;font-weight:700}
 .qb-row{display:flex;gap:8px;align-items:center}
 .qb-wrap{flex-wrap:wrap;max-width:560px}
+.qb-in.qb-num{width:110px;margin:0 6px}
 .qb-in{width:min(520px,calc(100vw - 48px));min-height:48px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:#1B2333;color:#fff;font:inherit;font-size:16px;padding:8px 12px;margin:4px 0 8px}
 .qb-chip{min-height:54px;border:1px solid rgba(255,255,255,.27);border-radius:12px;background:#283247;color:#fff;font-size:15px;padding:6px 14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer}
 .qb-chip i{display:block;border:2px solid #fff;border-radius:6px}
