@@ -24,10 +24,13 @@ await initDb();
 
 test("📝 الألوان: 98 لون، والأشكال والمجسمات كخطوط والمخفي متقطع", () => {
   assert.equal(E.palette().length, 98);
-  assert.equal(E.FRAMES.length, 23, "10 مزخرفة + 13 القديمة");
-  assert.equal(E.FRAMES.filter((f) => f.deco).length, 10);
+  assert.equal(E.FRAMES.length, 34, "21 مزخرفة + 13 القديمة");
+  assert.ok(E.BOARDS.length >= 40, "ألوان بطن السبورة هواية");
+  assert.equal(E.topOf("d-navy"), 0, "المزخرف بلا ضلع فوك: الفوك للهيدر");
+  assert.equal(E.topOf("oak"), E.FRAME);
+  assert.deepEqual(E.areaOf("d-navy", 1920), { x: 40, y: 0, w: 1840, h: 1040 });
+  assert.equal(E.FRAMES.filter((f) => f.deco).length, 21);
   assert.equal(E.DEFAULT_FRAME, "d-navy", "بلا خشب من البداية");
-  assert.equal(E.BOARDS.length, 8);
   const cube = E.buildShape("cube", [0, 0], [200, 200], 5);
   assert.equal(cube.solid.length, 3);
   assert.equal(cube.dashed.length, 2);
@@ -54,9 +57,10 @@ test("📝 الممحاة تقسم الخط بالنص، والنص ينمسح �
 });
 
 test("📝 درس جاي من برا ينفحص: الغريب ينشال", () => {
-  const l = E.cleanLesson({ w: 1920, board: "#123456", frame: "x", pages: [{ items: [{ k: "ink", c: "red", w: 5, p: [1, 2, 3, 4] }, { k: "evil" }], bg: "boards/1/bg/a.jpg" }] });
+  const l = E.cleanLesson({ w: 1920, board: "red", frame: "x", pages: [{ items: [{ k: "ink", c: "red", w: 5, p: [1, 2, 3, 4] }, { k: "evil" }], bg: "boards/1/bg/a.jpg" }] });
   assert.ok(l);
   assert.equal(l!.board, E.DEFAULT_BOARD);
+  assert.equal(E.cleanLesson({ board: "#a1b2c3", pages: [{ items: [] }] })!.board, "#A1B2C3", "أي لون يختاره من «لون ثاني» يبقى");
   assert.equal(l!.pages[0].items.length, 1);
   assert.equal((l!.pages[0].items[0] as any).c, "#FFFFFF");
   assert.equal(E.cleanLesson({ pages: [] }), null);

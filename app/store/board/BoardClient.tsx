@@ -2,7 +2,7 @@
 // 📝 سبورة قصي العميري (طلبه 2026-11-25، BOARD_SPEC.md): نفس سبورة الويندوز، بالتطبيق، عند الأستاذ وعند الطالب بنفس الخيارات.
 // الكف يمسح (التماس أكبر من الحد)، والقلم بالآيباد يكتب واليد ما تكتب وهو نازل. كل الكتابة والأزرار بالعربي
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, insetOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
+import { BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, areaOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
 import { pageToken } from "../adminPage";
 import { pdfClient } from "../pdfClient";
 import { drawItem, drawPage, framePreview, headPreview, paintFrame, textLines } from "./boardDraw";
@@ -24,7 +24,7 @@ const SET_KEY = "qboard_settings", DRAFT_KEY = "qboard_draft";
 type Settings = { board: string; frame: string; head: string; palm: number; eraser: number; width: number };
 const tablet = () => typeof window !== "undefined" && Math.max(window.screen.width, window.screen.height) < 1400;
 const loadSettings = (): Settings => {
-  const d: Settings = { board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "none", palm: tablet() ? 70 : 200, eraser: 80, width: 5 };
+  const d: Settings = { board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "navy", palm: tablet() ? 70 : 200, eraser: 80, width: 5 };
   try { return { ...d, ...JSON.parse(localStorage.getItem(SET_KEY) ?? "{}") }; } catch { return d; }
 };
 
@@ -68,7 +68,7 @@ export default function BoardClient() {
   const [tool, setTool] = useState<Tool>("pen");
   const [shape, setShape] = useState("line");
   const [color, setColor] = useState("#FFFFFF");
-  const [set, setSet] = useState<Settings>(() => ({ board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "none", palm: 200, eraser: 80, width: 5 }));
+  const [set, setSet] = useState<Settings>(() => ({ board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "navy", palm: 200, eraser: 80, width: 5 }));
   const [pop, setPop] = useState<Pop>("");
   const [popAt, setPopAt] = useState(0);
   const [ask, setAsk] = useState<Ask>(null);
@@ -134,8 +134,8 @@ export default function BoardClient() {
       const x = ctxOf(liveC.current);
       if (!x) return;
       x.clearRect(0, 0, geo.current.W, H);
-      const F = insetOf(lesson.current.frame);
-      x.save(); x.beginPath(); x.rect(F, F, geo.current.W - 2 * F, H - 2 * F); x.clip();
+      const A = areaOf(lesson.current.frame, geo.current.W);
+      x.save(); x.beginPath(); x.rect(A.x, A.y, A.w, A.h); x.clip();
       for (const c of contacts.current.values()) if (c.stroke) drawItem(x, c.stroke);
       for (const c of contacts.current.values()) if (c.mode === "shape") for (const s of shapeStrokes(toolRef.current.shape, c.start, c.last, toolRef.current.color, toolRef.current.set.width)) drawItem(x, s);
       if (ghost.current) for (const it of ghost.current) drawItem(x, it, bgOf);
@@ -475,8 +475,7 @@ export default function BoardClient() {
     try {
       const pdfjs = await pdfClient();
       const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), disableFontFace: true }).promise;
-      const F = insetOf(lesson.current.frame);
-      const target = (H - 2 * F) * geo.current.scale * geo.current.dpr * 1.5;
+      const target = areaOf(lesson.current.frame, geo.current.W).h * geo.current.scale * geo.current.dpr * 1.5;
       let first = isBlank();
       for (let i = 1; i <= doc.numPages; i++) {
         setBusy(`جاري فتح الملف... ${i} من ${doc.numPages}`);
@@ -503,9 +502,9 @@ export default function BoardClient() {
       const x = c.getContext("2d")!; x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
       // الصورة تنحط بنص السبورة كشي يتحرك ويكبر ويصغر (أداة «تحريك»)
       const r = URL.createObjectURL(await canvasBlob(c));
-      const F = insetOf(lesson.current.frame), aw = geo.current.W - 2 * F, ah = H - 2 * F;
+      const A = areaOf(lesson.current.frame, geo.current.W), aw = A.w, ah = A.h;
       const k2 = Math.min(aw * 0.6 / c.width, ah * 0.6 / c.height);
-      const it: Item = { k: "img", r, w: c.width * k2, h: c.height * k2, x: F + (aw - c.width * k2) / 2, y: F + (ah - c.height * k2) / 2 };
+      const it: Item = { k: "img", r, w: c.width * k2, h: c.height * k2, x: A.x + (aw - c.width * k2) / 2, y: A.y + (ah - c.height * k2) / 2 };
       page().items.push(it);
       pending.current = { add: [it], remove: [] }; commit();
       setTool("move"); setSel([it]);
@@ -709,7 +708,8 @@ export default function BoardClient() {
           {(pop === "shapes" || pop === "solids") && <div className="qb-row qb-wrap">{(pop === "shapes" ? SHAPES : SOLIDS).map((x) => <button key={x.id} type="button" className={`qb-chip${tool === "shape" && shape === x.id ? " on" : ""}`} onClick={() => { setShape(x.id); pickTool("shape"); }}><ShapeIcon id={x.id} />{x.t}</button>)}</div>}
           {pop === "board" && <div className="qb-boardpick">
             <div className="qb-ptitle">لون السبورة</div>
-            <div className="qb-row qb-wrap">{BOARDS.map((b) => <button key={b.c} type="button" aria-label={b.t} className={`qb-sw${set.board === b.c ? " on" : ""}`} style={{ background: b.c }} onClick={() => setBoard(b.c)} />)}</div>
+            <div className="qb-row qb-wrap">{BOARDS.map((b) => <button key={b.c} type="button" aria-label={b.t} title={b.t} className={`qb-sw${set.board.toUpperCase() === b.c ? " on" : ""}`} style={{ background: b.c }} onClick={() => setBoard(b.c)} />)}
+              <label className="qb-sw qb-custom" title="لون ثاني">🎨<input type="color" value={set.board} onChange={(e) => setBoard(e.target.value.toUpperCase())} /></label></div>
             <div className="qb-ptitle">الهيدر (اسمك واللوگو فوك)</div>
             <div className="qb-heads">{HEADS.map((h) => <button key={h.id} type="button" className={set.head === h.id ? "on" : ""} onClick={() => setHead(h.id)}>{heads[h.id] ? <img src={heads[h.id]} alt="" /> : <span className="qb-noprev" />}<span>{h.t}</span></button>)}</div>
             <div className="qb-ptitle">الإطار</div>
@@ -853,7 +853,9 @@ const CSS = `
 .qb-chip.on,.qb-frames button.on,.qb-sw.on,.qb-pal button.on{box-shadow:0 0 0 3px #F6C94A;border-color:#F6C94A}
 .qb-pal{display:grid;grid-template-columns:repeat(14,32px);gap:5px}
 .qb-pal button{width:32px;height:32px;border-radius:7px;border:1px solid rgba(255,255,255,.2);padding:0;cursor:pointer}
-.qb-sw{width:64px;height:48px;border-radius:10px;border:2px solid rgba(255,255,255,.35);cursor:pointer}
+.qb-sw{width:46px;height:36px;border-radius:9px;border:2px solid rgba(255,255,255,.35);cursor:pointer}
+.qb-custom{position:relative;display:inline-flex;align-items:center;justify-content:center;font-size:20px;background:conic-gradient(#e33,#fd3,#3c6,#39f,#a3f,#e33)}
+.qb-custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .qb-frames{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;width:min(560px,calc(100vw - 48px))}
 .qb-frames button{background:#283247;border:1px solid rgba(255,255,255,.2);border-radius:10px;color:#fff;padding:6px;display:flex;flex-direction:column;gap:4px;align-items:stretch;font-size:14px;cursor:pointer}
 .qb-frames img,.qb-noprev{width:100%;height:24px;border-radius:4px;display:block;object-fit:cover}

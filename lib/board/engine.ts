@@ -49,13 +49,21 @@ export function palette(): string[] {
 }
 
 // ---------- لون السبورة والإطارات
+// بطن السبورة: ألوان هواية (طلبه 2026-11-25)، وكل لون يگدر يختاره من «لون ثاني»
 export const BOARDS: { c: string; t: string }[] = [
-  { c: "#1F4E3D", t: "أخضر" }, { c: "#1D4E5F", t: "فيروزي" }, { c: "#293B60", t: "كحلي" }, { c: "#0F2A47", t: "أزرق غامق" },
-  { c: "#2B2B2B", t: "أسود" }, { c: "#3E2A1E", t: "بني" }, { c: "#4A1F2E", t: "عنابي" }, { c: "#F8F8F4", t: "سبورة بيضة" },
+  { c: "#1F4E3D", t: "أخضر" }, { c: "#2E5E3A", t: "أخضر زرعي" }, { c: "#0F3B2E", t: "زمردي" }, { c: "#3B5323", t: "زيتوني" }, { c: "#155E52", t: "أخضر بحري" },
+  { c: "#1D4E5F", t: "فيروزي" }, { c: "#0E5E6F", t: "تركوازي" }, { c: "#1F6F8B", t: "أزرق سماوي غامق" }, { c: "#1B3A8A", t: "أزرق ملكي" }, { c: "#1E56A0", t: "أزرق" },
+  { c: "#293B60", t: "كحلي" }, { c: "#141F33", t: "كحلي غامق" }, { c: "#0F2A47", t: "أزرق غامق" }, { c: "#2C2F5B", t: "نيلي" }, { c: "#3A1F5C", t: "بنفسجي" },
+  { c: "#5B2A6E", t: "موف" }, { c: "#4A1F2E", t: "عنابي" }, { c: "#6B1E2B", t: "خمري" }, { c: "#7A2E1F", t: "قرميدي" }, { c: "#3E2A1E", t: "بني" },
+  { c: "#5A3A22", t: "بني فاتح" }, { c: "#4B3B2A", t: "قهوائي" }, { c: "#2B2B2B", t: "أسود" }, { c: "#111111", t: "أسود فاحم" }, { c: "#3A3F47", t: "رصاصي غامق" },
+  { c: "#4F5B66", t: "رصاصي" }, { c: "#36454F", t: "فحمي" }, { c: "#F8F8F4", t: "سبورة بيضة" }, { c: "#FFFFFF", t: "أبيض ناصع" }, { c: "#F4EEDC", t: "عاجي" },
+  { c: "#FFF8E7", t: "كريمي" }, { c: "#F3E9D2", t: "ورق قديم" }, { c: "#EAF4EA", t: "أخضر فاتح" }, { c: "#E8F1FA", t: "أزرق فاتح" }, { c: "#FDF0F3", t: "وردي فاتح" },
+  { c: "#F2ECFA", t: "بنفسجي فاتح" }, { c: "#FFF6D6", t: "أصفر فاتح" }, { c: "#E9ECEF", t: "رصاصي فاتح" }, { c: "#DDE6D5", t: "ميرمية" }, { c: "#E5DCCB", t: "بيج" },
 ];
-/** deco: إطار مزخرف بأربع جهاته بدل الخشب (طلبه 2026-11-25): وجه سادة وحواليه شريط بلون وخطوط ذهبية.
+/** deco: إطار مزخرف بدل الخشب (طلبه 2026-11-25): ثلاث جهات بس (يمين ويسار وجوه)، الفوك يبقى للهيدر مالته
+ *  حتى ما يصير طبقتين فوك وتقل مساحة الكتابة. شريط بلون وخطوط ذهبية (أو فضية أو ذهبي وردي).
  *  bar: لون الشريط («board» يعني نفس لون السبورة، فتطلع الخطوط بس) */
-export type Frame = { id: string; t: string; wood?: [string, string, number]; grad?: string[]; deco?: { bar: string; style: string }; light: boolean };
+export type Frame = { id: string; t: string; wood?: [string, string, number]; grad?: string[]; deco?: { bar: string; style: string; line?: "gold" | "silver" | "rose" }; light: boolean };
 export const FRAMES: Frame[] = [
   { id: "d-navy", t: "كحلي وذهبي", deco: { bar: "#141F33", style: "lines" }, light: false },
   { id: "d-gold", t: "ذهبي فاخر", deco: { bar: "gold", style: "lines" }, light: true },
@@ -67,6 +75,17 @@ export const FRAMES: Frame[] = [
   { id: "d-math", t: "رموز الرياضيات", deco: { bar: "#141F33", style: "math" }, light: false },
   { id: "d-modern", t: "حديث متدرج", deco: { bar: "modern", style: "modern" }, light: false },
   { id: "d-chalk", t: "طباشير", deco: { bar: "board", style: "chalk" }, light: false },
+  { id: "d-emerald", t: "زمردي وذهبي", deco: { bar: "#0F3B2E", style: "lines" }, light: false },
+  { id: "d-royal", t: "أزرق ملكي وذهبي", deco: { bar: "#1B3A8A", style: "lines" }, light: false },
+  { id: "d-purple", t: "بنفسجي وذهبي", deco: { bar: "#3A1F5C", style: "lines" }, light: false },
+  { id: "d-brown", t: "بني وذهبي", deco: { bar: "#4A2E1A", style: "lines" }, light: false },
+  { id: "d-ivory", t: "عاجي وذهبي", deco: { bar: "#F4EEDC", style: "lines" }, light: true },
+  { id: "d-silver", t: "فضي", deco: { bar: "#1E2430", style: "lines", line: "silver" }, light: false },
+  { id: "d-rose", t: "ذهبي وردي", deco: { bar: "#3B2430", style: "lines", line: "rose" }, light: false },
+  { id: "d-dots", t: "نقاط ذهبية", deco: { bar: "#141F33", style: "dots" }, light: false },
+  { id: "d-wave", t: "موجة ذهبية", deco: { bar: "#141F33", style: "wave" }, light: false },
+  { id: "d-stars", t: "نجوم", deco: { bar: "#141F33", style: "stars" }, light: false },
+  { id: "d-rope", t: "حبل ذهبي", deco: { bar: "board", style: "rope" }, light: false },
   { id: "oak", t: "بلوط فاتح", wood: ["#D9B07A", "#A8763F", 0.55], light: true },
   { id: "walnut", t: "جوز غامق", wood: ["#7A5236", "#3B2415", 0.5], light: false },
   { id: "mahogany", t: "ماهوجني", wood: ["#A3532F", "#561F10", 0.6], light: false },
@@ -84,6 +103,10 @@ export const FRAMES: Frame[] = [
 export const DEFAULT_BOARD = "#1F4E3D", DEFAULT_FRAME = "d-navy";
 export const frameOf = (id: string) => FRAMES.find((f) => f.id === id) ?? FRAMES.find((f) => f.id === DEFAULT_FRAME)!;
 export const insetOf = (id: string) => (frameOf(id).id === "none" ? 0 : FRAME);
+/** من وين تبدي السبورة من فوك: الإطارات المزخرفة ما إلها ضلع فوك (الفوك للهيدر) */
+export const topOf = (id: string) => (frameOf(id).deco ? 0 : insetOf(id));
+/** مساحة الكتابة داخل الإطار */
+export const areaOf = (id: string, W: number) => { const F = insetOf(id), T = topOf(id); return { x: F, y: T, w: W - 2 * F, h: H - F - T }; };
 /** السبورة فاتحة؟ (القلم الأبيض يصير أسود عليها) */
 export function isLight(c: string) {
   const n = parseInt(c.replace("#", ""), 16);
@@ -313,7 +336,7 @@ export function cleanLesson(x: unknown): Lesson | null {
       return [];
     }),
   }));
-  return { v: 1, w: Math.max(400, Math.min(4000, num(j.w, 1920))), board: BOARDS.some((b) => b.c === j.board) ? String(j.board) : DEFAULT_BOARD, frame: FRAMES.some((f) => f.id === j.frame) ? String(j.frame) : DEFAULT_FRAME, head: headOf(j.head), pages, ...(typeof j.title === "string" ? { title: j.title.slice(0, 120) } : {}) };
+  return { v: 1, w: Math.max(400, Math.min(4000, num(j.w, 1920))), board: typeof j.board === "string" && /^#[0-9A-Fa-f]{6}$/.test(j.board) ? j.board.toUpperCase() : DEFAULT_BOARD, frame: FRAMES.some((f) => f.id === j.frame) ? String(j.frame) : DEFAULT_FRAME, head: headOf(j.head), pages, ...(typeof j.title === "string" ? { title: j.title.slice(0, 120) } : {}) };
 }
 
 // ---------- ✋ التحريك: يختار كتابة أو صورة (دوسة عليها أو مربع حواليها) ويحركها
