@@ -47,7 +47,7 @@ test("صفحة السيطرة لصاحب البوت بس، والسيطرة تن
   // السيطرة الثانية تبدي من بعد الأولى: امتحانين بس
   const s = await cp("saveCp", { exam: exams[4], min: 100, absent: 0 });
   assert.deepEqual(s.chapters[0].exams.map((e: any) => e.since), [1, 2, 3, 1, 2, 1]);
-  assert.deepEqual(s.chapters[0].exams[4].cp, { min: 100, absent: 0, bands: [] });
+  assert.deepEqual(s.chapters[0].exams[4].cp, { min: 100, absent: 0, bands: [], honor: null });
   await assert.rejects(cp("saveCp", { exam: exams[4], min: 300, absent: 0 }), /من 0 إلى 200/);
   const d = await cp("delCp", { exam: exams[4] });
   assert.equal(d.chapters[0].exams[4].cp, null);
@@ -249,4 +249,33 @@ test("امتحن الامتحان اللي فتحته الإدارة وهو مو
   assert.deepEqual([Number(row.passed), Number(row.score), Number(row.absent)], [1, 200, 0]);
   assert.match(calls.find((c) => c.p.chat_id === 60)!.p.text, /رجعت الامتحانات/);
   assert.ok(calls.some((c) => c.p.chat_id === 1 && /انشال إيقاف وحده/.test(c.p.text)));
+});
+
+test("🏆 قائمة المتفوقين: تنحفظ ويا السيطرة، وتندز PDF مرة وحدة بعد ما ينصحح آخر امتحان، وعيد الميلاد بفترة الامتحانات", async () => {
+  const { honorReports, bdayIn } = await import("../lib/checkpoints.ts");
+  assert.equal(bdayIn("2008-02-02", "2026-02-01", "2026-02-03"), true);
+  assert.equal(bdayIn("2008-03-02", "2026-02-01", "2026-02-03"), false);
+  assert.equal(bdayIn("2008-01-02", "2026-12-28", "2027-01-05"), true, "تعبر رأس السنة");
+  // سيطرة ورا الامتحان السادس (الرابع والخامس والسادس)، المتفوق معدل 95، ويا عيد الميلاد والعنوان
+  const n = (await cp("list")).chapters[0].exams[5].since;
+  await cp("saveCp", { exam: exams[5], min: 50 * n, absent: 0, honor: { min: 95, bday: true, addr: true } });
+  const l = await cp("list");
+  assert.deepEqual(l.chapters[0].exams[5].cp.honor, { min: 95, bday: true, addr: true });
+  await put("students", { user_id: 81, name: "متفوق مولود بالفترة", exam: "إلكتروني", birth: "2008-02-06", gov: "بغداد", side: "الكرخ", area: "المنصور", phone1: "07700000081", created: "2026-01-01 00:00:00" });
+  await put("students", { user_id: 82, name: "متفوق مو بالفترة", exam: "إلكتروني", birth: "2008-07-01", created: "2026-01-01 00:00:00" });
+  for (const u of [81, 82]) for (const n of [3, 4, 5]) await graded(u, n, 98);
+  for (const u of [81, 82]) { await put("checkpoint_done", { user_id: u, chapter: "الفصل الأول", block: exams[5], passed: 1, score: 98 * n, absent: 0, created: "x" }); }
+  calls.length = 0;
+  // امتحانات طلاب الفحوصات اللي قبل بنفس الامتحان: فاتتهم (حتى ما تنتظر القائمة تصحيحهم)
+  { const { find, update } = await import("../lib/db.ts"); for (const it of await find("sched_items", { exam_id: exams[5] })) if (!it.graded_at) await update("sched_items", { id: it.id }, { status: "missed" }); }
+  await honorReports("2026-03-01 10:00");
+  const docs = calls.filter((c) => c.method === "sendDocument");
+  assert.equal(docs.length, 1, "PDF وحد لصاحب البوت");
+  const html = fs.readdirSync(tmp).filter((f) => f.startsWith(`honor_${exams[5]}`) && f.endsWith(".html")).map((f) => fs.readFileSync(path.join(tmp, f), "utf8")).join("");
+  assert.match(html, /متفوق مولود بالفترة/);
+  assert.match(html, /بغداد - الكرخ - المنصور/);
+  assert.doesNotMatch(html, /مو بالفترة/);
+  calls.length = 0;
+  await honorReports("2026-03-02 10:00");
+  assert.equal(calls.filter((c) => c.method === "sendDocument").length, 0, "مرة وحدة بس");
 });

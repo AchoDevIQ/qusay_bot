@@ -50,7 +50,7 @@ export type PathTopic = { name: string; lectures: PathLec[] };
 export type PathExam = { id: number; title: string };
 export type Step =
   | { kind: "lec"; id: string; title: string; n: number; state: "done" | "open" | "locked" | "buy"; pct: number }
-  | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null }
+  | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; since?: number; from?: string; cp?: { min: number; absent: number; honor: { min: number; bday?: boolean; addr?: boolean } | null } | null }
   | { kind: "cp"; exam: number; min: number; absent: number; count: number };
 export type Section = { name: string; general?: boolean; steps: Step[] };
 
@@ -159,7 +159,7 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
   const { scheduleChapters } = await import("./schedApi.ts");
   const { labelChapters } = await import("./scheduleRules.ts");
   const examsBought = admin || (await scheduleChapters(uid)).flatMap((l) => labelChapters(l)).includes(chapterOf(ch));
-  let blocked = false, since = 0;
+  let blocked = false, since = 0, from = "";
   const out: Section[] = sections.map((sec) => ({
     name: sec.name, general: sec.general,
     steps: sec.items.flatMap((x): Step[] => {
@@ -171,6 +171,7 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
         return [{ kind: "lec", id: x.lec.id, title: x.lec.title, n: x.lec.n, state, pct }];
       }
       since++;
+      if (since === 1) from = x.exam.title;
       const it = items.get(x.exam.id);
       let state = examsBought ? "nodate" : "buy", at: string | undefined, total: number | null | undefined;
       if (it) {
@@ -179,8 +180,11 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
         state = it.status === "done" ? (it.total !== null && it.total !== undefined ? "graded" : "done") : k;
         total = it.total === null || it.total === undefined ? null : Number(it.total);
       }
-      const steps: Step[] = [{ kind: "exam", id: x.exam.id, title: x.exam.title, state, at, total }];
-      const rule = cfg.mode === "percent" ? (cfg.rules[String(x.exam.id)] ? { min: Math.ceil(cfg.pct.min * since), absent: cfg.pct.absent } : null) : cfg.rules[String(x.exam.id)];
+      const own = cfg.rules[String(x.exam.id)];
+      // الأستاذ: كل امتحان بيه «＋ إنشاء سيطرة»، ويعرف كم امتحان تشمل (من بعد السيطرة اللي قبلها)
+      const teach = admin ? { since, from, cp: own ? { min: own.min, absent: own.absent, honor: own.honor ?? null } : null } : {};
+      const steps: Step[] = [{ kind: "exam", id: x.exam.id, title: x.exam.title, state, at, total, ...teach }];
+      const rule = cfg.mode === "percent" ? (own ? { min: Math.ceil(cfg.pct.min * since), absent: cfg.pct.absent } : null) : own;
       if (rule) { steps.push({ kind: "cp", exam: x.exam.id, min: rule.min, absent: rule.absent, count: since }); since = 0; }
       return steps;
     }),
@@ -190,7 +194,7 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
   // ما اختار أوقات امتحاناته: أول خطوة بمساري
   const { needsSchedule } = await import("./schedApi.ts");
   const pickTimes = admin ? false : await needsSchedule(uid);
-  return { ch, chapters: chs.map((c) => ({ ch: c, name: `الفصل ${ORD[c]}` })), env, lang, lecturesBought, sections: out, stopped: !!stop, pickTimes };
+  return { ch, chapters: chs.map((c) => ({ ch: c, name: `الفصل ${ORD[c]}` })), env, lang, lecturesBought, sections: out, stopped: !!stop, pickTimes, teacher: admin };
 }
 
 /** قبل ما تنفتح محاضرة من المسار: لازم تكون مفتوحة إله (كمّل اللي قبلها) */

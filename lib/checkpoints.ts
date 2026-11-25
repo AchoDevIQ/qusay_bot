@@ -19,7 +19,10 @@ import { ApiError, authed, intOf, need } from "./webApi.ts";
 export type Band = { id: string; from: number; to: number; text: string; images?: string[]; image?: string | null };
 /** صور النتيجة (الحفظ القديم كان صورة وحدة) */
 const picsOf = (b: Band) => [...new Set([...(b.images ?? []), ...(b.image ? [b.image] : [])])];
-export type Rule = { min: number; absent: number; bands?: Band[] };
+/** honor: قائمة المتفوقين PDF لصاحب البوت (طلبه 2026-11-25): معدل كل امتحان min من 100 فما فوق،
+ * bday: بس اللي عيد ميلادهم صادف بفترة امتحانات هالسيطرة، addr: ويا عنوانهم الكامل (حتى يسويلهم هدية ومفاجأة) */
+export type Honor = { min: number; bday?: boolean; addr?: boolean };
+export type Rule = { min: number; absent: number; bands?: Band[]; honor?: Honor | null };
 /** طريقتين: «marks» كل سيطرة إلها شرطها ونتائجها بالدرجات، «percent» نسبة وحدة لكل السيطرات */
 export type Mode = "marks" | "percent";
 type Pct = { min: number; absent: number; bands: Band[] };
@@ -277,7 +280,54 @@ export async function sweepCheckpoints(force = false) {
   await kvSet("checkpoints_sweep", String(Date.now()));
   const ids = [...new Set((await find("sched_items")).map((i) => i.user_id as number).filter((u) => u > 0))];
   for (const id of ids) { try { await runCheckpoints(id); } catch (e) { console.error(e); } }
+  try { await honorReports(); } catch (e) { console.error("honor", e); }
   return ids.length;
+}
+
+/** 📄 قائمة المتفوقين لكل سيطرة طلبها: تندز مرة وحدة لصاحب البوت، بعد ما آخر امتحان بالسيطرة انصحح كله */
+export async function honorReports(now = stamp()) {
+  const cfg = await loadCfg();
+  const segs = segmentsOf(await bookExams(), cfg);
+  for (const g of segs) {
+    const honor = cfg.rules[String(g.exam)]?.honor;
+    if (!honor || (await kvGet(`cp_honor_${g.exam}`))) continue;
+    const last = await find("sched_items", { exam_id: g.exam });
+    if (!last.length) continue;
+    const s = await schedSettings();
+    // باقي أحد ما امتحن أو ما انصحح: ننتظر
+    const waiting = last.some((i) => i.kind !== "optional" && !i.graded_at && !(i.status === "missed" || (i.status === "waiting" && itemState("waiting", i.at, s.window, now) === "missed")));
+    if (waiting) continue;
+    const n = g.ids.length, need2 = honor.min * n;
+    const rows: unknown[][] = [];
+    for (const d of await find("checkpoint_done", { chapter: g.chapter, block: g.exam })) {
+      if (Number(d.passed) !== 1 || Number(d.score) < need2) continue;
+      const st = await student(Number(d.user_id));
+      if (!st) continue;
+      const its = (await find("sched_items", { user_id: d.user_id })).filter((i) => g.ids.includes(Number(i.exam_id)));
+      const from = its.map((i) => String(i.at).slice(0, 10)).sort()[0] ?? "", to = its.map((i) => String(i.at).slice(0, 10)).sort().pop() ?? "";
+      if (honor.bday && !bdayIn(String(st.birth ?? ""), from, to)) continue;
+      rows.push([st.name ?? "", `${d.score} من ${n * PER_EXAM}`, st.phone1 ?? "", ...(honor.bday ? [String(st.birth ?? "")] : []), ...(honor.addr ? [[st.gov, st.side, st.area].filter(Boolean).join(" - ")] : [])]);
+    }
+    rows.sort((a, b) => parseInt(String(b[1])) - parseInt(String(a[1])));
+    const title = `🏆 متفوقين سيطرة ${g.chapter} (${g.from} ← ${g.title}): معدل ${honor.min} فما فوق${honor.bday ? "، وعيد ميلادهم بفترة الامتحانات" : ""}`;
+    const { listPdf } = await import("./documents.ts");
+    for (const a of ADMIN_IDS) {
+      try {
+        if (rows.length) await listPdf(a, title, ["الاسم", "المجموع", "الهاتف", ...(honor.bday ? ["تاريخ الميلاد"] : []), ...(honor.addr ? ["العنوان"] : [])], rows, `honor_${g.exam}`);
+        else await send(a, `${title}
+
+ماكو طالب ينطبق عليه الشرط.`);
+      } catch (e) { console.error("honor send", e); }
+    }
+    await kvSet(`cp_honor_${g.exam}`, now);
+  }
+}
+/** عيد الميلاد (الشهر واليوم) بين يومين، حتى لو الفترة تعبر رأس السنة */
+export function bdayIn(birth: string, from: string, to: string) {
+  const md = birth.slice(5, 10);
+  if (!/^\d\d-\d\d$/.test(md) || !from || !to) return false;
+  const a = from.slice(5, 10), b = to.slice(5, 10);
+  return a <= b ? md >= a && md <= b : md >= a || md <= b;
 }
 
 export const stopView = (s: Row | null) => (s ? { at: String(s.created), reason: String(s.reason), what: whatOf(s), chapter: String(s.chapter), score: s.score, max: s.max, absent: s.absent } : null);
@@ -292,7 +342,7 @@ async function pageData() {
       chapter, exams: list.map((e, i) => {
         const r = cfg.rules[String(e.id)];
         const row = { id: e.id as number, title: String(e.title ?? ""), since: i + 1 - from, from: String(list[from].title ?? ""),
-          cp: r ? { min: r.min, absent: r.absent, bands: bandsView(r.bands ?? []) } : null };
+          cp: r ? { min: r.min, absent: r.absent, bands: bandsView(r.bands ?? []), honor: r.honor ?? null } : null };
         if (r) from = i + 1;
         return row;
       }),
@@ -405,7 +455,11 @@ export async function checkpointsAction(raw: Row | FormData) {
       const rule: Rule = cfg.mode === "percent" && body.min === undefined ? { min: old?.min ?? 0, absent: old?.absent ?? 0 }
         : { min: intOf(body.min, 0, n * PER_EXAM, `اكتب أقل مجموع من 0 إلى ${n * PER_EXAM}`), absent: intOf(body.absent, 0, n, `اكتب عدد الغيابات من 0 إلى ${n}`) };
       need(cfg.mode === "percent" || rule.min > 0 || rule.absent > 0, "حط أقل مجموع أو عدد غيابات، حتى السيطرة يكون إلها شرط");
-      cfg.rules[String(id)] = { ...rule, bands: cfg.rules[String(id)]?.bands ?? [] };
+      // قائمة المتفوقين (اختياري): معدل من 100، وعيد الميلاد والعنوان
+      const h = body.honor as Row | null | undefined;
+      const honor: Honor | null = h && Number(h.min) > 0 ? { min: intOf(h.min, 1, PER_EXAM, "معدل المتفوقين من 1 إلى 100"), ...(h.bday ? { bday: true } : {}), ...(h.addr ? { addr: true } : {}) } : body.honor === undefined ? old?.honor ?? null : null;
+      cfg.rules[String(id)] = { ...rule, bands: cfg.rules[String(id)]?.bands ?? [], honor };
+      if (honor) await kvSet(`cp_honor_${id}`, "");
       notice = `✅ انحفظت السيطرة بعد ${e.title}`;
     }
     await saveCfg(cfg);
