@@ -2,6 +2,7 @@
 // 🛤 مساري: «مسارك ويا قصي العميري». كل موضوع بطاقة لحاله، جواها المحاضرات بالترتيب والامتحانات بمكانها والسيطرة 🚦.
 // المحاضرة المفتوحة تنفتح بالتطبيق نفسه (ويا ملحقاتها). الجاية مقفولة لحد ما يكمل اللي قبلها للآخر
 import { useEffect, useState } from "react";
+import { pageToken } from "../adminPage";
 
 type Step =
   | { kind: "lec"; id: string; title: string; n: number; state: "done" | "open" | "locked" | "buy"; pct: number }
@@ -10,7 +11,8 @@ type Step =
 type Section = { name: string; general?: boolean; steps: Step[] };
 type Path = { ch: number; chapters: { ch: number; name: string }[]; lecturesBought: boolean; sections: Section[]; stopped: boolean; pickTimes?: boolean };
 
-const token = () => new URLSearchParams(location.search).get("t") ?? "";
+// الرمز من الرابط، أو المحفوظ بالصفحة (لوحة التحكم تفتح صفحاتها بدون الرمز بالرابط)
+const token = () => pageToken();
 /** «امتحاناتي» من جوه مساري (نفس الدخول): المواعيد، ودخول الامتحان، والدرجة والورقة */
 const examsLink = () => { const q = new URLSearchParams(location.search); const app = q.get("app"); return `/store/myexams?t=${encodeURIComponent(token())}${app ? `&app=${encodeURIComponent(app)}` : ""}`; };
 async function api(body: Record<string, unknown>) {
