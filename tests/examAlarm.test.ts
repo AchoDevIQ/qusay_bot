@@ -16,6 +16,10 @@ test("⏰ قبل ساعة وبوقته، والموعد يتبدل فيتبدل 
   const it = await insert("sched_items", { user_id: 7, exam_id: e, at: "2026-12-02 16:00", status: "waiting" });
   await insert("sched_items", { user_id: 7, exam_id: e, at: "2026-11-01 16:00", status: "waiting" });
   let a = await A.alarmsFor(7, "2026-12-01 10:00");
+  assert.deepEqual(a.map((x) => x.at), ["2026-12-02T16:00:00+03:00"], "الأصل: بوقت الامتحان بس");
+  assert.match(a[0].title, /هسه عندك امتحان/);
+  await A.setAlarmCfg({ before: [60, 0] });
+  a = await A.alarmsFor(7, "2026-12-01 10:00");
   assert.deepEqual(a.map((x) => x.at), ["2026-12-02T15:00:00+03:00", "2026-12-02T16:00:00+03:00"]);
   assert.match(a[0].title, /بعد ساعة/); assert.match(a[1].title, /هسه عندك امتحان/);
   await update("sched_items", { id: it }, { at: "2026-12-05 18:00" });

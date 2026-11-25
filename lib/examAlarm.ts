@@ -17,7 +17,8 @@ export type ToneId = (typeof TONES)[number]["id"];
 /** شوكت يرن: دقايق قبل الامتحان (0 = بوقته)، و«night» = الليلة اللي قبل الساعة 9 */
 export type AlarmCfg = { on: boolean; before: number[]; night: boolean; tone: ToneId };
 const CFG = "alarm_cfg";
-const DEF: AlarmCfg = { on: true, before: [60, 0], night: false, tone: "soft" };
+// الأصل (طلبه 2026-11-25): يرن بوقت الامتحان بس، وهو يگدر يضيف قبله من الصفحة
+const DEF: AlarmCfg = { on: true, before: [0], night: false, tone: "soft" };
 export const OFFSETS = [0, 10, 30, 60, 120] as const;
 
 export async function alarmCfg(): Promise<AlarmCfg> {
