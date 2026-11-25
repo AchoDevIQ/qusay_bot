@@ -45,7 +45,8 @@ export function examPlace(title: string, topics: string[]): { ti: number; nums: 
   return { ti, nums };
 }
 
-export type PathLec = { id: string; title: string; n: number };
+/** review: محاضرة مراجعة («مراجعه رسم الدوال 1»): مو من المحاضرات المرقمة، فالامتحانات ما تنحسب عليها */
+export type PathLec = { id: string; title: string; n: number; review?: boolean };
 export type PathTopic = { name: string; lectures: PathLec[] };
 export type PathExam = { id: number; title: string };
 export type Step =
@@ -66,11 +67,14 @@ export function buildPath(topics: PathTopic[], exams: PathExam[]): { sections: {
     if (ti >= 0) {
       const mine = flat.map((x, i) => ({ ...x, i })).filter((x) => x.ti === ti);
       if (mine.length) {
+        // المراجعات ما تنحسب: «رسم الدوال 1&2» بعد المحاضرة 2، و«رسم الدوال شامل» بعد آخر محاضرة (قبل المراجعات)
+        const main = mine.filter((x) => !x.lec.review);
+        const base = main.length ? main : mine;
         if (nums.length) {
           const max = Math.max(...nums);
-          const upto = mine.filter((x) => x.lec.n <= max);
-          at = (upto.length ? upto[upto.length - 1] : mine[0]).i;
-        } else at = mine[mine.length - 1].i;
+          const upto = base.filter((x) => x.lec.n <= max);
+          at = (upto.length ? upto[upto.length - 1] : base[0]).i;
+        } else at = base[base.length - 1].i;
       }
     }
     at = Math.max(at, prev);
@@ -138,7 +142,7 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
   const appCh2 = (await appChs(env)).find((c) => c.ch === ch);
   const topics: PathTopic[] = (appCh2?.topics ?? []).map((t) => ({
     name: t.name,
-    lectures: t.lectures.filter((l) => l.track === lang && !l.draft).map((l, k) => ({ id: l.id, title: l.title, n: lecNumber(l.title) || k + 1 })),
+    lectures: t.lectures.filter((l) => l.track === lang && !l.draft).map((l, k) => ({ id: l.id, title: l.title, n: lecNumber(l.title) || k + 1, ...(/مراجع|review/i.test(l.title) ? { review: true } : {}) })),
   })).filter((t) => t.lectures.length);
   // الامتحانات بترتيب الجدول (اللي تدخل الجدول بس)
   const { bookExams, loadCfg, cpImageUrl } = await import("./checkpoints.ts");
@@ -174,8 +178,8 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
       if (since === 1) from = x.exam.title;
       const it = items.get(x.exam.id);
       let state = examsBought ? "nodate" : "buy", at: string | undefined, total: number | null | undefined;
-      if (it) {
-        at = String(it.at);
+      if (it && /^\d{4}-\d\d-\d\d \d\d:\d\d/.test(String(it.at ?? ""))) {
+        at = String(it.at).slice(0, 16);
         const k = itemState(String(it.status), at, s.window, now);
         state = it.status === "done" ? (it.total !== null && it.total !== undefined ? "graded" : "done") : k;
         total = it.total === null || it.total === undefined ? null : Number(it.total);

@@ -23,10 +23,22 @@ async function api(body: Record<string, unknown>) {
   if (!r.ok) throw new Error(j.error || "صار خطأ");
   return j;
 }
+// المواعيد بتوقيت بغداد، بأرقام عادية
+const atMs = (at: string) => new Date(`${at.replace(" ", "T").slice(0, 16)}:00+03:00`).getTime();
 const when = (at?: string) => {
   if (!at) return "";
-  const d = new Date(at.replace(" ", "T"));
-  return d.toLocaleString("ar-IQ", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
+  return new Date(atMs(at)).toLocaleString("ar-IQ-u-nu-latn", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit", timeZone: "Asia/Baghdad" });
+};
+/** «⏳ باقي…» لحد وقت الامتحان: أيام وساعات، وبآخر ساعة دقايق وثواني */
+const left = (at: string, now: number) => {
+  const ms = atMs(at) - now;
+  if (ms <= 0) return "";
+  const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+  const day = (n: number) => (n === 1 ? "يوم" : n === 2 ? "يومين" : n <= 10 ? `${n} أيام` : `${n} يوم`), hr = (n: number) => (n === 1 ? "ساعة" : n === 2 ? "ساعتين" : n <= 10 ? `${n} ساعات` : `${n} ساعة`);
+  if (d) return `باقي ${day(d)}${h ? ` و${hr(h)}` : ""}`;
+  if (h) return `باقي ${hr(h)}${mm ? ` و${mm} دقيقة` : ""}`;
+  const sec = Math.floor((ms % 60000) / 1000);
+  return `باقي ${mm}:${String(sec).padStart(2, "0")} دقيقة`;
 };
 const EXAM: Record<string, string> = { buy: "🔒 اشتري امتحانات الفصل", nodate: "🗓 بعده ما انحط موعده", locked: "🗓 موعده", open: "🟢 مفتوح هسه، دوس هنا وادخله", missed: "❌ فاتك", done: "✅ قدمته، ينتظر التصحيح", graded: "✅ درجتك" };
 
@@ -36,6 +48,9 @@ export default function PathClient() {
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const [msg, setMsg] = useState("");
   const [cpFor, setCpFor] = useState<Extract<Step, { kind: "exam" }> | null>(null);
+  // العداد يمشي كل ثانية
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(t); }, []);
   // keep: نافذة السيطرة تبقى مفتوحة على نفس الامتحان (بعد ما تحط صورة، حتى تحط الثانية)، والأقسام المفتوحة تبقى
   const load = (ch?: number, keep?: number) => {
     const q = new URLSearchParams(location.search);
@@ -84,7 +99,9 @@ export default function PathClient() {
   ) : s.kind === "exam" ? (
     <a key={k} className={`qp-step exam ${s.state}`} href={s.state === "buy" ? undefined : examsLink()}>
       <span className="qp-ic">📝</span>
-      <span className="qp-t"><b>{s.title}</b><small>{EXAM[s.state] ?? s.state}{s.state === "locked" ? `: ${when(s.at)}` : ""}{s.state === "graded" && s.total !== null && s.total !== undefined ? ` ${s.total}` : ""}</small></span>
+      <span className="qp-t"><b>{s.title}</b><small>{s.state === "locked" ? "" : EXAM[s.state] ?? s.state}{s.state === "graded" && s.total !== null && s.total !== undefined ? ` ${s.total}` : ""}</small>
+        {s.at && <small className="qp-when">🗓 {when(s.at)}</small>}
+        {s.at && s.state === "locked" && left(s.at, now) && <span className="qp-left">⏳ {left(s.at, now)}</span>}</span>
       {p?.teacher && <button type="button" className="qp-addcp" onClick={(e) => { e.preventDefault(); setCpFor(s); }}>{s.cp ? "✏️ السيطرة" : "＋ إنشاء سيطرة"}</button>}
     </a>
   ) : null;
@@ -292,7 +309,7 @@ const CSS = `
 .qp-ch button.on{background:#141F33;color:#F6C94A;border-color:#141F33}
 .qp-stop{margin:14px 16px 0;background:#141F33;border:2px solid #F6C94A;color:#F6C94A;border-radius:12px;padding:12px;font-weight:700;line-height:1.7}
 .qp-sec{margin:14px 16px 0;background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(20,31,51,.08);overflow:hidden;border:1px solid #E6E9F0}
-.qp-sec.gen{border-color:#141F33}
+.qp-sec.gen{border:2px solid #F6C94A}
 .qp-head{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:10px 14px;background:none;border:0;font:inherit;color:inherit;text-align:right}
 .qp-head b{flex:1;font-size:17px}.qp-head small{color:#6B7488;font-weight:700}
 .qp-num{width:32px;height:32px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#141F33;color:#F6C94A;font-weight:800}
@@ -300,7 +317,7 @@ const CSS = `
 .qp-arr{color:#8A93A6}
 .qp-steps{border-top:1px solid #EEF0F5;padding:6px 10px 10px}
 .qp-step{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;margin-top:6px;padding:8px 10px;border-radius:12px;background:#fff;border:1px solid #E6E9F0;font:inherit;color:inherit;text-align:right}
-.qp-step.lec.open{background:#fff;border:1px solid #E6E9F0;border-right:5px solid #F6C94A}
+.qp-step.lec{border-right:5px solid #F6C94A}
 .qp-step.lec.locked,.qp-step.lec.buy{opacity:.55}
 .qp-step.exam{background:#F5F6FA}.qp-step.exam.open{background:#fff;border:2px solid #F6C94A}
 .qp-step.cp{background:#fff;border:1px dashed #141F33}
@@ -330,6 +347,8 @@ a.qp-step{text-decoration:none}
 .qp-gate{margin:14px 16px 0;border-radius:14px;overflow:hidden;background:#141F33;color:#fff;box-shadow:0 2px 10px rgba(20,31,51,.25)}
 .qp-stripes{display:block;height:10px;background:repeating-linear-gradient(-45deg,#F6C94A 0 12px,#141F33 12px 24px)}
 .qp-gin{display:flex;align-items:center;gap:12px;padding:12px 16px}
+.qp-t .qp-when{color:#141F33;font-weight:700}
+.qp-left{display:inline-block;align-self:flex-start;margin-top:4px;background:#141F33;color:#F6C94A;border-radius:8px;padding:2px 10px;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
 .qp-gate .qp-t b{font-size:17px;color:#F6C94A}.qp-gate .qp-t small{color:#C9D1E0}
 .qp-bico{font-size:26px}
 .qp-pics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
