@@ -192,7 +192,7 @@ test("📎 الشرح ينزل بملحقات محاضرة التطبيق: يخ�
   const r = await boardAction({ t: T, action: "send", id: saved.id, appLecture: "aaaaaaaabbbbccccddddeeeeeeeeeeee" });
   assert.match(r.notice, /ملحقات «ديموافر · المحاضره 1» بالتطبيق \(التجربة\)/);
   const ins = calls.find((c) => c.q.includes("lectureAttachment_insert"))!;
-  assert.ok(ins.write && ins.q.includes('type: "board"'));
+  assert.ok(ins.write && ins.v.y === "board");
   assert.equal(ins.v.l, "aaaaaaaabbbbccccddddeeeeeeeeeeee");
   assert.equal(ins.v.o, 3, "آخر ملحق");
   const row = r.sent[0];
@@ -231,4 +231,60 @@ test("📎 الشرح ينزل بملحقات محاضرة التطبيق: يخ�
   assert.ok(realDc.some((c) => c.q.includes("lectureAttachment_delete")), "الأولى انشالت");
   assert.equal((await boardAction({ t: T, action: "state" })).sent.length, n0);
   BA.setDcForTest(null);
+});
+
+test("📘✍️ أسئلة المحاضرة بالملحقات: صفحاتها من فهرس الملزمة، الزرين ينضافن، الطالب يحل على A4 وحله إله بس", async () => {
+  const { files } = await import("../lib/files.ts");
+  const BA = await import("../lib/boardAttach.ts");
+  const stamp = "2026-01-01 10:00";
+  await put("students", { user_id: 601, name: "طالب انگليزي فصل أول", curr: "إنجليزي", created: stamp });
+  await put("students", { user_id: 602, name: "ما شاري", curr: "إنجليزي", created: stamp });
+  await insert("exam_access", { user_id: 601, chapter: "الفصل الأول" });
+  const wz = await insert("note_books", { title: "وزاري 1", chapter: "الفصل الأول", lang: "en", section: "wz", file: "wz1", pages: 10, sol: "wz1sol", created: stamp });
+  const ith = await insert("note_books", { title: "إثرائي 1", chapter: "الفصل الأول", lang: "en", section: "ith", file: "ith1", pages: 6, sol: "ith1sol", created: stamp });
+  await insert("note_books", { title: "عربي", chapter: "الفصل الأول", lang: "ar", section: "wz", file: "wzar", pages: 4, sol: "x", created: stamp });
+  const toc = (items: { t: string; p: number }[]) => Buffer.from(JSON.stringify(items));
+  await files().write("notes/wz1.toc2.json", toc([{ t: "Complex numbers lecturer 1", p: 2 }, { t: "Complex numbers lecturer 2", p: 5 }, { t: "Square roots lecturer 1", p: 8 }]), "application/json");
+  await files().write("notes/ith1.toc2.json", toc([{ t: "Complex numbers · Lecture 1", p: 1 }, { t: "Complex numbers · Lecture 2", p: 3 }, { t: "Square roots · Lecture 1", p: 5 }]), "application/json");
+  const L2 = "aaaaaaaa111122223333444455556666", SQ = "bbbbbbbb111122223333444455556666", AR = "cccccccc111122223333444455556666";
+  const ins: any[] = [], del: string[] = [];
+  BA.setDcForTest(async (_env, q, v) => {
+    if (q.includes("curricula")) return { curricula: [{ chapters_on_curriculum: [{ orderPosition: 1, arabicTitle: "الأعداد المركبة", isTestChapter: false, subjects_on_chapter: [
+      { id: "s1", arabicTitle: "الأعداد المركبة", lectures_on_subject: [{ id: "dddddddd111122223333444455556666", title: "Lecture 1", track: "english", state: "published" }, { id: L2, title: "Lecture 2", track: "english", state: "published" }, { id: AR, title: "المحاضره 1", track: "arabic", state: "published" }] },
+      { id: "s2", arabicTitle: "الجذور التربيعية", lectures_on_subject: [{ id: SQ, title: "Lecture 1", track: "english", state: "published" }] }] }] }] };
+    if (q.includes("lecture(id")) return { lecture: { id: v.id, title: "x", track: "english", subject: { arabicTitle: "x", chapter: { orderPosition: 1 } }, lectureAttachments_on_lecture: [{ id: "1" }] } };
+    if (q.includes("lectureAttachment_insert")) { ins.push(v); return { lectureAttachment_insert: { id: `${String(ins.length).padStart(8, "0")}11112222333344445555${String(ins.length).padStart(4, "0")}` } }; }
+    if (q.includes("lectureAttachment_delete")) { del.push(v.id); return {}; }
+    return {};
+  });
+  const T = homeToken(1);
+  await boardAction({ t: T, action: "appmode", env: "staging" });
+  const r = await boardAction({ t: T, action: "lqSync" });
+  // 3 محاضرات انگليزي إلها أسئلة، العربي ملزمته ما بيها فهرس → ما إلها
+  assert.match(r.notice, /لـ 3 محاضرة/);
+  assert.equal(r.lqCount, 3);
+  assert.deepEqual(ins.filter((x) => x.l === L2).map((x) => [x.y, x.o]), [["qbook", 2], ["qsolve", 3]], "آخر الملحقات");
+  assert.ok(ins.find((x) => x.l === L2 && x.y === "qsolve").u.endsWith(`/store/board?solve=${L2}`));
+  assert.ok(!ins.some((x) => x.l === AR));
+  // مرة ثانية: ما يكرر
+  assert.match((await boardAction({ t: T, action: "lqSync" })).notice, /لـ 0 محاضرة، و3 كانت بيها/);
+
+  // الطالب: المحاضرة 2 = صفحات 5-7 من الوزاري و3-4 من الإثرائي
+  const lq = await boardAction({ t: homeToken(601), action: "lq", lec: L2 });
+  assert.deepEqual(lq.items.map((x: any) => `${x.sec}:${x.book}:${x.page}`), [5, 6, 7].map((p) => `wz:${wz}:${p}`).concat([3, 4].map((p) => `ith:${ith}:${p}`)));
+  assert.deepEqual((await boardAction({ t: homeToken(601), action: "lq", lec: SQ })).items.map((x: any) => x.page), [8, 9, 10, 5, 6]);
+  await assert.rejects(boardAction({ t: homeToken(602), action: "lq", lec: L2 }), /لطلابه بس/);
+  // حلّي: فارغ أول مرة، بعدين حله يرجعله، وغيره ما يشوفه
+  assert.equal((await boardAction({ t: homeToken(601), action: "solveGet", lec: L2 })).lesson, null);
+  const mine = { ...E.emptyLesson(764, "#FFFFFF", "none"), head: "none", pages: [{ bg: `q:${wz}:5`, items: [{ k: "ink", c: "#000000", w: 5, p: [1, 1, 9, 9] }] }, { bg: null, items: [] }] };
+  await boardAction({ t: homeToken(601), action: "solvePut", lec: L2, lesson: mine });
+  const back = await boardAction({ t: homeToken(601), action: "solveGet", lec: L2 });
+  assert.equal(back.lesson.pages[0].bg, `q:${wz}:5`);
+  assert.equal(back.lesson.pages[0].items.length, 1);
+  await assert.rejects(boardAction({ t: homeToken(602), action: "solveGet", lec: L2 }), /لطلابه بس/);
+  // الأستاذ يشيلهن
+  await boardAction({ t: T, action: "lqClear" });
+  assert.equal(del.length, 6);
+  BA.setDcForTest(null);
+  await boardAction({ t: T, action: "appmode", env: "" });
 });

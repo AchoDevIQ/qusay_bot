@@ -98,10 +98,10 @@ export async function appLecture(env: AppEnv, id: string) {
 }
 
 /** يضيف الشرح آخر ملحق بالمحاضرة */
-export async function addBoardAttachment(env: AppEnv, lectureId: string, url: string, title: string, after: number): Promise<string> {
-  const d = await dc(env, `mutation ($l: UUID!, $u: String!, $t: String, $o: Int!) {
-    lectureAttachment_insert(data: { lecture: { id: $l }, type: "${BOARD_TYPE}", url: $u, title: $t, orderPosition: $o })
-  }`, { l: lectureId, u: url, t: title.slice(0, 200), o: after + 1 }, true);
+export async function addBoardAttachment(env: AppEnv, lectureId: string, url: string, title: string, after: number, type = BOARD_TYPE): Promise<string> {
+  const d = await dc(env, `mutation ($l: UUID!, $u: String!, $t: String, $o: Int!, $y: String!) {
+    lectureAttachment_insert(data: { lecture: { id: $l }, type: $y, url: $u, title: $t, orderPosition: $o })
+  }`, { l: lectureId, u: url, t: title.slice(0, 200), o: after + 1, y: type }, true);
   const id = String((d.lectureAttachment_insert as Row | undefined)?.id ?? "");
   need(id, "ما انضاف الملحق بالتطبيق، حاول مرة ثانية", 502);
   return id;
@@ -112,3 +112,48 @@ export async function removeBoardAttachment(env: AppEnv, id: string) {
   if (!UUID.test(id)) return;
   await dc(env, `mutation ($id: UUID!) { lectureAttachment_delete(key: { id: $id }) }`, { id }, true);
 }
+
+// ---------- 📘✍️ أزرار «الملزمة» و«حلّي» بكل محاضرات التطبيق (lib/lectureQs.ts)
+export const QBOOK_TYPE = "qbook", QSOLVE_TYPE = "qsolve";
+type LqAtt = { lec: string; qbook: string; solve: string };
+const lqKey = (env: AppEnv) => `lq_atts_${env}`;
+async function lqList(env: AppEnv): Promise<LqAtt[]> { try { const j = JSON.parse((await kvGet(lqKey(env))) ?? "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
+
+/** يمر على كل محاضرات التطبيق: يحفظ معلوماتها، واللي إلها أسئلة بالملازم وما بيها الزرين يضيفهن آخر ملحقاتها */
+export async function syncLectureAtts(env: AppEnv, base: string) {
+  const { find } = await import("./db.ts");
+  const { lecNumber, lectureQs, saveLecInfo } = await import("./lectureQs.ts");
+  const books = await find("note_books");
+  const done = await lqList(env);
+  const have = new Set(done.map((x) => x.lec));
+  let added = 0, already = 0, none = 0;
+  for (const c of await appLectures(env)) {
+    const topics = c.topics.map((t) => t.name);
+    for (const [ti, t] of c.topics.entries()) {
+      for (const track of ["arabic", "english"] as const) {
+        const lecs = t.lectures.filter((l) => l.track === track);
+        for (const [k, l] of lecs.entries()) {
+          const info = { id: l.id, env, ch: c.ch, lang: track === "english" ? "en" as const : "ar" as const, topics, ti, lec: lecNumber(l.title) || k + 1, title: l.title, topic: t.name };
+          await saveLecInfo(info);
+          if (!(await lectureQs(books, info)).length) { none++; continue; }
+          if (have.has(l.id)) { already++; continue; }
+          const n = (await appLecture(env, l.id)).count;
+          const qbook = await addBoardAttachment(env, l.id, `${base}/store/qbook?lec=${l.id}`, "📘 ملزمة المحاضرة: الأسئلة وحلولها", n, QBOOK_TYPE);
+          const solve = await addBoardAttachment(env, l.id, `${base}/store/board?solve=${l.id}`, "✍️ حلّي: اكتب حلك تحت كل سؤال", n + 1, QSOLVE_TYPE);
+          done.push({ lec: l.id, qbook, solve }); have.add(l.id);
+          await kvSet(lqKey(env), JSON.stringify(done));
+          added++;
+        }
+      }
+    }
+  }
+  return { added, already, none };
+}
+/** يشيل الزرين من كل المحاضرات */
+export async function clearLectureAtts(env: AppEnv) {
+  const done = await lqList(env);
+  for (const x of done) { await removeBoardAttachment(env, x.qbook); await removeBoardAttachment(env, x.solve); }
+  await kvSet(lqKey(env), "[]");
+  return done.length;
+}
+export const lectureAttCount = async (env: AppEnv) => (await lqList(env)).length;

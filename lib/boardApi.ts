@@ -18,6 +18,7 @@ type Sent = { id: string; ref: string; title: string; chapter: number; at: strin
 const listKey = (uid: number) => `board_list_${uid}`;
 const SENT = "board_sent";
 const lessonRef = (uid: number, id: string) => `boards/${uid}/${id}.json`;
+const solveRef = (uid: number, lec: string) => `boards/${uid}/solve/${lec}.json`;
 const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"];
 
 const readJson = async <T>(k: string, d: T): Promise<T> => { try { const v = JSON.parse(await kvGet(k) ?? ""); return (v ?? d) as T; } catch { return d; } };
@@ -69,6 +70,7 @@ export async function boardAction(body: any) {
     inbox: teacher ? [] : (await inboxOf(uid)).map((x) => ({ id: x.id, title: x.title, at: x.at, pages: x.pages, chapter: x.chapter, topic: x.topic ?? "", lecture: x.lecture ?? 0, lt: x.lt ?? "" })),
     sent: teacher ? (await sentList()).slice(-50).reverse().map((x) => ({ id: x.id, title: x.title, at: x.at, chapter: x.chapter, topic: x.topic ?? "", lecture: x.lecture ?? 0, lt: x.lt ?? "", app: x.app ? x.app.env : "" })) : [],
     appEnv: teacher ? (await (await import("./boardAttach.ts")).boardAppEnv()) ?? "" : "",
+    lqCount: teacher ? await (async () => { const BA = await import("./boardAttach.ts"); const e = await BA.boardAppEnv(); return e ? await BA.lectureAttCount(e) : 0; })() : 0,
   });
   if (a === "state") return await state();
   if (a === "get") {
@@ -92,6 +94,39 @@ export async function boardAction(body: any) {
       need(ok, `هذا الشرح لطلاب محاضرات الفصل ${ORD[x!.chapter]}`, 403);
     }
     return { lesson: await readLesson(x!.ref), title: x!.title };
+  }
+  // ---------- 📘✍️ أسئلة المحاضرة (ملحقات التطبيق): القائمة، وحل الطالب على ورقة A4 (إله بس)
+  if (a === "lq") {
+    const { lectureFor } = await import("./lectureQs.ts");
+    return await lectureFor(uid, body.lec);
+  }
+  if (a === "solveGet") {
+    const { lectureFor } = await import("./lectureQs.ts");
+    const lec = await lectureFor(uid, body.lec);
+    const raw = await files().read(solveRef(uid, lec.id));
+    const lesson = raw ? cleanLesson(JSON.parse(raw.toString("utf8"))) : null;
+    return { lec, lesson };
+  }
+  if (a === "solvePut") {
+    const { lectureFor } = await import("./lectureQs.ts");
+    const lec = await lectureFor(uid, body.lec);
+    const raw = JSON.stringify(body.lesson ?? null);
+    need(raw.length <= MAX_JSON, "الحل كبير كلش");
+    const l = cleanLesson(body.lesson);
+    need(l, "الحل خربان");
+    await saveJson(solveRef(uid, lec.id), l!);
+    return { ok: true };
+  }
+  // الأستاذ: يحط زرين «الملزمة» و«حلّي» بكل محاضرات التطبيق اللي إلها أسئلة، أو يشيلهن
+  if (a === "lqSync" || a === "lqClear") {
+    need(teacher, "بس الأستاذ", 403);
+    const BA = await import("./boardAttach.ts");
+    const env = await BA.boardAppEnv();
+    need(env, "أول اختار «تجربة» لو «إي، بالتطبيق» من «📋 الشروح اللي دزيتها»");
+    if (a === "lqClear") { const n = await BA.clearLectureAtts(env!); return { ...await state(), notice: `🗑 انشالت أزرار الأسئلة من ${n} محاضرة` }; }
+    const { siteBase } = await import("./keyboards.ts");
+    const r = await BA.syncLectureAtts(env!, siteBase());
+    return { ...await state(), notice: `✅ انضافت «📘 الملزمة» و«✍️ حلّي» لـ ${r.added} محاضرة${r.already ? `، و${r.already} كانت بيها من قبل` : ""}${r.none ? `، و${r.none} محاضرة ما لگيت إلها أسئلة بالملازم` : ""}${env === "staging" ? " (داتا التجربة)" : ""}` };
   }
   if (a === "save") {
     const raw = JSON.stringify(body.lesson ?? null);

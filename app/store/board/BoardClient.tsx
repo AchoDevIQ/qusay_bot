@@ -7,6 +7,7 @@ import { plot } from "../../../lib/board/plot.ts";
 import { BOXES, STAMPS, makeBox, makeCover, makeStamp, type BoxKind } from "./makers";
 import { SLOGAN, CURVES, GRIDS, NOTEBOOK, curveOf, type Grid, BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, areaOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
 import { pageToken } from "../adminPage";
+import { deviceId, deviceNow, platformNow } from "../shared";
 import { pdfClient } from "../pdfClient";
 import { drawFoot, drawItem, drawPage, framePreview, headPreview, paintFrame, textLines } from "./boardDraw";
 import { IC } from "./icons";
@@ -22,7 +23,7 @@ type AppTopic = { id: string; name: string; lectures: AppLec[] };
 type AppCh = { ch: number; name: string; topics: AppTopic[] };
 const TRACK = { arabic: "عربي", english: "انگليزي" } as const;
 type Target = { ch: number; name: string; topics: { id: number; name: string; lectures: number }[] };
-type State = { teacher: boolean; name: string; lessons: Meta[]; inbox: Meta[]; sent: Meta[]; appEnv?: string };
+type State = { teacher: boolean; name: string; lessons: Meta[]; inbox: Meta[]; sent: Meta[]; appEnv?: string; lqCount?: number };
 type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings" | "sent" | "boxes" | "plot";
 type Ask = { text: string; buttons: { t: string; kind: "ok" | "bad" | "gray"; run: () => void }[]; input?: { value: string; set: (v: string) => void } } | null;
 
@@ -52,7 +53,14 @@ async function upload(blob: Blob): Promise<string> {
   if (!res.ok) throw new Error(j.error ?? "ما انرفعت الصورة");
   return String(j.ref);
 }
-const bgUrl = (ref: string) => `/api/board/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(pageToken())}`;
+const bgUrl = (ref: string) => {
+  // «q:ملزمة:صفحة» = صفحة سؤال من «📚 ملازمي» (حلّي): تنقرا حية، فإذا بدّل الأستاذ الملزمة تتبدل هنا
+  const q = /^q:(\d+):(\d+)$/.exec(ref);
+  if (q) return `/api/notes/page?t=${encodeURIComponent(pageToken())}&book=${q[1]}&page=${q[2]}&pf=${encodeURIComponent(platformNow())}&d=${encodeURIComponent(deviceNow())}`;
+  return `/api/board/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(pageToken())}`;
+};
+/** ورقة A4 طولية (حلّي): العرض ثابت، والارتفاع نفس السبورة */
+const PAPER_W = Math.round(H / Math.SQRT2);
 const canvasBlob = (c: HTMLCanvasElement, q = 0.86) => new Promise<Blob>((ok, bad) => c.toBlob((b) => (b ? ok(b) : bad(new Error("ما گدرت أسوي الصورة"))), "image/jpeg", q));
 
 export default function BoardClient() {
@@ -102,6 +110,9 @@ export default function BoardClient() {
   const page = () => lesson.current.pages[pageIx.current];
   const say = (t: string) => { setToast(t); window.setTimeout(() => setToast((x) => (x === t ? "" : x)), 3200); };
   const markDirty = () => setDirty(true);
+  /** حلّي: ورقة A4 وأسئلة المحاضرة، والحل ينحفظ وحده إله بس */
+  const paper = useRef(false);
+  const [solve, setSolve] = useState<{ id: string; title: string } | null>(null);
 
   // ---------- الرسم
   const bgOf = useCallback((ref?: string | null) => {
@@ -110,6 +121,8 @@ export default function BoardClient() {
     if (!im) {
       im = new Image();
       im.onload = () => redrawInk();
+      // صفحة سؤال ما انفتحت (قفل الامتحان، أوقاته، جهاز ثاني): نگله ليش
+      if (ref.startsWith("q:")) im.onerror = () => { void fetch(bgUrl(ref)).then((r) => r.text()).then((t) => say(t.length < 200 ? t : "السؤال ما انفتح")).catch(() => say("السؤال ما انفتح، تأكد من النت")); };
       im.src = ref.startsWith("data:") || ref.startsWith("blob:") ? ref : bgUrl(ref);
       imgs.current.set(ref, im);
     }
@@ -193,6 +206,18 @@ export default function BoardClient() {
     // الصفحة بعدها ما انرسمت: نعيد بالإطار الجاي
     if (cssW < 50 || cssH < 50) { requestAnimationFrame(() => layout()); return; }
     const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (paper.current) {
+      // ورقة A4 بالنص، والباقي طاولة
+      const scale = Math.min(cssH / H, cssW / PAPER_W), cw = PAPER_W * scale, ch = H * scale;
+      geo.current = { cssW: cw, cssH: ch, scale, W: PAPER_W, dpr };
+      for (const c of [frameC.current, inkC.current, liveC.current]) if (c) {
+        c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr);
+        Object.assign(c.style, { width: `${cw}px`, height: `${ch}px`, left: `${(cssW - cw) / 2}px`, top: `${(cssH - ch) / 2}px`, right: "auto", bottom: "auto" });
+      }
+      setW(PAPER_W);
+      redrawFrame(); redrawInk(); redrawLive();
+      return;
+    }
     const scale = cssH / H, Wn = Math.round(cssW / scale);
     geo.current = { cssW, cssH, scale, W: Wn, dpr };
     for (const c of [frameC.current, inkC.current, liveC.current]) if (c) { c.width = Math.round(cssW * dpr); c.height = Math.round(cssH * dpr); }
@@ -238,6 +263,7 @@ export default function BoardClient() {
       const inbox = q.get("inbox"), att = q.get("att");
       if (inbox) void openInbox(inbox);
       else if (att) void openAtt(att);
+      else if (q.get("solve")) void openSolve(q.get("solve")!);
     }).catch((e) => say(new URLSearchParams(location.search).get("att") && !new URLSearchParams(location.search).get("t") ? "حدّث التطبيق حتى ينفتح شرح السبورة جوه التطبيق" : `صار خطأ: ${(e as Error).message}`));
     return () => { window.removeEventListener("resize", onResize); ro?.disconnect(); window.clearTimeout(t); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -246,6 +272,13 @@ export default function BoardClient() {
   // مسودة بالجهاز كل شوية (إذا انسد التطبيق ما يروح الشرح)
   useEffect(() => {
     if (!dirty) return;
+    // حلّي ينحفظ بالسيرفر وحده، مو مسودة السبورة
+    if (solve) {
+      const t = window.setTimeout(() => {
+        void api({ action: "solvePut", lec: solve.id, lesson: lesson.current }).then(() => setDirty(false)).catch((e) => say(`ما انحفظ حلك: ${(e as Error).message}`));
+      }, 1500);
+      return () => window.clearTimeout(t);
+    }
     const t = window.setTimeout(() => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(lesson.current)); } catch { /* كبير، يبقى بس بالسيرفر */ } }, 1500);
     return () => window.clearTimeout(t);
   });
@@ -444,6 +477,7 @@ export default function BoardClient() {
   };
   /** قبل ما يروح الشرح المفتوح: تريد تحفظه؟ */
   const guard = (then: () => void) => {
+    if (solve && dirty) { setBusy("جاري حفظ حلك..."); void api({ action: "solvePut", lec: solve.id, lesson: lesson.current }).then(() => { setDirty(false); then(); }).catch((e) => say(`ما انحفظ حلك: ${(e as Error).message}`)).finally(() => setBusy("")); return; }
     if (!dirty || isBlank()) { then(); return; }
     setAsk({ text: "تريد تحفظ الشرح قبل؟", buttons: [
       { t: "احفظ", kind: "ok", run: () => saveDialog(then) },
@@ -494,6 +528,28 @@ export default function BoardClient() {
     } catch (e) { say(`صار خطأ: ${(e as Error).message}`); } finally { setBusy(""); }
   }
   // 📎 من ملحقات المحاضرة بالتطبيق: نفس شروحات الأستاذ، نسخته هو
+  async function openSolve(id: string) {
+    setPop(""); setBusy("جاري فتح الأسئلة...");
+    try {
+      await deviceId();
+      const r = await api({ action: "solveGet", lec: id });
+      const qs = r.lec.items as { book: number; page: number }[];
+      const ref = (q: { book: number; page: number }) => `q:${q.book}:${q.page}`;
+      let l = r.lesson ? cleanLesson(r.lesson) : null;
+      if (!l) l = { v: 1, w: PAPER_W, board: "#FFFFFF", frame: "none", head: "none", pages: qs.map((q) => ({ items: [], bg: ref(q) })) };
+      else {
+        // سؤال جديد انضاف للملزمة: ينضاف آخر الحل
+        const have = new Set(l.pages.map((p) => p.bg));
+        for (const q of qs) if (!have.has(ref(q))) l.pages.push({ items: [], bg: ref(q) });
+        l.w = PAPER_W; l.frame = "none"; l.head = "none";
+      }
+      paper.current = true;
+      setSolve({ id, title: `${r.lec.topic} · ${r.lec.title}` });
+      layout();
+      loadLesson(l, "", `حلّي · ${r.lec.title}`);
+      setColor("#000000");
+    } catch (e) { say(`صار خطأ: ${(e as Error).message}`); } finally { setBusy(""); }
+  }
   async function openAtt(id: string) {
     setPop(""); setBusy("جاري فتح الشرح...");
     try {
@@ -507,6 +563,7 @@ export default function BoardClient() {
     { t: "اسحبه", kind: "bad", run: () => { setAsk(null); setBusy("لحظة..."); void api({ action: "unsend", id: m.id }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
     { t: "رجوع", kind: "gray", run: () => setAsk(null) },
   ] });
+  const lqRun = (action: string) => { setBusy("لحظة، يمر على كل المحاضرات..."); void api({ action }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); };
   const setAppMode = (env: string) => { setBusy("لحظة..."); void api({ action: "appmode", env }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); };
   const delSaved = (m: Meta) => setAsk({ text: `تحذف «${m.title}»؟`, buttons: [
     { t: "احذف", kind: "bad", run: () => { setAsk(null); void api({ action: "del", id: m.id }).then((r) => { setSt(r); if (m.id === lessonId) setLessonId(""); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)); } },
@@ -895,6 +952,14 @@ export default function BoardClient() {
             <div className="qb-ptitle">📎 ينزل الشرح بملحقات محاضرات التطبيق؟</div>
             <div className="qb-row">{[["", "لا، رسالة بس"], ["staging", "تجربة"], ["prod", "إي، بالتطبيق"]].map(([v, t]) => <button key={v} type="button" className={`qb-chip${(st?.appEnv ?? "") === v ? " on" : ""}`} onClick={() => setAppMode(v)}>{t}</button>)}</div>
             <div className="qb-note">«تجربة» تنزل بداتا تجربة التطبيق بس (حساب طالب التجربة)، و«إي، بالتطبيق» تنزل للطلاب الحقيقيين جوه المحاضرة ← الملحقات.</div>
+            {st?.appEnv && <>
+              <div className="qb-ptitle">📘✍️ أسئلة المحاضرات بالملحقات</div>
+              <div className="qb-row qb-wrap">
+                <button type="button" className="qb-chip gold" onClick={() => lqRun("lqSync")}>حط «📘 الملزمة» و«✍️ حلّي» بكل محاضرة إلها أسئلة</button>
+                {!!st.lqCount && <button type="button" className="qb-chip" onClick={() => setAsk({ text: `تشيل الزرين من ${st.lqCount} محاضرة؟ حلول الطلاب تبقى محفوظة.`, buttons: [{ t: "شيلهن", kind: "bad", run: () => { setAsk(null); lqRun("lqClear"); } }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] })}>🗑 شيلهن ({st.lqCount})</button>}
+              </div>
+              <div className="qb-note">الأسئلة من «📚 ملازمي» (الوزاري والإثرائي)، كل محاضرة أسئلتها حسب فهرس الملزمة. إذا بدلت ملزمة تتبدل وحدها. المحاضرات الجديدة: دوس الزر مرة ثانية.</div>
+            </>}
             <div className="qb-ptitle">📋 الشروح اللي دزيتها</div>
             {!st?.sent.length && <div className="qb-empty">بعدك ما دزيت شرح</div>}
             {st?.sent.map((m) => <div key={m.id} className="qb-li"><button type="button" onClick={() => guard(() => void openAtt(m.id))}><b>{m.title}{m.app ? " 📎" : ""}</b><small>{whereOf(m)}{m.app === "staging" ? " · تجربة" : ""} · {m.at}</small></button><button type="button" className="qb-x" aria-label="اسحبه" onClick={() => unsend(m)}>🗑</button></div>)}

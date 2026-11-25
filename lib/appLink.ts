@@ -154,11 +154,11 @@ export async function appChapters(uid: number): Promise<string[]> {
 }
 
 // ---------- الدخول: التطبيق يفتح /api/app/enter بطلب POST فيه رمز الطالب، ويرجع له تحويل لصفحة البوت
-const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo", "vote", "board"]);
+const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo", "vote", "board", "qbook"]);
 export const APP_ERR = "ما گدرنا نفتح الصفحة. سد التطبيق وافتحه من جديد. إذا تكررت، تواصل ويا الإدارة.";
 
 /** يرجع رابط الصفحة (نسبي) لطالب التطبيق، أو null إذا الرمز أو الحساب مو صالح */
-export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: unknown; poll?: unknown; att?: unknown }): Promise<string | null> {
+export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: unknown; poll?: unknown; att?: unknown; lec?: unknown; solve?: unknown }): Promise<string | null> {
   const env: AppEnv = form.env === "staging" ? "staging" : "prod";
   const page = PAGES.has(String(form.page)) ? String(form.page) : "notes";
   const fu = await verifyAppIdToken(form.id);
@@ -174,7 +174,11 @@ export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: u
   const poll = page === "vote" && Number.isSafeInteger(Number(form.poll)) && Number(form.poll) > 0 ? `&p=${Number(form.poll)}` : "";
   // شرح السبورة من ملحقات المحاضرة: يفتح على الشرح نفسه
   const att = page === "board" && /^[\w-]{8,64}$/.test(String(form.att ?? "")) ? `&att=${String(form.att)}` : "";
-  return `/store/${page}?v=${Math.floor(Date.now() / 1000)}${poll}${att}&${auth}`;
+  // أسئلة المحاضرة: «📘 الملزمة» (qbook?lec=) و«✍️ حلّي» (board?solve=)
+  const id = (v: unknown) => /^[0-9a-f-]{32,36}$/i.test(String(v ?? "")) ? String(v) : "";
+  const lec = page === "qbook" && id(form.lec) ? `&lec=${id(form.lec)}` : "";
+  const solve = page === "board" && id(form.solve) ? `&solve=${id(form.solve)}` : "";
+  return `/store/${page}?v=${Math.floor(Date.now() / 1000)}${poll}${att}${lec}${solve}&${auth}`;
 }
 
 // ---------- تجربة التطبيق الجديد على طلاب يختارهم صاحب البوت (من صفحة الطلاب). الباقين يبقى عدهم التطبيق القديم
