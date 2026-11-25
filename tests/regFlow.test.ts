@@ -148,3 +148,12 @@ test("المدير يدز كلمة لأي طالب من صفحة الطلاب، 
   assert.equal(await get("SELECT user_id FROM student_pass WHERE user_id=3"), null);
   assert.equal(await get("SELECT user_id FROM pass_requests WHERE user_id=3"), null);
 });
+
+test("📜 سؤال «إي لو لا» لكل شرط: الخادم يقبل بس الجواب الصح، والشرط بلا سؤال ما يحتاج جواب", async () => {
+  const { checkAnswers } = await import("../lib/terms.ts");
+  const terms = [{ id: 1, text: "يغلق الكود", q: "يبقى مفتوح؟", a: "no" as const }, { id: 2, text: "شرط بلا سؤال" }];
+  checkAnswers(terms, { 1: "no" });
+  assert.throws(() => checkAnswers(terms, { 1: "yes" }), /جاوب أسئلة الشروط صح/);
+  assert.throws(() => checkAnswers(terms, {}), /جاوب أسئلة الشروط صح/);
+  checkAnswers([{ id: 2, text: "x" }], undefined);
+});

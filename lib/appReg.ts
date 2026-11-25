@@ -86,6 +86,8 @@ export async function appRegAction(body: Row) {
   }
   need(a === "register", "أمر غير معروف");
   need(body.rev === termsRev(await loadTerms()), "الشروط تغيرت. ارجع وافتح التسجيل من جديد.", 409);
+  const { checkAnswers } = await import("./terms.ts");
+  checkAnswers(await loadTerms(), body.answers);
   const { studentFromForm } = await import("./student.ts");
   const form = (body.form ?? {}) as Row;
   const { errs, r } = await studentFromForm(form, false);

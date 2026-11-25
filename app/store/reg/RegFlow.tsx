@@ -1,12 +1,11 @@
 "use client";
-// تسجيل الطالب الجديد خطوة خطوة: الشروط وترتيب كلماتها، معلوماته، وبعدها كلمة المرور
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { termWords } from "../../../lib/orderRules.ts";
+// تسجيل الطالب الجديد خطوة خطوة: الشروط وسؤال «إي لو لا» عن كل شرط، معلوماته، وبعدها كلمة المرور
+import { useEffect, useState, type ReactNode } from "react";
 import { CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanPhone, closeApp, haptic, nameOk, phoneErr, scrollToFirst } from "../shared";
 
 type Area = [number, string, string, [number, string, string?][]];
 export type RegData = { g: string[]; m: string[]; a: Area[]; tk?: string };
-type Term = { id: number; text: string };
+type Term = { id: number; text: string; q?: string; a?: "yes" | "no" };
 type Info = { terms: Term[]; rev: string; registered: boolean };
 type Done = { password: string; url?: string; close?: boolean };
 
@@ -61,7 +60,7 @@ export default function RegFlow({ D, app }: { D: RegData; app?: AppMode }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [loadErr, setLoadErr] = useState("");
   const [step, setStep] = useState(-1);   // التعريف، بعدها الشروط، وبعدها المعلومات والدراسة
-  const [agreed, setAgreed] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [making, setMaking] = useState(false);
   const [sendErr, setSendErr] = useState("");
   const [done, setDone] = useState<Done | null>(null);
@@ -114,9 +113,9 @@ export default function RegFlow({ D, app }: { D: RegData; app?: AppMode }) {
   if (step < T) {
     const term = info.terms[step];
     return (
-      <TermStep key={term.id} term={term} n={step + 1} total={T} last={step === T - 1} agreed={agreed.includes(term.id)}
+      <TermStep key={term.id} term={term} n={step + 1} total={T} last={step === T - 1} answered={answers[String(term.id)]}
         onBack={() => page(step - 1)}
-        onOk={() => { setAgreed((a) => (a.includes(term.id) ? a : [...a, term.id])); page(step + 1); }} />
+        onOk={(a) => { setAnswers((x) => ({ ...x, [String(term.id)]: a })); page(step + 1); }} />
     );
   }
 
@@ -154,7 +153,7 @@ export default function RegFlow({ D, app }: { D: RegData; app?: AppMode }) {
     window.scrollTo(0, 0);
     const n = NAME_PARTS.map((p) => (f[p.key] ?? "").trim().replace(/\s+/g, " ")).join(" ");
     const form = { n, cu: f.curr, gr: f.grade, g: gov, s: gov === "بغداد" ? f.side : "", a: (f.area ?? "").trim(), p1: cleanPhone(f.p1 ?? ""), p2: cleanPhone(f.p2 ?? ""), e: exam, c: exam === "حضوري" ? center : 0, sx: f.sx, b: `${f.by}-${f.bm}-${f.bd}`, dz: gov === "بغداد" ? f.dz ?? "" : "" };
-    try { setDone(await call<Done>({ action: "register", rev: info!.rev, form })); }
+    try { setDone(await call<Done>({ action: "register", rev: info!.rev, form, answers })); }
     catch (err) { setSendErr((err as Error).message); }
     setMaking(false);
   }
@@ -282,73 +281,34 @@ export default function RegFlow({ D, app }: { D: RegData; app?: AppMode }) {
   );
 }
 
-function shuffledOrder(n: number) {
-  const a = Array.from({ length: n }, (_, i) => i);
-  for (let tries = 0; tries < 5 && a.every((v, i) => v === i); tries++) {
-    for (let i = n - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-  }
-  return a;
-}
-
-function TermStep({ term, n, total, last, agreed, onBack, onOk }: { term: Term; n: number; total: number; last: boolean; agreed: boolean; onBack?: () => void; onOk: () => void }) {
-  const words = useRef(termWords(term.text)).current;
-  const order = useRef(shuffledOrder(words.length)).current;
-  const canOrder = words.length > 1;
-  const [picked, setPicked] = useState<number[]>(() => (agreed ? words.map((_, i) => i) : []));
-  const [wrong, setWrong] = useState(false);
-  const left = words.length - picked.length;
-
-  function press() {
-    haptic();
-    if (canOrder) {
-      // تتقارن الكلمات مو مكانها، لأن الشرط ممكن تتكرر بيه نفس الكلمة
-      const bad = picked.findIndex((p, i) => words[p] !== words[i]);
-      if (bad >= 0) {
-        setPicked(picked.slice(0, bad));
-        setWrong(true);
-        return;
-      }
-    }
-    onOk();
-  }
+/** شرط: يقراه، وإذا إله سؤال يجاوب «إي» لو «لا» بدوسة (طلبه 2026-11-26 بدل ترتيب كل الكلمات). الجواب الغلط يرجعه يقرا */
+function TermStep({ term, n, total, last, answered, onBack, onOk }: { term: Term; n: number; total: number; last: boolean; answered?: string; onBack?: () => void; onOk: (a: string) => void }) {
+  const asks = !!(term.q && term.a);
+  const [pick, setPick] = useState<string>(answered ?? "");
+  const right = !asks || pick === term.a;
+  const wrong = asks && !!pick && pick !== term.a;
+  const choose = (v: "yes" | "no") => { haptic(); setPick(v); };
   return (
     <div className="rg">
       <Top title="الشروط والأحكام" step={n} total={total} />
       <div className="rgbody">
-        <div className="rgcard rgterm">{term.text}</div>
-        {canOrder && (
+        <div className={"rgcard rgterm" + (wrong ? " rgreread" : "")}>{term.text}</div>
+        {asks && (
           <div className="rgcard">
-            <div className="rgask">حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، اضغط كلماته بالترتيب:</div>
-            <div className={"rgbuilt" + (left === 0 ? " full" : "")} aria-live="polite">
-              {!picked.length && <span className="rgempty">اضغط أول كلمة من تحت...</span>}
-              {picked.map((p, i) => (
-                <button type="button" key={p} className="rgword on" aria-label={`امسح ${words[p]}`} onClick={() => { haptic(); setWrong(false); setPicked(picked.filter((_, x) => x !== i)); }}>{words[p]} <span className="rgx">✕</span></button>
+            <div className="rgask">حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، جاوب:</div>
+            <div className="rgq">{term.q}</div>
+            <div className="rgyn">
+              {(["yes", "no"] as const).map((v) => (
+                <button type="button" key={v} className={"rgynb" + (pick === v ? (v === term.a ? " ok" : " bad") : "")} onClick={() => choose(v)}>{v === "yes" ? "إي" : "لا"}</button>
               ))}
             </div>
-            {/* كلمة غلط: يدوسها فتنمسح، أو يمسح آخر كلمة، أو يمسح الكل */}
-            {picked.length > 0 && (
-              <div className="rgfix">
-                <small>اخترت كلمة غلط؟ دوس عليها فوك (اللي بيها ✕) حتى تنمسح.</small>
-                <button type="button" className="rgfixbtn" onClick={() => { haptic(); setWrong(false); setPicked(picked.slice(0, -1)); }}>⌫ امسح آخر كلمة</button>
-                <button type="button" className="rgfixbtn" onClick={() => { haptic(); setWrong(false); setPicked([]); }}>🗑 امسح الكل</button>
-              </div>
-            )}
-            {wrong && <div className="rgwrong">⚠️ الترتيب غلط. بقت الكلمات الصحيحة، وكمل من بعدها.</div>}
-            {left > 0 && (
-              <div className="rgpool">
-                {order.filter((i) => !picked.includes(i)).map((i) => (
-                  <button type="button" key={i} className="rgword" onClick={() => { haptic(); setWrong(false); setPicked([...picked, i]); }}>{words[i]}</button>
-                ))}
-              </div>
-            )}
+            {wrong && <div className="rgwrong">⚠️ مو صح. اقرا الشرط فوك زين، وجاوب مرة ثانية.</div>}
+            {asks && pick === term.a && <div className="rgright">✅ صح</div>}
           </div>
         )}
       </div>
       <Foot>
-        <button type="button" className="rgbtn" disabled={canOrder && left > 0} onClick={press}>{canOrder && left > 0 ? `باقي ${left} كلمة` : last ? "أوافق وأنهي" : "أوافق ومتابعة"}</button>
+        <button type="button" className="rgbtn" disabled={!right || (asks && !pick)} onClick={() => { haptic(); onOk(pick || "ok"); }}>{asks && !right ? "جاوب السؤال أول" : last ? "أوافق وأنهي" : "أوافق ومتابعة"}</button>
         {onBack && <button type="button" className="rgback" onClick={onBack}>رجوع</button>}
       </Foot>
     </div>

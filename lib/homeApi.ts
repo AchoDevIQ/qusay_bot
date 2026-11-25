@@ -15,7 +15,7 @@ import { SCHED_FIRST, needsSchedule, scheduleChapters } from "./schedApi.ts";
 import { askStart, myQuestions } from "./questions.ts";
 import { onStoreOrder, saveStudent, showMe, studentFromForm } from "./student.ts";
 import { api, send } from "./telegram.ts";
-import { loadTerms, termsRev } from "./terms.ts";
+import { checkAnswers, loadTerms, termsRev } from "./terms.ts";
 import { visibleTiles } from "./studentVis.ts";
 import { stamp } from "./util.ts";
 import { ensure, need } from "./webApi.ts";
@@ -25,6 +25,7 @@ import { isAppKey, verifyHomeToken } from "./webAuth.ts";
 async function registerFromPage(id: number, body: Row) {
   need(!await student(id), "معلوماتك محفوظة ومقفولة. لتغيير أي معلومة تواصل ويا قصي العميري.");
   need(body.rev === termsRev(await loadTerms()), "الشروط تغيرت. سكر الصفحة وافتح التسجيل من جديد.", 409);
+  checkAnswers(await loadTerms(), body.answers);
   const { errs, r } = await studentFromForm(body.form ?? {}, false);
   need(!errs.length, errs.join("، "));
   need(r.gender, "اختار بنين لو بنات");
