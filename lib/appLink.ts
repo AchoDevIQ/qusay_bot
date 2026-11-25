@@ -154,11 +154,11 @@ export async function appChapters(uid: number): Promise<string[]> {
 }
 
 // ---------- الدخول: التطبيق يفتح /api/app/enter بطلب POST فيه رمز الطالب، ويرجع له تحويل لصفحة البوت
-const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo", "vote"]);
+const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo", "vote", "board"]);
 export const APP_ERR = "ما گدرنا نفتح الصفحة. سد التطبيق وافتحه من جديد. إذا تكررت، تواصل ويا الإدارة.";
 
 /** يرجع رابط الصفحة (نسبي) لطالب التطبيق، أو null إذا الرمز أو الحساب مو صالح */
-export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: unknown; poll?: unknown }): Promise<string | null> {
+export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: unknown; poll?: unknown; att?: unknown }): Promise<string | null> {
   const env: AppEnv = form.env === "staging" ? "staging" : "prod";
   const page = PAGES.has(String(form.page)) ? String(form.page) : "notes";
   const fu = await verifyAppIdToken(form.id);
@@ -172,7 +172,9 @@ export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: u
   if (page === "store") { const u = new URL(await storeLink(uid)); return `${u.pathname}${u.search}&${auth}`; }
   // التصويت من رابط القناة: يفتح على التصويت نفسه
   const poll = page === "vote" && Number.isSafeInteger(Number(form.poll)) && Number(form.poll) > 0 ? `&p=${Number(form.poll)}` : "";
-  return `/store/${page}?v=${Math.floor(Date.now() / 1000)}${poll}&${auth}`;
+  // شرح السبورة من ملحقات المحاضرة: يفتح على الشرح نفسه
+  const att = page === "board" && /^[\w-]{8,64}$/.test(String(form.att ?? "")) ? `&att=${String(form.att)}` : "";
+  return `/store/${page}?v=${Math.floor(Date.now() / 1000)}${poll}${att}&${auth}`;
 }
 
 // ---------- تجربة التطبيق الجديد على طلاب يختارهم صاحب البوت (من صفحة الطلاب). الباقين يبقى عدهم التطبيق القديم

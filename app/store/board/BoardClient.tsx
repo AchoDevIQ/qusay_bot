@@ -11,10 +11,16 @@ import { IC } from "./icons";
 type Tool = "pen" | "hl" | "eraser" | "shape" | "move";
 type Step = { add: Item[]; remove: Item[] };
 type Contact = { mode: "ink" | "erase" | "shape" | "ignore" | "select" | "drag" | "resize"; stroke?: InkStroke; start: [number, number]; last: [number, number]; size: number; pen: boolean; anchor?: [number, number] };
-type Meta = { id: string; title: string; at: string; pages: number; chapter?: number; topic?: string; lecture?: number };
+type Meta = { id: string; title: string; at: string; pages: number; chapter?: number; topic?: string; lecture?: number; lt?: string; app?: string };
+const whereOf = (m: Meta) => [`الفصل ${ORD[m.chapter ?? 0]}`, m.topic, m.lt || (m.lecture ? `المحاضرة ${m.lecture}` : "")].filter(Boolean).join(" · ");
+// محاضرات تطبيق قصي (الشرح ينزل بملحقاتها)
+type AppLec = { id: string; title: string; track: "arabic" | "english"; draft: boolean };
+type AppTopic = { id: string; name: string; lectures: AppLec[] };
+type AppCh = { ch: number; name: string; topics: AppTopic[] };
+const TRACK = { arabic: "عربي", english: "انگليزي" } as const;
 type Target = { ch: number; name: string; topics: { id: number; name: string; lectures: number }[] };
-type State = { teacher: boolean; name: string; lessons: Meta[]; inbox: Meta[]; sent: Meta[] };
-type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings";
+type State = { teacher: boolean; name: string; lessons: Meta[]; inbox: Meta[]; sent: Meta[]; appEnv?: string };
+type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings" | "sent";
 type Ask = { text: string; buttons: { t: string; kind: "ok" | "bad" | "gray"; run: () => void }[]; input?: { value: string; set: (v: string) => void } } | null;
 
 const BAR = 74;                       // ارتفاع شريط الأدوات (بكسل الشاشة)
@@ -206,9 +212,11 @@ export default function BoardClient() {
     const t = window.setTimeout(() => setSplash(false), 1700);
     void api({ action: "state" }).then((r: State) => {
       setSt(r);
-      const inbox = new URLSearchParams(location.search).get("inbox");
+      const q = new URLSearchParams(location.search);
+      const inbox = q.get("inbox"), att = q.get("att");
       if (inbox) void openInbox(inbox);
-    }).catch((e) => say(`صار خطأ: ${(e as Error).message}`));
+      else if (att) void openAtt(att);
+    }).catch((e) => say(new URLSearchParams(location.search).get("att") && !new URLSearchParams(location.search).get("t") ? "حدّث التطبيق حتى ينفتح شرح السبورة جوه التطبيق" : `صار خطأ: ${(e as Error).message}`));
     return () => { window.removeEventListener("resize", onResize); ro?.disconnect(); window.clearTimeout(t); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // الإعدادات تنحفظ بالجهاز
@@ -463,6 +471,21 @@ export default function BoardClient() {
       setDirty(true);
     } catch (e) { say(`صار خطأ: ${(e as Error).message}`); } finally { setBusy(""); }
   }
+  // 📎 من ملحقات المحاضرة بالتطبيق: نفس شروحات الأستاذ، نسخته هو
+  async function openAtt(id: string) {
+    setPop(""); setBusy("جاري فتح الشرح...");
+    try {
+      const r = await api({ action: "att", id });
+      const l = cleanLesson(r.lesson)!;
+      loadLesson(l, "", r.title ?? l.title ?? "شرح الأستاذ");
+      setDirty(!st?.teacher);
+    } catch (e) { say(`صار خطأ: ${(e as Error).message}`); } finally { setBusy(""); }
+  }
+  const unsend = (m: Meta) => setAsk({ text: `تسحب «${m.title}»؟ ينشال من شروحات الطلاب${m.app ? " ومن ملحقات المحاضرة بالتطبيق" : ""}. اللي حفظوه بسبوراتهم يبقى إلهم.`, buttons: [
+    { t: "اسحبه", kind: "bad", run: () => { setAsk(null); setBusy("لحظة..."); void api({ action: "unsend", id: m.id }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
+    { t: "رجوع", kind: "gray", run: () => setAsk(null) },
+  ] });
+  const setAppMode = (env: string) => { setBusy("لحظة..."); void api({ action: "appmode", env }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); };
   const delSaved = (m: Meta) => setAsk({ text: `تحذف «${m.title}»؟`, buttons: [
     { t: "احذف", kind: "bad", run: () => { setAsk(null); void api({ action: "del", id: m.id }).then((r) => { setSt(r); if (m.id === lessonId) setLessonId(""); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)); } },
     { t: "رجوع", kind: "gray", run: () => setAsk(null) },
@@ -541,8 +564,9 @@ export default function BoardClient() {
     if (!lessonId || dirty) { setAsk({ text: "احفظ الشرح أول حتى تدزه", buttons: [{ t: "احفظ", kind: "ok", run: () => saveDialog(() => window.setTimeout(sendDialog, 50)) }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); return; }
     // الفصل ← الموضوع ← المحاضرة، وبعدها يگله العدد ويسأله تريد تدزه؟
     setBusy("لحظة...");
-    void api({ action: "targets" }).then((r: { chapters: Target[] }) => {
+    void api({ action: "targets" }).then((r: { chapters: Target[]; app?: string }) => {
       setBusy("");
+      if (r.app) { appChapters(r.chapters as unknown as AppCh[], r.app); return; }
       const chs = r.chapters.length ? r.chapters : [1, 2, 3, 4, 5].map((ch) => ({ ch, name: "", topics: [] }));
       setAsk({ text: "بأي فصل ينزل الشرح؟", buttons: [
         ...chs.map((c) => ({ t: `الفصل ${ORD[c.ch]}`, kind: "gray" as const, run: () => pickTopic(c) })),
@@ -566,6 +590,48 @@ export default function BoardClient() {
       { t: "رجوع", kind: "gray", run: () => pickTopic(c) },
     ] });
   };
+  // ---------- محاضرات التطبيق: الفصل ← الموضوع ← عربي/انگليزي ← المحاضرة، والشرح ينزل بملحقاتها
+  const appChapters = (chs: AppCh[], env: string) => {
+    const test = env === "staging" ? " (داتا التجربة)" : "";
+    if (!chs.length) { say("ما لگينا محاضرات بالتطبيق"); return; }
+    setAsk({ text: `بملحقات أي محاضرة بالتطبيق${test}؟ أول اختار الفصل`, buttons: [
+      ...chs.map((c) => ({ t: `الفصل ${ORD[c.ch]}${c.name ? `: ${c.name}` : ""}`, kind: "gray" as const, run: () => appTopic(chs, env, c) })),
+      { t: "رجوع", kind: "gray", run: () => setAsk(null) },
+    ] });
+  };
+  const appTopic = (chs: AppCh[], env: string, c: AppCh) => {
+    if (!c.topics.length) { say(`الفصل ${ORD[c.ch]} ما بيه محاضرات بالتطبيق بعد`); return; }
+    setAsk({ text: `الفصل ${ORD[c.ch]}: بأي موضوع؟`, buttons: [
+      ...c.topics.map((t) => ({ t: t.name, kind: "gray" as const, run: () => appTrack(chs, env, c, t) })),
+      { t: "رجوع", kind: "gray", run: () => appChapters(chs, env) },
+    ] });
+  };
+  const appTrack = (chs: AppCh[], env: string, c: AppCh, t: AppTopic) => {
+    const tracks = (["arabic", "english"] as const).filter((k) => t.lectures.some((l) => l.track === k));
+    if (tracks.length === 1) { appLecture(chs, env, c, t, tracks[0]); return; }
+    setAsk({ text: `${t.name}: محاضرات العربي لو الانگليزي؟`, buttons: [
+      ...tracks.map((k) => ({ t: TRACK[k], kind: "gray" as const, run: () => appLecture(chs, env, c, t, k) })),
+      { t: "رجوع", kind: "gray", run: () => appTopic(chs, env, c) },
+    ] });
+  };
+  const appLecture = (chs: AppCh[], env: string, c: AppCh, t: AppTopic, k: "arabic" | "english") => {
+    setAsk({ text: `${t.name} (${TRACK[k]}): ويا أي محاضرة؟`, buttons: [
+      ...t.lectures.filter((l) => l.track === k).map((l) => ({ t: `${l.title}${l.draft ? " (مسودة)" : ""}`, kind: "gray" as const, run: () => void confirmApp(c.ch, t, l, env) })),
+      { t: "رجوع", kind: "gray", run: () => appTrack(chs, env, c, t) },
+    ] });
+  };
+  async function confirmApp(ch: number, t: AppTopic, l: AppLec, env: string) {
+    setAsk(null); setBusy("لحظة...");
+    try {
+      const { count } = await api({ action: "count", chapter: ch });
+      setBusy("");
+      const where = `الفصل ${ORD[ch]} · ${t.name} · ${l.title} (${TRACK[l.track]})`;
+      setAsk({ text: `تريد أدز «${title}»؟ ينزل بملحقات «${where}» بالتطبيق${env === "staging" ? " (داتا التجربة)" : ""}، وتوصل رسالة لـ ${count} طالب اشتروا محاضرات الفصل ${ORD[ch]}.`, buttons: [
+        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonId, appLecture: l.id }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
+        { t: "لا", kind: "bad", run: () => setAsk(null) },
+      ] });
+    } catch (e) { setBusy(""); say(`صار خطأ: ${(e as Error).message}`); }
+  }
   async function confirmSend(ch: number, t: Target["topics"][number] | null, lec: number) {
     setAsk(null); setBusy("لحظة...");
     try {
@@ -699,6 +765,7 @@ export default function BoardClient() {
             {lesson.current.pages[pageIx.current]?.bg && <button type="button" onClick={() => { setPop(""); setAsk({ text: "تشيل صفحة الملف (الخلفية) من هاي الصفحة؟ كتابتك تبقى", buttons: [{ t: "شيلها", kind: "bad", run: () => { setAsk(null); page().bg = null; markDirty(); redrawInk(); } }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); }}>شيل الخلفية من هاي الصفحة</button>}
             <button type="button" onClick={() => { setPop(""); setAsk({ text: "تحذف هاي الصفحة؟", buttons: [{ t: "احذف", kind: "bad", run: () => { setAsk(null); deletePage(); } }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); }}>حذف هاي الصفحة</button>
             {st?.teacher && <button type="button" className="gold" onClick={sendDialog}>📤 إرسال للطلاب</button>}
+            {st?.teacher && <button type="button" onClick={() => setPop("sent")}>📋 الشروح اللي دزيتها{st.sent.length ? ` (${st.sent.length})` : ""}</button>}
             {st && !st.teacher && <button type="button" className="gold" onClick={() => setPop("inbox")}>📥 شروحات الأستاذ{st.inbox.length ? ` (${st.inbox.length})` : ""}</button>}
             <button type="button" onClick={() => setPop("settings")}>إعدادات الكف والممحاة</button>
             <button type="button" onClick={() => { setPop(""); fullScreen(); }}>ملء الشاشة / نافذة</button>
@@ -723,7 +790,15 @@ export default function BoardClient() {
           {pop === "inbox" && <div className="qb-list">
             <div className="qb-ptitle">📥 شروحات الأستاذ</div>
             {!st?.inbox.length && <div className="qb-empty">بعد ما وصلك شرح</div>}
-            {st?.inbox.map((m) => <div key={m.id} className="qb-li"><button type="button" onClick={() => guard(() => void openInbox(m.id))}><b>{m.title}</b><small>{[`الفصل ${ORD[m.chapter ?? 0]}`, m.topic, m.lecture ? `المحاضرة ${m.lecture}` : ""].filter(Boolean).join(" · ")} · {m.pages} صفحة · {m.at}</small></button></div>)}
+            {st?.inbox.map((m) => <div key={m.id} className="qb-li"><button type="button" onClick={() => guard(() => void openInbox(m.id))}><b>{m.title}</b><small>{whereOf(m)} · {m.pages} صفحة · {m.at}</small></button></div>)}
+          </div>}
+          {pop === "sent" && <div className="qb-list">
+            <div className="qb-ptitle">📎 ينزل الشرح بملحقات محاضرات التطبيق؟</div>
+            <div className="qb-row">{[["", "لا، رسالة بس"], ["staging", "تجربة"], ["prod", "إي، بالتطبيق"]].map(([v, t]) => <button key={v} type="button" className={`qb-chip${(st?.appEnv ?? "") === v ? " on" : ""}`} onClick={() => setAppMode(v)}>{t}</button>)}</div>
+            <div className="qb-note">«تجربة» تنزل بداتا تجربة التطبيق بس (حساب طالب التجربة)، و«إي، بالتطبيق» تنزل للطلاب الحقيقيين جوه المحاضرة ← الملحقات.</div>
+            <div className="qb-ptitle">📋 الشروح اللي دزيتها</div>
+            {!st?.sent.length && <div className="qb-empty">بعدك ما دزيت شرح</div>}
+            {st?.sent.map((m) => <div key={m.id} className="qb-li"><button type="button" onClick={() => guard(() => void openAtt(m.id))}><b>{m.title}{m.app ? " 📎" : ""}</b><small>{whereOf(m)}{m.app === "staging" ? " · تجربة" : ""} · {m.at}</small></button><button type="button" className="qb-x" aria-label="اسحبه" onClick={() => unsend(m)}>🗑</button></div>)}
           </div>}
           {pop === "settings" && <div className="qb-set">
             <div className="qb-ptitle">إعدادات الكف والممحاة</div>

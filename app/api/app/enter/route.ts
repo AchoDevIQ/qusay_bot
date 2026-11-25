@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   try {
     await ensure();
     const f = await req.formData();
-    const to = await enterFromApp({ id: f.get("id"), env: f.get("env"), page: f.get("page"), poll: f.get("poll") });
+    const to = await enterFromApp({ id: f.get("id"), env: f.get("env"), page: f.get("page"), poll: f.get("poll"), att: f.get("att") });
     if (!to) return errPage();
     return new Response(null, { status: 303, headers: { Location: to, "Cache-Control": "no-store" } });
   } catch (e) {

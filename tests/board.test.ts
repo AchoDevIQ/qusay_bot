@@ -135,3 +135,63 @@ test("✋ التحريك: دوسة تختار، مربع يختار، والحر
   assert.equal(E.cleanLesson({ pages: [{ items: [img] }], head: "gold" })!.head, "gold");
   assert.equal(E.cleanLesson({ pages: [{ items: [] }], head: "x" })!.head, "none");
 });
+
+test("📎 الشرح ينزل بملحقات محاضرة التطبيق: يختار من محاضرات التطبيق، الملحق أول، والسحب يشيله", async () => {
+  const BA = await import("../lib/boardAttach.ts");
+  const calls: { q: string; v: any; write: boolean }[] = [];
+  let fail = false;
+  BA.setDcForTest(async (env, q, v, write) => {
+    calls.push({ q, v, write });
+    assert.equal(env, "staging");
+    if (fail) throw new Error("ماكو إذن");
+    if (q.includes("curricula")) return { curricula: [{ chapters_on_curriculum: [
+      { orderPosition: 1, arabicTitle: "الاعداد المركبه", isTestChapter: false, subjects_on_chapter: [{ id: "s1", arabicTitle: "ديموافر", lectures_on_subject: [
+        { id: "aaaaaaaabbbbccccddddeeeeeeeeeeee", title: "المحاضره 1", track: "arabic", state: "published" },
+        { id: "l-en", title: "المحاضره 1", track: "english", state: "draft" }, { id: "x", title: "؟", track: "other", state: "published" }] }] },
+      { orderPosition: 6, arabicTitle: "تجريبي 1", isTestChapter: false, subjects_on_chapter: [{ id: "s9", arabicTitle: "تجريبي", lectures_on_subject: [{ id: "t", title: "1", track: "arabic", state: "published" }] }] },
+    ] }] };
+    if (q.includes("lecture(id")) return { lecture: { id: v.id, title: "المحاضره 1", track: "arabic", subject: { arabicTitle: "ديموافر", chapter: { orderPosition: 1 } }, lectureAttachments_on_lecture: [{ id: "1" }, { id: "2" }] } };
+    if (q.includes("lectureAttachment_insert")) return { lectureAttachment_insert: { id: "11112222333344445555666677778888" } };
+    if (q.includes("lectureAttachment_delete")) return { lectureAttachment_delete: { id: v.id } };
+    return {};
+  });
+  const T = homeToken(1);
+  // مطفي: الاختيار من مواضيع البوت مثل قبل
+  assert.ok(!(await boardAction({ t: T, action: "targets" })).app);
+  await boardAction({ t: T, action: "appmode", env: "staging" });
+  assert.equal((await boardAction({ t: T, action: "state" })).appEnv, "staging");
+  const tg = await boardAction({ t: T, action: "targets" });
+  assert.equal(tg.app, "staging");
+  assert.deepEqual(tg.chapters.map((c: any) => c.ch), [1], "الفصول التجريبية ما تطلع");
+  assert.deepEqual(tg.chapters[0].topics[0].lectures.map((l: any) => [l.track, l.draft]), [["arabic", false], ["english", true]]);
+
+  const lesson = { ...E.emptyLesson(1920), pages: [{ items: [{ k: "ink", c: "#FFFFFF", w: 5, p: [1, 1, 9, 9] }] }] };
+  const saved = await boardAction({ t: T, action: "save", title: "ديموافر الأول", lesson });
+  // ماكو إذن: ما يندز شي
+  fail = true; sent.length = 0;
+  const before = (await boardAction({ t: T, action: "state" })).sent.length;
+  await assert.rejects(boardAction({ t: T, action: "send", id: saved.id, appLecture: "aaaaaaaabbbbccccddddeeeeeeeeeeee" }));
+  assert.equal((await boardAction({ t: T, action: "state" })).sent.length, before);
+  assert.equal(sent.length, 0, "ولا رسالة");
+  fail = false;
+  const r = await boardAction({ t: T, action: "send", id: saved.id, appLecture: "aaaaaaaabbbbccccddddeeeeeeeeeeee" });
+  assert.match(r.notice, /ملحقات «ديموافر · المحاضره 1» بالتطبيق \(التجربة\)/);
+  const ins = calls.find((c) => c.q.includes("lectureAttachment_insert"))!;
+  assert.ok(ins.write && ins.q.includes('type: "board"'));
+  assert.equal(ins.v.l, "aaaaaaaabbbbccccddddeeeeeeeeeeee");
+  assert.equal(ins.v.o, 3, "آخر ملحق");
+  const row = r.sent[0];
+  assert.equal(row.app, "staging");
+  assert.ok(String(ins.v.u).endsWith(`/store/board?att=${row.id}`), ins.v.u);
+  assert.ok(sent.every((m) => m.text.includes("ديموافر · المحاضره 1")));
+
+  // الطالب يفتحه من الملحق: شاري محاضرات الفصل الأول يگدر، الامتحانات بس لا
+  assert.equal((await boardAction({ t: homeToken(501), action: "att", id: row.id })).lesson.pages[0].items.length, 1);
+  await assert.rejects(boardAction({ t: homeToken(502), action: "att", id: row.id }), /لطلاب محاضرات الفصل الأول/);
+  // السحب: ينشال من التطبيق ومن الشروحات
+  await boardAction({ t: T, action: "unsend", id: row.id });
+  assert.ok(calls.some((c) => c.q.includes("lectureAttachment_delete") && c.v.id === "11112222333344445555666677778888"));
+  await assert.rejects(boardAction({ t: homeToken(501), action: "att", id: row.id }), /انسحب/);
+  await assert.rejects(boardAction({ t: homeToken(501), action: "unsend", id: row.id }), /بس الأستاذ/);
+  BA.setDcForTest(null);
+});

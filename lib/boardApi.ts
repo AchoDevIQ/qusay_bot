@@ -13,7 +13,8 @@ import { stamp } from "./util.ts";
 export const BOARD_PERM = "board";
 const MAX_JSON = 15 * 1024 * 1024, MAX_BG = 8 * 1024 * 1024, MAX_LESSONS = 300;
 type Meta = { id: string; title: string; at: string; pages: number };
-type Sent = { id: string; ref: string; title: string; chapter: number; at: string; pages: number; topic?: string; lecture?: number };
+/** app: الشرح نازل كملحق بمحاضرة بتطبيق قصي (env، رقم المحاضرة، رقم الملحق)، lt: عنوان المحاضرة */
+type Sent = { id: string; ref: string; title: string; chapter: number; at: string; pages: number; topic?: string; lecture?: number; lt?: string; app?: { env: "staging" | "prod"; lecture: string; att: string } };
 const listKey = (uid: number) => `board_list_${uid}`;
 const SENT = "board_sent";
 const lessonRef = (uid: number, id: string) => `boards/${uid}/${id}.json`;
@@ -65,8 +66,9 @@ export async function boardAction(body: any) {
   const state = async () => ({
     teacher, name: teacher ? "" : String(s?.name ?? ""),
     lessons: (await myList(uid)).slice().reverse(),
-    inbox: teacher ? [] : (await inboxOf(uid)).map((x) => ({ id: x.id, title: x.title, at: x.at, pages: x.pages, chapter: x.chapter, topic: x.topic ?? "", lecture: x.lecture ?? 0 })),
-    sent: teacher ? (await sentList()).slice(-50).reverse().map((x) => ({ id: x.id, title: x.title, at: x.at, chapter: x.chapter, topic: x.topic ?? "", lecture: x.lecture ?? 0 })) : [],
+    inbox: teacher ? [] : (await inboxOf(uid)).map((x) => ({ id: x.id, title: x.title, at: x.at, pages: x.pages, chapter: x.chapter, topic: x.topic ?? "", lecture: x.lecture ?? 0, lt: x.lt ?? "" })),
+    sent: teacher ? (await sentList()).slice(-50).reverse().map((x) => ({ id: x.id, title: x.title, at: x.at, chapter: x.chapter, topic: x.topic ?? "", lecture: x.lecture ?? 0, lt: x.lt ?? "", app: x.app ? x.app.env : "" })) : [],
+    appEnv: teacher ? (await (await import("./boardAttach.ts")).boardAppEnv()) ?? "" : "",
   });
   if (a === "state") return await state();
   if (a === "get") {
@@ -78,6 +80,18 @@ export async function boardAction(body: any) {
     const x = (teacher ? await sentList() : await inboxOf(uid)).find((y) => y.id === String(body.id ?? ""));
     need(x, "هذا الشرح مو إلك", 404);
     return { lesson: await readLesson(x!.ref) };
+  }
+  // 📎 من ملحقات المحاضرة بالتطبيق: الأستاذ، أو طالب شاري محاضرات هذا الفصل (بالبوت أو بالتطبيق)
+  if (a === "att") {
+    const x = (await sentList()).find((y) => y.id === String(body.id ?? ""));
+    need(x, "هذا الشرح انسحب", 404);
+    if (!teacher) {
+      const { lectureChapters } = await import("./access.ts");
+      const { appChapters, chapterOf } = await import("./appLink.ts");
+      const ok = (await lectureChapters(uid)).includes(x!.chapter) || (await appChapters(uid)).includes(chapterOf(x!.chapter));
+      need(ok, `هذا الشرح لطلاب محاضرات الفصل ${ORD[x!.chapter]}`, 403);
+    }
+    return { lesson: await readLesson(x!.ref), title: x!.title };
   }
   if (a === "save") {
     const raw = JSON.stringify(body.lesson ?? null);
@@ -102,6 +116,10 @@ export async function boardAction(body: any) {
   // ---------- الأستاذ بس: يدز شرحه لطلاب محاضرات الفصل، ويختار الموضوع والمحاضرة اللي ينزل وياها (طلبه 2026-11-25)
   if (a === "targets") {
     need(teacher, "بس الأستاذ يدز", 403);
+    // ينزل بملحقات محاضرات التطبيق: يختار من محاضرات التطبيق نفسها
+    const BA = await import("./boardAttach.ts");
+    const env = await BA.boardAppEnv();
+    if (env) return { app: env, chapters: await BA.appLectures(env) };
     const { chapters } = await import("./data.ts");
     const topics = await find("topics", { active: 1 }, { order: ["ord"] });
     return {
@@ -111,6 +129,24 @@ export async function boardAction(body: any) {
       })),
     };
   }
+  // الأستاذ: ينزل الشرح بملحقات التطبيق؟ مطفي / تجربة / الحقيقي
+  if (a === "appmode") {
+    need(teacher, "بس الأستاذ", 403);
+    const BA = await import("./boardAttach.ts");
+    await BA.setBoardAppEnv(body.env);
+    const env = await BA.boardAppEnv();
+    return { ...await state(), notice: env === "prod" ? "✅ الشرح ينزل بملحقات محاضرات التطبيق" : env === "staging" ? "✅ الشرح ينزل بملحقات محاضرات التطبيق (داتا التجربة بس)" : "✅ الشرح يوصل برسالة بس، بلا ملحقات التطبيق" };
+  }
+  // الأستاذ يسحب شرح دزه: ينشال من شروحات الطلاب ومن ملحقات المحاضرة بالتطبيق (نسخ الطلاب اللي حفظوها تبقى إلهم)
+  if (a === "unsend") {
+    need(teacher, "بس الأستاذ", 403);
+    const all = await sentList();
+    const x = all.find((y) => y.id === String(body.id ?? ""));
+    need(x, "مو موجود", 404);
+    if (x!.app) await (await import("./boardAttach.ts")).removeBoardAttachment(x!.app.env, x!.app.att);
+    await kvSet(SENT, JSON.stringify(all.filter((y) => y.id !== x!.id)));
+    return { ...await state(), notice: "🗑 انسحب الشرح" };
+  }
   if (a === "count") {
     need(teacher, "بس الأستاذ يدز", 403);
     const ch = Number(body.chapter);
@@ -119,7 +155,12 @@ export async function boardAction(body: any) {
   }
   if (a === "send") {
     need(teacher, "بس الأستاذ يدز", 403);
-    const ch = Number(body.chapter);
+    // محاضرة من التطبيق: الفصل منها هي
+    const BA = await import("./boardAttach.ts");
+    const env = body.appLecture ? await BA.boardAppEnv() : null;
+    need(!body.appLecture || env, "الإرسال لملحقات التطبيق مطفي");
+    const al = env ? await BA.appLecture(env, String(body.appLecture)) : null;
+    const ch = al ? al.ch : Number(body.chapter);
     need(ch >= 1 && ch <= 5, "اختار الفصل");
     const id = String(body.id ?? "");
     const meta = (await myList(uid)).find((x) => x.id === id);
@@ -131,8 +172,15 @@ export async function boardAction(body: any) {
     // الموضوع والمحاضرة اللي ينزل وياها الشرح (اختياري)
     const tp = Number(body.topic) ? (await find("topics", { id: Number(body.topic) }))[0] : null;
     const lec = Math.max(0, Math.round(Number(body.lecture) || 0));
-    const row: Sent = { id: sid, ref, title: meta!.title, chapter: ch, at: stamp(), pages: l.pages.length, ...(tp ? { topic: String(tp.ar ?? "") } : {}), ...(tp && lec ? { lecture: lec } : {}) };
-    const where = [`الفصل ${ORD[ch]}`, row.topic, row.lecture ? `المحاضرة ${row.lecture}` : ""].filter(Boolean).join(" · ");
+    let row: Sent = { id: sid, ref, title: meta!.title, chapter: ch, at: stamp(), pages: l.pages.length, ...(tp ? { topic: String(tp.ar ?? "") } : {}), ...(tp && lec ? { lecture: lec } : {}) };
+    if (al && env) {
+      // الملحق أول: إذا ما انضاف (ماكو إذن، نت)، ما يندز شي
+      const { siteBase } = await import("./keyboards.ts");
+      const lt = `${al.title}${al.track === "english" ? " (English)" : ""}`;
+      const att = await BA.addBoardAttachment(env, al.id, `${siteBase()}/store/board?att=${sid}`, `📝 ${meta!.title}`, al.count);
+      row = { id: sid, ref, title: meta!.title, chapter: ch, at: row.at, pages: row.pages, topic: al.topic, lt, app: { env, lecture: al.id, att } };
+    }
+    const where = [`الفصل ${ORD[ch]}`, row.topic, row.lt || (row.lecture ? `المحاضرة ${row.lecture}` : "")].filter(Boolean).join(" · ");
     await kvSet(SENT, JSON.stringify([...(await sentList()), row].slice(-500)));
     const to = await lectureBuyers(ch);
     const { send } = await import("./telegram.ts");
@@ -144,7 +192,7 @@ export async function boardAction(body: any) {
         n++;
       } catch (e) { console.error("board send", u, e); }
     }
-    return { ...await state(), notice: `✅ انبعث لـ ${n} طالب من طلاب محاضرات الفصل ${ORD[ch]}` };
+    return { ...await state(), notice: `✅ انبعث لـ ${n} طالب من طلاب محاضرات الفصل ${ORD[ch]}${row.app ? `، ونزل بملحقات «${row.topic} · ${row.lt}» بالتطبيق${row.app.env === "staging" ? " (التجربة)" : ""}` : ""}` };
   }
   need(false, "أمر غير معروف");
   return {};
