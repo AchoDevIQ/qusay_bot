@@ -144,28 +144,37 @@ function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kin
       setPv(j.preview);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
+  // كلشي بحفظة وحدة (طلبه 2026-11-25): الصور والفيديوهات تتجهز هنا، و«💾 حفظ السيطرة» يحفظ الشرط وبعده يرفعها
+  type Pend = File | "drop" | undefined;
+  const [pTop, setPTop] = useState<Pend>(undefined);
+  const [pStop, setPStop] = useState<Pend>(undefined);
+  const post = async (body: Record<string, unknown> | FormData) => {
+    const r = body instanceof FormData ? await fetch("/api/checkpoints", { method: "POST", body })
+      : await fetch("/api/checkpoints", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), ...body }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) throw new Error(j.error || "صار خطأ");
+    return j;
+  };
+  const sendPic = async (kind: "top" | "stop", f: Pend) => {
+    if (f === undefined) return;
+    const fd = new FormData();
+    fd.set("initData", pageAuth()); fd.set("action", "cpImage"); fd.set("exam", String(step.id)); fd.set("kind", kind);
+    if (f === "drop") fd.set("dropImage", "1"); else fd.set("file", f);
+    await post(fd);
+  };
   const call = async (body: Record<string, unknown>) => {
     setBusy(true); setErr("");
-    try {
-      const r = await fetch("/api/checkpoints", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), ...body }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j.error) throw new Error(j.error || "صار خطأ");
-      onSaved(j.notice || "✅ انحفظت");
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try { const j = await post(body); onSaved(j.notice || "✅ انحفظت"); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
-  const upload = async (kind: "top" | "stop", f: File | null) => {
+  const save = async () => {
     setBusy(true); setErr("");
     try {
-      const fd = new FormData();
-      fd.set("initData", pageAuth()); fd.set("action", "cpImage"); fd.set("exam", String(step.id)); fd.set("kind", kind);
-      if (f) fd.set("file", f); else fd.set("dropImage", "1");
-      const r = await fetch("/api/checkpoints", { method: "POST", body: fd });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j.error) throw new Error(j.error || "صار خطأ");
-      onPic(j.notice || "✅ انحفظت");
+      await post({ action: "saveCp", exam: step.id, min: Number(min) || 0, absent, honor: honorOn ? { min: Number(hMin) || 0, bday, addr } : null });
+      await sendPic("top", pTop); await sendPic("stop", pStop);
+      onSaved("✅ انحفظت السيطرة" + (pTop instanceof File || pStop instanceof File ? " ويا الصور" : ""));
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
-  const save = () => void call({ action: "saveCp", exam: step.id, min: Number(min) || 0, absent, honor: honorOn ? { min: Number(hMin) || 0, bday, addr } : null });
+  const shown = (p: Pend, saved?: string) => (p === "drop" ? undefined : p instanceof File ? `${URL.createObjectURL(p)}#${p.type.includes("mp4") ? "x.mp4" : "x"}` : saved);
   return (
     <div className="qp-dlg" onClick={onClose}>
       <div className="qp-box" onClick={(e) => e.stopPropagation()}>
@@ -187,11 +196,11 @@ function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kin
           <label className="qp-check"><input type="checkbox" checked={addr} onChange={(e) => setAddr(e.target.checked)} /> 🏠 ويا عنوانهم الكامل (حتى تسويلهم هدية ومفاجأة)</label>
           <div className="qp-dh">تجيك القائمة مرة وحدة، بعد ما آخر امتحان بهالسيطرة ينصحح كله.</div>
         </>}
-        {step.cp && <div className="qp-pics">
-          <Pic label="🏆 صورة أو فيديو المتفوقين" hint={`توصل اللي جابوا معدل ${step.cp.honor?.min ?? 95} فما فوق، ويا تهنئة`} url={step.cp.topImg} onPick={(f) => void upload("top", f)} onDrop={() => void upload("top", null)} busy={busy} />
-          <Pic label="⛔ صورة أو فيديو الموقوفين" hint="توصل اللي توقف عليه بهالسيطرة (بدل الصورة العامة)" url={step.cp.stopImg} onPick={(f) => void upload("stop", f)} onDrop={() => void upload("stop", null)} busy={busy} />
-        </div>}
-        {!step.cp && <div className="qp-dh">بعد ما تحفظ السيطرة، تگدر تحط صورة للمتفوقين وصورة للموقوفين.</div>}
+        <div className="qp-pics">
+          <Pic label="🏆 صورة أو فيديو المتفوقين" hint={`توصل اللي جابوا معدل ${honorOn ? hMin : 95} فما فوق، ويا تهنئة`} url={shown(pTop, step.cp?.topImg)} onPick={(f) => setPTop(f)} onDrop={() => setPTop("drop")} busy={busy} />
+          <Pic label="⛔ صورة أو فيديو الموقوفين" hint="توصل اللي توقف عليه بهالسيطرة (بدل الصورة العامة)" url={shown(pStop, step.cp?.stopImg)} onPick={(f) => setPStop(f)} onDrop={() => setPStop("drop")} busy={busy} />
+        </div>
+        {(pTop !== undefined || pStop !== undefined) && <div className="qp-dh">الصور تنحفظ من تدوس «💾 حفظ السيطرة».</div>}
         {step.cp && <button type="button" className="qp-pvbtn" disabled={busy} onClick={() => void (pv ? setPv(null) : preview())}>{pv ? "اخفي" : "👁 شنو يوصل الطالب وولي أمره؟"}</button>}
         {pv && <div className="qp-pv">
           <div className="qp-pvcol">
@@ -217,7 +226,7 @@ function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kin
         </div>}
         {err && <div className="qp-err">{err}</div>}
         <div className="qp-btns">
-          <button type="button" className="ok" disabled={busy} onClick={save}>💾 حفظ السيطرة</button>
+          <button type="button" className="ok" disabled={busy} onClick={() => void save()}>💾 حفظ السيطرة</button>
           {step.cp && <button type="button" className="bad" disabled={busy} onClick={() => { if (confirm("تحذف هاي السيطرة؟")) void call({ action: "delCp", exam: step.id }); }}>🗑 حذفها</button>}
           <button type="button" disabled={busy} onClick={onClose}>رجوع</button>
         </div>
