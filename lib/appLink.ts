@@ -224,9 +224,9 @@ export async function appState(form: { id?: unknown; env?: unknown; push?: unkno
   const { nowCards } = await import("./appNow.ts");
   const now = await nowCards(uid).catch((e) => { console.error("now cards", e); return []; });
   // ⏰ منبه الامتحانات: التطبيق يحطه بالموبايل نفسه، ويعيده كل ما يفتح (فإذا تبدل موعد امتحان يتبدل المنبه)
-  const { alarmsFor, toneOf } = await import("./examAlarm.ts");
+  const { alarmsFor, toneFor } = await import("./examAlarm.ts");
   const alarms = await alarmsFor(uid).catch((e) => { console.error("alarms", e); return []; });
-  return { pilot, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid), now, alarms, tone: await toneOf(uid) };
+  return { pilot, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid), now, alarms, ...(await toneFor(uid)) };
 }
 
 // ---------- مشاهدات المحاضرات (طلب الأستاذ 2026-11-17): التطبيق يبلغ البوت لما الطالب يفتح محاضرة ولوين وصل منها.

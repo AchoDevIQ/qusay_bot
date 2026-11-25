@@ -308,8 +308,8 @@ const CSS = `
 .qp-ch button{flex:none;min-height:44px;border:1px solid #D5DAE5;background:#fff;border-radius:22px;padding:0 16px;font:inherit;font-weight:700;color:#141F33}
 .qp-ch button.on{background:#141F33;color:#F6C94A;border-color:#141F33}
 .qp-stop{margin:14px 16px 0;background:#141F33;border:2px solid #F6C94A;color:#F6C94A;border-radius:12px;padding:12px;font-weight:700;line-height:1.7}
-.qp-sec{margin:14px 16px 0;background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(20,31,51,.08);overflow:hidden;border:1px solid #E6E9F0}
-.qp-sec.gen{border:2px solid #F6C94A}
+.qp-sec{margin:14px 16px 0;background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(20,31,51,.08);overflow:hidden;border:1px solid #E6E9F0;border-right:5px solid #F6C94A}
+.qp-sec.gen{border:2px solid #F6C94A;border-right:5px solid #F6C94A}
 .qp-head{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:10px 14px;background:none;border:0;font:inherit;color:inherit;text-align:right}
 .qp-head b{flex:1;font-size:17px}.qp-head small{color:#6B7488;font-weight:700}
 .qp-num{width:32px;height:32px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#141F33;color:#F6C94A;font-weight:800}
@@ -319,7 +319,7 @@ const CSS = `
 .qp-step{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;margin-top:6px;padding:8px 10px;border-radius:12px;background:#fff;border:1px solid #E6E9F0;font:inherit;color:inherit;text-align:right}
 .qp-step.lec{border-right:5px solid #F6C94A}
 .qp-step.lec.locked,.qp-step.lec.buy{opacity:.55}
-.qp-step.exam{background:#F5F6FA}.qp-step.exam.open{background:#fff;border:2px solid #F6C94A}
+.qp-step.exam{background:#F5F6FA;border-right:5px solid #F6C94A}.qp-step.exam.open{background:#fff;border:2px solid #F6C94A;border-right:5px solid #F6C94A}
 .qp-step.cp{background:#fff;border:1px dashed #141F33}
 .qp-ic{font-size:18px;width:34px;height:34px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;color:#141F33}
 .qp-step.lec.done .qp-ic{background:#141F33;color:#F6C94A;font-weight:800}

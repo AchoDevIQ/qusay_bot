@@ -2,7 +2,9 @@
 // مثل منبه الدوام، ويا ملاحظة «هسه عندك امتحان». المواعيد تنحسب وحدها من جدوله، فإذا تبدل موعد امتحان
 // (مثلاً من الأربعاء للسبت، أو من الساعة 4 للـ6) المنبه يتبدل وحده أول ما يفتح التطبيق.
 // الأستاذ يحدد شوكت يرن (قبل كم دقيقة، والليلة اللي قبل)، والطالب يختار النغمة من النغمات اللي جوه التطبيق.
+import { createHash } from "node:crypto";
 import { find, kvGet, kvSet, type Row } from "./db.ts";
+import { files } from "./files.ts";
 import { addMinutes } from "./scheduleRules.ts";
 import { stamp } from "./util.ts";
 import { need } from "./webApi.ts";
@@ -13,7 +15,54 @@ export const TONES = [
   { id: "bell", name: "🔔 جرس" },
   { id: "beep", name: "⏰ منبه" },
 ] as const;
-export type ToneId = (typeof TONES)[number]["id"];
+export type ToneId = string;
+/** نغمة: اللي جوه التطبيق (soft/bell/beep)، أو نغمة ضافها الأستاذ (صوته أو موسيقى) تنزل للموبايل وحدها.
+ *  url للسماع بالصفحة، وللنغمات المضافة التطبيق ينزلها منه. v يتغير إذا تغير الملف */
+export type Tone = { id: string; name: string; url: string; custom?: boolean };
+type Custom = { id: string; name: string; ref: string };
+const CUSTOM = "alarm_tones";
+const builtIn = (t: { id: string; name: string }): Tone => ({ ...t, url: `/alarm-tones/tone_${t.id}.mp3` });
+export const toneUrl = (id: string) => `/api/alarm/tone?id=${encodeURIComponent(id)}`;
+async function customs(): Promise<Custom[]> {
+  try { const l = JSON.parse((await kvGet(CUSTOM)) ?? "[]"); return Array.isArray(l) ? l : []; } catch { return []; }
+}
+export async function allTones(): Promise<Tone[]> {
+  return [...TONES.map(builtIn), ...(await customs()).map((c) => ({ id: c.id, name: c.name, url: toneUrl(c.id), custom: true }))];
+}
+/** ملف النغمة المضافة (WAV) */
+export async function toneFile(id: string) {
+  const c = (await customs()).find((x) => x.id === id);
+  return c ? files().read(c.ref) : null;
+}
+const TONE_MAX = 3 * 1024 * 1024, SECS_MAX = 30;
+/** نغمة جديدة من الأستاذ: WAV (الصفحة تحول أي صوت لـWAV وتقصه قبل ما ترفعه)، أقل من 30 ثانية حتى يرن بالآيفون */
+export async function addTone(name: unknown, b64: unknown) {
+  const n = String(name ?? "").trim().slice(0, 30);
+  need(n, "اكتب اسم للنغمة");
+  const buf = Buffer.from(String(b64 ?? ""), "base64");
+  need(buf.length > 44 && buf.length <= TONE_MAX, "النغمة لازم أصغر من 3 ميگا");
+  need(buf.subarray(0, 4).toString() === "RIFF" && buf.subarray(8, 12).toString() === "WAVE", "الملف مو صوت");
+  const byteRate = buf.readUInt32LE(28);
+  need(byteRate > 0 && (buf.length - 44) / byteRate <= SECS_MAX + 0.5, "النغمة لازم أقل من 30 ثانية");
+  const list = await customs();
+  need(list.length < 20, "وصلت 20 نغمة. احذف وحدة أول");
+  need(!list.some((c) => c.name === n) && !TONES.some((t) => t.name === n), "هذا الاسم موجود. اختار اسم ثاني");
+  const h = createHash("sha256").update(buf).digest("hex").slice(0, 16);
+  const id = `c${h.slice(0, 10)}`;
+  need(!list.some((c) => c.id === id), "هاي النغمة نفسها مضافة من قبل");
+  const ref = `alarm-tones/${h}.wav`;
+  await files().write(ref, buf, "audio/wav");
+  await kvSet(CUSTOM, JSON.stringify([...list, { id, name: n, ref }]));
+  return id;
+}
+export async function delTone(id: unknown) {
+  const list = await customs();
+  need(list.some((c) => c.id === id), "النغمة مو موجودة");
+  await kvSet(CUSTOM, JSON.stringify(list.filter((c) => c.id !== id)));
+  // اللي جانت نغمته الأساسية، ترجع الأساسية «🎵 نغمة هادئة» (الطلاب اللي اختاروها يرجعون للأساسية وحدهم)
+  const cfg = await alarmCfg();
+  if (cfg.tone === id) await kvSet(CFG, JSON.stringify({ ...cfg, tone: "soft" }));
+}
 /** شوكت يرن: دقايق قبل الامتحان (0 = بوقته)، و«night» = الليلة اللي قبل الساعة 9 */
 export type AlarmCfg = { on: boolean; before: number[]; night: boolean; tone: ToneId };
 const CFG = "alarm_cfg";
@@ -26,7 +75,7 @@ export async function alarmCfg(): Promise<AlarmCfg> {
 }
 export async function setAlarmCfg(raw: Row) {
   const before = (Array.isArray(raw.before) ? raw.before : []).map(Number).filter((n: number) => (OFFSETS as readonly number[]).includes(n));
-  const tone = TONES.some((t) => t.id === raw.tone) ? raw.tone as ToneId : DEF.tone;
+  const tone = (await allTones()).some((t) => t.id === raw.tone) ? String(raw.tone) : DEF.tone;
   need(before.length || raw.night, "اختار وقت واحد على الأقل يرن بيه");
   const c: AlarmCfg = { on: raw.on !== false, before: [...new Set(before)].sort((a, b) => b - a), night: !!raw.night, tone };
   await kvSet(CFG, JSON.stringify(c));
@@ -34,11 +83,18 @@ export async function setAlarmCfg(raw: Row) {
 }
 const toneKey = (uid: number) => `alarm_tone_${uid}`;
 export async function toneOf(uid: number): Promise<ToneId> {
-  const t = await kvGet(toneKey(uid));
-  return TONES.some((x) => x.id === t) ? t as ToneId : (await alarmCfg()).tone;
+  const all = await allTones(), t = await kvGet(toneKey(uid));
+  if (all.some((x) => x.id === t)) return t!;
+  const def = (await alarmCfg()).tone;
+  return all.some((x) => x.id === def) ? def : "soft";
+}
+/** للتطبيق: النغمة، وإذا مضافة رابط تنزيلها */
+export async function toneFor(uid: number) {
+  const id = await toneOf(uid);
+  return { tone: id, toneUrl: id.startsWith("c") ? toneUrl(id) : "" };
 }
 export async function setTone(uid: number, t: unknown) {
-  need(TONES.some((x) => x.id === t), "اختار نغمة");
+  need((await allTones()).some((x) => x.id === t), "اختار نغمة");
   await kvSet(toneKey(uid), String(t));
 }
 

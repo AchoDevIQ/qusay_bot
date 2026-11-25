@@ -33,3 +33,27 @@ test("⏰ قبل ساعة وبوقته، والموعد يتبدل فيتبدل 
   assert.equal(await A.toneOf(7), "beep");
   await assert.rejects(A.setTone(7, "x"), /اختار نغمة/);
 });
+
+test("🎵 نغمة يضيفها الأستاذ: WAV أقل من 30 ثانية، توصل للتطبيق برابطها، وتنحذف", async () => {
+  const wav = (secs: number) => {
+    const n = 8000 * secs, b = Buffer.alloc(44 + n * 2);
+    b.write("RIFF", 0); b.writeUInt32LE(36 + n * 2, 4); b.write("WAVE", 8); b.write("fmt ", 12); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+    b.writeUInt32LE(8000, 24); b.writeUInt32LE(16000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 2, 40);
+    b.writeInt16LE(secs, 44);
+    return b.toString("base64");
+  };
+  await assert.rejects(A.addTone("طويلة", wav(40)), /أقل من 30 ثانية/);
+  await assert.rejects(A.addTone("", wav(3)), /اكتب اسم/);
+  await assert.rejects(A.addTone("مو صوت", Buffer.from("hello world, this is not a wave file at all!!").toString("base64")), /مو صوت/);
+  const id = await A.addTone("صوت قصي", wav(3));
+  assert.match(id, /^c[0-9a-f]{10}$/);
+  await assert.rejects(A.addTone("ثانية", wav(3)), /مضافة من قبل/);
+  assert.ok((await A.allTones()).some((t) => t.id === id && t.custom && t.url.includes(id)));
+  assert.ok((await A.toneFile(id))!.length > 44);
+  await A.setTone(8, id);
+  assert.deepEqual(await A.toneFor(8), { tone: id, toneUrl: `/api/alarm/tone?id=${id}` });
+  await A.setAlarmCfg({ before: [0], tone: id });
+  await A.delTone(id);
+  assert.equal((await A.alarmCfg()).tone, "soft", "الأساسية رجعت");
+  assert.deepEqual(await A.toneFor(8), { tone: "soft", toneUrl: "" }, "اللي اختارها رجع للأساسية");
+});
