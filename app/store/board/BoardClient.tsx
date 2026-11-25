@@ -157,8 +157,17 @@ export default function BoardClient() {
       if (bd) { x.save(); x.strokeStyle = "rgba(246,201,74,.9)"; x.fillStyle = "rgba(246,201,74,.12)"; x.lineWidth = 2; x.setLineDash([10, 8]); x.fillRect(Math.min(bd.x0, bd.x1), Math.min(bd.y0, bd.y1), Math.abs(bd.x1 - bd.x0), Math.abs(bd.y1 - bd.y0)); x.strokeRect(Math.min(bd.x0, bd.x1), Math.min(bd.y0, bd.y1), Math.abs(bd.x1 - bd.x0), Math.abs(bd.y1 - bd.y0)); x.restore(); }
       const m = eraserMark.current;
       if (m) {
-        x.fillStyle = "rgba(255,255,255,0.24)"; x.strokeStyle = "rgba(255,255,255,0.86)"; x.lineWidth = 3;
-        x.beginPath(); x.roundRect(m.x - m.s / 2, m.y - m.s / 2, m.s, m.s, 12); x.fill(); x.stroke();
+        // المساحة بشكل لوگو قصي: قطعة كحلية بإطار ذهبي واللوگو عليها (نفس مكان المسح بالضبط)
+        x.save();
+        x.fillStyle = "rgba(20,31,51,0.82)"; x.strokeStyle = "#F6C94A"; x.lineWidth = 3;
+        x.beginPath(); x.roundRect(m.x - m.s / 2, m.y - m.s / 2, m.s, m.s, Math.min(14, m.s / 6)); x.fill(); x.stroke();
+        const lg = logo.current;
+        if (lg && lg.naturalWidth) {
+          const W0 = lg.naturalWidth, H0 = lg.naturalHeight, sw = W0 * 0.57, sh = H0 * 0.62;
+          const k = (m.s * 0.84) / Math.max(sw, sh);
+          x.drawImage(lg, W0 * 0.225, H0 * 0.225, sw, sh, m.x - (sw * k) / 2, m.y - (sh * k) / 2, sw * k, sh * k);
+        }
+        x.restore();
       }
       x.restore();
     });
@@ -727,7 +736,7 @@ export default function BoardClient() {
           <span className="qb-sep" />
           <Btn icon={IC.pen} t="قلم" on={tool === "pen"} run={() => pickTool("pen")} />
           <Btn icon={IC.hl} t="تظليل" on={tool === "hl"} run={() => pickTool("hl")} />
-          <Btn id="eraser" icon={IC.eraser} t="ممحاة" on={tool === "eraser"} run={(el) => { pickTool("eraser"); open("eraser", el); }} />
+          <Btn id="eraser" icon={<span className="qb-logo-ic"><img src="/app-logo.png" alt="" /></span>} t="ممحاة" on={tool === "eraser"} run={(el) => { pickTool("eraser"); open("eraser", el); }} />
           <Btn icon={IC.hand} t="تحريك" on={tool === "move"} run={() => pickTool("move")} />
           <Btn id="shapes" icon={IC.shapes} t="أشكال" on={tool === "shape" && SHAPES.some((s) => s.id === shape)} run={(el) => open("shapes", el)} />
           <Btn id="solids" icon={IC.solids} t="مجسمات" on={tool === "shape" && SOLIDS.some((s) => s.id === shape)} run={(el) => open("solids", el)} />
@@ -912,6 +921,7 @@ const CSS = `
 .qb-btn:disabled{opacity:.35}
 .qb-btn.on{background:#2c3850;color:#F6C94A;box-shadow:inset 0 0 0 2px #F6C94A}
 .qb-ic{display:flex;height:28px;align-items:center}
+.qb-logo-ic{width:30px;height:28px;overflow:hidden;display:flex;align-items:center;justify-content:center}.qb-logo-ic img{width:50px;height:50px;flex:none;margin-top:4px}
 .qb-t{font-size:12px;white-space:nowrap}
 .qb-sep{width:1px;height:46px;background:rgba(255,255,255,.18);margin:0 4px;flex:none}
 .qb-dot{width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.35);margin:0 3px;flex:none;cursor:pointer;padding:0}

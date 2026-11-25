@@ -161,7 +161,8 @@ export async function boardAction(body: any) {
     // محاضرة من التطبيق: الفصل منها هي
     const BA = await import("./boardAttach.ts");
     // محاضرة وحدة، أو ثنتين (العربي والانگليزي) إذا الشرح يشملهم
-    const ids = [...new Set((Array.isArray(body.appLecture) ? body.appLecture : body.appLecture ? [body.appLecture] : []).map(String))].slice(0, 2);
+    const raw: unknown[] = Array.isArray(body.appLecture) ? body.appLecture : body.appLecture ? [body.appLecture] : [];
+    const ids = [...new Set(raw.map((v) => String(v)))].slice(0, 2);
     const env = ids.length ? await BA.boardAppEnv() : null;
     need(!ids.length || env, "الإرسال لملحقات التطبيق مطفي");
     const als = env ? await Promise.all(ids.map((i) => BA.appLecture(env, i))) : [];
