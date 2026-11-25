@@ -36,10 +36,16 @@ export default function PathClient() {
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const [msg, setMsg] = useState("");
   const [cpFor, setCpFor] = useState<Extract<Step, { kind: "exam" }> | null>(null);
-  const load = (ch?: number) => {
+  // keep: نافذة السيطرة تبقى مفتوحة على نفس الامتحان (بعد ما تحط صورة، حتى تحط الثانية)، والأقسام المفتوحة تبقى
+  const load = (ch?: number, keep?: number) => {
     const q = new URLSearchParams(location.search);
     void api({ action: "state", ch, env: q.get("env") ?? undefined }).then((j: Path) => {
       setP(j); setErr("");
+      if (keep) {
+        const e = j.sections.flatMap((s) => s.steps).find((x) => x.kind === "exam" && x.id === keep);
+        if (e && e.kind === "exam") setCpFor(e);
+        return;
+      }
       // القسم اللي بيه الخطوة الجاية ينفتح وحده
       const k = j.sections.findIndex((s) => s.steps.some((x) => (x.kind === "lec" && x.state === "open") || (x.kind === "exam" && x.state === "open")));
       setOpen(k >= 0 ? { [k]: true } : { 0: true });
@@ -106,14 +112,14 @@ export default function PathClient() {
         </div>
       ) : renderSec(part.sec!, part.i!))}
       {p?.teacher && <a className="qp-link" href={`/store/checkpoints?t=${encodeURIComponent(token())}`}>⛔ الموقوفين، ورسالة الإيقاف وصورته</a>}
-      {cpFor && <CpDialog step={cpFor} onClose={() => setCpFor(null)} onSaved={(t) => { setCpFor(null); say(t); load(p?.ch); }} />}
+      {cpFor && <CpDialog key={cpFor.id} step={cpFor} onClose={() => setCpFor(null)} onSaved={(t) => { setCpFor(null); say(t); load(p?.ch); }} onPic={(t) => { say(t); load(p?.ch, cpFor.id); }} />}
       {msg && <div className="qp-toast">{msg}</div>}
     </div>
   );
 }
 
 /** 🚦 السيطرة ورا هذا الامتحان: تشمل الامتحانات من بعد السيطرة اللي قبلها. المجموع، الغياب، وقائمة المتفوقين */
-function CpDialog({ step, onClose, onSaved }: { step: Extract<Step, { kind: "exam" }>; onClose: () => void; onSaved: (notice: string) => void }) {
+function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kind: "exam" }>; onClose: () => void; onSaved: (notice: string) => void; onPic: (notice: string) => void }) {
   const n = step.since ?? 1, max = n * 100;
   const [min, setMin] = useState(String(step.cp?.min ?? max / 2));
   const [absent, setAbsent] = useState(step.cp?.absent ?? Math.min(2, n));
@@ -141,7 +147,7 @@ function CpDialog({ step, onClose, onSaved }: { step: Extract<Step, { kind: "exa
       const r = await fetch("/api/checkpoints", { method: "POST", body: fd });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j.error) throw new Error(j.error || "صار خطأ");
-      onSaved(j.notice || "✅ انحفظت");
+      onPic(j.notice || "✅ انحفظت");
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   const save = () => void call({ action: "saveCp", exam: step.id, min: Number(min) || 0, absent, honor: honorOn ? { min: Number(hMin) || 0, bday, addr } : null });
