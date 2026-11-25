@@ -226,7 +226,10 @@ export async function appState(form: { id?: unknown; env?: unknown; push?: unkno
   // ⏰ منبه الامتحانات: التطبيق يحطه بالموبايل نفسه، ويعيده كل ما يفتح (فإذا تبدل موعد امتحان يتبدل المنبه)
   const { alarmsFor, toneFor } = await import("./examAlarm.ts");
   const alarms = await alarmsFor(uid).catch((e) => { console.error("alarms", e); return []; });
-  return { pilot, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid), now, alarms, ...(await toneFor(uid)) };
+  // اشترى من المكتبة أو المكتب (بالبوت): التطبيق يفتحله الرئيسية حتى لو الشراء ما مسجل بالتطبيق نفسه
+  const { ownedChapters } = await import("./notes.ts");
+  const bought = (await ownedChapters(uid).catch(() => [])).length > 0;
+  return { pilot, bought, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid), now, alarms, ...(await toneFor(uid)) };
 }
 
 // ---------- مشاهدات المحاضرات (طلب الأستاذ 2026-11-17): التطبيق يبلغ البوت لما الطالب يفتح محاضرة ولوين وصل منها.
