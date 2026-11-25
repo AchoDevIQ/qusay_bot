@@ -1320,3 +1320,25 @@ test("🗓 الجدول الخاص بالأسبوع: جدوله كامل، كم 
   assert.equal(again.needsBuild, true);
   assert.equal(again.toPlan.length, 10);
 });
+
+test("⏰ قبل الامتحان بـ10 دقايق: رسالة وحدة بس، والحضوري والبعيد ما توصلهم", async () => {
+  const { notifySoon } = await import("../lib/examRoom.ts");
+  const { cronKey } = await import("../lib/webAuth.ts");
+  const { addMinutes } = await import("../lib/scheduleRules.ts");
+  await assert.rejects(notifySoon("bad"), (x: any) => x.status === 401);
+  const e = (await find("bank_exams", { slug: "room" }))[0];
+  await student(94); await student(95, "حضوري"); await student(96);
+  const near = await insert("sched_items", { user_id: 94, exam_id: e.id, at: addMinutes(stamp(), 8), status: "waiting" });
+  await insert("sched_items", { user_id: 95, exam_id: e.id, at: addMinutes(stamp(), 8), status: "waiting" });
+  await insert("sched_items", { user_id: 96, exam_id: e.id, at: addMinutes(stamp(), 40), status: "waiting" });
+  calls.length = 0;
+  const r = await notifySoon(cronKey());
+  const to = calls.filter((c) => c.method === "sendMessage").map((c) => Number(c.p.chat_id));
+  assert.ok(to.includes(94) && !to.includes(95) && !to.includes(96), JSON.stringify(to));
+  assert.match(calls.find((c) => Number(c.p.chat_id) === 94)!.p.text, /امتحانك يبدي بعد [78] دقيقة/);
+  assert.ok(r.due >= 1);
+  calls.length = 0;
+  await notifySoon(cronKey());
+  assert.ok(!calls.some((c) => Number(c.p.chat_id) === 94), "مرة وحدة");
+  assert.ok((await find("sched_items", { id: near }))[0].reminded);
+});

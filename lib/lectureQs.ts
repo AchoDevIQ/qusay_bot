@@ -13,7 +13,8 @@ import { need } from "./webApi.ts";
 
 /** المحاضرة: فصلها ومنهجها، ومواضيع فصلها بالتطبيق بالترتيب، ومكان موضوعها، ورقمها */
 export type LecInfo = { id: string; env: AppEnv; ch: number; lang: "ar" | "en"; topics: string[]; ti: number; lec: number; title: string; topic: string };
-export type QRef = { book: number; page: number; sec: "wz" | "ith" };
+/** sec book: صفحات دفتر الكتاب (أمثلة وأسئلة الكتاب) كاملة، بلا حل منفصل */
+export type QRef = { book: number; page: number; sec: "book" | "wz" | "ith" };
 const infoKey = (id: string) => `lq_${id}`;
 const UUID = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
@@ -47,12 +48,13 @@ export async function lecturePages(b: Row, info: Pick<LecInfo, "topics" | "ti" |
   return out;
 }
 
-/** أسئلة المحاضرة من ملازم الطالب (بس فصوله ومنهجه): الوزاري أول، بعده الإثرائي */
-export async function lectureQs(books: Row[], info: LecInfo): Promise<QRef[]> {
+/** أسئلة المحاضرة من ملازم الطالب (بس فصوله ومنهجه), بترتيبه: أمثلة وأسئلة الكتاب، بعدها الوزاري، بعدها الإثرائي.
+ * withBook: صفحات الكتاب للملزمة بس (حلّي بعده بلا الكتاب لحد ما تنطلع أسئلته سؤال سؤال) */
+export async function lectureQs(books: Row[], info: LecInfo, withBook = false): Promise<QRef[]> {
   const { hasSol, sectionOf } = await import("./notes.ts");
   const out: QRef[] = [];
-  for (const sec of ["wz", "ith"] as const) {
-    for (const b of books.filter((x) => sectionOf(x) === sec && hasSol(x) && x.chapter === chapterOf(info.ch) && (x.lang === info.lang || x.lang === "all"))) {
+  for (const sec of (withBook ? ["book", "wz", "ith"] : ["wz", "ith"]) as ("book" | "wz" | "ith")[]) {
+    for (const b of books.filter((x) => sectionOf(x) === sec && (sec === "book" || hasSol(x)) && x.chapter === chapterOf(info.ch) && (x.lang === info.lang || x.lang === "all"))) {
       for (const page of await lecturePages(b, info)) out.push({ book: Number(b.id), page, sec });
     }
   }
@@ -60,14 +62,14 @@ export async function lectureQs(books: Row[], info: LecInfo): Promise<QRef[]> {
 }
 
 /** للطالب (أو الأستاذ): المحاضرة وأسئلتها. ما اشترى الفصل؟ ما تنفتح */
-export async function lectureFor(uid: number, id: unknown) {
+export async function lectureFor(uid: number, id: unknown, withBook = false) {
   const info = await lecInfo(id);
   need(info, "هذي المحاضرة بعد ما إلها أسئلة", 404);
   const { myBooks, ownedChapters } = await import("./notes.ts");
   const { isAdmin } = await import("./data.ts");
   const admin = await isAdmin(uid);
   need(admin || (await ownedChapters(uid)).includes(chapterOf(info!.ch)), `أسئلة ${chapterOf(info!.ch)} لطلابه بس`, 403);
-  const items = await lectureQs(await myBooks(uid), info!);
+  const items = await lectureQs(await myBooks(uid), info!, withBook);
   need(items.length, "ما لگينا أسئلة لهاي المحاضرة بالملازم", 404);
   return { id: info!.id, title: info!.title, topic: info!.topic, ch: info!.ch, lang: info!.lang, items };
 }

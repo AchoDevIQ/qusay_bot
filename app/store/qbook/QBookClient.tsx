@@ -4,9 +4,9 @@
 import { useEffect, useState } from "react";
 import { deviceId, deviceNow, platformNow } from "../shared";
 
-type Q = { book: number; page: number; sec: "wz" | "ith" };
+type Q = { book: number; page: number; sec: "book" | "wz" | "ith" };
 type Lec = { id: string; title: string; topic: string; ch: number; items: Q[] };
-const SEC = { wz: "📗 وزاري", ith: "📙 إثرائي" } as const;
+const SEC = { book: "📘 أمثلة وأسئلة الكتاب", wz: "📗 وزاري", ith: "📙 إثرائي" } as const;
 const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"];
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
 const src = (q: Q, sol: boolean) => `/api/notes/page?t=${encodeURIComponent(token())}&book=${q.book}&page=${q.page}&pf=${encodeURIComponent(platformNow())}&d=${encodeURIComponent(deviceNow())}${sol ? "&sol=1" : ""}`;
@@ -36,16 +36,18 @@ export default function QBookClient() {
       <style>{CSS}</style>
       <header>
         <img src="/app-logo.png" alt="" />
-        <div><b>ملزمة المحاضرة</b>{lec && <small>الفصل {ORD[lec.ch]} · {lec.topic} · {lec.title} · {lec.items.length} سؤال</small>}</div>
+        <div><b>ملزمة المحاضرة</b>{lec && <small>الفصل {ORD[lec.ch]} · {lec.topic} · {lec.title} · {lec.items.filter((x) => x.sec !== "book").length} سؤال</small>}</div>
         {lec && <button type="button" onClick={() => setOpen(all ? {} : Object.fromEntries(lec.items.map((_, i) => [i, true])))}>{all ? "اخفي الحلول" : "كل الحلول"}</button>}
       </header>
       {err && <div className="qq-msg">{err}</div>}
       {!err && !lec && <div className="qq-msg">جاري التحميل...</div>}
       {ready && lec?.items.map((q, i) => (
         <section key={`${q.book}-${q.page}`}>
-          <div className="qq-tag">{SEC[q.sec]} · سؤال {i + 1}</div>
-          {/* صفحة الحل بيها السؤال فوك وحله تحته. «اخفي الحلول»: يطلع السؤال بس حتى يحاول */}
-          {open[i]
+          <div className="qq-tag">{SEC[q.sec]}{q.sec === "book" ? "" : ` · سؤال ${lec.items.slice(0, i + 1).filter((x) => x.sec === q.sec).length}`}</div>
+          {/* الكتاب: الصفحة نفسها (الشرح والأمثلة والأسئلة). الوزاري والإثرائي: صفحة الحل بيها السؤال فوك وحله تحته، و«اخفي الحلول» يطلع السؤال بس */}
+          {q.sec === "book"
+            ? <img className="qq-pg" src={src(q, false)} alt="صفحة الكتاب" loading={i < 2 ? "eager" : "lazy"} />
+            : open[i]
             ? <img className="qq-pg sol" src={src(q, true)} alt={`السؤال ${i + 1} وحله`} loading={i < 2 ? "eager" : "lazy"} />
             : <><img className="qq-pg" src={src(q, false)} alt={`سؤال ${i + 1}`} loading="lazy" />
               <button type="button" className="qq-sol" onClick={() => setOpen((o) => ({ ...o, [i]: true }))}>📘 الحل</button></>}

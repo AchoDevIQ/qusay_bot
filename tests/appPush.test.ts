@@ -68,3 +68,18 @@ test("التطبيق انمسح من التلفون: الرمز ينمسح", asy
   assert.equal(await kvGet(`app_push_${C}`), null);
   reply = "ok";
 });
+
+test("🟢 بدأ الامتحان: يوصل دائماً حتى لو فاتح المحادثة، وإشعار المحادثة ما يتكرر وياه", async () => {
+  sent.length = 0;
+  await push.noteChatIn(B);
+  assert.equal(await push.examPush(B, "امتحان الفصل الأول <b>1</b>", 15), true);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].m.type, "bot_exam");
+  assert.match(sent[0].m.title, /بدأ امتحانك: امتحان الفصل الأول 1/);
+  assert.match(sent[0].m.body, /15 دقيقة/);
+  // رسالة المحادثة اللي وراه ما تطلع إشعار ثاني
+  await beforeTelegram("sendMessage", { chat_id: B, text: "🟢 بدأ امتحانك" });
+  assert.equal(sent.length, 1);
+  // غير طالب تجربة: لا
+  assert.equal(await push.examPush(C, "x", 15), false);
+});

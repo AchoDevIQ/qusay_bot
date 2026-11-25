@@ -388,6 +388,33 @@ export async function startNowForTest(itemId: unknown) {
   await put("sched_items", { ...it!, at: stamp(), notified: "test" });
 }
 
+/** ⏰ قبل الامتحان بـ10 دقايق (طلبه 2026-11-25): رسالة بالمحادثة وإشعار مستعجل على التلفون، حتى يتجهز.
+ * مرة وحدة لكل امتحان (reminded). الحضوري والموقوف ما توصلهم */
+export const SOON_MIN = 10;
+export async function notifySoon(key: unknown, limit = 1200) {
+  await ensure();
+  if (key !== cronKey()) throw new ApiError(401, "no");
+  const now = stamp(), soon = addMinutes(now, SOON_MIN);
+  // «reminded» بالذاكرة مو بالسؤال: الامتحانات القديمة بالفايرستور ما بيها هالحقل أصلاً
+  const due = (await find("sched_items", { status: "waiting", notified: null }))
+    .filter((it) => !it.reminded && String(it.at) > now && String(it.at) <= soon).slice(0, limit);
+  const exams = new Map<unknown, Row | null>();
+  const jobs: { uid: number; title: string; mins: number; at: string }[] = [];
+  for (const it of due) {
+    await update("sched_items", { id: it.id }, { reminded: now });
+    const st = await student(it.user_id);
+    if (st?.exam === "حضوري" || await activeStop(it.user_id)) continue;
+    if (!exams.has(it.exam_id)) exams.set(it.exam_id, await one("bank_exams", { id: it.exam_id }));
+    const mins = Math.max(1, Math.round((Date.parse(String(it.at).replace(" ", "T")) - Date.parse(now.replace(" ", "T"))) / 60000));
+    jobs.push({ uid: it.user_id, title: String(exams.get(it.exam_id)?.title ?? ""), mins, at: String(it.at).slice(11, 16) });
+  }
+  const { examSoonPush } = await import("./appPush.ts");
+  for (let i = 0; i < jobs.length; i += 20) await Promise.all(jobs.slice(i, i + 20).map((j) => examSoonPush(j.uid, j.title, j.mins).catch(() => false)));
+  const sent = await sendMany(jobs, (j) => send(j.uid, `⏰ <b>امتحانك يبدي بعد ${j.mins} دقيقة: ${esc(j.title)}</b>
+الساعة ${ampm(j.at)}. جهز نفسك وشحن تلفونك، وأول ما يبدي يوصلك إشعار.`));
+  return { sent, due: jobs.length };
+}
+
 /** رسالة «بدأ الامتحان». يشغلها مؤقت من برا لأن السيرفر ينام: /api/cron?key=... */
 export async function notifyStarted(key: unknown, s: SchedSettings, limit = 1200) {
   await ensure();
@@ -405,6 +432,9 @@ export async function notifyStarted(key: unknown, s: SchedSettings, limit = 1200
     if (!exams.has(it.exam_id)) exams.set(it.exam_id, await one("bank_exams", { id: it.exam_id }));
     jobs.push({ uid: it.user_id, title: String(exams.get(it.exam_id)?.title ?? "") });
   }
+  // إشعار التلفون أول (مستعجل، يوصل دائماً)، وبعده رسالة المحادثة
+  const { examPush } = await import("./appPush.ts");
+  for (let i = 0; i < jobs.length; i += 20) await Promise.all(jobs.slice(i, i + 20).map((j) => examPush(j.uid, j.title, s.window).catch(() => false)));
   const sent = await sendMany(jobs, (j) => send(j.uid, `🟢 <b>بدأ امتحانك: ${j.title}</b>
 ادخل عليه خلال ${s.window} دقيقة.`, { kb: roomButton(j.uid) }));
   return { sent, due: jobs.length };

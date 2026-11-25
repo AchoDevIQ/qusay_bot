@@ -135,7 +135,7 @@ export async function syncLectureAtts(env: AppEnv, base: string) {
         for (const [k, l] of lecs.entries()) {
           const info = { id: l.id, env, ch: c.ch, lang: track === "english" ? "en" as const : "ar" as const, topics, ti, lec: lecNumber(l.title) || k + 1, title: l.title, topic: t.name };
           await saveLecInfo(info);
-          if (!(await lectureQs(books, info)).length) { none++; continue; }
+          if (!(await lectureQs(books, info, true)).length) { none++; continue; }
           if (have.has(l.id)) { already++; continue; }
           const n = (await appLecture(env, l.id)).count;
           const qbook = await addBoardAttachment(env, l.id, `${base}/store/qbook?lec=${l.id}`, "📘 ملزمة المحاضرة: الأسئلة وحلولها", n, QBOOK_TYPE);

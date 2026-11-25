@@ -9,7 +9,7 @@ import { kvGet, kvSet, remove } from "./db.ts";
 const PROJECT = "qmath-iq";
 const key = (uid: number) => `app_push_${uid}`;
 const lastInKey = (uid: number) => `app_lastin_${uid}`;
-export type PushType = "bot_chat" | "bot_notice";
+export type PushType = "bot_chat" | "bot_notice" | "bot_exam";
 export type PushMsg = { title: string; body: string; type: PushType };
 type Sender = (token: string, m: PushMsg) => Promise<"ok" | "gone" | "fail">;
 
@@ -40,8 +40,8 @@ async function fcmSend(token: string, m: PushMsg): Promise<"ok" | "gone" | "fail
     token,
     notification: { title: m.title, body: m.body },
     data: { type: m.type },
-    android: { priority: "high", notification: { channel_id: "student_app_default", tag: m.type, sound: "default" } },
-    apns: { headers: { "apns-collapse-id": m.type }, payload: { aps: { sound: "default", "thread-id": m.type } } },
+    android: { priority: "high", notification: { channel_id: "student_app_default", tag: m.type, sound: "default", ...(m.type === "bot_exam" ? { notification_priority: "PRIORITY_MAX", visibility: "PUBLIC" } : {}) } },
+    apns: { headers: { "apns-collapse-id": m.type, "apns-priority": "10" }, payload: { aps: { sound: "default", "thread-id": m.type, ...(m.type === "bot_exam" ? { "interruption-level": "time-sensitive" } : {}) } } },
   };
   const r = await fetch(`https://fcm.googleapis.com/v1/projects/${PROJECT}/messages:send`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${at}` }, body: JSON.stringify({ message }),
@@ -85,6 +85,25 @@ export async function chatPush(uid: number, text: string) {
   if (now - (recent.get(uid) ?? 0) < 20_000) return false;
   recent.set(uid, now);
   return pushApp(uid, { title: "💬 رسالة جديدة", body: plain(text) || "وصلتك رسالة جديدة بالمحادثة", type: "bot_chat" });
+}
+
+/** 🟢 بدأ الامتحان (طلبه 2026-11-25): يوصل دائماً، حتى لو هسه فاتح المحادثة أو التطبيق، بأولوية عالية،
+ * ومن يدوسه تنفتح «امتحاناتي». ينطلب قبل رسالة المحادثة، فإشعار المحادثة العادي ما يتكرر وياه */
+export async function examPush(uid: number, title: string, minutes: number) {
+  if (!(await kvGet(key(uid)).catch(() => null))) return false;
+  const { isPilot } = await import("./appLink.ts");
+  if (!await isPilot(uid)) return false;
+  recent.set(uid, Date.now());
+  return pushApp(uid, { title: `🟢 بدأ امتحانك${title ? `: ${plain(title, 60)}` : ""}`, body: `ادخل عليه خلال ${minutes} دقيقة. دوس هنا حتى تفتح امتحاناتي.`, type: "bot_exam" });
+}
+
+/** ⏰ امتحانك بعد 10 دقايق: نفس الإشعار المستعجل (يفتح «امتحاناتي») */
+export async function examSoonPush(uid: number, title: string, minutes: number) {
+  if (!(await kvGet(key(uid)).catch(() => null))) return false;
+  const { isPilot } = await import("./appLink.ts");
+  if (!await isPilot(uid)) return false;
+  recent.set(uid, Date.now());
+  return pushApp(uid, { title: `⏰ امتحانك بعد ${minutes} دقيقة`, body: `${title ? `${plain(title, 60)}. ` : ""}جهز نفسك، وأول ما يبدي يوصلك إشعار.`, type: "bot_exam" });
 }
 
 /** إشعار جديد: لطلاب التجربة اللي يوصلهم وعدهم رمز تلفون. يرجع عدد اللي وصلهم */

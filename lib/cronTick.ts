@@ -34,6 +34,7 @@ export async function cronTick(key: unknown) {
     try { out[name] = await f(); } catch (e) { console.error("cron", name, e); out[name] = "error"; }
   };
   try {
+    await step("soon", async () => (await import("./examRoom.ts")).notifySoon(key));
     await step("started", async () => notifyStarted(key, await schedSettings()));
     await step("checked", () => sweepCheckpoints());
     await step("absences", async () => (await import("./absences.ts")).sweepAbsences());

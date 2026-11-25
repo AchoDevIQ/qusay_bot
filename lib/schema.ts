@@ -35,7 +35,7 @@ export const SCHEMA: Record<string, Table> = {
   schedules: { key: "user_id", cols: nulls("mode", "center_id", "picks", "start_day", "end_day", "weekdays", "hour", "created", "hol", "pack") },
   place_slots: { key: "center_id", cols: { slots: null } },
   place_dates: { key: ["center_id", "exam_id"], cols: nulls("day", "versions") },
-  sched_items: { key: "id", auto: true, cols: nulls("user_id", "exam_id", "at", "status", "version_id", "started_at", "submitted_at", "opened_at", "notified", "grader_id", "total", "graded_at", "kind", "paid_id", "attended_at", "attended_by", "exc_state", "exc_reason", "exc_at", "exc_by", "fixed", "retake_of", "absent_told", "catch_place") },
+  sched_items: { key: "id", auto: true, cols: nulls("user_id", "exam_id", "at", "status", "version_id", "started_at", "submitted_at", "opened_at", "notified", "grader_id", "total", "graded_at", "kind", "paid_id", "attended_at", "attended_by", "exc_state", "exc_reason", "exc_at", "exc_by", "fixed", "retake_of", "absent_told", "catch_place", "reminded") },
   question_marks: { key: ["item_id", "q"], cols: { mark: null } },
   paper_ink: { key: ["item_id", "page"], cols: { ink: null } },
   comp_groups: { key: "id", auto: true, cols: nulls("name", "name_key", "code", "owner_id", "kind", "status", "created", "decided_at", "decided_by") },
