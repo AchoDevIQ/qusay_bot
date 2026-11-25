@@ -88,6 +88,9 @@ function segmentsOf(chapters: Map<string, Row[]>, cfg: Cfg): Seg[] {
 export const activeStop = async (uid: number) => (await find("student_stops", { user_id: uid }, { order: ["-id"] })).find((s) => !s.lifted) ?? null;
 /** للتطبيق بعدين: المحاضرات موقوفة على هذا الطالب؟ */
 export const lecturesStopped = async (uid: number) => !!(await activeStop(uid))?.lectures;
+/** المتفوق: للطالب (ويا صورته أو الفيديو) ولولي أمره */
+export const topText = (name: string, ch: string, score: number, max: number) => `🏆 عاشت إيدك يا ${name}، إنت من المتفوقين بسيطرة ${ch}: ${score} من ${max}`;
+export const topGuardian = (name: string, ch: string, score: number, max: number) => `🏆 ابنكم ${esc(name)} من المتفوقين بسيطرة ${esc(ch)}: جاب ${score} من ${max}. عاشت إيده 🌹`;
 const whatOf = (s: Row) => (s.lectures ? "الامتحانات والمحاضرات" : "الامتحانات");
 
 const fill = (text: string, v: Record<string, string | number>) => esc(text).replace(/\{([^{}]+)\}/g, (m, k) => (k in v ? esc(String(v[k])) : m));
@@ -199,7 +202,9 @@ export async function runCheckpoints(uid: number) {
       // 🏆 المتفوق (معدل قائمة المتفوقين، أو 95 إذا ما محددها): صورة المتفوقين ويا تهنئة
       const r = cfg.rules[String(g.exam)];
       if (r?.topImg && score >= (r.honor?.min ?? 95) * n) {
-        try { await sendPicture(uid, r.topImg, `🏆 عاشت إيدك يا ${st.name ?? ""}، إنت من المتفوقين بسيطرة ${g.chapter}: ${score} من ${n * PER_EXAM}`); } catch (e) { console.error(e); }
+        try { await sendPicture(uid, r.topImg, topText(st.name ?? "", g.chapter, score, n * PER_EXAM)); } catch (e) { console.error(e); }
+        const gd = await guardianOf(uid);
+        if (gd) try { await send(gd.guardian_id, topGuardian(st.name ?? "", g.chapter, score, n * PER_EXAM)); } catch (e) { console.error(e); }
       }
       continue;
     }
@@ -456,6 +461,23 @@ export async function checkpointsAction(raw: Row | FormData) {
     cfg.stopImage = body.dropImage === "1" ? null : await savePicture(body.file);
     await saveCfg(cfg);
     notice = cfg.stopImage ? "✅ انحفظت شخصية الإيقاف" : "🗑 انشالت شخصية الإيقاف";
+  } else if (a === "preview") {
+    // 👁 شنو يوصل: الموقوف وولي أمره، والمتفوق وولي أمره، بأمثلة (اسم طالب التجربة إذا مختار)
+    const cfg = await loadCfg();
+    const id = Number(body.exam);
+    const seg = segmentsOf(await bookExams(), cfg).find((x) => x.exam === id);
+    need(seg, "سوّي السيطرة أول");
+    const r = cfg.rules[String(id)]!;
+    const tuid = Number(await kvGet("fulltest_student")) || 0;
+    const name = String((tuid ? (await student(tuid))?.name : "") || "اسم الطالب");
+    const n = seg!.ids.length, max = n * PER_EXAM;
+    const low = Math.max(0, (seg!.min || max / 2) - 30);
+    const v = { "الاسم": name, "الموقوف": "الامتحانات والمحاضرات", "السبب": LOW, "الفصل": seg!.chapter, "العدد": n, "الدرجة": low, "الكلي": max, "المطلوب": seg!.min, "الغياب": 0 };
+    const topScore = Math.min(max, Math.ceil((r.honor?.min ?? 95) * n));
+    return { preview: {
+      stop: { media: cpImageUrl(r.stopImg || cfg.stopImage), bubble: plain(cfg.stopBubble, v), student: fill(cfg.student, v), guardian: fill(cfg.guardian, v) },
+      top: r.topImg ? { media: cpImageUrl(r.topImg), student: topText(name, seg!.chapter, topScore, max), guardian: topGuardian(name, seg!.chapter, topScore, max) } : null,
+    } };
   } else if (a === "cpImage") {
     // صورة المتفوقين أو الموقوفين لسيطرة وحدة (من «مساري»)
     const cfg = await loadCfg();

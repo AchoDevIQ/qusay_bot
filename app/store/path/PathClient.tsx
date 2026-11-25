@@ -129,6 +129,17 @@ function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kin
   const [addr, setAddr] = useState(!!step.cp?.honor?.addr);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  type Pv = { stop: { media: string; bubble: string; student: string; guardian: string }; top: { media: string; student: string; guardian: string } | null };
+  const [pv, setPv] = useState<Pv | null>(null);
+  const preview = async () => {
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/checkpoints", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "preview", exam: step.id }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j.error || "صار خطأ");
+      setPv(j.preview);
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
   const call = async (body: Record<string, unknown>) => {
     setBusy(true); setErr("");
     try {
@@ -177,6 +188,29 @@ function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kin
           <Pic label="⛔ صورة أو فيديو الموقوفين" hint="توصل اللي توقف عليه بهالسيطرة (بدل الصورة العامة)" url={step.cp.stopImg} onPick={(f) => void upload("stop", f)} onDrop={() => void upload("stop", null)} busy={busy} />
         </div>}
         {!step.cp && <div className="qp-dh">بعد ما تحفظ السيطرة، تگدر تحط صورة للمتفوقين وصورة للموقوفين.</div>}
+        {step.cp && <button type="button" className="qp-pvbtn" disabled={busy} onClick={() => void (pv ? setPv(null) : preview())}>{pv ? "اخفي" : "👁 شنو يوصل الطالب وولي أمره؟"}</button>}
+        {pv && <div className="qp-pv">
+          <div className="qp-pvcol">
+            <b>⛔ اللي ينوقف (مثال: جاب أقل من المطلوب)</b>
+            <small>📱 يوصل الطالب:</small>
+            <Media url={pv.stop.media} />
+            {pv.stop.bubble && <div className="qp-bub">💬 {pv.stop.bubble}</div>}
+            <div className="qp-msgx" dangerouslySetInnerHTML={{ __html: br(pv.stop.student) }} />
+            <small>👪 يوصل ولي أمره (كتابة بس):</small>
+            <div className="qp-msgx" dangerouslySetInnerHTML={{ __html: br(pv.stop.guardian) }} />
+          </div>
+          <div className="qp-pvcol">
+            <b>🏆 المتفوق</b>
+            {pv.top ? <>
+              <small>📱 يوصل الطالب:</small>
+              <Media url={pv.top.media} />
+              <div className="qp-msgx">{pv.top.student}</div>
+              <small>👪 يوصل ولي أمره:</small>
+              <div className="qp-msgx" dangerouslySetInnerHTML={{ __html: pv.top.guardian }} />
+            </> : <div className="qp-dh">حط «🏆 صورة أو فيديو المتفوقين» حتى توصلهم تهنئة. بدونها ما يوصل المتفوق شي خاص.</div>}
+            <small>اللي يعبر عادي (مو متفوق) ما يوصله شي من السيطرة، إلا إذا حاط نتائج بالدرجات بصفحة الموقوفين.</small>
+          </div>
+        </div>}
         {err && <div className="qp-err">{err}</div>}
         <div className="qp-btns">
           <button type="button" className="ok" disabled={busy} onClick={save}>💾 حفظ السيطرة</button>
@@ -188,6 +222,12 @@ function CpDialog({ step, onClose, onSaved, onPic }: { step: Extract<Step, { kin
   );
 }
 
+/** رسالة البوت: أسطرها بـ<br> */
+const br = (t: string) => t.split(String.fromCharCode(10)).join("<br>");
+function Media({ url }: { url: string }) {
+  if (!url) return <span className="qp-nopic">ماكو صورة</span>;
+  return /\.mp4/.test(decodeURIComponent(url)) ? <video src={url} controls playsInline className="qp-media" /> : <img src={url} alt="" className="qp-media" />;
+}
 function Pic({ label, hint, url, onPick, onDrop, busy }: { label: string; hint: string; url?: string; onPick: (f: File) => void; onDrop: () => void; busy: boolean }) {
   return (
     <div className="qp-pic">
@@ -275,6 +315,14 @@ a.qp-step{text-decoration:none}
 .qp-nopic{display:flex;align-items:center;justify-content:center;height:80px;border:1px dashed #D5DAE5;border-radius:8px;color:#8A93A6;font-size:13px}
 .qp-up{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid #D5DAE5;border-radius:10px;font-weight:700;cursor:pointer}
 @media (max-width:480px){.qp-pics{grid-template-columns:1fr}}
+.qp-pvbtn{min-height:48px;border-radius:12px;border:1px solid #141F33;background:#fff;color:#141F33;font:inherit;font-weight:800;margin-top:6px}
+.qp-pv{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qp-pvcol{display:flex;flex-direction:column;gap:6px;background:#F5F6FA;border-radius:12px;padding:10px}
+.qp-pvcol small{color:#5C667A;font-weight:700}
+.qp-media{width:100%;max-height:180px;object-fit:contain;border-radius:10px;background:#fff}
+.qp-bub{background:#fff;border-radius:10px;padding:8px;font-size:14px}
+.qp-msgx{background:#fff;border-radius:10px;padding:8px 10px;font-size:14px;line-height:1.7;border:1px solid #E6E9F0}
+@media (max-width:520px){.qp-pv{grid-template-columns:1fr}}
 .qp-msg{max-width:600px;margin:40px auto;padding:0 16px;text-align:center;font-size:18px;line-height:1.8}
 .qp-toast{position:fixed;left:16px;right:16px;bottom:20px;background:#141F33;color:#fff;border-radius:12px;padding:12px 14px;text-align:center;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 `;
