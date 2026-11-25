@@ -276,6 +276,9 @@ function DoorCard({ door }: { door: { id: number; name: string; link: string; qr
       <h2>🔗 رابط دخول {door.name}</h2>
       <img src={door.qr} alt="" style={{ width: 220, background: "#fff", borderRadius: 12, margin: "0 auto" }} />
       <div className="exhint">يصوّر الرمز بكاميرة تلفونه أو الآيباد، أو دزله الرابط. يفتحه ويحط رمز سري من 4 أرقام، وبعدها يدخل صفحاته بدون تليگرام.</div>
+      {/* الرابط نفسه مكتوب، وزر ينسخه: حتى يلصقه بكروم بالحاسبة (طلبه 2026-11-25: «ما دا يطلع لي كروم») */}
+      <div dir="ltr" style={{ userSelect: "all", WebkitUserSelect: "all", wordBreak: "break-all", fontSize: 13, background: "rgba(255,255,255,.08)", borderRadius: 8, padding: 8, margin: "8px 0" }}>{door.link}</div>
+      <button type="button" className="exbtn" onClick={() => { void navigator.clipboard?.writeText(door.link).then(() => alert("✅ انسخ. افتح كروم والصقه فوگ (Ctrl و V)")).catch(() => alert("ما انسخ. دوس على الرابط مطولاً واختار نسخ")); }}>📋 انسخ الرابط</button>
       <button type="button" className="exbtn" onClick={() => { if (navigator.share) void navigator.share({ title: "QMath", url: door.link }).catch(() => undefined); else void navigator.clipboard?.writeText(door.link); }}>📤 دز الرابط</button>
     </div></div>
   );
