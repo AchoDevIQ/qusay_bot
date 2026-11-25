@@ -187,7 +187,10 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
   }));
   const { activeStop } = await import("./checkpoints.ts");
   const stop = admin ? null : await activeStop(uid);
-  return { ch, chapters: chs.map((c) => ({ ch: c, name: `الفصل ${ORD[c]}` })), env, lang, lecturesBought, sections: out, stopped: !!stop };
+  // ما اختار أوقات امتحاناته: أول خطوة بمساري
+  const { needsSchedule } = await import("./schedApi.ts");
+  const pickTimes = admin ? false : await needsSchedule(uid);
+  return { ch, chapters: chs.map((c) => ({ ch: c, name: `الفصل ${ORD[c]}` })), env, lang, lecturesBought, sections: out, stopped: !!stop, pickTimes };
 }
 
 /** قبل ما تنفتح محاضرة من المسار: لازم تكون مفتوحة إله (كمّل اللي قبلها) */

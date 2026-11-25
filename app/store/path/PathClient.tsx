@@ -8,9 +8,11 @@ type Step =
   | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null }
   | { kind: "cp"; exam: number; min: number; absent: number; count: number };
 type Section = { name: string; general?: boolean; steps: Step[] };
-type Path = { ch: number; chapters: { ch: number; name: string }[]; lecturesBought: boolean; sections: Section[]; stopped: boolean };
+type Path = { ch: number; chapters: { ch: number; name: string }[]; lecturesBought: boolean; sections: Section[]; stopped: boolean; pickTimes?: boolean };
 
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
+/** «امتحاناتي» من جوه مساري (نفس الدخول): المواعيد، ودخول الامتحان، والدرجة والورقة */
+const examsLink = () => { const q = new URLSearchParams(location.search); const app = q.get("app"); return `/store/myexams?t=${encodeURIComponent(token())}${app ? `&app=${encodeURIComponent(app)}` : ""}`; };
 async function api(body: Record<string, unknown>) {
   const r = await fetch("/api/path", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ t: token(), ...body }) });
   const j = await r.json().catch(() => ({}));
@@ -22,7 +24,7 @@ const when = (at?: string) => {
   const d = new Date(at.replace(" ", "T"));
   return d.toLocaleString("ar-IQ", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
 };
-const EXAM: Record<string, string> = { buy: "🔒 اشتري امتحانات الفصل", nodate: "🗓 بعده ما انحط موعده", locked: "🗓 موعده", open: "🟢 مفتوح هسه، ادخل من الامتحانات", missed: "❌ فاتك", done: "✅ قدمته، ينتظر التصحيح", graded: "✅ درجتك" };
+const EXAM: Record<string, string> = { buy: "🔒 اشتري امتحانات الفصل", nodate: "🗓 بعده ما انحط موعده", locked: "🗓 موعده", open: "🟢 مفتوح هسه، دوس هنا وادخله", missed: "❌ فاتك", done: "✅ قدمته، ينتظر التصحيح", graded: "✅ درجتك" };
 
 export default function PathClient() {
   const [p, setP] = useState<Path | null>(null);
@@ -58,6 +60,7 @@ export default function PathClient() {
       </header>
       {progress && progress.all > 0 && <div className="qp-bar"><i style={{ width: `${(100 * progress.done) / progress.all}%` }} /></div>}
       {p && p.chapters.length > 1 && <nav className="qp-ch">{p.chapters.map((c) => <button key={c.ch} type="button" className={c.ch === p.ch ? "on" : ""} onClick={() => load(c.ch)}>{c.name}</button>)}</nav>}
+      {p?.pickTimes && <a className="qp-go" href={examsLink()}>🗓 أول شي: اختار أوقات امتحاناتك<small>دوس هنا، وبعدها ينفتحلك مسارك كله</small></a>}
       {p?.stopped && <div className="qp-stop">⛔ المنصة موقوفة عليك بسبب السيطرة. شوف رسالتها بالمحادثة، وراجع الإدارة.</div>}
       {err && <div className="qp-msg">{err}</div>}
       {!err && !p && <div className="qp-msg">جاري التحميل...</div>}
@@ -80,10 +83,10 @@ export default function PathClient() {
                   <span className="qp-t"><b>🎬 {s.title}</b><small>{s.state === "done" ? "كملتها" : s.state === "open" ? (s.pct ? `وصلت ${s.pct}٪، كمّلها للآخر` : "هسه دورها") : s.state === "buy" ? "اشتري المحاضرات" : "تنفتح بعد اللي قبلها"}</small></span>
                 </button>
               ) : s.kind === "exam" ? (
-                <div key={k} className={`qp-step exam ${s.state}`}>
+                <a key={k} className={`qp-step exam ${s.state}`} href={s.state === "buy" ? undefined : examsLink()}>
                   <span className="qp-ic">📝</span>
                   <span className="qp-t"><b>{s.title}</b><small>{EXAM[s.state] ?? s.state}{s.state === "locked" ? `: ${when(s.at)}` : ""}{s.state === "graded" && s.total !== null && s.total !== undefined ? ` ${s.total}` : ""}</small></span>
-                </div>
+                </a>
               ) : (
                 <div key={k} className="qp-step cp">
                   <span className="qp-ic">🚦</span>
@@ -126,6 +129,8 @@ const CSS = `
 .qp-step.cp{background:#FFF1E6;border:1px dashed #E67E22}
 .qp-ic{font-size:20px;width:28px;text-align:center;flex:none}
 .qp-t{display:flex;flex-direction:column;min-width:0}.qp-t b{font-size:15px}.qp-t small{color:#5C667A;font-size:13px;line-height:1.5}
+.qp-go{display:flex;flex-direction:column;gap:4px;margin:14px 16px 0;padding:16px;border-radius:14px;background:#141F33;color:#F6C94A;font-weight:800;font-size:18px;text-decoration:none;box-shadow:0 4px 14px rgba(20,31,51,.25)}.qp-go small{color:#C9D1E0;font-weight:600;font-size:13px}
+a.qp-step{text-decoration:none}
 .qp-msg{max-width:600px;margin:40px auto;padding:0 16px;text-align:center;font-size:18px;line-height:1.8}
 .qp-toast{position:fixed;left:16px;right:16px;bottom:20px;background:#141F33;color:#fff;border-radius:12px;padding:12px 14px;text-align:center;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 `;
