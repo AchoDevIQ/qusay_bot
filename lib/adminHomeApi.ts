@@ -89,6 +89,7 @@ async function homeData(uid: number) {
     if (stopped) people.push({ page: "checkpoints", icon: "⛔", title: "الموقوفين بالسيطرة", note: `${stopped} طالب موقوف`, hot: true });
   }
   if (await isAdmin(uid)) setup.unshift({ page: "tests", icon: "✅", title: "تست التطبيق", note: "الصح والباقي والمشاكل" });
+  if (await isAdmin(uid)) setup.unshift({ page: "fulltest", icon: "🧭", title: "التست الكامل", note: "كل التطبيق من الطول للطول، خطوة خطوة" });
   if (await isAdmin(uid)) setup.unshift({ page: "guide", icon: "📖", title: "دليل البوت", note: "شرح كل قسم، وترسله للمساعدين" });
   if (shop.length) groups.push({ title: "المتجر", tiles: shop });
   if (people.length) groups.push({ title: "الطلاب والامتحانات", tiles: people });
