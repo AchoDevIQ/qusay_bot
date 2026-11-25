@@ -45,10 +45,16 @@ const BUBBLE_MAX = 220;
 export const DEFAULT_STUDENT = "⛔ توقفت عليك {الموقوف}\n\nالسبب: {السبب}\n\nسيطرة {الفصل}، آخر {العدد} امتحانات:\nمجموعك {الدرجة} من {الكلي}، والمطلوب {المطلوب}\nغياباتك: {الغياب}\n\nحتى ترجعلك المحاضرات والامتحانات، لازم يحضر ولي أمرك إلى {المعهد} بهاي الأيام والأوقات:\n{الأوقات}";
 export const DEFAULT_GUARDIAN = "⛔ توقفت {الموقوف} على الطالب {الاسم}\n\nالسبب: {السبب}\n\nسيطرة {الفصل}، آخر {العدد} امتحانات:\nمجموعه {الدرجة} من {الكلي}، والمطلوب {المطلوب}\nغياباته: {الغياب}\n\nحتى ترجع المحاضرات والامتحانات للطالب، يرجى حضوركم إلى {المعهد} بهاي الأيام والأوقات:\n{الأوقات}";
 
+/** الرسائل المحفوظة قبل (2026-11-25) آخرها «ويا قصي العميري»: تتبدل وحدها لآخر الجديد (المعهد وأيامه وأوقاته) */
+const OLD_ENDS: [RegExp, string][] = [
+  [/حتى ترجع لازم يحضر ولي أمرك ويا قصي العميري\.?\s*$/, DEFAULT_STUDENT.slice(DEFAULT_STUDENT.indexOf("حتى ترجعلك"))],
+  [/حتى يرجع لازم تحضر ويا قصي العميري\.?\s*$/, DEFAULT_GUARDIAN.slice(DEFAULT_GUARDIAN.indexOf("حتى ترجع المحاضرات"))],
+];
+export const freshText = (t: string) => OLD_ENDS.reduce((x, [re, to]) => x.replace(re, to), t);
 export async function loadCfg(): Promise<Cfg> {
   let saved: Partial<Cfg> = {};
   try { saved = JSON.parse(await kvGet(KEY) ?? "{}"); } catch { /* إعدادات خربانة */ }
-  return { rules: saved.rules ?? {}, student: saved.student || DEFAULT_STUDENT, guardian: saved.guardian || DEFAULT_GUARDIAN, stopImage: saved.stopImage ?? null, stopBubble: saved.stopBubble ?? DEFAULT_BUBBLE,
+  return { rules: saved.rules ?? {}, student: freshText(saved.student || DEFAULT_STUDENT), guardian: freshText(saved.guardian || DEFAULT_GUARDIAN), stopImage: saved.stopImage ?? null, stopBubble: saved.stopBubble ?? DEFAULT_BUBBLE,
     mode: saved.mode === "percent" ? "percent" : "marks",
     pct: { min: Number(saved.pct?.min ?? 50), absent: Number(saved.pct?.absent ?? 0), bands: Array.isArray(saved.pct?.bands) ? saved.pct!.bands : [] } };
 }
@@ -295,7 +301,7 @@ export async function checkStopped(uid: number, item?: unknown) {
   await runCheckpoints(uid);
   const s = await activeStop(uid);
   if (s && await openedForStopped(uid, item)) return;
-  if (s) throw new ApiError(423, `⛔ توقفت عليك ${whatOf(s)} بسبب ${s.reason}. حتى ترجع تواصل ويا قصي العميري.`, { stop: await (async () => { const c = await loadCfg(); return { image: cpImageUrl(c.stopImage), bubble: plain(c.stopBubble, { "الاسم": (await student(uid))?.name ?? "" }) }; })() });
+  if (s) throw new ApiError(423, `⛔ توقفت عليك ${whatOf(s)} بسبب ${s.reason}. حتى ترجع، لازم يحضر ولي أمرك إلى ${(await instituteOf(await student(uid))).name} بأيامه وأوقاته (مكتوبة برسالة السيطرة بالمحادثة).`, { stop: await (async () => { const c = await loadCfg(); return { image: cpImageUrl(c.stopImage), bubble: plain(c.stopBubble, { "الاسم": (await student(uid))?.name ?? "" }) }; })() });
 }
 
 export async function liftStop(uid: number, by: number) {

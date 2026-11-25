@@ -207,7 +207,7 @@ export async function pathOpen(uid: number, lec: unknown) {
     if (p.ch !== ch) continue;
     for (const sec of p.sections) for (const st of sec.steps) {
       if (st.kind !== "lec" || st.id !== id) continue;
-      need(!p.stopped, "⛔ المنصة موقوفة عليك هسه. راجع رسالة السيطرة", 423);
+      need(!p.stopped, "⛔ المنصة موقوفة عليك هسه. حتى ترجع، لازم يحضر ولي أمرك إلى المعهد بأيامه وأوقاته (مكتوبة برسالة السيطرة بالمحادثة)", 423);
       need(st.state !== "buy", "اشتري محاضرات هذا الفصل حتى تنفتح", 403);
       need(st.state !== "locked", "🔒 كمّل المحاضرة اللي قبلها للآخر، وبعدها تنفتح هاي", 403);
       return { ok: true };

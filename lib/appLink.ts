@@ -154,7 +154,7 @@ export async function appChapters(uid: number): Promise<string[]> {
 }
 
 // ---------- الدخول: التطبيق يفتح /api/app/enter بطلب POST فيه رمز الطالب، ويرجع له تحويل لصفحة البوت
-const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo", "vote", "board", "qbook", "path"]);
+const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo", "vote", "board", "qbook", "path", "alarm"]);
 export const APP_ERR = "ما گدرنا نفتح الصفحة. سد التطبيق وافتحه من جديد. إذا تكررت، تواصل ويا الإدارة.";
 
 /** يرجع رابط الصفحة (نسبي) لطالب التطبيق، أو null إذا الرمز أو الحساب مو صالح */
@@ -223,7 +223,10 @@ export async function appState(form: { id?: unknown; env?: unknown; push?: unkno
   // «يهمك هسه»: بطاقات الرئيسية
   const { nowCards } = await import("./appNow.ts");
   const now = await nowCards(uid).catch((e) => { console.error("now cards", e); return []; });
-  return { pilot, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid), now };
+  // ⏰ منبه الامتحانات: التطبيق يحطه بالموبايل نفسه، ويعيده كل ما يفتح (فإذا تبدل موعد امتحان يتبدل المنبه)
+  const { alarmsFor, toneOf } = await import("./examAlarm.ts");
+  const alarms = await alarmsFor(uid).catch((e) => { console.error("alarms", e); return []; });
+  return { pilot, needSchedule: await needsSchedule(uid), notices: await unreadNotices(uid), chat: await unreadChat(uid), now, alarms, tone: await toneOf(uid) };
 }
 
 // ---------- مشاهدات المحاضرات (طلب الأستاذ 2026-11-17): التطبيق يبلغ البوت لما الطالب يفتح محاضرة ولوين وصل منها.

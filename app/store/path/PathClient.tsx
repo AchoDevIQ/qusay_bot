@@ -94,14 +94,15 @@ export default function PathClient() {
       <style>{CSS}</style>
       <header>
         <img src="/app-logo.png" alt="" />
-        <div><b>مسارك ويا قصي العميري</b>{progress && progress.all > 0 && <small>خلصت {progress.done} من {progress.all} محاضرة</small>}</div>
+        <div style={{ flex: 1 }}><b>مسارك ويا قصي العميري</b>{progress && progress.all > 0 && <small>خلصت {progress.done} من {progress.all} محاضرة</small>}</div>
+        <a className="qp-alarm" href={`/store/alarm?t=${encodeURIComponent(token())}${new URLSearchParams(location.search).get("app") ? `&app=${encodeURIComponent(new URLSearchParams(location.search).get("app")!)}` : ""}`} aria-label="منبه امتحاناتي">⏰</a>
       </header>
       {progress && progress.all > 0 && <div className="qp-bar"><i style={{ width: `${(100 * progress.done) / progress.all}%` }} /></div>}
       {/* معاينة الأستاذ: داتا التجربة لو الحقيقية */}
       {p && p.chapters.length === 5 && <nav className="qp-ch">{(["prod", "staging"] as const).map((e) => <button key={e} type="button" className={(new URLSearchParams(location.search).get("env") ?? "prod") === e ? "on" : ""} onClick={() => { const q = new URLSearchParams(location.search); q.set("env", e); location.search = q.toString(); }}>{e === "prod" ? "محاضرات التطبيق الحقيقية" : "داتا التجربة"}</button>)}</nav>}
       {p && p.chapters.length > 1 && <nav className="qp-ch">{p.chapters.map((c) => <button key={c.ch} type="button" className={c.ch === p.ch ? "on" : ""} onClick={() => load(c.ch)}>{c.name}</button>)}</nav>}
       {p?.pickTimes && <a className="qp-go" href={examsLink()}>🗓 أول شي: اختار أوقات امتحاناتك<small>دوس هنا، وبعدها ينفتحلك مسارك كله</small></a>}
-      {p?.stopped && <div className="qp-stop">⛔ المنصة موقوفة عليك بسبب السيطرة. شوف رسالتها بالمحادثة، وراجع الإدارة.</div>}
+      {p?.stopped && <div className="qp-stop">⛔ المنصة موقوفة عليك بسبب السيطرة. حتى ترجع، لازم يحضر ولي أمرك إلى المعهد بأيامه وأوقاته، ومكتوبة برسالة السيطرة بالمحادثة.</div>}
       {err && <div className="qp-msg">{err}</div>}
       {!err && !p && <div className="qp-msg">جاري التحميل...</div>}
       {p && !p.sections.length && <div className="qp-msg">بعده ما أكو محاضرات بهذا الفصل</div>}
@@ -284,6 +285,7 @@ const CSS = `
 .qp header div{display:flex;flex-direction:column}
 .qp header b{color:#F6C94A;font-size:19px}
 .qp header small{color:#C9D1E0;font-size:13px}
+.qp-alarm{width:44px;height:44px;border-radius:50%;border:2px solid #F6C94A;color:#F6C94A;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none}
 .qp-bar{height:6px;background:#E3E7EF}.qp-bar i{display:block;height:100%;background:linear-gradient(90deg,#F6C94A,#D9A62E)}
 .qp-ch{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 0}
 .qp-ch button{flex:none;min-height:44px;border:1px solid #D5DAE5;background:#fff;border-radius:22px;padding:0 16px;font:inherit;font-weight:700;color:#141F33}
