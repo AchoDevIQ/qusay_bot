@@ -14,7 +14,7 @@ export const BOARD_PERM = "board";
 const MAX_JSON = 15 * 1024 * 1024, MAX_BG = 8 * 1024 * 1024, MAX_LESSONS = 300;
 type Meta = { id: string; title: string; at: string; pages: number };
 /** app: الشرح نازل كملحق بمحاضرة بتطبيق قصي (env، رقم المحاضرة، رقم الملحق)، lt: عنوان المحاضرة */
-type Sent = { id: string; ref: string; title: string; chapter: number; at: string; pages: number; topic?: string; lecture?: number; lt?: string; app?: { env: "staging" | "prod"; lecture: string; att: string } };
+type Sent = { id: string; ref: string; title: string; chapter: number; at: string; pages: number; topic?: string; lecture?: number; lt?: string; app?: { env: "staging" | "prod"; lecture: string; att: string; more?: { lecture: string; att: string }[] } };
 const listKey = (uid: number) => `board_list_${uid}`;
 const SENT = "board_sent";
 const lessonRef = (uid: number, id: string) => `boards/${uid}/${id}.json`;
@@ -143,7 +143,10 @@ export async function boardAction(body: any) {
     const all = await sentList();
     const x = all.find((y) => y.id === String(body.id ?? ""));
     need(x, "مو موجود", 404);
-    if (x!.app) await (await import("./boardAttach.ts")).removeBoardAttachment(x!.app.env, x!.app.att);
+    if (x!.app) {
+      const { removeBoardAttachment } = await import("./boardAttach.ts");
+      for (const a of [x!.app, ...(x!.app.more ?? [])]) await removeBoardAttachment(x!.app.env, a.att);
+    }
     await kvSet(SENT, JSON.stringify(all.filter((y) => y.id !== x!.id)));
     return { ...await state(), notice: "🗑 انسحب الشرح" };
   }
@@ -157,9 +160,13 @@ export async function boardAction(body: any) {
     need(teacher, "بس الأستاذ يدز", 403);
     // محاضرة من التطبيق: الفصل منها هي
     const BA = await import("./boardAttach.ts");
-    const env = body.appLecture ? await BA.boardAppEnv() : null;
-    need(!body.appLecture || env, "الإرسال لملحقات التطبيق مطفي");
-    const al = env ? await BA.appLecture(env, String(body.appLecture)) : null;
+    // محاضرة وحدة، أو ثنتين (العربي والانگليزي) إذا الشرح يشملهم
+    const ids = [...new Set((Array.isArray(body.appLecture) ? body.appLecture : body.appLecture ? [body.appLecture] : []).map(String))].slice(0, 2);
+    const env = ids.length ? await BA.boardAppEnv() : null;
+    need(!ids.length || env, "الإرسال لملحقات التطبيق مطفي");
+    const als = env ? await Promise.all(ids.map((i) => BA.appLecture(env, i))) : [];
+    const al = als[0] ?? null;
+    need(als.every((x) => x.ch === al?.ch), "المحاضرتين لازم من نفس الفصل");
     const ch = al ? al.ch : Number(body.chapter);
     need(ch >= 1 && ch <= 5, "اختار الفصل");
     const id = String(body.id ?? "");
@@ -176,9 +183,17 @@ export async function boardAction(body: any) {
     if (al && env) {
       // الملحق أول: إذا ما انضاف (ماكو إذن، نت)، ما يندز شي
       const { siteBase } = await import("./keyboards.ts");
-      const lt = `${al.title}${al.track === "english" ? " (English)" : ""}`;
-      const att = await BA.addBoardAttachment(env, al.id, `${siteBase()}/store/board?att=${sid}`, `📝 ${meta!.title}`, al.count);
-      row = { id: sid, ref, title: meta!.title, chapter: ch, at: row.at, pages: row.pages, topic: al.topic, lt, app: { env, lecture: al.id, att } };
+      const lt = als.map((x) => `${x.title}${x.track === "english" ? " (English)" : ""}`).join(" + ");
+      const done: { lecture: string; att: string }[] = [];
+      try {
+        for (const x of als) done.push({ lecture: x.id, att: await BA.addBoardAttachment(env, x.id, `${siteBase()}/store/board?att=${sid}`, `📝 ${meta!.title}`, x.count) });
+      } catch (e) {
+        // الثانية ما انضافت: نشيل الأولى حتى ما يبقى نص
+        for (const d of done) await BA.removeBoardAttachment(env, d.att).catch(() => {});
+        throw e;
+      }
+      const topic = [...new Set(als.map((x) => x.topic))].join(" / ");
+      row = { id: sid, ref, title: meta!.title, chapter: ch, at: row.at, pages: row.pages, topic, lt, app: { env, ...done[0], ...(done.length > 1 ? { more: done.slice(1) } : {}) } };
     }
     const where = [`الفصل ${ORD[ch]}`, row.topic, row.lt || (row.lecture ? `المحاضرة ${row.lecture}` : "")].filter(Boolean).join(" · ");
     await kvSet(SENT, JSON.stringify([...(await sentList()), row].slice(-500)));

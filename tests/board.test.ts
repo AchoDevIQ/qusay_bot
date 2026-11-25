@@ -150,8 +150,8 @@ test("📎 الشرح ينزل بملحقات محاضرة التطبيق: يخ�
         { id: "l-en", title: "المحاضره 1", track: "english", state: "draft" }, { id: "x", title: "؟", track: "other", state: "published" }] }] },
       { orderPosition: 6, arabicTitle: "تجريبي 1", isTestChapter: false, subjects_on_chapter: [{ id: "s9", arabicTitle: "تجريبي", lectures_on_subject: [{ id: "t", title: "1", track: "arabic", state: "published" }] }] },
     ] }] };
-    if (q.includes("lecture(id")) return { lecture: { id: v.id, title: "المحاضره 1", track: "arabic", subject: { arabicTitle: "ديموافر", chapter: { orderPosition: 1 } }, lectureAttachments_on_lecture: [{ id: "1" }, { id: "2" }] } };
-    if (q.includes("lectureAttachment_insert")) return { lectureAttachment_insert: { id: "11112222333344445555666677778888" } };
+    if (q.includes("lecture(id")) return { lecture: { id: v.id, title: "المحاضره 1", track: v.id.startsWith("e") ? "english" : "arabic", subject: { arabicTitle: "ديموافر", chapter: { orderPosition: 1 } }, lectureAttachments_on_lecture: [{ id: "1" }, { id: "2" }] } };
+    if (q.includes("lectureAttachment_insert")) return { lectureAttachment_insert: { id: v.l.startsWith("e") ? "99992222333344445555666677778888" : "11112222333344445555666677778888" } };
     if (q.includes("lectureAttachment_delete")) return { lectureAttachment_delete: { id: v.id } };
     return {};
   });
@@ -193,5 +193,27 @@ test("📎 الشرح ينزل بملحقات محاضرة التطبيق: يخ�
   assert.ok(calls.some((c) => c.q.includes("lectureAttachment_delete") && c.v.id === "11112222333344445555666677778888"));
   await assert.rejects(boardAction({ t: homeToken(501), action: "att", id: row.id }), /انسحب/);
   await assert.rejects(boardAction({ t: homeToken(501), action: "unsend", id: row.id }), /بس الأستاذ/);
+
+  // الاثنين: نفس الشرح بمحاضرة العربي ومحاضرة الانگليزي، والسحب يشيل الثنين
+  calls.length = 0;
+  const EN = "eeeeeeeebbbbccccddddeeeeeeeeeeee";
+  const r2 = await boardAction({ t: T, action: "send", id: saved.id, appLecture: ["aaaaaaaabbbbccccddddeeeeeeeeeeee", EN] });
+  assert.deepEqual(calls.filter((c) => c.q.includes("lectureAttachment_insert")).map((c) => c.v.l), ["aaaaaaaabbbbccccddddeeeeeeeeeeee", EN]);
+  assert.match(r2.notice, /المحاضره 1 \+ المحاضره 1 \(English\)/);
+  await boardAction({ t: T, action: "unsend", id: r2.sent[0].id });
+  assert.deepEqual(calls.filter((c) => c.q.includes("lectureAttachment_delete")).map((c) => c.v.id), ["11112222333344445555666677778888", "99992222333344445555666677778888"]);
+  // الثانية فشلت: الأولى تنشال وما يندز شي
+  calls.length = 0;
+  const realDc = calls;
+  BA.setDcForTest(async (env, q, v) => {
+    realDc.push({ q, v, write: true });
+    if (q.includes("lecture(id")) return { lecture: { id: v.id, title: "م", track: "arabic", subject: { arabicTitle: "ديموافر", chapter: { orderPosition: 1 } }, lectureAttachments_on_lecture: [] } };
+    if (q.includes("lectureAttachment_insert")) { if (v.l.startsWith("e")) throw new Error("نت"); return { lectureAttachment_insert: { id: "11112222333344445555666677778888" } }; }
+    return {};
+  });
+  const n0 = (await boardAction({ t: T, action: "state" })).sent.length;
+  await assert.rejects(boardAction({ t: T, action: "send", id: saved.id, appLecture: ["aaaaaaaabbbbccccddddeeeeeeeeeeee", EN] }));
+  assert.ok(realDc.some((c) => c.q.includes("lectureAttachment_delete")), "الأولى انشالت");
+  assert.equal((await boardAction({ t: T, action: "state" })).sent.length, n0);
   BA.setDcForTest(null);
 });

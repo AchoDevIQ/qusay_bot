@@ -609,25 +609,27 @@ export default function BoardClient() {
   const appTrack = (chs: AppCh[], env: string, c: AppCh, t: AppTopic) => {
     const tracks = (["arabic", "english"] as const).filter((k) => t.lectures.some((l) => l.track === k));
     if (tracks.length === 1) { appLecture(chs, env, c, t, tracks[0]); return; }
-    setAsk({ text: `${t.name}: محاضرات العربي لو الانگليزي؟`, buttons: [
+    setAsk({ text: `${t.name}: الشرح لمحاضرات العربي، لو الانگليزي، لو الاثنين؟`, buttons: [
       ...tracks.map((k) => ({ t: TRACK[k], kind: "gray" as const, run: () => appLecture(chs, env, c, t, k) })),
+      { t: "الاثنين (عربي وانگليزي)", kind: "gray" as const, run: () => appLecture(chs, env, c, t, "arabic", true) },
       { t: "رجوع", kind: "gray", run: () => appTopic(chs, env, c) },
     ] });
   };
-  const appLecture = (chs: AppCh[], env: string, c: AppCh, t: AppTopic, k: "arabic" | "english") => {
-    setAsk({ text: `${t.name} (${TRACK[k]}): ويا أي محاضرة؟`, buttons: [
-      ...t.lectures.filter((l) => l.track === k).map((l) => ({ t: `${l.title}${l.draft ? " (مسودة)" : ""}`, kind: "gray" as const, run: () => void confirmApp(c.ch, t, l, env) })),
+  // both: يختار محاضرة العربي أول، بعدين الانگليزي، والشرح ينزل بالثنتين
+  const appLecture = (chs: AppCh[], env: string, c: AppCh, t: AppTopic, k: "arabic" | "english", both = false, first?: AppLec) => {
+    setAsk({ text: `${t.name} (${TRACK[k]}): ويا أي محاضرة؟${both ? (k === "arabic" ? " (بعدها تختار محاضرة الانگليزي)" : ` (العربي: ${first?.title})`) : ""}`, buttons: [
+      ...t.lectures.filter((l) => l.track === k).map((l) => ({ t: `${l.title}${l.draft ? " (مسودة)" : ""}`, kind: "gray" as const, run: () => (both && k === "arabic" ? appLecture(chs, env, c, t, "english", true, l) : void confirmApp(c.ch, t, first ? [first, l] : [l], env)) })),
       { t: "رجوع", kind: "gray", run: () => appTrack(chs, env, c, t) },
     ] });
   };
-  async function confirmApp(ch: number, t: AppTopic, l: AppLec, env: string) {
+  async function confirmApp(ch: number, t: AppTopic, ls: AppLec[], env: string) {
     setAsk(null); setBusy("لحظة...");
     try {
       const { count } = await api({ action: "count", chapter: ch });
       setBusy("");
-      const where = `الفصل ${ORD[ch]} · ${t.name} · ${l.title} (${TRACK[l.track]})`;
+      const where = `الفصل ${ORD[ch]} · ${t.name} · ${ls.map((l) => `${l.title} (${TRACK[l.track]})`).join(" و ")}`;
       setAsk({ text: `تريد أدز «${title}»؟ ينزل بملحقات «${where}» بالتطبيق${env === "staging" ? " (داتا التجربة)" : ""}، وتوصل رسالة لـ ${count} طالب اشتروا محاضرات الفصل ${ORD[ch]}.`, buttons: [
-        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonId, appLecture: l.id }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
+        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonId, appLecture: ls.map((l) => l.id) }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
         { t: "لا", kind: "bad", run: () => setAsk(null) },
       ] });
     } catch (e) { setBusy(""); say(`صار خطأ: ${(e as Error).message}`); }
