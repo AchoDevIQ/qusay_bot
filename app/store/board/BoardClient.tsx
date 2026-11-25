@@ -2,7 +2,8 @@
 // 📝 سبورة قصي العميري (طلبه 2026-11-25، BOARD_SPEC.md): نفس سبورة الويندوز، بالتطبيق، عند الأستاذ وعند الطالب بنفس الخيارات.
 // الكف يمسح (التماس أكبر من الحد)، والقلم بالآيباد يكتب واليد ما تكتب وهو نازل. كل الكتابة والأزرار بالعربي
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, areaOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
+import Splash from "./Splash";
+import { SLOGAN, BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, areaOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
 import { pageToken } from "../adminPage";
 import { pdfClient } from "../pdfClient";
 import { drawItem, drawPage, framePreview, headPreview, paintFrame, textLines } from "./boardDraw";
@@ -224,7 +225,7 @@ export default function BoardClient() {
     // حجم السبورة تغير (تدوير التابلت، ملء الشاشة): نعيد القياس
     const ro = typeof ResizeObserver !== "undefined" && wrap.current ? new ResizeObserver(() => layout()) : null;
     if (ro && wrap.current) ro.observe(wrap.current);
-    const t = window.setTimeout(() => setSplash(false), 1700);
+    const t = 0;
     void api({ action: "state" }).then((r: State) => {
       setSt(r);
       const q = new URLSearchParams(location.search);
@@ -840,7 +841,7 @@ export default function BoardClient() {
       </div></div>}
       {busy && <div className="qb-modal"><div className="qb-dlg"><div className="qb-dtext">{busy}</div></div></div>}
       {toast && <div className="qb-toast">{toast}</div>}
-      {splash && <div className="qb-splash" onPointerDown={() => setSplash(false)}><img src="/app-logo.png" alt="" /><b>قصي العميري</b><span>نسخة خاصة</span></div>}
+      {splash && <Splash slogan={SLOGAN} onDone={() => setSplash(false)} />}
       <span hidden>{W}</span>
     </div>
   );
