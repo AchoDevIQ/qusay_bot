@@ -2,11 +2,12 @@
 // 📝 سبورة قصي العميري (طلبه 2026-11-25، BOARD_SPEC.md): نفس سبورة الويندوز، بالتطبيق، عند الأستاذ وعند الطالب بنفس الخيارات.
 // الكف يمسح (التماس أكبر من الحد)، والقلم بالآيباد يكتب واليد ما تكتب وهو نازل. كل الكتابة والأزرار بالعربي
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import Splash from "./Splash";
-import { SLOGAN, BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, areaOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
+import Splash, { Outro } from "./Splash";
+import { BOXES, STAMPS, makeBox, makeCover, makeStamp, type BoxKind } from "./makers";
+import { SLOGAN, CURVES, GRIDS, NOTEBOOK, curveOf, type Grid, BOARDS, DEFAULT_BOARD, DEFAULT_FRAME, ERASERS, FRAMES, H, HEADS, QUICK, SHAPES, SOLIDS, WIDTHS, cleanLesson, emptyLesson, eraseAlong, headOf, hitItem, hlWidth, inRect, areaOf, isLight, isPalm, itemBox, moved, palette, scaled, shapeStrokes, unionBox, type Box, type InkStroke, type Item, type Lesson } from "../../../lib/board/engine.ts";
 import { pageToken } from "../adminPage";
 import { pdfClient } from "../pdfClient";
-import { drawItem, drawPage, framePreview, headPreview, paintFrame, textLines } from "./boardDraw";
+import { drawFoot, drawItem, drawPage, framePreview, headPreview, paintFrame, textLines } from "./boardDraw";
 import { IC } from "./icons";
 
 type Tool = "pen" | "hl" | "eraser" | "shape" | "move";
@@ -21,14 +22,15 @@ type AppCh = { ch: number; name: string; topics: AppTopic[] };
 const TRACK = { arabic: "عربي", english: "انگليزي" } as const;
 type Target = { ch: number; name: string; topics: { id: number; name: string; lectures: number }[] };
 type State = { teacher: boolean; name: string; lessons: Meta[]; inbox: Meta[]; sent: Meta[]; appEnv?: string };
-type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings" | "sent";
+type Pop = "" | "menu" | "colors" | "eraser" | "shapes" | "solids" | "board" | "open" | "inbox" | "settings" | "sent" | "boxes";
 type Ask = { text: string; buttons: { t: string; kind: "ok" | "bad" | "gray"; run: () => void }[]; input?: { value: string; set: (v: string) => void } } | null;
 
 const BAR = 74;                       // ارتفاع شريط الأدوات (بكسل الشاشة)
 const PAL = palette();
 const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"];
 const SET_KEY = "qboard_settings", DRAFT_KEY = "qboard_draft";
-type Settings = { board: string; frame: string; head: string; palm: number; eraser: number; width: number };
+/** wm / grid / foot: لمساته الشخصية، تنحفظ ويا الشرح ويشوفها الطالب */
+type Settings = { board: string; frame: string; head: string; palm: number; eraser: number; width: number; wm?: boolean; grid?: string; foot?: boolean };
 const tablet = () => typeof window !== "undefined" && Math.max(window.screen.width, window.screen.height) < 1400;
 const loadSettings = (): Settings => {
   const d: Settings = { board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "nb-charcoal", palm: tablet() ? 70 : 200, eraser: 80, width: 5 };
@@ -121,14 +123,16 @@ export default function BoardClient() {
   };
   const redrawFrame = useCallback(() => {
     const x = ctxOf(frameC.current);
-    if (x) paintFrame(x, geo.current.W, lesson.current.board, lesson.current.frame, logo.current, lesson.current.head);
+    if (x) paintFrame(x, geo.current.W, lesson.current.board, lesson.current.frame, logo.current, lesson.current.head, lesson.current);
   }, []);
   const redrawInk = useCallback(() => {
     const x = ctxOf(inkC.current);
     if (!x) return;
     x.clearRect(0, 0, geo.current.W, H);
     drawPage(x, geo.current.W, lesson.current.frame, page().items, bgOf(page().bg), bgOf);
+    if (lesson.current.foot) drawFoot(x, geo.current.W, lesson.current.frame, lesson.current.board, pageIx.current + 1, lesson.current.pages.length, titleNow.current);
   }, [bgOf]); // eslint-disable-line react-hooks/exhaustive-deps
+  const titleNow = useRef("");
   const inkQueued = useRef(false);
   const queueInk = () => { if (inkQueued.current) return; inkQueued.current = true; requestAnimationFrame(() => { inkQueued.current = false; redrawInk(); }); };
   const eraserMark = useRef<{ x: number; y: number; s: number } | null>(null);
@@ -213,6 +217,7 @@ export default function BoardClient() {
     const s = loadSettings();
     setSet(s);
     lesson.current.board = s.board; lesson.current.frame = s.frame; lesson.current.head = s.head;
+    applyLook(lesson.current, s);
     setColor(isLight(s.board) ? "#000000" : "#FFFFFF");
     const im = new Image(); im.onload = () => { logo.current = im; redrawFrame(); }; im.src = "/app-logo.png";
     // خط التطبيق: السبورة تنرسم من جديد أول ما يوصل، حتى الاسم والكتابة تطلع بخطنا مو بالخط الرسمي
@@ -431,7 +436,7 @@ export default function BoardClient() {
     lesson.current = l; pageIx.current = 0;
     undo.current = l.pages.map(() => []); redo.current = l.pages.map(() => []);
     setLessonId(id); setTitle(t); setDirty(false);
-    setSet((s) => ({ ...s, board: l.board, frame: l.frame, head: headOf(l.head) }));
+    setSet((s) => ({ ...s, board: l.board, frame: l.frame, head: headOf(l.head), wm: !!l.wm, grid: l.grid ?? "", foot: !!l.foot }));
     setSel([]);
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ }
     sync(); redrawFrame(); redrawInk();
@@ -445,7 +450,7 @@ export default function BoardClient() {
       { t: "رجوع", kind: "gray", run: () => setAsk(null) },
     ] });
   };
-  const newLesson = () => guard(() => loadLesson({ ...emptyLesson(geo.current.W, set.board, set.frame), head: set.head }, "", ""));
+  const newLesson = () => guard(() => loadLesson(applyLook({ ...emptyLesson(geo.current.W, set.board, set.frame), head: set.head }, set), "", ""));
 
   // ---------- الحفظ والفتح
   async function save(name: string, after?: () => void) {
@@ -539,17 +544,40 @@ export default function BoardClient() {
       const k = Math.min(1, 2400 / Math.max(im.naturalWidth, im.naturalHeight));
       const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
       const x = c.getContext("2d")!; x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
-      // الصورة تنحط بنص السبورة كشي يتحرك ويكبر ويصغر (أداة «تحريك»)
-      const r = URL.createObjectURL(await canvasBlob(c));
-      const A = areaOf(lesson.current.frame, geo.current.W), aw = A.w, ah = A.h;
-      const k2 = Math.min(aw * 0.6 / c.width, ah * 0.6 / c.height);
-      const it: Item = { k: "img", r, w: c.width * k2, h: c.height * k2, x: A.x + (aw - c.width * k2) / 2, y: A.y + (ah - c.height * k2) / 2 };
-      page().items.push(it);
-      pending.current = { add: [it], remove: [] }; commit();
-      setTool("move"); setSel([it]);
-      redrawInk(); redrawLive();
+      await placeCanvas(c, 0.6, await canvasBlob(c));
     } catch (e) { say(`صار خطأ: ${(e as Error).message}`); } finally { setBusy(""); }
   }
+  /** الصورة تنحط بنص السبورة كشي يتحرك ويكبر ويصغر (أداة «تحريك»). frac: كم تاخذ من العرض. at: مكانها (فوك البطن مثلاً) */
+  async function placeCanvas(c: HTMLCanvasElement, frac: number, blob?: Blob, at?: "top") {
+    const b = blob ?? await new Promise<Blob>((ok, bad) => c.toBlob((x) => (x ? ok(x) : bad(new Error("ما گدرت أسوي الصورة"))), "image/png"));
+    const r = URL.createObjectURL(b);
+    const A = areaOf(lesson.current.frame, geo.current.W), aw = A.w, ah = A.h;
+    const k2 = Math.min(aw * frac / c.width, ah * 0.6 / c.height);
+    const top = A.y + (headOf(lesson.current.head) !== "none" ? 96 : 24);
+    const it: Item = { k: "img", r, w: c.width * k2, h: c.height * k2, x: A.x + (aw - c.width * k2) / 2, y: at === "top" ? top : A.y + (ah - c.height * k2) / 2 };
+    page().items.push(it);
+    pending.current = { add: [it], remove: [] }; commit();
+    setTool("move"); setSel([it]);
+    redrawInk(); redrawLive();
+  }
+  // ---------- 📦 الصناديق والأختام وصفحة الغلاف
+  const [boxText, setBoxText] = useState("");
+  useEffect(() => { titleNow.current = title; redrawInk(); }, [title]); // eslint-disable-line react-hooks/exhaustive-deps
+  const addBox = (k: BoxKind) => { setPop(""); void placeCanvas(makeBox(k, boxText.trim(), isLight(lesson.current.board)), k === "title" ? 0.8 : 0.78, undefined, k === "title" ? "top" : undefined).catch((e) => say(`صار خطأ: ${(e as Error).message}`)); };
+  const addStamp = (id: string) => { setPop(""); void placeCanvas(makeStamp(id), 0.22).catch((e) => say(`صار خطأ: ${(e as Error).message}`)); };
+  const addCover = () => {
+    setPop("");
+    const t = title || boxText.trim() || "شرح جديد";
+    const c = makeCover(t, new Date().toLocaleDateString("ar-IQ", { year: "numeric", month: "long", day: "numeric" }), logo.current, isLight(lesson.current.board));
+    addPage(null, 0);
+    void placeCanvas(c, 0.72).then(() => say("📄 انضافت صفحة الغلاف أول صفحة")).catch((e) => say(`صار خطأ: ${(e as Error).message}`));
+  };
+  // ---------- ✨ اللمسات الشخصية: تنحفظ بالشرح وبالإعدادات (الشرح الجديد ياخذها)
+  const setLook = (p: Partial<Pick<Settings, "wm" | "grid" | "foot">>) => {
+    setSet((s) => { const n = { ...s, ...p }; applyLook(lesson.current, n); return n; });
+    applyLook(lesson.current, { ...set, ...p });
+    markDirty(); redrawFrame(); redrawInk();
+  };
 
   // ---------- الطباعة: كل الصفحات بإطارها وخلفيتها
   async function printAll() {
@@ -560,11 +588,12 @@ export default function BoardClient() {
       for (const pg of lesson.current.pages) {
         const c = document.createElement("canvas"); c.width = Math.round(Wn * k); c.height = Math.round(H * k);
         const x = c.getContext("2d")!; x.scale(k, k);
-        paintFrame(x, Wn, lesson.current.board, lesson.current.frame, logo.current, lesson.current.head);
+        paintFrame(x, Wn, lesson.current.board, lesson.current.frame, logo.current, lesson.current.head, lesson.current);
         for (const it of pg.items) if (it.k === "img") { const im = bgOf(it.r); if (im && !im.complete) await new Promise((r) => { im.onload = r; im.onerror = r; }); }
         const bg = bgOf(pg.bg);
         if (bg && !bg.complete) await new Promise((r) => { bg.onload = r; bg.onerror = r; });
         drawPage(x, Wn, lesson.current.frame, pg.items, bg, bgOf);
+        if (lesson.current.foot) drawFoot(x, Wn, lesson.current.frame, lesson.current.board, lesson.current.pages.indexOf(pg) + 1, lesson.current.pages.length, title);
         urls.push(c.toDataURL("image/jpeg", 0.9));
       }
       const w = window.open("", "_blank");
@@ -665,7 +694,9 @@ export default function BoardClient() {
   }
 
   // ---------- المايك
-  const exit = () => guard(() => { try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ } setDirty(false); if (history.length > 1) history.back(); else window.close(); });
+  const [outro, setOutro] = useState(false);
+  const exit = () => guard(() => { setPop(""); setOutro(true); });
+  const doExit = () => { try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ } setDirty(false); if (history.length > 1) history.back(); else window.close(); window.setTimeout(() => setOutro(false), 1500); };
   const fullScreen = () => { try { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen(); } catch { /* */ } };
 
   // ---------- الكيبورد
@@ -693,6 +724,9 @@ export default function BoardClient() {
     if (!isLight(c) && color.toUpperCase() === "#000000") setColor("#FFFFFF");
     redrawFrame();
   };
+  const headOn = (id: string) => (id.startsWith("cv-") ? set.head.startsWith(id.replace(/-[a-z]+$/, "-")) : set.head === id);
+  const pickHead = (id: string) => setHead(id.startsWith("cv-") ? id.replace(/-[a-z]+$/, `-${curveOf(set.head)?.col.id.slice(3) ?? "navy"}`) : id);
+  const pickCurveColor = (col: string) => setHead(`cv-${curveOf(set.head)?.shape ?? CURVES[0].id}-${col}`);
   const setHead = (h: string) => { lesson.current.head = h; setSet((s) => ({ ...s, head: h })); markDirty(); redrawFrame(); };
   const setFrame = (f: string) => { lesson.current.frame = f; setSet((s) => ({ ...s, frame: f })); markDirty(); redrawFrame(); redrawInk(); };
   const pickColor = (c: string) => { setColor(c); if (tool === "eraser" || tool === "shape") setTool("pen"); setPop(""); };
@@ -779,6 +813,8 @@ export default function BoardClient() {
             <button type="button" onClick={() => { setPop(""); saveDialog(); }}>حفظ الشرح</button>
             <button type="button" onClick={() => { setPop(""); pdfInput.current?.click(); }}>فتح ملف PDF</button>
             <button type="button" onClick={() => { setPop(""); imgInput.current?.click(); }}>إدراج صورة</button>
+            <button type="button" onClick={() => setPop("boxes")}>📦 صناديق جاهزة وأختام</button>
+            <button type="button" onClick={addCover}>📄 صفحة غلاف للشرح</button>
             <button type="button" onClick={() => { setPop(""); void printAll(); }}>طباعة / حفظ كـ PDF</button>
             {lesson.current.pages[pageIx.current]?.bg && <button type="button" onClick={() => { setPop(""); setAsk({ text: "تشيل صفحة الملف (الخلفية) من هاي الصفحة؟ كتابتك تبقى", buttons: [{ t: "شيلها", kind: "bad", run: () => { setAsk(null); page().bg = null; markDirty(); redrawInk(); } }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); }}>شيل الخلفية من هاي الصفحة</button>}
             <button type="button" onClick={() => { setPop(""); setAsk({ text: "تحذف هاي الصفحة؟", buttons: [{ t: "احذف", kind: "bad", run: () => { setAsk(null); deletePage(); } }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); }}>حذف هاي الصفحة</button>
@@ -796,7 +832,15 @@ export default function BoardClient() {
             <div className="qb-row qb-wrap">{BOARDS.map((b) => <button key={b.c} type="button" aria-label={b.t} title={b.t} className={`qb-sw${set.board.toUpperCase() === b.c ? " on" : ""}`} style={{ background: b.c }} onClick={() => setBoard(b.c)} />)}
               <label className="qb-sw qb-custom" title="لون ثاني">🎨<input type="color" value={set.board} onChange={(e) => setBoard(e.target.value.toUpperCase())} /></label></div>
             <div className="qb-ptitle">الهيدر (اسمك واللوگو فوك)</div>
-            <div className="qb-heads">{HEADS.map((h) => <button key={h.id} type="button" className={set.head === h.id ? "on" : ""} onClick={() => setHead(h.id)}>{heads[h.id] ? <img src={heads[h.id]} alt="" /> : <span className="qb-noprev" />}<span>{h.t}</span></button>)}</div>
+            <div className="qb-heads">{HEADS.map((h) => <button key={h.id} type="button" className={headOn(h.id) ? "on" : ""} onClick={() => pickHead(h.id)}>{heads[h.id] ? <img src={heads[h.id]} alt="" /> : <span className="qb-noprev" />}<span>{h.t}</span></button>)}</div>
+            <div className="qb-ptitle">🌙 لون الهيدر المقوس</div>
+            <div className="qb-row qb-wrap">{NOTEBOOK.map((n) => <button key={n.id} type="button" title={n.t} aria-label={n.t} className={`qb-sw${curveOf(set.head)?.col.id === n.id ? " on" : ""}`} style={{ background: `linear-gradient(${n.bg2},${n.bg})` }} onClick={() => pickCurveColor(n.id.slice(3))} />)}</div>
+            <div className="qb-ptitle">✨ لمسات شخصية</div>
+            <div className="qb-row qb-wrap">
+              <button type="button" className={`qb-chip${set.wm ? " on" : ""}`} onClick={() => setLook({ wm: !set.wm })}>لوگوك خفيف بالخلفية</button>
+              <button type="button" className={`qb-chip${set.foot ? " on" : ""}`} onClick={() => setLook({ foot: !set.foot })}>سطر تحت الصفحة</button>
+            </div>
+            <div className="qb-row qb-wrap"><span className="qb-note">الورق:</span>{GRIDS.map((g) => <button key={g.id} type="button" className={`qb-chip${(set.grid ?? "") === g.id ? " on" : ""}`} onClick={() => setLook({ grid: g.id })}>{g.t}</button>)}</div>
             <div className="qb-ptitle">الإطار</div>
             <div className="qb-frames">{frames.map((f) => <button key={f.id} type="button" className={set.frame === f.id ? "on" : ""} onClick={() => setFrame(f.id)}>{previews[f.id] ? <img src={previews[f.id]} alt="" /> : <span className="qb-noprev" />}<span>{f.t}</span></button>)}</div>
           </div>}
@@ -817,6 +861,14 @@ export default function BoardClient() {
             <div className="qb-ptitle">📋 الشروح اللي دزيتها</div>
             {!st?.sent.length && <div className="qb-empty">بعدك ما دزيت شرح</div>}
             {st?.sent.map((m) => <div key={m.id} className="qb-li"><button type="button" onClick={() => guard(() => void openAtt(m.id))}><b>{m.title}{m.app ? " 📎" : ""}</b><small>{whereOf(m)}{m.app === "staging" ? " · تجربة" : ""} · {m.at}</small></button><button type="button" className="qb-x" aria-label="اسحبه" onClick={() => unsend(m)}>🗑</button></div>)}
+          </div>}
+          {pop === "boxes" && <div className="qb-list">
+            <div className="qb-ptitle">📦 صناديق من دفترك</div>
+            <input className="qb-in" value={boxText} onChange={(e) => setBoxText(e.target.value)} placeholder="عنوان المحاضرة (للشريط)، مثلاً: المحاضرة 1 · المشتقة" />
+            <div className="qb-row qb-wrap">{BOXES.map((b) => <button key={b.id} type="button" className="qb-chip" onClick={() => addBox(b.id)}>{b.t}</button>)}</div>
+            <div className="qb-ptitle">🔖 أختام</div>
+            <div className="qb-row qb-wrap">{STAMPS.map((x) => <button key={x.id} type="button" className="qb-chip" style={{ color: x.c, borderColor: x.c }} onClick={() => addStamp(x.id)}>{x.t}</button>)}</div>
+            <div className="qb-note">الصندوق ينحط بنص السبورة ومختار: اسحبه وكبّره من الزوايا، واكتب جواه بالقلم.</div>
           </div>}
           {pop === "settings" && <div className="qb-set">
             <div className="qb-ptitle">إعدادات الكف والممحاة</div>
@@ -842,6 +894,7 @@ export default function BoardClient() {
       {busy && <div className="qb-modal"><div className="qb-dlg"><div className="qb-dtext">{busy}</div></div></div>}
       {toast && <div className="qb-toast">{toast}</div>}
       {splash && <Splash slogan={SLOGAN} onDone={() => setSplash(false)} />}
+      {outro && <Outro onDone={doExit} />}
       <span hidden>{W}</span>
     </div>
   );
@@ -942,6 +995,7 @@ const CSS = `
 .qb-ptitle{font-size:15px;color:#F6C94A;margin:2px 2px 8px;font-weight:700}
 .qb-row{display:flex;gap:8px;align-items:center}
 .qb-wrap{flex-wrap:wrap;max-width:560px}
+.qb-in{width:min(520px,calc(100vw - 48px));min-height:48px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:#1B2333;color:#fff;font:inherit;font-size:16px;padding:8px 12px;margin:4px 0 8px}
 .qb-chip{min-height:54px;border:1px solid rgba(255,255,255,.27);border-radius:12px;background:#283247;color:#fff;font-size:15px;padding:6px 14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer}
 .qb-chip i{display:block;border:2px solid #fff;border-radius:6px}
 .qb-chip.on,.qb-frames button.on,.qb-sw.on,.qb-pal button.on{box-shadow:0 0 0 3px #F6C94A;border-color:#F6C94A}
@@ -998,3 +1052,11 @@ const CSS = `
 .qb-splash span{color:#aab3c5;font-size:min(22px,4vh)}
 @media (max-width:900px){.qb-btn{width:52px}.qb-t{font-size:11px}.qb-pal{grid-template-columns:repeat(14,24px)}.qb-pal button{width:24px;height:24px}}
 `;
+
+/** يحط لمساته الشخصية (من الإعدادات) على الشرح */
+function applyLook(l: Lesson, s: { wm?: boolean; grid?: string; foot?: boolean }): Lesson {
+  if (s.wm) l.wm = 1; else delete l.wm;
+  if (s.foot) l.foot = 1; else delete l.foot;
+  if (s.grid === "sq" || s.grid === "dots" || s.grid === "lines") l.grid = s.grid as Grid; else delete l.grid;
+  return l;
+}

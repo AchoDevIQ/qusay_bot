@@ -11,7 +11,10 @@ export type TextItem = { k: "text"; c: string; s: number; x: number; y: number; 
 export type ImageItem = { k: "img"; r: string; x: number; y: number; w: number; h: number };
 export type Item = InkStroke | TextItem | ImageItem;
 export type Page = { items: Item[]; bg?: string | null };
-export type Lesson = { v: 1; w: number; board: string; frame: string; head?: string; pages: Page[]; title?: string };
+/** wm: لوگوه خفيف بخلفية البطن، grid: ورق (مربعات/نقاط/أسطر)، foot: سطر تحت كل صفحة (رقمها وعنوان الشرح) */
+export type Lesson = { v: 1; w: number; board: string; frame: string; head?: string; pages: Page[]; title?: string; wm?: 1; grid?: Grid; foot?: 1 };
+export type Grid = "sq" | "dots" | "lines";
+export const GRIDS: { id: "" | Grid; t: string }[] = [{ id: "", t: "بلا" }, { id: "sq", t: "مربعات" }, { id: "dots", t: "نقاط" }, { id: "lines", t: "أسطر" }];
 
 // ---------- 📓 هيدرات الدفتر: نفس الشكل، لون الشريط يتغير
 export const NOTEBOOK: { id: string; t: string; bg: string; bg2: string }[] = [
@@ -27,6 +30,21 @@ export const NOTEBOOK: { id: string; t: string; bg: string; bg2: string }[] = [
   { id: "nb-slate", t: "دفتر رصاصي", bg: "#2A303B", bg2: "#434B5A" },
 ];
 export const SLOGAN = "معاً لنغيّر الفكر الخاطئ عن الرياضيات";
+// ---------- 🌙 الهيدرات المقوسة: الشكل × لون من ألوان الدفتر، id = cv-<الشكل>-<اللون>
+export const CURVES: { id: string; t: string }[] = [
+  { id: "arch", t: "قوس لفوك" },
+  { id: "dome", t: "قوس لجوه" },
+  { id: "wave", t: "موجة" },
+  { id: "swoosh", t: "انسيابي" },
+  { id: "medal", t: "ميدالية اللوگو" },
+  { id: "pill", t: "كبسولتين" },
+];
+export const curveOf = (id?: string) => {
+  const m = /^cv-([a-z]+)-([a-z]+)$/.exec(String(id ?? ""));
+  if (!m) return null;
+  const shape = CURVES.find((c) => c.id === m[1]), col = NOTEBOOK.find((n) => n.id === `nb-${m[2]}`);
+  return shape && col ? { shape: shape.id, col } : null;
+};
 
 // ---------- 🏷 الهيدرات: شريط فوك السبورة باسمه واللوگو (طلبه 2026-11-25، يختار من 10)
 export const HEADS: { id: string; t: string }[] = [
@@ -43,9 +61,11 @@ export const HEADS: { id: string; t: string }[] = [
   { id: "modern", t: "حديث متدرج" },
   // 📓 مثل هيدر دفتر المحاضرات (طلبه 2026-11-25): لوگو بمربع + «قصي العميري» يسار، خط ذهبي مايل، وشعاره يمين. نفس التصميم بعشر ألوان
   ...NOTEBOOK.map((n) => ({ id: n.id, t: `📓 ${n.t}` })),
+  // 🌙 مقوسة (طلبه 2026-11-25: «مو بس عدلة، شوية مقوسة»): نفس المحتوى، الحافة التحتانية مقوسة. لونها يتبدل من صف الألوان
+  ...CURVES.map((c) => ({ id: `cv-${c.id}-navy`, t: `🌙 ${c.t}` })),
 ];
 export const HEAD_H = 76;
-export const headOf = (id?: string) => (HEADS.some((h) => h.id === id) ? String(id) : "none");
+export const headOf = (id?: string) => (HEADS.some((h) => h.id === id) || curveOf(id) ? String(id) : "none");
 
 // ---------- الألوان
 export const QUICK = ["#FFFFFF", "#FFE600", "#FF3B30", "#2F9BFF", "#34C759", "#000000"];
@@ -369,7 +389,7 @@ export function cleanLesson(x: unknown): Lesson | null {
       return [];
     }),
   }));
-  return { v: 1, w: Math.max(400, Math.min(4000, num(j.w, 1920))), board: typeof j.board === "string" && /^#[0-9A-Fa-f]{6}$/.test(j.board) ? j.board.toUpperCase() : DEFAULT_BOARD, frame: FRAMES.some((f) => f.id === j.frame) ? String(j.frame) : DEFAULT_FRAME, head: headOf(j.head), pages, ...(typeof j.title === "string" ? { title: j.title.slice(0, 120) } : {}) };
+  return { v: 1, w: Math.max(400, Math.min(4000, num(j.w, 1920))), board: typeof j.board === "string" && /^#[0-9A-Fa-f]{6}$/.test(j.board) ? j.board.toUpperCase() : DEFAULT_BOARD, frame: FRAMES.some((f) => f.id === j.frame) ? String(j.frame) : DEFAULT_FRAME, head: headOf(j.head), pages, ...(typeof j.title === "string" ? { title: j.title.slice(0, 120) } : {}), ...(j.wm ? { wm: 1 as const } : {}), ...(j.foot ? { foot: 1 as const } : {}), ...(GRIDS.some((g) => g.id && g.id === j.grid) ? { grid: j.grid as Grid } : {}) };
 }
 
 // ---------- ✋ التحريك: يختار كتابة أو صورة (دوسة عليها أو مربع حواليها) ويحركها

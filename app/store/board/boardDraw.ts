@@ -1,5 +1,5 @@
 // 📝 رسم السبورة على الـ canvas: الإطار والخشب، الخلفية، الكتابة والتظليل والنص
-import { FRAME, HEAD_H, H, NOTEBOOK, SLOGAN, frameOf, headOf, insetOf, isLight, woodPixels, wrapWidth, type Item, type TextItem, topOf, areaOf } from "../../../lib/board/engine.ts";
+import { FRAME, HEAD_H, H, NOTEBOOK, SLOGAN, curveOf, type Grid, frameOf, headOf, insetOf, isLight, woodPixels, wrapWidth, type Item, type TextItem, topOf, areaOf } from "../../../lib/board/engine.ts";
 
 // خط التطبيق نفسه (نفس الخط اللي يختاره من «✍️ الخط»)، مو الخط الرسمي
 export const FONT = `QAppEn, QAppAr, Cairo, Tahoma, Arial, sans-serif`;
@@ -26,6 +26,46 @@ export function woodTiles(id: string) {
   woodCache.set(id, out);
   return out;
 }
+/** ✨ لمسات شخصية على البطن: ورق (مربعات/نقاط/أسطر) ولوگوه خفيف بالنص */
+function paintLook(ctx: CanvasRenderingContext2D, W: number, board: string, frameId: string, logo: HTMLImageElement | null, look: Look, head: boolean) {
+  if (!look.grid && !look.wm) return;
+  const A = areaOf(frameId, W), top = A.y + (head ? HEAD_H : 0);
+  const light = isLight(board);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(A.x, top, A.w, A.y + A.h - top); ctx.clip();
+  const ink = light ? "rgba(20,31,51," : "rgba(255,255,255,";
+  if (look.grid === "sq") {
+    ctx.strokeStyle = `${ink}.09)`; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = A.x + 40; x < A.x + A.w; x += 40) { ctx.moveTo(x, top); ctx.lineTo(x, A.y + A.h); }
+    for (let y = top + 40; y < A.y + A.h; y += 40) { ctx.moveTo(A.x, y); ctx.lineTo(A.x + A.w, y); }
+    ctx.stroke();
+  } else if (look.grid === "dots") {
+    ctx.fillStyle = `${ink}.22)`;
+    for (let x = A.x + 40; x < A.x + A.w; x += 40) for (let y = top + 40; y < A.y + A.h; y += 40) { ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI * 2); ctx.fill(); }
+  } else if (look.grid === "lines") {
+    ctx.strokeStyle = `${ink}.11)`; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let y = top + 72; y < A.y + A.h - 10; y += 72) { ctx.moveTo(A.x + 20, y); ctx.lineTo(A.x + A.w - 20, y); }
+    ctx.stroke();
+  }
+  if (look.wm && logo) {
+    ctx.globalAlpha = light ? 0.07 : 0.06;
+    logoIn(ctx, logo, A.x + A.w / 2, (top + A.y + A.h) / 2, Math.min(A.w, A.y + A.h - top) * 0.55);
+  }
+  ctx.restore();
+}
+/** سطر تحت الصفحة: «قصي العميري · عنوان الشرح» يمين، ورقم الصفحة يسار، وخط ذهبي رفيع */
+export function drawFoot(ctx: CanvasRenderingContext2D, W: number, frameId: string, board: string, n: number, of: number, title: string) {
+  const A = areaOf(frameId, W), y = A.y + A.h - 22, light = isLight(board);
+  ctx.save();
+  ctx.fillStyle = light ? "rgba(20,31,51,.55)" : "rgba(246,201,74,.75)";
+  ctx.fillRect(A.x + 24, y - 20, A.w - 48, 1.2);
+  ctx.font = `600 20px ${FONT}`; ctx.textBaseline = "middle"; ctx.direction = "rtl";
+  ctx.textAlign = "right"; ctx.fillText(`قصي العميري${title ? ` · ${title}` : ""}`, A.x + A.w - 28, y);
+  ctx.textAlign = "left"; ctx.fillText(`صفحة ${n} من ${of}`, A.x + 28, y);
+  ctx.restore();
+}
 /** شريط صغير للمعاينة بقائمة الإطارات */
 export function framePreview(id: string): string {
   const f = frameOf(id);
@@ -39,11 +79,13 @@ export function framePreview(id: string): string {
 }
 
 /** الإطار ولون السبورة. ctx محوّل لوحدات السبورة (W × 1080) */
-export function paintFrame(ctx: CanvasRenderingContext2D, W: number, board: string, frameId: string, logo: HTMLImageElement | null, head = "none") {
+export type Look = { wm?: 1; grid?: Grid; foot?: 1 };
+export function paintFrame(ctx: CanvasRenderingContext2D, W: number, board: string, frameId: string, logo: HTMLImageElement | null, head = "none", look: Look = {}) {
   const f = frameOf(frameId), F = insetOf(frameId), T = topOf(frameId);
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = board;
   ctx.fillRect(F, T, W - 2 * F, H - F - T);
+  paintLook(ctx, W, board, frameId, logo, look, headOf(head) !== "none");
   const hd = headOf(head);
   // النحيف: الإطار أول، وبعده الهيدر على العرض كله فوكه، فالهيدر والإطار قطعة وحدة
   if (f.slim && f.deco) { paintDeco(ctx, W, F, f.deco, board, headBg(hd)); if (hd !== "none") drawHeader(ctx, W, 0, hd, logo, board, 0); return; }
@@ -108,7 +150,7 @@ function plate(ctx: CanvasRenderingContext2D, W: number, F: number, logo: HTMLIm
 /** الإطارات المزخرفة: ثلاث جهات (يمين ويسار وجوه) بلا خشب. الفوك مفتوح للهيدر */
 /** لون الإطار النحيف «بلون الهيدر»: لون شريط الهيدر نفسه */
 function headBg(hd: string) {
-  const nb = NOTEBOOK.find((n) => n.id === hd);
+  const nb = NOTEBOOK.find((n) => n.id === hd) ?? curveOf(hd)?.col;
   return nb ? nb.bg : hd === "gold" ? "gold" : hd === "modern" ? "modern" : "#141F33";
 }
 function paintDeco(ctx: CanvasRenderingContext2D, W: number, F: number, d: { bar: string; style: string; line?: string }, board: string, head = "#141F33") {
@@ -386,6 +428,8 @@ export function drawHeader(ctx: CanvasRenderingContext2D, W: number, F: number, 
   ctx.beginPath(); ctx.rect(x0, y, w, h + 30); ctx.clip();
   const nb = NOTEBOOK.find((n) => n.id === id);
   if (nb) { notebookHead(ctx, x0, x1, y, h, nb, logo); ctx.restore(); return; }
+  const cv = curveOf(id);
+  if (cv) { ctx.restore(); ctx.save(); ctx.beginPath(); ctx.rect(x0, y, w, h + 40); ctx.clip(); curvedHead(ctx, x0, x1, y, h, cv.shape, cv.col, logo); ctx.restore(); return; }
   switch (id) {
     case "navy": {
       ctx.fillStyle = "#141F33"; ctx.fillRect(x0, y, w, h);
@@ -480,38 +524,101 @@ export function drawHeader(ctx: CanvasRenderingContext2D, W: number, F: number, 
 }
 /** 📓 هيدر الدفتر: اللوگو بمربع ذهبي و«قصي العميري» يسار، خط ذهبي مايل، والشعار يمين. نفس ارتفاع باقي الهيدرات حتى البطن يبقى كبير */
 function notebookHead(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, h: number, c: { bg: string; bg2: string }, logo: HTMLImageElement | null) {
-  const w = x1 - x0, k = Math.max(0.6, Math.min(1, w / 1300));
-  const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, c.bg2); g.addColorStop(1, c.bg);
-  ctx.fillStyle = g; ctx.fillRect(x0, y, w, h);
+  const w = x1 - x0;
+  ctx.fillStyle = bandGrad(ctx, y, h, c); ctx.fillRect(x0, y, w, h);
   ctx.fillStyle = goldGrad(ctx, x0, x1); ctx.fillRect(x0, y + h - 3, w, 3);
-  // اللوگو بمربع بإطار ذهبي
-  const s = h - 22, bx = x0 + 16, by = y + 9;
-  ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.roundRect(bx, by, s, s, 9); ctx.fill();
+  headContent(ctx, x0, x1, y, h, logo, "straight");
+}
+const bandGrad = (ctx: CanvasRenderingContext2D, y: number, h: number, c: { bg: string; bg2: string }) => {
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, c.bg2); g.addColorStop(1, c.bg); return g;
+};
+function logoBox(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, bx: number, by: number, s: number, round = 9) {
+  ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.roundRect(bx, by, s, s, round); ctx.fill();
   ctx.strokeStyle = goldGrad(ctx, bx, bx + s); ctx.lineWidth = 2.5; ctx.stroke();
-  if (logo && logo.naturalWidth) {
-    const W0 = logo.naturalWidth, H0 = logo.naturalHeight, sw = W0 * 0.57, sh = H0 * 0.62, f = (s - 10) / Math.max(sw, sh);
-    ctx.drawImage(logo, W0 * 0.225, H0 * 0.225, sw, sh, bx + s / 2 - (sw * f) / 2, by + s / 2 - (sh * f) / 2, sw * f, sh * f);
-  }
-  // الاسم يم اللوگو
+  logoIn(ctx, logo, bx + s / 2, by + s / 2, s - 10);
+}
+/** اللوگو نفسه (بلا الفراغ اللي حواليه) بمربع size */
+export function logoIn(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, cx: number, cy: number, size: number) {
+  if (!logo || !logo.naturalWidth) return;
+  const W0 = logo.naturalWidth, H0 = logo.naturalHeight, sw = W0 * 0.57, sh = H0 * 0.62, f = size / Math.max(sw, sh);
+  ctx.drawImage(logo, W0 * 0.225, H0 * 0.225, sw, sh, cx - (sw * f) / 2, cy - (sh * f) / 2, sw * f, sh * f);
+}
+/** محتوى الهيدر: اللوگو والاسم يسار، الفاصل الذهبي (مايل أو مقوس)، والشعار يمين. ch: ارتفاع المحتوى من فوك */
+function headContent(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, ch: number, logo: HTMLImageElement | null, stripe: "straight" | "curve" | "none", medal = false) {
+  const w = x1 - x0, k = Math.max(0.6, Math.min(1, w / 1300));
+  const s = Math.min(ch - 22, 54), by = y + (ch - s) / 2 - 1.5, bx = x0 + 16;
+  let nx = bx + s + 16;
+  if (medal) nx = x0 + 16 + 96 + 14;
+  else logoBox(ctx, logo, bx, by, s);
   ctx.textBaseline = "middle"; ctx.direction = "rtl"; ctx.textAlign = "left";
   ctx.font = `700 ${Math.round(30 * k)}px ${FONT}`;
-  const nx = bx + s + 16, nw = ctx.measureText("قصي العميري").width;
-  ctx.fillStyle = "#FFFFFF"; ctx.fillText("قصي العميري", nx, y + h / 2 - 1);
-  // الخط الذهبي المايل
+  const nw = ctx.measureText("قصي العميري").width, cy = y + ch / 2 - 1;
+  ctx.fillStyle = "#FFFFFF"; ctx.fillText("قصي العميري", nx, cy);
   const sx = nx + nw + 46 * k;
   ctx.fillStyle = goldGrad(ctx, sx, sx + 60);
-  ctx.beginPath(); ctx.moveTo(sx, y + h - 3); ctx.lineTo(sx + 34, y); ctx.lineTo(sx + 56, y); ctx.lineTo(sx + 22, y + h - 3); ctx.closePath(); ctx.fill();
-  ctx.globalAlpha = 0.55;
-  ctx.beginPath(); ctx.moveTo(sx + 32, y + h - 3); ctx.lineTo(sx + 66, y); ctx.lineTo(sx + 72, y); ctx.lineTo(sx + 38, y + h - 3); ctx.closePath(); ctx.fill();
-  ctx.globalAlpha = 1;
-  // الشعار يمين، يصغر إذا الشاشة ضيقة حتى ما يدوس على الخط
+  if (stripe === "straight") {
+    ctx.beginPath(); ctx.moveTo(sx, y + ch - 3); ctx.lineTo(sx + 34, y); ctx.lineTo(sx + 56, y); ctx.lineTo(sx + 22, y + ch - 3); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath(); ctx.moveTo(sx + 32, y + ch - 3); ctx.lineTo(sx + 66, y); ctx.lineTo(sx + 72, y); ctx.lineTo(sx + 38, y + ch - 3); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+  } else if (stripe === "curve") {
+    // فاصل مقوس مثل ضربة فرشاة
+    ctx.beginPath(); ctx.moveTo(sx, y + ch); ctx.quadraticCurveTo(sx + 14, y + ch * 0.35, sx + 46, y); ctx.lineTo(sx + 64, y); ctx.quadraticCurveTo(sx + 30, y + ch * 0.4, sx + 20, y + ch); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.55; ctx.lineWidth = 3; ctx.strokeStyle = goldGrad(ctx, sx, sx + 80);
+    ctx.beginPath(); ctx.moveTo(sx + 34, y + ch); ctx.quadraticCurveTo(sx + 46, y + ch * 0.4, sx + 80, y); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   let fs = Math.round(28 * k);
   ctx.font = `700 ${fs}px ${FONT}`;
   const room = x1 - 24 - (sx + 90);
   while (fs > 14 && ctx.measureText(SLOGAN).width > room) { fs -= 1; ctx.font = `700 ${fs}px ${FONT}`; }
   ctx.textAlign = "right"; ctx.fillStyle = goldGrad(ctx, x1 - 500, x1);
-  ctx.fillText(SLOGAN, x1 - 24, y + h / 2 - 1);
+  ctx.fillText(SLOGAN, x1 - 24, cy);
+}
+/** 🌙 الهيدرات المقوسة: الشريط حافته التحتانية مقوسة، والخط الذهبي يمشي وياها. أعمق نقطة 76 حتى البطن يبقى كبير */
+function curvedHead(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, h: number, shape: string, c: { bg: string; bg2: string }, logo: HTMLImageElement | null) {
+  const w = x1 - x0;
+  const t = (x: number) => (x - x0) / w;
+  const bottom: (x: number) => number =
+    shape === "arch" ? (x) => y + h - 18 * Math.sin(Math.PI * t(x)) :
+    shape === "dome" ? (x) => y + h - 16 + 16 * Math.sin(Math.PI * t(x)) :
+    shape === "wave" ? (x) => y + h - 9 - 7 * Math.sin(t(x) * Math.PI * 4) :
+    shape === "swoosh" ? (x) => y + h - 22 * Math.pow(t(x), 1.6) :
+    shape === "medal" ? () => y + h - 16 :
+    () => y + h;
+  if (shape === "pill") {
+    // كبسولتين: يسار (اللوگو والاسم) ويمين (الشعار) بينهن خيط ذهبي مقوس، والبطن يبين بالنص
+    const ph = h - 14, py = y + 6, r = ph / 2;
+    ctx.font = `700 30px ${FONT}`;
+    const lw = 16 + 54 + 16 + ctx.measureText("قصي العميري").width + 28;
+    ctx.font = `700 28px ${FONT}`;
+    const rw = Math.min(w * 0.55, ctx.measureText(SLOGAN).width + 56);
+    for (const [px, pw] of [[x0 + 8, lw], [x1 - 8 - rw, rw]] as const) {
+      ctx.fillStyle = bandGrad(ctx, py, ph, c); ctx.beginPath(); ctx.roundRect(px, py, pw, ph, r); ctx.fill();
+      ctx.strokeStyle = goldGrad(ctx, px, px + pw); ctx.lineWidth = 2.5; ctx.stroke();
+    }
+    const gx0 = x0 + 8 + lw, gx1 = x1 - 8 - rw, gw = gx1 - gx0;
+    ctx.strokeStyle = goldGrad(ctx, gx0, gx1); ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(gx0, py + r); ctx.bezierCurveTo(gx0 + gw * 0.35, py + ph + 8, gx0 + gw * 0.65, py - 6, gx1, py + r); ctx.stroke();
+    headContent(ctx, x0 + 8, x1 - 8, py, ph, logo, "none");
+    return;
+  }
+  ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y);
+  for (let x = x1; x >= x0; x -= 6) ctx.lineTo(x, bottom(x));
+  ctx.lineTo(x0, bottom(x0)); ctx.closePath();
+  ctx.fillStyle = bandGrad(ctx, y, h, c); ctx.fill();
+  ctx.strokeStyle = goldGrad(ctx, x0, x1); ctx.lineWidth = 3;
+  ctx.beginPath(); for (let x = x0; x <= x1; x += 6) { if (x === x0) ctx.moveTo(x, bottom(x) - 1.5); else ctx.lineTo(x, bottom(x) - 1.5); } ctx.stroke();
+  const ch = shape === "dome" || shape === "arch" ? h - 18 : shape === "swoosh" ? h - 8 : h - 16;
+  if (shape === "medal") {
+    // ميدالية دائرية معلّقة نازلة من الشريط وبيها اللوگو
+    const R = 43, mx = x0 + 16 + R, my = y + 47;
+    ctx.fillStyle = bandGrad(ctx, my - R, 2 * R, c); ctx.beginPath(); ctx.arc(mx, my, R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = goldGrad(ctx, mx - R, mx + R); ctx.lineWidth = 3; ctx.stroke();
+    ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(mx, my, R - 6, 0, Math.PI * 2); ctx.stroke();
+    logoIn(ctx, logo, mx, my, R * 1.25);
+  }
+  headContent(ctx, x0, x1, y, ch, logo, "curve", shape === "medal");
 }
 /** معاينة الهيدر بالقائمة */
 export function headPreview(id: string, logo: HTMLImageElement | null, board: string): string {

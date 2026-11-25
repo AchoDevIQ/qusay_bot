@@ -76,3 +76,42 @@ const CSS = `
   .qs-door,.qs-in{transition:opacity .4s}.qs.open .qs-door{opacity:0}
 }
 `;
+
+// 🎬 الختامية: عكس الدخولية. البابين يتسكرون على السبورة واللوگو مجمّع، وبعدها قطعه تتفرق وتطلع
+export function Outro({ onDone }: { onDone: () => void }) {
+  const [go, setGo] = useState(false);
+  useEffect(() => {
+    const a = window.setTimeout(() => setGo(true), 750);
+    const b = window.setTimeout(onDone, 1750);
+    return () => { window.clearTimeout(a); window.clearTimeout(b); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className={`qs qo${go ? " go" : ""}`} onPointerDown={onDone}>
+      <div className="qs-door l" /><div className="qs-door r" />
+      <div className="qs-in">
+        <div className="qs-logo">
+          {TILES.map((t, i) => (
+            <i key={i} style={{ ["--x" as string]: `${t.x}vmax`, ["--y" as string]: `${t.y}vmax`, ["--rot" as string]: `${t.rot}deg`, ["--d" as string]: `${t.delay / 2}s`, backgroundPosition: `${t.c * 20}% ${t.r * 20}%` }} />
+          ))}
+        </div>
+        <b className="qs-name">قصي العميري</b>
+      </div>
+      <style>{CSS + OUT}</style>
+    </div>
+  );
+}
+const OUT = `
+.qo .qs-door.l{animation:qoL .6s cubic-bezier(.7,0,.25,1) both}
+.qo .qs-door.r{animation:qoR .6s cubic-bezier(.7,0,.25,1) both}
+@keyframes qoL{from{transform:translateX(-101%)}to{transform:none}}
+@keyframes qoR{from{transform:scaleX(-1) translateX(-101%)}to{transform:scaleX(-1)}}
+.qo .qs-in{opacity:0;animation:qoIn .3s .45s forwards}
+@keyframes qoIn{to{opacity:1}}
+.qo .qs-logo i{opacity:1;animation:none}
+.qo.go .qs-logo i{animation:qoOut .8s cubic-bezier(.6,0,.8,.4) var(--d) forwards}
+@keyframes qoOut{to{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--rot)) scale(.25);filter:blur(6px)}}
+.qo .qs-name{opacity:1;transform:none;animation:none;transition:opacity .5s}
+.qo.go .qs-name{opacity:0}
+@media (prefers-reduced-motion: reduce){.qo .qs-door,.qo .qs-in,.qo.go .qs-logo i{animation:none;opacity:1}}
+`;
