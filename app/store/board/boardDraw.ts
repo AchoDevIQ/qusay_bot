@@ -134,6 +134,16 @@ function paintDeco(ctx: CanvasRenderingContext2D, W: number, F: number, d: { bar
     ctx.strokeStyle = style; ctx.lineWidth = lw;
     ctx.beginPath(); ctx.moveTo(inset, 0); ctx.lineTo(inset, H - inset); ctx.lineTo(W - inset, H - inset); ctx.lineTo(W - inset, 0); ctx.stroke();
   };
+  // يمشي على شكل U (يسار نازل، جوه، يمين صاعد) كل step، ويعطي النقطة واتجاه «للداخل» (nx, ny) والمسافة من البداية
+  const walk = (inset: number, step: number, f: (x: number, y: number, nx: number, ny: number, s: number) => void, start = 0) => {
+    const segs: [number, number, number, number, number, number][] = [[inset, 0, inset, H - inset, 1, 0], [inset, H - inset, W - inset, H - inset, 0, -1], [W - inset, H - inset, W - inset, 0, -1, 0]];
+    const lens = segs.map(([x0, y0, x1, y1]) => Math.hypot(x1 - x0, y1 - y0)), total = lens.reduce((t, l) => t + l, 0);
+    for (let d = start, i = 0, base = 0; d <= total; d += step) {
+      while (i < 2 && d > base + lens[i]) base += lens[i++];
+      const [x0, y0, x1, y1, nx, ny] = segs[i], k = (d - base) / lens[i];
+      f(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k, nx, ny, d);
+    }
+  };
   // نقاط على طول الأضلاع الثلاثة (بنص الشريط)
   const along = (step: number, f: (x: number, y: number, k: number) => void) => {
     const m = (F - 3) / 2; let k = 0;
@@ -186,6 +196,49 @@ function paintDeco(ctx: CanvasRenderingContext2D, W: number, F: number, d: { bar
       for (let x = m; x <= W - m; x += 4) ctx.lineTo(x, H - m + wv(x));
       for (let y = H - m; y >= 0; y -= 4) ctx.lineTo(W - m + wv(y), y);
       ctx.stroke();
+      break;
+    }
+    // 🪢 حبل مبروم: خيطين يلفون على بعض على طول الأضلاع الثلاثة
+    case "twist": {
+      const m = F / 2, a = Math.max(3, F * 0.2);
+      for (const [ph, st, lw] of [[0, soft, 4], [Math.PI, gold, 4.5]] as const) {
+        ctx.strokeStyle = st; ctx.lineWidth = lw; ctx.lineCap = "round"; ctx.beginPath();
+        walk(m, 3, (x, y, nx, ny, s) => { const o = Math.sin(s / 7 + ph) * a; if (s === 0) ctx.moveTo(x + nx * o, y + ny * o); else ctx.lineTo(x + nx * o, y + ny * o); });
+        ctx.stroke();
+      }
+      // لمعة صغيرة على كل لفة
+      ctx.fillStyle = "rgba(255,248,220,.75)";
+      walk(m, 7 * Math.PI, (x, y) => { ctx.beginPath(); ctx.arc(x, y, 1.6, 0, Math.PI * 2); ctx.fill(); }, 7 * Math.PI / 2);
+      break;
+    }
+    case "rope2": {
+      const m = F / 2 - 3;
+      ctx.lineCap = "round";
+      ctx.setLineDash([14, 10]); u(m - 2, 5);
+      ctx.lineDashOffset = 12; u(m + 2, 5, soft);
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
+      u(F - 1.5, 2);
+      break;
+    }
+    case "beads": {
+      const m = F / 2, r = Math.max(3, F * 0.24);
+      walk(m, r * 2.6, (x, y) => {
+        ctx.fillStyle = gold; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.32, 0, Math.PI * 2); ctx.fill();
+      });
+      break;
+    }
+    case "chain": {
+      const m = F / 2, L = Math.max(8, F * 0.45);
+      let k = 0;
+      ctx.lineWidth = 2.6;
+      walk(m, L * 1.35, (x, y, nx, ny) => {
+        const ang = Math.atan2(nx, -ny); // اتجاه المشي
+        ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+        ctx.strokeStyle = k++ % 2 ? soft : gold;
+        ctx.beginPath(); ctx.ellipse(0, 0, L * 0.85, k % 2 ? L * 0.45 : L * 0.16, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      });
       break;
     }
     case "rope": {
