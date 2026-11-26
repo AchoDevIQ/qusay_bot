@@ -94,6 +94,7 @@ async function homeData(uid: number) {
   if (await isAdmin(uid)) setup.unshift({ page: "tests", icon: "✅", title: "تست التطبيق", note: "الصح والباقي والمشاكل" });
   if (await isAdmin(uid)) setup.unshift({ page: "fulltest", icon: "🧭", title: "التست الكامل", note: "كل التطبيق من الطول للطول، خطوة خطوة" });
   if (await isAdmin(uid)) setup.unshift({ page: "guide", icon: "📖", title: "دليل البوت", note: "شرح كل قسم، وترسله للمساعدين" });
+  if (await isAdmin(uid)) setup.unshift({ page: "features", icon: "✨", title: "مميزات التطبيق", note: "كل شي يسويه التطبيق، حسب الشخص" });
   if (shop.length) groups.push({ title: "المتجر", tiles: shop });
   if (people.length) groups.push({ title: "الطلاب والامتحانات", tiles: people });
   if (setup.length) groups.push({ title: "الإدارة", tiles: setup });

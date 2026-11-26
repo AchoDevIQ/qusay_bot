@@ -39,7 +39,7 @@ export default function AiReviewClient() {
             </>}
           </div>}
           {!data?.papers && <div className="empty">جاري التحميل...</div>}
-          {data?.papers?.map((p) => <PaperCard key={p.id} p={p} file={file} busy={busy} gkey={open} call={call} save={(marks) => call({ action: "save", item: p.id, marks }, true)} />)}
+          {data?.papers?.map((p, i) => <PaperCard key={p.id} p={p} n={i + 1} of={data.papers!.length} file={file} busy={busy} gkey={open} call={call} save={(marks) => call({ action: "save", item: p.id, marks }, true)} />)}
         </div>
         <style>{CSS}</style>
         <StatusBar busy={busy} error={error} notice={data?.notice} />
@@ -79,8 +79,11 @@ export default function AiReviewClient() {
 }
 
 /** ورقة طالب: اسمه ودرجته، وكل سؤال بصفحاته وعلامات الذكاء، ومربع درجته */
-function PaperCard({ p: start, file, busy, save, gkey, call }: { p: Paper; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
+/** ورقة طالب. n: رقمه بالمجموعة: الطلاب يتناوبون باللون (إطار أزرق وجوه ذهبي، والجاي بالعكس) حتى تبين وين تخلص ورقة وتبدي اللي بعدها (طلبه 2026-11-27) */
+function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
   const [p, setP] = useState(start);
+  // ✏️ أدوات التصحيح مخفية: كل سؤال يطلع بدرجته وورقته بس، ودوسة «✏️» تطلع أدواته (الدرجة، العلامات، ضيف علامة)
+  const [edit, setEdit] = useState<Record<number, boolean>>({});
   const [marks, setMarks] = useState<Record<number, string>>(() => Object.fromEntries(start.questions.map((q) => [q.n, String(q.mark)])));
   // ✏️ تعديل التصحيح على الورقة: علامة مختارة، أو «➕ ضيف علامة» ينتظر دوسة على الصفحة
   const [tap, setTap] = useState<{ ref: string; m: PaperMark } | null>(null);
@@ -98,25 +101,30 @@ function PaperCard({ p: start, file, busy, save, gkey, call }: { p: Paper; file:
   const [total, setTotal] = useState(p.total);
   const changed = p.questions.filter((q) => marks[q.n] !== undefined && marks[q.n] !== String(q.mark));
   return (
-    <div className="card arv-paper">
-      <div className="arv-head"><b>👤 {p.name}</b><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
+    <div className={"card arv-paper " + (n % 2 ? "arv-a" : "arv-b")}>
+      <div className="arv-start">👤 الطالب {n} من {of}: <b>{p.name}</b></div>
+      <div className="arv-head"><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
       {p.questions.map((q) => (
         <div key={q.n} className="arv-q">
           <div className="arv-qline">
             <b>س{q.n}</b>
-            <input className="exnum" inputMode="decimal" value={marks[q.n] ?? ""} onChange={(e) => setMarks({ ...marks, [q.n]: e.target.value.replace(/[^\d.]/g, "") })} />
-            <span>من {q.max}</span>
+            {edit[q.n]
+              ? <><input className="exnum" inputMode="decimal" value={marks[q.n] ?? ""} onChange={(e) => setMarks({ ...marks, [q.n]: e.target.value.replace(/[^\d.]/g, "") })} /><span>من {q.max}</span></>
+              : <span className="arv-mark">{marks[q.n] ?? q.mark} من {q.max}</span>}
+            <button type="button" className={"arv-pen" + (edit[q.n] ? " on" : "")} aria-label="تعديل" title="تعديل" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "✏️"}</button>
             {q.note && <small>{q.note}</small>}
           </div>
           {(q.marked?.length ? q.marked : q.photos.map((ref) => ({ ref, marks: [] as PaperMark[] }))).map((pg) => (
             <div key={pg.ref} className={adding === pg.ref ? "arv-adding" : ""} onClickCapture={(e) => pick(e, pg.ref)}>
               <MarkedPage src={file(pg.ref)} marks={spot?.ref === pg.ref ? [...pg.marks, { x: spot.x, y: spot.y, kind: "miss", text: "", note: "" }] : pg.marks}
-                onTap={adding ? undefined : (m) => setTap({ ref: pg.ref, m })} picked={tap?.ref === pg.ref ? pg.marks.indexOf(tap.m) : undefined} />
-              <div className="exline arv-tools">
+                onTap={adding || !edit[q.n] ? undefined : (m) => setTap({ ref: pg.ref, m })} picked={tap?.ref === pg.ref ? pg.marks.indexOf(tap.m) : undefined} />
+              {edit[q.n] && <div className="exline arv-tools">
                 {adding === pg.ref ? <span className="arv-hint">👆 دوس المكان اللي تريد تحط بيه علامتك</span>
                   : <button type="button" className="exbtn" disabled={busy} onClick={() => { setAdding(pg.ref); setTap(null); setSpot(null); }}>➕ ضيف علامة</button>}
                 {adding === pg.ref && <button type="button" className="exbtn" onClick={() => { setAdding(null); setSpot(null); }}>إلغاء</button>}
-              </div>
+                <a className="exbtn" style={{ textDecoration: "none" }} href={`/store/grade?edit=${p.id}`}>🖊 القلم والمساحة (شاشة التصحيح)</a>
+              </div>}
+              {edit[q.n] && !tap && !spot && adding !== pg.ref && <div className="arv-hint" style={{ marginTop: 4 }}>👆 دوس أي علامة على الورقة حتى تعدلها أو تشيلها</div>}
               {tap?.ref === pg.ref && <EditBox key={markKey(tap.m) + String(tap.m.added ?? "")} start={tap.m} busy={busy}
                 save={async (kind, note) => {
                   if (tap.m.added !== undefined) { const m = tap.m; await markCall({ action: "markDrop", n: m.added }); await markCall({ action: "markAdd", ref: pg.ref, x: m.x, y: m.y, kind, note }); }
@@ -134,6 +142,7 @@ function PaperCard({ p: start, file, busy, save, gkey, call }: { p: Paper; file:
         const r = await save(Object.fromEntries(changed.map((q) => [q.n, Number(marks[q.n])])));
         if (r?.saved) { setTotal(r.saved.total); for (const q of changed) q.mark = Number(marks[q.n]); setMarks({ ...marks }); }
       }}>{changed.length ? `💾 حفظ درجات ${p.name.split(" ")[0]}` : "ما غيرت شي"}</button>
+      <div className="arv-end">— نهاية أوراق {p.name} —</div>
     </div>
   );
 }
@@ -162,7 +171,16 @@ const CSS = `
 .arv-opt span{display:flex;flex-direction:column}.arv-opt small{opacity:.75;line-height:1.6}
 .arv-g{display:flex;flex-direction:column;gap:2px;width:100%;text-align:right;margin-top:8px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:none;color:inherit;font:inherit;cursor:pointer}
 .arv-g.held{border:2px solid #F6C94A}.arv-g small{opacity:.75}.arv-g span{font-weight:700;color:#F6C94A}
-.arv-paper{border-right:5px solid #F6C94A}
+.arv-paper{border:4px solid #2F6FD6;margin-bottom:26px}
+.arv-a{border-color:#2F6FD6;background:linear-gradient(rgba(246,201,74,.10),rgba(246,201,74,.10)),var(--ink2,#162238)}
+.arv-b{border-color:#F6C94A;background:linear-gradient(rgba(47,111,214,.16),rgba(47,111,214,.16)),var(--ink2,#162238)}
+.arv-start{margin:-1px -1px 10px;padding:10px 14px;font-size:18px;font-weight:800;color:#fff}
+.arv-a .arv-start{background:#2F6FD6}.arv-b .arv-start{background:#F6C94A;color:#141F33}
+.arv-end{margin-top:14px;text-align:center;font-weight:800;opacity:.85;padding:8px;border-top:2px dashed currentColor}
+.arv-a .arv-end{color:#7FA8F0}.arv-b .arv-end{color:#F6C94A}
+.arv-mark{font-weight:800;color:#F6C94A}
+.arv-pen{min-width:44px;min-height:40px;border-radius:10px;border:1.5px solid #F6C94A;background:transparent;color:#F6C94A;font:inherit;font-weight:800;cursor:pointer}
+.arv-pen.on{background:#F6C94A;color:#141F33}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
 .arv-q{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
 .arv-qline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.arv-qline .exnum{width:64px}.arv-qline small{flex-basis:100%;opacity:.8}

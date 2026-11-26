@@ -9,6 +9,7 @@ import { SLOGAN, CURVES, GRIDS, NOTEBOOK, curveOf, type Grid, BOARDS, DEFAULT_BO
 import { pageToken } from "../adminPage";
 import { deviceId, deviceNow, platformNow } from "../shared";
 import { pdfClient } from "../pdfClient";
+import { VideoBox } from "../notes/NotesClient";
 import { drawFoot, drawItem, drawPage, framePreview, headPreview, paintFrame, textLines } from "./boardDraw";
 import { IC } from "./icons";
 
@@ -1018,8 +1019,56 @@ export default function BoardClient() {
       {toast && <div className="qb-toast">{toast}</div>}
       {splash && <Splash slogan={SLOGAN} onDone={() => setSplash(false)} />}
       {outro && <Outro onDone={doExit} />}
+      {/* ✍️ سبورة الحل: فيديو الحل والتوضيح مال السؤال اللي قدامه (طلبه 2026-11-27) */}
+      {solve && <SolveVids bg={lesson.current.pages[pageInfo.i]?.bg ?? ""} />}
       <span hidden>{W}</span>
     </div>
+  );
+}
+
+/** 🎬 أزرار فيديو حل السؤال وتوضيحه بسبورة الحل: نفس أزرار الملزمة، للسؤال اللي بالصفحة هسه */
+type VMark = { id: number; page: number; video: boolean; solution: boolean; q?: string };
+const marksCache = new Map<number, Promise<VMark[]>>();
+async function notesCall(body: Record<string, unknown>) {
+  const res = await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: pageToken(), device: await deviceId(), pf: platformNow(), ...body }) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error ?? "صار خطأ، حاول مرة ثانية");
+  return j;
+}
+function SolveVids({ bg }: { bg: string }) {
+  const m = /^q:(\d+):(\d+)$/.exec(bg);
+  const book = m ? Number(m[1]) : 0, page = m ? Number(m[2]) : 0;
+  const [ms, setMs] = useState<VMark[]>([]);
+  const [vid, setVid] = useState<{ title: string; yt?: string; src?: string; kind: string } | null>(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    if (!book) { setMs([]); return; }
+    if (!marksCache.has(book)) marksCache.set(book, notesCall({ action: "marks", book }).then((j) => (j.marks ?? []) as VMark[]).catch(() => []));
+    let on = true;
+    void marksCache.get(book)!.then((all) => { if (on) setMs(all.filter((x) => x.page === page && (x.solution || x.video))); });
+    return () => { on = false; };
+  }, [book, page]);
+  async function play(x: VMark, kind: "video" | "solution") {
+    setMsg("⏳ دا يفتح الفيديو...");
+    try {
+      const j = await notesCall({ action: "play", book, mark: x.id, kind });
+      if (j.yt) { setVid({ title: "🎬 فيديو حل السؤال", yt: j.yt, kind }); setMsg(""); }
+      else if (j.clip) { setVid({ title: "▶️ فيديو توضيح السؤال", src: `/api/notes/video?t=${encodeURIComponent(pageToken())}&book=${book}&mark=${x.id}&pf=${encodeURIComponent(platformNow())}&d=${encodeURIComponent(deviceNow())}`, kind }); setMsg(""); }
+      else setMsg(j.notice ?? "");
+    } catch (e) { setMsg(`⚠️ ${(e as Error).message}`); }
+  }
+  if (!ms.length && !vid && !msg) return null;
+  return (
+    <>
+      {ms.length > 0 && <div style={{ position: "fixed", left: 12, bottom: 12, zIndex: 30, display: "flex", gap: 8, flexWrap: "wrap", maxWidth: "70vw" }}>
+        {ms.map((x) => <span key={x.id} style={{ display: "contents" }}>
+          {x.solution && <button type="button" onClick={() => void play(x, "solution")} style={{ minHeight: 44, padding: "0 14px", borderRadius: 12, border: 0, background: "#141F33", color: "#F6C94A", font: "inherit", fontWeight: 800 }}>🎬 فيديو الحل{ms.length > 1 && x.q ? ` ${x.q}` : ""}</button>}
+          {x.video && <button type="button" onClick={() => void play(x, "video")} style={{ minHeight: 44, padding: "0 14px", borderRadius: 12, border: 0, background: "#141F33", color: "#F6C94A", font: "inherit", fontWeight: 800 }}>▶️ توضيح{ms.length > 1 && x.q ? ` ${x.q}` : ""}</button>}
+        </span>)}
+      </div>}
+      {msg && <div className="qb-toast">{msg}</div>}
+      {vid && <VideoBox title={vid.title} yt={vid.yt} src={vid.src} back="✖ سد وارجع للحل" onClose={() => setVid(null)} onFail={(code) => void notesCall({ action: "videoError", book, kind: vid.kind, code }).catch(() => undefined)} />}
+    </>
   );
 }
 

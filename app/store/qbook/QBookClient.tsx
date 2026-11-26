@@ -33,7 +33,7 @@ export default function QBookClient({ mode, embedded }: { mode?: "q" | "sol"; em
   const [vmsg, setVmsg] = useState("");
   // علامات الفيديو لكل ملزمة بيها أسئلة هاي المحاضرة (مرة وحدة لكل ملزمة)
   useEffect(() => {
-    if (mode !== "sol" || !lec) return;
+    if (!lec) return;
     for (const b of [...new Set(lec.items.map((x) => x.book))]) {
       void notesPost({ action: "marks", book: b }).then((j) => setMarks((m) => ({ ...m, [b]: (j.marks ?? []) as VMark[] }))).catch(() => undefined);
     }
@@ -62,6 +62,14 @@ export default function QBookClient({ mode, embedded }: { mode?: "q" | "sol"; em
     })();
   }, []);
   const all = lec ? lec.items.every((_, i) => open[i]) : false;
+  // 🎬 فيديو الحل و▶️ التوضيح تحت كل سؤال، بكل التبويبات، حتى لو الحل النموذجي مخفي (طلبه 2026-11-27)
+  const vids = (q: Q) => {
+    const ms = (marks[q.book] ?? []).filter((m) => m.page === q.page && (m.solution || m.video));
+    return ms.length ? <div className="qq-vids">{ms.map((m) => <span key={m.id}>
+      {m.solution && <button type="button" onClick={() => void play(q.book, m, "solution")}>🎬 فيديو الحل{ms.length > 1 && m.q ? ` ${m.q}` : ""}</button>}
+      {m.video && <button type="button" onClick={() => void play(q.book, m, "video")}>▶️ توضيح{ms.length > 1 && m.q ? ` ${m.q}` : ""}</button>}
+    </span>)}</div> : null;
+  };
   return (
     <div className="qq" dir="rtl">
       <style>{CSS}</style>
@@ -82,15 +90,8 @@ export default function QBookClient({ mode, embedded }: { mode?: "q" | "sol"; em
           {q.sec === "book"
             ? <img className="qq-pg" src={src(q, false)} alt="صفحة الكتاب" loading={i < 2 ? "eager" : "lazy"} />
             : open[i]
-            ? <><img className="qq-pg sol" src={src(q, true)} alt={`السؤال ${i + 1} وحله`} loading={i < 2 ? "eager" : "lazy"} />
-              {mode === "sol" && (() => {
-                const ms = (marks[q.book] ?? []).filter((m) => m.page === q.page && (m.solution || m.video));
-                return ms.length ? <div className="qq-vids">{ms.map((m) => <span key={m.id}>
-                  {m.solution && <button type="button" onClick={() => void play(q.book, m, "solution")}>🎬 فيديو الحل{ms.length > 1 && m.q ? ` ${m.q}` : ""}</button>}
-                  {m.video && <button type="button" onClick={() => void play(q.book, m, "video")}>▶️ توضيح{ms.length > 1 && m.q ? ` ${m.q}` : ""}</button>}
-                </span>)}</div> : null;
-              })()}</>
-            : <><img className="qq-pg" src={src(q, false)} alt={`سؤال ${i + 1}`} loading="lazy" />
+            ? <><img className="qq-pg sol" src={src(q, true)} alt={`السؤال ${i + 1} وحله`} loading={i < 2 ? "eager" : "lazy"} />{vids(q)}</>
+            : <><img className="qq-pg" src={src(q, false)} alt={`سؤال ${i + 1}`} loading="lazy" />{vids(q)}
               {mode !== "q" && lec.sol !== false && <button type="button" className="qq-sol" onClick={() => setOpen((o) => ({ ...o, [i]: true }))}>📘 الحل</button>}</>}
         </section>
       ))}
