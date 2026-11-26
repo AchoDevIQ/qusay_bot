@@ -16,6 +16,14 @@ type Data = {
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
 
+/** بالرابط والرمز (بلا تليگرام): الملف ينفتح بالصفحة نفسها بدل محادثة البوت. يرجع false إذا مو هيج */
+function openFile(q: Record<string, string | number>) {
+  const a = typeof window === "undefined" ? "" : pageAuth();
+  if (!a.startsWith("tk:")) return false;
+  location.href = `/api/sales/file?t=${encodeURIComponent(a.slice(3))}&` + Object.entries(q).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&");
+  return true;
+}
+
 function Receipts({ id, busy, call, big }: { id: number; busy: boolean; call: Call; big?: boolean }) {
   const btn = big ? "btn agbtn" : "exbtn";
   const [msg, setMsg] = useState("");
@@ -39,11 +47,11 @@ function Receipts({ id, busy, call, big }: { id: number; busy: boolean; call: Ca
       } catch (e) { setMsg(`⚠️ ما انطبع مباشرة (${(e as Error).message || "خطأ"})، دا أفتح الطباعة العادية`); setTimeout(() => open("paper"), 1500); }
     }
     return (
-      <div className={big ? "adform" : "adreceipts"}>
+      <div className={big ? "adform rc-big" : "adreceipts"}>
         <button type="button" aria-label="اطبع الوصل" className={btn} onClick={() => (app ? void direct() : open("paper"))}>🖨{big ? " اطبع الوصل بطابعة الجهاز" : ""}</button>
         {msg && big && <div className="exhint">{msg}</div>}
         <button type="button" aria-label="وصل بإطار" className={btn} onClick={() => open("framed")}>📄{big ? " وصل بإطار للطابعة الكبيرة" : ""}</button>
-        {!big && <button type="button" aria-label="وصل ملون" className={btn} disabled={busy} onClick={() => void call({ action: "receipt", id, kind: "color" })}>🖼</button>}
+        <button type="button" aria-label="وصل ملون" className={btn} onClick={() => openFile({ kind: "color", id })}>🖼{big ? " الوصل الملون" : ""}</button>
       </div>
     );
   }
@@ -93,7 +101,7 @@ export default function SalesClient() {
               <div className="card">
                 <h2>🗂 المحاسبات السابقة</h2>
                 {shop.archive.length ? shop.archive.map((s) => (
-                  <button type="button" key={s.id} className="adfield" disabled={busy} onClick={() => void act({ action: "settlePdf", id: s.id })}><small>{s.n} بيعة{s.parts ? ` · ${partsLine(s.parts)}` : ""}</small><span>{s.created}</span><i>{fmt(s.amount)} 📄</i></button>
+                  <button type="button" key={s.id} className="adfield" disabled={busy} onClick={() => { if (!openFile({ kind: "settle", id: s.id })) void act({ action: "settlePdf", id: s.id }); }}><small>{s.n} بيعة{s.parts ? ` · ${partsLine(s.parts)}` : ""}</small><span>{s.created}</span><i>{fmt(s.amount)} 📄</i></button>
                 )) : <div className="empty">ما أكو محاسبات بعد.</div>}
               </div>
             )}
@@ -206,7 +214,7 @@ function Log({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
           <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "list", day: data.prev })}>◀️ السابق</button>
           {data.next && <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "list", day: data.next })}>التالي ▶️</button>}
           <button type="button" className="exbtn" onClick={() => setShowDays(!showDays)}>📅 كل الأيام</button>
-          <button type="button" className="exbtn" disabled={busy || !data.sales.length} onClick={() => void call({ action: "pdf", day: data.day })}>📄 PDF</button>
+          <button type="button" className="exbtn" disabled={busy || !data.sales.length} onClick={() => { if (!openFile({ kind: "day", day: data.day })) void call({ action: "pdf", day: data.day }); }}>📄 PDF</button>
         </div>
         {showDays && (
           <div className="expad">

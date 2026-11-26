@@ -259,6 +259,39 @@ async function salesData(uid: number, off: Row | null, rawDay: unknown, q: unkno
     catalog: await Promise.all((await cats()).map(async (c) => ({ name: c.name, items: (await products(c.id)).map((p) => ({ id: p.id, name: p.name, price: p.price })) }))),
   };
 }
+/** كشف مبيعات يوم: نفسه للبوت وللفتح بالصفحة */
+async function salesDayTable(off: Row | null, day: string) {
+  const rows = await find("orders", off ? { printed: 3, office_id: off.id } : { printed: 3 }, { where: (o) => String(o.created).startsWith(day), order: ["id"] });
+  need(rows.length, "ما أكو مبيعات بهذا اليوم");
+  const out = await Promise.all(rows.map(async (r) => [`#${r.id}`, String(r.created).slice(11), r.name, itemsText(r), num(r.total), await staffName(r.seller)]));
+  return { title: `مبيعات ${off ? off.name : "المكتب"} — ${day} — المجموع ${num(rows.reduce((s, r) => s + r.total, 0))}`, head: ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ", "البائع"], out };
+}
+/** 📄 ملف يفتح بالصفحة نفسها (جهاز البيع بلا تليگرام، طلبه 2026-11-26: «احنا ما نشتغل على البوت»):
+ *  kind = day (كشف يوم) | settle (كشف محاسبة) | color (الوصل الملون). يرجع {path, name, type} */
+export async function salesFile(uid: number, q: URLSearchParams) {
+  const off = await myOffice(uid);
+  need(off || await can(uid, "sales"), "ما عندك صلاحية", 403);
+  const kind = q.get("kind");
+  if (kind === "day") {
+    const day = String(q.get("day") ?? "");
+    need(DAY.test(day), "اليوم غير معروف");
+    const d = await salesDayTable(off, day);
+    return await (await import("./documents.ts")).listPdfFile(d.title, d.head, d.out, "sales_" + day);
+  }
+  if (kind === "settle") {
+    need(off, "ما عندك صلاحية", 403);
+    const f = await (await import("./office.ts")).settleFile(off!.id, Number(q.get("id")));
+    need(f, "المحاسبة غير موجودة", 404);
+    return f!;
+  }
+  need(kind === "color", "نوع الملف غير معروف");
+  const o = await one("orders", { id: Number(q.get("id")), printed: 3 });
+  need(o && (!off || o.office_id === off.id), "البيعة غير موجودة", 404);
+  const { receiptImageFile } = await import("./documents.ts");
+  const p = await receiptImageFile(o!, orderItems(o!));
+  need(p, "ما گدرنا نسوي صورة الوصل", 500);
+  return { path: p!, name: `receipt_${o!.id}.png`, type: "image/png" };
+}
 export async function salesAction(body: Row) {
   const uid = await pageUser(body);
   const off = await myOffice(uid);
@@ -273,10 +306,8 @@ export async function salesAction(body: Row) {
   } else if (a === "pdf") {
     const day = String(body.day ?? "");
     need(DAY.test(day), "اليوم غير معروف");
-    const rows = await find("orders", off ? { printed: 3, office_id: off.id } : { printed: 3 }, { where: (o) => String(o.created).startsWith(day), order: ["id"] });
-    need(rows.length, "ما أكو مبيعات بهذا اليوم");
-    const out = await Promise.all(rows.map(async (r) => [`#${r.id}`, String(r.created).slice(11), r.name, itemsText(r), num(r.total), await staffName(r.seller)]));
-    const sent = await listPdf(uid, `مبيعات ${off ? off.name : "المكتب"} — ${day} — المجموع ${num(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ", "البائع"], out, "sales_" + day);
+    const d = await salesDayTable(off, day);
+    const sent = await listPdf(uid, d.title, d.head, d.out, "sales_" + day);
     need(sent, "ما گدرت أرسل الملف، حاول مرة ثانية");
     extra = { notice: "✅ الملف وصلك بمحادثة البوت" };
   } else if (a === "receipt") {

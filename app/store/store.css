@@ -578,3 +578,6 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .sl-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 .sl-tabs button{flex:1 1 140px;min-height:48px;border-radius:12px;border:1.5px solid var(--gold);background:transparent;color:var(--gold);font:inherit;font-weight:800;padding:6px 8px}
 .sl-tabs button.on{background:var(--gold);color:#141F33}
+/* أزرار الوصل بعد البيع: كبيرة ومتباعدة حتى تنداس زين بجهاز البيع */
+.rc-big{display:grid;gap:18px}
+.rc-big .btn{min-height:64px;font-size:19px;border-radius:14px}

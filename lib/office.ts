@@ -8,7 +8,7 @@ import {
 import { logActivity } from "./access.ts";
 import { itemLabel, partRows, type MoneyParts } from "./orderRules.ts";
 import { flowKb, mainKb, posKb } from "./keyboards.ts";
-import { listPdf, sendColorReceipt, sendPaperReceipt, sendReceiptImage } from "./documents.ts";
+import { listPdf, listPdfFile, sendColorReceipt, sendPaperReceipt, sendReceiptImage } from "./documents.ts";
 import { unlockFromSale } from "./exams.ts";
 import { edit, send, type Kb } from "./telegram.ts";
 import { btn, cut, esc, money, num, shiftDay, stamp, toInt, todayStr, words } from "./util.ts";
@@ -133,6 +133,17 @@ function salesText(title: string, rows: Row[], limit = 30) {
 }
 export const officeDayRows = async (oid: number, day: string) => await find("orders", { printed: 3, office_id: oid }, { where: (o) => String(o.created).startsWith(day), order: ["id"] });
 export const officeOpenRows = async (oid: number) => await find("orders", { printed: 3, office_id: oid, settle_id: null }, { order: ["id"] });
+export function officePdfFile(title: string, rows: Row[], fname: string) {
+  const data = rows.map((r) => [`#${r.id}`, r.created, r.name, itemsLine(r), num(r.total)]);
+  return listPdfFile(`${title} — المجموع ${money(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ"], data, fname);
+}
+/** كشف المحاسبة كملف (للي يفتحه بالصفحة) */
+export async function settleFile(oid: number, stid: number) {
+  const st = await one("settlements", { id: stid, office_id: oid });
+  if (!st) return null;
+  const rows = await find("orders", { printed: 3, office_id: oid, settle_id: stid }, { order: ["id"] });
+  return await officePdfFile(`${(await office(oid))?.name ?? ""} — محاسبة ${st.created}`, rows, `settle_${stid}`);
+}
 export function officePdf(chat: number, title: string, rows: Row[], fname: string) {
   const data = rows.map((r) => [`#${r.id}`, r.created, r.name, itemsLine(r), num(r.total)]);
   return listPdf(chat, `${title} — المجموع ${money(rows.reduce((s, r) => s + r.total, 0))}`, ["رقم", "الوقت", "الطالب", "المنتجات", "المبلغ"], data, fname);

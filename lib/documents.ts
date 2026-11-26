@@ -168,6 +168,11 @@ export async function sendOrdersPdf(chat: number, ids: number[], reprint = false
 
 // ---------- قائمة عامة PDF
 export async function listPdf(chat: number, title: string, headers: string[], rows: unknown[][], fname: string) {
+  const f = await listPdfFile(title, headers, rows, fname);
+  return !!await upload("sendDocument", { chat_id: String(chat), caption: title }, "document", f.path, f.name, f.type);
+}
+/** نفس الكشف كملف على القرص (للي يفتحه بالصفحة نفسها، مثل جهاز البيع بلا تليگرام) */
+export async function listPdfFile(title: string, headers: string[], rows: unknown[][], fname: string) {
   const th = headers.map((h) => `<th>${esc(h)}</th>`).join("");
   const tr = rows.map((r, i) => `<tr><td class=n>${i + 1}</td>${r.map((x) => `<td>${esc(x)}</td>`).join("")}</tr>`).join("");
   const htm = `<!doctype html><html lang=ar dir=rtl><head><meta charset=utf-8><style>${await pageFonts()}@page{size:A4;margin:12mm}
@@ -181,9 +186,8 @@ td{border:1px solid #d9dde5;padding:5px 7px}tr:nth-child(even) td{background:#f6
   ensureDir();
   const base = path.join(PDF_DIR, `${fname}_${fileStamp()}`);
   fs.writeFileSync(base + ".html", htm, "utf8");
-  const fields = { chat_id: String(chat), caption: title };
-  if (await htmlToPdf(base + ".html", base + ".pdf")) return !!await upload("sendDocument", fields, "document", base + ".pdf", fname + ".pdf", "application/pdf");
-  return !!await upload("sendDocument", fields, "document", base + ".html", fname + ".html", "text/html");
+  if (await htmlToPdf(base + ".html", base + ".pdf")) return { path: base + ".pdf", name: fname + ".pdf", type: "application/pdf" };
+  return { path: base + ".html", name: fname + ".html", type: "text/html; charset=utf-8" };
 }
 
 // ---------- بطاقة معلومات الطالب (صورة)
@@ -385,11 +389,15 @@ tr:nth-child(even) td{background:rgba(255,255,255,.025)}
 }
 
 /** يرسم الوصل الملون ويرسله كصورة. يرجع false إذا ما صار */
-export async function sendReceiptImage(chat: number, o: Row, items: Row[], caption: string) {
+export async function receiptImageFile(o: Row, items: Row[]) {
   ensureDir();
   const ch = path.join(PDF_DIR, `rc_${o.id}.html`), cp = path.join(PDF_DIR, `rc_${o.id}.png`);
   fs.writeFileSync(ch, await receiptCardHtml(o, items), "utf8");
-  if (!await htmlToPng(ch, cp, 760, 640 + 100 * items.length)) return false;
+  return await htmlToPng(ch, cp, 760, 640 + 100 * items.length) ? cp : null;
+}
+export async function sendReceiptImage(chat: number, o: Row, items: Row[], caption: string) {
+  const cp = await receiptImageFile(o, items);
+  if (!cp) return false;
   return !!await upload("sendPhoto", { chat_id: String(chat), caption, parse_mode: "HTML" }, "photo", cp, "receipt.png", "image/png");
 }
 
@@ -500,12 +508,16 @@ export async function receiptPage(oid: number, framed = false): Promise<string |
   const o = await one("orders", { id: oid, printed: 3 });
   if (!o) return null;
   const html = framed ? await receiptFramedHtml(o, orderItems(o)) : await receiptPaperHtml(o, orderItems(o));
-  const bar = `<div class="noprint" style="position:sticky;top:0;background:#141F33;padding:10px;text-align:center;z-index:9"><button onclick="window.print()" style="font:700 20px Cairo,sans-serif;padding:12px 28px;border:0;border-radius:12px;background:#FFC947;color:#141F33">🖨 اطبع الوصل</button> <button onclick="history.back()" style="font:700 16px Cairo,sans-serif;padding:12px 18px;border:0;border-radius:12px;background:#fff;color:#141F33">رجوع</button></div><style>@media print{.noprint{display:none!important}}</style>`;
+  return withPrintBar(html, "🖨 اطبع الوصل", true);
+}
+/** صفحة تنطبع: شريط فوگ بيه «اطبع» و«رجوع» (بتطبيق قصي العميري الطباعة تنطلب من التطبيق: تختار أي طابعة، أو «حفظ PDF») */
+export function withPrintBar(html: string, label: string, auto = false) {
+  const bar = `<div class="noprint" style="position:sticky;top:0;background:#141F33;padding:10px;text-align:center;z-index:9"><button onclick="window.print()" style="font:700 20px Cairo,sans-serif;padding:14px 28px;border:0;border-radius:12px;background:#FFC947;color:#141F33;margin:4px">${label}</button> <button onclick="history.back()" style="font:700 18px Cairo,sans-serif;padding:14px 22px;border:0;border-radius:12px;background:#fff;color:#141F33;margin:4px">↩️ رجوع</button></div><style>@media print{.noprint{display:none!important}}</style>`;
   // زر الطباعة فوك الوصل، وتنفتح الطباعة وحدها أول ما تتحمل الصفحة.
   // داخل تطبيق جهاز البيع window.print ما يشتغل بالصفحة، فنطلب الطباعة من التطبيق نفسه
   const pr = "function qprint(){try{if(window.QApp&&QApp.systemPrint)QApp.systemPrint();else window.print()}catch(e){}}";
   return html.replace(/<body([^>]*)>/i, `<body$1>${bar.replace('onclick="window.print()"', 'onclick="qprint()"')}`)
-    .replace(/<\/body>/i, `<script>${pr}setTimeout(qprint,600)</script></body>`);
+    .replace(/<\/body>/i, `<script>${pr}${auto ? "setTimeout(qprint,600)" : ""}</script></body>`);
 }
 
 /** 🖨 وصل طابعة الجهاز صورة بعرض الطابعة (384 نقطة = 48 ملم)، حتى تطبيق جهاز البيع يطبعه فوراً بلا نافذة الطباعة.
