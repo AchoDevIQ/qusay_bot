@@ -61,7 +61,7 @@ export type InkItem = InkShape & { id: number; kind: InkKind; text: string; skip
  *  sym: ✓ أو ✗ بخط الأستاذ، word: مدحه بخطه، hand: ملاحظته بخطه (إذا كاتبها بـ «✍️ خط إيدي») */
 /** rot وsc: ميلان (درجات) وحجم خط الإيد، يتغيرون شوية بكل علامة حتى ما تبين نسخة وحدة (طلب الأستاذ 2026-11-22) */
 /** big: ✓ وحدة كبيرة على السؤال الصح كله. q / i: السؤال ورقم خطوته (i = -1 للسؤال كله)، حتى الأستاذ يدوس عليها ويصلحها */
-export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; col?: string; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number };
+export type PaperMark = { x: number; y: number; kind: "ok" | "half" | "bad" | "score" | "good" | "miss"; text: string; big?: boolean; box?: { y0: number; y1: number }; col?: string; q?: number; i?: number; note?: string; sym?: InkShape; word?: InkShape; hand?: InkShape; rot?: number; sc?: number; fixed?: string; added?: number };
 export type QgLog = { at: string; kind: "sent" | "unsure" | "failed" | "trial" | "cap" | "obj" | "wait"; item?: number; name?: string; exam?: string; total?: number; usd?: number; note?: string };
 
 const SET = "qg_settings", ON = "qg_on", LOG = "qg_log", TRIAL = "qg_trial", BATCHES = "qg_batches", NOW = "qg_now", MK_Q = "qg_mk_q";
@@ -354,6 +354,43 @@ export async function hideMark(id: number, key: string) {
   await kvSet(hideKey(id), JSON.stringify([...new Set([...await hiddenMarks(id), key])]));
 }
 export const markKey = (m: PaperMark) => `${m.q}:${m.i ?? -1}:${m.kind}`;
+// ---------- ✏️ تعديل التصحيح على الورقة (طلبه 2026-11-26، من «🗂 مراجعة تصحيح الذكاء»): يبدل علامة الذكاء (✓ ½ ✗ وملاحظته)،
+// أو يضيف علامته بالمكان اللي يدوسه. الطالب يشوف التصحيح بعد التعديل. الدرجة تتعدل لحالها بمربعها
+export type MarkKind = "ok" | "half" | "bad" | "good";
+export type MarkEdits = { fix: Record<string, { kind: MarkKind; note: string }>; add: { ref: string; x: number; y: number; kind: MarkKind; note: string }[] };
+const editKey = (id: number) => `qg_edit_${id}`;
+export const markEdits = async (id: number): Promise<MarkEdits> => { const e = await readJson<Partial<MarkEdits>>(editKey(id), {}); return { fix: e.fix ?? {}, add: Array.isArray(e.add) ? e.add : [] }; };
+const KINDS = ["ok", "half", "bad", "good"];
+const editNote = (t: unknown) => String(t ?? "").trim().slice(0, 120);
+export async function fixMark(id: number, key: string, kind: unknown, note: unknown) {
+  if (!/^\d+:-?\d+:(ok|half|bad|good|miss)$/.test(key) || !KINDS.includes(String(kind))) throw new Error("العلامة مو مفهومة");
+  const e = await markEdits(id);
+  e.fix[key] = { kind: kind as MarkKind, note: editNote(note) };
+  await kvSet(editKey(id), JSON.stringify(e));
+}
+export async function addMark(id: number, ref: unknown, x: unknown, y: unknown, kind: unknown, note: unknown) {
+  const X = Math.round(Number(x)), Y = Math.round(Number(y));
+  if (!ref || !(X >= 0 && X <= 1000 && Y >= 0 && Y <= 1000) || !KINDS.includes(String(kind))) throw new Error("مكان العلامة مو مفهوم");
+  const e = await markEdits(id);
+  e.add.push({ ref: String(ref), x: X, y: Y, kind: kind as MarkKind, note: editNote(note) });
+  await kvSet(editKey(id), JSON.stringify(e));
+}
+/** يمسح كل تعديلاته على الورقة (المخفية والمبدلة والمضافة): ترجع مثل ما صححها الذكاء */
+export async function resetMarks(id: number) { await kvSet(editKey(id), JSON.stringify({ fix: {}, add: [] })); await kvSet(hideKey(id), "[]"); }
+/** علامة مضافة: مفتاحها «add:رقمها» حتى تنشال */
+export async function dropAdded(id: number, n: number) { const e = await markEdits(id); e.add.splice(n, 1); await kvSet(editKey(id), JSON.stringify(e)); }
+const KIND_TEXT: Record<MarkKind, string> = { ok: "", half: "½", bad: "", good: "" };
+/** التعديلات فوك علامات الصفحات: المبدلة تاخذ نوعه وملاحظته (بالخط العادي)، والمضافة تنحط بمكانها */
+export function applyEdits<T extends { ref: string; marks: PaperMark[] }>(pages: T[], e: MarkEdits): T[] {
+  if (!Object.keys(e.fix).length && !e.add.length) return pages;
+  return pages.map((p) => ({
+    ...p,
+    marks: [
+      ...p.marks.map((m) => { const f = e.fix[markKey(m)]; return f ? { x: m.x, y: m.y, q: m.q, i: m.i, kind: f.kind, text: KIND_TEXT[f.kind], note: f.note, fixed: markKey(m) } as PaperMark : m; }),
+      ...e.add.map((a, n) => ({ ...a, n })).filter((a) => a.ref === p.ref).map((a) => ({ x: a.x, y: a.y, kind: a.kind, text: KIND_TEXT[a.kind], note: a.note, added: a.n } as PaperMark)),
+    ],
+  }));
+}
 export const dropHidden = <T extends { marks: PaperMark[] }>(pages: T[], hidden: string[]) => (hidden.length ? pages.map((p) => ({ ...p, marks: p.marks.filter((m) => !hidden.includes(markKey(m))) })) : pages);
 export async function forgetLesson(examId: number, lessonId: number) {
   await kvSet(learnKey(examId), JSON.stringify((await lessonsOf(examId)).filter((x) => x.id !== lessonId)));

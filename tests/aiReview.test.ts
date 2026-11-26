@@ -88,3 +88,22 @@ test("🤖 «بعد ما أراجعها»: تنحجز، أعدلها بصمت، 
   await assert.rejects(R.aiReviewAction({ initData: sign(99), action: "list" }));
   assert.ok((await find("sched_items", { exam_id: e })).every((x) => x.graded_at));
 });
+
+test("✏️ تعديل التصحيح على الورقة: تبديل علامة، شيلها، إضافة علامته، والرجوع", async () => {
+  const qg = await import("../lib/qusayGrade.ts");
+  const pages = [{ ref: "p1.jpg", marks: [{ x: 100, y: 200, kind: "bad" as const, text: "", q: 1, i: 0, note: "غلط" }, { x: 300, y: 400, kind: "ok" as const, text: "", q: 1, i: 1 }] }];
+  await qg.fixMark(900, "1:0:bad", "ok", "صح، بس رتبها");
+  await qg.addMark(900, "p1.jpg", 500, 600, "half", "نص");
+  let out = qg.applyEdits(pages, await qg.markEdits(900));
+  assert.equal(out[0].marks[0].kind, "ok"); assert.equal(out[0].marks[0].note, "صح، بس رتبها"); assert.equal(out[0].marks[0].fixed, "1:0:bad");
+  assert.equal(out[0].marks.length, 3); assert.equal(out[0].marks[2].kind, "half"); assert.equal(out[0].marks[2].added, 0);
+  await qg.hideMark(900, "1:1:ok");
+  out = qg.applyEdits(qg.dropHidden(pages, await qg.hiddenMarks(900)), await qg.markEdits(900));
+  assert.equal(out[0].marks.length, 2, "انشالت وحدة");
+  await qg.dropAdded(900, 0);
+  assert.equal(qg.applyEdits(pages, await qg.markEdits(900))[0].marks.length, 2);
+  await assert.rejects(qg.addMark(900, "p1.jpg", 5000, 1, "ok", ""), /مكان العلامة/);
+  await qg.resetMarks(900);
+  assert.deepEqual(qg.applyEdits(pages, await qg.markEdits(900)), pages);
+  assert.deepEqual(await qg.hiddenMarks(900), []);
+});

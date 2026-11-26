@@ -320,6 +320,7 @@ async function qusayShown(it: Row) {
   // ✓ ✗ والمدح والملاحظات بخط إيد الأستاذ («✍️ خط إيدي»)، إذا كاتبها
   const ink = mk ? await qg.inkFor(Number(it.exam_id)) : [];
   const hidden = await qg.hiddenMarks(it.id);
+  const edits = await qg.markEdits(it.id); // ✏️ تعديلات الأستاذ على العلامات
   // تصحيح قصي كله بالعربي، لكل الطلاب حتى طالب المنهج الإنجليزي (طلبه 2026-11-23: «لا يكتب ولا كلمة بالإنجليزي»).
   // خطواته المكتوبة بالإنجليزي تنترجم مرة وحدة بكلمات الكتاب العراقي
   const lang = "ar" as const;
@@ -330,7 +331,7 @@ async function qusayShown(it: Row) {
   return shownQs.map((q, qi) => ({
     n: q.n, score: q.score, max: q.max, note: q.reason ?? "",
     photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
-    ...(mk ? { marked: qg.dropHidden(qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink), hidden) } : {}),
+    ...(mk ? { marked: qg.applyEdits(qg.dropHidden(qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink), hidden), edits) } : {}),
     steps: q.steps.map((st, si) => ({ status: "", awarded: st.awarded, possible: st.points, expected: tr[qi][si], student: qg.wLines(st.w ?? ""), reason: st.note })), by: "qusay" as const,
   }));
 }
@@ -350,6 +351,7 @@ async function aiShown(it: Row, review = false) {
   const qg = await import("./qusayGrade.ts");
   const mk = await qg.muMarksOf(it.id);
   const ink = mk ? await qg.inkFor(Number(it.exam_id)) : [];
+  const hidden = await qg.hiddenMarks(it.id), edits = await qg.markEdits(it.id); // ✏️ تعديلات الأستاذ على العلامات
   return await Promise.all(((await aiResultOf(it.id)) ?? []).filter((q) => !part || !part.includes(q.n)).map(async (q) => {
     // عمود الحل النموذجي: خطواتك المحفوظة نفسها (مو صياغة الذكاء بالإنگليزي)
     // (بطريقة الحل اللي انحسبت بيها درجته، إذا الحل النموذجي بيه أكثر من طريقة)
@@ -359,7 +361,7 @@ async function aiShown(it: Row, review = false) {
     return {
       n: q.n, score: q.score, max: q.max, note: /[؀-ۿ]/.test(String(q.note ?? "")) ? q.note ?? "" : "",
       photos: answers.filter((a) => a.q === q.n).map((a) => a.file as string),
-      ...(mk ? { marked: qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink) } : {}),
+      ...(mk ? { marked: qg.applyEdits(qg.dropHidden(qg.marksByPage(mk.qs, mk.pages, q.n, answers.filter((a) => a.q === q.n).map((a) => a.file as string), ink), hidden), edits) } : {}),
       steps: q.steps.map((st, i) => ({ status: st.status, awarded: st.awarded, possible: st.possible,
         expected: sameCount ? mine![i].text : st.expected, student: st.student_tex || st.student, reason: [st.reason_ar, st.reason].find((t) => /[؀-ۿ]/.test(String(t ?? ""))) ?? "", // عربي بس، الإنگليزي ما يطلع للطالب
         // خطوة ما انقرت: الطالب يشوف رسالة «أرسل صورة ثانية» بدل كتابة ما تنقرا

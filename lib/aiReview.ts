@@ -33,6 +33,9 @@ async function placeOf(it: Row): Promise<{ key: string; label: string }> {
   return { key: `c${st?.center_id ?? 0}`, label: `🏫 ${(await centerName(st?.center_id)) || "مركز"}` };
 }
 const groupKey = (it: Row, place: string) => `${it.exam_id}|${place}|${String(it.at ?? "").slice(0, 16)}`;
+/** 🧪 أوراق طلاب التجربة: كلها بمجموعة وحدة، حتى يشوف شكل الصفحة ويجرب التعديل (طلبه 2026-11-26) */
+const TEST_KEY = "0|test|";
+const keyOf = async (it: Row) => (it.user_id < 0 ? TEST_KEY : groupKey(it, (await placeOf(it)).key));
 
 /** بدل إنهاء الورقة مباشرة (من نظام التصحيح AI و«تصحيح قصي»): بوضع «بعد ما أراجعها» تنحجز وتنتظر */
 export async function aiFinish(finish: (uid: number, itemId: number) => Promise<unknown>, uid: number, itemId: number) {
@@ -91,35 +94,39 @@ async function groups() {
   const exams = new Map((await find("bank_exams")).map((e) => [Number(e.id), e]));
   const map = new Map<string, { key: string; exam: number; title: string; chapter: string; place: string; at: string; count: number; held: number }>();
   for (const it of await find("sched_items", { status: "done" })) {
-    if (it.user_id <= 0 || !isAi(it)) continue;
+    if (!isAi(it)) continue;
     const h = !!held[String(it.id)];
-    if (!h && !(it.graded_at && String(it.graded_at) >= since)) continue;
-    const p = await placeOf(it);
-    const key = groupKey(it, p.key);
+    if (!h && !(it.graded_at && (it.user_id < 0 || String(it.graded_at) >= since))) continue;
+    const key = await keyOf(it);
     const e = exams.get(Number(it.exam_id));
-    const g = map.get(key) ?? { key, exam: Number(it.exam_id), title: String(e?.title ?? "امتحان"), chapter: String(e?.chapter ?? ""), place: p.label, at: String(it.at ?? "").slice(0, 16), count: 0, held: 0 };
+    const g = map.get(key) ?? (key === TEST_KEY
+      ? { key, exam: 0, title: "🧪 أوراق التجربة", chapter: "طلاب التجربة، كل الامتحانات", place: "تجربة", at: "", count: 0, held: 0 }
+      : { key, exam: Number(it.exam_id), title: String(e?.title ?? "امتحان"), chapter: String(e?.chapter ?? ""), place: (await placeOf(it)).label, at: String(it.at ?? "").slice(0, 16), count: 0, held: 0 });
     g.count++; if (h) g.held++;
     map.set(key, g);
   }
-  return [...map.values()].map((g) => ({ ...g, seen: seen.has(g.key) })).sort((a, b) => b.at.localeCompare(a.at));
+  return [...map.values()].map((g) => ({ ...g, seen: seen.has(g.key) })).sort((a, b) => (a.key === TEST_KEY ? 1 : 0) - (b.key === TEST_KEY ? 1 : 0) || b.at.localeCompare(a.at));
 }
 
 /** أوراق المجموعة: طالب ورا طالب */
-async function groupPapers(key: string) {
+async function groupPapers(key: string, only?: number) {
   const [exam, place, at] = key.split("|");
+  const test = key === TEST_KEY;
   const held = await heldMap();
   const { aiReviewShown } = await import("./examRoom.ts");
   const { itemTotal } = await import("./gradeApi.ts");
   const out = [];
-  for (const it of await find("sched_items", { exam_id: Number(exam) })) {
-    if (it.user_id <= 0 || it.status !== "done" || !isAi(it) || String(it.at ?? "").slice(0, 16) !== at) continue;
+  for (const it of await find("sched_items", test ? { status: "done" } : { exam_id: Number(exam) })) {
+    if (it.status !== "done" || !isAi(it) || (only && Number(it.id) !== only)) continue;
+    if (test ? it.user_id >= 0 || !it.graded_at : it.user_id <= 0 || String(it.at ?? "").slice(0, 16) !== at) continue;
     if (!it.graded_at && !held[String(it.id)]) continue;
-    if ((await placeOf(it)).key !== place) continue;
+    if (!test && (await placeOf(it)).key !== place) continue;
     const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [Number(m.q), Number(m.mark)]));
     const qs = await aiReviewShown(it);
     const max = new Map((await find("bank_questions", { version_id: it.version_id })).map((q) => [Number(q.n), Number(q.max_mark)]));
     out.push({
-      id: Number(it.id), name: String((await student(it.user_id))?.name ?? "طالب"), held: !!held[String(it.id)],
+      id: Number(it.id), name: String((await student(it.user_id))?.name ?? "طالب") + (test ? ` · ${String((await one("bank_exams", { id: it.exam_id }))?.title ?? "")}` : ""), held: !!held[String(it.id)],
+      by: it.grader_id === QUSAY_GRADER ? "🧠 تصحيح قصي" : "🤖 مؤمل",
       total: it.graded_at ? Number(it.total ?? 0) : await itemTotal(it),
       questions: qs.map((q) => ({ n: q.n, max: max.get(q.n) ?? q.max, mark: marks.get(q.n) ?? q.score, note: q.note ?? "", photos: q.photos, marked: (q as { marked?: unknown }).marked ?? null })),
     });
@@ -168,7 +175,7 @@ export async function aiReviewAction(body: Row) {
     notice = "✅ انحفظ الإعداد";
   } else if (a === "group") {
     const key = String(body.key ?? "");
-    need(/^\d+\|(on|c\d+)\|[\d -:]+$/.test(key), "المجموعة غير موجودة");
+    need(key === TEST_KEY || /^\d+\|(on|c\d+)\|[\d -:]+$/.test(key), "المجموعة غير موجودة");
     const seen = await readJson<string[]>(SEEN, []);
     if (!seen.includes(key)) await kvSet(SEEN, JSON.stringify([...seen, key].slice(-1000)));
     const g = (await groups()).find((x) => x.key === key);
@@ -176,6 +183,20 @@ export async function aiReviewAction(body: Row) {
   } else if (a === "save") {
     const r = await saveMarks(Number(body.item), body.marks);
     return { saved: r, notice: r.changed ? `✅ انحفظ، الدرجة ${r.total}` : "ما تغير شي" };
+  } else if (a === "markFix" || a === "markHide" || a === "markAdd" || a === "markDrop" || a === "markReset") {
+    // ✏️ تعديل التصحيح نفسه على الورقة: تبديل علامة، شيلها، إضافة علامته، أو رجوع لتصحيح الذكاء
+    const item = Number(body.item);
+    const it = await one("sched_items", { id: item });
+    need(it && isAi(it), "الورقة غير موجودة");
+    const qg = await import("./qusayGrade.ts");
+    try {
+      if (a === "markFix") await qg.fixMark(item, String(body.key ?? ""), body.kind, body.note);
+      if (a === "markHide") await qg.hideMark(item, String(body.key ?? ""));
+      if (a === "markAdd") await qg.addMark(item, body.ref, body.x, body.y, body.kind, body.note);
+      if (a === "markDrop") await qg.dropAdded(item, Number(body.n));
+      if (a === "markReset") await qg.resetMarks(item);
+    } catch (e) { need(false, (e as Error).message); }
+    return { paper: (await groupPapers(String(body.key2 ?? ""), item))[0] ?? null, notice: a === "markReset" ? "↩️ رجعت لتصحيح الذكاء" : "✅ انحفظ التصحيح" };
   } else if (a === "approve") {
     const key = String(body.key ?? "");
     const papers = await groupPapers(key);
