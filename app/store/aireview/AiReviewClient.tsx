@@ -21,6 +21,18 @@ export default function AiReviewClient() {
   const c = cfg ?? data?.cfg ?? null;
   const openGroup = async (key: string) => { setOpen(key); window.scrollTo(0, 0); await call({ action: "group", key }, true); };
   const back = async () => { setOpen(null); await call({ action: "list" }); };
+  // رجع من شاشة التصحيح (?open=المجموعة#p رقم الورقة): تنفتح نفس المجموعة وتنزل لنفس الطالب
+  const reopened = useRef(false);
+  useEffect(() => {
+    if (!data || reopened.current) return;
+    reopened.current = true;
+    const k = new URLSearchParams(location.search).get("open");
+    if (!k) return;
+    void openGroup(k).then(() => {
+      const id = location.hash.slice(1);
+      if (id) setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 400);
+    });
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
   const file = (ref: string) => `/api/aireview/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
 
   if (open) {
@@ -79,6 +91,11 @@ export default function AiReviewClient() {
 }
 
 /** ورقة طالب: اسمه ودرجته، وكل سؤال بصفحاته وعلامات الذكاء، ومربع درجته */
+/** رابط شاشة التصحيح لهاي الورقة، ويا طريق الرجوع لهاي المجموعة (ويا رمز الصفحة إذا موجود) */
+function gradeLink(id: number, gkey: string) {
+  const t = new URLSearchParams(location.search).get("t");
+  return `/store/grade?edit=${id}&back=${encodeURIComponent(gkey)}${t ? `&t=${encodeURIComponent(t)}` : ""}`;
+}
 /** ورقة طالب. n: رقمه بالمجموعة: الطلاب يتناوبون باللون (إطار أزرق وجوه ذهبي، والجاي بالعكس) حتى تبين وين تخلص ورقة وتبدي اللي بعدها (طلبه 2026-11-27) */
 function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
   const [p, setP] = useState(start);
@@ -125,7 +142,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
     return () => window.clearTimeout(t);
   }, [marks]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className={"card arv-paper " + (n % 2 ? "arv-a" : "arv-b")}>
+    <div id={`p${p.id}`} className={"card arv-paper " + (n % 2 ? "arv-a" : "arv-b")}>
       <div className="arv-start">👤 الطالب {n} من {of}: <b>{p.name}</b></div>
       <div className="arv-head"><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
       {p.questions.map((q) => (
@@ -135,7 +152,9 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
             {edit[q.n]
               ? <><input className="exnum" inputMode="decimal" value={marks[q.n] ?? ""} onChange={(e) => setMarks({ ...marks, [q.n]: e.target.value.replace(/[^\d.]/g, "") })} /><span>من {q.max}</span></>
               : <span className="arv-mark">{marks[q.n] ?? q.mark} من {q.max}</span>}
-            <button type="button" className={"arv-pen" + (edit[q.n] ? " on" : "")} aria-label="تعديل" title="تعديل" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "✏️"}</button>
+            {/* ✏️ شاشة التصحيح نفسها بكل أدواتها (القلم، المساحة، الختوم...)، ومن يخلص يرجع لنفس الطالب هنا (طلبه 2026-11-27) */}
+            <button type="button" className="arv-pen" aria-label="صحح بشاشة التصحيح" title="صحح بشاشة التصحيح" onClick={() => { location.href = gradeLink(p.id, gkey); }}>✏️ صحح</button>
+            <button type="button" className={"arv-pen arv-pen2" + (edit[q.n] ? " on" : "")} aria-label="علامات الذكاء" title="علامات الذكاء" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "🤖 علامات الذكاء"}</button>
             {q.note && <small>{q.note}</small>}
           </div>
           {(q.marked?.length ? q.marked : q.photos.map((ref) => ({ ref, marks: [] as PaperMark[] }))).map((pg) => (
@@ -146,7 +165,6 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
                 {adding === pg.ref ? <span className="arv-hint">👆 دوس المكان اللي تريد تحط بيه علامتك</span>
                   : <button type="button" className="exbtn" disabled={busy} onClick={() => { setAdding(pg.ref); setTap(null); setSpot(null); }}>➕ ضيف علامة</button>}
                 {adding === pg.ref && <button type="button" className="exbtn" onClick={() => { setAdding(null); setSpot(null); }}>إلغاء</button>}
-                <a className="exbtn" style={{ textDecoration: "none" }} href={`/store/grade?edit=${p.id}`}>🖊 القلم والمساحة (شاشة التصحيح)</a>
               </div>}
               {edit[q.n] && !tap && !spot && adding !== pg.ref && <div className="arv-hint" style={{ marginTop: 4 }}>👆 دوس أي علامة على الورقة حتى تعدلها أو تشيلها</div>}
               {tap?.ref === pg.ref && <EditBox key={markKey(tap.m) + String(tap.m.added ?? "")} start={tap.m} busy={busy}
@@ -204,6 +222,7 @@ const CSS = `
 .arv-saved{font-weight:800;text-align:center;padding:8px;border-radius:10px;background:rgba(110,231,168,.12);color:#6ee7a8}
 .arv-pen{min-width:44px;min-height:40px;border-radius:10px;border:1.5px solid #F6C94A;background:transparent;color:#F6C94A;font:inherit;font-weight:800;cursor:pointer}
 .arv-pen.on{background:#F6C94A;color:#141F33}
+.arv-pen2{font-size:13px;opacity:.85}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
 .arv-q{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
 .arv-qline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.arv-qline .exnum{width:64px}.arv-qline small{flex-basis:100%;opacity:.8}

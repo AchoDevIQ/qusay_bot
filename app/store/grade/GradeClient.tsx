@@ -38,6 +38,15 @@ function useWide(on: boolean) {
   }, [on]);
 }
 
+/** جاي من «🗂 مراجعة تصحيح الذكاء» (?back=المجموعة): يرجع لنفس الطالب هناك. true إذا رجع */
+function backToReview(id: number, wait = 0) {
+  const q = new URLSearchParams(location.search), g = q.get("back");
+  if (!g) return false;
+  const t = q.get("t");
+  setTimeout(() => { location.href = `/store/aireview?open=${encodeURIComponent(g)}${t ? `&t=${encodeURIComponent(t)}` : ""}#p${id}`; }, wait);
+  return true;
+}
+
 export default function GradeClient({ only }: { only?: "obj" } = {}) {
   // اختيار المصحح «تبقى قلم / تتحول نص» بعد ما يبدله، حتى الورقة الجاية تفتح بيه
   const [penNow, setPenNow] = useState<boolean | null>(null);
@@ -163,7 +172,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
       return;
     }
     // تعديل ورقة مصححة: يرجع للقائمة، ما تنفتح ورقة ثانية
-    if (p.editing) { setPaper(null); setTimeout(() => void call({ action: "list" }), 1500); return; }
+    if (p.editing) { setPaper(null); if (backToReview(p.id, 1500)) return; setTimeout(() => void call({ action: "list" }), 1500); return; }
     setPaper(null);
     void openNext([p.id]);
   }
@@ -182,7 +191,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         {data && netWait.size > 0 && <div className="gk-netwait">📶 {netWait.size} ورقة تنتظر النت حتى توصل للطالب. تنرسل وحدها أول ما يرجع النت، لا تسد الصفحة.</div>}
         {data && paper && (
           <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
-            onClose={() => { setPaper(null); setSavedNow(0); group.current = null; void call(tab === "check" ? { action: "check", grader: data?.check?.grader ?? "" } : { action: tab === "objlog" ? "objLog" : tab === "history" ? "history" : "list" }); }}
+            onClose={() => { if (paper.editing && backToReview(paper.id)) return; setPaper(null); setSavedNow(0); group.current = null; void call(tab === "check" ? { action: "check", grader: data?.check?.grader ?? "" } : { action: tab === "objlog" ? "objLog" : tab === "history" ? "history" : "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onRescan={async () => { skipped.current.add(paper.id); await next(await call({ action: "rescan", id: paper.id })); }}
             onSave={(inkSaved, compose) => saveInBackground(paper, inkSaved, compose)}
