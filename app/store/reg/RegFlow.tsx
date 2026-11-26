@@ -1,11 +1,12 @@
 "use client";
 // تسجيل الطالب الجديد خطوة خطوة: الشروط وسؤال «إي لو لا» عن كل شرط، معلوماته، وبعدها كلمة المرور
 import { useEffect, useState, type ReactNode } from "react";
+import { typedCheck } from "../../../lib/termText.ts";
 import { CURR_OPTS, Err, type Errs, PhoneInput, SIDE_OPTS, Seg, cleanPhone, closeApp, haptic, nameOk, phoneErr, scrollToFirst } from "../shared";
 
 type Area = [number, string, string, [number, string, string?][]];
 export type RegData = { g: string[]; m: string[]; a: Area[]; tk?: string };
-type Term = { id: number; text: string; q?: string; a?: "yes" | "no" };
+type Term = { id: number; text: string; kind?: "cond" | "info"; q?: string; a?: "yes" | "no" };
 type Info = { terms: Term[]; rev: string; registered: boolean };
 type Done = { password: string; url?: string; close?: boolean };
 
@@ -113,9 +114,9 @@ export default function RegFlow({ D, app }: { D: RegData; app?: AppMode }) {
   if (step < T) {
     const term = info.terms[step];
     return (
-      <TermStep key={term.id} term={term} n={step + 1} total={T} last={step === T - 1} answered={answers[String(term.id)]}
+      <TermStep key={term.id} term={term} n={step + 1} total={T} last={step === T - 1} answered={answers[String(term.id)]} typedBefore={answers[`w${term.id}`]}
         onBack={() => page(step - 1)}
-        onOk={(a) => { setAnswers((x) => ({ ...x, [String(term.id)]: a })); page(step + 1); }} />
+        onOk={(a, w) => { setAnswers((x) => ({ ...x, [String(term.id)]: a, ...(w !== undefined ? { [`w${term.id}`]: w } : {}) })); page(step + 1); }} />
     );
   }
 
@@ -281,18 +282,35 @@ export default function RegFlow({ D, app }: { D: RegData; app?: AppMode }) {
   );
 }
 
-/** شرط: يقراه، وإذا إله سؤال يجاوب «إي» لو «لا» بدوسة (طلبه 2026-11-26 بدل ترتيب كل الكلمات). الجواب الغلط يرجعه يقرا */
-function TermStep({ term, n, total, last, answered, onBack, onOk }: { term: Term; n: number; total: number; last: boolean; answered?: string; onBack?: () => void; onOk: (a: string) => void }) {
+/** بند التسجيل (طلبه 2026-11-26): «✍️ شرط» يعيد كتابته كله كلمة كلمة بإيده (بلا لصق)، و«📖 تعليمة» يقراها ويدوس «فهمت».
+ *  (وإذا إله سؤال «إي لو لا» القديم، يجاوبه هم) */
+function TermStep({ term, n, total, last, answered, typedBefore, onBack, onOk }: { term: Term; n: number; total: number; last: boolean; answered?: string; typedBefore?: string; onBack?: () => void; onOk: (a: string, typed?: string) => void }) {
+  const cond = term.kind === "cond";
+  const [typed, setTyped] = useState(typedBefore ?? "");
+  const chk = typedCheck(term.text, typed);
   const asks = !!(term.q && term.a);
   const [pick, setPick] = useState<string>(answered ?? "");
-  const right = !asks || pick === term.a;
+  const right = (!asks || pick === term.a) && (!cond || chk.done);
   const wrong = asks && !!pick && pick !== term.a;
   const choose = (v: "yes" | "no") => { haptic(); setPick(v); };
   return (
     <div className="rg">
-      <Top title="الشروط والأحكام" step={n} total={total} />
+      <Top title={cond ? "الشروط" : "التعليمات"} step={n} total={total} />
       <div className="rgbody">
         <div className={"rgcard rgterm" + (wrong ? " rgreread" : "")}>{term.text}</div>
+        {cond && (
+          <div className="rgcard">
+            <div className="rgask">✍️ حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، اكتبه هنا مثل ما هو:</div>
+            <textarea className="rgtype" dir="rtl" rows={4} value={typed} autoComplete="off" autoCorrect="off" spellCheck={false}
+              placeholder="اكتب الشرط هنا كلمة كلمة..."
+              onPaste={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()}
+              onChange={(e) => setTyped(e.target.value)} />
+            <div className="rgprog"><i style={{ width: `${chk.total ? (100 * chk.ok) / chk.total : 0}%` }} /></div>
+            <small className="rgcount">كتبت {chk.ok} من {chk.total} كلمة</small>
+            {chk.wrong && <div className="rgwrong">⚠️ الكلمة رقم {chk.wrong.n} غلط: كتبت «{chk.wrong.got}»، المفروض «{chk.wrong.want}».</div>}
+            {chk.done && <div className="rgright">✅ كتبته صح</div>}
+          </div>
+        )}
         {asks && (
           <div className="rgcard">
             <div className="rgask">حتى بعدين لا تقول أنا عبرت الشرط بدون ما أقرأ، جاوب:</div>
@@ -308,7 +326,7 @@ function TermStep({ term, n, total, last, answered, onBack, onOk }: { term: Term
         )}
       </div>
       <Foot>
-        <button type="button" className="rgbtn" disabled={!right || (asks && !pick)} onClick={() => { haptic(); onOk(pick || "ok"); }}>{asks && !right ? "جاوب السؤال أول" : last ? "أوافق وأنهي" : "أوافق ومتابعة"}</button>
+        <button type="button" className="rgbtn" disabled={!right || (asks && !pick)} onClick={() => { haptic(); onOk(pick || "ok", cond ? typed : undefined); }}>{cond && !chk.done ? `باقي ${chk.total - chk.ok} كلمة` : asks && !right ? "جاوب السؤال أول" : !cond ? (last ? "فهمت وأنهي" : "فهمت ومتابعة") : last ? "أوافق وأنهي" : "أوافق ومتابعة"}</button>
         {onBack && <button type="button" className="rgback" onClick={onBack}>رجوع</button>}
       </Foot>
     </div>

@@ -2,9 +2,11 @@
 import { createHash } from "node:crypto";
 import { kvGet, kvSet, type Row } from "./db.ts";
 import { authed, need } from "./webApi.ts";
+import { typedCheck } from "./termText.ts";
 
 /** q: سؤال «إي لو لا» عن الشرط (طلبه 2026-11-26 بدل ترتيب كل الكلمات)، و a جوابه الصح. بلا سؤال: زر «أوافق» بس */
-export type Term = { id: number; text: string; q?: string; a?: "yes" | "no" };
+/** kind: «cond» شرط ينكتب من جديد كلمة كلمة (الأصل)، «info» تعليمة يقراها ويدوس «فهمت». q/a: سؤال «إي لو لا» القديم (اختياري) */
+export type Term = { id: number; text: string; kind?: "cond" | "info"; q?: string; a?: "yes" | "no" };
 const KEY = "reg_terms";
 const MAX_TEXT = 5000;
 const DELETES_LECTURES = "تحذف المحاضرات مباشرة بعد انتهاء امتحانات الدور الأول مباشرة ولأيمكن ارجاعها لاي سبب كان و انا لست مسؤول عن عدم مشاهدتها *** انا ادفع للشركة اشتراك اجباري بغض النظر عن مشاهدة المحاضرات او عدم مشاهدتها";
@@ -32,8 +34,12 @@ export const termsRev = (terms: Term[]) => createHash("sha256").update(JSON.stri
 /** الطالب جاوب كل أسئلة الشروط صح؟ (الصفحة ما تعبره إلا يجاوب صح، وهنا نتأكد هم) */
 export function checkAnswers(terms: Term[], raw: unknown) {
   const ans = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  for (const t of terms) if (t.q && t.a) need(ans[String(t.id)] === t.a, "جاوب أسئلة الشروط صح حتى تكمل");
+  for (const t of terms) {
+    if (t.kind === "cond") need(typedCheck(t.text, String(ans[`w${t.id}`] ?? "")).done, "اكتب كل شرط مثل ما هو حتى تكمل");
+    if (t.q && t.a) need(ans[String(t.id)] === t.a, "جاوب أسئلة الشروط صح حتى تكمل");
+  }
 }
+const kindOf = (body: Row) => ({ kind: body.kind === "info" ? "info" as const : "cond" as const });
 const qOf = (body: Row) => {
   const q = String(body.q ?? "").trim().slice(0, 300);
   if (!q) return {};
@@ -55,13 +61,13 @@ export async function termsAction(body: Row) {
   let terms = await loadTerms();
   let notice = "";
   if (a === "add") {
-    terms = [...terms, { id: Math.max(0, ...terms.map((t) => t.id)) + 1, text: textOf(body.text), ...qOf(body) }];
+    terms = [...terms, { id: Math.max(0, ...terms.map((t) => t.id)) + 1, text: textOf(body.text), ...kindOf(body), ...qOf(body) }];
     notice = "✅ انضاف الشرط";
   } else if (a === "save") {
     need(terms.some((t) => t.id === id), "الشرط غير موجود");
     const text = textOf(body.text);
     const qa = qOf(body);
-    terms = terms.map((t) => (t.id === id ? { id: t.id, text, ...qa } : t));
+    terms = terms.map((t) => (t.id === id ? { id: t.id, text, ...kindOf(body), ...qa } : t));
     notice = "✅ انحفظ الشرط";
   } else if (a === "del") {
     need(terms.some((t) => t.id === id), "الشرط غير موجود");
