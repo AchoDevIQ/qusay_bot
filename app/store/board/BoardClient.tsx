@@ -758,10 +758,16 @@ export default function BoardClient() {
       { t: "رجوع", kind: "gray", run: () => appTopic(chs, env, c) },
     ] });
   };
-  // both: يختار محاضرة العربي أول، بعدين الانگليزي، والشرح ينزل بالثنتين
+  // both (طلبه 2026-11-26): يختار المحاضرة مرة وحدة، والانگليزي بنفس رقمها بنفس الموضوع ينختار وحده
+  // (مراجعة ويا مراجعة). إذا ما لگاها، يسأله عن الانگليزي مثل قبل
+  const lecNo = (l: AppLec) => `${/مراجع|review/i.test(l.title) ? "r" : ""}${(l.title.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).match(/\d+/) ?? [""])[0]}`;
+  const pairOf = (t: AppTopic, ar: AppLec) => { const no = lecNo(ar); return no ? t.lectures.find((l) => l.track === "english" && lecNo(l) === no) ?? null : null; };
   const appLecture = (chs: AppCh[], env: string, c: AppCh, t: AppTopic, k: "arabic" | "english", both = false, first?: AppLec) => {
-    setAsk({ text: `${t.name} (${TRACK[k]}): ويا أي محاضرة؟${both ? (k === "arabic" ? " (بعدها تختار محاضرة الانگليزي)" : ` (العربي: ${first?.title})`) : ""}`, buttons: [
-      ...t.lectures.filter((l) => l.track === k).map((l) => ({ t: `${l.title}${l.draft ? " (مسودة)" : ""}`, kind: "gray" as const, run: () => (both && k === "arabic" ? appLecture(chs, env, c, t, "english", true, l) : void confirmApp(c.ch, t, first ? [first, l] : [l], env)) })),
+    setAsk({ text: `${t.name}${both && k === "arabic" ? " (عربي وانگليزي)" : ` (${TRACK[k]})`}: ويا أي محاضرة؟${both ? (k === "arabic" ? " (ينزل بنفسها بالانگليزي هم)" : ` (ما لگيت نفسها بالانگليزي، اختارها. العربي: ${first?.title})`) : ""}`, buttons: [
+      ...t.lectures.filter((l) => l.track === k).map((l) => ({ t: `${l.title}${l.draft ? " (مسودة)" : ""}`, kind: "gray" as const, run: () => {
+        if (both && k === "arabic") { const en = pairOf(t, l); if (en) void confirmApp(c.ch, t, [l, en], env); else appLecture(chs, env, c, t, "english", true, l); }
+        else void confirmApp(c.ch, t, first ? [first, l] : [l], env);
+      } })),
       { t: "رجوع", kind: "gray", run: () => appTrack(chs, env, c, t) },
     ] });
   };
@@ -771,7 +777,8 @@ export default function BoardClient() {
       const { count } = await api({ action: "count", chapter: ch });
       setBusy("");
       const where = `الفصل ${ORD[ch]} · ${t.name} · ${ls.map((l) => `${l.title} (${TRACK[l.track]})`).join(" و ")}`;
-      setAsk({ text: `تريد أدز «${title}»؟ ينزل بملحقات «${where}» بالتطبيق${env === "staging" ? " (داتا التجربة)" : ""}، وتوصل رسالة لـ ${count} طالب اشتروا محاضرات الفصل ${ORD[ch]}.`, buttons: [
+      void count;
+      setAsk({ text: `تريد أدز «${title}»؟ ينزل بملحقات «${where}» بالتطبيق${env === "staging" ? " (داتا التجربة)" : ""}. الطلاب يلگوه جوه المحاضرة، بلا رسالة.`, buttons: [
         { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonIdRef.current, appLecture: ls.map((l) => l.id) }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
         { t: "لا", kind: "bad", run: () => setAsk(null) },
       ] });

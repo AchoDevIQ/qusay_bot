@@ -233,7 +233,8 @@ export async function boardAction(body: any) {
     }
     const where = [`الفصل ${ORD[ch]}`, row.topic, row.lt || (row.lecture ? `المحاضرة ${row.lecture}` : "")].filter(Boolean).join(" · ");
     await kvSet(SENT, JSON.stringify([...(await sentList()), row].slice(-500)));
-    const to = await lectureBuyers(ch);
+    // نزل بملحقات المحاضرة بالتطبيق: الطالب يلگاه جوه المحاضرة، فماكو رسالة (طلبه 2026-11-26: «ليش يوصل اشعار؟»)
+    const to = row.app ? [] : await lectureBuyers(ch);
     const { send } = await import("./telegram.ts");
     const { adminPageLink } = await import("./keyboards.ts");
     let n = 0;
@@ -243,7 +244,7 @@ export async function boardAction(body: any) {
         n++;
       } catch (e) { console.error("board send", u, e); }
     }
-    return { ...await state(), notice: `✅ انبعث لـ ${n} طالب من طلاب محاضرات الفصل ${ORD[ch]}${row.app ? `، ونزل بملحقات «${row.topic} · ${row.lt}» بالتطبيق${row.app.env === "staging" ? " (التجربة)" : ""}` : ""}` };
+    return { ...await state(), notice: row.app ? `✅ نزل بملحقات «${row.topic} · ${row.lt}» بالتطبيق${row.app.env === "staging" ? " (التجربة)" : ""}. الطلاب يلگوه جوه المحاضرة.` : `✅ انبعث لـ ${n} طالب من طلاب محاضرات الفصل ${ORD[ch]}` };
   }
   need(false, "أمر غير معروف");
   return {};
