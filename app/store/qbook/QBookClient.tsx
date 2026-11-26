@@ -11,7 +11,9 @@ const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
 const src = (q: Q, sol: boolean) => `/api/notes/page?t=${encodeURIComponent(token())}&book=${q.book}&page=${q.page}&pf=${encodeURIComponent(platformNow())}&d=${encodeURIComponent(deviceNow())}${sol ? "&sol=1" : ""}`;
 
-export default function QBookClient() {
+/** mode: «q» أسئلة بس (تبويب «الأسئلة» تحت الفيديو)، «sol» كل سؤال وحله (تبويب «الحل النموذجي»)، وبلاه الملزمة مثل قبل.
+ *  embedded: جوه تبويب بالتطبيق، بلا الرأس الكبير */
+export default function QBookClient({ mode, embedded }: { mode?: "q" | "sol"; embedded?: boolean } = {}) {
   const [lec, setLec] = useState<Lec | null>(null);
   const [err, setErr] = useState("");
   const [ready, setReady] = useState(false);
@@ -26,7 +28,7 @@ export default function QBookClient() {
         if (!r.ok) throw new Error(j.error || "صار خطأ");
         setLec(j);
         // الملزمة كاملة: كل سؤال وحله ظاهر، ويگدر يخفي الحلول حتى يحاول بنفسه
-        setOpen(Object.fromEntries((j.items as Q[]).map((_, i) => [i, true])));
+        setOpen(mode === "q" ? {} : Object.fromEntries((j.items as Q[]).map((_, i) => [i, true])));
       } catch (e) { setErr((e as Error).message); }
     })();
   }, []);
@@ -34,11 +36,12 @@ export default function QBookClient() {
   return (
     <div className="qq" dir="rtl">
       <style>{CSS}</style>
-      <header>
+      {!embedded && <header>
         <img src="/app-logo.png" alt="" />
         <div><b>ملزمة المحاضرة</b>{lec && <small>الفصل {ORD[lec.ch]} · {lec.topic} · {lec.title} · {lec.items.filter((x) => x.sec !== "book").length} سؤال</small>}</div>
-        {lec && <button type="button" onClick={() => setOpen(all ? {} : Object.fromEntries(lec.items.map((_, i) => [i, true])))}>{all ? "اخفي الحلول" : "كل الحلول"}</button>}
-      </header>
+        {lec && !mode && <button type="button" onClick={() => setOpen(all ? {} : Object.fromEntries(lec.items.map((_, i) => [i, true])))}>{all ? "اخفي الحلول" : "كل الحلول"}</button>}
+      </header>}
+      {embedded && lec && <div className="qq-top">{mode === "sol" ? "✅ الحل النموذجي" : "📘 أسئلة المحاضرة"} · {lec.topic} · {lec.title}{mode === "q" ? <small>حلها على «✍️ سبورة الحل»، وشوف حلي بـ«✅ الحل النموذجي»</small> : null}</div>}
       {err && <div className="qq-msg">{err}</div>}
       {!err && !lec && <div className="qq-msg">جاري التحميل...</div>}
       {ready && lec?.items.map((q, i) => (
@@ -50,7 +53,7 @@ export default function QBookClient() {
             : open[i]
             ? <img className="qq-pg sol" src={src(q, true)} alt={`السؤال ${i + 1} وحله`} loading={i < 2 ? "eager" : "lazy"} />
             : <><img className="qq-pg" src={src(q, false)} alt={`سؤال ${i + 1}`} loading="lazy" />
-              <button type="button" className="qq-sol" onClick={() => setOpen((o) => ({ ...o, [i]: true }))}>📘 الحل</button></>}
+              {mode !== "q" && <button type="button" className="qq-sol" onClick={() => setOpen((o) => ({ ...o, [i]: true }))}>📘 الحل</button>}</>}
         </section>
       ))}
     </div>
@@ -70,5 +73,6 @@ const CSS = `
 .qq-pg{display:block;width:100%;height:auto;background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(20,31,51,.12)}
 .qq-pg.sol{border:2px solid #F6C94A}
 .qq-sol{display:block;width:100%;margin-top:10px;min-height:52px;border:2px dashed #F6C94A;background:#fff;color:#141F33;border-radius:12px;font:inherit;font-size:17px;font-weight:700}
+.qq-top{max-width:900px;margin:12px auto 0;padding:0 16px;font-weight:800;color:#141F33;display:flex;flex-direction:column;gap:2px}.qq-top small{font-weight:600;color:#5C667A}
 .qq-msg{max-width:600px;margin:40px auto;padding:0 16px;text-align:center;font-size:18px;line-height:1.8}
 `;

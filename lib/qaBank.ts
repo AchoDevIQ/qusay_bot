@@ -782,6 +782,12 @@ export async function saveAnswer(uid: number, question: string, r: QaResult, whe
   const id = randomUUID().replace(/-/g, "").slice(0, 16);
   await kvSet(`qa_ans_${id}`, JSON.stringify({ uid, question: question.slice(0, 2000), where, source: r.source, solution: r.solution, ...(r.asked ? { asked: r.asked.slice(0, 4000) } : {}), ...(r.fk ? { fk: r.fk } : {}), ...(r.rasid ? { rasid: r.rasid } : {}), ...(r.notebook ? { notebook: r.notebook } : {}), ...(r.similar ? { similar: r.similar } : {}), lang, ...ctx, at: new Date().toISOString() }));
   // 🔎 حلول الذكاء: كل حل كتبه الذكاء ينضاف لقائمة الأستاذ حتى يشوفه ويصلحه
+  // 📂 أسئلتي جوه المحاضرة بالتطبيق: كل طالب قائمة أسئلته (الأحدث أول) بموضوعها ومحاضرتها
+  if (uid > 0) {
+    const mineKey = `qa_mine_${uid}`;
+    let mine: Row[] = []; try { mine = JSON.parse((await kvGet(mineKey)) ?? "[]"); } catch { /* */ }
+    await kvSet(mineKey, JSON.stringify([{ id, at: new Date().toISOString().slice(0, 16).replace("T", " "), q: (r.asked || question).slice(0, 200), ch: Number(ctx.chapter) || 0, tid: Number(ctx.tid) || 0, lecture: Number(ctx.lecture) || 0 }, ...(Array.isArray(mine) ? mine : [])].slice(0, 300)));
+  }
   if (AI_SOURCES.includes(r.source)) await indexAnswer({ id, at: new Date().toISOString().slice(0, 16).replace("T", " "), uid, tid: Number(ctx.tid) || 0, source: r.source, q: (r.asked || question).slice(0, 160) });
   return id;
 }

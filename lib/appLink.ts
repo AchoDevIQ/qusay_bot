@@ -154,11 +154,11 @@ export async function appChapters(uid: number): Promise<string[]> {
 }
 
 // ---------- الدخول: التطبيق يفتح /api/app/enter بطلب POST فيه رمز الطالب، ويرجع له تحويل لصفحة البوت
-const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo", "vote", "board", "qbook", "path", "alarm"]);
+const PAGES = new Set(["notes", "myexams", "home", "chat", "store", "guardian", "inbox", "myorders", "myinfo", "vote", "board", "qbook", "path", "alarm", "lec", "answer"]);
 export const APP_ERR = "ما گدرنا نفتح الصفحة. سد التطبيق وافتحه من جديد. إذا تكررت، تواصل ويا الإدارة.";
 
 /** يرجع رابط الصفحة (نسبي) لطالب التطبيق، أو null إذا الرمز أو الحساب مو صالح */
-export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: unknown; poll?: unknown; att?: unknown; lec?: unknown; solve?: unknown }): Promise<string | null> {
+export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: unknown; poll?: unknown; att?: unknown; lec?: unknown; solve?: unknown; view?: unknown; a?: unknown }): Promise<string | null> {
   const env: AppEnv = form.env === "staging" ? "staging" : "prod";
   const page = PAGES.has(String(form.page)) ? String(form.page) : "notes";
   const fu = await verifyAppIdToken(form.id);
@@ -176,9 +176,13 @@ export async function enterFromApp(form: { id?: unknown; env?: unknown; page?: u
   const att = page === "board" && /^[\w-]{8,64}$/.test(String(form.att ?? "")) ? `&att=${String(form.att)}` : "";
   // أسئلة المحاضرة: «📘 الملزمة» (qbook?lec=) و«✍️ حلّي» (board?solve=)
   const id = (v: unknown) => /^[0-9a-f-]{32,36}$/i.test(String(v ?? "")) ? String(v) : "";
-  const lec = page === "qbook" && id(form.lec) ? `&lec=${id(form.lec)}` : "";
+  const lec = (page === "qbook" || page === "lec") && id(form.lec) ? `&lec=${id(form.lec)}` : "";
+  // تبويبات المحاضرة بالتطبيق (lec): الأسئلة، الحل النموذجي، سبورة الحل، سبورة الشرح، أسئلتي
+  const view = page === "lec" && /^(q|sol|solve|board|myq)$/.test(String(form.view ?? "")) ? `&view=${String(form.view)}` : "";
   const solve = page === "board" && id(form.solve) ? `&solve=${id(form.solve)}` : "";
-  return `/store/${page}?v=${Math.floor(Date.now() / 1000)}${poll}${att}${lec}${solve}&${auth}`;
+  // ❓ «أسئلتي»: صفحة حل سؤال سأله
+  const ans = page === "answer" && /^[a-f0-9]{16}$/.test(String(form.a ?? "")) ? `&a=${String(form.a)}` : "";
+  return `/store/${page}?v=${Math.floor(Date.now() / 1000)}${poll}${att}${lec}${solve}${view}${ans}&${auth}`;
 }
 
 // ---------- تجربة التطبيق الجديد على طلاب يختارهم صاحب البوت (من صفحة الطلاب). الباقين يبقى عدهم التطبيق القديم

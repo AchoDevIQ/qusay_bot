@@ -63,7 +63,8 @@ export async function lectureQs(books: Row[], info: LecInfo, withBook = false): 
 
 /** للطالب (أو الأستاذ): المحاضرة وأسئلتها. ما اشترى الفصل؟ ما تنفتح */
 export async function lectureFor(uid: number, id: unknown, withBook = false) {
-  const info = await lecInfo(id);
+  // ما انحفظت معلوماتها (ما داس «حط الملزمة»): من نسخة محاضرات التطبيق
+  const info = (await lecInfo(id)) ?? (UUID.test(String(id ?? "")) ? await (await import("./lecTabs.ts")).ensureLecInfo(String(id)) : null);
   need(info, "هذي المحاضرة بعد ما إلها أسئلة", 404);
   const { myBooks, ownedChapters } = await import("./notes.ts");
   const { isAdmin } = await import("./data.ts");

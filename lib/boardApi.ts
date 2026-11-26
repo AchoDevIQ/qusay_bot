@@ -96,6 +96,8 @@ export async function boardAction(body: any) {
     return { lesson: await readLesson(x!.ref), title: x!.title };
   }
   // ---------- 📘✍️ أسئلة المحاضرة (ملحقات التطبيق): القائمة، وحل الطالب على ورقة A4 (إله بس)
+  // 🎬 تبويبات المحاضرة: الأسئلة موجودة؟ وشروحات السبورة، وأسئلة الطالب بهاي المحاضرة
+  if (a === "lecTabs") return await (await import("./lecTabs.ts")).lecTabsFor(uid, body.lec);
   if (a === "lq") {
     const { lectureFor } = await import("./lectureQs.ts");
     return await lectureFor(uid, body.lec, true);
