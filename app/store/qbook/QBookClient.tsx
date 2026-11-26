@@ -15,7 +15,7 @@ async function notesPost(body: Record<string, unknown>) {
 }
 
 type Q = { book: number; page: number; sec: "book" | "wz" | "ith" };
-type Lec = { id: string; title: string; topic: string; ch: number; items: Q[] };
+type Lec = { id: string; title: string; topic: string; ch: number; items: Q[]; sol?: boolean };
 const SEC = { book: "📘 أمثلة وأسئلة الكتاب", wz: "📗 وزاري", ith: "📙 إثرائي" } as const;
 const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"];
 const token = () => new URLSearchParams(location.search).get("t") ?? "";
@@ -56,8 +56,8 @@ export default function QBookClient({ mode, embedded }: { mode?: "q" | "sol"; em
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || "صار خطأ");
         setLec(j);
-        // الملزمة كاملة: كل سؤال وحله ظاهر، ويگدر يخفي الحلول حتى يحاول بنفسه
-        setOpen(mode === "q" ? {} : Object.fromEntries((j.items as Q[]).map((_, i) => [i, true])));
+        // الملزمة كاملة: كل سؤال وحله ظاهر، ويگدر يخفي الحلول حتى يحاول بنفسه. الحل النموذجي مسدود: الأسئلة بس
+        setOpen(mode === "q" || j.sol === false ? {} : Object.fromEntries((j.items as Q[]).map((_, i) => [i, true])));
       } catch (e) { setErr((e as Error).message); }
     })();
   }, []);
@@ -68,12 +68,14 @@ export default function QBookClient({ mode, embedded }: { mode?: "q" | "sol"; em
       {!embedded && <header>
         <img src="/app-logo.png" alt="" />
         <div><b>ملزمة المحاضرة</b>{lec && <small>الفصل {ORD[lec.ch]} · {lec.topic} · {lec.title} · {lec.items.filter((x) => x.sec !== "book").length} سؤال</small>}</div>
-        {lec && !mode && <button type="button" onClick={() => setOpen(all ? {} : Object.fromEntries(lec.items.map((_, i) => [i, true])))}>{all ? "اخفي الحلول" : "كل الحلول"}</button>}
+        {lec && !mode && lec.sol !== false && <button type="button" onClick={() => setOpen(all ? {} : Object.fromEntries(lec.items.map((_, i) => [i, true])))}>{all ? "اخفي الحلول" : "كل الحلول"}</button>}
       </header>}
-      {embedded && lec && <div className="qq-top">{mode === "sol" ? "✅ الحل النموذجي" : "📘 أسئلة المحاضرة"} · {lec.topic} · {lec.title}{mode === "q" ? <small>حلها على «✍️ سبورة الحل»، وشوف حلي بـ«✅ الحل النموذجي»</small> : null}</div>}
+      {embedded && lec && <div className="qq-top">{mode === "sol" ? "✅ الحل النموذجي" : "📘 أسئلة المحاضرة"} · {lec.topic} · {lec.title}{mode === "q" ? <small>حلها على «✍️ سبورة الحل»{lec.sol !== false ? "، وشوف حلي بـ«✅ الحل النموذجي»" : ""}</small> : null}</div>}
       {err && <div className="qq-msg">{err}</div>}
       {!err && !lec && <div className="qq-msg">جاري التحميل...</div>}
-      {ready && lec?.items.map((q, i) => (
+      {/* 📘 الحل النموذجي مسدود هسه: تبويبه يگول هيج بس، بلا أسئلة */}
+      {lec && mode === "sol" && lec.sol === false && <div className="qq-msg">🔒 الحل النموذجي مسدود هسه. حل الأسئلة على «✍️ سبورة الحل».</div>}
+      {ready && !(mode === "sol" && lec?.sol === false) && lec?.items.map((q, i) => (
         <section key={`${q.book}-${q.page}`}>
           <div className="qq-tag">{SEC[q.sec]}{q.sec === "book" ? "" : ` · سؤال ${lec.items.slice(0, i + 1).filter((x) => x.sec === q.sec).length}`}</div>
           {/* الكتاب: الصفحة نفسها (الشرح والأمثلة والأسئلة). الوزاري والإثرائي: صفحة الحل بيها السؤال فوك وحله تحته، و«اخفي الحلول» يطلع السؤال بس */}
@@ -89,7 +91,7 @@ export default function QBookClient({ mode, embedded }: { mode?: "q" | "sol"; em
                 </span>)}</div> : null;
               })()}</>
             : <><img className="qq-pg" src={src(q, false)} alt={`سؤال ${i + 1}`} loading="lazy" />
-              {mode !== "q" && <button type="button" className="qq-sol" onClick={() => setOpen((o) => ({ ...o, [i]: true }))}>📘 الحل</button>}</>}
+              {mode !== "q" && lec.sol !== false && <button type="button" className="qq-sol" onClick={() => setOpen((o) => ({ ...o, [i]: true }))}>📘 الحل</button>}</>}
         </section>
       ))}
       {vmsg && <div className="qq-vmsg">{vmsg}</div>}

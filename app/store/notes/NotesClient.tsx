@@ -284,7 +284,8 @@ function Reader({ book, start = 1, onClose }: { book: Book; start?: number; onCl
         <small className={pending ? "ntwait" : "ntok"}>{err ? "⚠️" : pending ? "⏳ يحفظ" : "✅ محفوظ"}</small>
       </div>
       {/* 📝 الراصد والوزارية والإثرائية: الزرين بشريط لحالهم فوك الأدوات، بعيد عن هدر الصفحة */}
-      {(book.sol || book.kind === "rasid") && (
+      {/* الحل النموذجي مسدود (شنو يشوف الطالب): book.sol يجي false، فالزرين ما يطلعن والطالب يكتب على صفحته بس */}
+      {book.sol && (
         <div className="ntbar ntrasid">
           <button type="button" className={"gk-btn" + (sol ? "" : " on")} onClick={() => setSol(0)}>📝 حلي</button>
           <button type="button" className={"gk-btn" + (sol ? " on" : "")} onClick={() => { haptic(); setSol(page); }}>📘 الحل النموذجي</button>

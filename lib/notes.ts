@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { boughtCourse, guardianOf, logActivity } from "./access.ts";
-import { find, insert, one, put, remove, update, type Row } from "./db.ts";
+import { find, insert, kvGet, one, put, remove, update, type Row } from "./db.ts";
 import { isAdmin, student } from "./data.ts";
 import { checkDevice, checkPhone } from "./deviceLock.ts";
 import { LOCK_TEXT, examInProgress } from "./examLock.ts";
@@ -103,7 +103,8 @@ export async function noteAction(body: Row) {
   if (a === "list") {
     const books = await myBooks(uid);
     const marks = new Map((await find("note_bookmarks", { user_id: uid })).map((m) => [m.book_id as number, m.page as number]));
-    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang ?? "all", pages: b.pages, kind: b.kind ?? "book", section: sectionOf(b), sol: hasSol(b), saved: marks.get(b.id) ?? 0 })) };
+    const solOn = await (await import("./studentVis.ts")).solAllowed(uid);
+    return { books: books.map((b) => ({ id: b.id, title: b.title, chapter: b.chapter, lang: b.lang ?? "all", pages: b.pages, kind: b.kind ?? "book", section: sectionOf(b), sol: solOn && hasSol(b), saved: marks.get(b.id) ?? 0 })) };
   }
   const b = await myBook(uid, body.book);
   // 📑 المواضيع: الموضوع، وبعده المحاضرة (أو السؤال بالراصد)، ويا رقم صفحتها
@@ -245,6 +246,8 @@ export async function notePage(token: unknown, book: unknown, rawPage: unknown, 
   const b = await myBook(uid, book);
   const rasid = b.kind === "rasid";
   need(!sol || hasSol(b), "هاي الملزمة ما بيها حل نموذجي", 404);
+  // 📘 الحل النموذجي مخفي (شنو يشوف الطالب): يبقى بس صفحة الراصد اللي جاوبوا بيها سؤاله العلمي
+  if (sol && !await (await import("./studentVis.ts")).solAllowed(uid)) need(await qaRasidOk(uid, Number(b.id), pageOf(b, rawPage)), "🔒 الحل النموذجي مسدود هسه", 403);
   const jpg = await cleanPage(b, pageOf(b, rawPage), !!sol);
   need(jpg, "الصفحة غير موجودة", 404);
   return await watermark(jpg!, String((await student(uid))?.name ?? ""), uid, rasid && !sol ? (b.lang === "en" ? "en" : "ar") : undefined);
@@ -379,4 +382,17 @@ export async function noteAdmin(raw: Row | FormData) {
   await remove("note_bookmarks", { book_id: id });
   await remove("note_books", { id });
   return await adminData(uid, "🗑 انحذفت");
+}
+
+/** صفحة الحل هاي جاوبوا بيها سؤال علمي سأله هذا الطالب؟ (آخر 60 سؤال) */
+async function qaRasidOk(uid: number, book: number, page: number) {
+  let mine: Row[] = [];
+  try { mine = JSON.parse((await kvGet(`qa_mine_${uid}`)) ?? "[]"); } catch { mine = []; }
+  for (const m of (Array.isArray(mine) ? mine : []).slice(0, 60)) {
+    try {
+      const a = JSON.parse((await kvGet(`qa_ans_${m.id}`)) ?? "null");
+      if (a?.uid === uid && Number(a.rasid?.book) === book && Number(a.rasid?.page) === page) return true;
+    } catch { /* */ }
+  }
+  return false;
 }

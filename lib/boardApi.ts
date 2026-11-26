@@ -100,7 +100,8 @@ export async function boardAction(body: any) {
   if (a === "lecTabs") return await (await import("./lecTabs.ts")).lecTabsFor(uid, body.lec);
   if (a === "lq") {
     const { lectureFor } = await import("./lectureQs.ts");
-    return await lectureFor(uid, body.lec, true);
+    // sol: الحل النموذجي مفتوح لهذا الطالب؟ (شنو يشوف الطالب ← 📘 الحل النموذجي)
+    return { ...await lectureFor(uid, body.lec, true), sol: await (await import("./studentVis.ts")).solAllowed(uid) };
   }
   if (a === "solveGet") {
     const { lectureFor } = await import("./lectureQs.ts");

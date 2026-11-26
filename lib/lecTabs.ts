@@ -72,5 +72,7 @@ export async function lecTabsFor(uid: number, id: unknown) {
   const { isAdmin } = await import("./data.ts");
   const owns = (await isAdmin(uid)) || (await ownedChapters(uid)).includes(chapterOf(info.ch));
   const qs = owns && (await lectureQs(await myBooks(uid), info, true)).length > 0;
-  return { qs, board: await boardFor(lid), myq: await myQuestions(uid, info), info: { title: info.title, topic: info.topic, ch: info.ch } };
+  // sol: تبويب «الحل النموذجي» يطلع بس إذا مفتوح للطالب (شنو يشوف الطالب ← 📘 الحل النموذجي)
+  const sol = qs && await (await import("./studentVis.ts")).solAllowed(uid);
+  return { qs, sol, board: await boardFor(lid), myq: await myQuestions(uid, info), info: { title: info.title, topic: info.topic, ch: info.ch } };
 }

@@ -127,6 +127,14 @@ test("📝 الراصد: صفحته عليها اسم الطالب بالهدر�
   await files().write("notes/r1/p1.jpg", await page("#26282c"), "image/jpeg");
   await files().write("notes/r1/s1.jpg", await page("#ffffff"), "image/jpeg");
   const mine = await loadImage(await notePage(homeToken(10), r.id, 1, "android", dev(10)));
+  // 📘 الحل النموذجي مخفي من البداية (شنو يشوف الطالب): الصفحة تنقفل، وزر الحلول ما يطلع
+  await assert.rejects(notePage(homeToken(10), r.id, 1, "android", dev(10), true), (e: any) => e.status === 403);
+  assert.equal((await act(10, "list")).books.find((b: any) => b.id === r.id).sol, false);
+  // يفتحه للكل: يرجع يطلع
+  const { kvSet } = await import("../lib/db.ts");
+  const { visRules } = await import("../lib/studentVis.ts");
+  await kvSet("student_vis", JSON.stringify({ ...(await visRules()), sol: { mode: "all" } }));
+  assert.equal((await act(10, "list")).books.find((b: any) => b.id === r.id).sol, true);
   const sol = await loadImage(await notePage(homeToken(10), r.id, 1, "android", dev(10), true));
   const px = async (im: any) => { const c = createCanvas(im.width, im.height); const g = c.getContext("2d"); g.drawImage(im, 0, 0); return g.getImageData(0, 0, im.width, im.height).data; };
   const a = await px(mine), b = await px(sol);

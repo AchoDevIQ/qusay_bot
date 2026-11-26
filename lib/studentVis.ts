@@ -22,7 +22,9 @@ export const VIS_TILES = [
 ] as const;
 export type TileKey = (typeof VIS_TILES)[number]["key"];
 /** شغلات التطبيق مو مربعات: الرسائل الصوتية بالمحادثة. من البداية مسدودة */
-export const VIS_EXTRA = [{ key: "voice", title: "🎤 الرسائل الصوتية بمحادثة التطبيق" }] as const;
+export const VIS_EXTRA = [{ key: "voice", title: "🎤 الرسائل الصوتية بمحادثة التطبيق" },
+  // 📘 الحل النموذجي (طلبه 2026-11-26): مخفي من البداية، بالملازم (الراصد والوزارية والإثرائية) وبتبويب المحاضرة «الحل النموذجي»
+  { key: "sol", title: "📘 الحل النموذجي (بالملازم وبتبويب المحاضرة)" }] as const;
 export type RuleKey = TileKey | (typeof VIS_EXTRA)[number]["key"];
 const KEYS = new Set<string>(VIS_TILES.map((t) => t.key));
 const CURRS = ["عربي", "إنجليزي"];
@@ -142,4 +144,12 @@ export async function visAction(body: Row) {
     centers: [...(await centerNames()).entries()].map(([id, name]) => ({ id, name })),
     genders: GENDERS, currs: CURRS, chapters: await chapterList(), names: await studentNames(ids), sos, appReg: await (await import("./appReg.ts")).appRegOn(),
   };
+}
+
+/** 📘 الطالب يشوف الحل النموذجي؟ صاحب البوت والمساعدين يشوفونه دايماً (حتى يجربون) */
+export async function solAllowed(uid: number) {
+  const { isAdmin, isStaff, student } = await import("./data.ts");
+  if (await isAdmin(uid) || await isStaff(uid)) return true;
+  const r = (await visRules()).sol;
+  return !!r && await inRule(r, uid, await student(uid));
 }
