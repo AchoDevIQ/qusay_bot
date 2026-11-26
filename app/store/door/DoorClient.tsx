@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 
 type State = { hasPin: boolean; label: string; vapid: string };
-type Open = { t: string; admin: boolean; office: boolean; student?: boolean };
+type Open = { t: string; admin: boolean; office: boolean; student?: boolean; pin?: string };
 
 export default function DoorClient() {
   const [d, setD] = useState("");
   const [st, setSt] = useState<State | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
-  const [pin, setPin] = useState(""), [pin2, setPin2] = useState("");
+  const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [notice, setNotice] = useState("");
 
@@ -95,12 +95,8 @@ export default function DoorClient() {
         )}
         {st && !open && !st.hasPin && (
           <div className="card"><div className="form">
-            <div className="exhint">أول مرة: حط رمز سري من 4 أرقام، تفتح بيه صفحاتك من هذا الجهاز بدون تليگرام.</div>
-            <label>الرمز</label>
-            <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(digits(e.target.value))} placeholder="••••" />
-            <label>اكتب الرمز مرة ثانية</label>
-            <input type="password" inputMode="numeric" value={pin2} onChange={(e) => setPin2(digits(e.target.value))} placeholder="••••" />
-            <button type="button" className="btn" disabled={busy || pin.length !== 4 || pin2.length !== 4} onClick={() => void call({ action: "setPin", pin, pin2 }).then((r) => { if (r) { setOpen(r); setPin(""); setPin2(""); } })}>🔐 احفظ رمزي وادخل</button>
+            <div className="exhint">أول مرة على هذا الجهاز: دوس الزر، ويطلعلك رمزك السري (4 أرقام). تفتح بيه صفحاتك كل مرة.</div>
+            <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "makePin" }).then((r) => { if (r) setOpen(r); })}>🔐 اعطيني رمزي السري</button>
           </div></div>
         )}
         {st && !open && st.hasPin && (
@@ -108,6 +104,13 @@ export default function DoorClient() {
             <label>رمزك السري</label>
             <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(digits(e.target.value))} placeholder="••••" />
             <button type="button" className="btn" disabled={busy || pin.length !== 4} onClick={() => void call({ action: "open", pin }).then((r) => { if (r) { setOpen(r); setPin(""); } })}>🔓 ادخل</button>
+          </div></div>
+        )}
+        {open?.pin && (
+          <div className="card"><div className="form" style={{ textAlign: "center" }}>
+            <div className="exhint">🔐 هذا رمزك السري. اكتبه بورقة لو صوّره واحفظه. كل مرة تدخل تكتبه:</div>
+            <div dir="ltr" style={{ fontSize: 44, fontWeight: 900, letterSpacing: 12, color: "#F6C94A" }}>{open.pin}</div>
+            <div className="exhint">إذا نسيته، گول لقصي العميري يسويلك رابط جديد.</div>
           </div></div>
         )}
         {open && (

@@ -1,5 +1,5 @@
 // صفحة باب الكادر (/store/door): الرابط الخاص + الرمز ← رابط جلسة لصفحاته، وتفعيل إشعاراته
-import { doorState, doorTargets, openDoor, saveDoorSub, setDoorPin, verifyDoor } from "./doorLink.ts";
+import { doorState, doorTargets, makeDoorPin, openDoor, saveDoorSub, setDoorPin, verifyDoor } from "./doorLink.ts";
 import { ensure, need } from "./webApi.ts";
 import { verifyHomeToken } from "./webAuth.ts";
 
@@ -9,6 +9,7 @@ export async function doorAction(body: any) {
   need(uid !== null, "هذا الرابط انتهى أو انبطل. اطلب رابط جديد من صاحب البوت", 401);
   const a = String(body?.action ?? "state");
   if (a === "state") return { ...await doorState(uid!), vapid: process.env.VAPID_PUBLIC_KEY ?? "" };
+  if (a === "makePin") { const pin = await makeDoorPin(uid!); return { pin, t: await openDoor(uid!, pin), ...await doorTargets(uid!) }; }
   if (a === "setPin") { await setDoorPin(uid!, body.pin, body.pin2); return { t: await openDoor(uid!, body.pin), ...await doorTargets(uid!) }; }
   if (a === "open") return { t: await openDoor(uid!, body.pin), ...await doorTargets(uid!) };
   if (a === "pushSub") {

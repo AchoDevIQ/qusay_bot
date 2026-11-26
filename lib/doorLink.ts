@@ -59,6 +59,23 @@ export async function setDoorPin(uid: number, pin: unknown, pin2: unknown) {
   need(!/^(\d)\1{3}$/.test(p) && !["1234", "4321", "0123", "9876"].includes(p), "هذا الرمز سهل كلش، اختار غيره");
   await put("door_links", { ...r!, hash: hashPin(p) });
 }
+/** رمز صعب من 4 أرقام (بلا 1111 ولا 1234 ولا تكرار رقم 3 مرات) */
+export function strongPin() {
+  for (;;) {
+    const p = String(randomBytes(4).readUInt32BE(0) % 10000).padStart(4, "0");
+    const d = [...p].map(Number), step = d[1] - d[0];
+    if (new Set(d).size < 3) continue;                       // 1121، 1122، 1111
+    if (d.every((x, i) => i === 0 || x - d[i - 1] === step)) continue; // 1234، 9876، 2468
+    if (p.slice(0, 2) === p.slice(2)) continue;              // 1212
+    return p;
+  }
+}
+/** أول مرة على جهازه: النظام يسويله رمزه ويگله إياه (طلبه 2026-11-26: «خليه يصنعله باسورد») */
+export async function makeDoorPin(uid: number) {
+  const p = strongPin();
+  await setDoorPin(uid, p, p);
+  return p;
+}
 /** يفتح برمزه: يرجع رابط جلسة لصفحاته (لوحة التحكم تقبله أسبوع) */
 export async function openDoor(uid: number, pin: unknown) {
   const r = await one("door_links", { user_id: uid });
