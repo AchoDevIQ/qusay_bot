@@ -26,6 +26,8 @@ async function pageData() {
       users: (await find("office_users", { office_id: o.id })).map((u) => ({ id: u.user_id, name: u.name || String(u.user_id) })),
       archive: (await find("settlements", { office_id: o.id }, { order: ["-id"], limit: 30 })).map((s) => ({ id: s.id, amount: s.amount, n: s.n, created: s.created, parts: savedParts(s) })),
     }))),
+    // 📲 رمز مربع لصفحة تنزيل التطبيق: جهاز المكتبة يصوّره بدل ما يكتب رابط طويل
+    apk: await (async () => { const { siteBase } = await import("./keyboards.ts"); const link = `${siteBase()}/apk`; return { link, qr: await (await import("qrcode")).default.toDataURL(link, { margin: 1, width: 300 }) }; })(),
   };
 }
 const liveOffice = async (raw: unknown) => {

@@ -11,7 +11,7 @@ type Office = {
 };
 type Sale = { id: number; time: string; name: string; total: number; items: string };
 type Data = {
-  today: string; offices: Office[]; notice: string; openId?: number;
+  today: string; offices: Office[]; notice: string; openId?: number; apk?: { link: string; qr: string };
   sales?: { officeId: number; title: string; rows: Sale[]; parts: MoneyParts; prices: PriceLine[] }; invite?: { officeId: number; code: string; link: string }; door?: { officeId: number; name: string; link: string; qr: string };
 };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
@@ -38,6 +38,14 @@ export default function LibsClient() {
               </div>
             ))}
             {!data.offices.length && <div className="empty">ما أكو مكتبات بعد.</div>}
+            {data.apk && (
+              <div className="card expad" style={{ textAlign: "center" }}>
+                <div className="exlabel">📲 تطبيق «قصي العميري» لجهاز المكتبة</div>
+                <div className="exhint">بجهاز المكتبة صوّر هذا الرمز بالكاميرا، أو افتح المتصفح واكتب الرابط القصير. تطلع صفحة بيها زر «⬇️ نزّل التطبيق».</div>
+                <img src={data.apk.qr} alt="" style={{ width: 180, background: "#fff", borderRadius: 12, margin: "8px auto" }} />
+                <div dir="ltr" style={{ userSelect: "all", wordBreak: "break-all", fontSize: 13 }}>{data.apk.link}</div>
+              </div>
+            )}
             <div className="card expad adform">
               <div className="exlabel">➕ مكتبة جديدة</div>
               <input placeholder="اسم المكتبة" value={name} onChange={(e) => setName(e.target.value)} />
