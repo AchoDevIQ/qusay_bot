@@ -204,10 +204,13 @@ test("🧪 الاختبار الذاتي: بس قبل الامتحان الرس�
   const st = await selfTests(62);
   assert.ok(!st.open.has(e) && st.done.has(e), "مرة وحدة، وصار «اختبرت نفسك»");
   await assert.rejects(act("openOptional", { exam: e }), /مو متاح/);
-  // الحضوري: ماكو اختبار ذاتي
+  // الحضوري هم: يختبر نفسه من بيته (يصور جوابه بموبايله)
   await put("students", { user_id: 63, name: "علي حسن محمد كاظم", curr: "عربي", exam: "حضوري", created: "2026-01-01 10:00" });
   await put("exam_access", { user_id: 63, chapter: "فصل الذاتي", order_id: 1, created: "1" });
-  assert.equal((await selfTests(63)).open.size, 0);
+  assert.ok((await selfTests(63)).open.has(e));
+  const r63 = await myExamAction({ token: homeToken(63), pf: "ios", device: "dev-" + String(63).padStart(14, "0"), action: "openOptional", exam: e }) as any;
+  assert.equal(r63.room.questions.length, 1, "انفتح من البيت");
+  assert.equal((await find("sched_items", { user_id: 63, kind: "optional" }))[0].catch_place, "online");
 });
 
 test("رابط المؤقت: بالمفتاح بس، وصاحب البوت بس يشوفه", async () => {

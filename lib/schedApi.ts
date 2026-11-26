@@ -774,7 +774,7 @@ async function optionalList(uid: number, bought: Row[]) {
 export async function selfTests(uid: number) {
   const s = await schedSettings();
   const st = await student(uid);
-  const off = !s.optionalOpen || !st || st.exam === "حضوري";
+  const off = !s.optionalOpen || !st; // الحضوري هم (طلبه 2026-11-26): يختبر نفسه من بيته، والرسمي بالمركز
   const open = off ? new Set<number>() : new Set((await optionalList(uid, await boughtExams(uid))).map((x) => Number(x.exam)));
   const done = new Map<number, Row>();
   for (const i of await find("sched_items", { user_id: uid, kind: "optional" })) done.set(Number(i.exam_id), i);
@@ -837,7 +837,7 @@ async function studentInfo(uid: number) {
     schedule: sched && !general ? { start: sched.start_day, end: sched.end_day, weekdays: JSON.parse(sched.weekdays), hour: sched.hour, times: sched.picks ? JSON.parse(sched.picks) : null, hol: holOf(sched.hol) ?? null } : null,
     holidays: await myHolidays(uid, sched), midHol: await midHolidayRow(sched, s), gap: s.gap,
     days: daysView(slots, await fullTimes(place.centerId, slots, st, uid)),
-    optional: place.inPerson || !s.optionalOpen ? [] : await optionalList(uid, bought),
+    optional: !s.optionalOpen ? [] : await optionalList(uid, bought),
     // آخر سيطرة عبرها: تومض ويا شخصيتها لحد ما يشوفها
     cp: await checkpointCard(uid),
     // ملفات المحاضرات اللي صاحب البوت خلاها ظاهرة. وبنص الامتحان ماكو ملفات ولا رابط التطبيق
@@ -1080,11 +1080,12 @@ export async function myExamAction(body: Row) {
     need(s.optionalOpen, "الامتحانات الاختيارية مسدودة هسه");
     const bought = await boughtExams(id);
     const e = (await optionalList(id, bought)).find((x) => x.exam === Number(body.exam));
-    need(e && (await student(id))!.exam !== "حضوري", "هذا الامتحان مو متاح");
+    need(e, "هذا الامتحان مو متاح");
     const version = pickOptional(await find("bank_versions", { exam_id: e!.exam }) as { id: number; kind: string; ok: unknown }[]);
     need(version, "هذا الامتحان مو متاح");
     const now = stamp();
-    const item = await insert("sched_items", { user_id: id, exam_id: e!.exam, at: now, status: "started", kind: "optional", version_id: version, started_at: now, opened_at: now });
+    // من البيت دائماً، حتى للحضوري: يصور جوابه بموبايله («💻 إلكتروني من بيته»)
+    const item = await insert("sched_items", { user_id: id, exam_id: e!.exam, at: now, status: "started", kind: "optional", version_id: version, started_at: now, opened_at: now, catch_place: "online" });
     await logActivity(id, `🎯 دخل امتحان اختياري: ${e!.title}`);
     const room = await openRoom(id, item, s);
     return { ...await studentInfo(id), room };
