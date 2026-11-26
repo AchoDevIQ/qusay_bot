@@ -13,7 +13,7 @@ type TestStudent = { id: number; name: string; curr?: string; papers: number; gr
 type TestVersion = { id: number; exam: number; slug: string; title: string; chapter: string; model: string; qs: { n: number; max: number }[] };
 type Paper = { id: number; title: string; chapter: string; model: string; optional: boolean; submitted: string; graded: string; total: number | null; grader: string; ai: boolean; marks: { n: number; max: number; mark: number | null; skip?: boolean }[]; objections: { open: number; ok: number; no: number }; pages: string[]; gradedPages: boolean };
 type StudentFile = { id: number; canEdit: boolean; fileToken: string; papers: Paper[]; orders: { id: number; created: string; state: string; cancelled: boolean; total: number; items: string[] }[]; spent: number; absences: { id: number; title: string; chapter: string; at: string }[]; attended: { id: number; title: string; at: string }[]; stops: { id: number; chapter: string; score: number; max: number; absent: number; reason: string; created: string; lifted: string }[]; questions: { id: number; status: string; created: string }[]; lectures?: { title: string; subject: string; times: number; percent: number; last: string }[]; crashes?: { at: string; model: string; os: string; ver: string; screen: string; error: string }[]; log: { what: string; created: string }[]; average: number | null; retDisc?: { on: boolean; pct: number; year: string; lastYear: string; last: string[]; now: string[] } };
-type Data = { doorLink?: string; doorFor?: number; canMsg?: boolean; file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; inPerson?: boolean; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean; away?: boolean; ipad?: boolean }[]; perDay: number; general: number; times?: { picks: Record<string, string>; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[] } | null; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null } };
+type Data = { doorLink?: string; doorFor?: number; canMsg?: boolean; file?: StudentFile; papers?: { id: number; list: Paper[]; fileToken: string }; tests?: TestStudent[] | null; testVersions?: TestVersion[] | null; stats: Record<string, number>; results: S[]; found: number; limit: number; govs: string[]; areas: Area[]; notice: string; tryCode?: { k: number; img: string }; tryCodes?: { k: number; kind: string; img: string }[]; log?: { id: number; rows: { what: string; created: string }[] }; sched?: { id: number; view?: string; way: string; inPerson?: boolean; items: { id: number; title: string; at: string; state: string; status?: string; retake?: boolean; optional?: boolean; away?: boolean; ipad?: boolean }[]; perDay: number; general: number; times?: { picks: Record<string, string>; days: { d: number; name: string; times: { t: string; label: string; full?: boolean }[] }[] } | null; hol?: { from: string; to: string } | null; holReq?: { from: string; to: string } | null }; testAccts?: S[] };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 
 const GRADE_OPTS = [{ v: "السادس العلمي", label: "السادس" }, { v: "الخامس العلمي", label: "الخامس" }];
@@ -41,6 +41,7 @@ export default function StudentsClient() {
     void call({ action: "list", q: shown, filters: next });
   }
   const s = data?.stats;
+  const [tryOpen, setTry] = useState(false);
   async function openFile(x: S) {
     setFileOf(x); setFileData(null);
     window.scrollTo(0, 0);
@@ -54,6 +55,11 @@ export default function StudentsClient() {
         <div className="wrap">
           <button type="button" className="exbtn" style={{ marginBottom: 10 }} onClick={() => { setFileOf(null); setFileData(null); }}>⬅️ رجوع لقائمة الطلاب</button>
           <FileView s={data.results.find((x) => x.id === fileOf.id) ?? fileOf} file={fileData} data={data} busy={busy} call={act} close={() => { setFileOf(null); setFileData(null); }} />
+          {data.tests && fileOf.id > 0 && (() => {
+            const isTest = !!data.testAccts?.some((x) => x.id === fileOf.id);
+            return <div className="card expad exline"><span className="exhint">{isTest ? "🧪 هذا حساب تجربة: ما يطلع بقائمة الطلاب، يطلع جوه «🧪 التجريب»." : "حساب تستعمله للتجربة؟ أشّره حتى ما يطلع بقائمة الطلاب الحقيقية."}</span>
+              <button type="button" className="exbtn" disabled={busy} onClick={() => void act({ action: "testAcct", id: fileOf.id, on: !isTest })}>{isTest ? "↩️ رجّعه حساب حقيقي" : "🧪 حساب تجربة"}</button></div>;
+          })()}
         </div>
         <StatusBar busy={busy} error={error} notice={data.notice} />
       </UploadCtx.Provider>
@@ -68,10 +74,6 @@ export default function StudentsClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && s && (
           <>
-            {data.tests && <TestStudents tests={data.tests} chapters={[...new Set((data.testVersions ?? []).map((v) => v.chapter).filter(Boolean))]} busy={busy} act={act} />}
-            {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} code={data.tryCode} codes={data.tryCodes} />}
-            {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions} busy={busy} act={act} />}
-            {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
             <div className="card">
               <h2>📊 الطلاب المسجلين: {s.all}</h2>
               <div className="adstats">
@@ -111,6 +113,22 @@ export default function StudentsClient() {
               ) : <div className="empty">ما لگيت طالب.</div>}
               {data.found > data.results.length && <div className="expad exhint">تطلع أول {data.results.length} من {data.found}. استخدم البحث أو الفلاتر حتى توصل للطالب.</div>}
             </div>
+            {/* 🧪 التجريب (طلبه 2026-11-26): كل شي تجريبي هنا بس، مسدود لحد ما يدوسه */}
+            {(data.tests || !!data.testAccts?.length) && <div className="card">
+              <button type="button" className="fthead" onClick={() => setTry(!tryOpen)}><b>🧪 التجريب</b><span>{tryOpen ? "▴" : "▾"}</span></button>
+              {tryOpen && <>
+                {!!data.testAccts?.length && <>
+                  <div className="exlabel adtop">👤 حسابات التجربة ({data.testAccts.length})</div>
+                  <table className="extable"><tbody>
+                    {data.testAccts.map((x) => <tr key={x.id} className="exrow" onClick={() => void openFile(x)}><td><b>{x.name}</b><small className="pdmode">{x.phone1}</small></td><td className="p">📂 ملفه</td></tr>)}
+                  </tbody></table>
+                </>}
+                {data.tests && <TestStudents tests={data.tests} chapters={[...new Set((data.testVersions ?? []).map((v) => v.chapter).filter(Boolean))]} busy={busy} act={act} />}
+                {data.tests && data.testVersions && <InPersonTry areas={data.areas} versions={data.testVersions} busy={busy} act={act} code={data.tryCode} codes={data.tryCodes} />}
+                {data.tests && !!data.tests.length && data.testVersions && <TryExam tests={data.tests} versions={data.testVersions} busy={busy} act={act} />}
+                {data.tests && !!data.tests.length && data.testVersions && <TestPaper tests={data.tests} versions={data.testVersions} busy={busy} upload={(f) => call(f)} />}
+              </>}
+            </div>}
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 // واجهة صفحة الطلاب: الأرقام، البحث، تعديل المعلومات، الحذف، وقوائم PDF
 import { activeStop, liftStop, stopView } from "./checkpoints.ts";
 import { deviceOf, unlockDevice } from "./deviceLock.ts";
-import { find, one, remove, setSession, update, type Row } from "./db.ts";
+import { find, one, remove, setSession, update, type Row, kvGet, kvSet } from "./db.ts";
 import { activityOf, guardianOf, logActivity } from "./access.ts";
 import { GOVS, GRADES, toLatinDigits } from "./config.ts";
 import { areasWithCenters, can, centerName, isAdmin, placeOf, staffName, student } from "./data.ts";
@@ -30,14 +30,23 @@ export const STUDENTS_PERM = "students";
 export const MSG_PERM = "msg";
 const RECENT = 100;
 
+// 🧪 حسابات التجربة (طلبه 2026-11-26: «تنظف لي لوحة الطلاب، التجريبي يكون وحده»): طلاب التجربة (رقمهم سالب)
+// والحسابات الحقيقية اللي أشّرها «🧪 حساب تجربة» (مثل رقمه 901) ما تطلع بالقائمة ولا البحث ولا الإحصاء ولا الطباعة،
+// تطلع بس جوه «🧪 التجريب» آخر الصفحة
+const TEST_ACCTS = "test_accounts";
+export async function testAccountIds(): Promise<number[]> { try { const l = JSON.parse((await kvGet(TEST_ACCTS)) ?? "[]"); return Array.isArray(l) ? l.map(Number) : []; } catch { return []; } }
+export async function isTestAccount(uid: number) { return uid < 0 || (await testAccountIds()).includes(uid); }
+async function realStudents(): Promise<Row[]> { const t = new Set(await testAccountIds()); return (await find("students")).filter((r) => r.user_id > 0 && !t.has(Number(r.user_id))); }
+
 export async function studentsStats() {
-  const rows = await find("students");
+  const rows = await realStudents();
   const f = (col: string, v: string) => rows.filter((r) => r[col] === v).length;
   return { all: rows.length, g6: f("grade", GRADES[0]), g5: f("grade", GRADES[1]), in: f("exam", "حضوري"),
     on: f("exam", "إلكتروني"), ar: f("curr", "عربي"), en: f("curr", "إنجليزي") };
 }
 export async function sendStudentsPdf(chat: number, fifth: boolean) {
-  const rows = fifth ? await find("students", { grade: GRADES[1] }, { order: ["name"] }) : await find("students", {}, { order: ["grade", "name"] });
+  const real = await realStudents();
+  const rows = (fifth ? real.filter((r) => r.grade === GRADES[1]) : real).sort((a, b) => (fifth ? 0 : String(a.grade).localeCompare(String(b.grade))) || String(a.name).localeCompare(String(b.name), "ar"));
   return await listPdf(chat, fifth ? "طلاب الخامس العلمي" : "كل الطلاب المسجلين", ["الاسم", "الصف", "المنهج", "المحافظة", "الهاتف 1", "الهاتف 2", "الامتحان"],
     await Promise.all(rows.map(async (r) => [r.name, r.grade, r.curr, placeOf(r), r.phone1, r.phone2, (r.exam ?? "") + (r.center_id ? " - " + await centerName(r.center_id) : "")])),
     fifth ? "students_5th" : "students_all");
@@ -54,8 +63,9 @@ type Filters = { curr?: string; grade?: string; exam?: string; gov?: string };
 async function matching(q: string, f: Filters) {
   const s = toLatinDigits(q.trim()).toLowerCase();
   const has = (v: unknown) => v !== null && String(v).toLowerCase().includes(s);
+  const test = new Set(await testAccountIds());
   return await find("students", {}, {
-    where: (r) => (!s || has(r.name) || has(r.phone1) || has(r.phone2)) && (!f.curr || r.curr === f.curr) && (!f.grade || r.grade === f.grade) && (!f.exam || r.exam === f.exam) && (!f.gov || r.gov === f.gov),
+    where: (r) => r.user_id > 0 && !test.has(Number(r.user_id)) && (!s || has(r.name) || has(r.phone1) || has(r.phone2)) && (!f.curr || r.curr === f.curr) && (!f.grade || r.grade === f.grade) && (!f.exam || r.exam === f.exam) && (!f.gov || r.gov === f.gov),
     order: s || f.curr || f.grade || f.exam || f.gov ? ["name"] : ["-created"],
   });
 }
@@ -82,6 +92,8 @@ async function pageData(q: string, f: Filters, uid = 0) {
     stats: await studentsStats(), results: await Promise.all(rows.map(async (r) => view(r, !!uid && await isAdmin(uid)))), found: found.length, limit: RECENT, govs: GOVS,
     areas: (await areasWithCenters()).map((a) => ({ id: a.id, gov: a.gov, name: a.name, centers: centers.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, name: c.name })) })),
     tests: uid && await isAdmin(uid) ? await testStudents() : null,
+    // حسابات حقيقية أشّرها «🧪 حساب تجربة»: تطلع بس جوه «🧪 التجريب»
+    testAccts: await Promise.all((await testAccountIds()).map((i) => one("students", { user_id: i })).map(async (p) => { const r = await p; return r ? await view(r, !!uid && await isAdmin(uid)) : null; })).then((l) => l.filter(Boolean)),
     canMsg: uid ? await can(uid, MSG_PERM) : false,
     testVersions: uid && await isAdmin(uid) ? await testVersions() : null,
   };
@@ -346,6 +358,13 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
     await remove("guardian_pins", { user_id: id });
     await logActivity(id, "👨‍👧 الإدارة فكت ربط ولي الأمر");
     notice = "✅ انفك الربط. الطالب يگدر يدز الرابط لولي أمر ثاني";
+  } else if (a === "testAcct") {
+    // 🧪 «حساب تجربة»: يختفي من القائمة الحقيقية ويطلع جوه «🧪 التجريب»
+    need(await isAdmin(uid), "بس صاحب البوت", 403);
+    need(await student(id), "الطالب غير موجود");
+    const list = (await testAccountIds()).filter((x) => x !== id);
+    await kvSet(TEST_ACCTS, JSON.stringify(body.on ? [...list, id] : list));
+    notice = body.on ? "🧪 صار حساب تجربة: ما يطلع بالقائمة، تلگاه جوه «🧪 التجريب» آخر الصفحة" : "✅ رجع حساب حقيقي";
   } else need(a === "list", "أمر غير معروف");
   return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice, tryCode, tryCodes };
 }
