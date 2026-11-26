@@ -760,10 +760,25 @@ async function itemsView(uid: number, s: SchedSettings) {
   });
 }
 /** امتحانات الفصول المشتراة اللي عندها نسخة اختيارية. كل واحد ينفتح مرة وحدة بوقت يختاره الطالب */
+/** 🧪 الاختبار الذاتي (الامتحان الاختياري): مرة وحدة لكل امتحان، وبس قبل الامتحان الرسمي (طلبه 2026-11-26).
+ *  الرسمي اللي انفتح أو فات أو انحل: اختباره الذاتي ما يطلع */
 async function optionalList(uid: number, bought: Row[]) {
   const versions = await find("bank_versions", { kind: "optional", ok: 1 });
-  const taken = new Set((await find("sched_items", { user_id: uid, kind: "optional" })).map((i) => i.exam_id));
-  return bought.filter((e) => versions.some((v) => v.exam_id === e.id) && !taken.has(e.id)).map((e) => ({ exam: e.id, title: e.title, chapter: e.chapter, minutes: e.minutes ?? 75 }));
+  const items = await find("sched_items", { user_id: uid });
+  const taken = new Set(items.filter((i) => i.kind === "optional").map((i) => i.exam_id));
+  const s = await schedSettings(), now = stamp();
+  const past = new Set(items.filter((i) => i.kind !== "optional" && i.status !== "skipped" && (i.status !== "waiting" || itemState("waiting", String(i.at), s.window, now) !== "locked")).map((i) => i.exam_id));
+  return bought.filter((e) => versions.some((v) => v.exam_id === e.id) && !taken.has(e.id) && !past.has(e.id)).map((e) => ({ exam: e.id, title: e.title, chapter: e.chapter, minutes: e.minutes ?? 75 }));
+}
+/** للمسار: الامتحانات اللي اختبارها الذاتي متاح هسه، واللي انحل (ودرجته) */
+export async function selfTests(uid: number) {
+  const s = await schedSettings();
+  const st = await student(uid);
+  const off = !s.optionalOpen || !st || st.exam === "حضوري";
+  const open = off ? new Set<number>() : new Set((await optionalList(uid, await boughtExams(uid))).map((x) => Number(x.exam)));
+  const done = new Map<number, Row>();
+  for (const i of await find("sched_items", { user_id: uid, kind: "optional" })) done.set(Number(i.exam_id), i);
+  return { open, done };
 }
 async function studentInfo(uid: number) {
   // درجات كانت تنتظر ولي الأمر وهسه ما تنتظر (انفك الربط، لو حظر البوت): توصله

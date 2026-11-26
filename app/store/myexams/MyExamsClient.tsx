@@ -100,6 +100,8 @@ export default function MyExamsClient() {
     const q = new URLSearchParams(location.search), o = Number(q.get("obj")), pp = Number(q.get("paper"));
     void (o ? openObj(o).then(() => undefined) : pp ? openPaper(pp).then(() => undefined) : call({ action: "info" }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // 🧪 من «مساري»: «تگدر تختبر نفسك» يفتح الصفحة على الاختبار الذاتي مال هذا الامتحان
+  const [selfExam] = useState(() => (typeof location === "undefined" ? 0 : Number(new URLSearchParams(location.search).get("self")) || 0));
   async function enterOptional(exam: number) { const r = await call({ action: "openOptional", exam }); if (r?.room) setRoom(r.room); }
   // الآيباد: الشاشة عريضة (أصغر جهة 600 أو أكثر)، والتلفون ضيق. امتحان المركز بالآيباد ما ينفتح من التلفون
   async function enter(item: number) { const r = await call({ action: "openExam", item, tablet: isTablet() }); if (r?.room) setRoom(r.room); }
@@ -167,6 +169,7 @@ export default function MyExamsClient() {
         {info && !info.basics && !info.needsChoice && info.needsBuild && info.mode !== "slow" && <Build info={info} busy={busy} call={call} />}
         {info && info.mode !== "general" && info.mode !== "slow" && info.schedule && !info.needsBuild && <MyHoliday info={info} busy={busy} call={call} />}
         {info && info.mode === "general" && !info.repick && <MyTimes info={info} busy={busy} call={call} />}
+        {info && selfExam > 0 && !info.viewOnly && <SelfStart info={info} exam={selfExam} busy={busy} enter={enterOptional} />}
         {info?.early && !info.repick && !info.late.length && !info.viewOnly && <EarlyCard e={info.early} busy={busy} call={call} />}
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
@@ -883,11 +886,27 @@ function List({ info, busy, enter, paper, file, off, cmd }: { info: Info; busy: 
   );
 }
 
+/** 🧪 الاختبار الذاتي اللي جاي من «مساري»: فوك الصفحة، ويا «ادخل» */
+function SelfStart({ info, exam, busy, enter }: { info: Info; exam: number; busy: boolean; enter: (exam: number) => void }) {
+  const o = info.optional.find((x) => x.exam === exam);
+  if (!o) return <div className="card"><h2>🧪 اختبر نفسك</h2><div className="expad exhint">هذا الاختبار مو متاح هسه: يا اختبرت نفسك بيه من قبل، يا امتحانه الرسمي بدأ.</div></div>;
+  return (
+    <div className="card" style={{ borderColor: "#F6C94A" }}>
+      <h2>🧪 اختبر نفسك قبل الامتحان الرسمي</h2>
+      <div className="expad">
+        <b>{o.title}</b>
+        <div className="exhint adtop">أسئلة ثانية غير الامتحان الرسمي، وتنصحح مثله. الدرجة ما تنحسب بالسيطرة.<br />⚠️ مرة وحدة بس. لمن تدخل يبدي وقته ({o.minutes} دقيقة)، وما يتوقف إذا طلعت.</div>
+        <button type="button" className="btn adtop" disabled={busy} onClick={() => enter(o.exam)}>🧪 ادخل الاختبار</button>
+      </div>
+    </div>
+  );
+}
+
 function Optional({ info, busy, enter }: { info: Info; busy: boolean; enter: (exam: number) => void }) {
   const [ask, setAsk] = useState(0);
   return (
     <div className="card">
-      <h2>🎯 امتحانات اختيارية</h2>
+      <h2>🧪 اختبر نفسك قبل الامتحان الرسمي</h2>
       <div className="expad exhint adtop">كل امتحان ينفتح مرة وحدة بس. لمن تدخل يبدي وقته، وما يتوقف إذا طلعت.</div>
       <table className="extable"><tbody>
         {info.optional.map((o) => (

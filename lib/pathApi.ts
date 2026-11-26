@@ -51,9 +51,11 @@ export type PathTopic = { name: string; lectures: PathLec[] };
 export type PathExam = { id: number; title: string };
 export type Step =
   | { kind: "lec"; id: string; title: string; n: number; state: "done" | "open" | "locked" | "buy"; pct: number }
-  | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; since?: number; from?: string; cp?: { min: number; absent: number; honor: { min: number; bday?: boolean; addr?: boolean } | null; stopImg?: string; topImg?: string } | null }
+  | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; self?: SelfTest; since?: number; from?: string; cp?: { min: number; absent: number; honor: { min: number; bday?: boolean; addr?: boolean } | null; stopImg?: string; topImg?: string } | null }
   | { kind: "cp"; exam: number; min: number; absent: number; count: number; title?: string };
 export type Section = { name: string; general?: boolean; steps: Step[] };
+/** 🧪 الاختبار الذاتي تحت الامتحان: open يگدر يدخله، locked يكمل محاضراته أول، used اختبر نفسه (total درجته، null ينتظر التصحيح) */
+export type SelfTest = { state: "open" | "locked" | "used"; total?: number | null; going?: boolean };
 
 /** يرتب محاضرات الفصل (بالمواضيع) وامتحاناته (بترتيب الجدول) بمسار واحد، كل موضوع قسم لحاله */
 export function buildPath(topics: PathTopic[], exams: PathExam[]): { sections: { name: string; general?: boolean; items: ({ kind: "lec"; lec: PathLec } | { kind: "exam"; exam: PathExam })[] }[] } {
@@ -152,6 +154,7 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
   const views = new Map((await find("lecture_views", { user_id: uid })).map((v) => [String(v.lecture), Number(v.percent ?? 0)]));
   const items = new Map<number, Row>();
   for (const it of await find("sched_items", { user_id: uid })) {
+    if (it.kind === "optional") continue; // الاختبار الذاتي لحاله، ما ياخذ مكان الرسمي
     const old = items.get(Number(it.exam_id));
     if (!old || String(it.at) > String(old.at)) items.set(Number(it.exam_id), it);
   }
@@ -160,6 +163,8 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
   const { stamp } = await import("./util.ts");
   const s = await schedSettings(), now = stamp();
   const cfg = await loadCfg();
+  const { selfTests } = await import("./schedApi.ts");
+  const self = admin ? { open: new Set<number>(), done: new Map<number, Row>() } : await selfTests(uid);
   const { scheduleChapters } = await import("./schedApi.ts");
   const { labelChapters } = await import("./scheduleRules.ts");
   const examsBought = admin || (await scheduleChapters(uid)).flatMap((l) => labelChapters(l)).includes(chapterOf(ch));
@@ -187,7 +192,12 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
       const own = cfg.rules[String(x.exam.id)];
       // الأستاذ: كل امتحان بيه «＋ إنشاء سيطرة»، ويعرف كم امتحان تشمل (من بعد السيطرة اللي قبلها)
       const teach = admin ? { since, from, cp: own ? { min: own.min, absent: own.absent, honor: own.honor ?? null, stopImg: cpImageUrl(own.stopImg ?? null), topImg: cpImageUrl(own.topImg ?? null) } : null } : {};
-      const steps: Step[] = [{ kind: "exam", id: x.exam.id, title: x.exam.title, state, at, total, ...teach }];
+      // 🧪 اختبر نفسك قبل الرسمي: مرة وحدة، وينفتح بعد ما يكمل المحاضرات اللي قبله
+      const tried = self.done.get(x.exam.id);
+      const selfTest: SelfTest | undefined = tried
+        ? { state: "used", total: tried.total === null || tried.total === undefined ? null : Number(tried.total), ...(tried.status === "started" ? { going: true } : {}) }
+        : self.open.has(x.exam.id) ? { state: lecturesBought && blocked ? "locked" : "open" } : undefined;
+      const steps: Step[] = [{ kind: "exam", id: x.exam.id, title: x.exam.title, state, at, total, ...(selfTest ? { self: selfTest } : {}), ...teach }];
       const rule = cfg.mode === "percent" ? (own ? { min: Math.ceil(cfg.pct.min * since), absent: cfg.pct.absent } : null) : own;
       if (rule) { steps.push({ kind: "cp", exam: x.exam.id, min: rule.min, absent: rule.absent, count: since, title: x.exam.title }); since = 0; }
       return steps;

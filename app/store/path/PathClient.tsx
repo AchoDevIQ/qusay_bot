@@ -1,13 +1,15 @@
 "use client";
 // 🛤 مساري: «مسارك ويا قصي العميري». كل موضوع بطاقة لحاله، جواها المحاضرات بالترتيب والامتحانات بمكانها والسيطرة 🚦.
 // المحاضرة المفتوحة تنفتح بالتطبيق نفسه (ويا ملحقاتها). الجاية مقفولة لحد ما يكمل اللي قبلها للآخر
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { pageAuth, pageToken } from "../adminPage";
 
 type Step =
   | { kind: "lec"; id: string; title: string; n: number; state: "done" | "open" | "locked" | "buy"; pct: number }
-  | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; since?: number; from?: string; cp?: Cp | null }
+  | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; self?: SelfTest; since?: number; from?: string; cp?: Cp | null }
   | { kind: "cp"; exam: number; min: number; absent: number; count: number; title?: string };
+/** 🧪 الاختبار الذاتي تحت الامتحان (مرة وحدة، قبل الرسمي) */
+type SelfTest = { state: "open" | "locked" | "used"; total?: number | null; going?: boolean };
 type Section = { name: string; general?: boolean; steps: Step[] };
 type Honor = { min: number; bday?: boolean; addr?: boolean };
 type Cp = { min: number; absent: number; honor: Honor | null; stopImg?: string; topImg?: string };
@@ -41,6 +43,15 @@ const left = (at: string, now: number) => {
   return `باقي ${mm}:${String(sec).padStart(2, "0")} دقيقة`;
 };
 const EXAM: Record<string, string> = { buy: "🔒 اشتري امتحانات الفصل", nodate: "🗓 بعده ما انحط موعده", locked: "🗓 موعده", open: "🟢 مفتوح هسه، دوس هنا وادخله", missed: "❌ فاتك", done: "✅ قدمته، ينتظر التصحيح", graded: "✅ درجتك" };
+
+/** 🧪 سطر «تگدر تختبر نفسك» تحت الامتحان: يفتح «امتحاناتي» على الاختبار مباشرة */
+function SelfLine({ exam, self }: { exam: number; self: SelfTest }) {
+  const go = () => `${examsLink()}&self=${exam}`;
+  if (self.state === "open") return <a className="qp-self" href={go()}><span className="qp-sic">🧪</span><span className="qp-t"><b>تگدر تختبر نفسك قبل الامتحان الرسمي</b><small>بأسئلة ثانية، وينصحح مثل الامتحان. مرة وحدة بس. دوس هنا</small></span></a>;
+  if (self.state === "locked") return <div className="qp-self off"><span className="qp-sic">🧪</span><span className="qp-t"><b>اختبر نفسك قبل الامتحان الرسمي</b><small>🔒 ينفتح بعد ما تكمل المحاضرات اللي قبله</small></span></div>;
+  if (self.going) return <a className="qp-self" href={examsLink()}><span className="qp-sic">🧪</span><span className="qp-t"><b>بديت اختبارك الذاتي</b><small>دوس هنا وكمّله</small></span></a>;
+  return <div className="qp-self used"><span className="qp-sic">🧪</span><span className="qp-t"><b>اختبرت نفسك</b><small>{self.total === null || self.total === undefined ? "ينتظر التصحيح" : `درجتك ${self.total} من 100`}</small></span></div>;
+}
 
 export default function PathClient() {
   const [p, setP] = useState<Path | null>(null);
@@ -97,13 +108,17 @@ export default function PathClient() {
       <span className="qp-t"><b>🎬 {s.title}</b>{(s.state !== "open" || s.pct > 0) && <small>{s.state === "done" ? "كملتها" : s.state === "open" ? `وصلت ${s.pct}٪، كمّلها للآخر` : s.state === "buy" ? "اشتري المحاضرات" : "تنفتح بعد اللي قبلها"}</small>}</span>
     </button>
   ) : s.kind === "exam" ? (
-    <a key={k} className={`qp-step exam ${s.state}`} href={s.state === "buy" ? undefined : examsLink()}>
+    <Fragment key={k}>
+    {/* الاختبار الذاتي فوك الرسمي: يجي قبله (طلبه 2026-11-26) */}
+    {s.self && <SelfLine exam={s.id} self={s.self} />}
+    <a className={`qp-step exam ${s.state}`} href={s.state === "buy" ? undefined : examsLink()}>
       <span className="qp-ic">📝</span>
       <span className="qp-t"><b>{s.title}</b><small>{s.state === "locked" ? "" : EXAM[s.state] ?? s.state}{s.state === "graded" && s.total !== null && s.total !== undefined ? ` ${s.total}` : ""}</small>
         {s.at && <small className="qp-when">🗓 {when(s.at)}</small>}
         {s.at && s.state === "locked" && left(s.at, now) && <span className="qp-left">⏳ {left(s.at, now)}</span>}</span>
       {p?.teacher && <button type="button" className="qp-addcp" onClick={(e) => { e.preventDefault(); setCpFor(s); }}>{s.cp ? "✏️ السيطرة" : "＋ إنشاء سيطرة"}</button>}
     </a>
+    </Fragment>
   ) : null;
   const progress = p ? (() => { const l = p.sections.flatMap((s) => s.steps.filter((x) => x.kind === "lec")) as Extract<Step, { kind: "lec" }>[]; return { done: l.filter((x) => x.state === "done").length, all: l.length }; })() : null;
   return (
@@ -348,6 +363,10 @@ a.qp-step{text-decoration:none}
 .qp-stripes{display:block;height:10px;background:repeating-linear-gradient(-45deg,#F6C94A 0 12px,#141F33 12px 24px)}
 .qp-gin{display:flex;align-items:center;gap:12px;padding:12px 16px}
 .qp-t .qp-when{color:#141F33;font-weight:700}
+.qp-self{display:flex;align-items:center;gap:10px;margin:6px 0 0;padding:8px 10px;border-radius:12px;border:1.5px dashed #F6C94A;background:#FFFBEF;color:#141F33;text-decoration:none}
+.qp-self .qp-sic{width:34px;height:34px;flex:none;border-radius:50%;background:#141F33;display:flex;align-items:center;justify-content:center;font-size:17px}
+.qp-self b{font-size:14px}.qp-self small{color:#5C667A;font-size:12.5px;line-height:1.5}
+.qp-self.off{opacity:.6}.qp-self.used{border-style:solid;background:#fff}
 .qp-left{display:inline-block;align-self:flex-start;margin-top:4px;background:#141F33;color:#F6C94A;border-radius:8px;padding:2px 10px;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
 .qp-gate .qp-t b{font-size:17px;color:#F6C94A}.qp-gate .qp-t small{color:#C9D1E0}
 .qp-bico{font-size:26px}

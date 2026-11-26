@@ -181,6 +181,35 @@ test("الاختياري: مرة وحدة بوقته، ما يأثر على ال
   await schedAdminAction({ action: "save", initData: sign(1), window: 15, extra: 15, perDay: 2, gap: 30, holidayStart: "", holidayDays: 0, excluded: "", blockedHours: [], optionalOpen: true });
 });
 
+test("🧪 الاختبار الذاتي: بس قبل الامتحان الرسمي، ومساري يعرفه، وما ياخذ مكان الرسمي", async () => {
+  const { e } = await exam();
+  await update("bank_exams", { id: e }, { chapter: "فصل الذاتي" });
+  await insert("bank_versions", { exam_id: e, model: "S", kind: "optional", ok: 1 });
+  const o = (await find("bank_versions", { exam_id: e, model: "S" }))[0];
+  await insert("bank_questions", { version_id: o.id, n: 1, max_mark: 100, q_file: "t/q.png" });
+  await put("students", { user_id: 62, name: "علي حسن محمد كاظم", curr: "عربي", exam: "إلكتروني", created: "2026-01-01 10:00" });
+  await put("exam_access", { user_id: 62, chapter: "فصل الذاتي", order_id: 1, created: "1" });
+  const act = (action: string, x: object = {}) => myExamAction({ token: homeToken(62), pf: "ios", device: "dev-" + String(62).padStart(14, "0"), action, ...x }) as Promise<any>;
+  const { selfTests } = await import("../lib/schedApi.ts");
+  // الرسمي بعده: متاح
+  const off = await insert("sched_items", { user_id: 62, exam_id: e, at: "2099-01-01 10:00", status: "waiting" });
+  assert.ok((await selfTests(62)).open.has(e));
+  // الرسمي بدأ أو فات: ما يطلع
+  await update("sched_items", { id: off }, { at: "2020-01-01 10:00" });
+  assert.ok(!(await selfTests(62)).open.has(e));
+  assert.ok(!(await act("info")).optional.some((x: any) => x.exam === e));
+  // يرجع قبل الرسمي، ويختبر نفسه مرة وحدة
+  await update("sched_items", { id: off }, { at: "2099-01-01 10:00", status: "waiting" });
+  await act("openOptional", { exam: e });
+  const st = await selfTests(62);
+  assert.ok(!st.open.has(e) && st.done.has(e), "مرة وحدة، وصار «اختبرت نفسك»");
+  await assert.rejects(act("openOptional", { exam: e }), /مو متاح/);
+  // الحضوري: ماكو اختبار ذاتي
+  await put("students", { user_id: 63, name: "علي حسن محمد كاظم", curr: "عربي", exam: "حضوري", created: "2026-01-01 10:00" });
+  await put("exam_access", { user_id: 63, chapter: "فصل الذاتي", order_id: 1, created: "1" });
+  assert.equal((await selfTests(63)).open.size, 0);
+});
+
 test("رابط المؤقت: بالمفتاح بس، وصاحب البوت بس يشوفه", async () => {
   const s = await schedSettings();
   await assert.rejects(notifyStarted("bad", s), (x: any) => x.status === 401);
