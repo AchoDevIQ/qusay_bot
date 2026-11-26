@@ -1,7 +1,7 @@
 "use client";
 // 🤖 مراجعة تصحيح الذكاء: تختار مجموعة (امتحان + مكان + موعد)، وتنفتح أوراقها كلها بصفحة وحدة، طالب ورا طالب،
 // ويا علامات الذكاء الحمرة ودرجة كل سؤال تگدر تبدلها وتحفظ بنفس المكان. وإعداد: الدرجات توصل مباشرة لو بعد ما تراجعها
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MarkedPage, type MarkedPageT, type PaperMark } from "../myexams/AiCompare";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 
@@ -100,6 +100,30 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
   };
   const [total, setTotal] = useState(p.total);
   const changed = p.questions.filter((q) => marks[q.n] !== undefined && marks[q.n] !== String(q.mark));
+  // 💾 الدرجة تنحفظ وحدها من يعدلها (طلبه 2026-11-27): ثانية بعد آخر رقم يكتبه، بلا زر حفظ.
+  // بس الرقم الكامل والصحيح (مو فاضي، مو «8.»، ومو أكثر من درجة السؤال)
+  const [saveMsg, setSaveMsg] = useState("");
+  const saving = useRef(false);
+  const ok = (q: Q) => /^\d+(\.\d+)?$/.test(marks[q.n] ?? "") && Number(marks[q.n]) <= q.max;
+  const ready = changed.filter(ok);
+  const bad = changed.find((q) => !ok(q) && (marks[q.n] ?? "") !== "" && !/\.$/.test(marks[q.n] ?? ""));
+  useEffect(() => {
+    if (!ready.length || saving.current) return;
+    setSaveMsg("⏳ يحفظ...");
+    const t = window.setTimeout(async () => {
+      saving.current = true;
+      const now = ready.map((q) => [q.n, marks[q.n]] as const);
+      const r = await save(Object.fromEntries(now.map(([n, v]) => [n, Number(v)])));
+      saving.current = false;
+      if (r?.saved) {
+        setTotal(r.saved.total);
+        for (const [n, v] of now) { const q = p.questions.find((x) => x.n === n); if (q) q.mark = Number(v); }
+        setMarks((m) => ({ ...m }));
+        setSaveMsg(`✅ انحفظ: صارت ${r.saved.total} من 100`);
+      } else setSaveMsg("⚠️ ما انحفظ، عدّل الرقم مرة ثانية");
+    }, 1000);
+    return () => window.clearTimeout(t);
+  }, [marks]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={"card arv-paper " + (n % 2 ? "arv-a" : "arv-b")}>
       <div className="arv-start">👤 الطالب {n} من {of}: <b>{p.name}</b></div>
@@ -138,10 +162,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
       ))}
       {!p.questions.length && <div className="exhint">ماكو تصحيح ذكاء محفوظ لهاي الورقة.</div>}
       {!!p.questions.length && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => { if (confirm("ترجع العلامات مثل ما صححها الذكاء؟ تعديلاتك عليها تنمسح (الدرجات تبقى)")) void markCall({ action: "markReset" }); }}>↩️ رجّع علامات الذكاء</button>}
-      <button type="button" className="btn adtop" disabled={busy || !changed.length} onClick={async () => {
-        const r = await save(Object.fromEntries(changed.map((q) => [q.n, Number(marks[q.n])])));
-        if (r?.saved) { setTotal(r.saved.total); for (const q of changed) q.mark = Number(marks[q.n]); setMarks({ ...marks }); }
-      }}>{changed.length ? `💾 حفظ درجات ${p.name.split(" ")[0]}` : "ما غيرت شي"}</button>
+      {bad && <div className="arv-hint adtop">⚠️ درجة س{bad.n} لازم رقم من 0 لـ {bad.max}</div>}
+      {saveMsg && <div className="arv-saved adtop">{saveMsg}</div>}
       <div className="arv-end">— نهاية أوراق {p.name} —</div>
     </div>
   );
@@ -179,6 +201,7 @@ const CSS = `
 .arv-end{margin-top:14px;text-align:center;font-weight:800;opacity:.85;padding:8px;border-top:2px dashed currentColor}
 .arv-a .arv-end{color:#7FA8F0}.arv-b .arv-end{color:#F6C94A}
 .arv-mark{font-weight:800;color:#F6C94A}
+.arv-saved{font-weight:800;text-align:center;padding:8px;border-radius:10px;background:rgba(110,231,168,.12);color:#6ee7a8}
 .arv-pen{min-width:44px;min-height:40px;border-radius:10px;border:1.5px solid #F6C94A;background:transparent;color:#F6C94A;font:inherit;font-weight:800;cursor:pointer}
 .arv-pen.on{background:#F6C94A;color:#141F33}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
