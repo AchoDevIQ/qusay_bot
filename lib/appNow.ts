@@ -54,7 +54,7 @@ export async function nowCards(uid: number, now = stamp()): Promise<NowCard[]> {
   }
   // ٥. طلب بعده يتجهز
   for (const o of (await find("orders", { user_id: uid })).filter((x) => !Number(x.printed) && String(x.created ?? "") >= addDays(today, -30))) {
-    out.push({ kind: "order", id: Number(o.id), title: "⏳ طلبك يتجهز", text: `طلب رقم ${o.id}، تگدر تشوفه بطلباتي`, go: "orders" });
+    out.push({ kind: "order", id: Number(o.id), title: "⏳ طلبك يتجهز", text: `طلب رقم ${o.id}، تگدر تشوفه بـ«🧾 مشترياتي»`, go: "orders" });
   }
   // ٦. ماكو شي: امتحانه الجاي
   if (!out.some((c) => c.kind === "exam")) {

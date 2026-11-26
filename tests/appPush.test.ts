@@ -69,6 +69,18 @@ test("التطبيق انمسح من التلفون: الرمز ينمسح", asy
   reply = "ok";
 });
 
+test("🧾 تم الشراء: إشعار يوصل دائماً، يفتح المحادثة، ورسالة الوصل اللي وراه ما تطلع إشعار ثاني", async () => {
+  sent.length = 0;
+  await push.noteChatIn(B);
+  assert.equal(await push.purchasePush(B, "الفصل الأول - محاضرات فقط", "40,000"), true);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].m.type, "bot_chat");
+  assert.match(sent[0].m.title, /تم الشراء/);
+  assert.match(sent[0].m.body, /الفصل الأول.*40,000.*مشترياتي/);
+  await beforeTelegram("sendMessage", { chat_id: B, text: "🧾 وصل شرائك" });
+  assert.equal(sent.length, 1);
+});
+
 test("🟢 بدأ الامتحان: يوصل دائماً حتى لو فاتح المحادثة، وإشعار المحادثة ما يتكرر وياه", async () => {
   sent.length = 0;
   await push.noteChatIn(B);

@@ -97,6 +97,14 @@ export async function examPush(uid: number, title: string, minutes: number) {
   return pushApp(uid, { title: `🟢 بدأ امتحانك${title ? `: ${plain(title, 60)}` : ""}`, body: `ادخل عليه خلال ${minutes} دقيقة. دوس هنا حتى تفتح امتحاناتي.`, type: "bot_exam" });
 }
 
+/** 🧾 اشترى (طلبه 2026-11-26): يوصل دائماً، والدوسة تفتح المحادثة اللي بيها الوصل الملون.
+ * ينطلب قبل الوصل حتى إشعار المحادثة العادي ما يتكرر وياه */
+export async function purchasePush(uid: number, what: string, total: string) {
+  if (!(await kvGet(key(uid)).catch(() => null))) return false;
+  recent.set(uid, Date.now());
+  return pushApp(uid, { title: "🧾 تم الشراء", body: `${plain(what, 120)} · المجموع ${total}. مشترياتك كلها محفوظة بـ«🧾 مشترياتي».`, type: "bot_chat" });
+}
+
 /** ⏰ امتحانك بعد 10 دقايق: نفس الإشعار المستعجل (يفتح «امتحاناتي») */
 export async function examSoonPush(uid: number, title: string, minutes: number) {
   if (!(await kvGet(key(uid)).catch(() => null))) return false;

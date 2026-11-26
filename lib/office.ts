@@ -58,8 +58,10 @@ export async function posSale(uid: number, o: any): Promise<{ error?: string; ag
   const od = (await one("orders", { id: oid }))!;
   await (await import("./stock.ts")).takeStock(items, s.curr);
   await setSession(uid, "", {});
-  // الوصل الإلكتروني الملون للطالب
+  // الوصل الإلكتروني الملون للطالب، وقبله إشعار على تلفونه (التطبيق)
   let sent = false;
+  const what = items.map((i) => itemLabel(i) + (i.qty > 1 ? ` ×${i.qty}` : "")).join("، ");
+  await (await import("./appPush.ts")).purchasePush(sid, what, money(total)).catch((e) => console.error("purchase push", e));
   try {
     sent = await sendReceiptImage(sid, od, items, `🧾 <b>وصل شرائك من ${esc(await sellerLabel(od))}</b> (#${oid})\nشكراً لك 🌷`);
   } catch (e) { console.error(e); }
@@ -68,6 +70,14 @@ export async function posSale(uid: number, o: any): Promise<{ error?: string; ag
       "", `💰 المجموع: <b>${money(total)}</b>`, "شكراً لك 🌷"];
     sent = !!await send(sid, lines.join("\n"));
   }
+  // ولي الأمر: نفس الوصل الملون بكل اللي اشتراه (تليگرام لو صفحته بالتطبيق، ووياها إشعار تلفونه)
+  try {
+    const g = await (await import("./access.ts")).guardianOf(sid);
+    if (g) {
+      const cap = `🧾 <b>${esc(s.name)}</b> اشترى من ${esc(await sellerLabel(od))} (#${oid}):\n${items.map((i) => `• ${esc(itemLabel(i))}${i.qty > 1 ? ` × ${i.qty}` : ""}`).join("\n")}\n💰 المجموع: <b>${money(total)}</b>`;
+      if (!await sendReceiptImage(Number(g.guardian_id), od, items, cap)) await send(Number(g.guardian_id), cap);
+    }
+  } catch (e) { console.error("guardian receipt", e); }
   await logActivity(sid, `🏪 اشترى من ${await sellerLabel(od)} (#${oid}): ${items.map((i) => `${i.name} ×${i.qty}`).join("، ")}`);
   const unlocked = await unlockFromSale(sid, items, oid);
   let msg = `✅ <b>تم البيع #${oid}</b> — ${esc(s.name)}\n💰 ${money(total)}\n\n` +
