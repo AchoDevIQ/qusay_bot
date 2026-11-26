@@ -60,9 +60,13 @@ export async function cronTick(key: unknown) {
   try {
     // ❓ أسئلة صفحة «سؤال علمي» أول شي، حتى الطالب ما ينتظر هواية
     await step("askPage", async () => (await import("./questions.ts")).askPageTick());
-    await step("ai", () => aiGradeTick(finishByAi, paperName));
+    // 🤖 «بعد ما أراجعها»: الورقة اللي صححها الذكاء تنحجز لحد ما يوافق صاحب البوت (أو تخلص المدة)
+    const { aiFinish, releaseTick } = await import("./aiReview.ts");
+    const aiDone = (uid: number, id: number) => aiFinish(finishByAi, uid, id);
+    await step("aiReviewRelease", () => releaseTick());
+    await step("ai", () => aiGradeTick(aiDone, paperName));
     // «تصحيح قصي»: مصحح الأستاذ الثاني، طافي إلا إذا شغله من صفحته
-    await step("qusay", async () => (await import("./qusayGrade.ts")).qusayTick(finishByAi));
+    await step("qusay", async () => (await import("./qusayGrade.ts")).qusayTick(aiDone));
     await step("aiDraft", () => draftQueueTick(ADMIN_IDS[0] ?? 0));
     await step("qaExams", () => examQueueTick());
     await step("qaRetry", () => qaRetryTick());

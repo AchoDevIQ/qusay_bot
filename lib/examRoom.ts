@@ -334,9 +334,12 @@ async function qusayShown(it: Row) {
     steps: q.steps.map((st, si) => ({ status: "", awarded: st.awarded, possible: st.points, expected: tr[qi][si], student: qg.wLines(st.w ?? ""), reason: st.note })), by: "qusay" as const,
   }));
 }
+/** 🤖 مراجعة تصحيح الذكاء: ورقة المجموعة كلها (حتى المحجوزة قبل ما توصل للطالب) */
+export const aiReviewShown = (it: Row) => aiShown(it, true);
 /** تصحيح نظام التصحيح AI اللي يشوفه الطالب: كل الورقة إذا هو صححها، أو بس أسئلته إذا حوّل الباقي لمصحح */
-async function aiShown(it: Row) {
-  if (!it.graded_at) return [];
+async function aiShown(it: Row, review = false) {
+  // review: «🤖 مراجعة تصحيح الذكاء» تشوف الورقة حتى قبل ما توصل للطالب
+  if (!it.graded_at && !review) return [];
   // صححها «🧠 تصحيح قصي»: الطالب يشوف نفس العرض، كل سؤال وكل خطوة شگد انطى عليها وليش
   if (it.grader_id === QUSAY_GRADER) return await qusayShown(it);
   const part = await aiPartialOf(it.id);

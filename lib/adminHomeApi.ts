@@ -46,6 +46,8 @@ async function homeData(uid: number) {
   // الملازم والجواب الآلي: صاحب البوت بس
   if (await isAdmin(uid)) people.push({ page: "booklets", icon: "📚", title: "الملازم والجواب الآلي" });
   if (await isAdmin(uid)) people.push({ page: "aigrade", icon: "🤖", title: "نظام التصحيح AI", note: "المواضيع والخطوات والسجل" });
+  // 🤖 مراجعة تصحيح الذكاء: أوراق كل مجموعة بصفحة وحدة. «⏳» إذا بيها درجات تنتظر موافقته
+  if (await isAdmin(uid) || await can(uid, "aireview")) { const n = Object.keys(await (await import("./aiReview.ts")).heldMap()).length; people.push({ page: "aireview", icon: "🗂", title: "مراجعة تصحيح الذكاء", note: n ? `⏳ ${n} درجة تنتظرك` : "أوراق كل مجموعة بصفحة وحدة", hot: n > 0 }); }
   // 🔎 حلول الذكاء للأسئلة العلمية: يشوفها ويصلحها (طلبه 2026-11-23)
   if (await can(uid, "qareview")) { const { revList } = await import("./qaReview.ts"); const n = (await revList()).filter((x) => !x.state).length; people.push({ page: "qareview", icon: "🔎", title: "حلول الذكاء", note: n ? `${n} حل ما شفته` : "شفت كل الحلول", hot: n > 0 }); }
   // 💰 الصرفية بالمجمل وكل شي لحاله (طلبه 2026-11-23)

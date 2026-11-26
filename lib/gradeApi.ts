@@ -276,7 +276,7 @@ async function paperView(it: Row, withObj = false, editing = false) {
 /** جاوب على السؤال؟ بس إذا الأجوبة صور لكل سؤال؛ إذا الورقة كاملة (حضوري) ما نعرف */
 const answeredOf = (answers: Row[]) => (n: number) => (answers.some((a) => !a.q) ? undefined : answers.some((a) => a.q === n));
 /** مجموع الورقة من درجاتها المحفوظة، ويا قاعدة «أجب عن K أسئلة» */
-async function itemTotal(it: Row) {
+export async function itemTotal(it: Row) {
   const qs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
   const answered = answeredOf(await find("exam_answers", { item_id: it.id }));
   const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [m.q, m.mark]));
