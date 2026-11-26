@@ -275,7 +275,7 @@ function DoorCard({ door }: { door: { id: number; name: string; link: string; qr
     <div className="card"><div className="form" style={{ textAlign: "center" }}>
       <h2>🔗 رابط دخول {door.name}</h2>
       <img src={door.qr} alt="" style={{ width: 220, background: "#fff", borderRadius: 12, margin: "0 auto" }} />
-      <div className="exhint">يصوّر الرمز بكاميرة تلفونه أو الآيباد، أو دزله الرابط. يفتحه ويحط رمز سري من 4 أرقام، وبعدها يدخل صفحاته بدون تليگرام.</div>
+      <div className="exhint">يصوّر الرمز بكاميرة تلفونه أو الآيباد، أو دزله الرابط. يفتحه ويطلعله رمزه السري (4 أرقام)، وبعدها يدخل صفحاته بيه بدون تليگرام.</div>
       <DoorShare link={door.link} />
     </div></div>
   );

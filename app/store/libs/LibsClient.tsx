@@ -116,7 +116,7 @@ function Panel({ o, data, busy, call }: { o: Office; data: Data; busy: boolean; 
         {data.door?.officeId === o.id && (
           <div style={{ textAlign: "center" }}>
             <img src={data.door.qr} alt="" style={{ width: 200, background: "#fff", borderRadius: 12 }} />
-            <div className="exhint">رابط دخول {data.door.name} بدون تليگرام: يصوّر الرمز أو تدزله الرابط، ويحط رمز سري.</div>
+            <div className="exhint">رابط دخول {data.door.name} بدون تليگرام: يصوّر الرمز أو تنسخله الرابط، ويطلعله رمزه السري.</div>
             <DoorShare link={data.door.link} />
           </div>
         )}
