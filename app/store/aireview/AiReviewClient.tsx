@@ -6,7 +6,7 @@ import { MarkedPage, type MarkedPageT, type PaperMark } from "../myexams/AiCompa
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 
 type Cfg = { mode: "after" | "before"; hours: number };
-type Group = { key: string; exam: number; title: string; chapter: string; place: string; at: string; count: number; held: number; seen: boolean };
+type Group = { key: string; exam: number; title: string; chapter: string; place: string; at: string; count: number; held: number; seen: boolean; pending?: number };
 type Q = { n: number; max: number; mark: number; note: string; photos: string[]; marked: MarkedPageT[] | null };
 type Paper = { id: number; name: string; held: boolean; total: number; by: string; questions: Q[] };
 type Data = { cfg?: Cfg; owner?: boolean; groups?: Group[]; notice?: string; group?: Group | null; papers?: Paper[]; fileToken?: string; saved?: { changed: number; total: number }; paper?: Paper | null };
@@ -45,13 +45,12 @@ export default function AiReviewClient() {
           {g && <div className="card">
             <h2>{g.title}</h2>
             <div className="exhint">{g.chapter} · {g.place} · {g.at} · {g.count} ورقة</div>
-            {g.held > 0 && <>
-              <div className="exhint adtop">⏳ {g.held} درجة تنتظرك وما وصلت للطلاب. راجعها، وعدل اللي تريده، وبعدها:</div>
-              <button type="button" className="btn adtop" disabled={busy} onClick={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))}>✅ وافقت، دزها للطلاب ({g.held})</button>
-            </>}
+            <SendAll g={g} busy={busy} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} />
           </div>}
           {!data?.papers && <div className="empty">جاري التحميل...</div>}
           {data?.papers?.map((p, i) => <PaperCard key={p.id} p={p} n={i + 1} of={data.papers!.length} file={file} busy={busy} gkey={open} call={call} save={(marks) => call({ action: "save", item: p.id, marks }, true)} />)}
+          {/* بالأخير بعد ما يخلص كل الأوراق: نفس الزر */}
+          {g && data?.papers && <div className="card expad"><SendAll g={g} busy={busy} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} /></div>}
         </div>
         <style>{CSS}</style>
         <StatusBar busy={busy} error={error} notice={data?.notice} />
@@ -101,19 +100,24 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
   const [p, setP] = useState(start);
   // ✏️ أدوات التصحيح مخفية: كل سؤال يطلع بدرجته وورقته بس، ودوسة «✏️» تطلع أدواته (الدرجة، العلامات، ضيف علامة)
   const [edit, setEdit] = useState<Record<number, boolean>>({});
-  // ✏️ صحح: شاشة التصحيح الكاملة جوه هذا الكرت. من يحفظ (أو يدوس «⬅️ القائمة») تتسد وترجع الورقة بتصحيحه
-  const [grading, setGrading] = useState(false);
+  // ✏️ صحح (طلبه 2026-11-27): أدوات التصحيح كلها تنفتح بنفس السؤال اللي داسه، بعرض الشاشة. كل دوسة رقم وكل خط ينحفظ وحده،
+  // و«✔ خلصت» يحفظ الصفحة الأخيرة ويسدها. ما يوصل شي للطالب إلا من «📤 دز للطلاب» بالمجموعة
+  const [gq, setGq] = useState<number | null>(null);
+  const [nextQ, setNextQ] = useState<number | null>(null);
+  const [closing, setClosing] = useState(false);
+  const frame = useRef<HTMLIFrameElement | null>(null);
+  const finish = (then: number | null) => { setNextQ(then); setClosing(true); frame.current?.contentWindow?.postMessage({ qgrade: "save" }, location.origin); };
+  const openQ = (n: number) => { if (gq === null) setGq(n); else if (gq !== n) finish(n); };
   useEffect(() => {
-    if (!grading) return;
+    if (gq === null) return;
     const on = (e: MessageEvent) => {
       if (e.origin !== location.origin || e.data?.qgrade !== "done" || Number(e.data.id) !== p.id) return;
-      setGrading(false);
+      setClosing(false); setGq(nextQ); setNextQ(null);
       void call({ action: "group", key: gkey }, true);
-      document.getElementById(`p${p.id}`)?.scrollIntoView({ block: "start" });
     };
     window.addEventListener("message", on);
     return () => window.removeEventListener("message", on);
-  }, [grading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gq, nextQ]); // eslint-disable-line react-hooks/exhaustive-deps
   const [marks, setMarks] = useState<Record<number, string>>(() => Object.fromEntries(start.questions.map((q) => [q.n, String(q.mark)])));
   // ✏️ تعديل التصحيح على الورقة: علامة مختارة، أو «➕ ضيف علامة» ينتظر دوسة على الصفحة
   const [tap, setTap] = useState<{ ref: string; m: PaperMark } | null>(null);
@@ -157,10 +161,6 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
   return (
     <div id={`p${p.id}`} className={"card arv-paper " + (n % 2 ? "arv-a" : "arv-b")}>
       <div className="arv-start">👤 الطالب {n} من {of}: <b>{p.name}</b></div>
-      {grading && <div className="arv-grade">
-        <div className="exline"><b>✏️ تصحح ورقة {p.name}</b><button type="button" className="exbtn" onClick={() => setGrading(false)}>✖ سد بلا حفظ</button></div>
-        <iframe title={`تصحيح ${p.name}`} src={gradeLink(p.id, gkey, true)} />
-      </div>}
       <div className="arv-head"><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
       {p.questions.map((q) => (
         <div key={q.n} className="arv-q">
@@ -170,11 +170,17 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
               ? <><input className="exnum" inputMode="decimal" value={marks[q.n] ?? ""} onChange={(e) => setMarks({ ...marks, [q.n]: e.target.value.replace(/[^\d.]/g, "") })} /><span>من {q.max}</span></>
               : <span className="arv-mark">{marks[q.n] ?? q.mark} من {q.max}</span>}
             {/* ✏️ شاشة التصحيح نفسها بكل أدواتها، جوه ورقة هذا الطالب، وصفحاته ورا بعض (طلبه 2026-11-27) */}
-            <button type="button" className="arv-pen" aria-label="صحح بأدوات التصحيح" title="صحح بأدوات التصحيح" onClick={() => setGrading(true)}>✏️ صحح</button>
+            {gq === q.n
+              ? <button type="button" className="arv-pen on" disabled={closing} onClick={() => finish(null)}>{closing ? "⏳ يحفظ..." : "✔ خلصت"}</button>
+              : <button type="button" className="arv-pen" aria-label="صحح بأدوات التصحيح" title="صحح بأدوات التصحيح" disabled={closing} onClick={() => openQ(q.n)}>✏️ صحح</button>}
             <button type="button" className={"arv-pen arv-pen2" + (edit[q.n] ? " on" : "")} aria-label="علامات الذكاء" title="علامات الذكاء" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "🤖 علامات الذكاء"}</button>
             {q.note && <small>{q.note}</small>}
           </div>
-          {(q.marked?.length ? q.marked : q.photos.map((ref) => ({ ref, marks: [] as PaperMark[] }))).map((pg) => (
+          {gq === q.n && <div className="arv-grade">
+            <iframe ref={frame} title={`تصحيح ${p.name} س${q.n}`} src={`${gradeLink(p.id, gkey, true)}&q=${q.n}`} />
+            <div className="exline arv-gfoot"><button type="button" className="btn" style={{ width: "auto" }} disabled={closing} onClick={() => finish(null)}>{closing ? "⏳ يحفظ..." : `✔ خلصت س${q.n}`}</button></div>
+          </div>}
+          {gq !== q.n && (q.marked?.length ? q.marked : q.photos.map((ref) => ({ ref, marks: [] as PaperMark[] }))).map((pg) => (
             <div key={pg.ref} className={adding === pg.ref ? "arv-adding" : ""} onClickCapture={(e) => pick(e, pg.ref)}>
               <MarkedPage src={file(pg.ref)} marks={spot?.ref === pg.ref ? [...pg.marks, { x: spot.x, y: spot.y, kind: "miss", text: "", note: "" }] : pg.marks}
                 onTap={adding || !edit[q.n] ? undefined : (m) => setTap({ ref: pg.ref, m })} picked={tap?.ref === pg.ref ? pg.marks.indexOf(tap.m) : undefined} />
@@ -240,8 +246,10 @@ const CSS = `
 .arv-pen{min-width:44px;min-height:40px;border-radius:10px;border:1.5px solid #F6C94A;background:transparent;color:#F6C94A;font:inherit;font-weight:800;cursor:pointer}
 .arv-pen.on{background:#F6C94A;color:#141F33}
 .arv-pen2{font-size:13px;opacity:.85}
-.arv-grade{margin:6px -6px 12px;padding:8px;border:3px solid #F6C94A;border-radius:12px;background:#1b1c1f}
-.arv-grade iframe{display:block;width:100%;height:calc(100vh - 90px);min-height:520px;border:0;border-radius:8px;background:#1b1c1f;margin-top:8px}
+.arv-grade{position:relative;width:100vw;margin:8px 0 12px calc(50% - 50vw);border-top:3px solid #F6C94A;border-bottom:3px solid #F6C94A;background:#1b1c1f;overflow:hidden}
+.arv-grade iframe{display:block;width:100%;height:calc(100vh - 70px);min-height:520px;border:0;background:#1b1c1f}
+.arv-gfoot{justify-content:center;padding:8px}
+html,body{overflow-x:hidden}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
 .arv-q{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
 .arv-qline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.arv-qline .exnum{width:64px}.arv-qline small{flex-basis:100%;opacity:.8}
@@ -251,3 +259,15 @@ const CSS = `
 .arv-box{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:10px;border:2px solid #F6C94A;border-radius:12px;background:rgba(246,201,74,.08)}
 .arv-img{width:100%;display:block;margin-top:8px;border-radius:8px;background:#fff}
 `;
+
+/** «📤 دز للطلاب»: الدرجات المحجوزة والتعديلات الصامتة بهاي المجموعة توصل هسه للطلاب وأولياء أمورهم */
+function SendAll({ g, busy, send }: { g: Group; busy: boolean; send: () => void }) {
+  const n = g.held + (g.pending ?? 0);
+  if (!n) return <div className="exhint adtop">✅ ماكو شي ينتظر. كلشي واصل للطلاب.</div>;
+  return (
+    <>
+      <div className="exhint adtop">⏳ ما وصل للطلاب بعد: {g.held ? `${g.held} درجة تنتظرك` : ""}{g.held && g.pending ? " و" : ""}{g.pending ? `${g.pending} تعديل سويته` : ""}. من تخلص مراجعة الأوراق كلها:</div>
+      <button type="button" className="btn adtop" disabled={busy} onClick={send}>📤 دز للطلاب ({n})</button>
+    </>
+  );
+}

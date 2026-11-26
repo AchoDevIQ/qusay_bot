@@ -279,10 +279,14 @@ const TIP: Record<Tool, string> = { hand: "تحريك: اسحب الكتابة �
 
 const SHOWQ_KEY = "gradeShowQuestion";
 const PEN_KEY = "gradePen";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers, penText: penTextStart = false, onPenText, stacked = false }: {
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers, penText: penTextStart = false, onPenText, stacked = false, focusQ = 0, autosave = false, saveSignal = 0 }: {
   paper: Paper; url: (r: string) => string; busy: boolean; stickers: Sticker[]; penText?: boolean; onPenText?: (on: boolean) => void;
   /** 📄 كل الصفحات ورا بعض مثل PDF (مراجعة تصحيح الذكاء، طلبه 2026-11-27): الصفحة اللي يدوسها تصير الشغالة */
   stacked?: boolean;
+  /** يفتح على هذا السؤال، وبالورا بعض تطلع صفحاته بس */
+  focusQ?: number;
+  /** بلا زر حفظ: الدرجة تنحفظ بكل دوسة، والكتابة كل ثانية، والحفظ الأخير ينطلب من برا (saveSignal يزيد) */
+  autosave?: boolean; saveSignal?: number;
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null; errors?: string[] } | null>;
   onClose: () => void; onSkip: () => void; onRescan: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
   onDecide: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>, rejects: Record<number, string>, accepted: number) => void;
@@ -397,6 +401,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     buildPages(paper, url).then((p) => {
       if (stop) return;
       setPages(p);
+      if (focusQ) { const f = p.findIndex((x) => holds(x, focusQ)); if (f >= 0) setAt(f); setQSel(focusQ); return; }
       const first = objMode ? p.findIndex((x) => holds(x, objs[0].q)) : p.findIndex((x) => (x.q !== null && marks[x.q] === null) || !!x.qs?.some((n) => marks[n] === null));
       if (first > 0) setAt(first);
     }).catch(() => { if (!stop) setPages([]); });
@@ -616,8 +621,11 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     }
     onSave(Promise.all([flush(), ...pendingMarks.current]).then(() => undefined), composeAll);
   }
+  // الحفظ الأخير ينطلب من برا (مراجعة الذكاء: «✔ خلصت»)
+  const lastSig = useRef(saveSignal);
+  useEffect(() => { if (saveSignal !== lastSig.current) { lastSig.current = saveSignal; save(); } }, [saveSignal]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="gk">
+    <div className={"gk" + (stacked ? " gk-stacked" : "")}>
       <div className="gk-row gk-head">
         <b className="gk-name">{paper.name}{paper.test ? " (تجربة)" : ""}</b>
         <div className="gk-tools">
@@ -683,7 +691,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           </div>
           {k > 0 && <span className="gk-hint">أجب عن {k} من {paper.questions.length}: تنحسب أول {k} جاوبهن</span>}
           <span className="gk-total">{total} / 100</span>
-          {!locked && !objMode && <button type="button" className="gk-save" disabled={busy} onClick={save}>💾 حفظ{missing ? ` (باقي ${missing})` : ""}</button>}
+          {!locked && !objMode && !autosave && <button type="button" className="gk-save" disabled={busy} onClick={save}>💾 حفظ{missing ? ` (باقي ${missing})` : ""}</button>}
+          {autosave && <span className="gk-auto">💾 ينحفظ وحده</span>}
           {objMode && <button type="button" className="gk-save" disabled={busy || recOn} onClick={() => void decide()}>💾 حفظ الرد{undecided.length ? ` (باقي ${undecided.length})` : ""}</button>}
         </div>
       )}
@@ -729,7 +738,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         {pages && !pages.length && <div className="gk-empty">⚠️ ماكو صفحات بهذي الورقة.</div>}
         {page && showQ && q && !page.pen && <div className="gk-qtop" ref={qtop}><b>س{q.n}</b><TrimmedImage src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
         {/* 📄 ورا بعض: كل صفحة بإطار، والشغالة إطارها ذهبي. دوسة على صفحة ثانية تخليها الشغالة (بعدها تكتب عليها) */}
-        {stacked && pages?.map((pg, i) => i === at ? null : (
+        {stacked && pages?.map((pg, i) => i === at || (focusQ && !holds(pg, focusQ)) ? null : (
           <div key={i + ":" + pg.src} id={`gk-pg-${i}`} className="gk-stk" onClick={() => go(i)}>
             <div className="gk-stkh">صفحة {i + 1}{pg.q ? ` · س${pg.q}` : ""} · دوس حتى تصححها</div>
             <div style={{ pointerEvents: "none" }}><Sheet page={pg} ink={inks[i] ?? { rot: 0, items: [] }} zoom={zoom} tool="hand" color={color} width={width} sticker={sticker} fitH={0} locked aspect={aspect} onAdd={() => undefined} onErase={() => undefined} onMove={() => undefined} onEdit={() => undefined} onPenDown={() => undefined} onTap={() => undefined} /></div>
@@ -737,7 +746,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         )).slice(0, at)}
         {stacked && page && <div className="gk-stkh gk-stkon" id={`gk-pg-${at}`}>✏️ صفحة {at + 1}{page.q ? ` · س${page.q}` : ""}: تصححها هسه</div>}
         {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={stacked ? 0 : fitH} locked={locked} aspect={aspect} onAdd={addStroke} onErase={erase} onMove={moveItem} onEdit={editText} onPenDown={penDown} onTap={(x, y) => { setEditIdx(null); setTextAt({ x, y }); setText(""); }} />}
-        {stacked && pages?.map((pg, i) => i <= at ? null : (
+        {stacked && pages?.map((pg, i) => i <= at || (focusQ && !holds(pg, focusQ)) ? null : (
           <div key={i + ":" + pg.src} id={`gk-pg-${i}`} className="gk-stk" onClick={() => go(i)}>
             <div className="gk-stkh">صفحة {i + 1}{pg.q ? ` · س${pg.q}` : ""} · دوس حتى تصححها</div>
             <div style={{ pointerEvents: "none" }}><Sheet page={pg} ink={inks[i] ?? { rot: 0, items: [] }} zoom={zoom} tool="hand" color={color} width={width} sticker={sticker} fitH={0} locked aspect={aspect} onAdd={() => undefined} onErase={() => undefined} onMove={() => undefined} onEdit={() => undefined} onPenDown={() => undefined} onTap={() => undefined} /></div>

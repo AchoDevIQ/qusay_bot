@@ -128,12 +128,20 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
     return r;
   };
   // جاي من ملف الطالب: تنفتح الورقة للتعديل مباشرة
+  // جوه مراجعة الذكاء: «✔ خلصت» برا يطلب الحفظ الأخير
+  const [saveSig, setSaveSig] = useState(0);
+  useEffect(() => {
+    if (!embedded) return;
+    const on = (e: MessageEvent) => { if (e.origin === location.origin && e.data?.qgrade === "save") setSaveSig((n) => n + 1); };
+    window.addEventListener("message", on);
+    return () => window.removeEventListener("message", on);
+  }, []);
   const editOpened = useRef(false);
   useEffect(() => {
     if (!data || editOpened.current) return;
     editOpened.current = true;
     const id = Number(new URLSearchParams(location.search).get("edit"));
-    if (id) void act({ action: "openEdit", id });
+    if (id) void act({ action: "openEdit", id, ...(embedded ? { quiet: true } : {}) });
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
   const url = (ref: string) => `/api/grade/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
   /** الحفظ بالخلفية: المصحح ما ينتظر، تنفتح الورقة الجاية والدرجة توصل للطالب وراها */
@@ -194,7 +202,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
         {data && netWait.size > 0 && <div className="gk-netwait">📶 {netWait.size} ورقة تنتظر النت حتى توصل للطالب. تنرسل وحدها أول ما يرجع النت، لا تسد الصفحة.</div>}
         {data && paper && (
-          <Grader key={paper.id} stacked={embedded} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
+          <Grader key={paper.id} stacked={embedded} focusQ={embedded ? Number(new URLSearchParams(location.search).get("q")) || 0 : 0} autosave={embedded} saveSignal={saveSig} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
             onClose={() => { if (paper.editing && backToReview(paper.id)) return; setPaper(null); setSavedNow(0); group.current = null; void call(tab === "check" ? { action: "check", grader: data?.check?.grader ?? "" } : { action: tab === "objlog" ? "objLog" : tab === "history" ? "history" : "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onRescan={async () => { skipped.current.add(paper.id); await next(await call({ action: "rescan", id: paper.id })); }}

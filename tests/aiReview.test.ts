@@ -63,13 +63,16 @@ test("🤖 «بعد ما أراجعها»: تنحجز، أعدلها بصمت، 
   assert.equal(s.saved.total, 90);
   assert.ok(!sent.some((x) => String(x.p.chat_id) === "71"));
   await assert.rejects(act("save", { item: a, marks: { 2: 70 } }), /بين 0 و60/);
-  // تعديل الواصلة: «تعديل درجة» يوصل الطالب
+  // تعديل الواصلة: بصمت هم (طلبه 2026-11-27)، والمجموعة تگول بيها تعديل ينتظر
   await act("save", { item: c, marks: { 1: 40 } });
-  assert.ok(sent.some((x) => String(x.p.chat_id) === "73" && /راجع ورقتك/.test(String(x.p.text ?? x.p.caption ?? ""))));
-  // الموافقة: المحجوزة توصل (بالدرجة بعد التعديل)
+  assert.ok(!sent.some((x) => String(x.p.chat_id) === "73"));
+  assert.equal((await act("group", { key: g.key })).group.pending, 1);
+  // «📤 دز للطلاب»: المحجوزة توصل (بالدرجة بعد التعديل)، والواصلة يوصلها «تعديل درجة»
   sent.length = 0;
   const appr = await act("approve", { key: g.key });
-  assert.match(appr.notice, /وصلت 2 درجة/);
+  assert.match(appr.notice, /2 درجة و1 تعديل درجة/);
+  assert.ok(sent.some((x) => String(x.p.chat_id) === "73" && /تعديل درجة/.test(String(x.p.text ?? x.p.caption ?? ""))));
+  assert.equal((await act("group", { key: g.key })).group.pending, 0);
   assert.equal(Number((await one("sched_items", { id: a }))!.total), 90);
   assert.ok((await one("sched_items", { id: b }))!.graded_at);
   // المدة: ورقة ثانية تنحجز، وبعد 24 ساعة توصل وحدها

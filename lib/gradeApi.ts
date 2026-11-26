@@ -351,8 +351,53 @@ async function workPaper(uid: number, raw: unknown) {
     need(await canHandle(uid, it!), "ما عندك صلاحية على هذي الورقة", 403);
     return { it: it!, obj: true };
   }
+  if (await isEditing(uid, it!.id)) return { it: it!, obj: false };   // ورقة ذكاء محجوزة تنتظر المراجعة
   need(it!.grader_id === uid, "هذي الورقة أخذها مصحح ثاني", 409);
   return { it: it!, obj: false };
+}
+// ✏️ التعديل من «🗂 مراجعة تصحيح الذكاء» (طلبه 2026-11-27): كل شي ينحفظ بصمت، وما يوصل للطالب إلا من يدوس «📤 دز للطلاب» بالمجموعة
+const quietKey = (item: number) => `grade_quiet_${item}`;
+const PENDING = "ai_review_notify";
+/** أوراق انعدلت بصمت وتنتظر «📤 دز للطلاب»: رقم الورقة ← درجتها قبل أول تعديل */
+export async function pendingEdits(): Promise<Record<string, number>> {
+  try { const v = JSON.parse((await kvGet(PENDING)) ?? "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+}
+/** ورقة انعدلت بصمت: تنحفظ درجتها قبل أول تعديل (إذا بعدها ما انحفظت) */
+export async function notePending(id: number, before: number) {
+  const p = await pendingEdits();
+  if (p[String(id)] !== undefined) return;
+  p[String(id)] = before;
+  await kvSet(PENDING, JSON.stringify(p));
+}
+/** «تعديل درجة» للطالب وولي أمره (نفس رسالة التعديل العادي) */
+export async function notifyEdit(it: Row, old: number) {
+  const view = await paperView(it);
+  const total = Number(it.total);
+  if (total === old) return false;
+  const text = `✏️ <b>تعديل درجة</b>
+امتحان: <b>${esc(view.title)}</b>
+درجتك صارت <b>${total}</b> من 100 (كانت ${old}).`;
+  if (await paperWaits(it.user_id, it.id)) { await send(it.user_id, editWaitText(esc(view.title))); await holdForStudent(it.user_id, { id: it.id, kind: "edit" }); }
+  else await send(it.user_id, text);
+  const g = await guardianOf(it.user_id);
+  if (g) await send(g.guardian_id, `✏️ <b>تعديل درجة</b>
+درجة الطالب <b>${esc(String(view.name))}</b> في امتحان <b>${esc(view.title)}</b> صارت <b>${total}</b> من 100.`);
+  try { await runCheckpoints(it.user_id); } catch (e) { console.error(e); }
+  return true;
+}
+/** «📤 دز للطلاب»: التعديلات الصامتة لهاي الأوراق توصل هسه. يرجع شگد وصل */
+export async function sendPendingEdits(ids: number[]) {
+  const p = await pendingEdits();
+  let n = 0;
+  for (const id of ids) {
+    if (p[String(id)] === undefined) continue;
+    const it = await one("sched_items", { id });
+    const old = Number(p[String(id)]);
+    delete p[String(id)];
+    if (it?.graded_at && await notifyEdit(it, old).catch((e) => { console.error(e); return false; })) n++;
+  }
+  await kvSet(PENDING, JSON.stringify(p));
+  return n;
 }
 /** أوراق تجربة بدون طلاب حقيقيين: الجواب صورة السؤال نفسه، حتى تنجرب الشاشة وما توصل رسالة لأحد */
 /** طلاب تجربة: 3 طلاب، لكل واحد ورقة مسلمة بكل امتحان جاهز (جوابها الحل النموذجي).
@@ -595,8 +640,10 @@ export async function gradeAction(body: Row) {
   } else if (a === "openEdit") {
     need(await can(uid, EDIT_PERM), "ما عندك صلاحية تعديل التصحيح", 403);
     const it = await one("sched_items", { id: Number(body.id) });
-    need(it?.status === "done" && it.graded_at, "هذي الورقة بعدها ما انصححت");
+    const heldAi = !!body.quiet && it?.status === "done" && !it.graded_at && !!(await (await import("./aiReview.ts")).heldMap())[String(it.id)];
+    need(it?.status === "done" && (it.graded_at || heldAi), "هذي الورقة بعدها ما انصححت");
     await kvSet(editKey(it!.id), String(uid));
+    await kvSet(quietKey(it!.id), body.quiet ? "1" : "");
     paper = await paperView(it!, false, true);
   } else if (a === "openObj") {
     const { it, obj } = await workPaper(uid, body.id);
@@ -778,6 +825,12 @@ async function finishEdit(uid: number, it: Row, photos: Buffer[]) {
   await keepPages(it.id, photos);
   await kvSet(editKey(it.id), "");
   await logActivity(it.user_id, `✏️ ${await staffName(uid)} عدل تصحيح امتحان ${view.title}: ${old} ← ${total}`);
+  if (await kvGet(quietKey(it.id)) === "1") {
+    await kvSet(quietKey(it.id), "");
+    const p = await pendingEdits();
+    if (p[String(it.id)] === undefined && total !== old) { p[String(it.id)] = old; await kvSet(PENDING, JSON.stringify(p)); }
+    return `✅ انحفظ: ${total} من 100. يوصل للطالب من تدوس «📤 دز للطلاب» بالمجموعة`;
+  }
   if (total === old) return `✅ انحفظ التعديل، والدرجة بقت ${total} من 100`;
   const text = `✏️ <b>تعديل درجة</b>\nامتحان: <b>${esc(view.title)}</b>\nدرجتك صارت <b>${total}</b> من 100 (كانت ${old}).`;
   if (await paperWaits(it.user_id, it.id)) { await send(it.user_id, editWaitText(esc(view.title))); await holdForStudent(it.user_id, { id: it.id, kind: "edit" }); }
@@ -790,6 +843,12 @@ async function finishEdit(uid: number, it: Row, photos: Buffer[]) {
 async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentId: number) {
   const row = await one("sched_items", { id: Number(raw) });
   if (row?.graded_at && await isEditing(uid, row.id)) return await finishEdit(uid, row, photos);
+  if (row && !row.graded_at && await isEditing(uid, row.id)) {
+    await keepPages(row.id, photos);
+    await kvSet(editKey(row.id), ""); await kvSet(quietKey(row.id), "");
+    await logActivity(row.user_id, `✏️ ${await staffName(uid)} عدل تصحيح الذكاء قبل ما يوصل`);
+    return "✅ انحفظ. يوصل للطالب من تدوس «📤 دز للطلاب» بالمجموعة";
+  }
   const it = await myPaper(uid, raw);
   need(!it.graded_at, "الورقة مخلصة");
   const view = await paperView(it);

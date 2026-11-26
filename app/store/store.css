@@ -586,3 +586,5 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .gk-stk:hover{border-color:#F6C94A}
 .gk-stkh{padding:6px 10px;font-weight:800;font-size:14px;color:#cfd7e6;background:#2a2c31;border-radius:8px 8px 0 0}
 .gk-stkon{margin-top:14px;background:#F6C94A;color:#141F33}
+.gk-stacked .gk-stage{overflow-x:hidden;touch-action:pan-y;padding-inline:0}
+.gk-auto{font-size:13px;font-weight:800;color:#6ee7a8}

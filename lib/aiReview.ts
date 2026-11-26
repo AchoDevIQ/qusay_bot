@@ -2,7 +2,7 @@
 // طالب ورا طالب: اسمه، ودرجته، وصفحات ورقته ويا علامات الذكاء الحمرة، ودرجة كل سؤال يگدر يبدلها ويحفظ بنفس المكان.
 // والإعداد: درجات الذكاء توصل للطالب «مباشرة» (ويراجعها بعدين، والتعديل يوصل «تعديل درجة»)، لو «بعد ما أراجعها»:
 // الورقة تنحجز وتنتظره، ويوصله «المجموعة جاهزة»، ومن يوافق توصل كلها. إذا ما راجعها خلال المدة اللي يحددها، توصل وحدها.
-import { find, kvGet, kvSet, one, put, type Row } from "./db.ts";
+import { find, kvGet, kvSet, one, put, update, type Row } from "./db.ts";
 import { AI_GRADER, QUSAY_GRADER, can, centerName, staffIds, student } from "./data.ts";
 import { addMinutes } from "./scheduleRules.ts";
 import { send } from "./telegram.ts";
@@ -135,13 +135,21 @@ async function groupPapers(key: string, only?: number) {
 }
 
 /** يحفظ درجات أسئلة ورقة: المحجوزة تتعدل بصمت (لسه ما وصلت)، والواصلة توصل «تعديل درجة» للطالب وولي أمره */
+/** درجة سؤال بورقة واصلة: تنحفظ ويتحدث المجموع، والدرجة القديمة تنحفظ حتى «📤 دز للطلاب» يگولهم كانت شگد */
+async function quietMark(itemId: number, it: Row, q: number, mark: number) {
+  const G = await import("./gradeApi.ts");
+  const before = Number(it.total ?? 0);
+  await put("question_marks", { item_id: itemId, q, mark });
+  await update("sched_items", { id: itemId }, { total: await G.itemTotal(it) });
+  await G.notePending(itemId, before);
+}
 async function saveMarks(itemId: number, raw: unknown) {
   const it = await one("sched_items", { id: itemId });
   need(it && isAi(it), "الورقة غير موجودة");
   const want = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const max = new Map((await find("bank_questions", { version_id: it!.version_id })).map((q) => [Number(q.n), Number(q.max_mark)]));
   const held = !!(await heldMap())[String(itemId)];
-  const { ownerFixMark, itemTotal } = await import("./gradeApi.ts");
+  const { itemTotal } = await import("./gradeApi.ts");
   let changed = 0;
   for (const [k, v] of Object.entries(want)) {
     const q = Number(k), mark = Number(v);
@@ -149,8 +157,9 @@ async function saveMarks(itemId: number, raw: unknown) {
     need(Number.isFinite(mark) && mark >= 0 && mark <= max.get(q)!, `درجة السؤال ${q} لازم بين 0 و${max.get(q)}`);
     const old = await one("question_marks", { item_id: itemId, q });
     if (old && Number(old.mark) === mark) continue;
-    if (held || !it!.graded_at) await put("question_marks", { item_id: itemId, q, mark });
-    else await ownerFixMark(itemId, q, mark);
+    // كلها بصمت (طلبه 2026-11-27): الورقة اللي وصلت تتحدث درجتها، والطالب يوصله «تعديل درجة» من «📤 دز للطلاب»
+    if (!held && it!.graded_at) await quietMark(itemId, it!, q, mark);
+    else await put("question_marks", { item_id: itemId, q, mark });
     changed++;
   }
   const now = (await one("sched_items", { id: itemId }))!;
@@ -179,7 +188,11 @@ export async function aiReviewAction(body: Row) {
     const seen = await readJson<string[]>(SEEN, []);
     if (!seen.includes(key)) await kvSet(SEEN, JSON.stringify([...seen, key].slice(-1000)));
     const g = (await groups()).find((x) => x.key === key);
-    return { group: g ?? null, papers: await groupPapers(key), fileToken: (await import("./webAuth.ts")).fileToken(uid) };
+    const papers = await groupPapers(key);
+    // تعديلات صامتة (✏️ صحح) تنتظر «📤 دز للطلاب»
+    const pend = await (await import("./gradeApi.ts")).pendingEdits();
+    const pending = papers.filter((p) => pend[String(p.id)] !== undefined).length;
+    return { group: g ? { ...g, pending } : null, papers, fileToken: (await import("./webAuth.ts")).fileToken(uid) };
   } else if (a === "save") {
     const r = await saveMarks(Number(body.item), body.marks);
     return { saved: r, notice: r.changed ? `✅ انحفظ، الدرجة ${r.total}` : "ما تغير شي" };
@@ -202,7 +215,9 @@ export async function aiReviewAction(body: Row) {
     const papers = await groupPapers(key);
     let n = 0;
     for (const p of papers) if (p.held && await release(p.id)) n++;
-    notice = n ? `✅ وصلت ${n} درجة للطلاب` : "ماكو درجات تنتظر بهاي المجموعة";
+    // والأوراق اللي وصلت قبل وعدلتها بصمت: «تعديل درجة» يوصل هسه
+    const e = await (await import("./gradeApi.ts")).sendPendingEdits(papers.map((p) => p.id));
+    notice = n || e ? `✅ وصلت للطلاب: ${n ? `${n} درجة` : ""}${n && e ? " و" : ""}${e ? `${e} تعديل درجة` : ""}` : "ماكو شي ينتظر بهاي المجموعة";
   } else need(a === "list", "أمر غير معروف");
   return { cfg: await reviewCfg(), owner, groups: await groups(), notice };
 }
