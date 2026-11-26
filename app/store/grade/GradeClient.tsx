@@ -38,15 +38,17 @@ function useWide(on: boolean) {
   }, [on]);
 }
 
-/** جاي من «🗂 مراجعة تصحيح الذكاء» (?back=المجموعة): يرجع لنفس الطالب هناك. true إذا رجع */
+/** جاي من «🗂 مراجعة تصحيح الذكاء»: جوه ورقة الطالب نفسها (?embed=1) يگول للصفحة «خلصت»، أو (?back=المجموعة) يرجع لنفس الطالب هناك. true إذا رجع */
 function backToReview(id: number, wait = 0) {
   const q = new URLSearchParams(location.search), g = q.get("back");
+  if (q.get("embed") === "1" && window.parent !== window) { setTimeout(() => window.parent.postMessage({ qgrade: "done", id }, location.origin), wait); return true; }
   if (!g) return false;
   const t = q.get("t");
   setTimeout(() => { location.href = `/store/aireview?open=${encodeURIComponent(g)}${t ? `&t=${encodeURIComponent(t)}` : ""}#p${id}`; }, wait);
   return true;
 }
 
+const embedded = typeof window !== "undefined" && new URLSearchParams(location.search).get("embed") === "1";
 export default function GradeClient({ only }: { only?: "obj" } = {}) {
   // اختيار المصحح «تبقى قلم / تتحول نص» بعد ما يبدله، حتى الورقة الجاية تفتح بيه
   const [penNow, setPenNow] = useState<boolean | null>(null);
@@ -160,6 +162,8 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         setBgErr(`⚠️ ورقة ${p.name} ما انحفظت${(e as Error).message ? `: ${(e as Error).message}` : ""}. افتحها من القائمة واحفظها مرة ثانية.`);
       } finally {
         saving.current.delete(p.id); setSavingLeft(saving.current.size);
+        // جوه مراجعة الذكاء: «خلصت» توصل للصفحة بس بعد ما ينحفظ كله (إذا تتسد قبل، الحفظ ينقطع)
+        if (p.editing && embedded) backToReview(p.id);
         setNetWait((x) => { const y = new Set(x); y.delete(p.id); return y; });
         if (decide) void call({ action: tab === "objlog" ? "objLog" : "list" });
       }
@@ -172,7 +176,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
       return;
     }
     // تعديل ورقة مصححة: يرجع للقائمة، ما تنفتح ورقة ثانية
-    if (p.editing) { setPaper(null); if (backToReview(p.id, 1500)) return; setTimeout(() => void call({ action: "list" }), 1500); return; }
+    if (p.editing) { setPaper(null); if (embedded) return; if (backToReview(p.id, 1500)) return; setTimeout(() => void call({ action: "list" }), 1500); return; }
     setPaper(null);
     void openNext([p.id]);
   }
@@ -190,7 +194,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
         {data && netWait.size > 0 && <div className="gk-netwait">📶 {netWait.size} ورقة تنتظر النت حتى توصل للطالب. تنرسل وحدها أول ما يرجع النت، لا تسد الصفحة.</div>}
         {data && paper && (
-          <Grader key={paper.id} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
+          <Grader key={paper.id} stacked={embedded} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
             onClose={() => { if (paper.editing && backToReview(paper.id)) return; setPaper(null); setSavedNow(0); group.current = null; void call(tab === "check" ? { action: "check", grader: data?.check?.grader ?? "" } : { action: tab === "objlog" ? "objLog" : tab === "history" ? "history" : "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onRescan={async () => { skipped.current.add(paper.id); await next(await call({ action: "rescan", id: paper.id })); }}

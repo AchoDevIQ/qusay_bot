@@ -92,15 +92,28 @@ export default function AiReviewClient() {
 
 /** ورقة طالب: اسمه ودرجته، وكل سؤال بصفحاته وعلامات الذكاء، ومربع درجته */
 /** رابط شاشة التصحيح لهاي الورقة، ويا طريق الرجوع لهاي المجموعة (ويا رمز الصفحة إذا موجود) */
-function gradeLink(id: number, gkey: string) {
+function gradeLink(id: number, gkey: string, embed = false) {
   const t = new URLSearchParams(location.search).get("t");
-  return `/store/grade?edit=${id}&back=${encodeURIComponent(gkey)}${t ? `&t=${encodeURIComponent(t)}` : ""}`;
+  return `/store/grade?edit=${id}&back=${encodeURIComponent(gkey)}${embed ? "&embed=1" : ""}${t ? `&t=${encodeURIComponent(t)}` : ""}`;
 }
 /** ورقة طالب. n: رقمه بالمجموعة: الطلاب يتناوبون باللون (إطار أزرق وجوه ذهبي، والجاي بالعكس) حتى تبين وين تخلص ورقة وتبدي اللي بعدها (طلبه 2026-11-27) */
 function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
   const [p, setP] = useState(start);
   // ✏️ أدوات التصحيح مخفية: كل سؤال يطلع بدرجته وورقته بس، ودوسة «✏️» تطلع أدواته (الدرجة، العلامات، ضيف علامة)
   const [edit, setEdit] = useState<Record<number, boolean>>({});
+  // ✏️ صحح: شاشة التصحيح الكاملة جوه هذا الكرت. من يحفظ (أو يدوس «⬅️ القائمة») تتسد وترجع الورقة بتصحيحه
+  const [grading, setGrading] = useState(false);
+  useEffect(() => {
+    if (!grading) return;
+    const on = (e: MessageEvent) => {
+      if (e.origin !== location.origin || e.data?.qgrade !== "done" || Number(e.data.id) !== p.id) return;
+      setGrading(false);
+      void call({ action: "group", key: gkey }, true);
+      document.getElementById(`p${p.id}`)?.scrollIntoView({ block: "start" });
+    };
+    window.addEventListener("message", on);
+    return () => window.removeEventListener("message", on);
+  }, [grading]); // eslint-disable-line react-hooks/exhaustive-deps
   const [marks, setMarks] = useState<Record<number, string>>(() => Object.fromEntries(start.questions.map((q) => [q.n, String(q.mark)])));
   // ✏️ تعديل التصحيح على الورقة: علامة مختارة، أو «➕ ضيف علامة» ينتظر دوسة على الصفحة
   const [tap, setTap] = useState<{ ref: string; m: PaperMark } | null>(null);
@@ -144,6 +157,10 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
   return (
     <div id={`p${p.id}`} className={"card arv-paper " + (n % 2 ? "arv-a" : "arv-b")}>
       <div className="arv-start">👤 الطالب {n} من {of}: <b>{p.name}</b></div>
+      {grading && <div className="arv-grade">
+        <div className="exline"><b>✏️ تصحح ورقة {p.name}</b><button type="button" className="exbtn" onClick={() => setGrading(false)}>✖ سد بلا حفظ</button></div>
+        <iframe title={`تصحيح ${p.name}`} src={gradeLink(p.id, gkey, true)} />
+      </div>}
       <div className="arv-head"><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
       {p.questions.map((q) => (
         <div key={q.n} className="arv-q">
@@ -152,8 +169,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
             {edit[q.n]
               ? <><input className="exnum" inputMode="decimal" value={marks[q.n] ?? ""} onChange={(e) => setMarks({ ...marks, [q.n]: e.target.value.replace(/[^\d.]/g, "") })} /><span>من {q.max}</span></>
               : <span className="arv-mark">{marks[q.n] ?? q.mark} من {q.max}</span>}
-            {/* ✏️ شاشة التصحيح نفسها بكل أدواتها (القلم، المساحة، الختوم...)، ومن يخلص يرجع لنفس الطالب هنا (طلبه 2026-11-27) */}
-            <button type="button" className="arv-pen" aria-label="صحح بشاشة التصحيح" title="صحح بشاشة التصحيح" onClick={() => { location.href = gradeLink(p.id, gkey); }}>✏️ صحح</button>
+            {/* ✏️ شاشة التصحيح نفسها بكل أدواتها، جوه ورقة هذا الطالب، وصفحاته ورا بعض (طلبه 2026-11-27) */}
+            <button type="button" className="arv-pen" aria-label="صحح بأدوات التصحيح" title="صحح بأدوات التصحيح" onClick={() => setGrading(true)}>✏️ صحح</button>
             <button type="button" className={"arv-pen arv-pen2" + (edit[q.n] ? " on" : "")} aria-label="علامات الذكاء" title="علامات الذكاء" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "🤖 علامات الذكاء"}</button>
             {q.note && <small>{q.note}</small>}
           </div>
@@ -223,6 +240,8 @@ const CSS = `
 .arv-pen{min-width:44px;min-height:40px;border-radius:10px;border:1.5px solid #F6C94A;background:transparent;color:#F6C94A;font:inherit;font-weight:800;cursor:pointer}
 .arv-pen.on{background:#F6C94A;color:#141F33}
 .arv-pen2{font-size:13px;opacity:.85}
+.arv-grade{margin:6px -6px 12px;padding:8px;border:3px solid #F6C94A;border-radius:12px;background:#1b1c1f}
+.arv-grade iframe{display:block;width:100%;height:calc(100vh - 90px);min-height:520px;border:0;border-radius:8px;background:#1b1c1f;margin-top:8px}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
 .arv-q{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
 .arv-qline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.arv-qline .exnum{width:64px}.arv-qline small{flex-basis:100%;opacity:.8}

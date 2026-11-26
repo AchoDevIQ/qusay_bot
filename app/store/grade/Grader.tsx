@@ -279,8 +279,10 @@ const TIP: Record<Tool, string> = { hand: "تحريك: اسحب الكتابة �
 
 const SHOWQ_KEY = "gradeShowQuestion";
 const PEN_KEY = "gradePen";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers, penText: penTextStart = false, onPenText }: {
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers, penText: penTextStart = false, onPenText, stacked = false }: {
   paper: Paper; url: (r: string) => string; busy: boolean; stickers: Sticker[]; penText?: boolean; onPenText?: (on: boolean) => void;
+  /** 📄 كل الصفحات ورا بعض مثل PDF (مراجعة تصحيح الذكاء، طلبه 2026-11-27): الصفحة اللي يدوسها تصير الشغالة */
+  stacked?: boolean;
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null; errors?: string[] } | null>;
   onClose: () => void; onSkip: () => void; onRescan: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
   onDecide: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>, rejects: Record<number, string>, accepted: number) => void;
@@ -519,7 +521,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     void flush(); setAt(i); setPenBox(false);
     const on = pages[i].qs;
     if (on && !on.includes(qSel)) setQSel(on.find((n) => marks[n] === null || marks[n] === undefined) ?? on[0]);
-    stage.current?.scrollTo({ top: 0 });
+    if (stacked) document.getElementById(`gk-pg-${i}`)?.scrollIntoView({ block: "nearest" });
+    else stage.current?.scrollTo({ top: 0 });
   }
   const page = pages?.[at];
   const curQ = page?.q ?? qSel;
@@ -725,7 +728,21 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         {!pages && <div className="gk-empty">جاري تجهيز الورقة...</div>}
         {pages && !pages.length && <div className="gk-empty">⚠️ ماكو صفحات بهذي الورقة.</div>}
         {page && showQ && q && !page.pen && <div className="gk-qtop" ref={qtop}><b>س{q.n}</b><TrimmedImage src={url(q.image)} alt={`السؤال ${q.n}`} /></div>}
-        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={fitH} locked={locked} aspect={aspect} onAdd={addStroke} onErase={erase} onMove={moveItem} onEdit={editText} onPenDown={penDown} onTap={(x, y) => { setEditIdx(null); setTextAt({ x, y }); setText(""); }} />}
+        {/* 📄 ورا بعض: كل صفحة بإطار، والشغالة إطارها ذهبي. دوسة على صفحة ثانية تخليها الشغالة (بعدها تكتب عليها) */}
+        {stacked && pages?.map((pg, i) => i === at ? null : (
+          <div key={i + ":" + pg.src} id={`gk-pg-${i}`} className="gk-stk" onClick={() => go(i)}>
+            <div className="gk-stkh">صفحة {i + 1}{pg.q ? ` · س${pg.q}` : ""} · دوس حتى تصححها</div>
+            <div style={{ pointerEvents: "none" }}><Sheet page={pg} ink={inks[i] ?? { rot: 0, items: [] }} zoom={zoom} tool="hand" color={color} width={width} sticker={sticker} fitH={0} locked aspect={aspect} onAdd={() => undefined} onErase={() => undefined} onMove={() => undefined} onEdit={() => undefined} onPenDown={() => undefined} onTap={() => undefined} /></div>
+          </div>
+        )).slice(0, at)}
+        {stacked && page && <div className="gk-stkh gk-stkon" id={`gk-pg-${at}`}>✏️ صفحة {at + 1}{page.q ? ` · س${page.q}` : ""}: تصححها هسه</div>}
+        {page && <Sheet key={at + ":" + page.src} page={page} ink={ink} zoom={zoom} tool={locked ? "hand" : tool} color={color} width={width} sticker={sticker} fitH={stacked ? 0 : fitH} locked={locked} aspect={aspect} onAdd={addStroke} onErase={erase} onMove={moveItem} onEdit={editText} onPenDown={penDown} onTap={(x, y) => { setEditIdx(null); setTextAt({ x, y }); setText(""); }} />}
+        {stacked && pages?.map((pg, i) => i <= at ? null : (
+          <div key={i + ":" + pg.src} id={`gk-pg-${i}`} className="gk-stk" onClick={() => go(i)}>
+            <div className="gk-stkh">صفحة {i + 1}{pg.q ? ` · س${pg.q}` : ""} · دوس حتى تصححها</div>
+            <div style={{ pointerEvents: "none" }}><Sheet page={pg} ink={inks[i] ?? { rot: 0, items: [] }} zoom={zoom} tool="hand" color={color} width={width} sticker={sticker} fitH={0} locked aspect={aspect} onAdd={() => undefined} onErase={() => undefined} onMove={() => undefined} onEdit={() => undefined} onPenDown={() => undefined} onTap={() => undefined} /></div>
+          </div>
+        ))}
       </div>
       {textAt && (
         <div className="gk-modal" onClick={() => !recOn && !voiceBusy && setTextAt(null)}>
