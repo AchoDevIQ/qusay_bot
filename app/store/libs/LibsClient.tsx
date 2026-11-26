@@ -29,7 +29,9 @@ export default function LibsClient() {
         {!data && !error && <div className="empty">جاري التحميل...</div>}
         {data && (
           <>
-            {data.offices.map((o) => (
+            {/* مكتبة مفتوحة: تطلع وحدها، والباقي يختفي (طلبه 2026-11-26) */}
+            {open !== null && data.offices.some((o) => o.id === open) && <button type="button" className="btn ghost" onClick={() => setOpen(null)}>↩️ كل المكتبات</button>}
+            {data.offices.filter((o) => open === null || o.id === open || !data.offices.some((x) => x.id === open)).map((o) => (
               <div className="card" key={o.id}>
                 <button type="button" className="adchapter" onClick={() => setOpen(open === o.id ? null : o.id)}>
                   <span>🏪 {o.name}</span><small>اليوم: {fmt(o.today.total)} {open === o.id ? "▲" : "▼"}</small>
@@ -37,6 +39,7 @@ export default function LibsClient() {
                 {open === o.id && <Panel key={o.name + o.lim} o={o} data={data} busy={busy} call={call} />}
               </div>
             ))}
+            {open === null && <>
             {!data.offices.length && <div className="empty">ما أكو مكتبات بعد.</div>}
             {data.apk && (
               <div className="card expad" style={{ textAlign: "center" }}>
@@ -54,6 +57,7 @@ export default function LibsClient() {
                 if (r) { setName(""); setOpen(r.openId ?? null); }
               }}>إضافة</button>
             </div>
+            </>}
           </>
         )}
       </div>

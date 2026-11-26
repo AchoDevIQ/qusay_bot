@@ -110,6 +110,9 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
   const [st, setSt] = useState<St | null>(null);
   const [cart, setCart] = useState<Record<number, number>>({});
   const [sold, setSold] = useState<{ id: number; name: string } | null>(null);
+  // أزرار الأقسام فوگ (طلبه 2026-11-26): يدوس القسم ويطلع بس منتجاته، بلا ما ينزل ويصعد
+  const [tab, setTab] = useState(data.catalog[0]?.name ?? "");
+  const shownCats = data.catalog.filter((c) => c.name === tab);
   const all = data.catalog.flatMap((c) => c.items);
   const lines = Object.entries(cart).map(([id, n]) => ({ id: Number(id), n, p: all.find((x) => x.id === Number(id)) })).filter((x) => x.p);
   const disc = new Map(st?.rd ?? []);
@@ -151,7 +154,13 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
         <div className="who">📞 {st.phone}{st.gov ? ` · ${st.gov}` : ""} <button type="button" className="exbtn" onClick={() => setSt(null)}>تغيير الطالب</button></div>
         {disc.size > 0 && <div className="who">🎁 <b>طالب العام</b>: عليه خصم، والسعر الجديد مكتوب جوه المنتج</div>}
       </div>
-      {data.catalog.map((c) => (
+      <div className="sl-tabs">
+        {data.catalog.map((c) => {
+          const n = c.items.reduce((k, p) => k + (cart[p.id] ?? 0), 0);
+          return <button type="button" key={c.name} className={c.name === tab ? "on" : ""} onClick={() => setTab(c.name)}>{c.name}{n ? ` (${n})` : ""}</button>;
+        })}
+      </div>
+      {shownCats.map((c) => (
         <div className="card" key={c.name}>
           <h2>📂 {c.name}</h2>
           <table><tbody>
@@ -170,6 +179,10 @@ function Sell({ data, busy, call }: { data: Data; busy: boolean; call: Call }) {
           </tbody></table>
         </div>
       ))}
+      {lines.length > 0 && <div className="card expad">
+        <div className="exlabel">🛒 اللي اختاره</div>
+        {lines.map((x) => <div key={x.id} className="exhint">• {x.p!.name}{x.n > 1 ? ` × ${x.n}` : ""}</div>)}
+      </div>}
       <div className="card expad adform">
         <div>💰 المجموع بدون توصيل: <b className="adcode">{fmt(total)}</b></div>
         <button type="button" className="btn" disabled={busy || !lines.length} onClick={async () => {

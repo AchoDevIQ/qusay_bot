@@ -573,3 +573,8 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 /* «✍️ تأكد من سؤالك»: كتابة كبيرة يگدر يصلّح بيها الرقم، والمرتب تحته أكبر (2026-11-24) */
 .askfix{font-size:20px;line-height:1.7;min-height:140px;unicode-bidi:plaintext}
 .tidyview .tidyline{font-size:19px;padding:4px 0}
+
+/* 🏪 أزرار أقسام المنتجات بصفحة البيع */
+.sl-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.sl-tabs button{flex:1 1 140px;min-height:48px;border-radius:12px;border:1.5px solid var(--gold);background:transparent;color:var(--gold);font:inherit;font-weight:800;padding:6px 8px}
+.sl-tabs button.on{background:var(--gold);color:#141F33}
