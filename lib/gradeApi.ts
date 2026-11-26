@@ -86,10 +86,11 @@ async function examGroups(waiting: Row[]) {
   const general = new Set((await find("schedules", { mode: "general" })).map((s) => s.user_id));
   // الجدول العام والخاص كل واحد بروحه، وداخلهم حسب الموضوع حتى يصحح طلاب الموضوع سوا.
   // الترتيب: الموضوع اللي بيه أقدم ورقة مسلمة أول (مثل الاختياري اللي ينقدم بأي وقت)، حتى ما تتأخر ورقة على صاحبها
-  const groups = new Map<string, { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; order: number; oldest: string }>();
+  // 🧪 أوراق التجربة بتجمع لحالها (طلبه 2026-11-26: «التجريبي وحده»)، تطلع جوه «🧪 التجريب» آخر الصفحة
+  const groups = new Map<string, { exam: number; general: boolean; test: boolean; title: string; chapter: string; count: number; tests: number; order: number; oldest: string }>();
   for (const p of waiting) {
-    const e = exams.get(p.exam_id), gen = general.has(p.user_id), key = `${p.exam_id}|${gen}`;
-    const g = groups.get(key) ?? { exam: p.exam_id, general: gen, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", count: 0, tests: 0, order: (e?.pos ?? 0) * 1000 + (e?.ord ?? 0), oldest: "" };
+    const e = exams.get(p.exam_id), gen = general.has(p.user_id), test = isTest(p), key = `${p.exam_id}|${gen}|${test}`;
+    const g = groups.get(key) ?? { exam: p.exam_id, general: gen, test, title: e?.title ?? "امتحان", chapter: e?.chapter ?? "", count: 0, tests: 0, order: (e?.pos ?? 0) * 1000 + (e?.ord ?? 0), oldest: "" };
     g.count++; if (isTest(p)) g.tests++;
     const at = String(p.submitted_at ?? "");
     if (at && (!g.oldest || at < g.oldest)) g.oldest = at;
@@ -565,9 +566,10 @@ export async function gradeAction(body: Row) {
     // الورقة الجاية: السيرفر يختار أول ورقة فاضية ويحجزها بنفس اللحظة، فمصححين اثنين ما ياخذون نفس الورقة
     const skip = new Set((Array.isArray(body.skip) ? body.skip : []).map(Number));
     const exam = Number(body.exam) || 0, general = body.general === true || body.general === "true" ? true : body.general === false || body.general === "false" ? false : null;
+    const test = body.test === true ? true : body.test === false ? false : null;
     const gen = new Set((await find("schedules", { mode: "general" })).map((x) => x.user_id));
     const all = (await waitingFor(uid, await find("sched_items", { status: "done" }, { order: ["submitted_at"] })))
-      .filter((p) => !skip.has(p.id) && (!exam || p.exam_id === exam) && (general === null || gen.has(p.user_id) === general));
+      .filter((p) => !skip.has(p.id) && (!exam || p.exam_id === exam) && (general === null || gen.has(p.user_id) === general) && (test === null || isTest(p) === test));
     // ورقة حاجزها هو من قبل أول، وبعدها الفاضيات بالترتيب
     for (const p of [...all.filter((x) => x.grader_id === uid), ...all.filter((x) => !x.grader_id)]) {
       if (!await claimPaper(uid, p.id)) continue;

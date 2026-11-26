@@ -7,7 +7,7 @@ import { allJobs, postRetry, saveJob, sendJob, type SendJob } from "./reliable";
 
 type Row = { id: number; exam: number; general: boolean; optional: boolean; name: string; title: string; chapter: string; model: string; submitted: string; total: number | null; graded: string; test: boolean; grader: string };
 type ObjRow = Row & { qs: number[] };
-type Group = { exam: number; general: boolean; title: string; chapter: string; count: number; tests: number; oldest?: string };
+type Group = { exam: number; general: boolean; test?: boolean; title: string; chapter: string; count: number; tests: number; oldest?: string };
 type HistRow = Row & { objOpen: number; objOk: number; objNo: number };
 type History = { day: string; days: { d: string; n: number }[]; prev: string; next: string; due: number | null; count: number; owner: boolean; everyone?: boolean; rows: HistRow[] };
 type ObjQ = { q: number; text: string; old: number; mark: number | null; status: string; reason: string; edited: boolean; by: string; at: string };
@@ -48,7 +48,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
   // الامتحان اللي فتحه: الأوراق تنفتح منه وحده لحد ما تخلص
   const group = useRef<string | null>(null);
   const [tab, setTab] = useState<"papers" | "history" | "objlog" | "pay" | "check" | "contract">("papers");
-  const inGroup = (x: Row) => group.current === null || `${x.exam}|${x.general}` === group.current;
+  const inGroup = (x: Row) => group.current === null || `${x.exam}|${x.general}|${!!x.test}` === group.current;
   const saving = useRef(new Set<number>());
   const [savedNow, setSavedNow] = useState(0);
   const [bgErr, setBgErr] = useState("");
@@ -110,8 +110,8 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
   };
   /** الورقة الجاية: السيرفر يختارها ويحجزها بنفس اللحظة، فما تطلع لمصححين اثنين */
   const openNext = async (exclude: number[] = []) => {
-    const [exam, general] = (group.current ?? "").split("|");
-    const r = await call({ action: "openNext", light: 1, exam: group.current ? Number(exam) : 0, general: group.current ? general === "true" : null, skip: [...skipped.current, ...saving.current, ...exclude] }, true);
+    const [exam, general, test] = (group.current ?? "").split("|");
+    const r = await call({ action: "openNext", light: 1, exam: group.current ? Number(exam) : 0, general: group.current ? general === "true" : null, test: group.current ? test === "true" : null, skip: [...skipped.current, ...saving.current, ...exclude] }, true);
     if (r?.paper) setPaper(r.paper);
     else if (r) { setAllDone(true); void call({ action: "list" }); }
     return r;
@@ -222,7 +222,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
             {tab === "papers" && data.quota && <div className="card"><div className="form"><b>🎯 حصتك اليوم: صححت {data.quota.done} من {data.quota.target}</b>{data.quota.done >= data.quota.target && <span className="fdok">✅ وصلت حصتك</span>}</div></div>}
             {tab === "papers" && data.canEdit && <EditFind found={data.found ?? null} busy={busy} act={act} />}
             {tab === "papers" && <List data={data} busy={busy} act={act} openGroup={(g) => {
-              group.current = `${g.exam}|${g.general}`; skipped.current.clear();
+              group.current = `${g.exam}|${g.general}|${!!g.test}`; skipped.current.clear();
               void openNext();
             }} />}
             {tab === "history" && data.history && <HistoryTab h={data.history} busy={busy} owner={data.owner} act={act} />}
@@ -258,7 +258,9 @@ function ObjList({ data, busy, act }: { data: Data; busy: boolean; act: Call }) 
 /** الأوراق: الاعتراضات أول، وبعدها الامتحانات اللي بيها أوراق تنتظر. المصحح يفتح امتحان، مو طالب */
 function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: Call; openGroup: (g: Group) => void }) {
   const [kind, setKind] = useState<"general" | "private">("general");
-  const gen = data.groups.filter((g) => g.general), priv = data.groups.filter((g) => !g.general);
+  const real = data.groups.filter((g) => !g.test), tests = data.groups.filter((g) => g.test);
+  const [tryOpen, setTry] = useState(false);
+  const gen = real.filter((g) => g.general), priv = real.filter((g) => !g.general);
   const sum = (l: Group[]) => l.reduce((n, g) => n + g.count, 0);
   const shown = kind === "general" ? gen : priv;
   return (
@@ -282,7 +284,7 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
       {data.only && <OutCard only={data.only} busy={busy} act={act} />}
       {data.only && <QuotaCard only={data.only} stop={data.quotaStop ?? []} busy={busy} act={act} />}
       <div className="card">
-        <h2>📥 أوراق تنتظر: {sum(data.groups)}</h2>
+        <h2>📥 أوراق تنتظر: {sum(real)}</h2>
         <div className="seg expad gktabs2">
           <button type="button" className={kind === "general" ? "on" : ""} onClick={() => setKind("general")}>📅 الجدول العام ({sum(gen)})</button>
           <button type="button" className={kind === "private" ? "on" : ""} onClick={() => setKind("private")}>🗂 الجدول الخاص ({sum(priv)})</button>
@@ -293,13 +295,26 @@ function List({ data, busy, act, openGroup }: { data: Data; busy: boolean; act: 
             {shown.map((g) => (
               <div key={`${g.exam}|${g.general}`} className="gkgroup">
                 <div><b>{g.title}</b><small>{g.chapter}{g.oldest ? <> · أقدم ورقة <span dir="ltr">{g.oldest.slice(0, 16)}</span></> : null}</small></div>
-                <span className="gkcount">{g.count} ورقة{g.tests ? ` (${g.tests} تجربة)` : ""}</span>
+                <span className="gkcount">{g.count} ورقة</span>
                 <button type="button" className="btn" disabled={busy} onClick={() => openGroup(g)}>▶ فتح التجمع</button>
               </div>
             ))}
           </div>
         ) : <div className="empty">✅ ماكو أوراق تنتظر.</div>}
       </div>
+      {/* 🧪 أوراق التجربة: لحالها بالآخر، مسدودة لحد ما يدوسها */}
+      {!!tests.length && <div className="card">
+        <button type="button" className="fthead" onClick={() => setTry(!tryOpen)}><b>🧪 التجريب ({sum(tests)} ورقة)</b><span>{tryOpen ? "▴" : "▾"}</span></button>
+        {tryOpen && <div className="gkgroups">
+          {tests.map((g) => (
+            <div key={`t${g.exam}|${g.general}`} className="gkgroup">
+              <div><b>{g.title}</b><small>{g.chapter} · أوراق طلاب التجربة</small></div>
+              <span className="gkcount">{g.count} ورقة</span>
+              <button type="button" className="btn" disabled={busy} onClick={() => openGroup(g)}>▶ فتح</button>
+            </div>
+          ))}
+        </div>}
+      </div>}
     </>
   );
 }

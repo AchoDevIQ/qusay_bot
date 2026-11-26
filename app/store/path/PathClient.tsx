@@ -61,6 +61,10 @@ export default function PathClient() {
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const [msg, setMsg] = useState("");
   const [cpFor, setCpFor] = useState<Extract<Step, { kind: "exam" }> | null>(null);
+  // 🧪 داتا التجربة (الأستاذ): من آخر الصفحة، مو فوك (طلبه 2026-11-26: «التجريبي وحده»)
+  const [tryOpen, setTryOpen] = useState(false);
+  const testEnv = typeof location !== "undefined" && new URLSearchParams(location.search).get("env") === "staging";
+  const setEnv = (e: "prod" | "staging") => { const q = new URLSearchParams(location.search); q.set("env", e); location.search = q.toString(); };
   // العداد يمشي كل ثانية
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(t); }, []);
@@ -132,8 +136,8 @@ export default function PathClient() {
         <a className="qp-alarm" href="/store/alarm" onClick={(e) => { e.preventDefault(); const app = new URLSearchParams(location.search).get("app"); location.href = `/store/alarm?t=${encodeURIComponent(token())}${app ? `&app=${encodeURIComponent(app)}` : ""}`; }} aria-label="منبه امتحاناتي">⏰</a>
       </header>
       {progress && progress.all > 0 && <div className="qp-bar"><i style={{ width: `${(100 * progress.done) / progress.all}%` }} /></div>}
-      {/* معاينة الأستاذ: داتا التجربة لو الحقيقية */}
-      {p && p.chapters.length === 5 && <nav className="qp-ch">{(["prod", "staging"] as const).map((e) => <button key={e} type="button" className={(new URLSearchParams(location.search).get("env") ?? "prod") === e ? "on" : ""} onClick={() => { const q = new URLSearchParams(location.search); q.set("env", e); location.search = q.toString(); }}>{e === "prod" ? "محاضرات التطبيق الحقيقية" : "داتا التجربة"}</button>)}</nav>}
+      {/* معاينة الأستاذ: الحقيقية بالأصل. داتا التجربة من «🧪 التجريب» آخر الصفحة، وفوك شريط ذهبي يذكره وين هو */}
+      {p?.teacher && testEnv && <div className="qp-test">🧪 هذا مسار داتا التجربة<button type="button" onClick={() => setEnv("prod")}>رجوع للحقيقية</button></div>}
       {p && p.chapters.length > 1 && <nav className="qp-ch">{p.chapters.map((c) => <button key={c.ch} type="button" className={c.ch === p.ch ? "on" : ""} onClick={() => load(c.ch)}>{c.name}</button>)}</nav>}
       {p?.pickTimes && <a className="qp-go" href={examsLink()}>🗓 أول شي: اختار أوقات امتحاناتك<small>دوس هنا، وبعدها ينفتحلك مسارك كله</small></a>}
       {p?.stopped && <div className="qp-stop">⛔ المنصة موقوفة عليك بسبب السيطرة. حتى ترجع، لازم يحضر ولي أمرك إلى المعهد بأيامه وأوقاته، ومكتوبة برسالة السيطرة بالمحادثة.</div>}
@@ -151,6 +155,10 @@ export default function PathClient() {
         </div>
       ) : renderSec(part.sec!, part.i!))}
       {p?.teacher && <a className="qp-link" href={`/store/checkpoints?t=${encodeURIComponent(token())}`}>⛔ الموقوفين، ورسالة الإيقاف وصورته</a>}
+      {p?.teacher && !testEnv && <div className="qp-try">
+        <button type="button" className="qp-tryhead" onClick={() => setTryOpen(!tryOpen)}><b>🧪 التجريب</b><span>{tryOpen ? "▴" : "▾"}</span></button>
+        {tryOpen && <button type="button" className="qp-trybtn" onClick={() => setEnv("staging")}>🧪 شوف المسار بداتا التجربة</button>}
+      </div>}
       {cpFor && <CpDialog key={cpFor.id} step={cpFor} onClose={() => setCpFor(null)} onSaved={(t) => { setCpFor(null); say(t); load(p?.ch); }} onPic={(t) => { say(t); load(p?.ch, cpFor.id); }} />}
       {msg && <div className="qp-toast">{msg}</div>}
     </div>
@@ -369,6 +377,11 @@ a.qp-step{text-decoration:none}
 .qp-self .qp-sic{width:34px;height:34px;flex:none;border-radius:50%;background:#141F33;display:flex;align-items:center;justify-content:center;font-size:17px}
 .qp-self b{font-size:14px}.qp-self small{color:#5C667A;font-size:12.5px;line-height:1.5}
 .qp-self.off{opacity:.6}.qp-self.used{border-style:solid;background:#fff}
+.qp-test{display:flex;align-items:center;gap:10px;justify-content:space-between;margin:10px 16px 0;padding:8px 12px;border-radius:12px;background:#F6C94A;color:#141F33;font-weight:800}
+.qp-test button{border:0;border-radius:10px;background:#141F33;color:#F6C94A;font:inherit;font-weight:700;padding:6px 10px;min-height:36px}
+.qp-try{margin:24px 16px 0;background:#fff;border-radius:14px;border:1px dashed #C9D1E0}
+.qp-tryhead{display:flex;justify-content:space-between;width:100%;min-height:48px;padding:0 14px;align-items:center;border:0;background:none;font:inherit;color:#5C667A}
+.qp-trybtn{display:block;width:calc(100% - 24px);margin:0 12px 12px;min-height:46px;border-radius:12px;border:1.5px solid #141F33;background:#fff;color:#141F33;font:inherit;font-weight:700}
 .qp-left{display:inline-block;align-self:flex-start;margin-top:4px;background:#141F33;color:#F6C94A;border-radius:8px;padding:2px 10px;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
 .qp-gate .qp-t b{font-size:17px;color:#F6C94A}.qp-gate .qp-t small{color:#C9D1E0}
 .qp-bico{font-size:26px}
