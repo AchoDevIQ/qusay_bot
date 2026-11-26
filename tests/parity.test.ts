@@ -59,6 +59,10 @@ function dropNewButtons(e: any) {
   if (kb) e.p.reply_markup.inline_keyboard = kb.filter((row: any[]) => !row.some((b) => /^(a:ex|a:asstudent$|a:sfp:\d+:(editgrade|gcheck|qusay|spend|qareview|station|exams|schedule|exception|retake|move|camup|signups|birthdays|competition|grade|aicalib|objections|attend|sales|company|fees|online|centers|guardians|leave|aiphoto|msg|polls|qafail|studentvis|notices|appcrash|board|aireview)$)/.test(b.callback_data ?? "") || /\/store\/(exams|products|fees)/.test(b.web_app?.url ?? "")));
   return e;
 }
+// اسم «البيع المباشر» (طلبه 2026-11-26) بدل «البيع بالمكتب»: نفس الأزرار باسم جديد
+function oldSaleNames(e: any) {
+  return JSON.parse(JSON.stringify(e).replaceAll("💵 بيع مباشر", "🏪 بيع بالمكتب").replaceAll("📊 مبيعات البيع المباشر", "📊 مبيعات المكتب").replaceAll("💵 البيع المباشر (بلا مكتبة)", "🏪 البيع بالمكتب ومبيعاته"));
+}
 // الحماية ميزة جديدة: كل اللي يوصل للطلاب ممنوع من الحفظ وإعادة التوجيه
 function dropProtect(e: any) {
   if (e.p && typeof e.p === "object") delete e.p.protect_content;
@@ -99,8 +103,9 @@ function normalDb(db: Record<string, any[]>) {
     });
   }
   // kv: المفاتيح اللي بيها وقت أو رمز، وقيم JSON
+  // guardian_buys_wait_: وصولات الشراء اللي تنتظر ولي الأمر، ميزة جديدة
   // invfail_: عداد المحاولات الغلط، إضافة أمنية ما موجودة بالبوت القديم
-  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_|^asstudent_|^seeded$|^last_two_done$|^grade_errors_|^comments_seeded$/.test(r.k)).map((r) => {
+  out.kv = out.kv.filter((r) => !/_stamp$|^invfail_|^asstudent_|^seeded$|^last_two_done$|^grade_errors_|^comments_seeded$|^guardian_buys_wait_/.test(r.k)).map((r) => {
     let v = r.v;
     if (/^(q_hours|online_only)$/.test(r.k)) v = JSON.parse(v);
     if (/^libinv_/.test(r.k)) v = String(v).split(":")[0];
@@ -127,7 +132,7 @@ for (const driver of ["sqlite", "firestore"]) for (const file of fs.readdirSync(
       const noOnceNote = (e: any) => { if (typeof e.p?.text === "string") e.p.text = e.p.text.replace(" (مرة وحدة بس، وبعدها معلوماتك تطلع تلقائياً بالمتجر والأسئلة)", ""); return e; };
       const photoOnly = (e: any) => { if (e.m === "sendPhoto" && /تم استلام طلبك/.test(e.p.caption ?? "")) { delete e.p.caption; delete e.p.parse_mode; } return e; };
       const dropPhotoMode = (e: any) => { if (e.m === "sendPhoto" && !e.p.caption) delete e.p.parse_mode; return e; };
-      const a = normal(ts.trace.map(dropNewButtons).map(dropPhotoMode).map(dropMenuButtons).map(dropProtect).map(dropNotesCode).map(dropMoneyParts)), b = normal(py.trace.map(photoOnly).map(dropMenuButtons).map(noOnceNote));
+      const a = normal(ts.trace.map(oldSaleNames).map(dropNewButtons).map(dropPhotoMode).map(dropMenuButtons).map(dropProtect).map(dropNotesCode).map(dropMoneyParts)), b = normal(py.trace.map(photoOnly).map(dropMenuButtons).map(noOnceNote));
       for (let i = 0; i < Math.max(a.length, b.length); i++) assert.deepEqual(a[i], b[i], `الرسالة رقم ${i}`);
       noPartsColumn(ts.db);
       if (driver === "firestore") assert.deepEqual(sorted(normalDb(ts.db)), sorted(normalDb(py.db)));
