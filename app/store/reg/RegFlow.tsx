@@ -340,9 +340,10 @@ function Success({ done, onFinish }: { done: Done; onFinish?: (d: Done) => void 
         <div className="rgcard rgpass">
           <small>كلمة المرور:</small>
           <b dir="ltr">{done.password}</b>
-          <button type="button" className="rgcopy" onClick={() => void copy()}>{copied ? "✅ تم النسخ" : "📋 نسخ"}</button>
+          <button type="button" className="rgcopy" onClick={() => void copy()}>{copied ? "✅ انتسخ، هسه الصقه بالملاحظات" : "📋 نسخ"}</button>
         </div>
-        <div className="rgalert">⚠️ احفظ كلمة المرور هذه في مكان آمن، لأنها لن تظهر مجدداً. تحتاجها حتى تدخل للتطبيق وتشاهد المحاضرات.</div>
+        {/* وين يحفظه (طلبه 2026-11-26: «نسخته اوكي، بس وين اخليه؟») */}
+        <div className="rgalert">📌 <b>وين تحفظه؟</b> الصقه بـ«الملاحظات» بموبايلك، أو صوّر الشاشة، أو اكتبه بورقة. ما راح يطلع مرة ثانية.<br />تحتاجه بس إذا طلعت من حسابك أو بدلت موبايلك. هسه «ادخل للتطبيق» يدخلك وحده.<br />وإذا نسيته: بشاشة الدخول دوس «نسيت الرمز السري؟».</div>
       </div>
       <Foot>
         <button type="button" className="rgbtn" onClick={() => { if (onFinish) onFinish(done); else if (done.url) location.href = done.url; else closeApp(); }}>{onFinish ? "ادخل للتطبيق" : "متابعة"}</button>
