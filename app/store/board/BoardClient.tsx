@@ -31,6 +31,9 @@ const BAR = 74;                       // ارتفاع شريط الأدوات (�
 const PAL = palette();
 const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"];
 const SET_KEY = "qboard_settings", DRAFT_KEY = "qboard_draft";
+// آخر شرح محفوظ اشتغل عليه: من يرجع للسبورة ينفتح وحده (طلبه 2026-11-26: «ألقى صفحة فارغة»)
+const LAST_KEY = "qboard_last";
+const rememberLast = (id: string) => { try { if (id) localStorage.setItem(LAST_KEY, id); else localStorage.removeItem(LAST_KEY); } catch { /* */ } };
 /** wm / grid / foot: لمساته الشخصية، تنحفظ ويا الشرح ويشوفها الطالب */
 type Settings = { board: string; frame: string; head: string; palm: number; eraser: number; width: number; wm?: boolean; grid?: string; foot?: boolean };
 const tablet = () => typeof window !== "undefined" && Math.max(window.screen.width, window.screen.height) < 1400;
@@ -80,7 +83,10 @@ export default function BoardClient() {
   const logo = useRef<HTMLImageElement | null>(null);
   const [pageInfo, setPageInfo] = useState({ i: 0, n: 1 });
   const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false); dirtyRef.current = dirty;
   const [lessonId, setLessonId] = useState("");
+  // آخر رقم شرح وحالة الحفظ: الإرسال بعد «احفظ» يقراهم من هنا، لأن نافذته انفتحت قبل الحفظ (كانت تشوف القديم وتگول «احفظ أول» من جديد)
+  const lessonIdRef = useRef(""); lessonIdRef.current = lessonId;
   const [title, setTitle] = useState("");
   // ---------- الأدوات
   const [tool, setTool] = useState<Tool>("pen");
@@ -249,7 +255,8 @@ export default function BoardClient() {
     // خط التطبيق: السبورة تنرسم من جديد أول ما يوصل، حتى الاسم والكتابة تطلع بخطنا مو بالخط الرسمي
     void Promise.allSettled([document.fonts.load("700 40px QAppAr", "قصي العميري"), document.fonts.load("400 40px QAppAr", "اب"), document.fonts.load("700 40px QAppEn", "Ab1")]).then(() => { redrawFrame(); redrawInk(); });
     // مسودة ما انحفظت (التطبيق انسد فجأة)
-    try { const d = cleanLesson(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null")); if (d && d.pages.some((p) => p.items.length || p.bg)) { lesson.current = d; undo.current = d.pages.map(() => []); redo.current = d.pages.map(() => []); setDirty(true); } } catch { /* */ }
+    let hadDraft = false;
+    try { const d = cleanLesson(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null")); if (d && d.pages.some((p) => p.items.length || p.bg)) { lesson.current = d; undo.current = d.pages.map(() => []); redo.current = d.pages.map(() => []); setDirty(true); hadDraft = true; } } catch { /* */ }
     layout();
     const onResize = () => layout();
     window.addEventListener("resize", onResize);
@@ -264,6 +271,12 @@ export default function BoardClient() {
       if (inbox) void openInbox(inbox);
       else if (att) void openAtt(att);
       else if (q.get("solve")) void openSolve(q.get("solve")!);
+      else if (!hadDraft) {
+        // ماكو مسودة: آخر شرح حفظه أو فتحه ينفتح وحده، مو صفحة فاضية
+        let last = ""; try { last = localStorage.getItem(LAST_KEY) ?? ""; } catch { /* */ }
+        const m = last ? r.lessons?.find((x) => x.id === last) : null;
+        if (m) void api({ action: "get", id: m.id }).then((g: { lesson: unknown }) => { const l = cleanLesson(g.lesson); if (l) loadLesson(l, m.id, m.title); }).catch(() => rememberLast(""));
+      }
     }).catch((e) => say(new URLSearchParams(location.search).get("att") && !new URLSearchParams(location.search).get("t") ? "حدّث التطبيق حتى ينفتح شرح السبورة جوه التطبيق" : `صار خطأ: ${(e as Error).message}`));
     return () => { window.removeEventListener("resize", onResize); ro?.disconnect(); window.clearTimeout(t); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -469,7 +482,7 @@ export default function BoardClient() {
     fitLesson(l, geo.current.W);
     lesson.current = l; pageIx.current = 0;
     undo.current = l.pages.map(() => []); redo.current = l.pages.map(() => []);
-    setLessonId(id); setTitle(t); setDirty(false);
+    setLessonId(id); setTitle(t); setDirty(false); if (id) rememberLast(id);
     setSet((s) => ({ ...s, board: l.board, frame: l.frame, head: headOf(l.head), wm: !!l.wm, grid: l.grid ?? "", foot: !!l.foot }));
     setSel([]);
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ }
@@ -485,7 +498,7 @@ export default function BoardClient() {
       { t: "رجوع", kind: "gray", run: () => setAsk(null) },
     ] });
   };
-  const newLesson = () => guard(() => loadLesson(applyLook({ ...emptyLesson(geo.current.W, set.board, set.frame), head: set.head }, set), "", ""));
+  const newLesson = () => guard(() => { rememberLast(""); loadLesson(applyLook({ ...emptyLesson(geo.current.W, set.board, set.frame), head: set.head }, set), "", ""); });
 
   // ---------- الحفظ والفتح
   async function save(name: string, after?: () => void) {
@@ -501,6 +514,7 @@ export default function BoardClient() {
       }
       const r = await api({ action: "save", id: lessonId, title: name, lesson: l });
       setLessonId(r.id); setTitle(name); setSt(r); setDirty(false);
+      lessonIdRef.current = r.id; dirtyRef.current = false; rememberLast(r.id);
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ }
       say(r.notice ?? "✅ انحفظ");
       after?.();
@@ -690,7 +704,7 @@ export default function BoardClient() {
   // ---------- إرسال للطلاب (الأستاذ): يختار الفصل، ويسأله تريد تدزه؟
   const sendDialog = () => {
     setPop("");
-    if (!lessonId || dirty) { setAsk({ text: "احفظ الشرح أول حتى تدزه", buttons: [{ t: "احفظ", kind: "ok", run: () => saveDialog(() => window.setTimeout(sendDialog, 50)) }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); return; }
+    if (!lessonIdRef.current || dirtyRef.current) { setAsk({ text: "احفظ الشرح أول حتى تدزه", buttons: [{ t: "احفظ", kind: "ok", run: () => saveDialog(() => window.setTimeout(sendDialog, 50)) }, { t: "رجوع", kind: "gray", run: () => setAsk(null) }] }); return; }
     // الفصل ← الموضوع ← المحاضرة، وبعدها يگله العدد ويسأله تريد تدزه؟
     setBusy("لحظة...");
     void api({ action: "targets" }).then((r: { chapters: Target[]; app?: string }) => {
@@ -758,7 +772,7 @@ export default function BoardClient() {
       setBusy("");
       const where = `الفصل ${ORD[ch]} · ${t.name} · ${ls.map((l) => `${l.title} (${TRACK[l.track]})`).join(" و ")}`;
       setAsk({ text: `تريد أدز «${title}»؟ ينزل بملحقات «${where}» بالتطبيق${env === "staging" ? " (داتا التجربة)" : ""}، وتوصل رسالة لـ ${count} طالب اشتروا محاضرات الفصل ${ORD[ch]}.`, buttons: [
-        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonId, appLecture: ls.map((l) => l.id) }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
+        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonIdRef.current, appLecture: ls.map((l) => l.id) }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
         { t: "لا", kind: "bad", run: () => setAsk(null) },
       ] });
     } catch (e) { setBusy(""); say(`صار خطأ: ${(e as Error).message}`); }
@@ -771,7 +785,7 @@ export default function BoardClient() {
       if (!count) { say(`ماكو طلاب اشتروا محاضرات الفصل ${ORD[ch]}`); return; }
       const where = [`الفصل ${ORD[ch]}`, t?.name, lec ? `المحاضرة ${lec}` : ""].filter(Boolean).join(" · ");
       setAsk({ text: `تريد أدز «${title}» (${where}) لـ ${count} طالب اشتروا محاضرات الفصل ${ORD[ch]}؟`, buttons: [
-        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonId, chapter: ch, topic: t?.id ?? 0, lecture: lec }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
+        { t: "إي، دزه", kind: "ok", run: () => { setAsk(null); setBusy("جاري الإرسال..."); void api({ action: "send", id: lessonIdRef.current, chapter: ch, topic: t?.id ?? 0, lecture: lec }).then((r) => { setSt(r); say(r.notice); }).catch((e) => say(`صار خطأ: ${(e as Error).message}`)).finally(() => setBusy("")); } },
         { t: "لا", kind: "bad", run: () => setAsk(null) },
       ] });
     } catch (e) { setBusy(""); say(`صار خطأ: ${(e as Error).message}`); }
