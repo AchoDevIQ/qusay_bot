@@ -109,7 +109,7 @@ export async function libAction(body: Row) {
     need(ou, "الحساب غير موجود");
     const link = await door.makeDoor(u, String(ou!.name ?? "المكتبة"));
     const QR = (await import("qrcode")).default;
-    extra = { notice: "✅ طلع رابط دخوله تحت اسمه: دوس «📤 دز الرابط» ودزه إله. (كل دوسة تسوي رابط جديد وتلغي اللي قبله، فدز آخر واحد بس)", door: { officeId: ou!.office_id, name: String(ou!.name ?? ""), link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
+    extra = { notice: "✅ طلع رابط دخوله تحت اسمه: دوس «📋 انسخ الرابط» ودزه إله. (كل دوسة تسوي رابط جديد وتلغي اللي قبله، فدز آخر واحد بس)", door: { officeId: ou!.office_id, name: String(ou!.name ?? ""), link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
   } else if (a === "delUser") {
     const u = Number(body.user);
     need(await one("office_users", { user_id: u }), "الحساب غير موجود");

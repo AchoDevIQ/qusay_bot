@@ -2,7 +2,7 @@
 // المكتبات: المبيعات، المحاسبة، الأرشيف، والحسابات
 import { useState } from "react";
 import { partsLine, type MoneyParts, type PriceLine } from "../../../lib/orderRules.ts";
-import { AdminHeader, Confirm, MoneyBreakdown, PriceReport, StatusBar, useAdminApi } from "../adminPage";
+import { AdminHeader, Confirm, DoorShare, MoneyBreakdown, PriceReport, StatusBar, useAdminApi } from "../adminPage";
 
 type Tot = { n: number; total: number };
 type Office = {
@@ -117,7 +117,7 @@ function Panel({ o, data, busy, call }: { o: Office; data: Data; busy: boolean; 
           <div style={{ textAlign: "center" }}>
             <img src={data.door.qr} alt="" style={{ width: 200, background: "#fff", borderRadius: 12 }} />
             <div className="exhint">رابط دخول {data.door.name} بدون تليگرام: يصوّر الرمز أو تدزله الرابط، ويحط رمز سري.</div>
-            <button type="button" className="exbtn" onClick={() => { const l = data.door!.link; if (navigator.share) void navigator.share({ url: l }).catch(() => undefined); else void navigator.clipboard?.writeText(l); }}>📤 دز الرابط</button>
+            <DoorShare link={data.door.link} />
           </div>
         )}
         <NoTgUser officeId={o.id} busy={busy} call={call} />
@@ -164,3 +164,4 @@ function NoTgUser({ officeId, busy, call }: { officeId: number; busy: boolean; c
     </div>
   );
 }
+

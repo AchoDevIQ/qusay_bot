@@ -128,3 +128,15 @@ export function Confirm({ label, onYes, disabled }: { label: string; onYes: () =
     ? <button type="button" className="exbtn danger" disabled={disabled} onClick={() => { setAsk(false); onYes(); }}>⚠️ متأكد؟ اضغط مرة ثانية</button>
     : <button type="button" className="exbtn" disabled={disabled} onClick={() => setAsk(true)}>{label}</button>;
 }
+
+/** رابط الدخول بدون تليگرام: مكتوب، ويا زر «📋 انسخ الرابط» بس، وهو يدزه بإيده (طلبه 2026-11-26: نافذة المشاركة مال ويندوز جانت تحيّره) */
+export function DoorShare({ link }: { link: string }) {
+  const [msg, setMsg] = useState("");
+  return (
+    <div style={{ display: "grid", gap: 8, marginTop: 8, justifyItems: "center" }}>
+      <div dir="ltr" style={{ userSelect: "all", WebkitUserSelect: "all", wordBreak: "break-all", fontSize: 13, background: "rgba(255,255,255,.08)", borderRadius: 8, padding: 8, width: "100%" }}>{link}</div>
+      <button type="button" className="exbtn" onClick={() => void navigator.clipboard?.writeText(link).then(() => setMsg("✅ انسخ الرابط. روح للواتساب، افتح محادثته، ودوس لصق (Ctrl و V) ودزه."), () => setMsg("⚠️ ما انسخ. ظلّل الرابط فوگ بالماوس وانسخه."))}>📋 انسخ الرابط</button>
+      {msg && <div className="exhint">{msg}</div>}
+    </div>
+  );
+}
