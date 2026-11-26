@@ -99,5 +99,7 @@ export async function linkGuardian(gid: number, code: string): Promise<{ name?: 
   if (old && old.guardian_id !== gid) return { error: "⚠️ هذا الطالب مربوط بولي أمر ثاني. إذا تريد تغيره تواصل ويا قصي العميري." };
   await put("guardians", { guardian_id: gid, student_id: sid, created: stamp() });
   if (!old) await logActivity(sid!, "👨‍👧 انربط ولي الأمر");
+  // وصولات الشراء اللي چانت تنتظره
+  if (!old) try { await (await import("./guardianBuys.ts")).releaseBuys(sid!); } catch (e) { console.error(e); }
   return { name: s.name, sid: sid! };
 }

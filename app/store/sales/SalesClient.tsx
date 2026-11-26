@@ -72,7 +72,7 @@ export default function SalesClient() {
   const shop = data?.shop;
   return (
     <>
-      <AdminHeader title={shop ? `🏪 ${shop.name}` : "🏪 بيع ومبيعات المكتب"} home={!!shop} />
+      <AdminHeader title={shop ? `🏪 ${shop.name}` : "💵 البيع المباشر"} home={!!shop} />
       <div className="wrap">
         {!data && error && <div className="card warn exerr">⚠️ {error}</div>}
         {!data && !error && <div className="empty">جاري التحميل...</div>}

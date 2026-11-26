@@ -70,14 +70,8 @@ export async function posSale(uid: number, o: any): Promise<{ error?: string; ag
       "", `💰 المجموع: <b>${money(total)}</b>`, "شكراً لك 🌷"];
     sent = !!await send(sid, lines.join("\n"));
   }
-  // ولي الأمر: نفس الوصل الملون بكل اللي اشتراه (تليگرام لو صفحته بالتطبيق، ووياها إشعار تلفونه)
-  try {
-    const g = await (await import("./access.ts")).guardianOf(sid);
-    if (g) {
-      const cap = `🧾 <b>${esc(s.name)}</b> اشترى من ${esc(await sellerLabel(od))} (#${oid}):\n${items.map((i) => `• ${esc(itemLabel(i))}${i.qty > 1 ? ` × ${i.qty}` : ""}`).join("\n")}\n💰 المجموع: <b>${money(total)}</b>`;
-      if (!await sendReceiptImage(Number(g.guardian_id), od, items, cap)) await send(Number(g.guardian_id), cap);
-    }
-  } catch (e) { console.error("guardian receipt", e); }
+  // ولي الأمر: نفس الوصل الملون بكل اللي اشتراه. إذا مو مربوط، ينتظره ويوصله أول ما ينربط (مثل الدرجة)
+  try { await (await import("./guardianBuys.ts")).guardianBuy(sid, oid); } catch (e) { console.error("guardian receipt", e); }
   await logActivity(sid, `🏪 اشترى من ${await sellerLabel(od)} (#${oid}): ${items.map((i) => `${i.name} ×${i.qty}`).join("، ")}`);
   const unlocked = await unlockFromSale(sid, items, oid);
   let msg = `✅ <b>تم البيع #${oid}</b> — ${esc(s.name)}\n💰 ${money(total)}\n\n` +

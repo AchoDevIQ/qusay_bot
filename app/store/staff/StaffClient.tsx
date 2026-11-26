@@ -105,8 +105,8 @@ function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; per
       {s.grade && <GradeWallet s={s} g={s.grade} chapters={chapters} topics={topics} tree={tree} busy={busy} call={call} />}
 
       <div className="exfoot">
-        <div className="exlabel">💰 حساب مبيعاته بنفسه</div>
-        <div className="exhint">بس اللي باعه من صفحة البيع بعد ما انضاف مساعد. مبيعات اليوم وشغله بالتفصيل: <Link href="/store/sales" className="adlinkin">🏪 بيع ومبيعات المكتب ← المبيعات</Link></div>
+        <div className="exlabel">💵 حساب بيعه المباشر (بلا مكتبة)</div>
+        <div className="exhint">بس اللي باعه من صفحة البيع بعد ما انضاف مساعد. مبيعات اليوم وشغله بالتفصيل: <Link href="/store/sales" className="adlinkin">💵 البيع المباشر ← المبيعات</Link></div>
         <div className="adstats adstats2">
           <div><b>{fmt(a.sold)}</b>كل مبيعاته</div><div><b>{fmt(a.paid)}</b>سلمك</div>
           <div><b>{fmt(a.owed)}</b>بذمته</div><div><b>{a.limit ? fmt(a.limit) : "بدون حد"}</b>الرصيد المسموح</div>

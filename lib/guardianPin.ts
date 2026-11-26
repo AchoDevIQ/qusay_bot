@@ -39,6 +39,8 @@ export async function issuePin(sid: number): Promise<string> {
   await logActivity(sid, "🔑 الإدارة صنعت رمز ولي الأمر");
   // الدرجات اللي چانت تنتظر ولي أمر توصل لصفحته هسه
   try { const { releaseHeld } = await import("./gradeApi.ts"); await releaseHeld(sid); } catch (e) { console.error(e); }
+  // ووصولات الشراء اللي چانت تنتظره
+  try { await (await import("./guardianBuys.ts")).releaseBuys(sid); } catch (e) { console.error(e); }
   return p;
 }
 export async function pinState(sid: number) {
@@ -64,6 +66,8 @@ export async function setPin(sid: number, pin: unknown, pin2: unknown) {
   await logActivity(sid, "👨‍👧 ولي الأمر حط رمزه السري على تطبيق ابنه");
   // الدرجات اللي كانت تنتظر ولي أمر توصله هسه
   try { const { releaseHeld } = await import("./gradeApi.ts"); await releaseHeld(sid); } catch (e) { console.error(e); }
+  // ووصولات الشراء اللي چانت تنتظره
+  try { await (await import("./guardianBuys.ts")).releaseBuys(sid); } catch (e) { console.error(e); }
   return gid;
 }
 

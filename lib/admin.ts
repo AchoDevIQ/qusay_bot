@@ -54,7 +54,7 @@ export async function adminMenuFor(uid: number): Promise<View> {
   if (await can(uid, "orders")) {
     const n = await newOrdersCount();
     kb.push([btn("🖨 الطلبات الجديدة (للطباعة)" + (n ? `  🔴 ${n}` : ""), "a:pend")], [btn("🗂 الطلبات المطبوعة", "a:printed")],
-      [btn("🏪 بيع بالمكتب", "a:pos")], [btn("📊 مبيعات المكتب", "a:of")]);
+      [btn("💵 بيع مباشر", "a:pos")], [btn("📊 مبيعات البيع المباشر", "a:of")]);
   }
   if (await can(uid, "students")) kb.push([btn("🎓 الطلاب", "a:st")], [btn("🏫 المراكز الامتحانية", "a:ce")]);
   if (await can(uid, "q")) {

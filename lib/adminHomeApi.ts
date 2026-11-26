@@ -30,7 +30,7 @@ async function homeData(uid: number) {
   }
   if (await can(uid, "sales")) {
     const sold = await find("orders", { printed: 3 }, { where: (o) => o.office_id === null && String(o.created).startsWith(todayStr()) });
-    shop.push({ page: "sales", icon: "🏪", title: "بيع ومبيعات المكتب", note: `اليوم: ${sold.length} بيعة` });
+    shop.push({ page: "sales", icon: "💵", title: "البيع المباشر", note: `اليوم: ${sold.length} بيعة` });
   }
   if (await can(uid, "products")) shop.push({ page: "products", icon: "🛒", title: "المنتجات والأقسام" });
   if (await can(uid, "fees")) shop.push({ page: "fees", icon: "🚚", title: "أسعار التوصيل" });
