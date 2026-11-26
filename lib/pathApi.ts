@@ -55,7 +55,7 @@ export type Step =
   | { kind: "cp"; exam: number; min: number; absent: number; count: number; title?: string };
 export type Section = { name: string; general?: boolean; steps: Step[] };
 /** 🧪 الاختبار الذاتي تحت الامتحان: open يگدر يدخله، locked يكمل محاضراته أول، used اختبر نفسه (total درجته، null ينتظر التصحيح) */
-export type SelfTest = { state: "open" | "locked" | "used"; total?: number | null; going?: boolean };
+export type SelfTest = { state: "open" | "locked" | "used"; total?: number | null; going?: boolean; item?: number };
 
 /** يرتب محاضرات الفصل (بالمواضيع) وامتحاناته (بترتيب الجدول) بمسار واحد، كل موضوع قسم لحاله */
 export function buildPath(topics: PathTopic[], exams: PathExam[]): { sections: { name: string; general?: boolean; items: ({ kind: "lec"; lec: PathLec } | { kind: "exam"; exam: PathExam })[] }[] } {
@@ -195,7 +195,7 @@ export async function pathFor(uid: number, chArg?: unknown, envArg?: unknown) {
       // 🧪 اختبر نفسك قبل الرسمي: مرة وحدة، وينفتح بعد ما يكمل المحاضرات اللي قبله
       const tried = self.done.get(x.exam.id);
       const selfTest: SelfTest | undefined = tried
-        ? { state: "used", total: tried.total === null || tried.total === undefined ? null : Number(tried.total), ...(tried.status === "started" ? { going: true } : {}) }
+        ? { state: "used", item: Number(tried.id), total: tried.total === null || tried.total === undefined ? null : Number(tried.total), ...(tried.status === "started" ? { going: true } : {}) }
         : self.open.has(x.exam.id) ? { state: lecturesBought && blocked ? "locked" : "open" } : undefined;
       const steps: Step[] = [{ kind: "exam", id: x.exam.id, title: x.exam.title, state, at, total, ...(selfTest ? { self: selfTest } : {}), ...teach }];
       const rule = cfg.mode === "percent" ? (own ? { min: Math.ceil(cfg.pct.min * since), absent: cfg.pct.absent } : null) : own;

@@ -9,7 +9,7 @@ type Step =
   | { kind: "exam"; id: number; title: string; state: string; at?: string; total?: number | null; self?: SelfTest; since?: number; from?: string; cp?: Cp | null }
   | { kind: "cp"; exam: number; min: number; absent: number; count: number; title?: string };
 /** 🧪 الاختبار الذاتي تحت الامتحان (مرة وحدة، قبل الرسمي) */
-type SelfTest = { state: "open" | "locked" | "used"; total?: number | null; going?: boolean };
+type SelfTest = { state: "open" | "locked" | "used"; total?: number | null; going?: boolean; item?: number };
 type Section = { name: string; general?: boolean; steps: Step[] };
 type Honor = { min: number; bday?: boolean; addr?: boolean };
 type Cp = { min: number; absent: number; honor: Honor | null; stopImg?: string; topImg?: string };
@@ -50,7 +50,9 @@ function SelfLine({ exam, self }: { exam: number; self: SelfTest }) {
   if (self.state === "open") return <a className="qp-self" href={go()}><span className="qp-sic">🧪</span><span className="qp-t"><b>تگدر تختبر نفسك قبل الامتحان الرسمي</b><small>بأسئلة ثانية، وينصحح مثل الامتحان. مرة وحدة بس. دوس هنا</small></span></a>;
   if (self.state === "locked") return <div className="qp-self off"><span className="qp-sic">🧪</span><span className="qp-t"><b>اختبر نفسك قبل الامتحان الرسمي</b><small>🔒 ينفتح بعد ما تكمل المحاضرات اللي قبله</small></span></div>;
   if (self.going) return <a className="qp-self" href={examsLink()}><span className="qp-sic">🧪</span><span className="qp-t"><b>بديت اختبارك الذاتي</b><small>دوس هنا وكمّله</small></span></a>;
-  return <div className="qp-self used"><span className="qp-sic">🧪</span><span className="qp-t"><b>اختبرت نفسك</b><small>{self.total === null || self.total === undefined ? "ينتظر التصحيح" : `درجتك ${self.total} من 100`}</small></span></div>;
+  // انصحح: دوسة تفتح ورقته المصححة، وبيها «✋ اعتراض على الدرجة» مثل الرسمي
+  if (self.total !== null && self.total !== undefined && self.item) return <a className="qp-self used" href={`${examsLink()}&paper=${self.item}`}><span className="qp-sic">🧪</span><span className="qp-t"><b>اختبرت نفسك: درجتك {self.total} من 100</b><small>دوس هنا تشوف ورقتك المصححة، وإذا عندك اعتراض اعترض</small></span></a>;
+  return <div className="qp-self used"><span className="qp-sic">🧪</span><span className="qp-t"><b>اختبرت نفسك</b><small>ينتظر التصحيح</small></span></div>;
 }
 
 export default function PathClient() {

@@ -864,7 +864,7 @@ function List({ info, busy, enter, paper, file, off, cmd }: { info: Info; busy: 
             </tr>
           ))}
           <tr className={`mxexamrow ${i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}`} id={i.id === now?.id && !(i.lectures ?? []).length ? "mx-now" : undefined}>
-            <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxexam">📝 امتحان</span><b>{i.optional ? "🎯 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}{i.gwait && <span className="adentag">👨‍👧 الدرجة عند ولي أمرك</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
+            <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxexam">📝 امتحان</span><b>{i.optional ? "🧪 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.optional && <span className="adentag">اختبر نفسك</span>}{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}{i.gwait && <span className="adentag">👨‍👧 الدرجة عند ولي أمرك</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.skippable && (
                 <div className="hint adtop">هذا الامتحان مو إجباري. تگدر تحذفه من جدولك، فيصعد جدولك:
