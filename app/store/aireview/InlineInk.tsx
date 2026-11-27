@@ -121,8 +121,11 @@ async function composePhotos(paper: GPaper, order: (string | null)[], inks: Reco
   return out;
 }
 
-// القلم (Apple Pencil) يكتب دائماً وهو مختار، والإصبع ينزل ويصعد بالصفحة. الجهاز اللي ما بيه قلم: الإصبع يكتب من يختار القلم
+// القلم (Apple Pencil) يكتب دائماً وهو مختار، والإصبع ينزل ويصعد بالصفحة. الجهاز اللي ما بيه قلم: الإصبع يكتب من يختار القلم.
+// (طلبه 2026-11-28: «القلم يقطع») الصفحة ما تتحرك بالمتصفح فوك الورقة أبداً (touch-action: none)، لأن الآيباد چان يحسب
+// حركة القلم سحب للصفحة فيقطع الخط. الإصبع ننزّل بيه الصفحة إحنا، والكف اللي على الشاشة وهو يكتب ما يحركها
 let penSeen = false;
+let penDown = 0, penUpAt = 0;
 
 /** طبقة الكتابة فوك صفحة وحدة */
 export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: Ink; pen: PenSet; onChange: (next: Ink) => void; rotated: boolean }) {
@@ -162,34 +165,61 @@ export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: 
     const hit = (p: number[]) => (p.length === 2 ? seg(p[0], p[1], p[0], p[1]) : p.some((_, i) => i % 2 === 0 && i + 3 < p.length && seg(p[i], p[i + 1], p[i + 2], p[i + 3])));
     return items.filter((it) => (it.t === "s" ? !hit(it.p) : Math.hypot(it.x - x, it.y - y) >= R));
   };
+  const scroll = useRef<{ id: number; y: number } | null>(null);
   const down = (e: React.PointerEvent) => {
     if (!on) return;
-    if (e.pointerType === "pen") { if (!penSeen) { penSeen = true; bump((n) => n + 1); } }
-    else if (e.pointerType === "touch" && penSeen) return; // إصبع بجهاز بيه قلم: يمرر الصفحة
+    if (e.pointerType === "pen") { if (!penSeen) { penSeen = true; bump((n) => n + 1); } penDown++; }
+    else if (e.pointerType === "touch" && penSeen) {
+      // إصبع بجهاز بيه قلم: ينزّل الصفحة. بس مو كف حاط وهو يكتب (أو بعده بشوية)
+      e.preventDefault();
+      if (penDown > 0 || Date.now() - penUpAt < 500 || (e.width || 0) > 60) return;
+      scroll.current = { id: e.pointerId, y: e.clientY };
+      try { cv.current?.setPointerCapture(e.pointerId); } catch { /* المؤشر انشال قبل: نكمل بدونه */ }
+      return;
+    }
     e.preventDefault();
     const [x, y] = at(e);
-    if (pen.tool === "ok" || pen.tool === "wrong") { onChange({ ...cur.current, items: [...cur.current.items, { t: pen.tool === "ok" ? "k" : "w", x, y }] }); return; }
-    cv.current?.setPointerCapture(e.pointerId);
+    if (pen.tool === "ok" || pen.tool === "wrong") { if (e.pointerType === "pen") { penDown = Math.max(0, penDown - 1); penUpAt = Date.now(); } onChange({ ...cur.current, items: [...cur.current.items, { t: pen.tool === "ok" ? "k" : "w", x, y }] }); return; }
+    try { cv.current?.setPointerCapture(e.pointerId); } catch { /* المؤشر انشال قبل: نكمل بدونه */ }
     drawing.current = e.pointerId;
     if (pen.tool === "eraser") { const items = erase(x, y, cur.current.items); if (items.length !== cur.current.items.length) onChange({ ...cur.current, items }); return; }
     live.current = { t: "s", c: pen.color, w: pen.width, p: [+x.toFixed(4), +y.toFixed(4)] };
     paint();
   };
   const move = (e: React.PointerEvent) => {
+    const sc = scroll.current;
+    if (sc && sc.id === e.pointerId) {
+      if (penDown > 0) { scroll.current = null; return; }
+      window.scrollBy(0, sc.y - e.clientY);
+      sc.y = e.clientY;
+      return;
+    }
     if (drawing.current !== e.pointerId) return;
-    const [x, y] = at(e);
-    if (pen.tool === "eraser") { const items = erase(x, y, cur.current.items); if (items.length !== cur.current.items.length) onChange({ ...cur.current, items }); return; }
+    e.preventDefault();
+    // كل نقاط الحركة (مو بس آخر وحدة)، حتى الخط يطلع ناعم ومتصل
+    const evs = (e.nativeEvent as PointerEvent).getCoalescedEvents?.() ?? [];
+    const pts = evs.length ? evs : [e.nativeEvent as PointerEvent];
+    const r = cv.current!.getBoundingClientRect();
+    const xy = (ev: PointerEvent) => [Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height))] as const;
+    if (pen.tool === "eraser") {
+      let items = cur.current.items;
+      for (const ev of pts) { const [x, y] = xy(ev); items = erase(x, y, items); }
+      if (items.length !== cur.current.items.length) onChange({ ...cur.current, items });
+      return;
+    }
     const s = live.current; if (!s || s.t !== "s") return;
-    s.p.push(+x.toFixed(4), +y.toFixed(4));
+    for (const ev of pts) { const [x, y] = xy(ev); s.p.push(+x.toFixed(4), +y.toFixed(4)); }
     paint();
   };
   const up = (e: React.PointerEvent) => {
+    if (e.pointerType === "pen") { penDown = Math.max(0, penDown - 1); penUpAt = Date.now(); }
+    if (scroll.current?.id === e.pointerId) { scroll.current = null; return; }
     if (drawing.current !== e.pointerId) return;
     drawing.current = null;
     const s = live.current; live.current = null;
     if (s) onChange({ ...cur.current, items: [...cur.current.items, s] });
   };
-  return <canvas ref={cv} className={"arv-ink" + (on ? " on" : "")} style={{ pointerEvents: on ? "auto" : "none", touchAction: on && !penSeen ? "none" : "pan-y" }}
+  return <canvas ref={cv} className={"arv-ink" + (on ? " on" : "")} style={{ pointerEvents: on ? "auto" : "none", touchAction: on ? "none" : "auto" }}
     onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />;
 }
 

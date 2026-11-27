@@ -350,7 +350,7 @@ html,body{touch-action:pan-y;overscroll-behavior-x:none}
 .arv-nums button{height:42px;border:0;border-radius:10px;background:#2a2c31;color:#fff;font:inherit;font-size:17px;font-weight:800;cursor:pointer}
 .arv-nums button.on{background:#1f9d55;box-shadow:0 0 0 3px #7ee2a8}
 .arv-pgbox{position:relative;margin-top:8px}.arv-pgbox .mkpage{margin-top:0}
-.arv-ink{position:absolute;inset:0;width:100%;height:100%;z-index:4;border-radius:8px}
+.arv-ink{position:absolute;inset:0;width:100%;height:100%;z-index:4;border-radius:8px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .arv-ink.on{cursor:crosshair;outline:2px solid rgba(246,201,74,.55)}
 .arv-inkbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .arv-inkbar button{min-height:40px;padding:0 12px;border-radius:10px;border:1.5px solid #F6C94A;background:transparent;color:#F6C94A;font:inherit;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
