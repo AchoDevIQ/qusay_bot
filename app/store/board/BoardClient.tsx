@@ -805,6 +805,9 @@ export default function BoardClient() {
   const [outro, setOutro] = useState(false);
   const exit = () => guard(() => { setPop(""); setOutro(true); });
   const doExit = () => { try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ } setDirty(false); if (history.length > 1) history.back(); else window.close(); window.setTimeout(() => setOutro(false), 1500); };
+  // «−»: الأدوات تنزل وشريط المتصفح (اللي بيه الرابط) يختفي هم، حتى الطلاب ما يشوفون الرابط بالشاشة أو بالتصوير (طلبه 2026-11-27).
+  // ما يطلّع من ملء الشاشة أبداً (قبل جان «−» يطلّع منها فيبين الرابط)
+  const hideBrowser = () => { try { if (!document.fullscreenElement) void document.documentElement.requestFullscreen?.().catch(() => { /* الآيباد */ }); } catch { /* */ } };
   const fullScreen = () => { try { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen(); } catch { /* */ } };
 
   // ---------- الكيبورد
@@ -908,7 +911,7 @@ export default function BoardClient() {
           <span className="qb-pg">{pageInfo.i + 1} / {pageInfo.n}</span>
           <Btn icon={IC.next} t="التالية" dis={pageInfo.i >= pageInfo.n - 1} run={() => goTo(pageIx.current + 1)} />
           <span className="qb-sep" />
-          <Btn icon={IC.min} t="نزّل الأدوات" run={() => { setPop(""); setBarDown(true); }} />
+          <Btn icon={IC.min} t="نزّل الأدوات" run={() => { setPop(""); setBarDown(true); hideBrowser(); }} />
           <Btn icon={IC.close} t="خروج" run={exit} />
         </div>
       </div>
