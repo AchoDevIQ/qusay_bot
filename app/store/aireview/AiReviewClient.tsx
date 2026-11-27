@@ -231,6 +231,12 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
             {!inl.order && <button type="button" className={"arv-pen arv-pen2" + (edit[q.n] ? " on" : "")} aria-label="علامات الذكاء" title="علامات الذكاء" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "🤖 علامات الذكاء"}</button>}
             {q.note && <small>{q.note}</small>}
           </div>
+          {/* 🔢 أرقام الدرجة ظاهرة تحت كل سؤال مثل شاشة التصحيح (طلبه 2026-11-28): دوسة على الرقم وينحفظ وحده */}
+          <div className={"arv-nums" + (q.max + 1 > 16 ? " many" : "")}>
+            {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (
+              <button type="button" key={m} className={Number(marks[q.n] ?? q.mark) === m && (marks[q.n] ?? "") !== "" ? "on" : ""} onClick={() => setMarks({ ...marks, [q.n]: String(m) })}>{m}</button>
+            ))}
+          </div>
           {/* ✏️ فوك كل سؤال: قلم ومساحة ظاهرين، و«⋯ المزيد» يطلع الباقي بنفس المكان (طلبه 2026-11-27) */}
           {inl.order && <InkBar pen={pen} setPen={(x) => { setPen(x); if (x.tool) { setEdit((e) => ({ ...e, [q.n]: false })); setAdding(null); setTap(null); setSpot(null); } }} more={!!more[q.n]} setMore={(v) => setMore({ ...more, [q.n]: v })}
             canBack={lastPage.current[q.n] !== undefined && inl.canBack(lastPage.current[q.n])} onBack={() => { const i = lastPage.current[q.n]; if (i !== undefined) inl.back(i); }}
@@ -340,6 +346,9 @@ html,body{touch-action:pan-y;overscroll-behavior-x:none}
 .arv-adding .mkpage{outline:3px dashed #F6C94A;cursor:crosshair}
 .arv-box{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:10px;border:2px solid #F6C94A;border-radius:12px;background:rgba(246,201,74,.08)}
 .arv-img{width:100%;display:block;margin-top:8px;border-radius:8px;background:#fff}
+.arv-nums{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px;margin-top:8px}
+.arv-nums button{height:42px;border:0;border-radius:10px;background:#2a2c31;color:#fff;font:inherit;font-size:17px;font-weight:800;cursor:pointer}
+.arv-nums button.on{background:#1f9d55;box-shadow:0 0 0 3px #7ee2a8}
 .arv-pgbox{position:relative;margin-top:8px}.arv-pgbox .mkpage{margin-top:0}
 .arv-ink{position:absolute;inset:0;width:100%;height:100%;z-index:4;border-radius:8px}
 .arv-ink.on{cursor:crosshair;outline:2px solid rgba(246,201,74,.55)}
