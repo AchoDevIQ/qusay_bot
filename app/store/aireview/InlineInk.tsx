@@ -124,7 +124,12 @@ async function composePhotos(paper: GPaper, order: (string | null)[], inks: Reco
 // القلم (Apple Pencil) يكتب دائماً وهو مختار، والإصبع ينزل ويصعد بالصفحة. الجهاز اللي ما بيه قلم: الإصبع يكتب من يختار القلم.
 // (طلبه 2026-11-28: «القلم يقطع») الصفحة ما تتحرك بالمتصفح فوك الورقة أبداً (touch-action: none)، لأن الآيباد چان يحسب
 // حركة القلم سحب للصفحة فيقطع الخط. الإصبع ننزّل بيه الصفحة إحنا، والكف اللي على الشاشة وهو يكتب ما يحركها
-let penSeen = false;
+// آيباد (شاشة كبيرة باللمس) أو جهاز كتب بيه قلم قبل: الإصبع ينزّل الصفحة من أول لمسة، حتى قبل ما يكتب بالقلم
+const PEN_SEEN = "arvPenSeen";
+let penSeen = typeof window !== "undefined" && (() => {
+  try { if (localStorage.getItem(PEN_SEEN) === "1") return true; } catch { /* */ }
+  return navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) >= 700;
+})();
 let penDown = 0, penUpAt = 0;
 
 /** طبقة الكتابة فوك صفحة وحدة */
@@ -165,15 +170,30 @@ export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: 
     const hit = (p: number[]) => (p.length === 2 ? seg(p[0], p[1], p[0], p[1]) : p.some((_, i) => i % 2 === 0 && i + 3 < p.length && seg(p[i], p[i + 1], p[i + 2], p[i + 3])));
     return items.filter((it) => (it.t === "s" ? !hit(it.p) : Math.hypot(it.x - x, it.y - y) >= R));
   };
-  const scroll = useRef<{ id: number; y: number } | null>(null);
+  const scroll = useRef<{ id: number; y: number; v: number; t: number } | null>(null);
+  // بعد ما يرفع إصبعه الصفحة تكمل تتزحلق شوية وتوگف، مثل التمرير العادي
+  const glide = useRef(0);
+  const stopGlide = () => { if (glide.current) cancelAnimationFrame(glide.current); glide.current = 0; };
+  const startGlide = (v0: number) => {
+    let v = v0, last = performance.now();
+    const step = (now: number) => {
+      const dt = now - last; last = now;
+      window.scrollBy(0, v * dt);
+      v *= Math.pow(0.995, dt);
+      glide.current = Math.abs(v) > 0.02 ? requestAnimationFrame(step) : 0;
+    };
+    if (Math.abs(v) > 0.05) glide.current = requestAnimationFrame(step);
+  };
   const down = (e: React.PointerEvent) => {
     if (!on) return;
-    if (e.pointerType === "pen") { if (!penSeen) { penSeen = true; bump((n) => n + 1); } penDown++; }
+    if (e.pointerType === "pen") { if (!penSeen) { penSeen = true; try { localStorage.setItem(PEN_SEEN, "1"); } catch { /* */ } bump((n) => n + 1); } penDown++; stopGlide(); }
     else if (e.pointerType === "touch" && penSeen) {
       // إصبع بجهاز بيه قلم: ينزّل الصفحة. بس مو كف حاط وهو يكتب (أو بعده بشوية)
       e.preventDefault();
-      if (penDown > 0 || Date.now() - penUpAt < 500 || (e.width || 0) > 60) return;
-      scroll.current = { id: e.pointerId, y: e.clientY };
+      // (الآيباد يعطي لمسة الإصبع عرض كبير، فما نحكم بالعرض: الكف ينعرف لأنه يجي وياه القلم نازل أو توه رفعه)
+      if (penDown > 0 || Date.now() - penUpAt < 400) return;
+      stopGlide();
+      scroll.current = { id: e.pointerId, y: e.clientY, v: 0, t: performance.now() };
       try { cv.current?.setPointerCapture(e.pointerId); } catch { /* المؤشر انشال قبل: نكمل بدونه */ }
       return;
     }
@@ -190,8 +210,10 @@ export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: 
     const sc = scroll.current;
     if (sc && sc.id === e.pointerId) {
       if (penDown > 0) { scroll.current = null; return; }
-      window.scrollBy(0, sc.y - e.clientY);
-      sc.y = e.clientY;
+      const now = performance.now(), dy = sc.y - e.clientY;
+      window.scrollBy(0, dy);
+      if (now > sc.t) sc.v = 0.7 * (dy / (now - sc.t)) + 0.3 * sc.v;
+      sc.y = e.clientY; sc.t = now;
       return;
     }
     if (drawing.current !== e.pointerId) return;
@@ -213,7 +235,11 @@ export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: 
   };
   const up = (e: React.PointerEvent) => {
     if (e.pointerType === "pen") { penDown = Math.max(0, penDown - 1); penUpAt = Date.now(); }
-    if (scroll.current?.id === e.pointerId) { scroll.current = null; return; }
+    if (scroll.current?.id === e.pointerId) {
+      const sc = scroll.current; scroll.current = null;
+      if (e.type === "pointerup" && performance.now() - sc.t < 80) startGlide(sc.v);
+      return;
+    }
     if (drawing.current !== e.pointerId) return;
     drawing.current = null;
     const s = live.current; live.current = null;
