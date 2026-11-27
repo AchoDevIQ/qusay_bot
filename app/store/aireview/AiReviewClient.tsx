@@ -44,7 +44,12 @@ export default function AiReviewClient() {
     });
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
   // كل ورقة تگول شگد عندها سؤال مفتوح وشگد ينحفظ بالخلفية: «📤 دز للطلاب» ينتظر لحد ما يخلص كلشي (طلبه 2026-11-27)
-  const file = (ref: string) => `/api/aireview/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
+  // رمز الصور يبقى نفسه (يتجدد بس قبل ما يخلص بـ10 دقايق): لو يتبدل بكل تحديث، كل الصور تنعاد تتحمل وطولها يتغير لحظة
+  // فالصفحة تقفز وتقلّب بين الأوراق (فيديو الأستاذ 2026-11-28، بالآيباد سفاري ما يثبّت مكانه)
+  const tok = useRef("");
+  const freshTok = data?.fileToken ?? "";
+  if (freshTok && (!tok.current || Number(tok.current.split(".")[1] || 0) - Date.now() / 1000 < 600)) tok.current = freshTok;
+  const file = (ref: string) => `/api/aireview/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(tok.current)}`;
 
   if (open) {
     const g = data?.group;
@@ -56,7 +61,7 @@ export default function AiReviewClient() {
           {g && <div className="card">
             <h2>{g.title}</h2>
             <div className="exhint">{g.chapter} · {g.place} · {g.at} · {g.count} ورقة</div>
-            <SendAll g={g} busy={busy} work={busyWork} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} />
+            <SendAll compact g={g} busy={busy} work={busyWork} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} />
           </div>}
           {!data?.papers && <div className="empty">جاري التحميل...</div>}
           {data?.papers?.map((p, i) => <PaperCard key={p.id} pen={pen} setPen={setPen} report={report} p={p} n={i + 1} of={data.papers!.length} file={file} busy={busy} gkey={open} call={call} save={(marks) => call({ action: "save", item: p.id, marks }, true)} />)}
@@ -224,6 +229,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
             {edit[q.n]
               ? <><input className="exnum" inputMode="decimal" value={marks[q.n] ?? ""} onChange={(e) => setMarks({ ...marks, [q.n]: e.target.value.replace(/[^\d.]/g, "") })} /><span>من {q.max}</span></>
               : <span className="arv-mark">{marks[q.n] ?? q.mark} من {q.max}</span>}
+            {/* مجموع الطالب فوگ كل سؤال، ويتغير وياه (طلبه 2026-11-28) */}
+            <span className="arv-qtot">المجموع {total} من 100</span>
             {/* ورقة PDF أو ورقة كاملة: القلم هنا ما يشتغل عليها، فتنفتح شاشة التصحيح نفسها */}
             {!inl.order && (gq === q.n
               ? <button type="button" className="arv-pen on" onClick={() => leave(null)}>✔ خلصت</button>
@@ -281,10 +288,13 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
       ))}
       {!p.questions.length && <div className="exhint">ماكو تصحيح ذكاء محفوظ لهاي الورقة.</div>}
       {!!p.questions.length && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => { if (confirm("ترجع العلامات مثل ما صححها الذكاء؟ تعديلاتك عليها تنمسح (الدرجات تبقى)")) void markCall({ action: "markReset" }); }}>↩️ رجّع علامات الذكاء</button>}
-      {bad && <div className="arv-hint adtop">⚠️ درجة س{bad.n} لازم رقم من 0 لـ {bad.max}</div>}
-      {saveMsg && <div className="arv-saved adtop">{saveMsg}</div>}
-      {inl.state === "saving" && <div className="arv-saving adtop">⏳ كتابة القلم تنحفظ...</div>}
-      {inl.state === "err" && <div className="arv-hint adtop">⚠️ كتابة القلم ما انحفظت{inl.err ? `: ${inl.err}` : ""} <button type="button" className="exbtn" onClick={inl.retry}>🔄 عيدها</button></div>}
+      {/* رسائل الحفظ بمكان طوله ثابت: ظهورها واختفاؤها ما يحرك الأوراق (بالآيباد الصفحة چانت تقفز) */}
+      <div className="arv-status">
+        {bad ? <span className="arv-hint">⚠️ درجة س{bad.n} لازم رقم من 0 لـ {bad.max}</span>
+          : inl.state === "err" ? <span className="arv-hint">⚠️ كتابة القلم ما انحفظت{inl.err ? `: ${inl.err}` : ""} <button type="button" className="exbtn" onClick={inl.retry}>🔄 عيدها</button></span>
+          : inl.state === "saving" ? <span className="arv-saving">⏳ كتابة القلم تنحفظ...</span>
+          : saveMsg ? <span className="arv-saving">{saveMsg}</span> : null}
+      </div>
       <div className="arv-end">— نهاية أوراق {p.name} —</div>
     </div>
   );
@@ -346,6 +356,10 @@ html,body{touch-action:pan-y;overscroll-behavior-x:none}
 .arv-adding .mkpage{outline:3px dashed #F6C94A;cursor:crosshair}
 .arv-box{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:10px;border:2px solid #F6C94A;border-radius:12px;background:rgba(246,201,74,.08)}
 .arv-img{width:100%;display:block;margin-top:8px;border-radius:8px;background:#fff}
+.arv-status{height:34px;margin-top:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.arv-send-top{height:56px;margin-top:8px;display:flex;align-items:center;gap:10px;overflow:hidden;white-space:nowrap}
+.arv-okline{font-weight:800;color:#6ee7a8}
+.arv-qtot{margin-inline-start:auto;font-weight:800;font-size:14px;padding:2px 10px;border-radius:20px;background:rgba(246,201,74,.16);color:#F6C94A}
 .arv-nums{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px;margin-top:8px}
 .arv-nums button{height:42px;border:0;border-radius:10px;background:#2a2c31;color:#fff;font:inherit;font-size:17px;font-weight:800;cursor:pointer}
 .arv-nums button.on{background:#1f9d55;box-shadow:0 0 0 3px #7ee2a8}
@@ -363,9 +377,19 @@ html,body{touch-action:pan-y;overscroll-behavior-x:none}
 /** «📤 دز للطلاب»: الدرجات المحجوزة والتعديلات الصامتة بهاي المجموعة توصل هسه للطلاب وأولياء أمورهم */
 type Work = { id: number; name: string; open: number | null; saving: number[]; failed: number[] };
 const jump = (id: number) => document.getElementById(`p${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
-function SendAll({ g, busy, send, work }: { g: Group; busy: boolean; send: () => void; work: Work[] }) {
+function SendAll({ g, busy, send, work, compact }: { g: Group; busy: boolean; send: () => void; work: Work[]; compact?: boolean }) {
   const n = g.held + (g.pending ?? 0);
   const open = work.filter((w) => w.open !== null), saving = work.filter((w) => w.saving.length), failed = work.filter((w) => w.failed.length);
+  // فوگ الصفحة: سطر واحد طوله ثابت دائماً، حتى ما تنزل وتصعد الأوراق اللي تحته كل ما ينحفظ شي.
+  // التفاصيل بالأسماء بآخر الصفحة
+  if (compact) return (
+    <div className="arv-send-top">
+      {open.length || saving.length || failed.length
+        ? <span className="arv-hint">{failed.length ? "⚠️ أكو شي ما انحفظ (التفاصيل بآخر الصفحة)" : "⏳ ينحفظ... «📤 دز للطلاب» يطلع من يخلص"}</span>
+        : n ? <><span className="arv-okline">✅ كلشي انحفظ</span><button type="button" className="btn" style={{ width: "auto" }} disabled={busy} onClick={send}>📤 دز للطلاب ({n})</button></>
+          : <span className="exhint">✅ كلشي واصل للطلاب.</span>}
+    </div>
+  );
   // بعده يصحح، لو ينحفظ، لو سؤال ما انحفظ: الزر ينتظر، ويگله منو بالاسم (دوسة على الاسم توديه لورقته)
   if (open.length || saving.length || failed.length) return (
     <div className="arv-wait adtop">
