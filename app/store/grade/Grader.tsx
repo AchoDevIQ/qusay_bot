@@ -279,14 +279,14 @@ const TIP: Record<Tool, string> = { hand: "تحريك: اسحب الكتابة �
 
 const SHOWQ_KEY = "gradeShowQuestion";
 const PEN_KEY = "gradePen";
-export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers, penText: penTextStart = false, onPenText, stacked = false, focusQ = 0, autosave = false, saveSignal = 0 }: {
+export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave, onDecide, onRescan, today, left: papersLeft, stickers, penText: penTextStart = false, onPenText, stacked = false, focusQ = 0, autosave = false, saveSignal = 0, onAutoFail }: {
   paper: Paper; url: (r: string) => string; busy: boolean; stickers: Sticker[]; penText?: boolean; onPenText?: (on: boolean) => void;
   /** 📄 كل الصفحات ورا بعض مثل PDF (مراجعة تصحيح الذكاء، طلبه 2026-11-27): الصفحة اللي يدوسها تصير الشغالة */
   stacked?: boolean;
   /** يفتح على هذا السؤال، وبالورا بعض تطلع صفحاته بس */
   focusQ?: number;
   /** بلا زر حفظ: الدرجة تنحفظ بكل دوسة، والكتابة كل ثانية، والحفظ الأخير ينطلب من برا (saveSignal يزيد) */
-  autosave?: boolean; saveSignal?: number;
+  autosave?: boolean; saveSignal?: number; onAutoFail?: (msg: string) => void;
   act: (b: Record<string, unknown>) => Promise<{ paper?: Paper | null; errors?: string[] } | null>;
   onClose: () => void; onSkip: () => void; onRescan: () => void; onSave: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>) => void; today: number; left: number;
   onDecide: (inkSaved: Promise<void>, compose: (p: Prepared) => Promise<Blob[]>, rejects: Record<number, string>, accepted: number) => void;
@@ -614,6 +614,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     const miss = paper.questions.find((x) => x.n === missN);
     if (miss) {
       setSaveErr(`باقي درجة السؤال ${miss.n}`);
+      if (autosave) { void flush(); onAutoFail?.(`باقي درجة السؤال ${miss.n}: حطلها درجة وبعدين «✔ خلصت»`); }
       const i = pages?.findIndex((p) => holds(p, miss.n)) ?? -1;
       if (i >= 0) go(i);
       setQSel(miss.n);

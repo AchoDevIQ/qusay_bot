@@ -22,6 +22,8 @@ export default function AiReviewClient() {
   const openGroup = async (key: string) => { setOpen(key); window.scrollTo(0, 0); await call({ action: "group", key }, true); };
   const back = async () => { setOpen(null); await call({ action: "list" }); };
   // رجع من شاشة التصحيح (?open=المجموعة#p رقم الورقة): تنفتح نفس المجموعة وتنزل لنفس الطالب
+  // الصفحة بعرض الشاشة كله (مثل شاشة التصحيح)، حتى الورقة تملي الشاشة وما تتحرك يمين ويسار
+  useEffect(() => { document.body.classList.add("grwide"); return () => { document.body.classList.remove("grwide"); }; }, []);
   const reopened = useRef(false);
   useEffect(() => {
     if (!data || reopened.current) return;
@@ -106,14 +108,28 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
   const [nextQ, setNextQ] = useState<number | null>(null);
   const [closing, setClosing] = useState(false);
   const frame = useRef<HTMLIFrameElement | null>(null);
-  const finish = (then: number | null) => { setNextQ(then); setClosing(true); frame.current?.contentWindow?.postMessage({ qgrade: "save" }, location.origin); };
+  const [gmsg, setGmsg] = useState("");
+  const wait = useRef<number | null>(null);
+  const closeNow = (then: number | null) => {
+    if (wait.current) { window.clearTimeout(wait.current); wait.current = null; }
+    setClosing(false); setGq(then); setNextQ(null);
+    void call({ action: "group", key: gkey }, true);
+  };
+  const finish = (then: number | null) => {
+    setNextQ(then); setClosing(true); setGmsg("");
+    frame.current?.contentWindow?.postMessage({ qgrade: "save" }, location.origin);
+    // الدرجات والكتابة أصلاً تنحفظ وحدها: إذا الحفظ الأخير ما رد، تتسد بعد 8 ثواني
+    if (wait.current) window.clearTimeout(wait.current);
+    wait.current = window.setTimeout(() => closeNow(then), 8000);
+  };
   const openQ = (n: number) => { if (gq === null) setGq(n); else if (gq !== n) finish(n); };
   useEffect(() => {
     if (gq === null) return;
     const on = (e: MessageEvent) => {
-      if (e.origin !== location.origin || e.data?.qgrade !== "done" || Number(e.data.id) !== p.id) return;
-      setClosing(false); setGq(nextQ); setNextQ(null);
-      void call({ action: "group", key: gkey }, true);
+      if (e.origin !== location.origin || Number(e.data?.id) !== p.id) return;
+      if (e.data?.qgrade === "done") closeNow(nextQ);
+      // ما انحفظ (مثلاً سؤال بلا درجة): يبقى مفتوح ويگله ليش، والأزرار ترجع
+      if (e.data?.qgrade === "fail") { if (wait.current) { window.clearTimeout(wait.current); wait.current = null; } setClosing(false); setNextQ(null); setGmsg(String(e.data.msg ?? "ما انحفظ")); }
     };
     window.addEventListener("message", on);
     return () => window.removeEventListener("message", on);
@@ -178,7 +194,9 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
           </div>
           {gq === q.n && <div className="arv-grade">
             <iframe ref={frame} title={`تصحيح ${p.name} س${q.n}`} src={`${gradeLink(p.id, gkey, true)}&q=${q.n}`} />
-            <div className="exline arv-gfoot"><button type="button" className="btn" style={{ width: "auto" }} disabled={closing} onClick={() => finish(null)}>{closing ? "⏳ يحفظ..." : `✔ خلصت س${q.n}`}</button></div>
+            {gmsg && <div className="arv-hint" style={{ textAlign: "center", padding: 6 }}>⚠️ {gmsg}</div>}
+            <div className="exline arv-gfoot"><button type="button" className="btn" style={{ width: "auto" }} disabled={closing} onClick={() => finish(null)}>{closing ? "⏳ يحفظ..." : `✔ خلصت س${q.n}`}</button>
+              <button type="button" className="exbtn" onClick={() => closeNow(null)}>✖ سد</button></div>
           </div>}
           {gq !== q.n && (q.marked?.length ? q.marked : q.photos.map((ref) => ({ ref, marks: [] as PaperMark[] }))).map((pg) => (
             <div key={pg.ref} className={adding === pg.ref ? "arv-adding" : ""} onClickCapture={(e) => pick(e, pg.ref)}>
@@ -246,10 +264,10 @@ const CSS = `
 .arv-pen{min-width:44px;min-height:40px;border-radius:10px;border:1.5px solid #F6C94A;background:transparent;color:#F6C94A;font:inherit;font-weight:800;cursor:pointer}
 .arv-pen.on{background:#F6C94A;color:#141F33}
 .arv-pen2{font-size:13px;opacity:.85}
-.arv-grade{position:relative;width:100vw;margin:8px 0 12px calc(50% - 50vw);border-top:3px solid #F6C94A;border-bottom:3px solid #F6C94A;background:#1b1c1f;overflow:hidden}
+.arv-grade{position:relative;width:auto;margin:8px -12px 12px;border-top:3px solid #F6C94A;border-bottom:3px solid #F6C94A;background:#1b1c1f;overflow:hidden;touch-action:pan-y}
 .arv-grade iframe{display:block;width:100%;height:calc(100vh - 70px);min-height:520px;border:0;background:#1b1c1f}
 .arv-gfoot{justify-content:center;padding:8px}
-html,body{overflow-x:hidden}
+html,body{overflow-x:hidden;overflow-x:clip}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
 .arv-q{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
 .arv-qline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.arv-qline .exnum{width:64px}.arv-qline small{flex-basis:100%;opacity:.8}
