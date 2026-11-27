@@ -32,6 +32,8 @@ const BAR = 74;                       // ارتفاع شريط الأدوات (�
 const PAL = palette();
 const ORD = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"];
 const SET_KEY = "qboard_settings", DRAFT_KEY = "qboard_draft";
+// المسودة لأي شرح تعود (رقمه واسمه)، حتى من يرجع تنفتح نفس الشاشة اللي طلع منها ويبقى الحفظ على نفس الشرح
+const META_KEY = "qboard_draft_meta";
 // آخر شرح محفوظ اشتغل عليه: من يرجع للسبورة ينفتح وحده (طلبه 2026-11-26: «ألقى صفحة فارغة»)
 const LAST_KEY = "qboard_last";
 const rememberLast = (id: string) => { try { if (id) localStorage.setItem(LAST_KEY, id); else localStorage.removeItem(LAST_KEY); } catch { /* */ } };
@@ -259,7 +261,7 @@ export default function BoardClient() {
     void Promise.allSettled([document.fonts.load("700 40px QAppAr", "قصي العميري"), document.fonts.load("400 40px QAppAr", "اب"), document.fonts.load("700 40px QAppEn", "Ab1")]).then(() => { redrawFrame(); redrawInk(); });
     // مسودة ما انحفظت (التطبيق انسد فجأة)
     let hadDraft = false;
-    try { const d = cleanLesson(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null")); if (d && d.pages.some((p) => p.items.length || p.bg)) { lesson.current = d; undo.current = d.pages.map(() => []); redo.current = d.pages.map(() => []); setDirty(true); hadDraft = true; } } catch { /* */ }
+    try { const d = cleanLesson(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null")); if (d && d.pages.some((p) => p.items.length || p.bg)) { lesson.current = d; undo.current = d.pages.map(() => []); redo.current = d.pages.map(() => []); setDirty(true); hadDraft = true; const m = JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); if (m?.id) { setLessonId(String(m.id)); setTitle(String(m.title ?? "")); } } } catch { /* */ }
     layout();
     const onResize = () => layout();
     window.addEventListener("resize", onResize);
@@ -295,7 +297,7 @@ export default function BoardClient() {
       }, 1500);
       return () => window.clearTimeout(t);
     }
-    const t = window.setTimeout(() => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(lesson.current)); } catch { /* كبير، يبقى بس بالسيرفر */ } }, 1500);
+    const t = window.setTimeout(keepDraft, 1500);
     return () => window.clearTimeout(t);
   });
   const sync = () => { setPageInfo({ i: pageIx.current, n: lesson.current.pages.length }); };
@@ -804,12 +806,15 @@ export default function BoardClient() {
   // ---------- المايك
   const [outro, setOutro] = useState(false);
   const exit = () => guard(() => { setPop(""); setOutro(true); });
-  const doExit = () => { try { localStorage.removeItem(DRAFT_KEY); } catch { /* */ } setDirty(false); if (history.length > 1) history.back(); else window.close(); window.setTimeout(() => setOutro(false), 1500); };
+  // الطلوع ما يمسح اللي قدامه (طلبه 2026-11-27: «تطلع لي الشاشة اللي طلعت منها، بآخر إعدادات اخترتها»):
+  // اللي بالشاشة يبقى مسودة بالجهاز، ومن يرجع ينفتح نفسه. «شرح جديد» أو فتح شرح ثاني يبدله
+  const doExit = () => { if (dirty && !solve) keepDraft(); setDirty(false); if (history.length > 1) history.back(); else window.close(); window.setTimeout(() => setOutro(false), 1500); };
   // «−»: الأدوات تنزل وشريط المتصفح (اللي بيه الرابط) يختفي هم، حتى الطلاب ما يشوفون الرابط بالشاشة أو بالتصوير (طلبه 2026-11-27).
   // ما يطلّع من ملء الشاشة أبداً (قبل جان «−» يطلّع منها فيبين الرابط)
   const hideBrowser = () => { try { if (!document.fullscreenElement) void document.documentElement.requestFullscreen?.().catch(() => { /* الآيباد */ }); } catch { /* */ } };
   const fullScreen = () => { try { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen(); } catch { /* */ } };
 
+  function keepDraft() { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(lesson.current)); localStorage.setItem(META_KEY, JSON.stringify({ id: lessonId, title })); } catch { /* كبير، يبقى بس بالسيرفر */ } }
   // ---------- الكيبورد
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
