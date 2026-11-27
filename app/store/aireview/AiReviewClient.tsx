@@ -131,6 +131,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
     }
     if (then !== null) { setFails((f) => { const x = { ...f }; delete x[then]; return x; }); setBg((b) => b.filter((x) => x !== then)); }
     setGq(then);
+    // الأدوات تملي الشاشة: الصفحة تنزل عليها
+    if (then !== null) setTimeout(() => document.getElementById(`g${p.id}-${then}`)?.scrollIntoView({ block: "start", behavior: "smooth" }), 80);
   };
   useEffect(() => { report(p.id, { id: p.id, name: p.name, open: gq, saving: bg, failed: Object.keys(fails).map(Number) }); }, [gq, bg, fails]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -204,7 +206,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
           </div>
           {bg.includes(q.n) && gq !== q.n && <div className="arv-saving">⏳ س{q.n} ينحفظ بالخلفية...</div>}
           {fails[q.n] && <div className="arv-hint" style={{ marginTop: 4 }}>⚠️ س{q.n}: {fails[q.n]}</div>}
-          {(gq === q.n || bg.includes(q.n)) && <div className="arv-grade" style={gq === q.n ? undefined : { display: "none" }}>
+          {(gq === q.n || bg.includes(q.n)) && <div id={`g${p.id}-${q.n}`} className="arv-grade" style={gq === q.n ? undefined : { display: "none" }}>
             <iframe ref={(el) => { if (el) frames.current.set(q.n, el); else frames.current.delete(q.n); }} title={`تصحيح ${p.name} س${q.n}`} src={`${gradeLink(p.id, gkey, true)}&q=${q.n}`} />
             <div className="exline arv-gfoot"><button type="button" className="btn" style={{ width: "auto" }} onClick={() => leave(null)}>{`✔ خلصت س${q.n}`}</button></div>
           </div>}
@@ -275,7 +277,8 @@ const CSS = `
 .arv-pen.on{background:#F6C94A;color:#141F33}
 .arv-pen2{font-size:13px;opacity:.85}
 .arv-grade{position:relative;width:auto;margin:8px -12px 12px;border-top:3px solid #F6C94A;border-bottom:3px solid #F6C94A;background:#1b1c1f;overflow:hidden;touch-action:pan-y}
-.arv-grade iframe{display:block;width:100%;height:calc(100vh - 70px);min-height:520px;border:0;background:#1b1c1f}
+.arv-grade iframe{display:block;width:100%;height:calc(100vh - 64px);min-height:520px;border:0;background:#1b1c1f}
+.arv-grade{scroll-margin-top:0}
 .arv-gfoot{justify-content:center;padding:8px}
 .arv-saving{margin-top:4px;font-size:13px;font-weight:800;color:#6ee7a8}
 .arv-wait{padding:10px;border-radius:10px;background:rgba(246,201,74,.12);color:#F6C94A;font-weight:800;text-align:center}

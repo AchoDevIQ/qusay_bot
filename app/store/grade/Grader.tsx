@@ -665,9 +665,17 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           <button type="button" className="gk-ic" title="تصغير" onClick={() => setZoom(ZOOMS[Math.max(0, ZOOMS.indexOf(zoom) - 1)])}>－</button>
         </div>
         <div className="gk-tools">
-          <button type="button" className="gk-ic" disabled={at === 0} onClick={() => go(at - 1)}>›</button>
-          <span className="gk-pg">{at + 1}{pages ? ` / ${pages.length}` : ""}</span>
-          <button type="button" className="gk-ic" disabled={!pages || at >= pages.length - 1} onClick={() => go(at + 1)}>‹</button>
+          {/* سؤال واحد (مراجعة الذكاء): التقليب بين صفحات هذا السؤال بس، حتى المصحح ما يغلط بسؤال ثاني */}
+          {(() => {
+            const nav = focusQ && pages ? pages.map((p, i) => (holds(p, focusQ) ? i : -1)).filter((i) => i >= 0) : null;
+            const k = nav ? nav.indexOf(at) : at;
+            const prev = nav ? nav[k - 1] : at - 1, next = nav ? nav[k + 1] : at + 1, count = nav ? nav.length : pages?.length ?? 0;
+            return <>
+              <button type="button" className="gk-ic" disabled={prev === undefined || prev < 0} onClick={() => go(prev!)}>›</button>
+              <span className="gk-pg">{(nav ? k : at) + 1}{pages ? ` / ${count}` : ""}</span>
+              <button type="button" className="gk-ic" disabled={next === undefined || !pages || next >= pages.length} onClick={() => go(next!)}>‹</button>
+            </>;
+          })()}
         </div>
         {paper.editing && <b className="gk-objtag">✏️ تعديل</b>}
         {!locked && !objMode && !paper.editing && (rescanAsk
@@ -692,7 +700,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
       </div>
       {q && (
         <div className="gk-row gk-marks">
-          {page?.q === null && <div className="gk-qs">{shownQs.filter((x) => !page.qs || page.qs.includes(x.n)).map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] === SKIP ? " · ⏭" : marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
+          {page?.q === null && !focusQ && <div className="gk-qs">{shownQs.filter((x) => !page.qs || page.qs.includes(x.n)).map((x) => <button type="button" key={x.n} className={x.n === curQ ? "on" : ""} onClick={() => setQSel(x.n)}>س{x.n}{marks[x.n] === SKIP ? " · ⏭" : marks[x.n] !== null && marks[x.n] !== undefined ? ` · ${marks[x.n]}` : ""}</button>)}</div>}
           <span className="gk-q">س{q.n}<small> من {q.max}</small>{q.byAi && <small className="gk-byai"> · 🤖 صححه AI</small>}</span>
           {/* الدرجة بالصوت: نفس الدوس على الرقم بالضبط، ونفس الشروط */}
           {!locked && <VoiceMark qn={q.n} max={q.max} onMark={(m) => void press(m)}
