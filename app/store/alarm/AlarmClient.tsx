@@ -1,6 +1,6 @@
 "use client";
 // ⏰ منبه الامتحانات: الطالب يسمع النغمات ويختار وحدة، ويشوف منبهاته الجاية. صاحب البوت يحدد شوكت يرن للكل
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { pageToken } from "../adminPage";
 
 type Tone = { id: string; name: string; url: string; custom?: boolean };
@@ -50,7 +50,17 @@ export default function AlarmClient() {
     } catch (e) { setErr((e as Error).message); }
   };
   useEffect(() => { void api({ action: "state" }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const play = (t: Tone) => { try { void new Audio(t.url).play(); } catch { /* */ } };
+  // نغمة وحدة بس تشتغل (طلبه 2026-11-27): ▶ على غيرها يسكت اللي قبلها، و⏹ على نفسها يسكتها
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState("");
+  const stop = () => { const a = audio.current; audio.current = null; if (a) { a.pause(); a.currentTime = 0; } setPlaying(""); };
+  const play = (t: Tone) => {
+    const same = playing === t.id;
+    stop();
+    if (same) return;
+    try { const a = new Audio(t.url); audio.current = a; a.onended = () => { if (audio.current === a) stop(); }; setPlaying(t.id); void a.play().catch(() => { if (audio.current === a) stop(); }); } catch { /* */ }
+  };
+  useEffect(() => () => stop(), []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="qa" dir="rtl">
       <style>{CSS}</style>
@@ -62,7 +72,7 @@ export default function AlarmClient() {
           <p>دوس ▶ تسمعها، ودوس الاسم تختارها.</p>
           {d.tones.map((t) => (
             <div key={t.id} className={`qa-tone${d.tone === t.id ? " on" : ""}`}>
-              <button type="button" className="qa-play" aria-label="اسمع" onClick={() => play(t)}>▶</button>
+              <button type="button" className="qa-play" aria-label={playing === t.id ? "سكت" : "اسمع"} onClick={() => play(t)}>{playing === t.id ? "⏹" : "▶"}</button>
               <button type="button" className="qa-name" onClick={() => void api({ action: "tone", tone: t.id })}>{t.name}{d.tone === t.id ? " ✓" : ""}</button>
             </div>
           ))}
@@ -82,7 +92,7 @@ export default function AlarmClient() {
           <div className="qa-chips">{d.tones.map((t) => <button key={t.id} type="button" className={cfg.tone === t.id ? "on" : ""} onClick={() => setCfg({ ...cfg, tone: t.id })}>{t.name}</button>)}</div>
           <button type="button" className="qa-save" onClick={() => void api({ action: "cfg", cfg })}>💾 حفظ</button>
         </section>}
-        {d.admin && <MyTones tones={d.tones.filter((t) => t.custom)} api={api} play={play} />}
+        {d.admin && <MyTones tones={d.tones.filter((t) => t.custom)} api={api} play={play} playing={playing} />}
       </>}
       {!d && !err && <div className="qa-msg">جاري التحميل...</div>}
       {msg && <div className="qa-toast">{msg}</div>}
@@ -91,7 +101,7 @@ export default function AlarmClient() {
 }
 
 /** 🎵 نغماتك: ترفع صوت أو موسيقى، أو تسجل صوتك، وتوصل للطلاب وحدها (بلا تحديث للتطبيق) */
-function MyTones({ tones, api, play }: { tones: Tone[]; api: (b: Record<string, unknown>) => Promise<void>; play: (t: Tone) => void }) {
+function MyTones({ tones, api, play, playing }: { tones: Tone[]; api: (b: Record<string, unknown>) => Promise<void>; play: (t: Tone) => void; playing: string }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState("");
   const [ready, setReady] = useState<{ b64: string; secs: number; cut: boolean; url: string } | null>(null);
@@ -135,7 +145,7 @@ function MyTones({ tones, api, play }: { tones: Tone[]; api: (b: Record<string, 
       </div>}
       {tones.map((t) => (
         <div key={t.id} className="qa-tone">
-          <button type="button" className="qa-play" aria-label="اسمع" onClick={() => play(t)}>▶</button>
+          <button type="button" className="qa-play" aria-label={playing === t.id ? "سكت" : "اسمع"} onClick={() => play(t)}>{playing === t.id ? "⏹" : "▶"}</button>
           <span className="qa-name">{t.name}</span>
           <button type="button" className="qa-del" onClick={() => { if (confirm(`تحذف «${t.name}»؟ اللي مختاريها يرجعون للنغمة الأساسية`)) void api({ action: "delTone", id: t.id }); }}>🗑</button>
         </div>

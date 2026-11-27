@@ -95,6 +95,8 @@ export default function BoardClient() {
   const [color, setColor] = useState("#FFFFFF");
   const [set, setSet] = useState<Settings>(() => ({ board: DEFAULT_BOARD, frame: DEFAULT_FRAME, head: "nb-charcoal", palm: 200, eraser: 80, width: 5 }));
   const [pop, setPop] = useState<Pop>("");
+  // «−» ينزل شريط الأدوات جوه ويخلي السبورة كلها، ويبقى لسان صغير تدوسه ويصعد (طلبه 2026-11-27، مثل البرامج)
+  const [barDown, setBarDown] = useState(false);
   const [popAt, setPopAt] = useState(0);
   const [ask, setAsk] = useState<Ask>(null);
   const [toast, setToast] = useState("");
@@ -876,7 +878,8 @@ export default function BoardClient() {
         </div>}
       </div>
 
-      <div className="qb-bar">
+      {barDown && <button type="button" className="qb-tab" aria-label="طلع الأدوات" onClick={() => setBarDown(false)}>⌃ الأدوات</button>}
+      <div className="qb-bar" style={barDown ? { display: "none" } : undefined}>
         <div className="qb-grp">
           <Btn id="menu" icon={IC.menu} t="القائمة" on={pop === "menu"} run={(el) => open("menu", el)} />
           <Btn icon={IC.pdf} t="فتح PDF" run={() => pdfInput.current?.click()} />
@@ -905,7 +908,7 @@ export default function BoardClient() {
           <span className="qb-pg">{pageInfo.i + 1} / {pageInfo.n}</span>
           <Btn icon={IC.next} t="التالية" dis={pageInfo.i >= pageInfo.n - 1} run={() => goTo(pageIx.current + 1)} />
           <span className="qb-sep" />
-          <Btn icon={IC.min} t="تصغير" run={fullScreen} />
+          <Btn icon={IC.min} t="نزّل الأدوات" run={() => { setPop(""); setBarDown(true); }} />
           <Btn icon={IC.close} t="خروج" run={exit} />
         </div>
       </div>
@@ -1149,6 +1152,7 @@ const CSS = `
 .qb-hint{position:absolute;top:56px;left:50%;transform:translateX(-50%);background:#1F2738;color:#F6C94A;padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.27);font-size:18px;pointer-events:none}
 .qb-bar{height:${BAR}px;flex:none;background:#1B2333;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:0 6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .qb-grp{display:flex;align-items:center;gap:2px;flex:none}
+.qb-tab{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:25;border:0;border-radius:14px 14px 0 0;background:#1B2333;color:#F6C94A;font:inherit;font-weight:800;font-size:15px;padding:6px 22px 8px;min-height:40px;box-shadow:0 -2px 10px rgba(0,0,0,.35);opacity:.9}
 .qb-btn{width:58px;height:66px;flex:none;border:0;border-radius:10px;background:transparent;color:#dfe5f0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;cursor:pointer}
 .qb-btn:disabled{opacity:.35}
 .qb-btn.on{background:#2c3850;color:#F6C94A;box-shadow:inset 0 0 0 2px #F6C94A}

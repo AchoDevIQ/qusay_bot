@@ -324,6 +324,8 @@ body.grwide .grtop{padding-left:104px}
 .gktabs2{margin-top:12px}
 .gk-nums{display:grid;grid-template-columns:repeat(var(--cols,16),minmax(0,1fr));gap:4px}
 .gk-nums button{min-width:0;width:100%;padding:0;height:38px;font-size:clamp(12px,2.1vw,17px)}
+/* درجة السؤال أكثر من 15: الأرقام تاخذ سطر كامل وحدها، حتى ما تنضغط وتركب فوق بعض */
+.gk-nums.gk-many{order:5;flex:1 1 100%}
 .gk-modelpart{margin-bottom:8px}
 /* سجل التصحيح يوم يوم */
 .gkmonth{justify-content:space-between;align-items:center}

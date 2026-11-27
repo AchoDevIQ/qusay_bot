@@ -651,7 +651,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
         </div>
       </div>
       <div className="gk-row gk-info">
-        <button type="button" className="gk-skip" onClick={async () => { await flush(3); onClose(); }}>⬅️ القائمة</button>
+        <button type="button" className="gk-skip" onClick={async () => { await flush(3); if (autosave && window.parent !== window) window.parent.postMessage({ qgrade: "close", id: paper.id, q: focusQ }, location.origin); else onClose(); }}>{autosave ? "✔ خلصت" : "⬅️ القائمة"}</button>
         <span>الامتحان: {paper.title} · النسخة: {paper.model}</span>
         <span>صححت: <b>{today}</b> | متبقي: <b>{papersLeft}</b>{saveErr && <span className="gk-err"> · ⚠️ {saveErr}</span>}</span>
         {!locked && !objMode && !paper.editing && <button type="button" className="gk-skip" disabled={busy} onClick={async () => { await flush(3); onSkip(); }}>⏭ تخطي الورقة</button>}
@@ -705,7 +705,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
           {/* الدرجة بالصوت: نفس الدوس على الرقم بالضبط، ونفس الشروط */}
           {!locked && <VoiceMark qn={q.n} max={q.max} onMark={(m) => void press(m)}
             blocked={busy ? "الصفحة مشغولة، عيدها بعد شوية" : objMode && !objOf(q.n) ? "هذا السؤال ما عليه اعتراض" : !objMode && q.byAi ? "هذا السؤال صححه نظام التصحيح AI" : ""} />}
-          <div className="gk-nums" style={{ ["--cols" as string]: q.max + 1 <= 16 ? q.max + 1 : Math.ceil((q.max + 1) / 2) }}>
+          <div className={"gk-nums" + (q.max + 1 > 16 ? " gk-many" : "")} style={{ ["--cols" as string]: q.max + 1 <= 16 ? q.max + 1 : Math.ceil((q.max + 1) / 2) }}>
             {Array.from({ length: q.max + 1 }, (_, m) => m).map((m) => (
               <button type="button" key={m} className={(marks[q.n] === m ? "on" : "") + (objMode && objOf(q.n)?.old === m ? " gk-was" : "")} disabled={busy || locked || (objMode && !objOf(q.n)) || (!objMode && !!q.byAi)} onClick={() => void press(m)}>{m}</button>
             ))}

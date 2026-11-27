@@ -132,14 +132,27 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
     if (then !== null) { setFails((f) => { const x = { ...f }; delete x[then]; return x; }); setBg((b) => b.filter((x) => x !== then)); }
     setGq(then);
     // الأدوات تملي الشاشة: الصفحة تنزل عليها
-    if (then !== null) setTimeout(() => document.getElementById(`g${p.id}-${then}`)?.scrollIntoView({ block: "start", behavior: "smooth" }), 80);
+    // سد التصحيح: يرجع لنفس السؤال بالقائمة
+    if (then === null && cur !== null) setTimeout(() => document.getElementById(`q${p.id}-${cur}`)?.scrollIntoView({ block: "center" }), 60);
   };
+  // التصحيح المفتوح يملي الشاشة بالضبط وما يتحرك (طلبه 2026-11-27): الصفحة اللي وراه تنقفل لحد «✔ خلصت»
+  useEffect(() => {
+    if (gq === null) return;
+    const h = document.documentElement, b = document.body;
+    const was = [h.style.overflow, b.style.overflow];
+    h.style.overflow = "hidden"; b.style.overflow = "hidden";
+    return () => { h.style.overflow = was[0]; b.style.overflow = was[1]; };
+  }, [gq]);
+  const leaveRef = useRef(leave);
+  leaveRef.current = leave;
   useEffect(() => { report(p.id, { id: p.id, name: p.name, open: gq, saving: bg, failed: Object.keys(fails).map(Number) }); }, [gq, bg, fails]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const on = (e: MessageEvent) => {
       if (e.origin !== location.origin || Number(e.data?.id) !== p.id) return;
       const n = Number(e.data?.q) || 0;
       if (e.data?.qgrade === "done") doneBg(n);
+      // «✔ خلصت» من جوه أدوات التصحيح نفسها: نفس زر «✔ خلصت» اللي تحت (يحفظ بالخلفية ويسد)
+      if (e.data?.qgrade === "close") leaveRef.current(null);
       // ما انحفظ (سؤال بلا درجة): يگله جنب السؤال، والأدوات تنسد
       if (e.data?.qgrade === "fail") { setFails((f) => ({ ...f, [n]: String(e.data.msg ?? "ما انحفظ") })); doneBg(n); }
     };
@@ -161,6 +174,11 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
     setSpot({ ref, x: Math.round(((e.clientX - b.left) / b.width) * 1000), y: Math.round(((e.clientY - b.top) / b.height) * 1000) });
   };
   const [total, setTotal] = useState(p.total);
+  // رجع من أدوات التصحيح (أو تحدثت المجموعة): الدرجات والمجموع يتحدثون بالقائمة، إلا السؤال اللي قاعد يكتب رقمه هسه
+  useEffect(() => {
+    setP(start); setTotal(start.total);
+    setMarks((m) => ({ ...m, ...Object.fromEntries(start.questions.filter((q) => !edit[q.n]).map((q) => [q.n, String(q.mark)])) }));
+  }, [start]); // eslint-disable-line react-hooks/exhaustive-deps
   const changed = p.questions.filter((q) => marks[q.n] !== undefined && marks[q.n] !== String(q.mark));
   // 💾 الدرجة تنحفظ وحدها من يعدلها (طلبه 2026-11-27): ثانية بعد آخر رقم يكتبه، بلا زر حفظ.
   // بس الرقم الكامل والصحيح (مو فاضي، مو «8.»، ومو أكثر من درجة السؤال)
@@ -191,7 +209,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
       <div className="arv-start">👤 الطالب {n} من {of}: <b>{p.name}</b></div>
       <div className="arv-head"><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
       {p.questions.map((q) => (
-        <div key={q.n} className="arv-q">
+        <div key={q.n} id={`q${p.id}-${q.n}`} className="arv-q">
           <div className="arv-qline">
             <b>س{q.n}</b>
             {edit[q.n]
@@ -206,9 +224,9 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
           </div>
           {bg.includes(q.n) && gq !== q.n && <div className="arv-saving">⏳ س{q.n} ينحفظ بالخلفية...</div>}
           {fails[q.n] && <div className="arv-hint" style={{ marginTop: 4 }}>⚠️ س{q.n}: {fails[q.n]}</div>}
-          {(gq === q.n || bg.includes(q.n)) && <div id={`g${p.id}-${q.n}`} className="arv-grade" style={gq === q.n ? undefined : { display: "none" }}>
+          {(gq === q.n || bg.includes(q.n)) && <div id={`g${p.id}-${q.n}`} className={"arv-grade" + (gq === q.n ? " open" : "")} style={gq === q.n ? undefined : { display: "none" }}>
             <iframe ref={(el) => { if (el) frames.current.set(q.n, el); else frames.current.delete(q.n); }} title={`تصحيح ${p.name} س${q.n}`} src={`${gradeLink(p.id, gkey, true)}&q=${q.n}`} />
-            <div className="exline arv-gfoot"><button type="button" className="btn" style={{ width: "auto" }} onClick={() => leave(null)}>{`✔ خلصت س${q.n}`}</button></div>
+            <div className="exline arv-gfoot"><span>👤 {p.name} · س{q.n}</span><button type="button" className="btn" style={{ width: "auto" }} onClick={() => leave(null)}>{`✔ خلصت س${q.n}`}</button></div>
           </div>}
           {gq !== q.n && (q.marked?.length ? q.marked : q.photos.map((ref) => ({ ref, marks: [] as PaperMark[] }))).map((pg) => (
             <div key={pg.ref} className={adding === pg.ref ? "arv-adding" : ""} onClickCapture={(e) => pick(e, pg.ref)}>
@@ -279,7 +297,9 @@ const CSS = `
 .arv-grade{position:relative;width:auto;margin:8px -12px 12px;border-top:3px solid #F6C94A;border-bottom:3px solid #F6C94A;background:#1b1c1f;overflow:hidden;touch-action:pan-y}
 .arv-grade iframe{display:block;width:100%;height:calc(100vh - 64px);min-height:520px;border:0;background:#1b1c1f}
 .arv-grade{scroll-margin-top:0}
-.arv-gfoot{justify-content:center;padding:8px}
+.arv-gfoot{justify-content:center;align-items:center;gap:12px;padding:6px 8px;flex:none;flex-wrap:nowrap}.arv-gfoot span{font-weight:800;color:#F6C94A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arv-grade.open{position:fixed;inset:0;z-index:1000;margin:0;border:0;display:flex;flex-direction:column;touch-action:none;overscroll-behavior:contain}
+.arv-grade.open iframe{flex:1;height:auto;min-height:0}
 .arv-saving{margin-top:4px;font-size:13px;font-weight:800;color:#6ee7a8}
 .arv-wait{padding:10px;border-radius:10px;background:rgba(246,201,74,.12);color:#F6C94A;font-weight:800;text-align:center}
 .arv-who{background:none;border:0;padding:0;color:#fff;font:inherit;font-weight:900;text-decoration:underline;cursor:pointer}
