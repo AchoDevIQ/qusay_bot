@@ -469,6 +469,18 @@ export default function BoardClient() {
     for (const x of now) noteAdd(x);
     setSel(now);
   };
+  // ✏️ تعديل كتابة انحطت (طلبه 2026-11-27: «أريدها قابلة للتعديل»): نفس مربع المايك بكتابتها، و«💾 احفظ التعديل» يبدلها بمكانها
+  const [editIt, setEditIt] = useState<Extract<Item, { k: "text" }> | null>(null);
+  const saveEdit = (old: Extract<Item, { k: "text" }>, t: string, s: number) => {
+    const x = ctxOf(liveC.current)!;
+    const lay = textLines(x, t, s, old.x);
+    const nu: Item = { ...old, t, s, bw: lay.w, bh: lay.h };
+    const items = page().items, k = items.indexOf(old);
+    if (k < 0) return;
+    items[k] = nu;
+    pending.current = { add: [nu], remove: [old] };
+    commit(); setSel([nu]); redrawInk(); redrawLive();
+  };
   const deleteSel = () => {
     if (!sel.current.length) return;
     pending.current = { add: [], remove: [...sel.current] };
@@ -893,9 +905,10 @@ export default function BoardClient() {
         <canvas ref={liveC} className="qb-c qb-live" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp} />
         {placing && <div className="qb-hint">دوس على السبورة بالمكان اللي تريد تبدي منه الكتابة</div>}
         {newVer && <button type="button" className="qb-upd" onClick={() => { if (!solve) keepDraft(); location.reload(); }}>🔄 أكو تحديث جديد للسبورة. دوس هنا حتى يتحدث (كتابتك تبقى)</button>}
-        {tool === "move" && !selN && <div className="qb-hint">دوس على كتابة أو صورة، أو اسحب مربع حوالين اللي تريد تحركه</div>}
+        {tool === "move" && !selN && <div className="qb-hint">دوس على كتابة أو صورة، أو اسحب مربع حوالين اللي تريد تحركه. الكتابة تگدر تعدلها بـ«✏️ عدّل الكتابة»</div>}
         {tool === "move" && selN > 0 && <div className="qb-selbar">
           <span>اسحبه لمكان ثاني، أو كبّره من الدوائر الذهبية</span>
+          {selN === 1 && sel.current[0]?.k === "text" && <button type="button" onClick={() => { const it = sel.current[0]; if (it?.k === "text") { setEditIt(it); setMic(true); } }}>✏️ عدّل الكتابة</button>}
           <button type="button" className="bad" onClick={deleteSel}>🗑 احذف</button>
           <button type="button" onClick={() => { setSel([]); redrawLive(); }}>✖ خلص</button>
         </div>}
@@ -1035,7 +1048,13 @@ export default function BoardClient() {
       <input ref={pdfInput} type="file" accept="application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void openPdf(f); }} />
       <input ref={imgInput} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void insertImage(f); }} />
 
-      {mic && <MicPanel teacher={!!st?.teacher} onCancel={() => setMic(false)} onPlace={(t, s) => { setMic(false); if (!t.trim()) return; pendingText.current = { t: t.trim(), s }; setPlacing(true); }} />}
+      {mic && <MicPanel teacher={!!st?.teacher} init={editIt ? { t: editIt.t, s: editIt.s } : undefined} onCancel={() => { setMic(false); setEditIt(null); }} onPlace={(t, s) => {
+        setMic(false);
+        const ed = editIt; setEditIt(null);
+        if (!t.trim()) return;
+        if (ed) { saveEdit(ed, t.trim(), s); return; }
+        pendingText.current = { t: t.trim(), s }; setPlacing(true);
+      }} />}
       {ask && <div className="qb-modal"><div className="qb-dlg">
         <div className="qb-dtext">{ask.text}</div>
         {ask.input && <AskInput init={ask.input.value} set={ask.input.set} />}
@@ -1120,15 +1139,15 @@ function langCmd(t: string): "ar-IQ" | "en-US" | null {
   if (/^(ال)?عربي(ه|ة)?$|^(arabic|arabi|araby|arabee|arab)$/.test(n)) return "ar-IQ";
   return null;
 }
-function MicPanel({ onCancel, onPlace, teacher }: { onCancel: () => void; onPlace: (t: string, size: number) => void; teacher: boolean }) {
+function MicPanel({ onCancel, onPlace, teacher, init }: { onCancel: () => void; onPlace: (t: string, size: number) => void; teacher: boolean; init?: { t: string; s: number } }) {
   const [tr, setTr] = useState("");
-  const [text, setText] = useState("");
-  const [size, setSize] = useState(56);
+  const [text, setText] = useState(init?.t ?? "");
+  const [size, setSize] = useState(init?.s ?? 56);
   const [lang, setLang] = useState<"ar-IQ" | "en-US">("ar-IQ");
   const [on, setOn] = useState(false);
   const [err, setErr] = useState("");
   const rec = useRef<SR | null>(null);
-  const done = useRef(""); // الكلام اللي خلص وانكتب
+  const done = useRef(init?.t ?? ""); // الكلام اللي خلص وانكتب
   const want = useRef(false);
   const langNow = useRef<"ar-IQ" | "en-US">("ar-IQ");
   // الكلام ينضاف بمكان المؤشر اللي واگف عليه بالمربع (طلبه 2026-11-27: «يضيفها وين واگف»)، وإذا ما داس بالمربع ينضاف بالآخر
@@ -1209,7 +1228,7 @@ function MicPanel({ onCancel, onPlace, teacher }: { onCancel: () => void; onPlac
           stop(); setTr("⏳ يترجم..."); setErr("");
           try { const r = await api({ action: "translate", text }); setText(r.text); done.current = r.text; setTr(""); } catch (e) { setTr(""); setErr((e as Error).message); }
         }}>{tr || "🌐 ترجم"}</button>}
-        <button type="button" className="ok" disabled={!text.trim()} onClick={() => { stop(); onPlace(text, size); }}>اكتبها على السبورة</button>
+        <button type="button" className="ok" disabled={!text.trim()} onClick={() => { stop(); onPlace(text, size); }}>{init ? "💾 احفظ التعديل" : "اكتبها على السبورة"}</button>
         <button type="button" className="gray" onClick={() => { stop(); onCancel(); }}>إلغاء</button>
       </div>
     </div></div>
