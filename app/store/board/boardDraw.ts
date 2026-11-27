@@ -330,16 +330,25 @@ export function textLines(ctx: CanvasRenderingContext2D, t: string, size: number
     }
     lines.push(cur);
   }
-  const w = Math.min(max, Math.max(1, ...lines.map((l) => ctx.measureText(l).width)));
+  // عربي وإنگليزي سوه (المايك، طلبه 2026-11-27): المربع ياخذ العرض كله، حتى الإنگليزي يبدي يسار والعربي يمين
+  const mixed = lines.some(isArLine) && lines.some((l) => l.trim() && !isArLine(l));
+  const w = mixed ? max : Math.min(max, Math.max(1, ...lines.map((l) => ctx.measureText(l).width)));
   return { lines, w, h: Math.round(lines.length * size * 1.35) };
 }
+const isArLine = (l: string) => /[؀-ۿ]/.test(l);
+/** كل سطر بلغته: السطر العربي يمين المربع، والإنگليزي يسار المربع (من اليسار لليمين) */
 function drawText(ctx: CanvasRenderingContext2D, it: TextItem) {
-  const { lines } = textLines(ctx, it.t, it.s, it.x);
+  const { lines, w } = textLines(ctx, it.t, it.s, it.x);
   ctx.save();
   ctx.fillStyle = it.c;
   ctx.font = `${it.s}px ${FONT}`;
-  ctx.direction = "rtl"; ctx.textAlign = "right"; ctx.textBaseline = "top";
-  lines.forEach((l, i) => ctx.fillText(l, it.x, it.y + i * it.s * 1.35));
+  ctx.textBaseline = "top";
+  const left = it.x - Math.max(w, it.bw || 0);
+  lines.forEach((l, i) => {
+    const ar = isArLine(l);
+    ctx.direction = ar ? "rtl" : "ltr"; ctx.textAlign = ar ? "right" : "left";
+    ctx.fillText(l, ar ? it.x : left, it.y + i * it.s * 1.35);
+  });
   ctx.restore();
 }
 

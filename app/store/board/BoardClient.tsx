@@ -1098,6 +1098,25 @@ function ShapeIcon({ id }: { id: string }) {
 
 // ---------- 🎤 المايك: احچي وتنكتب (عربي أو إنگليزي)
 type SR = { lang: string; continuous: boolean; interimResults: boolean; start(): void; stop(): void; onresult: ((e: any) => void) | null; onend: (() => void) | null; onerror: ((e: any) => void) | null };
+// المايك (طلبه 2026-11-27): كل لغة بسطرها. يگول «إنگليزي» أو «عربي» (أو يدوس الزر): تتبدل اللغة وينزل سطر.
+// الكلمة نفسها ما تنكتب. وبالسبورة الإنگليزي يسار والعربي يمين
+const norm = (t: string) => t.trim().toLowerCase().replace(/[.,!?؟،:;"'«»]/g, "").replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/\s+/g, " ");
+// الأرقام دائماً إنگليزي (طلبه 2026-11-27: «بمنهجنا نكتبها إنگليزي»): ٦ ← 6، و«ستة» أو «six» لحالها ← 6
+const AR_NUM: Record<string, string> = { صفر: "0", واحد: "1", واحده: "1", اثنين: "2", اثنان: "2", ثنين: "2", ثلاثه: "3", ثلاث: "3", تلاته: "3", اربعه: "4", اربع: "4", خمسه: "5", خمس: "5", سته: "6", ست: "6", سبعه: "7", سبع: "7", ثمانيه: "8", ثمان: "8", ثماني: "8", تسعه: "9", تسع: "9", عشره: "10", عشر: "10" };
+const EN_NUM: Record<string, string> = { zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10" };
+function enDigits(t: string) {
+  return t.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .split(/(\s+)/).map((w) => {
+      const k = w.replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
+      return AR_NUM[k] ?? EN_NUM[w.toLowerCase()] ?? w;
+    }).join("");
+}
+function langCmd(t: string): "ar-IQ" | "en-US" | null {
+  const n = norm(t);
+  if (/^(ال)?ا?ن[جكگق]ل[ي]?ز[ي]?(ه|ة)?$|^(english|inglizi|ingilizi|engilizi)$/.test(n)) return "en-US";
+  if (/^(ال)?عربي(ه|ة)?$|^(arabic|arabi|araby|arabee|arab)$/.test(n)) return "ar-IQ";
+  return null;
+}
 function MicPanel({ onCancel, onPlace }: { onCancel: () => void; onPlace: (t: string, size: number) => void }) {
   const [text, setText] = useState("");
   const [size, setSize] = useState(56);
@@ -1105,34 +1124,50 @@ function MicPanel({ onCancel, onPlace }: { onCancel: () => void; onPlace: (t: st
   const [on, setOn] = useState(false);
   const [err, setErr] = useState("");
   const rec = useRef<SR | null>(null);
-  const base = useRef("");
+  const done = useRef(""); // الكلام اللي خلص وانكتب
   const want = useRef(false);
+  const langNow = useRef<"ar-IQ" | "en-US">("ar-IQ");
+  const add = (t: string) => { const c = done.current; done.current = !c ? t : c.endsWith("\n") ? c + t : `${c} ${t}`; };
   const make = (lg: string) => {
     const C = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     if (!C) { setErr("هذا الجهاز ما يدعم تحويل الكلام لكتابة. جرب متصفح كروم"); return null; }
     const r: SR = new C();
     r.lang = lg; r.continuous = true; r.interimResults = true;
     r.onresult = (e: any) => {
-      let fin = "", tmp = "";
-      for (let i = 0; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else tmp += t; }
-      setText((base.current ? base.current + " " : "") + (fin + tmp).trim());
-      if (fin) { /* يبقى بالنص */ }
+      if (rec.current !== r) return;
+      let tmp = "";
+      for (let i = e.resultIndex ?? 0; i < e.results.length; i++) {
+        const t = enDigits(String(e.results[i][0].transcript ?? "").trim());
+        if (!t) continue;
+        if (e.results[i].isFinal) {
+          const cmd = langCmd(t);
+          if (cmd) { if (cmd !== langNow.current) { switchLang(cmd); return; } continue; }
+          add(t);
+        } else tmp += (tmp ? " " : "") + t;
+      }
+      const c = done.current;
+      setText(tmp ? (!c ? tmp : c.endsWith("\n") ? c + tmp : `${c} ${tmp}`) : c);
     };
     r.onerror = (e: any) => { if (e?.error === "not-allowed") setErr("لازم تسمح للمايك"); };
-    r.onend = () => { if (want.current) { try { r.start(); } catch { /* */ } } else setOn(false); };
+    r.onend = () => { if (want.current && rec.current === r) { try { r.start(); } catch { /* */ } } else if (rec.current === r) setOn(false); };
     return r;
   };
-  const start = (lg = lang) => {
+  const start = (lg = langNow.current) => {
     setErr("");
     const r = make(lg);
     if (!r) return;
-    base.current = text.trim();
     rec.current = r; want.current = true;
     try { r.start(); setOn(true); } catch { setErr("المايك ما اشتغل"); }
   };
-  const stop = () => { want.current = false; try { rec.current?.stop(); } catch { /* */ } setOn(false); };
-  // تغيير اللغة: الكلام اللي انكتب يبقى، والسماع يبدي من جديد
-  const switchLang = (lg: "ar-IQ" | "en-US") => { setLang(lg); if (on) { want.current = false; try { rec.current?.stop(); } catch { /* */ } window.setTimeout(() => start(lg), 250); } };
+  const stop = () => { want.current = false; const r = rec.current; rec.current = null; try { r?.stop(); } catch { /* */ } setOn(false); };
+  // تغيير اللغة: الكلام اللي انكتب يبقى، ينزل سطر، والسماع يبدي من جديد باللغة الثانية
+  const switchLang = (lg: "ar-IQ" | "en-US") => {
+    if (lg === langNow.current) return;
+    langNow.current = lg; setLang(lg);
+    if (done.current.trim()) done.current = done.current.trimEnd() + "\n";
+    setText(done.current);
+    if (want.current) { const r = rec.current; rec.current = null; try { r?.stop(); } catch { /* */ } window.setTimeout(() => start(lg), 250); }
+  };
   useEffect(() => () => { want.current = false; try { rec.current?.stop(); } catch { /* */ } }, []);
   return (
     <div className="qb-modal"><div className="qb-dlg qb-mic">
@@ -1141,7 +1176,8 @@ function MicPanel({ onCancel, onPlace }: { onCancel: () => void; onPlace: (t: st
         <button type="button" className={`qb-chip${lang === "ar-IQ" ? " on" : ""}`} onClick={() => switchLang("ar-IQ")}>عربي</button>
         <button type="button" className={`qb-chip${lang === "en-US" ? " on" : ""}`} onClick={() => switchLang("en-US")}>إنگليزي</button>
       </div>
-      <textarea dir={lang === "en-US" ? "auto" : "rtl"} value={text} onChange={(e) => setText(e.target.value)} rows={4} />
+      <div className="qb-note">گول «إنگليزي» أو «عربي» (أو دوس الزر): تتبدل اللغة وينزل سطر. بالسبورة الإنگليزي يسار والعربي يمين.</div>
+      <textarea dir="auto" style={{ unicodeBidi: "plaintext", textAlign: "start" }} value={text} onChange={(e) => { setText(e.target.value); done.current = e.target.value; }} rows={4} />
       {err && <div className="qb-note bad">⚠️ {err}</div>}
       <div className="qb-row"><span>حجم الكتابة:</span>{[[36, "صغير"], [56, "وسط"], [84, "كبير"]].map(([n, t]) => <button key={n} type="button" className={`qb-chip${size === n ? " on" : ""}`} onClick={() => setSize(Number(n))}>{t}</button>)}</div>
       <div className="qb-dbtns">
