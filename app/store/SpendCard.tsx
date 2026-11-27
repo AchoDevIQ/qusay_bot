@@ -6,7 +6,8 @@ type Row = { key: string; label: string; today: number; month: number; all: numb
 type Data = { rows: Row[]; total: { today: number; month: number; all: number }; since: string };
 const IQD = 1600;
 const usd = (n: number) => (n > 0 && n < 0.01 ? "<$0.01" : `$${n.toFixed(2)}`);
-const iqd = (n: number) => `${Math.round(n * IQD).toLocaleString("en")} د.ع`;
+// المبلغ الصغير كلش (أقل من 10 دنانير، مثل ترجمة سطر بالسبورة) يبين بكسوره، مو «0» (طلبه 2026-11-27)
+const iqd = (n: number) => { const v = n * IQD; return `${v > 0 && v < 10 ? v.toFixed(2) : Math.round(v).toLocaleString("en")} د.ع`; };
 
 export default function SpendCard() {
   const { data, error } = useAdminApi<Data>("/api/aispend", "💰 صرفية الذكاء");
