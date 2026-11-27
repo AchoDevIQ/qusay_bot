@@ -336,13 +336,9 @@ export function eraseAlong(items: Item[], a: P2, b: P2, size: number): { items: 
   const bx0 = Math.min(a[0], b[0]) - half, bx1 = Math.max(a[0], b[0]) + half, by0 = Math.min(a[1], b[1]) - half, by1 = Math.max(a[1], b[1]) + half;
   const removed: Item[] = [], added: Item[] = [], out: Item[] = [];
   for (const it of items) {
-    // الصورة ما تنمسح بالممحاة ولا بالكف (تنشال بس من «تحريك» ← احذف)
-    if (it.k === "img") { out.push(it); continue; }
-    if (it.k === "text") {
-      const r = textBox(it);
-      if (r.x1 >= bx0 && r.x0 <= bx1 && r.y1 >= by0 && r.y0 <= by1) { removed.push(it); continue; }
-      out.push(it); continue;
-    }
+    // الصورة والكتابة المطبوعة (المايك والكيبورد) ما تنمسح بالممحاة ولا بالكف: تنشال بس من «تحريك» ← احذف
+    // (طلبه 2026-11-27: يمسح كتابة قلمه اللي يمها والمطبوعة تبقى)
+    if (it.k === "img" || it.k === "text") { out.push(it); continue; }
     const pad = half + it.w / 2;
     // سريع: إذا مربع الخط كله بعيد عن الممحاة ما نلمسه (المربع، مو النقاط: خط طويل بنقطتين يمر من نصها)
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;

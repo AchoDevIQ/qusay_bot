@@ -46,7 +46,7 @@ test("📝 الألوان: 98 لون، والأشكال والمجسمات كخ�
   assert.equal(E.hlWidth(10), 50);
 });
 
-test("📝 الممحاة تقسم الخط بالنص، والنص ينمسح كله، والكف أكبر من الحد", () => {
+test("📝 الممحاة تقسم الخط بالنص، والكتابة المطبوعة ما تنمسح، والكف أكبر من الحد", () => {
   const line: any = { k: "ink", c: "#FFFFFF", w: 4, p: [0, 100, 400, 100] };
   const text: any = { k: "text", c: "#FFFFFF", s: 40, x: 900, y: 50, t: "مرحبا", bw: 120, bh: 54 };
   const r = E.eraseAlong([line, text], [200, 60], [200, 140], 40);
@@ -54,7 +54,7 @@ test("📝 الممحاة تقسم الخط بالنص، والنص ينمسح �
   assert.equal(r.added.length, 2, "الخط صار قطعتين");
   assert.ok(r.items.includes(text), "النص البعيد ما ينلمس");
   const r2 = E.eraseAlong(r.items, [850, 60], [850, 70], 40);
-  assert.ok(!r2.items.includes(text), "النص ينمسح كله");
+  assert.ok(r2.items.includes(text) && !r2.removed.length, "الكتابة المطبوعة (المايك) تبقى، تنشال بس من «تحريك» ← احذف");
   assert.ok(E.isPalm(630, 730, 200) && !E.isPalm(60, 60, 200));
   assert.ok(E.isLight("#F8F8F4") && !E.isLight("#1F4E3D"));
 });
