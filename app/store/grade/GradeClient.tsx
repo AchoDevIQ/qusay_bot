@@ -41,7 +41,7 @@ function useWide(on: boolean) {
 /** جاي من «🗂 مراجعة تصحيح الذكاء»: جوه ورقة الطالب نفسها (?embed=1) يگول للصفحة «خلصت»، أو (?back=المجموعة) يرجع لنفس الطالب هناك. true إذا رجع */
 function backToReview(id: number, wait = 0) {
   const q = new URLSearchParams(location.search), g = q.get("back");
-  if (q.get("embed") === "1" && window.parent !== window) { setTimeout(() => window.parent.postMessage({ qgrade: "done", id }, location.origin), wait); return true; }
+  if (q.get("embed") === "1" && window.parent !== window) { setTimeout(() => window.parent.postMessage({ qgrade: "done", id, q: Number(q.get("q")) || 0 }, location.origin), wait); return true; }
   if (!g) return false;
   const t = q.get("t");
   setTimeout(() => { location.href = `/store/aireview?open=${encodeURIComponent(g)}${t ? `&t=${encodeURIComponent(t)}` : ""}#p${id}`; }, wait);
@@ -202,7 +202,7 @@ export default function GradeClient({ only }: { only?: "obj" } = {}) {
         {data && paper && bgErr && <div className="gk-bgerr" onClick={() => setBgErr("")}>{bgErr} ✕</div>}
         {data && netWait.size > 0 && <div className="gk-netwait">📶 {netWait.size} ورقة تنتظر النت حتى توصل للطالب. تنرسل وحدها أول ما يرجع النت، لا تسد الصفحة.</div>}
         {data && paper && (
-          <Grader key={paper.id} stacked={embedded} focusQ={embedded ? Number(new URLSearchParams(location.search).get("q")) || 0 : 0} autosave={embedded} saveSignal={saveSig} onAutoFail={(msg) => window.parent.postMessage({ qgrade: "fail", id: paper.id, msg }, location.origin)} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
+          <Grader key={paper.id} stacked={embedded} focusQ={embedded ? Number(new URLSearchParams(location.search).get("q")) || 0 : 0} autosave={embedded} saveSignal={saveSig} onAutoFail={(msg) => window.parent.postMessage({ qgrade: "fail", id: paper.id, q: Number(new URLSearchParams(location.search).get("q")) || 0, msg }, location.origin)} paper={paper} url={url} busy={busy} act={act} today={data.today + savedNow} stickers={data.stickers ?? []} penText={penNow ?? !!data.penText} onPenText={setPenNow} left={data.waiting.filter((x) => x.id !== paper.id && inGroup(x) && !saving.current.has(x.id)).length}
             onClose={() => { if (paper.editing && backToReview(paper.id)) return; setPaper(null); setSavedNow(0); group.current = null; void call(tab === "check" ? { action: "check", grader: data?.check?.grader ?? "" } : { action: tab === "objlog" ? "objLog" : tab === "history" ? "history" : "list" }); }}
             onSkip={async () => { skipped.current.add(paper.id); await next(await call({ action: "release", id: paper.id })); }}
             onRescan={async () => { skipped.current.add(paper.id); await next(await call({ action: "rescan", id: paper.id })); }}

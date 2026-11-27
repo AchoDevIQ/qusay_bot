@@ -1,7 +1,7 @@
 "use client";
 // 🤖 مراجعة تصحيح الذكاء: تختار مجموعة (امتحان + مكان + موعد)، وتنفتح أوراقها كلها بصفحة وحدة، طالب ورا طالب،
 // ويا علامات الذكاء الحمرة ودرجة كل سؤال تگدر تبدلها وتحفظ بنفس المكان. وإعداد: الدرجات توصل مباشرة لو بعد ما تراجعها
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MarkedPage, type MarkedPageT, type PaperMark } from "../myexams/AiCompare";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 
@@ -19,7 +19,10 @@ export default function AiReviewClient() {
   const [open, setOpen] = useState<string | null>(null);
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const c = cfg ?? data?.cfg ?? null;
-  const openGroup = async (key: string) => { setOpen(key); window.scrollTo(0, 0); await call({ action: "group", key }, true); };
+  const [work, setWork] = useState<Record<number, { open: number; saving: number }>>({});
+  const report = useCallback((id: number, open: number, saving: number) => setWork((w) => (w[id]?.open === open && w[id]?.saving === saving ? w : { ...w, [id]: { open, saving } })), []);
+  const busyWork = Object.values(work).reduce((t, x) => ({ open: t.open + x.open, saving: t.saving + x.saving }), { open: 0, saving: 0 });
+  const openGroup = async (key: string) => { setWork({}); setOpen(key); window.scrollTo(0, 0); await call({ action: "group", key }, true); };
   const back = async () => { setOpen(null); await call({ action: "list" }); };
   // رجع من شاشة التصحيح (?open=المجموعة#p رقم الورقة): تنفتح نفس المجموعة وتنزل لنفس الطالب
   // الصفحة بعرض الشاشة كله (مثل شاشة التصحيح)، حتى الورقة تملي الشاشة وما تتحرك يمين ويسار
@@ -35,6 +38,7 @@ export default function AiReviewClient() {
       if (id) setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 400);
     });
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  // كل ورقة تگول شگد عندها سؤال مفتوح وشگد ينحفظ بالخلفية: «📤 دز للطلاب» ينتظر لحد ما يخلص كلشي (طلبه 2026-11-27)
   const file = (ref: string) => `/api/aireview/file?ref=${encodeURIComponent(ref)}&t=${encodeURIComponent(data?.fileToken ?? "")}`;
 
   if (open) {
@@ -47,12 +51,12 @@ export default function AiReviewClient() {
           {g && <div className="card">
             <h2>{g.title}</h2>
             <div className="exhint">{g.chapter} · {g.place} · {g.at} · {g.count} ورقة</div>
-            <SendAll g={g} busy={busy} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} />
+            <SendAll g={g} busy={busy} work={busyWork} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} />
           </div>}
           {!data?.papers && <div className="empty">جاري التحميل...</div>}
-          {data?.papers?.map((p, i) => <PaperCard key={p.id} p={p} n={i + 1} of={data.papers!.length} file={file} busy={busy} gkey={open} call={call} save={(marks) => call({ action: "save", item: p.id, marks }, true)} />)}
+          {data?.papers?.map((p, i) => <PaperCard key={p.id} report={report} p={p} n={i + 1} of={data.papers!.length} file={file} busy={busy} gkey={open} call={call} save={(marks) => call({ action: "save", item: p.id, marks }, true)} />)}
           {/* بالأخير بعد ما يخلص كل الأوراق: نفس الزر */}
-          {g && data?.papers && <div className="card expad"><SendAll g={g} busy={busy} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} /></div>}
+          {g && data?.papers && <div className="card expad"><SendAll g={g} busy={busy} work={busyWork} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} /></div>}
         </div>
         <style>{CSS}</style>
         <StatusBar busy={busy} error={error} notice={data?.notice} />
@@ -98,42 +102,47 @@ function gradeLink(id: number, gkey: string, embed = false) {
   return `/store/grade?edit=${id}&back=${encodeURIComponent(gkey)}${embed ? "&embed=1" : ""}${t ? `&t=${encodeURIComponent(t)}` : ""}`;
 }
 /** ورقة طالب. n: رقمه بالمجموعة: الطلاب يتناوبون باللون (إطار أزرق وجوه ذهبي، والجاي بالعكس) حتى تبين وين تخلص ورقة وتبدي اللي بعدها (طلبه 2026-11-27) */
-function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
+function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { report: (id: number, open: number, saving: number) => void; p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
   const [p, setP] = useState(start);
   // ✏️ أدوات التصحيح مخفية: كل سؤال يطلع بدرجته وورقته بس، ودوسة «✏️» تطلع أدواته (الدرجة، العلامات، ضيف علامة)
   const [edit, setEdit] = useState<Record<number, boolean>>({});
   // ✏️ صحح (طلبه 2026-11-27): أدوات التصحيح كلها تنفتح بنفس السؤال اللي داسه، بعرض الشاشة. كل دوسة رقم وكل خط ينحفظ وحده،
   // و«✔ خلصت» يحفظ الصفحة الأخيرة ويسدها. ما يوصل شي للطالب إلا من «📤 دز للطلاب» بالمجموعة
+  // gq: السؤال المفتوح قدامه. bg: أسئلة تركها، تنحفظ بالخلفية (شاشتها مخفية لحد ما تخلص) وهو يكمل براحته (طلبه 2026-11-27)
   const [gq, setGq] = useState<number | null>(null);
-  const [nextQ, setNextQ] = useState<number | null>(null);
-  const [closing, setClosing] = useState(false);
-  const frame = useRef<HTMLIFrameElement | null>(null);
-  const [gmsg, setGmsg] = useState("");
-  const wait = useRef<number | null>(null);
-  const closeNow = (then: number | null) => {
-    if (wait.current) { window.clearTimeout(wait.current); wait.current = null; }
-    setClosing(false); setGq(then); setNextQ(null);
+  const [bg, setBg] = useState<number[]>([]);
+  const [fails, setFails] = useState<Record<number, string>>({});
+  const frames = useRef(new Map<number, HTMLIFrameElement>());
+  const timers = useRef(new Map<number, number>());
+  const doneBg = (n: number) => {
+    const t = timers.current.get(n); if (t) window.clearTimeout(t); timers.current.delete(n);
+    setBg((b) => b.filter((x) => x !== n));
     void call({ action: "group", key: gkey }, true);
   };
-  const finish = (then: number | null) => {
-    setNextQ(then); setClosing(true); setGmsg("");
-    frame.current?.contentWindow?.postMessage({ qgrade: "save" }, location.origin);
-    // الدرجات والكتابة أصلاً تنحفظ وحدها: إذا الحفظ الأخير ما رد، تتسد بعد 8 ثواني
-    if (wait.current) window.clearTimeout(wait.current);
-    wait.current = window.setTimeout(() => closeNow(then), 8000);
+  /** يترك السؤال المفتوح: يحفظه بالخلفية ويفتح اللي بعده فوراً (أو يسدها) */
+  const leave = (then: number | null) => {
+    const cur = gq;
+    if (cur !== null && cur !== then) {
+      frames.current.get(cur)?.contentWindow?.postMessage({ qgrade: "save" }, location.origin);
+      setBg((b) => [...b.filter((x) => x !== cur), cur]);
+      // الدرجات والكتابة أصلاً انحفظت وهو يكتب: إذا الحفظ الأخير ما رد، تنشال بعد 20 ثانية
+      timers.current.set(cur, window.setTimeout(() => doneBg(cur), 20000));
+    }
+    if (then !== null) { setFails((f) => { const x = { ...f }; delete x[then]; return x; }); setBg((b) => b.filter((x) => x !== then)); }
+    setGq(then);
   };
-  const openQ = (n: number) => { if (gq === null) setGq(n); else if (gq !== n) finish(n); };
+  useEffect(() => { report(p.id, gq === null ? 0 : 1, bg.length); }, [gq, bg]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (gq === null) return;
     const on = (e: MessageEvent) => {
       if (e.origin !== location.origin || Number(e.data?.id) !== p.id) return;
-      if (e.data?.qgrade === "done") closeNow(nextQ);
-      // ما انحفظ (مثلاً سؤال بلا درجة): يبقى مفتوح ويگله ليش، والأزرار ترجع
-      if (e.data?.qgrade === "fail") { if (wait.current) { window.clearTimeout(wait.current); wait.current = null; } setClosing(false); setNextQ(null); setGmsg(String(e.data.msg ?? "ما انحفظ")); }
+      const n = Number(e.data?.q) || 0;
+      if (e.data?.qgrade === "done") doneBg(n);
+      // ما انحفظ (سؤال بلا درجة): يگله جنب السؤال، والأدوات تنسد
+      if (e.data?.qgrade === "fail") { setFails((f) => ({ ...f, [n]: String(e.data.msg ?? "ما انحفظ") })); doneBg(n); }
     };
     window.addEventListener("message", on);
     return () => window.removeEventListener("message", on);
-  }, [gq, nextQ]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [marks, setMarks] = useState<Record<number, string>>(() => Object.fromEntries(start.questions.map((q) => [q.n, String(q.mark)])));
   // ✏️ تعديل التصحيح على الورقة: علامة مختارة، أو «➕ ضيف علامة» ينتظر دوسة على الصفحة
   const [tap, setTap] = useState<{ ref: string; m: PaperMark } | null>(null);
@@ -187,16 +196,16 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call }: { p: Paper
               : <span className="arv-mark">{marks[q.n] ?? q.mark} من {q.max}</span>}
             {/* ✏️ شاشة التصحيح نفسها بكل أدواتها، جوه ورقة هذا الطالب، وصفحاته ورا بعض (طلبه 2026-11-27) */}
             {gq === q.n
-              ? <button type="button" className="arv-pen on" disabled={closing} onClick={() => finish(null)}>{closing ? "⏳ يحفظ..." : "✔ خلصت"}</button>
-              : <button type="button" className="arv-pen" aria-label="صحح بأدوات التصحيح" title="صحح بأدوات التصحيح" disabled={closing} onClick={() => openQ(q.n)}>✏️ صحح</button>}
+              ? <button type="button" className="arv-pen on" onClick={() => leave(null)}>✔ خلصت</button>
+              : <button type="button" className="arv-pen" aria-label="صحح بأدوات التصحيح" title="صحح بأدوات التصحيح" onClick={() => leave(q.n)}>✏️ صحح</button>}
             <button type="button" className={"arv-pen arv-pen2" + (edit[q.n] ? " on" : "")} aria-label="علامات الذكاء" title="علامات الذكاء" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "🤖 علامات الذكاء"}</button>
             {q.note && <small>{q.note}</small>}
           </div>
-          {gq === q.n && <div className="arv-grade">
-            <iframe ref={frame} title={`تصحيح ${p.name} س${q.n}`} src={`${gradeLink(p.id, gkey, true)}&q=${q.n}`} />
-            {gmsg && <div className="arv-hint" style={{ textAlign: "center", padding: 6 }}>⚠️ {gmsg}</div>}
-            <div className="exline arv-gfoot"><button type="button" className="btn" style={{ width: "auto" }} disabled={closing} onClick={() => finish(null)}>{closing ? "⏳ يحفظ..." : `✔ خلصت س${q.n}`}</button>
-              <button type="button" className="exbtn" onClick={() => closeNow(null)}>✖ سد</button></div>
+          {bg.includes(q.n) && gq !== q.n && <div className="arv-saving">⏳ س{q.n} ينحفظ بالخلفية...</div>}
+          {fails[q.n] && <div className="arv-hint" style={{ marginTop: 4 }}>⚠️ س{q.n}: {fails[q.n]}</div>}
+          {(gq === q.n || bg.includes(q.n)) && <div className="arv-grade" style={gq === q.n ? undefined : { display: "none" }}>
+            <iframe ref={(el) => { if (el) frames.current.set(q.n, el); else frames.current.delete(q.n); }} title={`تصحيح ${p.name} س${q.n}`} src={`${gradeLink(p.id, gkey, true)}&q=${q.n}`} />
+            <div className="exline arv-gfoot"><button type="button" className="btn" style={{ width: "auto" }} onClick={() => leave(null)}>{`✔ خلصت س${q.n}`}</button></div>
           </div>}
           {gq !== q.n && (q.marked?.length ? q.marked : q.photos.map((ref) => ({ ref, marks: [] as PaperMark[] }))).map((pg) => (
             <div key={pg.ref} className={adding === pg.ref ? "arv-adding" : ""} onClickCapture={(e) => pick(e, pg.ref)}>
@@ -267,6 +276,9 @@ const CSS = `
 .arv-grade{position:relative;width:auto;margin:8px -12px 12px;border-top:3px solid #F6C94A;border-bottom:3px solid #F6C94A;background:#1b1c1f;overflow:hidden;touch-action:pan-y}
 .arv-grade iframe{display:block;width:100%;height:calc(100vh - 70px);min-height:520px;border:0;background:#1b1c1f}
 .arv-gfoot{justify-content:center;padding:8px}
+.arv-saving{margin-top:4px;font-size:13px;font-weight:800;color:#6ee7a8}
+.arv-wait{padding:10px;border-radius:10px;background:rgba(246,201,74,.12);color:#F6C94A;font-weight:800;text-align:center}
+.arv-ok{padding:10px;border-radius:10px;background:rgba(110,231,168,.12);color:#6ee7a8;font-weight:800;text-align:center}
 html,body{overflow-x:hidden;overflow-x:clip}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
 .arv-q{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
@@ -279,12 +291,17 @@ html,body{overflow-x:hidden;overflow-x:clip}
 `;
 
 /** «📤 دز للطلاب»: الدرجات المحجوزة والتعديلات الصامتة بهاي المجموعة توصل هسه للطلاب وأولياء أمورهم */
-function SendAll({ g, busy, send }: { g: Group; busy: boolean; send: () => void }) {
+function SendAll({ g, busy, send, work }: { g: Group; busy: boolean; send: () => void; work: { open: number; saving: number } }) {
   const n = g.held + (g.pending ?? 0);
-  if (!n) return <div className="exhint adtop">✅ ماكو شي ينتظر. كلشي واصل للطلاب.</div>;
+  // بعده يصحح لو ينحفظ: الزر ينتظر
+  if (work.open || work.saving) return (
+    <div className="arv-wait adtop">{work.saving ? `⏳ ${work.saving} سؤال ينحفظ بالخلفية، انتظر شوية...` : "✏️ عندك سؤال مفتوح: دوس «✔ خلصت» عليه أول"}<br /><small>«📤 دز للطلاب» يطلع من ينحفظ كلشي.</small></div>
+  );
+  if (!n) return <div className="exhint adtop">✅ كلشي انحفظ، وماكو شي ينتظر. كلشي واصل للطلاب.</div>;
   return (
     <>
-      <div className="exhint adtop">⏳ ما وصل للطلاب بعد: {g.held ? `${g.held} درجة تنتظرك` : ""}{g.held && g.pending ? " و" : ""}{g.pending ? `${g.pending} تعديل سويته` : ""}. من تخلص مراجعة الأوراق كلها:</div>
+      <div className="arv-ok adtop">✅ كلشي انحفظ. تگدر تدز هسه.</div>
+      <div className="exhint">ما وصل للطلاب بعد: {g.held ? `${g.held} درجة تنتظرك` : ""}{g.held && g.pending ? " و" : ""}{g.pending ? `${g.pending} تعديل سويته` : ""}.</div>
       <button type="button" className="btn adtop" disabled={busy} onClick={send}>📤 دز للطلاب ({n})</button>
     </>
   );
