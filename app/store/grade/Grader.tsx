@@ -383,6 +383,8 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
   const pendingMarks = useRef(new Set<Promise<void>>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inksRef = useRef(inks); inksRef.current = inks;
+  /** الصفحات اللي كتب عليها بهاي الشاشة (تبقى، حتى بعد ما تنحفظ) */
+  const touched = useRef(new Set<number>());
   const locked = !!paper.graded && !objMode && !paper.editing;
   const stage = useRef<HTMLDivElement>(null);
   const qtop = useRef<HTMLDivElement>(null);
@@ -428,6 +430,7 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     if (locked) return;
     const before = pg === at ? ink.items : inksRef.current[pg]?.items ?? [];
     if (keep) { (undo.current[pg] ??= []).push(before); redo.current[pg] = []; }
+    touched.current.add(pg);
     setInks((x) => ({ ...x, [pg]: next }));
     dirty.current.add(pg);
     if (timer.current) clearTimeout(timer.current);
@@ -583,7 +586,17 @@ export default function Grader({ paper, url, busy, act, onClose, onSkip, onSave,
     const info: HeaderInfo = { slug: paper.slug, chapter: paper.chapter, title: paper.title, info: paper.info, model: paper.model, name: paper.name, total: prep.total, lang: paper.lang, sid: paper.sid };
     const logo = await loadImage("/logo.png");
     const out = [await coverImage(info, prep.comment, prep.sticker ? await loadImage(stickerUrl(prep.sticker)) : null, logo)];
-    const all = inksRef.current;
+    let all = inksRef.current;
+    // مراجعة الذكاء: كل سؤال بشاشة لحاله. الصفحات اللي ما لمستها هاي الشاشة تاخذ آخر كتابة محفوظة بالسيرفر
+    if (autosave) {
+      try {
+        const r = await fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: pageAuth(), action: "openEdit", id: paper.id, quiet: true }) });
+        const j = await r.json();
+        const fresh = (j?.paper?.ink ?? {}) as Record<string, string>;
+        all = { ...all };
+        for (const [k, v] of Object.entries(fresh)) if (!touched.current.has(Number(k))) all[Number(k)] = parseInk(v);
+      } catch { /* بالموجود */ }
+    }
     const imgs = new Map<number, HTMLImageElement>();
     for (const ink of Object.values(all)) for (const it of ink.items) if (it.t === "i" && !imgs.has(it.id)) { const im = await loadImage(stickerUrl(it.id)); if (im) imgs.set(it.id, im); }
     for (const [i, pg] of (pages ?? []).entries()) {

@@ -823,10 +823,11 @@ async function finishEdit(uid: number, it: Row, photos: Buffer[]) {
   const old = Number(it.total);
   await update("sched_items", { id: it.id }, { total });
   await keepPages(it.id, photos);
-  await kvSet(editKey(it.id), "");
+  const quiet = await kvGet(quietKey(it.id)) === "1";
+  // الصامت (مراجعة الذكاء): التعديل والصمت يبقون، لأن أسئلة ثانية من نفس الورقة ممكن بعدها مفتوحة وتنحفظ وراه
+  if (!quiet) await kvSet(editKey(it.id), "");
   await logActivity(it.user_id, `✏️ ${await staffName(uid)} عدل تصحيح امتحان ${view.title}: ${old} ← ${total}`);
-  if (await kvGet(quietKey(it.id)) === "1") {
-    await kvSet(quietKey(it.id), "");
+  if (quiet) {
     const p = await pendingEdits();
     if (p[String(it.id)] === undefined && total !== old) { p[String(it.id)] = old; await kvSet(PENDING, JSON.stringify(p)); }
     return `✅ انحفظ: ${total} من 100. يوصل للطالب من تدوس «📤 دز للطلاب» بالمجموعة`;
@@ -844,8 +845,8 @@ async function finishPaper(uid: number, raw: unknown, photos: Buffer[], commentI
   const row = await one("sched_items", { id: Number(raw) });
   if (row?.graded_at && await isEditing(uid, row.id)) return await finishEdit(uid, row, photos);
   if (row && !row.graded_at && await isEditing(uid, row.id)) {
+    // ورقة ذكاء محجوزة: الصفحات بس. التعديل يبقى مفتوح، لأن أسئلة ثانية من نفس الورقة ممكن بعدها مفتوحة
     await keepPages(row.id, photos);
-    await kvSet(editKey(row.id), ""); await kvSet(quietKey(row.id), "");
     await logActivity(row.user_id, `✏️ ${await staffName(uid)} عدل تصحيح الذكاء قبل ما يوصل`);
     return "✅ انحفظ. يوصل للطالب من تدوس «📤 دز للطلاب» بالمجموعة";
   }

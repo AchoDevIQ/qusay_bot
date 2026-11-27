@@ -19,9 +19,10 @@ export default function AiReviewClient() {
   const [open, setOpen] = useState<string | null>(null);
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const c = cfg ?? data?.cfg ?? null;
-  const [work, setWork] = useState<Record<number, { open: number; saving: number }>>({});
-  const report = useCallback((id: number, open: number, saving: number) => setWork((w) => (w[id]?.open === open && w[id]?.saving === saving ? w : { ...w, [id]: { open, saving } })), []);
-  const busyWork = Object.values(work).reduce((t, x) => ({ open: t.open + x.open, saving: t.saving + x.saving }), { open: 0, saving: 0 });
+  // بالاسم: منو سؤاله مفتوح، منو ينحفظ، ومنو ما انحفظ، حتى يعرف يرجعله
+  const [work, setWork] = useState<Record<number, Work>>({});
+  const report = useCallback((id: number, x: Work) => setWork((w) => (JSON.stringify(w[id]) === JSON.stringify(x) ? w : { ...w, [id]: x })), []);
+  const busyWork = Object.values(work);
   const openGroup = async (key: string) => { setWork({}); setOpen(key); window.scrollTo(0, 0); await call({ action: "group", key }, true); };
   const back = async () => { setOpen(null); await call({ action: "list" }); };
   // رجع من شاشة التصحيح (?open=المجموعة#p رقم الورقة): تنفتح نفس المجموعة وتنزل لنفس الطالب
@@ -102,7 +103,7 @@ function gradeLink(id: number, gkey: string, embed = false) {
   return `/store/grade?edit=${id}&back=${encodeURIComponent(gkey)}${embed ? "&embed=1" : ""}${t ? `&t=${encodeURIComponent(t)}` : ""}`;
 }
 /** ورقة طالب. n: رقمه بالمجموعة: الطلاب يتناوبون باللون (إطار أزرق وجوه ذهبي، والجاي بالعكس) حتى تبين وين تخلص ورقة وتبدي اللي بعدها (طلبه 2026-11-27) */
-function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { report: (id: number, open: number, saving: number) => void; p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
+function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { report: (id: number, x: Work) => void; p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
   const [p, setP] = useState(start);
   // ✏️ أدوات التصحيح مخفية: كل سؤال يطلع بدرجته وورقته بس، ودوسة «✏️» تطلع أدواته (الدرجة، العلامات، ضيف علامة)
   const [edit, setEdit] = useState<Record<number, boolean>>({});
@@ -131,7 +132,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
     if (then !== null) { setFails((f) => { const x = { ...f }; delete x[then]; return x; }); setBg((b) => b.filter((x) => x !== then)); }
     setGq(then);
   };
-  useEffect(() => { report(p.id, gq === null ? 0 : 1, bg.length); }, [gq, bg]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { report(p.id, { id: p.id, name: p.name, open: gq, saving: bg, failed: Object.keys(fails).map(Number) }); }, [gq, bg, fails]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const on = (e: MessageEvent) => {
       if (e.origin !== location.origin || Number(e.data?.id) !== p.id) return;
@@ -278,6 +279,7 @@ const CSS = `
 .arv-gfoot{justify-content:center;padding:8px}
 .arv-saving{margin-top:4px;font-size:13px;font-weight:800;color:#6ee7a8}
 .arv-wait{padding:10px;border-radius:10px;background:rgba(246,201,74,.12);color:#F6C94A;font-weight:800;text-align:center}
+.arv-who{background:none;border:0;padding:0;color:#fff;font:inherit;font-weight:900;text-decoration:underline;cursor:pointer}
 .arv-ok{padding:10px;border-radius:10px;background:rgba(110,231,168,.12);color:#6ee7a8;font-weight:800;text-align:center}
 html,body{overflow-x:hidden;overflow-x:clip}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
@@ -291,11 +293,19 @@ html,body{overflow-x:hidden;overflow-x:clip}
 `;
 
 /** «📤 دز للطلاب»: الدرجات المحجوزة والتعديلات الصامتة بهاي المجموعة توصل هسه للطلاب وأولياء أمورهم */
-function SendAll({ g, busy, send, work }: { g: Group; busy: boolean; send: () => void; work: { open: number; saving: number } }) {
+type Work = { id: number; name: string; open: number | null; saving: number[]; failed: number[] };
+const jump = (id: number) => document.getElementById(`p${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+function SendAll({ g, busy, send, work }: { g: Group; busy: boolean; send: () => void; work: Work[] }) {
   const n = g.held + (g.pending ?? 0);
-  // بعده يصحح لو ينحفظ: الزر ينتظر
-  if (work.open || work.saving) return (
-    <div className="arv-wait adtop">{work.saving ? `⏳ ${work.saving} سؤال ينحفظ بالخلفية، انتظر شوية...` : "✏️ عندك سؤال مفتوح: دوس «✔ خلصت» عليه أول"}<br /><small>«📤 دز للطلاب» يطلع من ينحفظ كلشي.</small></div>
+  const open = work.filter((w) => w.open !== null), saving = work.filter((w) => w.saving.length), failed = work.filter((w) => w.failed.length);
+  // بعده يصحح، لو ينحفظ، لو سؤال ما انحفظ: الزر ينتظر، ويگله منو بالاسم (دوسة على الاسم توديه لورقته)
+  if (open.length || saving.length || failed.length) return (
+    <div className="arv-wait adtop">
+      {saving.map((w) => <div key={`s${w.id}`}>⏳ ينحفظ: <button type="button" className="arv-who" onClick={() => jump(w.id)}>{w.name}</button> {w.saving.map((q) => `س${q}`).join("، ")}</div>)}
+      {open.map((w) => <div key={`o${w.id}`}>✏️ مفتوح: <button type="button" className="arv-who" onClick={() => jump(w.id)}>{w.name}</button> س{w.open} (دوس «✔ خلصت»)</div>)}
+      {failed.map((w) => <div key={`f${w.id}`}>⚠️ ما انحفظ: <button type="button" className="arv-who" onClick={() => jump(w.id)}>{w.name}</button> {w.failed.map((q) => `س${q}`).join("، ")} (ناقصته درجة: افتحه وكمله)</div>)}
+      <small>«📤 دز للطلاب» يطلع من ينحفظ كلشي.</small>
+    </div>
   );
   if (!n) return <div className="exhint adtop">✅ كلشي انحفظ، وماكو شي ينتظر. كلشي واصل للطلاب.</div>;
   return (
