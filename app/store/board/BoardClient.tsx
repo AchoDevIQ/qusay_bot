@@ -1,6 +1,7 @@
 "use client";
 // 📝 سبورة قصي العميري (طلبه 2026-11-25، BOARD_SPEC.md): نفس سبورة الويندوز، بالتطبيق، عند الأستاذ وعند الطالب بنفس الخيارات.
 // الكف يمسح (التماس أكبر من الحد)، والقلم بالآيباد يكتب واليد ما تكتب وهو نازل. كل الكتابة والأزرار بالعربي
+import { enDigits } from "../../../lib/board/spokenNum.ts";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Splash, { Outro } from "./Splash";
 import { plot } from "../../../lib/board/plot.ts";
@@ -1101,16 +1102,6 @@ type SR = { lang: string; continuous: boolean; interimResults: boolean; start():
 // المايك (طلبه 2026-11-27): كل لغة بسطرها. يگول «إنگليزي» أو «عربي» (أو يدوس الزر): تتبدل اللغة وينزل سطر.
 // الكلمة نفسها ما تنكتب. وبالسبورة الإنگليزي يسار والعربي يمين
 const norm = (t: string) => t.trim().toLowerCase().replace(/[.,!?؟،:;"'«»]/g, "").replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/\s+/g, " ");
-// الأرقام دائماً إنگليزي (طلبه 2026-11-27: «بمنهجنا نكتبها إنگليزي»): ٦ ← 6، و«ستة» أو «six» لحالها ← 6
-const AR_NUM: Record<string, string> = { صفر: "0", واحد: "1", واحده: "1", اثنين: "2", اثنان: "2", ثنين: "2", ثلاثه: "3", ثلاث: "3", تلاته: "3", اربعه: "4", اربع: "4", خمسه: "5", خمس: "5", سته: "6", ست: "6", سبعه: "7", سبع: "7", ثمانيه: "8", ثمان: "8", ثماني: "8", تسعه: "9", تسع: "9", عشره: "10", عشر: "10" };
-const EN_NUM: Record<string, string> = { zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10" };
-function enDigits(t: string) {
-  return t.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
-    .split(/(\s+)/).map((w) => {
-      const k = w.replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
-      return AR_NUM[k] ?? EN_NUM[w.toLowerCase()] ?? w;
-    }).join("");
-}
 function langCmd(t: string): "ar-IQ" | "en-US" | null {
   const n = norm(t);
   if (/^(ال)?ا?ن[جكگق]ل[ي]?ز[ي]?(ه|ة)?$|^(english|inglizi|ingilizi|engilizi)$/.test(n)) return "en-US";
@@ -1178,7 +1169,7 @@ function MicPanel({ onCancel, onPlace, teacher }: { onCancel: () => void; onPlac
         <button type="button" className={`qb-chip${lang === "en-US" ? " on" : ""}`} onClick={() => switchLang("en-US")}>إنگليزي</button>
       </div>
       <div className="qb-note">گول «إنگليزي» أو «عربي» (أو دوس الزر): تتبدل اللغة وينزل سطر. بالسبورة الإنگليزي يسار والعربي يمين.</div>
-      <textarea dir="auto" style={{ unicodeBidi: "plaintext", textAlign: "start" }} value={text} onChange={(e) => { setText(e.target.value); done.current = e.target.value; }} rows={4} />
+      <textarea dir="auto" style={{ unicodeBidi: "plaintext", textAlign: "start" }} value={text} onChange={(e) => { const v = e.target.value.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))); setText(v); done.current = v; }} rows={4} />
       {err && <div className="qb-note bad">⚠️ {err}</div>}
       <div className="qb-row"><span>حجم الكتابة:</span>{[[36, "صغير"], [56, "وسط"], [84, "كبير"]].map(([n, t]) => <button key={n} type="button" className={`qb-chip${size === n ? " on" : ""}`} onClick={() => setSize(Number(n))}>{t}</button>)}</div>
       <div className="qb-dbtns">
