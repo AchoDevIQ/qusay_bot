@@ -73,6 +73,8 @@ export async function boardAction(body: any) {
     lqCount: teacher ? await (async () => { const BA = await import("./boardAttach.ts"); const e = await BA.boardAppEnv(); return e ? await BA.lectureAttCount(e) : 0; })() : 0,
   });
   if (a === "state") return await state();
+  // 🌐 ترجمة كلام المايك (للأستاذ بس، لأنها بفلوس)
+  if (a === "translate") { need(teacher, "الترجمة للأستاذ بس", 403); return { text: await (await import("./boardTranslate.ts")).translateBoard(body.text) }; }
   if (a === "get") {
     const id = String(body.id ?? "");
     need(/^[\w-]{8,64}$/.test(id) && (await myList(uid)).some((x) => x.id === id), "الشرح مو موجود", 404);

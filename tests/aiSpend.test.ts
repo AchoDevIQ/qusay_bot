@@ -69,5 +69,5 @@ test("الكارت: التصحيح لحاله والأسئلة العلمية ل
 test("الكارت لصاحب البوت بس", async () => {
   await assert.rejects(aiSpendAction({ initData: sign(5) }), (e: any) => e.status === 403);
   const r: any = await aiSpendAction({ initData: sign(1) });
-  assert.equal(r.rows.length, 4);   // ويا «🧠 تصحيح قصي»
+  assert.equal(r.rows.length, 5);   // ويا «🧠 تصحيح قصي» و«🌐 ترجمة مايك السبورة»
 });

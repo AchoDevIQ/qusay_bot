@@ -3,7 +3,7 @@
 import { kvGet, kvSet } from "./db.ts";
 import { stamp } from "./util.ts";
 
-export type SpendKind = "qa" | "pen" | "qusay";
+export type SpendKind = "qa" | "pen" | "qusay" | "board";
 const KEY = "ai_spend_days";
 const KEEP_DAYS = 400;
 type Days = Record<string, Partial<Record<SpendKind, number>>>;

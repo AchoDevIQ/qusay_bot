@@ -1022,7 +1022,7 @@ export default function BoardClient() {
       <input ref={pdfInput} type="file" accept="application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void openPdf(f); }} />
       <input ref={imgInput} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void insertImage(f); }} />
 
-      {mic && <MicPanel onCancel={() => setMic(false)} onPlace={(t, s) => { setMic(false); if (!t.trim()) return; pendingText.current = { t: t.trim(), s }; setPlacing(true); }} />}
+      {mic && <MicPanel teacher={!!st?.teacher} onCancel={() => setMic(false)} onPlace={(t, s) => { setMic(false); if (!t.trim()) return; pendingText.current = { t: t.trim(), s }; setPlacing(true); }} />}
       {ask && <div className="qb-modal"><div className="qb-dlg">
         <div className="qb-dtext">{ask.text}</div>
         {ask.input && <AskInput init={ask.input.value} set={ask.input.set} />}
@@ -1117,7 +1117,8 @@ function langCmd(t: string): "ar-IQ" | "en-US" | null {
   if (/^(ال)?عربي(ه|ة)?$|^(arabic|arabi|araby|arabee|arab)$/.test(n)) return "ar-IQ";
   return null;
 }
-function MicPanel({ onCancel, onPlace }: { onCancel: () => void; onPlace: (t: string, size: number) => void }) {
+function MicPanel({ onCancel, onPlace, teacher }: { onCancel: () => void; onPlace: (t: string, size: number) => void; teacher: boolean }) {
+  const [tr, setTr] = useState("");
   const [text, setText] = useState("");
   const [size, setSize] = useState(56);
   const [lang, setLang] = useState<"ar-IQ" | "en-US">("ar-IQ");
@@ -1182,6 +1183,11 @@ function MicPanel({ onCancel, onPlace }: { onCancel: () => void; onPlace: (t: st
       <div className="qb-row"><span>حجم الكتابة:</span>{[[36, "صغير"], [56, "وسط"], [84, "كبير"]].map(([n, t]) => <button key={n} type="button" className={`qb-chip${size === n ? " on" : ""}`} onClick={() => setSize(Number(n))}>{t}</button>)}</div>
       <div className="qb-dbtns">
         {on ? <button type="button" className="bad" onClick={stop}>⏹ وگّف</button> : <button type="button" className="bad" onClick={() => start()}>🎤 ابدأ الكلام</button>}
+        {/* 🌐 كل سطر وتحته ترجمته بعبارات المنهج: الإنگليزي يطلع تحته عربي، والعربي تحته إنگليزي */}
+        {teacher && <button type="button" className="gray" disabled={!text.trim() || !!tr} onClick={async () => {
+          stop(); setTr("⏳ يترجم..."); setErr("");
+          try { const r = await api({ action: "translate", text }); setText(r.text); done.current = r.text; setTr(""); } catch (e) { setTr(""); setErr((e as Error).message); }
+        }}>{tr || "🌐 ترجم"}</button>}
         <button type="button" className="ok" disabled={!text.trim()} onClick={() => { stop(); onPlace(text, size); }}>اكتبها على السبورة</button>
         <button type="button" className="gray" onClick={() => { stop(); onCancel(); }}>إلغاء</button>
       </div>
