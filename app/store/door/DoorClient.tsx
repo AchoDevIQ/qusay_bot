@@ -14,7 +14,14 @@ export default function DoorClient() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [notice, setNotice] = useState("");
   /** دخل: ينحفظ بالجهاز حتى المرة الجاية ما يطلب الرمز */
-  const keep = (r: Open) => { try { localStorage.setItem(T_KEY, r.t); } catch { /* */ } setOpen(r); };
+  const keep = (r: Open) => {
+    try { localStorage.setItem(T_KEY, r.t); } catch { /* */ }
+    setOpen(r);
+    // ?go=board: أيقونة «سبورة قصي العميري» باللابتوب تفتح نافذة لحالها (بلا رابط، وبيها زر تصغير الويندوز) وتدخل للسبورة على طول.
+    // بس إذا هذي أول مرة يطلعله رمزه (r.pin) يبقى هنا حتى يحفظه
+    const g = new URLSearchParams(location.search).get("go");
+    if (g === "board" && r.admin && !r.pin) location.replace(`/store/board?t=${encodeURIComponent(r.t)}`);
+  };
 
   async function call(body: Record<string, unknown>, key = d) {
     setBusy(true); setError("");
@@ -51,7 +58,8 @@ export default function DoorClient() {
   function takeLink(text: string) {
     const m = /[?&]d=([^&\s#]+)/.exec(text.trim()) ?? /^(k[\w.-]+)$/.exec(text.trim());
     if (!m) { setError("هذا مو رابط الدخول. انسخ الرابط كامل من صاحب البوت"); return false; }
-    location.href = `/store/door?d=${m[1]}`;
+    const g = new URLSearchParams(location.search).get("go");
+    location.href = `/store/door?d=${m[1]}${g ? `&go=${encodeURIComponent(g)}` : ""}`;
     return true;
   }
   useEffect(() => {

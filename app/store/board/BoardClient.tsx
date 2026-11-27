@@ -810,8 +810,10 @@ export default function BoardClient() {
   // اللي بالشاشة يبقى مسودة بالجهاز، ومن يرجع ينفتح نفسه. «شرح جديد» أو فتح شرح ثاني يبدله
   const doExit = () => { if (dirty && !solve) keepDraft(); setDirty(false); if (history.length > 1) history.back(); else window.close(); window.setTimeout(() => setOutro(false), 1500); };
   // «−»: الأدوات تنزل وشريط المتصفح (اللي بيه الرابط) يختفي هم، حتى الطلاب ما يشوفون الرابط بالشاشة أو بالتصوير (طلبه 2026-11-27).
-  // ما يطلّع من ملء الشاشة أبداً (قبل جان «−» يطلّع منها فيبين الرابط)
-  const hideBrowser = () => { try { if (!document.fullscreenElement) void document.documentElement.requestFullscreen?.().catch(() => { /* الآيباد */ }); } catch { /* */ } };
+  // ما يطلّع من ملء الشاشة أبداً (قبل جان «−» يطلّع منها فيبين الرابط). بنافذة السبورة لحالها (أيقونة اللابتوب) ماكو رابط أصلاً،
+  // فما تصير ملء الشاشة حتى يبقى زر تصغير الويندوز «−» فوگ ظاهر
+
+  const hideBrowser = () => { try { if (!document.fullscreenElement && window.locationbar?.visible !== false) void document.documentElement.requestFullscreen?.().catch(() => { /* الآيباد */ }); } catch { /* */ } };
   const fullScreen = () => { try { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen(); } catch { /* */ } };
 
   function keepDraft() { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(lesson.current)); localStorage.setItem(META_KEY, JSON.stringify({ id: lessonId, title })); } catch { /* كبير، يبقى بس بالسيرفر */ } }
