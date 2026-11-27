@@ -305,6 +305,7 @@ const CSS = `
 .arv-who{background:none;border:0;padding:0;color:#fff;font:inherit;font-weight:900;text-decoration:underline;cursor:pointer}
 .arv-ok{padding:10px;border-radius:10px;background:rgba(110,231,168,.12);color:#6ee7a8;font-weight:800;text-align:center}
 html,body{overflow-x:hidden;overflow-x:clip}
+html,body{touch-action:pan-y;overscroll-behavior-x:none}
 .arv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:17px}.arv-total{margin-inline-start:auto;font-weight:800;color:#F6C94A}
 .arv-q{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
 .arv-qline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.arv-qline .exnum{width:64px}.arv-qline small{flex-basis:100%;opacity:.8}
