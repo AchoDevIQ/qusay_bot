@@ -104,6 +104,17 @@ export default function BoardClient() {
   const [ask, setAsk] = useState<Ask>(null);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState("");
+  // 🔄 تحديث جديد: النافذة المفتوحة من مدة تبقى على النسخة القديمة لحد ما تتحدث، فتنبهه (كتابته تبقى، لأنها مسودة بالجهاز)
+  const [newVer, setNewVer] = useState(false);
+  useEffect(() => {
+    let first = "";
+    const check = () => { void fetch("/api/version", { cache: "no-store" }).then((r) => r.json()).then((j: { v?: string }) => { const v = String(j?.v ?? ""); if (!v) return; if (!first) first = v; else if (v !== first) setNewVer(true); }).catch(() => { /* */ }); };
+    check();
+    const t = window.setInterval(check, 3 * 60_000);
+    const vis = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", vis);
+    return () => { window.clearInterval(t); document.removeEventListener("visibilitychange", vis); };
+  }, []);
   const [splash, setSplash] = useState(true);
   const [st, setSt] = useState<State | null>(null);
   const [lastTouch, setLastTouch] = useState("-");
@@ -881,6 +892,7 @@ export default function BoardClient() {
         <canvas ref={inkC} className="qb-c" />
         <canvas ref={liveC} className="qb-c qb-live" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp} />
         {placing && <div className="qb-hint">دوس على السبورة بالمكان اللي تريد تبدي منه الكتابة</div>}
+        {newVer && <button type="button" className="qb-upd" onClick={() => { if (!solve) keepDraft(); location.reload(); }}>🔄 أكو تحديث جديد للسبورة. دوس هنا حتى يتحدث (كتابتك تبقى)</button>}
         {tool === "move" && !selN && <div className="qb-hint">دوس على كتابة أو صورة، أو اسحب مربع حوالين اللي تريد تحركه</div>}
         {tool === "move" && selN > 0 && <div className="qb-selbar">
           <span>اسحبه لمكان ثاني، أو كبّره من الدوائر الذهبية</span>
@@ -1119,7 +1131,16 @@ function MicPanel({ onCancel, onPlace, teacher }: { onCancel: () => void; onPlac
   const done = useRef(""); // الكلام اللي خلص وانكتب
   const want = useRef(false);
   const langNow = useRef<"ar-IQ" | "en-US">("ar-IQ");
-  const add = (t: string) => { const c = done.current; done.current = !c ? t : c.endsWith("\n") ? c + t : `${c} ${t}`; };
+  // الكلام ينضاف بمكان المؤشر اللي واگف عليه بالمربع (طلبه 2026-11-27: «يضيفها وين واگف»)، وإذا ما داس بالمربع ينضاف بالآخر
+  const caret = useRef<number | null>(null);
+  const box = useRef<HTMLTextAreaElement | null>(null);
+  const join = (c: string, t: string, at: number | null) => {
+    const k = at === null ? c.length : Math.min(Math.max(at, 0), c.length);
+    const pre = c.slice(0, k), post = c.slice(k);
+    const a = !pre || /\s$/.test(pre) ? "" : " ", b = post && !/^\s/.test(post) ? " " : "";
+    return { text: pre + a + t + b + post, end: (pre + a + t).length };
+  };
+  const add = (t: string) => { const r = join(done.current, t, caret.current); done.current = r.text; if (caret.current !== null) caret.current = r.end; };
   const make = (lg: string) => {
     const C = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     if (!C) { setErr("هذا الجهاز ما يدعم تحويل الكلام لكتابة. جرب متصفح كروم"); return null; }
@@ -1137,8 +1158,7 @@ function MicPanel({ onCancel, onPlace, teacher }: { onCancel: () => void; onPlac
           add(t);
         } else tmp += (tmp ? " " : "") + t;
       }
-      const c = done.current;
-      setText(tmp ? (!c ? tmp : c.endsWith("\n") ? c + tmp : `${c} ${tmp}`) : c);
+      setText(tmp ? join(done.current, tmp, caret.current).text : done.current);
     };
     r.onerror = (e: any) => { if (e?.error === "not-allowed") setErr("لازم تسمح للمايك"); };
     r.onend = () => { if (want.current && rec.current === r) { try { r.start(); } catch { /* */ } } else if (rec.current === r) setOn(false); };
@@ -1156,11 +1176,21 @@ function MicPanel({ onCancel, onPlace, teacher }: { onCancel: () => void; onPlac
   const switchLang = (lg: "ar-IQ" | "en-US") => {
     if (lg === langNow.current) return;
     langNow.current = lg; setLang(lg);
-    if (done.current.trim()) done.current = done.current.trimEnd() + "\n";
+    // ينزل سطر: بالآخر، أو بمكان المؤشر إذا واگف بنص الكلام
+    if (done.current.trim()) {
+      if (caret.current === null) done.current = done.current.trimEnd() + "\n";
+      else {
+        const k = caret.current, pre = done.current.slice(0, k).trimEnd(), post = done.current.slice(k).trimStart();
+        done.current = post ? `${pre}\n\n${post}` : `${pre}\n`;
+        caret.current = pre.length + 1;
+      }
+    }
     setText(done.current);
     if (want.current) { const r = rec.current; rec.current = null; try { r?.stop(); } catch { /* */ } window.setTimeout(() => start(lg), 250); }
   };
   useEffect(() => () => { want.current = false; try { rec.current?.stop(); } catch { /* */ } }, []);
+  // المؤشر يبقى ورا آخر كلمة انضافت، حتى الكلام الجاي يكمل من نفس المكان
+  useEffect(() => { const el = box.current; if (el && caret.current !== null && document.activeElement === el) { try { el.setSelectionRange(caret.current, caret.current); } catch { /* */ } } }, [text]);
   return (
     <div className="qb-modal"><div className="qb-dlg qb-mic">
       <div className="qb-ptitle">احچي وتنكتب</div>
@@ -1169,7 +1199,7 @@ function MicPanel({ onCancel, onPlace, teacher }: { onCancel: () => void; onPlac
         <button type="button" className={`qb-chip${lang === "en-US" ? " on" : ""}`} onClick={() => switchLang("en-US")}>إنگليزي</button>
       </div>
       <div className="qb-note">گول «إنگليزي» أو «عربي» (أو دوس الزر): تتبدل اللغة وينزل سطر. بالسبورة الإنگليزي يسار والعربي يمين.</div>
-      <textarea dir="auto" style={{ unicodeBidi: "plaintext", textAlign: "start" }} value={text} onChange={(e) => { const v = e.target.value.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))); setText(v); done.current = v; }} rows={4} />
+      <textarea ref={box} onSelect={(e) => { caret.current = e.currentTarget.selectionStart; }} onClick={(e) => { caret.current = e.currentTarget.selectionStart; }} onKeyUp={(e) => { caret.current = e.currentTarget.selectionStart; }} dir="auto" style={{ unicodeBidi: "plaintext", textAlign: "start" }} value={text} onChange={(e) => { const v = e.target.value.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))); setText(v); done.current = v; }} rows={4} />
       {err && <div className="qb-note bad">⚠️ {err}</div>}
       <div className="qb-row"><span>حجم الكتابة:</span>{[[36, "صغير"], [56, "وسط"], [84, "كبير"]].map(([n, t]) => <button key={n} type="button" className={`qb-chip${size === n ? " on" : ""}`} onClick={() => setSize(Number(n))}>{t}</button>)}</div>
       <div className="qb-dbtns">
@@ -1195,6 +1225,7 @@ const CSS = `
 .qb-hint{position:absolute;top:56px;left:50%;transform:translateX(-50%);background:#1F2738;color:#F6C94A;padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.27);font-size:18px;pointer-events:none}
 .qb-bar{height:${BAR}px;flex:none;background:#1B2333;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:0 6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .qb-grp{display:flex;align-items:center;gap:2px;flex:none}
+.qb-upd{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;border:0;border-radius:12px;background:#F6C94A;color:#141F33;font:inherit;font-weight:800;font-size:15px;padding:8px 16px;box-shadow:0 4px 14px rgba(0,0,0,.35);max-width:calc(100% - 32px)}
 .qb-tab{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:25;border:0;border-radius:14px 14px 0 0;background:#1B2333;color:#F6C94A;font:inherit;font-weight:800;font-size:15px;padding:6px 22px 8px;min-height:40px;box-shadow:0 -2px 10px rgba(0,0,0,.35);opacity:.9}
 .qb-btn{width:58px;height:66px;flex:none;border:0;border-radius:10px;background:transparent;color:#dfe5f0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;cursor:pointer}
 .qb-btn:disabled{opacity:.35}
