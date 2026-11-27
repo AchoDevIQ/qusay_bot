@@ -32,6 +32,11 @@ test("مساعد بدون تليگرام: رابط، رمز، جلسة أسبو�
   assert.equal(verifyInitData(`tk:${r.t}`), uid, "صفحات الإدارة تقبله");
   assert.equal(verifyInitData(`tk:${r.t}`, Date.now() / 1000 + 8 * 86400), null, "اللوحة ترفضه ورا أسبوع");
   await assert.rejects(doorAction({ d, action: "open", pin: "0000" }), /غلط/);
+  // الجهاز يتذكره: دخلته اللي قبل تعطي دخلة جديدة بدون رمز، والغلط يرجع يطلب الرمز
+  const again: any = await doorAction({ d, action: "resume", t: r.t });
+  assert.equal(verifyInitData(`tk:${again.t}`), uid);
+  assert.equal(again.admin, true);
+  await assert.rejects(doorAction({ d, action: "resume", t: "bad" }), /رمزك/);
   await send(uid, "📝 أكو ورقة تنتظرك");
   const l: any = await chatAction({ token: r.t, app: "", action: "list" });
   assert.equal(l.msgs.at(-1).text, "📝 أكو ورقة تنتظرك");
@@ -44,8 +49,10 @@ test("رابط جديد يبطل القديم، والإبطال يسد البا
   const d2 = new URL(await makeDoor(uid, "أ")).searchParams.get("d")!;
   await assert.rejects(doorAction({ d: d1, action: "state" }), /انتهى/);
   assert.equal((await doorAction({ d: d2, action: "state" })).hasPin, false);
+  const { homeToken } = await import("../lib/webAuth.ts");
   await revokeDoor(uid);
   await assert.rejects(doorAction({ d: d2, action: "state" }), /انتهى/);
+  await assert.rejects(doorAction({ d: d2, action: "resume", t: homeToken(uid) }), /انتهى/, "الإبطال يسد التذكر هم");
 });
 
 test("صاحب المكتبة من رابطه: الوصل ينفتح صفحة وتنطبع بطابعة الجهاز، وبس بيعات مكتبته", async () => {

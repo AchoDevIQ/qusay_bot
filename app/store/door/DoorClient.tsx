@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 type State = { hasPin: boolean; label: string; vapid: string };
 type Open = { t: string; admin: boolean; office: boolean; student?: boolean; pin?: string };
 
+const T_KEY = "qm_door_t";
 export default function DoorClient() {
   const [d, setD] = useState("");
   const [st, setSt] = useState<State | null>(null);
@@ -12,6 +13,8 @@ export default function DoorClient() {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [notice, setNotice] = useState("");
+  /** دخل: ينحفظ بالجهاز حتى المرة الجاية ما يطلب الرمز */
+  const keep = (r: Open) => { try { localStorage.setItem(T_KEY, r.t); } catch { /* */ } setOpen(r); };
 
   async function call(body: Record<string, unknown>, key = d) {
     setBusy(true); setError("");
@@ -27,7 +30,17 @@ export default function DoorClient() {
     try { if (k) localStorage.setItem("qm_door", k); else k = localStorage.getItem("qm_door") ?? ""; } catch { /* */ }
     setD(k);
     if (!k) { setNoLink(true); return; }
-    void call({ action: "state" }, k).then((r) => r && setSt(r));
+    void call({ action: "state" }, k).then(async (r) => {
+      if (!r) return;
+      // هذا الجهاز دخل قبل: يكمل بدون رمز (الدخول يتجدد كل ما يفتحها)
+      let t = ""; try { t = localStorage.getItem(T_KEY) ?? ""; } catch { /* */ }
+      if (r.hasPin && t) {
+        const j = await fetch("/api/door", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ d: k, action: "resume", t }) }).then((x) => x.ok ? x.json() : null).catch(() => null);
+        if (j?.t) { keep(j); setSt(r); return; }
+        try { localStorage.removeItem(T_KEY); } catch { /* */ }
+      }
+      setSt(r);
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ماكو رابط محفوظ (مثل تطبيق جهاز البيع أول مرة): يلصق الرابط أو يصور رمزه المربع
@@ -96,14 +109,14 @@ export default function DoorClient() {
         {st && !open && !st.hasPin && (
           <div className="card"><div className="form">
             <div className="exhint">أول مرة على هذا الجهاز: دوس الزر، ويطلعلك رمزك السري (4 أرقام). تفتح بيه صفحاتك كل مرة.</div>
-            <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "makePin" }).then((r) => { if (r) setOpen(r); })}>🔐 اعطيني رمزي السري</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "makePin" }).then((r) => { if (r) keep(r); })}>🔐 اعطيني رمزي السري</button>
           </div></div>
         )}
         {st && !open && st.hasPin && (
           <div className="card"><div className="form">
             <label>رمزك السري</label>
             <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(digits(e.target.value))} placeholder="••••" />
-            <button type="button" className="btn" disabled={busy || pin.length !== 4} onClick={() => void call({ action: "open", pin }).then((r) => { if (r) { setOpen(r); setPin(""); } })}>🔓 ادخل</button>
+            <button type="button" className="btn" disabled={busy || pin.length !== 4} onClick={() => void call({ action: "open", pin }).then((r) => { if (r) { keep(r); setPin(""); } })}>🔓 ادخل</button>
           </div></div>
         )}
         {open?.pin && (
@@ -121,7 +134,7 @@ export default function DoorClient() {
             {open.student && <button type="button" className="btn ghost" onClick={() => go("inbox")}>🔔 الإشعارات</button>}
             <button type="button" className="btn ghost" onClick={() => go("chat")}>💬 {open.student ? "المحادثة" : "رسائلي"}</button>
             <button type="button" className="btn ghost" disabled={busy} onClick={() => void enablePush()}>🔔 فعّل الإشعارات على هذا الجهاز</button>
-            <div className="exhint">الدخول يبقى أسبوع، وبعدها تكتب رمزك مرة ثانية. بالآيفون والآيباد: «مشاركة» ← «إضافة للشاشة الرئيسية»، وافتحها من هناك.</div>
+            <div className="exhint">هذا الجهاز يبقى داخل: الرابط ثابت، وما يطلب رمزك مرة ثانية إلا إذا ما فتحته أسبوع كامل (أو انمسحت بيانات المتصفح). بالآيفون والآيباد: «مشاركة» ← «إضافة للشاشة الرئيسية»، وافتحها من هناك.</div>
           </div></div>
         )}
       </div>
