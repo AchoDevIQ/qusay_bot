@@ -4,7 +4,7 @@ import { useState } from "react";
 import { pageAuth } from "../adminPage";
 import VoiceRec from "../VoiceRec";
 
-export default function MessageBox({ paperId, name, onClose }: { paperId: number; name: string; onClose: (notice?: string) => void }) {
+export default function MessageBox({ paperId, name, onClose, quiet }: { paperId: number; name: string; onClose: (notice?: string) => void; quiet?: boolean }) {
   const [text, setText] = useState("");
   const [btnText, setBtnText] = useState("");
   const [btnUser, setBtnUser] = useState("");
@@ -19,6 +19,8 @@ export default function MessageBox({ paperId, name, onClose }: { paperId: number
       const fd = new FormData();
       fd.set("initData", pageAuth()); fd.set("action", "message"); fd.set("id", String(paperId));
       fd.set("text", text); fd.set("btnText", btnText); fd.set("btnUser", btnUser);
+      // من مراجعة الذكاء: تنحفظ وتوصل ويا «📤 دز للطلاب»
+      if (quiet) fd.set("quiet", "1");
       if (voice) fd.set("voice", voice, "voice");
       const res = await fetch("/api/grade", { method: "POST", body: fd });
       const j = await res.json().catch(() => ({}));

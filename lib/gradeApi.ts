@@ -1044,7 +1044,9 @@ async function decidePaper(uid: number, raw: unknown, photos: Buffer[], rejectsR
 async function messageStudent(uid: number, form: FormData) {
   const row = await one("sched_items", { id: Number(form.get("id")) });
   need(row?.status === "done", "الورقة غير موجودة");
-  need(row!.grader_id === uid || (row!.graded_at && await canHandle(uid, row!)), "هذي الورقة أخذها مصحح ثاني", 409);
+  // 📩 من «مراجعة تصحيح الذكاء» (quiet): ورقة صححها الذكاء، حتى المحجوزة. الرسالة تنتظر «📤 دز للطلاب»
+  const quiet = form.get("quiet") === "1" && (row!.grader_id === AI_GRADER || row!.grader_id === QUSAY_GRADER) && await can(uid, "aireview");
+  need(quiet || row!.grader_id === uid || (row!.graded_at && await canHandle(uid, row!)), "هذي الورقة أخذها مصحح ثاني", 409);
   const it = row!;
   const text = String(form.get("text") ?? "").trim().slice(0, 3000);
   const voice = voiceOf(form);
@@ -1059,6 +1061,10 @@ async function messageStudent(uid: number, form: FormData) {
 بخصوص امتحان: ${esc(view.title)}${text ? `
 
 ${esc(text)}` : ""}`;
+  if (quiet) {
+    await (await import("./reviewMsgs.ts")).queueMsg(it.id, caption, voice);
+    return { ok: true, notice: "✅ انحفظت الرسالة. توصل للطالب ويا درجته من تدوس «📤 دز للطلاب»" };
+  }
   await deliverMsg(it.user_id, caption, voice, kb);
   await logActivity(it.user_id, `📩 وصلته ${objection ? "رد بالفويس على اعتراضه" : "رسالة من المصحح"} بخصوص ${view.title}`);
   return { ok: true, notice: isTest(it) ? "🧪 وصلت الرسالة إلك إنت، لأنه طالب تجربة" : "✅ وصلت الرسالة للطالب" };

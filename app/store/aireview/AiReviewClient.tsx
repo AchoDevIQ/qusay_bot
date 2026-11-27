@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MarkedPage, type MarkedPageT, type PaperMark } from "../myexams/AiCompare";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 import { InkBar, InkLayer, loadPen, usePaperInk, type PaperPages, type PenSet } from "./InlineInk";
+import MessageBox from "../grade/MessageBox";
 
 type Cfg = { mode: "after" | "before"; hours: number };
 type Group = { key: string; exam: number; title: string; chapter: string; place: string; at: string; count: number; held: number; seen: boolean; pending?: number };
@@ -117,6 +118,9 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
   // ✏️ القلم على الورقة بمكانها (طلبه 2026-11-27): ينحفظ وحده، وصور الورقة المصححة تتركب بصمت بعد ما يوگف
   const inl = usePaperInk(start.id, start.name, start.pg, file, () => void call({ action: "group", key: gkey }, true));
   const [more, setMore] = useState<Record<number, boolean>>({});
+  // 📩 رسالة للطالب (كتابة أو فويس، طلبه 2026-11-28): تنتظر وتوصل ويا «📤 دز للطلاب»
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [msgNote, setMsgNote] = useState("");
   const lastPage = useRef<Record<number, number>>({});
   // ✏️ أدوات التصحيح مخفية: كل سؤال يطلع بدرجته وورقته بس، ودوسة «✏️» تطلع أدواته (الدرجة، العلامات، ضيف علامة)
   const [edit, setEdit] = useState<Record<number, boolean>>({});
@@ -221,7 +225,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
   return (
     <div id={`p${p.id}`} className={"card arv-paper " + (n % 2 ? "arv-a" : "arv-b")}>
       <div className="arv-start">👤 الطالب {n} من {of}: <b>{p.name}</b></div>
-      <div className="arv-head"><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
+      <div className="arv-head"><button type="button" className="arv-msg" onClick={() => setMsgOpen(true)}>📩 رسالة للطالب</button><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
       {p.questions.map((q) => (
         <div key={q.n} id={`q${p.id}-${q.n}`} className="arv-q">
           <div className="arv-qline">
@@ -295,6 +299,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
           : inl.state === "saving" ? <span className="arv-saving">⏳ كتابة القلم تنحفظ...</span>
           : saveMsg ? <span className="arv-saving">{saveMsg}</span> : null}
       </div>
+      {msgNote && <div className="arv-saved adtop">{msgNote}</div>}
+      {msgOpen && <MessageBox quiet paperId={p.id} name={p.name} onClose={(note) => { setMsgOpen(false); if (note) { setMsgNote(note); void call({ action: "group", key: gkey }, true); } }} />}
       <div className="arv-end">— نهاية أوراق {p.name} —</div>
     </div>
   );
@@ -359,6 +365,7 @@ html,body{touch-action:pan-y;overscroll-behavior-x:none}
 .arv-status{height:34px;margin-top:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .arv-send-top{height:56px;margin-top:8px;display:flex;align-items:center;gap:10px;overflow:hidden;white-space:nowrap}
 .arv-okline{font-weight:800;color:#6ee7a8}
+.arv-msg{min-height:40px;padding:0 12px;border-radius:10px;border:1.5px solid #6ee7a8;background:transparent;color:#6ee7a8;font:inherit;font-weight:800;cursor:pointer}
 .arv-qtot{margin-inline-start:auto;font-weight:800;font-size:14px;padding:2px 10px;border-radius:20px;background:rgba(246,201,74,.16);color:#F6C94A}
 .arv-nums{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px;margin-top:8px}
 .arv-nums button{height:42px;border:0;border-radius:10px;background:#2a2c31;color:#fff;font:inherit;font-size:17px;font-weight:800;cursor:pointer}

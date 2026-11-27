@@ -77,6 +77,8 @@ async function release(itemId: number) {
   if (!it || it.graded_at || !isAi(it)) return false;
   const { finishByAi } = await import("./gradeApi.ts");
   await finishByAi(Number(it.grader_id), itemId);
+  // 📩 رسائله المنتظرة لهذا الطالب توصل ويا درجته
+  await (await import("./reviewMsgs.ts")).sendQueued([itemId]).catch((e) => console.error(e));
   return true;
 }
 /** كل دقيقة: المحجوزة اللي خلصت مدتها توصل وحدها */
@@ -203,7 +205,9 @@ export async function aiReviewAction(body: Row) {
     const papers = await groupPapers(key);
     // تعديلات صامتة (✏️ صحح) تنتظر «📤 دز للطلاب»
     const pend = await (await import("./gradeApi.ts")).pendingEdits();
-    const pending = papers.filter((p) => pend[String(p.id)] !== undefined).length;
+    // ويا الرسائل اللي تنتظر (📩 للأوراق اللي وصلت قبل)
+    const { queuedPapers } = await import("./reviewMsgs.ts");
+    const pending = papers.filter((p) => pend[String(p.id)] !== undefined).length + await queuedPapers(papers.filter((p) => !p.held && pend[String(p.id)] === undefined).map((p) => p.id));
     return { group: g ? { ...g, pending } : null, papers, fileToken: (await import("./webAuth.ts")).fileToken(uid) };
   } else if (a === "save") {
     const r = await saveMarks(Number(body.item), body.marks);
@@ -225,11 +229,17 @@ export async function aiReviewAction(body: Row) {
   } else if (a === "approve") {
     const key = String(body.key ?? "");
     const papers = await groupPapers(key);
+    const RM = await import("./reviewMsgs.ts");
+    const msgsBefore = await RM.queuedCount(papers.map((p) => p.id));
     let n = 0;
     for (const p of papers) if (p.held && await release(p.id)) n++;
     // والأوراق اللي وصلت قبل وعدلتها بصمت: «تعديل درجة» يوصل هسه
     const e = await (await import("./gradeApi.ts")).sendPendingEdits(papers.map((p) => p.id));
-    notice = n || e ? `✅ وصلت للطلاب: ${n ? `${n} درجة` : ""}${n && e ? " و" : ""}${e ? `${e} تعديل درجة` : ""}` : "ماكو شي ينتظر بهاي المجموعة";
+    // 📩 الرسائل المنتظرة (المحجوزة وصلت ويا release فوك)
+    await RM.sendQueued(papers.map((p) => p.id));
+    const m = msgsBefore - await RM.queuedCount(papers.map((p) => p.id));
+    const parts = [n ? `${n} درجة` : "", e ? `${e} تعديل درجة` : "", m ? `${m} رسالة` : ""].filter(Boolean);
+    notice = parts.length ? `✅ وصلت للطلاب: ${parts.join(" و")}` : "ماكو شي ينتظر بهاي المجموعة";
   } else need(a === "list", "أمر غير معروف");
   return { cfg: await reviewCfg(), owner, groups: await groups(), notice };
 }

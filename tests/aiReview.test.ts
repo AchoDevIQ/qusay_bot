@@ -72,10 +72,18 @@ test("🤖 «بعد ما أراجعها»: تنحجز، أعدلها بصمت، 
   await act("save", { item: c, marks: { 1: 40 } });
   assert.ok(!sent.some((x) => String(x.p.chat_id) === "73"));
   assert.equal((await act("group", { key: g.key })).group.pending, 1);
-  // «📤 دز للطلاب»: المحجوزة توصل (بالدرجة بعد التعديل)، والواصلة يوصلها «تعديل درجة»
+  // 📩 رسالة لورقة محجوزة من المراجعة: تنتظر، وما توصل للطالب هسه
+  const { gradeUpload } = await import("../lib/gradeApi.ts");
+  const fd = new FormData();
+  fd.set("initData", sign(1)); fd.set("action", "message"); fd.set("id", String(a)); fd.set("text", "شد حيلك بالسؤال الثاني"); fd.set("quiet", "1");
+  const q = await gradeUpload(fd) as any;
+  assert.match(q.notice, /دز للطلاب/);
+  assert.ok(!sent.some((x) => String(x.p.chat_id) === "71"), "الرسالة تنتظر");
+  // «📤 دز للطلاب»: المحجوزة توصل (بالدرجة بعد التعديل)، والواصلة يوصلها «تعديل درجة»، والرسالة توصل وياها
   sent.length = 0;
   const appr = await act("approve", { key: g.key });
-  assert.match(appr.notice, /2 درجة و1 تعديل درجة/);
+  assert.match(appr.notice, /2 درجة و1 تعديل درجة و1 رسالة/);
+  assert.ok(sent.some((x) => String(x.p.chat_id) === "71" && /شد حيلك/.test(String(x.p.text ?? x.p.caption ?? ""))), "رسالته وصلت ويا درجته");
   assert.ok(sent.some((x) => String(x.p.chat_id) === "73" && /تعديل درجة/.test(String(x.p.text ?? x.p.caption ?? ""))));
   assert.equal((await act("group", { key: g.key })).group.pending, 0);
   assert.equal(Number((await one("sched_items", { id: a }))!.total), 90);
