@@ -57,6 +57,11 @@ test("🤖 «بعد ما أراجعها»: تنحجز، أعدلها بصمت، 
   const open = await act("group", { key: g.key });
   assert.equal(open.papers.length, 3);
   assert.ok(open.papers.find((p: any) => p.id === a).held);
+  // ✏️ القلم بمكانه: ترتيب الصفحات مثل شاشة التصحيح، والكتابة المحفوظة
+  const pga = open.papers.find((p: any) => p.id === a).pg;
+  assert.deepEqual(pga.whole, []);
+  assert.deepEqual(pga.qs.map((q: any) => [q.n, q.answers]), [[1, ["student_answers/x.jpg"]], [2, []]]);
+  assert.deepEqual(pga.ink, {});
   // تعديل المحجوزة: بصمت
   sent.length = 0;
   const s = await act("save", { item: a, marks: { 2: 60 } });

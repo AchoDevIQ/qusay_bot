@@ -21,9 +21,9 @@ export type Paper = { editing?: boolean; ai?: AiQ[] | null; errors?: string[]; v
 // was: رد عليه قبل ورجع فتحه حتى يعدله، فرده السابق يبين والرفض يبقى مأشر بسببه
 export type Objection = { q: number; text: string; voice: string | null; old: number; was?: "accepted" | "rejected"; reason?: string };
 export type Prepared = { total: number; comment: string; sticker: number; sent: number };
-type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "w"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
+export type Item = { t: "s"; c: string; w: number; p: number[] } | { t: "x"; c: string; x: number; y: number; s: string; z: number } | { t: "k"; x: number; y: number } | { t: "w"; x: number; y: number } | { t: "i"; id: number; x: number; y: number; w: number };
 export type Sticker = { id: number; name: string; lo: number; hi: number };
-type Ink = { rot: number; items: Item[] };
+export type Ink = { rot: number; items: Item[] };
 type Page = { src: string | null; q: number | null; qs?: number[]; pen?: boolean };   // qs: صفحة وحدة بيها أكثر من سؤال. pen: ورقة القلم، السؤال مكتوب عليها
 type Tool = "hand" | "pen" | "eraser" | "text" | "stamp" | "wrong" | "sticker";
 
@@ -32,7 +32,7 @@ const GREEN = "#1f9d55";
 const RED = "#e53935";
 const isPdf = (f: string) => /\.pdf$/i.test(f);
 const holds = (p: Page, n: number) => p.q === n || !!p.qs?.includes(n);
-const parseInk = (s: string | undefined): Ink => { try { const j = JSON.parse(s || ""); return { rot: Number(j.rot) || 0, items: Array.isArray(j.items) ? j.items : [] }; } catch { return { rot: 0, items: [] }; } };
+export const parseInk = (s: string | undefined): Ink => { try { const j = JSON.parse(s || ""); return { rot: Number(j.rot) || 0, items: Array.isArray(j.items) ? j.items : [] }; } catch { return { rot: 0, items: [] }; } };
 
 /** صفحات الورقة بالترتيب: الورقة الكاملة أول، بعدها جواب كل سؤال. السؤال اللي ما بي جواب يبقى صفحة فارغة حتى تنطي درجته */
 async function buildPages(paper: Paper, url: (r: string) => string): Promise<Page[]> {
@@ -77,7 +77,7 @@ async function buildPages(paper: Paper, url: (r: string) => string): Promise<Pag
 /** جواب انكتب بـ «✏️ اكتب بالقلم»: اسمه بالسيرفر q3_pen_… */
 export const isPen = (f: string) => /\/q\d+_pen_[^/]*$/.test(f);
 const stickerUrl = (id: number) => `/api/sticker?id=${id}`;
-function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: number, live?: Item | null, imgs?: Map<number, HTMLImageElement>, clear = true) {
+export function drawItems(ctx: CanvasRenderingContext2D, items: Item[], w: number, h: number, live?: Item | null, imgs?: Map<number, HTMLImageElement>, clear = true) {
   if (clear) ctx.clearRect(0, 0, w, h);
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   for (const it of live ? [...items, live] : items) {

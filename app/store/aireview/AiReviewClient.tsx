@@ -4,11 +4,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MarkedPage, type MarkedPageT, type PaperMark } from "../myexams/AiCompare";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
+import { InkBar, InkLayer, loadPen, usePaperInk, type PaperPages, type PenSet } from "./InlineInk";
 
 type Cfg = { mode: "after" | "before"; hours: number };
 type Group = { key: string; exam: number; title: string; chapter: string; place: string; at: string; count: number; held: number; seen: boolean; pending?: number };
 type Q = { n: number; max: number; mark: number; note: string; photos: string[]; marked: MarkedPageT[] | null };
-type Paper = { id: number; name: string; held: boolean; total: number; by: string; questions: Q[] };
+type Paper = { id: number; name: string; held: boolean; total: number; by: string; questions: Q[]; pg?: PaperPages };
 type Data = { cfg?: Cfg; owner?: boolean; groups?: Group[]; notice?: string; group?: Group | null; papers?: Paper[]; fileToken?: string; saved?: { changed: number; total: number }; paper?: Paper | null };
 type Call = (b: Record<string, unknown>, merge?: boolean) => Promise<Data | null>;
 const markKey = (m: PaperMark) => m.fixed ?? `${m.q}:${m.i ?? -1}:${m.kind}`;
@@ -23,6 +24,9 @@ export default function AiReviewClient() {
   const [work, setWork] = useState<Record<number, Work>>({});
   const report = useCallback((id: number, x: Work) => setWork((w) => (JSON.stringify(w[id]) === JSON.stringify(x) ? w : { ...w, [id]: x })), []);
   const busyWork = Object.values(work);
+  // ✏️ القلم والمساحة على كل الأوراق: أداة وحدة للكل (تختارها بأي سؤال وتكتب بأي ورقة)، ولونه وسمكه يبقون نفسهم
+  const [pen, setPen] = useState<PenSet>({ tool: null, color: "#e53935", width: 2 });
+  useEffect(() => { setPen(loadPen()); }, []);
   const openGroup = async (key: string) => { setWork({}); setOpen(key); window.scrollTo(0, 0); await call({ action: "group", key }, true); };
   const back = async () => { setOpen(null); await call({ action: "list" }); };
   // رجع من شاشة التصحيح (?open=المجموعة#p رقم الورقة): تنفتح نفس المجموعة وتنزل لنفس الطالب
@@ -55,7 +59,7 @@ export default function AiReviewClient() {
             <SendAll g={g} busy={busy} work={busyWork} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} />
           </div>}
           {!data?.papers && <div className="empty">جاري التحميل...</div>}
-          {data?.papers?.map((p, i) => <PaperCard key={p.id} report={report} p={p} n={i + 1} of={data.papers!.length} file={file} busy={busy} gkey={open} call={call} save={(marks) => call({ action: "save", item: p.id, marks }, true)} />)}
+          {data?.papers?.map((p, i) => <PaperCard key={p.id} pen={pen} setPen={setPen} report={report} p={p} n={i + 1} of={data.papers!.length} file={file} busy={busy} gkey={open} call={call} save={(marks) => call({ action: "save", item: p.id, marks }, true)} />)}
           {/* بالأخير بعد ما يخلص كل الأوراق: نفس الزر */}
           {g && data?.papers && <div className="card expad"><SendAll g={g} busy={busy} work={busyWork} send={() => void call({ action: "approve", key: g.key }).then(() => openGroup(g.key))} /></div>}
         </div>
@@ -103,8 +107,12 @@ function gradeLink(id: number, gkey: string, embed = false) {
   return `/store/grade?edit=${id}&back=${encodeURIComponent(gkey)}${embed ? "&embed=1" : ""}${t ? `&t=${encodeURIComponent(t)}` : ""}`;
 }
 /** ورقة طالب. n: رقمه بالمجموعة: الطلاب يتناوبون باللون (إطار أزرق وجوه ذهبي، والجاي بالعكس) حتى تبين وين تخلص ورقة وتبدي اللي بعدها (طلبه 2026-11-27) */
-function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { report: (id: number, x: Work) => void; p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
+function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen, setPen }: { pen: PenSet; setPen: (p: PenSet) => void; report: (id: number, x: Work) => void; p: Paper; n: number; of: number; file: (ref: string) => string; busy: boolean; save: (marks: Record<number, number>) => Promise<Data | null>; gkey: string; call: Call }) {
   const [p, setP] = useState(start);
+  // ✏️ القلم على الورقة بمكانها (طلبه 2026-11-27): ينحفظ وحده، وصور الورقة المصححة تتركب بصمت بعد ما يوگف
+  const inl = usePaperInk(start.id, start.name, start.pg, file, () => void call({ action: "group", key: gkey }, true));
+  const [more, setMore] = useState<Record<number, boolean>>({});
+  const lastPage = useRef<Record<number, number>>({});
   // ✏️ أدوات التصحيح مخفية: كل سؤال يطلع بدرجته وورقته بس، ودوسة «✏️» تطلع أدواته (الدرجة، العلامات، ضيف علامة)
   const [edit, setEdit] = useState<Record<number, boolean>>({});
   // ✏️ صحح (طلبه 2026-11-27): أدوات التصحيح كلها تنفتح بنفس السؤال اللي داسه، بعرض الشاشة. كل دوسة رقم وكل خط ينحفظ وحده،
@@ -145,7 +153,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
   }, [gq]);
   const leaveRef = useRef(leave);
   leaveRef.current = leave;
-  useEffect(() => { report(p.id, { id: p.id, name: p.name, open: gq, saving: bg, failed: Object.keys(fails).map(Number) }); }, [gq, bg, fails]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 0: كتابة القلم بهاي الورقة (بعدها تنحفظ، لو ما انحفظت)
+  useEffect(() => { report(p.id, { id: p.id, name: p.name, open: gq, saving: [...bg, ...(inl.state === "saving" ? [0] : [])], failed: [...Object.keys(fails).map(Number), ...(inl.state === "err" ? [0] : [])] }); }, [gq, bg, fails, inl.state]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const on = (e: MessageEvent) => {
       if (e.origin !== location.origin || Number(e.data?.id) !== p.id) return;
@@ -215,13 +224,20 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
             {edit[q.n]
               ? <><input className="exnum" inputMode="decimal" value={marks[q.n] ?? ""} onChange={(e) => setMarks({ ...marks, [q.n]: e.target.value.replace(/[^\d.]/g, "") })} /><span>من {q.max}</span></>
               : <span className="arv-mark">{marks[q.n] ?? q.mark} من {q.max}</span>}
-            {/* ✏️ شاشة التصحيح نفسها بكل أدواتها، جوه ورقة هذا الطالب، وصفحاته ورا بعض (طلبه 2026-11-27) */}
-            {gq === q.n
+            {/* ورقة PDF أو ورقة كاملة: القلم هنا ما يشتغل عليها، فتنفتح شاشة التصحيح نفسها */}
+            {!inl.order && (gq === q.n
               ? <button type="button" className="arv-pen on" onClick={() => leave(null)}>✔ خلصت</button>
-              : <button type="button" className="arv-pen" aria-label="صحح بأدوات التصحيح" title="صحح بأدوات التصحيح" onClick={() => leave(q.n)}>✏️ صحح</button>}
-            <button type="button" className={"arv-pen arv-pen2" + (edit[q.n] ? " on" : "")} aria-label="علامات الذكاء" title="علامات الذكاء" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "🤖 علامات الذكاء"}</button>
+              : <button type="button" className="arv-pen" aria-label="صحح بأدوات التصحيح" title="صحح بأدوات التصحيح" onClick={() => leave(q.n)}>✏️ صحح</button>)}
+            {!inl.order && <button type="button" className={"arv-pen arv-pen2" + (edit[q.n] ? " on" : "")} aria-label="علامات الذكاء" title="علامات الذكاء" onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); }}>{edit[q.n] ? "✔ خلصت" : "🤖 علامات الذكاء"}</button>}
             {q.note && <small>{q.note}</small>}
           </div>
+          {/* ✏️ فوك كل سؤال: قلم ومساحة ظاهرين، و«⋯ المزيد» يطلع الباقي بنفس المكان (طلبه 2026-11-27) */}
+          {inl.order && <InkBar pen={pen} setPen={(x) => { setPen(x); if (x.tool) { setEdit((e) => ({ ...e, [q.n]: false })); setAdding(null); setTap(null); setSpot(null); } }} more={!!more[q.n]} setMore={(v) => setMore({ ...more, [q.n]: v })}
+            canBack={lastPage.current[q.n] !== undefined && inl.canBack(lastPage.current[q.n])} onBack={() => { const i = lastPage.current[q.n]; if (i !== undefined) inl.back(i); }}
+            extra={<div className="arv-inkbar">
+              <button type="button" className={edit[q.n] ? "on" : ""} onClick={() => { setEdit({ ...edit, [q.n]: !edit[q.n] }); setTap(null); setSpot(null); setAdding(null); if (!edit[q.n]) setPen({ ...pen, tool: null }); }}>{edit[q.n] ? "✔ خلصت علامات الذكاء" : "🤖 علامات الذكاء"}</button>
+              <button type="button" onClick={() => leave(q.n)}>🧰 كل أدوات التصحيح</button>
+            </div>} />}
           {bg.includes(q.n) && gq !== q.n && <div className="arv-saving">⏳ س{q.n} ينحفظ بالخلفية...</div>}
           {fails[q.n] && <div className="arv-hint" style={{ marginTop: 4 }}>⚠️ س{q.n}: {fails[q.n]}</div>}
           {(gq === q.n || bg.includes(q.n)) && <div id={`g${p.id}-${q.n}`} className={"arv-grade" + (gq === q.n ? " open" : "")} style={gq === q.n ? undefined : { display: "none" }}>
@@ -230,8 +246,16 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
           </div>}
           {gq !== q.n && (q.marked?.length ? q.marked : q.photos.map((ref) => ({ ref, marks: [] as PaperMark[] }))).map((pg) => (
             <div key={pg.ref} className={adding === pg.ref ? "arv-adding" : ""} onClickCapture={(e) => pick(e, pg.ref)}>
-              <MarkedPage src={file(pg.ref)} marks={spot?.ref === pg.ref ? [...pg.marks, { x: spot.x, y: spot.y, kind: "miss", text: "", note: "" }] : pg.marks}
-                onTap={adding || !edit[q.n] ? undefined : (m) => setTap({ ref: pg.ref, m })} picked={tap?.ref === pg.ref ? pg.marks.indexOf(tap.m) : undefined} />
+              <div className="arv-pgbox">
+                <MarkedPage src={file(pg.ref)} marks={spot?.ref === pg.ref ? [...pg.marks, { x: spot.x, y: spot.y, kind: "miss", text: "", note: "" }] : pg.marks}
+                  onTap={adding || !edit[q.n] ? undefined : (m) => setTap({ ref: pg.ref, m })} picked={tap?.ref === pg.ref ? pg.marks.indexOf(tap.m) : undefined} />
+                {(() => {
+                  const i = inl.index.get(pg.ref);
+                  if (i === undefined) return null;
+                  const ink = inl.inks[i] ?? { rot: 0, items: [] };
+                  return <InkLayer ink={ink} pen={pen} rotated={!!ink.rot} onChange={(next) => { lastPage.current[q.n] = i; inl.change(i, next); }} />;
+                })()}
+              </div>
               {edit[q.n] && <div className="exline arv-tools">
                 {adding === pg.ref ? <span className="arv-hint">👆 دوس المكان اللي تريد تحط بيه علامتك</span>
                   : <button type="button" className="exbtn" disabled={busy} onClick={() => { setAdding(pg.ref); setTap(null); setSpot(null); }}>➕ ضيف علامة</button>}
@@ -253,6 +277,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report }: { 
       {!!p.questions.length && <button type="button" className="exbtn adtop" disabled={busy} onClick={() => { if (confirm("ترجع العلامات مثل ما صححها الذكاء؟ تعديلاتك عليها تنمسح (الدرجات تبقى)")) void markCall({ action: "markReset" }); }}>↩️ رجّع علامات الذكاء</button>}
       {bad && <div className="arv-hint adtop">⚠️ درجة س{bad.n} لازم رقم من 0 لـ {bad.max}</div>}
       {saveMsg && <div className="arv-saved adtop">{saveMsg}</div>}
+      {inl.state === "saving" && <div className="arv-saving adtop">⏳ كتابة القلم تنحفظ...</div>}
+      {inl.state === "err" && <div className="arv-hint adtop">⚠️ كتابة القلم ما انحفظت{inl.err ? `: ${inl.err}` : ""} <button type="button" className="exbtn" onClick={inl.retry}>🔄 عيدها</button></div>}
       <div className="arv-end">— نهاية أوراق {p.name} —</div>
     </div>
   );
@@ -314,6 +340,15 @@ html,body{touch-action:pan-y;overscroll-behavior-x:none}
 .arv-adding .mkpage{outline:3px dashed #F6C94A;cursor:crosshair}
 .arv-box{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:10px;border:2px solid #F6C94A;border-radius:12px;background:rgba(246,201,74,.08)}
 .arv-img{width:100%;display:block;margin-top:8px;border-radius:8px;background:#fff}
+.arv-pgbox{position:relative;margin-top:8px}.arv-pgbox .mkpage{margin-top:0}
+.arv-ink{position:absolute;inset:0;width:100%;height:100%;z-index:4;border-radius:8px}
+.arv-ink.on{cursor:crosshair;outline:2px solid rgba(246,201,74,.55)}
+.arv-inkbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.arv-inkbar button{min-height:40px;padding:0 12px;border-radius:10px;border:1.5px solid #F6C94A;background:transparent;color:#F6C94A;font:inherit;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.arv-inkbar button.on{background:#F6C94A;color:#141F33}.arv-inkbar button:disabled{opacity:.35}
+.arv-dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;display:inline-block}
+.arv-more{margin-top:6px;padding:8px;border:1px dashed rgba(246,201,74,.6);border-radius:12px}
+.arv-colors{display:flex;flex-wrap:wrap;gap:6px}.arv-colors button{width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.5);cursor:pointer}.arv-colors button.on{outline:3px solid #F6C94A;outline-offset:2px}
 `;
 
 /** «📤 دز للطلاب»: الدرجات المحجوزة والتعديلات الصامتة بهاي المجموعة توصل هسه للطلاب وأولياء أمورهم */
@@ -325,9 +360,9 @@ function SendAll({ g, busy, send, work }: { g: Group; busy: boolean; send: () =>
   // بعده يصحح، لو ينحفظ، لو سؤال ما انحفظ: الزر ينتظر، ويگله منو بالاسم (دوسة على الاسم توديه لورقته)
   if (open.length || saving.length || failed.length) return (
     <div className="arv-wait adtop">
-      {saving.map((w) => <div key={`s${w.id}`}>⏳ ينحفظ: <button type="button" className="arv-who" onClick={() => jump(w.id)}>{w.name}</button> {w.saving.map((q) => `س${q}`).join("، ")}</div>)}
+      {saving.map((w) => <div key={`s${w.id}`}>⏳ ينحفظ: <button type="button" className="arv-who" onClick={() => jump(w.id)}>{w.name}</button> {w.saving.map((q) => (q ? `س${q}` : "كتابة القلم")).join("، ")}</div>)}
       {open.map((w) => <div key={`o${w.id}`}>✏️ مفتوح: <button type="button" className="arv-who" onClick={() => jump(w.id)}>{w.name}</button> س{w.open} (دوس «✔ خلصت»)</div>)}
-      {failed.map((w) => <div key={`f${w.id}`}>⚠️ ما انحفظ: <button type="button" className="arv-who" onClick={() => jump(w.id)}>{w.name}</button> {w.failed.map((q) => `س${q}`).join("، ")} (ناقصته درجة: افتحه وكمله)</div>)}
+      {failed.map((w) => <div key={`f${w.id}`}>⚠️ ما انحفظ: <button type="button" className="arv-who" onClick={() => jump(w.id)}>{w.name}</button> {w.failed.map((q) => (q ? `س${q}` : "كتابة القلم")).join("، ")} (افتحه وكمله)</div>)}
       <small>«📤 دز للطلاب» يطلع من ينحفظ كلشي.</small>
     </div>
   );

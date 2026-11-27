@@ -2,6 +2,7 @@
 // طالب ورا طالب: اسمه، ودرجته، وصفحات ورقته ويا علامات الذكاء الحمرة، ودرجة كل سؤال يگدر يبدلها ويحفظ بنفس المكان.
 // والإعداد: درجات الذكاء توصل للطالب «مباشرة» (ويراجعها بعدين، والتعديل يوصل «تعديل درجة»)، لو «بعد ما أراجعها»:
 // الورقة تنحجز وتنتظره، ويوصله «المجموعة جاهزة»، ومن يوافق توصل كلها. إذا ما راجعها خلال المدة اللي يحددها، توصل وحدها.
+import { answerOnlyOf } from "./answerOnly.ts";
 import { find, kvGet, kvSet, one, put, update, type Row } from "./db.ts";
 import { AI_GRADER, QUSAY_GRADER, can, centerName, staffIds, student } from "./data.ts";
 import { addMinutes } from "./scheduleRules.ts";
@@ -124,11 +125,22 @@ async function groupPapers(key: string, only?: number) {
     const marks = new Map((await find("question_marks", { item_id: it.id })).map((m) => [Number(m.q), Number(m.mark)]));
     const qs = await aiReviewShown(it);
     const max = new Map((await find("bank_questions", { version_id: it.version_id })).map((q) => [Number(q.n), Number(q.max_mark)]));
+    // ✏️ القلم على الورقة بمكانها (طلبه 2026-11-27): ترتيب صفحاتها نفس شاشة التصحيح (رقم الصفحة اللي تنحفظ بيه الكتابة)، وكتابته المحفوظة
+    const ans = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
+    const bankQs = await find("bank_questions", { version_id: it.version_id }, { order: ["n"] });
+    const whole = ans.filter((a) => !a.q).map((a) => String(a.file));
+    const pg = {
+      whole,
+      qs: bankQs.map((q) => ({ n: Number(q.n), answers: ans.filter((a) => Number(a.q) === Number(q.n)).map((a) => String(a.file)), answered: whole.length ? null : ans.some((a) => Number(a.q) === Number(q.n)) })),
+      answerOnly: answerOnlyOf(await one("bank_exams", { id: it.exam_id })),
+      ink: Object.fromEntries((await find("paper_ink", { item_id: it.id })).map((r) => [Number(r.page), String(r.ink ?? "")])),
+    };
     out.push({
       id: Number(it.id), name: String((await student(it.user_id))?.name ?? "طالب") + (test ? ` · ${String((await one("bank_exams", { id: it.exam_id }))?.title ?? "")}` : ""), held: !!held[String(it.id)],
       by: it.grader_id === QUSAY_GRADER ? "🧠 تصحيح قصي" : "🤖 مؤمل",
       total: it.graded_at ? Number(it.total ?? 0) : await itemTotal(it),
       questions: qs.map((q) => ({ n: q.n, max: max.get(q.n) ?? q.max, mark: marks.get(q.n) ?? q.score, note: q.note ?? "", photos: q.photos, marked: (q as { marked?: unknown }).marked ?? null })),
+      pg,
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name, "ar"));
