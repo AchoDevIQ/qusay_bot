@@ -10,7 +10,8 @@ const MM = 8;   // 8 نقاط بالملم
 type Job = { id: number; name: string; b64: string };
 // late: يحتاج قرار (جاي بغير وقته wrongTime، لو من مركز ثاني away). exc: هذا الحساب عنده صلاحية الاستثناء
 type Card = { item: number; name: string; exam: string; print: string; at: string; already: boolean; late?: boolean; printed?: boolean; wrongTime?: boolean; away?: string; exc?: boolean };
-type Reply = { job?: Job | null; card?: Card; ok?: boolean; pos?: { dx: number; dy: number }; exc?: boolean };
+type Leave = { item: number; name: string; exam: string; n: number; at: string };
+type Reply = { job?: Job | null; card?: Card; ok?: boolean; pos?: { dx: number; dy: number }; exc?: boolean; leaves?: Leave[] };
 
 const why = (e: unknown) => (e as Error)?.message || String(e);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -24,6 +25,8 @@ export default function StationClient() {
   const [last, setLast] = useState<Card | null>(null);
   // الجايين بغير وقتهم: كل واحد قراره لحاله، والكاميرا تبقى تقرا غيرهم (طلبه 2026-11-28: «ما أريد يرتبط قرار الطالب اللي بعده باللي قبله»)
   const [pendings, setPendings] = useState<Card[]>([]);
+  // 🚪 طلاب سجلت حضورهم وطلعوا برا صفحة الامتحان (طلبه 2026-11-28)
+  const [leaves, setLeaves] = useState<Leave[]>([]);
   const drop = (item: number) => setPendings((l) => l.filter((x) => x.item !== item));
   const [num, setNum] = useState("");
   const [pos, setPos] = useState({ dx: 0, dy: 0 });
@@ -177,6 +180,20 @@ export default function StationClient() {
     if (r.job) { setStatus("🖨 دا يطبع ليبل تجربة"); await write(r.job); setStatus("✅ انطبع ليبل التجربة"); }
   });
 
+  // 🚪 كل 5 ثواني: منو طلع برا صفحة الامتحان من الطلاب اللي سجلت حضورهم. يهتز الجهاز من يطلع واحد جديد
+  useEffect(() => {
+    let known = "";
+    const t = setInterval(() => {
+      void api({ action: "leaves" }).then((r) => {
+        const l = r.leaves ?? [];
+        const sig = l.map((x) => `${x.item}:${x.n}`).join();
+        if (sig && sig !== known) { try { navigator.vibrate?.([300, 150, 300]); } catch { /* ما يهتز */ } }
+        known = sig;
+        setLeaves(l);
+      }).catch(() => undefined);
+    }, 5000);
+    return () => clearInterval(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // الليبلات اللي تنرسل من صفحة الحضوري بتليگرام
   useEffect(() => {
     const t = setInterval(() => void once(async () => {
@@ -278,6 +295,14 @@ export default function StationClient() {
     <div className="wrap">
       <div className="card expad">
         <div className="exlabel">🖨 محطة طباعة الليبل</div>
+        {leaves.map((x) => (
+          <div key={x.item} className="atcard" style={{ borderColor: "#d32f2f", background: "#3a1414" }}>
+            <b style={{ color: "#ffb4ab", fontSize: 18 }}>🚪 {x.name} طلع برا صفحة الامتحان</b>
+            <div className="exhint">{x.exam} · الساعة <span dir="ltr">{x.at}</span>{x.n > 1 ? ` · المرة ${x.n}` : ""}</div>
+            <div className="exhint">يمتحن بالآيباد وإنت سجلت حضوره. روح شوفه.</div>
+            <button type="button" className="btn adtop" onClick={() => void api({ action: "leaveSeen", item: x.item }).then((r) => setLeaves(r.leaves ?? []))}>👀 شفته</button>
+          </div>
+        ))}
         <div className="exhint atok" style={{ fontSize: 17 }}>{status}</div>
         {same && camera && <div className="exhint">👀 الكاميرا بعدها على نفس الطالب. وجهها على اللي بعده</div>}
         {/* ⏰ ينتظرون قرار (طلبه 2026-11-28: «منزل هالقد جوه»): فوگ جوه النتيجة. كل كارت باسم طالبه، والقرار لكل واحد لحاله.

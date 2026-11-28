@@ -162,6 +162,25 @@ export async function stationAction(body: Row) {
     return { job: await jobOf(card) };
   }
   if (body.action === "test") return { job: await jobOf({ item: 0, uid: 0, name: "محمد علي حسين عمر", exam: "فقط مسائل التقريب والمعدلات الزمنية والتطبيقات على النهايات", center: "معهد قصي العميري", at: stamp() }) };
+  // 🚪 الطالب اللي سجل حضوره هذا المساعد طلع برا صفحة الامتحان (طلبه 2026-11-28: «اللي وجه البي او اس ما وصلته»):
+  // جهاز البيع ما عنده تليگرام، فالخبر يطلع بصفحة المحطة نفسها لحد ما يدوس «👀 شفته»
+  const seenKey2 = `leave_seen_${uid}`;
+  const seenMap = async (): Promise<Record<string, number>> => { try { return JSON.parse(await kvGet(seenKey2) ?? "{}"); } catch { return {}; } };
+  if (body.action === "leaves" || body.action === "leaveSeen") {
+    const seen = await seenMap();
+    if (body.action === "leaveSeen") {
+      const r = await one("exam_leaves", { item_id: Number(body.item) });
+      if (r) { seen[String(r.item_id)] = Number(r.n) || 0; await kvSet(seenKey2, JSON.stringify(seen)); }
+    }
+    const today = stamp().slice(0, 10), out = [];
+    for (const r of await find("exam_leaves")) {
+      if (!String(r.last_at ?? "").startsWith(today) || (seen[String(r.item_id)] ?? 0) >= (Number(r.n) || 0)) continue;
+      const it = await one("sched_items", { id: r.item_id });
+      if (!it || (Number(it.attended_by) !== uid && !await isAdmin(uid!))) continue;
+      out.push({ item: r.item_id, name: String(r.name ?? ""), exam: String(r.exam ?? ""), n: Number(r.n) || 0, at: String(r.last_at ?? "").slice(11, 16) });
+    }
+    return { leaves: out };
+  }
   need(body.action === "next", "أمر غير معروف");
   for (const id of q) {
     const it = await one("sched_items", { id });

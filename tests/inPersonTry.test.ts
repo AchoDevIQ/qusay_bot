@@ -373,3 +373,30 @@ test("🚪 صفحة «طلعوا من الامتحان»: الطلعة تصير 
   assert.equal(r.open.find((x: any) => x.item === card.item)?.n, 2, "طلع مرة ثانية: رجع فوگ");
   await assert.rejects(leavesAction({ initData: sign(41), action: "list" }), /صلاحية/);
 });
+
+test("🚪 المراقب بجهاز البيع: الطالب اللي سجل حضوره وطلع يطلعله بصفحة المحطة، و«👀 شفته» يشيله", async () => {
+  const { makeInPersonOne } = await import("../lib/gradeApi.ts");
+  const { openRoom, examLeft } = await import("../lib/examRoom.ts");
+  const { schedSettings } = await import("../lib/schedApi.ts");
+  const { attendAction, stationToken } = await import("../lib/inPerson.ts");
+  const { put } = await import("../lib/db.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "مراقب" });
+  const c = await insert("centers", { area_id: area, name: "مركز المراقب", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const k = await makeInPersonOne(c, v.id, "ipad");
+  const watcher = 8_080_808;
+  await put("staff", { user_id: watcher, name: "جهاز البيع", perms: "station" });
+  const station = stationToken(watcher);
+  const card = (await attendAction({ station, action: "scan", code: String(k) }) as any).card;
+  const s = await schedSettings();
+  await openRoom(-k, card.item, s, true);
+  await examLeft(-k, card.item, s, "left", 0);
+  let r: any = await attendAction({ station, action: "leaves" });
+  assert.ok(r.leaves.some((x: any) => x.item === card.item), "يطلع للمراقب");
+  r = await attendAction({ station, action: "leaveSeen", item: card.item });
+  assert.ok(!r.leaves.some((x: any) => x.item === card.item), "شفته يشيله");
+  // مساعد ثاني ما سجل حضوره: ما يطلعله
+  await put("staff", { user_id: 8_080_809, name: "غيره", perms: "station" });
+  r = await attendAction({ station: stationToken(8_080_809), action: "leaves" });
+  assert.ok(!r.leaves.some((x: any) => x.item === card.item));
+});
