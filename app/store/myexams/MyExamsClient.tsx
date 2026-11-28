@@ -8,6 +8,7 @@ import { addDays, ampm, prettyAt, prettyDay } from "../../../lib/scheduleRules.t
 import BasicsCard, { type Basics } from "../BasicsCard";
 import { DateInput, deviceId, deviceNow, haptic, openOutside, platform, platformNow } from "../shared";
 import QRCode from "qrcode";
+import { IpadGuide, IpadGuideButton } from "./IpadGuide";
 import { prepare, previewUrl, rememberScan, scanDefault } from "../photoPrep";
 import PenPage, { hasPenDraft, type PenHead } from "./PenPage";
 import { donePicking, pickingNow } from "../picking";
@@ -174,6 +175,8 @@ export default function MyExamsClient() {
         {info && !info.needsChoice && !info.needsBuild && !info.items.length && <div className="empty">{info.mode === "general" ? "مواعيدك لسه ما نزلت." : "ماكو امتحانات بعد لفصولك."}</div>}
         {info?.notice && <div className="card warn exerr">{info.notice}</div>}
         {info?.attendCode && <AttendCode code={info.attendCode} ipad={!!info.ipad} />}
+        {/* 📖 شرح الآيباد محفوظ للطالب (طلبه 2026-11-28): لكل اللي يمتحن بالآيباد، لو عنده امتحان بالآيباد */}
+        {info && (info.ipad || info.items.some((i) => i.ipad)) && <div className="card expad"><IpadGuideButton className="btn" /></div>}
         {info && info.ipad !== null && info.ipad !== undefined && <IpadChoice on={info.ipad} busy={busy} call={call} />}
         {info && !!info.items.length && <List info={info} busy={busy} enter={enter} paper={(id) => void openPaper(id)} file={(name) => call({ action: "lectureFile", name })} off={(ids) => call({ action: "holidayOff", holidays: ids })} cmd={call} />}
         {info?.comp && <CompCard c={info.comp} busy={busy} call={call} />}
@@ -1133,13 +1136,8 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
       <div className="wrap">
         <div className="card agcard pen-intro">
           <h2>📖 قبل ما تبدي: شلون ترسل أجوبتك</h2>
-          <ol>
-            <li><b>اكتب جوابك</b> بكل ورقة، ومن تخلصها دوس <b>«✅ تم»</b>. رقم السؤال فوگ يصير <b className="ok">أخضر</b> (الأحمر يعني بعده ما خلص).</li>
-            <li>من تخلص كل الأسئلة دوس الزر الكبير <b>«✅ أكملت الجواب على جميع الأسئلة»</b>. هذا ما يرسل شي، بس يوريك أسئلتك.</li>
-            <li>تطلعلك كل الأسئلة: <b className="ok">✅ مكتوب</b> لو <b className="no">⚠️ فارغ</b>. إذا نسيت سؤال دوس عليه وارجع اكتبه.</li>
-            <li>من تتأكد دوس <b>«📤 أرسل الأجوبة وسلّم»</b>: كل أجوبتك تنرسل مرة وحدة، وبعدها ما تگدر تغير.</li>
-          </ol>
-          <div className="exhint">⏳ الوقت يمشي من هسه. إذا خلص الوقت، اللي كتبته ينرسل وحده.</div>
+          <IpadGuide part="send" />
+          <div className="exhint">📖 هذا الشرح محفوظلك: تلگاه بزر «📖 الشرح» فوگ ورقة القلم، وبصفحة «امتحاناتي».</div>
           <button type="button" className="btn agbtn" onClick={() => { setIntroOk(true); void call({ action: "penIntro" }); }}>✅ فهمت، افتح الأسئلة</button>
         </div>
       </div>

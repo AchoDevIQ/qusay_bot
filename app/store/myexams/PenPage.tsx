@@ -10,6 +10,7 @@ import { loadImage, W, type HeaderInfo } from "../grade/compose";
 import { drawPaper, H } from "./penPaper";
 import { COLORS, WIDTHS } from "../grade/pens";
 import { haptic } from "../shared";
+import { IpadGuideButton } from "./IpadGuide";
 
 export type PenHead = { slug: string; chapter: string; title: string; info: string; name: string; lang: string };
 export type PenQ = { n: number; img: string | null; done: boolean };
@@ -277,6 +278,7 @@ export default function PenPage({ item, sid, model, head, questions, start, busy
           <button type="button" className={"pen-tm" + (doneSet.has(cur) ? " on" : "")} disabled={sending} onClick={markDone}>✅ تم</button>
           <button type="button" className="btn pen-save" disabled={busy || sending} onClick={() => { haptic(); setMsg(""); setAsk(true); }}>{sending || busy ? "جاري الإرسال..." : "✅ أكملت الجواب على جميع الأسئلة"}</button>
           <button type="button" className="exbtn pen-back" disabled={busy || sending} onClick={onClose}>↩️ رجوع</button>
+          <IpadGuideButton part="send" label="📖 الشرح" className="exbtn pen-back" />
         </div>
         {penBox && (
           <div className="gk-penbox">

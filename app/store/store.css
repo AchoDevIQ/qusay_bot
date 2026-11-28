@@ -590,3 +590,4 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .gk-stkon{margin-top:14px;background:#F6C94A;color:#141F33}
 .gk-stacked .gk-stage{overflow-x:hidden;touch-action:pan-y;padding-inline:0}
 .gk-auto{font-size:13px;font-weight:800;color:#6ee7a8}
+.pen-guide{max-height:88vh;overflow:auto}.pen-guide h3{margin:14px 0 4px;font-size:17px}
