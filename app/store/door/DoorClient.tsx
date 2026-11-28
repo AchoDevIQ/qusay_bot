@@ -155,6 +155,12 @@ export default function DoorClient() {
             <div className="exhint">هذا الجهاز يبقى داخل: الرابط ثابت، وما يطلب رمزك مرة ثانية إلا إذا ما فتحته أسبوع كامل (أو انمسحت بيانات المتصفح). بالآيفون والآيباد: «مشاركة» ← «إضافة للشاشة الرئيسية»، وافتحها من هناك.</div>
           </div></div>
         )}
+        {st && (
+          <div className="card"><div className="form">
+            {/* 🔄 الجهاز ينتقل لحساب ثاني (مثلاً جهاز البيع من حساب المكتبة لمساعد الحضوري، طلبه 2026-11-28) */}
+            <button type="button" className="btn ghost" onClick={() => { if (!confirm("تطلع من هذا الحساب بهذا الجهاز وتدخل بحساب ثاني؟")) return; try { localStorage.removeItem("qm_door"); localStorage.removeItem(T_KEY); } catch { /* */ } location.href = "/store/door"; }}>🔄 ادخل بحساب ثاني</button>
+          </div></div>
+        )}
       </div>
     </>
   );
