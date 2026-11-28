@@ -72,6 +72,11 @@ test("🤖 «بعد ما أراجعها»: تنحجز، أعدلها بصمت، 
   await act("save", { item: c, marks: { 1: 40 } });
   assert.ok(!sent.some((x) => String(x.p.chat_id) === "73"));
   assert.equal((await act("group", { key: g.key })).group.pending, 1);
+  // ✍️ عبارة بالرقعة يكتبها بخطه: تنحفظ بخط إيده العام، فتتبدل بكل مكان
+  const h = await act("handAdd", { item: a, text: "نسيت الإشارة", s: [[100, 100, 300, 200, 500, 150]], w: 1000, h: 360, c: "#d40000", wd: 2 });
+  assert.match(h.notice, /بخطك/);
+  const { inkList } = await import("../lib/qusayGrade.ts");
+  assert.ok((await inkList(0)).some((x: any) => x.kind === "note" && x.text === "نسيت الإشارة"));
   // 📩 رسالة لورقة محجوزة من المراجعة: تنتظر، وما توصل للطالب هسه
   const { gradeUpload } = await import("../lib/gradeApi.ts");
   const fd = new FormData();

@@ -6,6 +6,7 @@ import { MarkedPage, type MarkedPageT, type PaperMark } from "../myexams/AiCompa
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 import { InkBar, InkLayer, loadPen, usePaperInk, type PaperPages, type PenSet } from "./InlineInk";
 import MessageBox from "../grade/MessageBox";
+import { BOX, Pad } from "../qusay/InkBook";
 
 type Cfg = { mode: "after" | "before"; hours: number };
 type Group = { key: string; exam: number; title: string; chapter: string; place: string; at: string; count: number; held: number; seen: boolean; pending?: number };
@@ -120,6 +121,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
   const [more, setMore] = useState<Record<number, boolean>>({});
   // 📩 رسالة للطالب (كتابة أو فويس، طلبه 2026-11-28): تنتظر وتوصل ويا «📤 دز للطلاب»
   const [msgOpen, setMsgOpen] = useState(false);
+  // ✍️ عبارة بالرقعة: يكتبها بخطه وتتبدل بكل مكان
+  const [handFor, setHandFor] = useState<string | null>(null);
   const [msgNote, setMsgNote] = useState("");
   const lastPage = useRef<Record<number, number>>({});
   // ✏️ أدوات التصحيح مخفية: كل سؤال يطلع بدرجته وورقته بس، ودوسة «✏️» تطلع أدواته (الدرجة، العلامات، ضيف علامة)
@@ -283,6 +286,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
               </div>}
               {edit[q.n] && !tap && !spot && adding !== pg.ref && <div className="arv-hint" style={{ marginTop: 4 }}>👆 دوس أي علامة على الورقة حتى تعدلها أو تشيلها</div>}
               {tap?.ref === pg.ref && <EditBox key={markKey(tap.m) + String(tap.m.added ?? "")} start={tap.m} busy={busy}
+                hand={tap.m.note && !tap.m.hand ? () => setHandFor(tap.m.note!) : undefined}
                 save={async (kind, note) => {
                   if (tap.m.added !== undefined) { const m = tap.m; await markCall({ action: "markDrop", n: m.added }); await markCall({ action: "markAdd", ref: pg.ref, x: m.x, y: m.y, kind, note }); }
                   else await markCall({ action: "markFix", key: markKey(tap.m), kind, note });
@@ -303,6 +307,11 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
           : saveMsg ? <span className="arv-saving">{saveMsg}</span> : null}
       </div>
       {msgNote && <div className="arv-saved adtop">{msgNote}</div>}
+      {handFor && <div className="gk-modal"><div className="arv-handbox" onClick={(e) => e.stopPropagation()}>
+        <div className="exlabel">✍️ اكتب «{handFor}» بخط إيدك. وين ما مكتوبة هاي العبارة بالرقعة (بكل الأوراق) تصير بخطك</div>
+        <Pad kind="note" label={handFor} busy={busy} onCancel={() => setHandFor(null)}
+          onUpload={(s, c, wd) => void call({ action: "handAdd", text: handFor, s, c, wd, ...BOX.note }, true).then((r) => { if (r) { setHandFor(null); setTap(null); void call({ action: "group", key: gkey }, true); } })} />
+      </div></div>}
       {msgOpen && <MessageBox quiet paperId={p.id} name={p.name} onClose={(note) => { setMsgOpen(false); if (note) { setMsgNote(note); void call({ action: "group", key: gkey }, true); } }} />}
       <div className="arv-end">— نهاية أوراق {p.name} —</div>
     </div>
@@ -310,7 +319,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
 }
 
 /** صندوق العلامة: نوعها (✓ ½ ✗ 👍) وملاحظتك، وحفظ أو شيلها */
-function EditBox({ start, busy, save, drop, close }: { start?: PaperMark; busy: boolean; save: (kind: string, note: string) => Promise<unknown>; drop?: () => void; close: () => void }) {
+function EditBox({ start, busy, save, drop, close, hand }: { start?: PaperMark; busy: boolean; save: (kind: string, note: string) => Promise<unknown>; drop?: () => void; close: () => void; hand?: () => void }) {
   const first = start && ["ok", "half", "bad", "good"].includes(start.kind) ? start.kind : "ok";
   const [kind, setKind] = useState<string>(first);
   const [note, setNote] = useState(start?.note ?? "");
@@ -322,6 +331,7 @@ function EditBox({ start, busy, save, drop, close }: { start?: PaperMark; busy: 
       <div className="exline">
         <button type="button" className="btn" style={{ width: "auto" }} disabled={busy} onClick={() => void save(kind, note)}>💾 حفظ</button>
         {drop && <button type="button" className="exbtn" disabled={busy} onClick={drop}>🗑 شيلها</button>}
+        {hand && <button type="button" className="exbtn" disabled={busy} onClick={hand}>✍️ اكتب العبارة بخطي (تتبدل بكل مكان)</button>}
         <button type="button" className="exbtn" onClick={close}>إلغاء</button>
       </div>
     </div>
@@ -368,6 +378,7 @@ html,body{touch-action:pan-y;overscroll-behavior-x:none}
 .arv-status{height:34px;margin-top:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .arv-send-top{height:56px;margin-top:8px;display:flex;align-items:center;gap:10px;overflow:hidden;white-space:nowrap}
 .arv-okline{font-weight:800;color:#6ee7a8}
+.arv-handbox{width:min(760px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--ink2,#162238);border:2px solid #F6C94A;border-radius:14px;padding:12px}
 .arv-msg{min-height:40px;padding:0 12px;border-radius:10px;border:1.5px solid #6ee7a8;background:transparent;color:#6ee7a8;font:inherit;font-weight:800;cursor:pointer}
 .arv-qtot{margin-inline-start:auto;font-weight:800;font-size:14px;padding:2px 10px;border-radius:20px;background:rgba(246,201,74,.16);color:#F6C94A}
 .arv-nums{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px;margin-top:8px}

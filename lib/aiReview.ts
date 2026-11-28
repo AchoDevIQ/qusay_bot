@@ -226,6 +226,14 @@ export async function aiReviewAction(body: Row) {
       if (a === "markReset") await qg.resetMarks(item);
     } catch (e) { need(false, (e as Error).message); }
     return { paper: (await groupPapers(String(body.key2 ?? ""), item))[0] ?? null, notice: a === "markReset" ? "↩️ رجعت لتصحيح الذكاء" : "✅ انحفظ التصحيح" };
+  } else if (a === "handAdd") {
+    // ✍️ عبارة مكتوبة بالرقعة: يكتبها بخط إيده مرة، وتتبدل بخطه بكل مكان مكتوبة بيه هاي العبارة (طلبه 2026-11-28):
+    // كل الأوراق وكل المواضيع، الحالية والجاية (تنحفظ بـ «✍️ خط إيدي» العام، والعلامات تنرسم وقت العرض)
+    const text = String(body.text ?? "").trim();
+    need(text, "ماكو عبارة");
+    const { addInk } = await import("./qusayGrade.ts");
+    try { await addInk(0, { kind: "note", text, w: body.w, h: body.h, s: body.s, c: body.c, wd: body.wd }); } catch (e) { need(false, (e as Error).message); }
+    return { notice: "✅ انحفظت بخطك. وين ما مكتوبة هاي العبارة صارت بخطك" };
   } else if (a === "approve") {
     const key = String(body.key ?? "");
     const papers = await groupPapers(key);
