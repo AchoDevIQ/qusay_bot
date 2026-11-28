@@ -1097,6 +1097,8 @@ export async function myExamAction(body: Row) {
     return { ...await studentInfo(id), notice: body.on ? "📱 تمام: بالمركز ما تنطبعلك ورقة، ومن يسجلون حضورك تنفتح أسئلتك بالآيباد" : "📄 رجعت تمتحن بالورقة بالمركز" };
   }
   if (a === "examLeft") return await examLeft(id, body.item, await schedSettings(), body.phase, body.secs);
+  // 📖 شاف شرح إرسال الأجوبة: ما يطلعله بامتحاناته الجاية
+  if (a === "penIntro") { await kvSet(`pen_intro_${id}`, stamp()); return { ok: true }; }
   if (a === "openExam" || a === "delAnswer" || a === "submitExam" || a === "oath") {
     const s = await schedSettings();
     // الغرفة أول: تحديث المواعيد يعيد كتابة الامتحانات اللي لسه ما بدت

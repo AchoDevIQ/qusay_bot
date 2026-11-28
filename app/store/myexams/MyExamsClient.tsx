@@ -65,7 +65,7 @@ function AnswerOnlyNote({ k, n, done }: { k: number; n: number; done: number }) 
     </div>
   );
 }
-type Room = { id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; max: number; img: string | null; text: string | null; answers: { id: number; file: string }[] }[]; head: PenHead; answerOnly?: number };
+type Room = { penIntro?: boolean; id: number; sid: number; title: string; oath: string; sworn: boolean; gallery: boolean; model: string; closeAt: string; now: string; minutes: number; extra: number; pages: string[]; questions: { n: number; max: number; img: string | null; text: string | null; answers: { id: number; file: string }[] }[]; head: PenHead; answerOnly?: number };
 const STATE: Record<Item["state"], string> = { locked: "🔒 مقفول لحد وقته", open: "🟢 بدا هسه", missed: "⛔ فات وقته", done: "✅ مخلص", center: "🏫 بالمركز", past: "انتهى موعده", notbought: "🔒 ما مشتري" };
 
 export default function MyExamsClient() {
@@ -1085,6 +1085,9 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   useEffect(() => { if (left <= 0) setClosed(true); }, [left, tick]);
   // ✏️ اكتب بالقلم: رقم السؤال المفتوح بورقة الكتابة
   const [pen, setPen] = useState<number | null>(null);
+  // 📖 شرح الإرسال بأول ورقة القلم (طلبه 2026-11-28: «الطلاب يگولون ما ندري»): مرة وحدة لكل امتحان، يدوس «فهمت» وتنفتح الأسئلة
+  // بس بأول امتحان للطالب: الخادم يگول إذا بعده ما شافه
+  const [introOk, setIntroOk] = useState(!room.penIntro);
   // الآيباد (شاشة عريضة): السؤال مكتوب فوك ورقة القلم، فما نطلع صفحات الأسئلة، وورقة القلم تنفتح وحدها بعد القسم
   const [wide, setWide] = useState(false);
   useEffect(() => { setWide(window.innerWidth >= 700); }, []);
@@ -1123,6 +1126,23 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     return (
       <div className="wrap"><div className="card warn exerr">{total ? "انتهى الوقت، وأجوبتك اللي دزيتها انحفظت." : "⛔ انتهى وقت الامتحان المحدد، وأعطيناك وقت إضافي، ولم ترسل الإجابة."}</div>
         <button type="button" className="btn agbtn" onClick={leave}>رجوع لامتحاناتي</button></div>
+    );
+  }
+  if (pen !== null && room.sworn && !introOk) {
+    return (
+      <div className="wrap">
+        <div className="card agcard pen-intro">
+          <h2>📖 قبل ما تبدي: شلون ترسل أجوبتك</h2>
+          <ol>
+            <li><b>اكتب جوابك</b> بكل ورقة، ومن تخلصها دوس <b>«✅ تم»</b>. رقم السؤال فوگ يصير <b className="ok">أخضر</b> (الأحمر يعني بعده ما خلص).</li>
+            <li>من تخلص كل الأسئلة دوس الزر الكبير <b>«✅ أكملت الجواب على جميع الأسئلة»</b>. هذا ما يرسل شي، بس يوريك أسئلتك.</li>
+            <li>تطلعلك كل الأسئلة: <b className="ok">✅ مكتوب</b> لو <b className="no">⚠️ فارغ</b>. إذا نسيت سؤال دوس عليه وارجع اكتبه.</li>
+            <li>من تتأكد دوس <b>«📤 أرسل الأجوبة وسلّم»</b>: كل أجوبتك تنرسل مرة وحدة، وبعدها ما تگدر تغير.</li>
+          </ol>
+          <div className="exhint">⏳ الوقت يمشي من هسه. إذا خلص الوقت، اللي كتبته ينرسل وحده.</div>
+          <button type="button" className="btn agbtn" onClick={() => { setIntroOk(true); void call({ action: "penIntro" }); }}>✅ فهمت، افتح الأسئلة</button>
+        </div>
+      </div>
     );
   }
   // ✏️ الكتابة بالقلم: صفحة وحدة لكل الأسئلة، تنفتح على السؤال اللي داسه

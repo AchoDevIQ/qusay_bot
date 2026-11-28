@@ -103,6 +103,8 @@ async function roomView(it: Row, s: SchedSettings) {
   const answers = await find("exam_answers", { item_id: it.id }, { order: ["id"] });
   const sworn = !!await kvGet(oathKey(it.id));
   return {
+    // 📖 شرح الإرسال: بس بأول امتحان للطالب (طلبه 2026-11-28)، مو كل امتحان لأن وقته محسوب
+    penIntro: !await kvGet(`pen_intro_${it.user_id}`),
     id: it.id, sid: it.user_id, title: titleFor(e, st?.curr), model: v.model, oath: oathSentence(st?.name ?? ""), sworn: !!await kvGet(oathKey(it.id)), gallery: s.gallery, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra, answerOnly: answerOnlyOf(e),
     // صور الأسئلة ما توصل للصفحة أصلاً قبل القسم
     pages: await kvGet(oathKey(it.id)) ? await pagesOf(e, v, st?.curr ?? "") : [],
