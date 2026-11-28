@@ -261,7 +261,11 @@ export async function markAttendance(uid: number, by: number, force = false) {
   need(st!.exam === "حضوري", `${st!.name} طالب إلكتروني، مو حضوري`);
   const lock = force ? null : await attendLock(by);
   const it = lock ? await lockedItem(st!, uid, lock) : await todayItem(uid);
-  need(it, `${st!.name} ما عنده امتحان`);
+  // ما عنده امتحان: يگول السبب (طلبه 2026-11-28): غير مشترك بأي فصل، لو مشترك بس ما عنده امتحان
+  if (!it) {
+    const access = await find("exam_access", { user_id: uid });
+    need(false, access.length ? `${st!.name}: ما عنده امتحان (مشترك بـ ${[...new Set(access.map((a) => String(a.chapter)))].join("، ")}، بس ما إله موعد)` : `🚫 ${st!.name}: غير مشترك بالفصل`);
+  }
   if (!force && it!.status !== "attended" && !await onTime(it!)) return { ...await itemCard(it!), already: false, late: true };
   return await enterItem(it!, by);
 }

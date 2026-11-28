@@ -208,15 +208,22 @@ export default function StationClient() {
         let reading = false;
         timer = setInterval(() => {
           if (busy.current || !v.videoWidth || reading) return;
-          if (det) {
-            reading = true;
-            void det.detect(v).then((codes) => { for (const c of codes) if (c.rawValue) found(c.rawValue); }).catch(() => { det = null; }).finally(() => { reading = false; });
-            return;
-          }
+          // كل مرة صورة جديدة من الكاميرا (رسمها بالكانفس): بجهاز البيع القراية من الفيديو مباشرة چانت تبقى على أول صورة
+          // فتظل تقرا أول طالب («توه انقرا») حتى لو وجهها على غيره (طلبه 2026-11-28)
           const s = Math.min(1, 1280 / v.videoWidth);
           canvas.width = v.videoWidth * s; canvas.height = v.videoHeight * s;
           const g = canvas.getContext("2d", { willReadFrequently: true })!;
           g.drawImage(v, 0, 0, canvas.width, canvas.height);
+          if (det) {
+            reading = true;
+            void det.detect(canvas).then((codes) => {
+              const raw = codes.map((c) => c.rawValue).filter(Boolean);
+              // أكثر من كود بالصورة: الجديد أول
+              const pick = raw.find((x) => x !== seen.current.code) ?? raw[0];
+              if (pick) found(pick);
+            }).catch(() => { det = null; }).finally(() => { reading = false; });
+            return;
+          }
           const d = g.getImageData(0, 0, canvas.width, canvas.height);
           const r = jsQR(d.data, d.width, d.height, { inversionAttempts: "attemptBoth" });
           if (r?.data) found(r.data);

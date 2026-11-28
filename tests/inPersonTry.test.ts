@@ -174,7 +174,7 @@ test("👥 4 طلاب حضوريين: كل واحد بحالته، وكوده ا
   const scan = (k: number) => attendAction({ action: "scan", code: studentCode(-k), initData: `tk:${homeToken(1)}` }) as Promise<any>;
   assert.equal((await scan(set[0].k)).card.late, false);
   assert.equal((await scan(set[2].k)).card.late, true);
-  await assert.rejects(scan(set[3].k), /ما عنده امتحان/);
+  await assert.rejects(scan(set[3].k), /غير مشترك بالفصل/);
 });
 
 test("🔒 امتحان الجلسة: الكود اللي ما يطابق المركز أو الفصل أو الامتحان ينرفض بسببه", async () => {
