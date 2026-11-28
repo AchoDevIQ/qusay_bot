@@ -88,6 +88,19 @@ async function enqueue(uid: number, item: number) {
   const q = await readQueue(uid);
   if (!q.includes(item)) await kvSet(queueKey(uid), JSON.stringify([...q, item]));
 }
+// 🏷 مراكز الليبل (طلبه 2026-11-28): صاحب صلاحية طباعة الليبل يطبع لطلاب المراكز اللي اختارهن صاحب البوت بس.
+// فارغ: كل المراكز. صاحب البوت كل المراكز دائماً
+export const labelCentersKey = (uid: number) => `label_centers_${uid}`;
+export async function labelCenters(uid: number): Promise<number[] | null> {
+  if (await isAdmin(uid)) return null;
+  try { const j = JSON.parse((await kvGet(labelCentersKey(uid))) || "null"); return Array.isArray(j) && j.length ? j.map(Number) : null; } catch { return null; }
+}
+async function needLabelCenter(uid: number, sid: number) {
+  const list = await labelCenters(uid);
+  if (!list) return;
+  const st = await student(sid);
+  need(st && list.includes(Number(st.center_id)), `هذا الطالب من مركز «${(await centerName(st?.center_id)) || "ثاني"}»، وما مسموحلك تطبع ليبلات إلا لمراكزك`, 403);
+}
 export async function stationAction(body: Row) {
   const uid = verifyStationToken(body.station);
   need(uid !== null, "الرابط انتهى. انسخ رابط المحطة من صفحة الحضوري مرة ثانية", 401);
@@ -121,10 +134,13 @@ export async function stationAction(body: Row) {
     let sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
     if (sid && sid > 0 && await isAdmin(uid!) && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
+    await needLabelCenter(uid!, sid!);
     const card = await markAttendance(sid!, uid!);
     return { card, job: card.print === "label" && !card.late && !card.printed ? await jobOf(card) : null };
   }
   if (body.action === "except") {
+    const ex = await one("sched_items", { id: Number(body.item) });
+    if (ex) await needLabelCenter(uid!, Number(ex.user_id));
     const card = (await decideLate(uid!, body.item, true))!;
     return { card, job: card.print === "label" ? await jobOf(card) : null };
   }
@@ -132,6 +148,7 @@ export async function stationAction(body: Row) {
   if (body.action === "reprint") {
     const it = await one("sched_items", { id: Number(body.item) });
     need(it, "الامتحان غير موجود", 404);
+    await needLabelCenter(uid!, Number(it!.user_id));
     const card = await itemCard(it!);
     // طالب الآيباد ينسجل حضوره بس، وما ينطبعله ليبل إلا باستثناء (نسى الآيباد ذاك اليوم)
     need(card.print !== "ipad" || body.force === true, "هذا الطالب يمتحن بالآيباد. إذا نسى الآيباد دوس «استثناء» حتى ينطبعله ليبل");

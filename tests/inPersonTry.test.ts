@@ -202,3 +202,31 @@ test("🔒 امتحان الجلسة: الكود اللي ما يطابق الم
   assert.equal(((await attendAction({ action: "lock", center: 0, exam: 0, initData: me })) as any).lock, null);
   assert.equal((await scan(set[1].k)).card.late, false);
 });
+
+test("🏷 مراكز الليبل: مساعد الليبل يطبع لطلاب مراكزه بس، و✅/⏰/🚫 تسوي طالب جديد بنوعه", async () => {
+  const { makeInPersonOne, inPersonTests } = await import("../lib/gradeApi.ts");
+  const { attendAction, stationToken, labelCentersKey } = await import("../lib/inPerson.ts");
+  const { put, kvSet } = await import("../lib/db.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "مراكز الليبل" });
+  const mine = await insert("centers", { area_id: area, name: "مركزي", active: 1 });
+  const other = await insert("centers", { area_id: area, name: "مركز غيري", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const now = await makeInPersonOne(mine, v.id, "now");
+  const late = await makeInPersonOne(mine, v.id, "late");
+  const none = await makeInPersonOne(mine, v.id, "none");
+  assert.ok(now !== late && late !== none, "كل دوسة طالب جديد");
+  const kinds = Object.fromEntries((await inPersonTests(mine, v.id)).map((x) => [x.k, x.kind]));
+  assert.deepEqual([kinds[now], kinds[late], kinds[none]], ["now", "late", "none"]);
+  const away = await makeInPersonOne(other, v.id, "now");
+  // مساعد بصلاحية الليبل بس، ومركزه «مركزي»
+  const helper = 7_070_707;
+  await put("staff", { user_id: helper, name: "مساعد الليبل", perms: "station" });
+  await kvSet(labelCentersKey(helper), JSON.stringify([mine]));
+  const station = stationToken(helper);
+  const scan = (k: number) => attendAction({ station, action: "scan", code: studentCode(-k) }) as Promise<any>;
+  await assert.rejects(scan(away), /مركز غيري/);
+  assert.equal((await scan(now)).card.late, false);
+  // كل المراكز: يطبع للكل
+  await kvSet(labelCentersKey(helper), "");
+  assert.equal((await scan(away)).card.late, false);
+});

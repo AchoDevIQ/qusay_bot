@@ -11,7 +11,7 @@ type Places = { all: boolean; keys: string[]; private: boolean };
 type Area = { id: number; name: string; centers: { id: number; name: string; slots: { d: number; t: string }[] }[] };
 const DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
 type Grade = { chapters: string[]; off: number[]; places: Places; rate: Rate; mand: number; opt: number; obj: number; fines?: { day: string; target: number; done: number }[]; contract?: { v: number; at: string; current: boolean } | null; amount: number; archive: { id: number; mand: number; opt: number; obj: number; forgiven?: boolean; amount: number; created: string }[] };
-type Staff = { id: number; name: string; perms: string[]; door?: boolean; work: { today: number; last: string } | null; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
+type Staff = { id: number; name: string; perms: string[]; door?: boolean; labelCenters?: number[] | null; work: { today: number; last: string } | null; account: Account; grade: Grade | null; pays: { id: number; amount: number; created: string }[] };
 type Data = { chapters: string[]; topics: Topic[]; tree: Area[]; perms: { key: string; label: string }[]; staff: Staff[]; notice: string; door?: { id: number; name: string; link: string; qr: string } };
 type Call = (b: Record<string, unknown>) => Promise<Data | null>;
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -76,10 +76,13 @@ function Rows({ s, perms, chapters, topics, tree, open, toggle, busy, call }: { 
 function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; perms: Data["perms"]; chapters: string[]; topics: Topic[]; tree: Area[]; busy: boolean; call: Call }) {
   const [name, setName] = useState(s.name);
   const [picked, setPicked] = useState(s.perms);
+  // 🏷 مراكز الليبل: null كل المراكز
+  const [lc, setLc] = useState<number[] | null>(s.labelCenters ?? null);
+  const allCenters = tree.flatMap((a) => a.centers.map((c) => ({ id: c.id, name: `${c.name} (${a.name})` })));
   const [pay, setPay] = useState("");
   const [limit, setLimit] = useState(String(s.account.limit));
   const a = s.account;
-  const same = [...picked].sort().join() === [...s.perms].sort().join();
+  const same = [...picked].sort().join() === [...s.perms].sort().join() && JSON.stringify(lc) === JSON.stringify(s.labelCenters ?? null);
   return (
     <div>
       <div className="exlabel">الصلاحيات</div>
@@ -90,6 +93,18 @@ function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; per
             <input type="checkbox" checked={picked.includes(p.key)} onChange={() => setPicked(picked.includes(p.key) ? picked.filter((x) => x !== p.key && !(p.key === "grade" && x === "objections")) : [...picked, p.key])} />
             <span>{p.label}</span>
           </label>
+          {p.key === "station" && picked.includes("station") && (
+            <div className="stask">
+              <span>🏷 يطبع ليبلات لطلاب أي مراكز؟</span>
+              <div className="seg">
+                <button type="button" className={lc === null ? "on" : ""} onClick={() => setLc(null)}>كل المراكز</button>
+                <button type="button" className={lc !== null ? "on" : ""} onClick={() => setLc(lc ?? [])}>مراكز أختارها</button>
+              </div>
+              {lc !== null && allCenters.map((c) => (
+                <label key={c.id} className="adcheck adflat"><input type="checkbox" checked={lc.includes(c.id)} onChange={() => setLc(lc.includes(c.id) ? lc.filter((x) => x !== c.id) : [...lc, c.id])} /><span>{c.name}</span></label>
+              ))}
+            </div>
+          )}
           {p.key === "grade" && picked.includes("grade") && (
             <div className="stask">
               <span>✋ ترغب هو يتابع اعتراضات أوراقه؟ اعتراضاته توصلك إنت بكل الأحوال.</span>
@@ -101,7 +116,7 @@ function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; per
           )}
         </div>
       ))}
-      <button type="button" className="btn adsmallbtn" disabled={busy || same} onClick={() => void call({ action: "perms", id: s.id, perms: picked })}>حفظ الصلاحيات</button>
+      <button type="button" className="btn adsmallbtn" disabled={busy || same} onClick={() => void call({ action: "perms", id: s.id, perms: picked, labelCenters: lc })}>حفظ الصلاحيات</button>
       {s.grade && <GradeWallet s={s} g={s.grade} chapters={chapters} topics={topics} tree={tree} busy={busy} call={call} />}
 
       <div className="exfoot">

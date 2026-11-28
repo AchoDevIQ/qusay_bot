@@ -1,5 +1,5 @@
 // صفحة المساعدين: الإضافة، الصلاحيات، الحساب والدفعات. للمدير بس
-import { find, insert, kvSet, one, put, remove, setSession, update, type Row } from "./db.ts";
+import { find, insert, kvGet, kvSet, one, put, remove, setSession, update, type Row } from "./db.ts";
 import { ADMIN_IDS, PERMS, toLatinDigits } from "./config.ts";
 import { setGraderView, setStudentView, staffAccount } from "./data.ts";
 import { parseAmount } from "./office.ts";
@@ -52,6 +52,7 @@ async function pageData() {
     perms: Object.entries(PERMS).map(([key, label]) => ({ key, label })),
     staff: await Promise.all(rows.map(async (s) => ({
       id: s.user_id, name: s.name, perms: String(s.perms ?? "").split(",").filter(Boolean), door: !!await one("door_links", { user_id: s.user_id }),
+      labelCenters: await (async () => { try { const j = JSON.parse((await kvGet(`label_centers_${s.user_id}`)) || "null"); return Array.isArray(j) && j.length ? j.map(Number) : null; } catch { return null; } })(),
       work: graderIds.has(s.user_id) || work.has(s.user_id) ? { today: work.get(s.user_id)?.today ?? 0, last: work.get(s.user_id)?.last ? ago(work.get(s.user_id)!.last) : "" } : null,
       account: await staffAccount(s.user_id),
       // محفظة التصحيح: اللي إله على التصحيح، تطلع برا جنب اسمه ويندفع بضغطة
@@ -94,6 +95,12 @@ export async function staffAction(body: Row) {
     const list = Array.isArray(body.perms) ? (body.perms as unknown[]).map(String) : [];
     need(list.every((p) => p in PERMS), "صلاحية غير معروفة");
     await update("staff", { user_id: id }, { perms: [...new Set(list)].sort().join(",") });
+    // 🏷 مراكز الليبل: null كل المراكز، وإلا اللي أشر عليهن
+    if (body.labelCenters !== undefined) {
+      const lc = Array.isArray(body.labelCenters) ? [...new Set((body.labelCenters as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n > 0))] : [];
+      if (Array.isArray(body.labelCenters)) need(lc.length, "أشّر مركز واحد على الأقل، لو اختار «كل المراكز»");
+      await kvSet(`label_centers_${id}`, lc.length ? JSON.stringify(lc) : "");
+    }
     notice = "✅ انحفظت الصلاحيات";
   } else if (a === "del") {
     await liveStaff(id);

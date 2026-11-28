@@ -515,6 +515,36 @@ export async function makeInPersonSet(centerId: number, vid: number) {
   }
   return out;
 }
+/** 🎫 طالب حضوري تجريبي من النوع اللي يختاره (طلبه 2026-11-28: «أنا أصنع»): كل دوسة طالب جديد.
+ *  now: امتحانه هسه، late: جاي بغير وقته (موعده بعد 3 ساعات)، none: غير مشترك بالفصل */
+export async function makeInPersonOne(centerId: number, vid: number, kind: "now" | "late" | "none") {
+  need(await one("centers", { id: centerId }), "اختار المركز");
+  const v = await one("bank_versions", { id: vid });
+  need(v, "اختار الامتحان");
+  need(["now", "late", "none"].includes(kind), "اختار نوع الطالب");
+  const k = await addTestStudent();
+  await update("students", { user_id: -k }, { exam: "حضوري", center_id: centerId, name: `طالب حضوري تجريبي ${k}` });
+  const e = await one("bank_exams", { id: v!.exam_id });
+  if (kind !== "none") {
+    await put("exam_access", { user_id: -k, chapter: e?.chapter ?? "", order_id: null, created: stamp() });
+    await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: kind === "late" ? addMinutes(stamp(), 180) : stamp(), status: "waiting", version_id: vid, notified: "test" });
+  }
+  return k;
+}
+/** طلاب التجربة الحضوريين بهذا المركز، وحالة كل واحد ويا هذا الامتحان */
+export async function inPersonTests(centerId: number, vid: number) {
+  const v = await one("bank_versions", { id: vid });
+  const e = v ? await one("bank_exams", { id: v.exam_id }) : null;
+  const out: { k: number; kind: "now" | "late" | "none" | "other" }[] = [];
+  for (const s of (await find("students")).filter((x) => x.user_id < 0 && x.exam === "حضوري" && x.center_id === centerId)) {
+    const sid = Number(s.user_id);
+    const access = e ? (await find("exam_access", { user_id: sid })).some((a) => a.chapter === e.chapter) : false;
+    const it = v ? (await find("sched_items", { user_id: sid, exam_id: v.exam_id })).find((x) => x.status === "waiting") : null;
+    const kind = !access ? "none" : !it ? "other" : String(it.at) > addMinutes(stamp(), 60) ? "late" : "now";
+    out.push({ k: -sid, kind });
+  }
+  return out.sort((a, b) => b.k - a.k);
+}
 /** «📝 امتحن بنفسك»: صاحب البوت يدخل امتحان حي باسم طالب تجربة: الأسئلة، القسم، الكاميرا، التسليم، مثل الطالب بالضبط.
  *  ورقة نفس الطالب القديمة بنفس الامتحان تنشال، فيگدر يعيد التجربة */
 export async function startTestExam(sid: number, vid: number) {

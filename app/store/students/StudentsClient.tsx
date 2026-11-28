@@ -580,7 +580,7 @@ async function shrink(f: File): Promise<Blob> {
 function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown; code?: { k: number; img: string }; codes?: { k: number; kind: string; img: string }[] }) {
   const centers = areas.flatMap((a) => a.centers.map((c) => ({ id: c.id, name: `${c.name} (${a.name})` })));
   const [center, setCenter] = useState(0);
-  const [late, setLate] = useState(false);
+  const [big, setBig] = useState<{ k: number; img: string } | null>(null);
   const [slug, setSlug] = useState("");
   const [exam, setExam] = useState(0);
   const [vid, setVid] = useState(0);
@@ -591,7 +591,7 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
     <div className="card">
       <h2>🎫 طالب حضوري تجريبي</h2>
       <div className="form">
-        <div className="exhint">يسوي طالب حضوري بالمركز اللي تختاره، وامتحانه اليوم. بعدها روح لـ 🎫 الحضوري واكتب رقمه حتى ينسجل حضوره ويطلع ليبله. إذا عدتها لنفس المركز ينستعمل نفس الطالب.</div>
+        <div className="exhint">اختار المركز والامتحان، وبعدين سوي الطالب اللي تريده (كل دوسة طالب جديد). بعدها بـ 🎫 الحضوري (لو المحطة) وجه الكاميرا على كوده، لو اكتب رقمه.</div>
         <label>المركز</label>
         <select value={center} onChange={(e) => setCenter(Number(e.target.value))}>
           <option value={0}>اختار المركز...</option>
@@ -607,23 +607,29 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
           {topics.map((x) => <option key={x.exam} value={x.exam}>{x.title}</option>)}
         </select>}
         {exam > 0 && models.length > 1 && <div className="seg">{models.map((x) => <button key={x.id} type="button" className={vid === x.id ? "on" : ""} onClick={() => setVid(x.id)}>{x.model}</button>)}</div>}
-        <label>موعده</label>
-        <div className="seg">
-          <button type="button" className={!late ? "on" : ""} onClick={() => setLate(false)}>✅ هسه (بوقته)</button>
-          <button type="button" className={late ? "on" : ""} onClick={() => setLate(true)}>⏰ بغير وقته</button>
+        {/* كل دوسة طالب جديد من النوع اللي تختاره (طلبه 2026-11-28: «أنا أصنع»)، والطلاب كلهم بقائمة تحت */}
+        <label>سوي طالب</label>
+        <div className="atrow">
+          <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "now" })}>✅ امتحانه هسه</button>
+          <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "late" })}>⏰ جاي بغير وقته</button>
+          <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "none" })}>🚫 غير مشترك بالفصل</button>
         </div>
-        <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPerson", center, vid, late })}>🎫 سوي الطالب وامتحان اليوم</button>
-        <button type="button" className="btn adtop" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonSet", center, vid })}>👥 سوي 4 طلاب حضوريين بأكوادهم</button>
-        <div className="exhint">اثنين عندهم الامتحان هسه، واحد جاي بغير وقته، وواحد غير مشترك بالفصل. كل واحد كوده ثابت مثل الطالب الحقيقي.</div>
+        <button type="button" className="exbtn adtop" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonList", center, vid })}>📋 طلاب التجربة اللي سويتهم بهذا المركز</button>
         {!!codes?.length && (
-          <div className="adtop" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
+          <div className="adtop" style={{ display: "grid", gap: 8 }}>
+            <div className="exhint">دوس على الطالب: يطلع كوده كبير يملي الشاشة، ووجه عليه كاميرا الحضور.</div>
             {codes.map((x) => (
-              <div key={x.k} className="exhint" style={{ textAlign: "center", border: "1px solid #d4a63a", borderRadius: 12, padding: 8 }}>
-                <b>طالب حضوري تجريبي {x.k}</b>
-                <div>{x.kind === "now" ? "✅ عنده امتحان هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : "🚫 غير مشترك بالفصل"}</div>
-                <img src={x.img} alt={`كود الطالب ${x.k}`} style={{ width: "100%", maxWidth: 220, background: "#fff", borderRadius: 8, marginTop: 6 }} />
-              </div>
+              <button key={x.k} type="button" className="exbtn" onClick={() => setBig(x)}>
+                🎫 طالب حضوري تجريبي {x.k} · {x.kind === "now" ? "✅ امتحانه هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : x.kind === "none" ? "🚫 غير مشترك بالفصل" : "ما عنده هذا الامتحان"}
+              </button>
             ))}
+          </div>
+        )}
+        {big && (
+          <div onClick={() => setBig(null)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 12 }}>
+            <b style={{ color: "#141F33", fontSize: 22 }}>طالب حضوري تجريبي {big.k}</b>
+            <img src={big.img} alt={`كود الطالب ${big.k}`} style={{ width: "min(92vw, 80vh)", height: "auto" }} />
+            <button type="button" className="btn" style={{ width: "auto" }} onClick={() => setBig(null)}>✖ سد</button>
           </div>
         )}
         {code && (
