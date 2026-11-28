@@ -626,7 +626,7 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
                 <button type="button" className="exbtn" onClick={() => setBig({ k: x.k, img: x.img })}>
                   🎫 طالب حضوري تجريبي {x.k} · {x.kind === "now" ? "✅ امتحانه هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : x.kind === "none" ? "🚫 غير مشترك بالفصل" : x.kind === "ipad" ? "📱 يمتحن بالآيباد" : "ما عنده هذا الامتحان"}
                 </button>
-                {x.open && x.openImg && <button type="button" className="exbtn" onClick={() => setBig({ k: x.k, img: x.openImg!, open: x.open })}>📱 افتح امتحاناته بالآيباد (صوّر الكود بكاميرا الآيباد)</button>}
+                {x.open && x.openImg && <button type="button" className="exbtn" onClick={() => setBig({ k: x.k, img: x.openImg!, open: x.open })}>📱 خلي الآيباد جهاز هذا الطالب (للتجربة)</button>}
               </div>
             ))}
           </div>
@@ -634,7 +634,7 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
         {big && (
           <div onClick={() => setBig(null)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 12 }}>
             <b style={{ color: "#141F33", fontSize: 22 }}>طالب حضوري تجريبي {big.k}</b>
-            {big.open && <div style={{ color: "#141F33", fontWeight: 700, textAlign: "center", maxWidth: 520 }}>صوّر هذا الكود بكاميرا الآيباد: تنفتح صفحة امتحاناته كأنك الطالب. بعدها وجه كاميرا الحضور على كود حضوره، وشوف الأسئلة تنفتح بالآيباد</div>}
+            {big.open && <div style={{ color: "#141F33", fontWeight: 700, textAlign: "center", maxWidth: 560 }}>للتجربة بس: صوّر هذا الكود بكاميرا الآيباد، فيصير الآيباد كأنه جهاز الطالب وتنفتح امتحاناته. بعدها بالآيباد يطلع «🎫 كود الحضور» مالته، مثل الطالب الحقيقي بتطبيقه. وجه كاميرا جهاز الحضور (POS) على الكود اللي بشاشة الآيباد: ينسجل حضوره، والأسئلة تنفتح بالآيباد وحدها بلا قسم</div>}
             <img src={big.img} alt={`كود الطالب ${big.k}`} style={{ width: "min(92vw, 70vh)", height: "auto" }} />
             {big.open && <button type="button" className="exbtn" onClick={(e) => { e.stopPropagation(); void navigator.clipboard?.writeText(big.open!); }}>📋 انسخ الرابط</button>}
             <button type="button" className="btn" style={{ width: "auto" }} onClick={() => setBig(null)}>✖ سد</button>

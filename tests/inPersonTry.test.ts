@@ -255,3 +255,16 @@ test("🗑 مسح طلاب التجربة الحضوريين: الحضوريين
   assert.equal((await find("sched_items", { user_id: -k })).length, 0);
   assert.ok(await one("students", { user_id: -online }), "طالب التجربة الإلكتروني يبقى");
 });
+
+test("📱 الحضوري بالآيباد: بعد الحضور الأسئلة تنفتح بلا قسم", async () => {
+  const { makeInPersonOne } = await import("../lib/gradeApi.ts");
+  const { openRoom } = await import("../lib/examRoom.ts");
+  const { schedSettings } = await import("../lib/schedApi.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "قسم" });
+  const c = await insert("centers", { area_id: area, name: "مركز بلا قسم", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const k = await makeInPersonOne(c, v.id, "ipad");
+  const card = await markAttendance(-k, 1);
+  const room: any = await openRoom(-k, card.item, await schedSettings(), true);
+  assert.equal(room.sworn, true);
+});

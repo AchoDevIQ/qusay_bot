@@ -142,6 +142,8 @@ export async function openRoom(uid: number, id: unknown, s: SchedSettings, table
       await logActivity(uid, `📱 فتح امتحان ${e?.title ?? ""} بالآيباد بالمركز`);
       it = await ownItem(uid, id);
     }
+    // الحضوري بالآيباد ما يطلعله القسم (طلبه 2026-11-28): المراقب بالمركز، فالأسئلة تنفتح مباشرة. الإلكتروني بس يحلف
+    if (!await kvGet(oathKey(it.id))) await kvSet(oathKey(it.id), "حضوري بالآيباد");
   }
   const state = roomState(it, s);
   need(state !== "locked", "الامتحان لسه ما بدا");
