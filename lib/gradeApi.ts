@@ -1016,6 +1016,15 @@ ${SEEN_CAPTION}`);
 /** المصحح الآلي يحفظ الورقة مثل أي مصحح: الدرجة والمقولة توصل للطالب وولي أمره */
 export const paperName = nameOf;
 export const finishByAi = (uid: number, itemId: number) => finishPaper(uid, itemId, [], 0);
+/** ورقة فارغة (ما دز ولا جواب): كل أسئلتها صفر، وتنحفظ باسم نظام التصحيح بلا ما تروح للذكاء.
+ *  إذا «بعد ما أراجعها» شغالة، تنحجز مثل باقي أوراق الذكاء */
+export async function gradeBlank(itemId: number) {
+  const it = await one("sched_items", { id: itemId });
+  if (!it || it.graded_at) return;
+  for (const q of await find("bank_questions", { version_id: it.version_id })) await put("question_marks", { item_id: itemId, q: q.n, mark: 0 });
+  await update("sched_items", { id: itemId }, { grader_id: AI_GRADER });
+  await (await import("./aiReview.ts")).aiFinish(finishByAi, AI_GRADER, itemId);
+}
 
 /** الحفظ ويا صور الورقة المصححة اللي ركبتها صفحة التصحيح */
 export async function gradeUpload(form: FormData) {

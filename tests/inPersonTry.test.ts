@@ -268,3 +268,21 @@ test("📱 الحضوري بالآيباد: بعد الحضور الأسئلة �
   const room: any = await openRoom(-k, card.item, await schedSettings(), true);
   assert.equal(room.sworn, true);
 });
+
+test("📄 ورقة فارغة: تتسلم وتاخذ صفر بلا ذكاء", async () => {
+  const { makeInPersonOne } = await import("../lib/gradeApi.ts");
+  const { openRoom, submitRoom } = await import("../lib/examRoom.ts");
+  const { schedSettings } = await import("../lib/schedApi.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "فارغة" });
+  const c = await insert("centers", { area_id: area, name: "مركز الفارغة", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const k = await makeInPersonOne(c, v.id, "ipad");
+  const card = await markAttendance(-k, 1);
+  const s = await schedSettings();
+  await openRoom(-k, card.item, s, true);
+  await submitRoom(-k, card.item, s);
+  const it = (await one("sched_items", { id: card.item }))!;
+  assert.equal(it.status, "done");
+  assert.ok(it.graded_at, "انصححت وحدها");
+  assert.equal(Number(it.total), 0);
+});

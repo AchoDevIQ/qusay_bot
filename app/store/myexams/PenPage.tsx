@@ -208,6 +208,26 @@ export default function PenPage({ item, sid, model, head, questions, start, busy
     if (s.p.length === 4 && Math.hypot(s.p[2] - s.p[0], s.p[3] - s.p[1]) < 3) s.p = s.p.slice(0, 2);
     change((old) => [...old, s]);
   }
+  // «✅ أكملت الجواب على جميع الأسئلة» (طلبه 2026-11-28: الطلاب ما يفتهمون «أرسل الخضر»): يطلع كل الأسئلة
+  // «س1 ✅ مكتوب» لو «س2 ⚠️ فارغ»، وبعدها «📤 أرسل الأجوبة وسلّم» يدز كل اللي كتبه ويسلّم مرة وحدة (حتى لو بعضها فارغ)
+  const written = (n: number) => green(n) || readDraft(item, n).length > 0;
+  async function finishAll() {
+    haptic(); setMsg(""); setAsk(false);
+    const list = questions.filter((x) => readDraft(item, x.n).length && (dirty.has(x.n) || !x.done));
+    setSending(true);
+    try {
+      const files: { n: number; file: File }[] = [];
+      for (const x of list) {
+        const f = await sheetFile(info, x.n, x.img, readDraft(item, x.n));
+        if (!f) { setMsg(`ما گدرت أجهز ورقة السؤال ${x.n}، حاول مرة ثانية`); return; }
+        files.push({ n: x.n, file: f });
+      }
+      if (files.length && !await onSend(files)) return;
+      for (const x of list) setDirty(item, x.n, false);
+      setDirtySet(new Set());
+      onSubmit();
+    } finally { setSending(false); }
+  }
   /** «📤 أرسل الأجوبة»: كل ورقة كتب بيها بعد آخر إرسال تنرسل، مرة وحدة */
   async function sendAll(sure = false) {
     haptic(); setMsg("");
@@ -255,7 +275,7 @@ export default function PenPage({ item, sid, model, head, questions, start, busy
             ? <button type="button" className="gk-clear on" onClick={() => { change([]); setSure(false); }}>⚠️ متأكد؟</button>
             : <button type="button" className="gk-clear" disabled={!strokes.length} onClick={() => setSure(true)}>🗑 امسح الورقة</button>}
           <button type="button" className={"pen-tm" + (doneSet.has(cur) ? " on" : "")} disabled={sending} onClick={markDone}>✅ تم</button>
-          <button type="button" className="btn pen-save" disabled={busy || sending} onClick={() => void sendAll()}>{sending || busy ? "جاري الإرسال..." : "📤 أرسل الأجوبة"}</button>
+          <button type="button" className="btn pen-save" disabled={busy || sending} onClick={() => { haptic(); setMsg(""); setAsk(true); }}>{sending || busy ? "جاري الإرسال..." : "✅ أكملت الجواب على جميع الأسئلة"}</button>
           <button type="button" className="exbtn pen-back" disabled={busy || sending} onClick={onClose}>↩️ رجوع</button>
         </div>
         {penBox && (
@@ -269,12 +289,23 @@ export default function PenPage({ item, sid, model, head, questions, start, busy
         )}
         {/* التنبيهات تطلع فوك الورقة بدون ما تدفعها لجوه */}
         <div className="pen-float">
-        {left <= 3 && left > 0 && <div className="pen-msg bad">⚠️ باقي {left} {left === 1 ? "دقيقة" : "دقايق"}: دوس «📤 أرسل الأجوبة» هسه، حتى ما تضيع كتابتك.</div>}
+        {left <= 3 && left > 0 && <div className="pen-msg bad">⚠️ باقي {left} {left === 1 ? "دقيقة" : "دقايق"}: دوس «✅ أكملت الجواب على جميع الأسئلة» هسه، حتى ما تضيع كتابتك.</div>}
         {msg && <div className="pen-msg">{msg}</div>}
         {ask && (
-          <div className="pen-msg bad">
-            🔴 باقي أسئلة حمر ما دسيت عليها «✅ تم»: {questions.filter((x) => !green(x.n)).map((x) => x.n).join("، ")}.
-            <div className="exline"><button type="button" className="exbtn" onClick={() => void sendAll(true)}>📤 أرسل الخضر هسه</button><button type="button" className="exbtn" onClick={() => setAsk(false)}>رجوع أكمّل</button></div>
+          <div className="pen-msg">
+            <b>تأكد من أجوبتك قبل الإرسال:</b>
+            <div className="pen-check">
+              {questions.map((x) => (
+                <button key={x.n} type="button" className={written(x.n) ? "ok" : "no"} onClick={() => { setAsk(false); go(x.n); }}>
+                  السؤال {x.n}: {written(x.n) ? "✅ مكتوب" : "⚠️ فارغ"}
+                </button>
+              ))}
+            </div>
+            {questions.some((x) => !written(x.n)) && <div className="exhint">دوس على السؤال الفارغ إذا تريد ترجع تكتبه.</div>}
+            <div className="exline">
+              <button type="button" className="btn agbtn" disabled={busy || sending} onClick={() => void finishAll()}>📤 أرسل الأجوبة وسلّم</button>
+              <button type="button" className="exbtn" onClick={() => setAsk(false)}>↩️ أرجع أكمّل</button>
+            </div>
           </div>
         )}
         </div>

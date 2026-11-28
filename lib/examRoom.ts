@@ -205,10 +205,12 @@ export async function deleteAnswer(uid: number, item: unknown, answer: unknown, 
 }
 export async function submitRoom(uid: number, item: unknown, s: SchedSettings) {
   const it = await liveRoom(uid, item, s);
-  need((await find("exam_answers", { item_id: it.id })).length, "ما دزيت ولا جواب");
+  // الورقة الفارغة تتسلم هم (طلبه 2026-11-28: «يجوز يسلم ورقة فارغة»)، وتاخذ صفر بلا ذكاء ولا مصحح، فما تكلف فلوس
+  const blank = !(await find("exam_answers", { item_id: it.id })).length;
   await update("sched_items", { id: it.id }, { status: "done", submitted_at: stamp() });
   const e = await one("bank_exams", { id: it.exam_id });
-  await logActivity(uid, `✅ سلم امتحان ${e?.title ?? ""}`);
+  await logActivity(uid, `✅ سلم امتحان ${e?.title ?? ""}${blank ? " (ورقة فارغة: صفر)" : ""}`);
+  if (blank) { await (await import("./gradeApi.ts")).gradeBlank(it.id); return; }
   try { await notifyGraders(); } catch (x) { console.error(x); }
   // أول امتحان: لازم يربط ولي أمره، فتوصله رسالة بزر «حوّل لولي أمرك»
   try { const { guardianOf, sendGuardianAsk } = await import("./access.ts"); if (!await guardianOf(uid)) await sendGuardianAsk(uid); } catch (x) { console.error(x); }
