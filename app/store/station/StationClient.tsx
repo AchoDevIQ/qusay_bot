@@ -203,14 +203,24 @@ export default function StationClient() {
         v.srcObject = stream;
         await v.play();
         setCamErr("");
+        // قارئ الكيو آر الداخلي مال أندرويد (جهاز البيع وكروم) أسرع وأدق بهواية، وإذا ما موجود القارئ القديم بدقة أعلى (طلبه 2026-11-28: «ما يقرا»)
+        const BD = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect(s: CanvasImageSource): Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+        let det: { detect(s: CanvasImageSource): Promise<{ rawValue: string }[]> } | null = null;
+        try { det = BD ? new BD({ formats: ["qr_code"] }) : null; } catch { det = null; }
+        let reading = false;
         timer = setInterval(() => {
-          if (busy.current || !v.videoWidth) return;
-          const s = Math.min(1, 800 / v.videoWidth);
+          if (busy.current || !v.videoWidth || reading) return;
+          if (det) {
+            reading = true;
+            void det.detect(v).then((codes) => { for (const c of codes) if (c.rawValue) found(c.rawValue); }).catch(() => { det = null; }).finally(() => { reading = false; });
+            return;
+          }
+          const s = Math.min(1, 1280 / v.videoWidth);
           canvas.width = v.videoWidth * s; canvas.height = v.videoHeight * s;
           const g = canvas.getContext("2d", { willReadFrequently: true })!;
           g.drawImage(v, 0, 0, canvas.width, canvas.height);
           const d = g.getImageData(0, 0, canvas.width, canvas.height);
-          const r = jsQR(d.data, d.width, d.height, { inversionAttempts: "dontInvert" });
+          const r = jsQR(d.data, d.width, d.height, { inversionAttempts: "attemptBoth" });
           if (r?.data) found(r.data);
         }, 250);
       } catch (e) { setCamErr(why(e)); setCamera(false); }
@@ -225,14 +235,20 @@ export default function StationClient() {
       const url = URL.createObjectURL(f);
       const im = new Image();
       await new Promise((ok, no) => { im.onload = ok; im.onerror = no; im.src = url; });
-      const s = Math.min(1, 1200 / im.width);
+      const s = Math.min(1, 1600 / im.width);
       const canvas = document.createElement("canvas");
       canvas.width = im.width * s; canvas.height = im.height * s;
       const g = canvas.getContext("2d")!;
       g.drawImage(im, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
-      const d = g.getImageData(0, 0, canvas.width, canvas.height);
-      const r = jsQR(d.data, d.width, d.height);
+      // القارئ الداخلي أول (أدق)، وبعدين القديم
+      let code = "";
+      try {
+        const BD = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect(s: CanvasImageSource): Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+        if (BD) code = (await new BD({ formats: ["qr_code"] }).detect(canvas)).map((c) => c.rawValue).find((x) => x.startsWith("QS:")) ?? "";
+      } catch { /* القديم */ }
+      if (!code) { const d = g.getImageData(0, 0, canvas.width, canvas.height); code = jsQR(d.data, d.width, d.height, { inversionAttempts: "attemptBoth" })?.data ?? ""; }
+      const r = { data: code };
       if (r?.data?.startsWith("QS:")) { seen.current = { code: "", at: 0 }; found(r.data); }
       else setStatus("⚠️ ما انقرا الكود. قرب الكاميرا وصور مرة ثانية");
     } catch (e) { setStatus(`⚠️ ${why(e)}`); }
