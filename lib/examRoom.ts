@@ -207,6 +207,9 @@ export async function submitRoom(uid: number, item: unknown, s: SchedSettings) {
   const it = await liveRoom(uid, item, s);
   // الورقة الفارغة تتسلم هم (طلبه 2026-11-28: «يجوز يسلم ورقة فارغة»)، وتاخذ صفر بلا ذكاء ولا مصحح، فما تكلف فلوس
   const blank = !(await find("exam_answers", { item_id: it.id })).length;
+  // بس امتحان الآيباد الحضوري (الإلكتروني يصور أجوبته، وزر تسليمه يطلع بعد ما يجاوب)
+  const ipad = it.catch_place === "ipad" || (it.catch_place !== "online" && it.kind !== "catchup" && await ipadExam(uid));
+  need(!blank || ipad, "ما دزيت ولا جواب");
   await update("sched_items", { id: it.id }, { status: "done", submitted_at: stamp() });
   const e = await one("bank_exams", { id: it.exam_id });
   await logActivity(uid, `✅ سلم امتحان ${e?.title ?? ""}${blank ? " (ورقة فارغة: صفر)" : ""}`);
