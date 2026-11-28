@@ -33,6 +33,10 @@ export default function StationClient() {
   const attaching = useRef(false);
   const chunk = useRef(180);
   const seen = useRef({ code: "", at: 0 });
+  // الكاميرا بعدها على نفس الطالب: سطر صغير تحت النتيجة، والنتيجة نفسها تبقى (طلبه 2026-11-28: الجاي بغير وقته
+  // چان يطلع «توه انقرا» بداله، لأن الكاميرا تقرا نفس الكود بعد ربع ثانية وتمسح رسالته)
+  const [same, setSame] = useState(false);
+  const sameOff = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { void api({ action: "pos" }).then((r) => { if (r.pos) setPos(r.pos); }).catch(() => undefined); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   function move(dx: number, dy: number) {
@@ -117,13 +121,15 @@ export default function StationClient() {
     busy.current = true;
     try { await run(); } catch (e) { setStatus(`⚠️ ${why(e)}`); await sleep(1200); } finally { busy.current = false; }
   }
+  // الحضور ينسجل حتى لو الطابعة مو متصلة (طالب الآيباد والجاي بغير وقته ما يحتاجون طابعة)، وإذا يحتاج ليبل يگله يتصل ويطبعه
+  const noPrinter = (name: string) => setStatus(`✅ انسجل حضور ${name}، بس الطابعة مو متصلة: اتصل بيها ودوس «🏷 اطبع ليبل مرة ثانية»`);
   const handle = (code: string) => once(async () => {
-    if (!ch.current) { setStatus("⚠️ اتصل بالطابعة أول"); return; }
     setStatus("⏳ دا يسجل الحضور...");
     const r = await api({ action: "scan", code });
     const c = r.card!;
     if (c.late) { setPendings((l) => [c, ...l.filter((x) => x.item !== c.item)]); setStatus(`⏰ ${c.name}: جاي بغير وقته. قراره تحت، وكمل باللي بعده`); return; }
     setLast(c);
+    if (r.job && !ch.current) { noPrinter(c.name); return; }
     if (r.job) {
       setStatus(`🖨 دا يطبع: ${c.name}`);
       await write(r.job);
@@ -139,10 +145,10 @@ export default function StationClient() {
       setStatus(`❌ انرفض: ${c.name}`);
       return;
     }
-    if (!ch.current) { setStatus("⚠️ اتصل بالطابعة أول"); return; }
     const r = await api({ action: "except", item: c.item });
     drop(c.item);
     setLast(r.card!);
+    if (r.job && !ch.current) { noPrinter(c.name); return; }
     if (r.job) { setStatus(`🖨 دا يطبع: ${c.name}`); await write(r.job); await api({ action: "printed", id: c.item }); setStatus(`✅ انطبع: ${c.name}`); }
     else setStatus(`✅ انسجل ${c.name} باستثناء`);
   });
@@ -185,8 +191,11 @@ export default function StationClient() {
     if (!raw.startsWith("QS:")) return;
     const now = Date.now();
     // نفس الكود مرة ثانية خلال 8 ثواني: ما ينطبع مرتين، ويگله بدل ما يسكت
-    if (seen.current.code === raw && now - seen.current.at < 8000) { setStatus("⚠️ نفس الطالب توه انقرا. شيل الكاميرا عنه، أو وجهها على طالب ثاني"); return; }
+    // نفس الكود والكاميرا بعدها عليه: ما ينطبع مرتين، ونتيجته تبقى مكتوبة. ما دام الكاميرا عليه ما ينقرا مرة ثانية،
+    // ومن تشيلها عنه 8 ثواني وترجعها ينقرا من جديد
+    if (seen.current.code === raw && now - seen.current.at < 8000) { seen.current.at = now; setSame(true); if (sameOff.current) clearTimeout(sameOff.current); sameOff.current = setTimeout(() => setSame(false), 1500); return; }
     seen.current = { code: raw, at: now };
+    setSame(false);
     void handle(raw);
   }
   useEffect(() => {
@@ -264,6 +273,7 @@ export default function StationClient() {
       <div className="card expad">
         <div className="exlabel">🖨 محطة طباعة الليبل</div>
         <div className="exhint atok" style={{ fontSize: 17 }}>{status}</div>
+        {same && camera && <div className="exhint">👀 الكاميرا بعدها على نفس الطالب. وجهها على اللي بعده</div>}
         {!ready && <button type="button" className="btn agbtn adtop" onClick={() => void connect()}>🔌 اتصل بالطابعة</button>}
         {count > 0 && <div className="exhint">انطبع: <b>{count}</b></div>}
       </div>
