@@ -628,7 +628,9 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
                 <button type="button" className="exbtn" onClick={() => setBig({ k: x.k, img: x.img })}>
                   🎫 طالب حضوري تجريبي {x.k} · {x.kind === "now" ? "✅ امتحانه هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : x.kind === "none" ? "🚫 غير مشترك بالفصل" : x.kind === "ipad" ? "📱 يمتحن بالآيباد" : "ما عنده هذا الامتحان"}
                 </button>
-                {x.open && x.openImg && <button type="button" className="exbtn" onClick={() => setBig({ k: x.k, img: x.openImg!, open: x.open })}>📱 خلي الآيباد جهاز هذا الطالب (للتجربة)</button>}
+                {/* 📱 بالمعهد عنده الآيباد وجهاز البيع بس (طلبه 2026-11-28): الآيباد اللي فاتح هاي الصفحة يصير آيباد الطالب مباشرة */}
+                {x.open && <a className="btn" href={x.open}>📱 افتح امتحاناته بهذا الآيباد (يصير آيباد الطالب)</a>}
+                {x.open && x.openImg && <button type="button" className="exbtn" onClick={() => setBig({ k: x.k, img: x.openImg!, open: x.open })}>📷 لو افتحه بجهاز ثاني (كود تصوّره)</button>}
               </div>
             ))}
           </div>
