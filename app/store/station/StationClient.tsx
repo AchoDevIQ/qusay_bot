@@ -8,8 +8,9 @@ import { deviceApp } from "../../../lib/deviceApp.ts";
 const SERVICES = ["000018f0-0000-1000-8000-00805f9b34fb", "e7810a71-73ae-499d-8c15-faa9aef0c3f2"];
 const MM = 8;   // 8 نقاط بالملم
 type Job = { id: number; name: string; b64: string };
-type Card = { item: number; name: string; exam: string; print: string; at: string; already: boolean; late?: boolean; printed?: boolean };
-type Reply = { job?: Job | null; card?: Card; ok?: boolean; pos?: { dx: number; dy: number } };
+// late: يحتاج قرار (جاي بغير وقته wrongTime، لو من مركز ثاني away). exc: هذا الحساب عنده صلاحية الاستثناء
+type Card = { item: number; name: string; exam: string; print: string; at: string; already: boolean; late?: boolean; printed?: boolean; wrongTime?: boolean; away?: string; exc?: boolean };
+type Reply = { job?: Job | null; card?: Card; ok?: boolean; pos?: { dx: number; dy: number }; exc?: boolean };
 
 const why = (e: unknown) => (e as Error)?.message || String(e);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -124,10 +125,15 @@ export default function StationClient() {
   // الحضور ينسجل حتى لو الطابعة مو متصلة (طالب الآيباد والجاي بغير وقته ما يحتاجون طابعة)، وإذا يحتاج ليبل يگله يتصل ويطبعه
   const noPrinter = (name: string) => setStatus(`✅ انسجل حضور ${name}، بس الطابعة مو متصلة: اتصل بيها ودوس «🏷 اطبع ليبل مرة ثانية»`);
   const handle = (code: string) => once(async () => {
+    setLast(null);
     setStatus("⏳ دا يسجل الحضور...");
     const r = await api({ action: "scan", code });
     const c = r.card!;
-    if (c.late) { setPendings((l) => [c, ...l.filter((x) => x.item !== c.item)]); setStatus(`⏰ ${c.name}: جاي بغير وقته. قراره تحت، وكمل باللي بعده`); return; }
+    if (c.late) {
+      setPendings((l) => [{ ...c, exc: !!r.exc }, ...l.filter((x) => x.item !== c.item)]);
+      setStatus(`${c.away ? `🏫 ${c.name}: من مركز ثاني (${c.away})` : `⏰ ${c.name}: جاي بغير وقته`}. كارته تحت، تقرر عليه وقت ما تريد، وكمل باللي بعده`);
+      return;
+    }
     setLast(c);
     if (r.job && !ch.current) { noPrinter(c.name); return; }
     if (r.job) {
@@ -135,7 +141,7 @@ export default function StationClient() {
       await write(r.job);
       await api({ action: "printed", id: c.item });
       setStatus(`✅ انطبع: ${c.name}`);
-    } else setStatus(c.print === "ipad" ? `📱 ${c.name}: يمتحن بالآيباد، لا تطبعله شي` : c.printed ? `⚠️ ${c.name}: مطبوع له ليبل` : c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
+    } else setStatus(c.print === "ipad" ? `✅ تم تسجيل حضور ${c.name}. 📱 يمتحن بالآيباد: أسئلته تنفتح هسه بالآيباد مالته وحدها، لا تطبعله شي` : c.printed ? `⚠️ ${c.name}: مطبوع له ليبل` : c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
   });
   /** قرار الجاي بغير وقته: لكل طالب لحاله */
   const decide = (c: Card, allow: boolean) => once(async () => {
@@ -274,6 +280,23 @@ export default function StationClient() {
         <div className="exlabel">🖨 محطة طباعة الليبل</div>
         <div className="exhint atok" style={{ fontSize: 17 }}>{status}</div>
         {same && camera && <div className="exhint">👀 الكاميرا بعدها على نفس الطالب. وجهها على اللي بعده</div>}
+        {/* ⏰ ينتظرون قرار (طلبه 2026-11-28: «منزل هالقد جوه»): فوگ جوه النتيجة. كل كارت باسم طالبه، والقرار لكل واحد لحاله.
+            الاستثناء بس للمشتري اللي عنده امتحان: جاي بغير وقته لو من مركز ثاني. غير المشترك ما يطلعله كارت أصلاً */}
+        {!!pendings.length && <div className="exlabel adtop">⏳ ينتظرون قرارك</div>}
+        {pendings.map((c) => (
+          <div key={c.item} className="atcard">
+            <b>{c.name}</b>
+            {c.away && <div className="exhint exbad">🏫 من مركز ثاني: {c.away}</div>}
+            {(c.wrongTime || !c.away) && <div className="exhint exbad">⏰ جاي بغير وقته. موعده: <span dir="ltr">{c.at}</span></div>}
+            <div className="exhint">{c.exam}</div>
+            {!c.exc && <div className="exhint">🔒 هذا الحساب ما عنده صلاحية الاستثناء. قصي العميري يعطيها من 👥 المساعدين ← «🔓 فتح امتحان فايت باستثناء»، وبعدها سد الصفحة وافتحها.</div>}
+            <div className="atrow adtop">
+              {c.exc && <button type="button" className="btn" onClick={() => void decide(c, true)}>🔓 استثناء، دخّله</button>}
+              <button type="button" className="exbtn" onClick={() => void decide(c, false)}>❌ رفض</button>
+              <button type="button" className="exbtn" onClick={() => drop(c.item)}>✖ عوفه</button>
+            </div>
+          </div>
+        ))}
         {!ready && <button type="button" className="btn agbtn adtop" onClick={() => void connect()}>🔌 اتصل بالطابعة</button>}
         {count > 0 && <div className="exhint">انطبع: <b>{count}</b></div>}
       </div>
@@ -287,20 +310,9 @@ export default function StationClient() {
             <input className="exinput" inputMode="numeric" dir="ltr" aria-label="رقم الطالب" placeholder="رقم الطالب" value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ""))} />
             <button type="button" className="exbtn" disabled={!num} onClick={() => { void handle(num); setNum(""); }}>سجل واطبع</button>
           </div>
-          {pendings.map((c) => (
-            <div key={c.item} className="atcard">
-              <b>{c.name}</b>
-              <div className="exhint exbad">⏰ جاي بغير وقته. موعده: <span dir="ltr">{c.at}</span></div>
-              <div className="exhint">{c.exam}</div>
-              <div className="atrow adtop">
-                <button type="button" className="btn" onClick={() => void decide(c, true)}>🔓 استثناء</button>
-                <button type="button" className="exbtn" onClick={() => void decide(c, false)}>❌ رفض</button>
-                <button type="button" className="exbtn" onClick={() => drop(c.item)}>✖ عوفه</button>
-              </div>
-            </div>
-          ))}
           {last && (
             <div className="atcard">
+              <div className="exhint">آخر طالب انسجل:</div>
               <b>{last.name}</b>
               {last.printed && <div className="exhint exbad">⚠️ هذا الطالب مطبوع له ليبل</div>}
               <div className="exhint">{last.exam}</div>

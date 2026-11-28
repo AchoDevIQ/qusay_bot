@@ -95,6 +95,13 @@ export async function labelCenters(uid: number): Promise<number[] | null> {
   if (await isAdmin(uid)) return null;
   try { const j = JSON.parse((await kvGet(labelCentersKey(uid))) || "null"); return Array.isArray(j) && j.length ? j.map(Number) : null; } catch { return null; }
 }
+/** الطالب من مركز برا مراكز هذا المساعد: يرجع اسم مركزه، وإلا "" */
+async function awayFromLabelCenters(uid: number, sid: number) {
+  const list = await labelCenters(uid);
+  if (!list) return "";
+  const st = await student(sid);
+  return st && list.includes(Number(st.center_id)) ? "" : (await centerName(st?.center_id)) || "ثاني";
+}
 async function needLabelCenter(uid: number, sid: number) {
   const list = await labelCenters(uid);
   if (!list) return;
@@ -135,13 +142,12 @@ export async function stationAction(body: Row) {
     // رقم طالب تجربة («11» = طالب حضوري تجريبي 11): لكل من يجرب المحطة، مو بس صاحب البوت (طلبه 2026-11-28)
     if (sid && sid > 0 && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
-    await needLabelCenter(uid!, sid!);
-    const card = await markAttendance(sid!, uid!);
-    return { card, job: card.print === "label" && !card.late && !card.printed ? await jobOf(card) : null };
+    // من مركز برا مراكز المساعد: ما ينرفض، يطلع كارت استثناء (طلبه 2026-11-28: الاستثناء لغير وقته لو غير مركزه، بس لازم مشتري الفصل)
+    const card = await markAttendance(sid!, uid!, false, await awayFromLabelCenters(uid!, sid!));
+    return { card, exc: card.late ? await can(uid!, EXC_PERM) : undefined, job: card.print === "label" && !card.late && !card.printed ? await jobOf(card) : null };
   }
   if (body.action === "except") {
-    const ex = await one("sched_items", { id: Number(body.item) });
-    if (ex) await needLabelCenter(uid!, Number(ex.user_id));
+    // صلاحية الاستثناء تكفي حتى لطالب من مركز ثاني
     const card = (await decideLate(uid!, body.item, true))!;
     return { card, job: card.print === "label" ? await jobOf(card) : null };
   }
@@ -244,18 +250,18 @@ export async function attendLock(by: number): Promise<{ center: number; exam: nu
 }
 /** امتحان الطالب بامتحان الجلسة، أو سبب رفضه */
 async function lockedItem(st: Row, uid: number, lock: { center: number; exam: number }) {
-  if (lock.center && st.center_id !== lock.center) need(false, `⛔ ${st.name} مو من هذا المركز. مركزه: ${await centerName(st.center_id) || "ماكو"}`);
+  // من مركز ثاني: ما ينرفض هنا. إذا مشتري وعنده امتحان، markAttendance ترجعه كارت استثناء
   if (!lock.exam) return await todayItem(uid);
   const e = await one("bank_exams", { id: lock.exam });
   const { boughtExams } = await import("./schedApi.ts");
-  if (!(await boughtExams(uid)).some((x) => x.id === lock.exam)) need(false, `⛔ ${st.name} غير مشترك في ${e?.chapter ?? "فصل هذا الامتحان"}`);
+  if (!(await boughtExams(uid)).some((x) => x.id === lock.exam)) need(false, `🚫 ${st.name}: غير مشترك في ${e?.chapter ?? "فصل هذا الامتحان"}، فما إله امتحان ولا استثناء`);
   const mine = (await find("sched_items", { user_id: uid, exam_id: lock.exam })).filter((i) => i.kind !== "optional");
   const live = mine.find((i) => LIVE.has(i.status) && i.catch_place !== "online");
   if (!live) need(false, mine.some((i) => i.status === "done") ? `⛔ ${st.name} امتحن ${e?.title ?? "هذا الامتحان"} قبل` : `⛔ ${st.name} ما إله موعد بامتحان ${e?.title ?? ""}`);
   return live!;
 }
 /** حضور الطالب. الجاي بغير وقته ما ينسجل: يرجع late حتى المساعد يختار استثناء لو رفض. force: بدون سؤال */
-export async function markAttendance(uid: number, by: number, force = false) {
+export async function markAttendance(uid: number, by: number, force = false, awayCenter = "") {
   const st = await student(uid);
   need(st, "هذا مو طالب مسجل");
   need(st!.exam === "حضوري", `${st!.name} طالب إلكتروني، مو حضوري`);
@@ -264,9 +270,14 @@ export async function markAttendance(uid: number, by: number, force = false) {
   // ما عنده امتحان: يگول السبب (طلبه 2026-11-28): غير مشترك بأي فصل، لو مشترك بس ما عنده امتحان
   if (!it) {
     const access = await find("exam_access", { user_id: uid });
-    need(false, access.length ? `${st!.name}: ما عنده امتحان (مشترك بـ ${[...new Set(access.map((a) => String(a.chapter)))].join("، ")}، بس ما إله موعد)` : `🚫 ${st!.name}: غير مشترك بالفصل`);
+    need(false, access.length ? `${st!.name}: ما عنده امتحان (مشترك بـ ${[...new Set(access.map((a) => String(a.chapter)))].join("، ")}، بس ما إله موعد)` : `🚫 ${st!.name}: غير مشترك بالفصل، فما إله امتحان ولا استثناء`);
   }
-  if (!force && it!.status !== "attended" && !await onTime(it!)) return { ...await itemCard(it!), already: false, late: true };
+  // الاستثناء (طلبه 2026-11-28): بس للمشتري اللي عنده امتحان (غير المشترك انرفض فوگ). جاي بغير وقته، لو من غير مركز
+  if (!force && it!.status !== "attended") {
+    const away = awayCenter || (lock?.center && st!.center_id !== lock.center ? (await centerName(st!.center_id)) || "ثاني" : "");
+    const wrongTime = !await onTime(it!);
+    if (wrongTime || away) return { ...await itemCard(it!), already: false, late: true, wrongTime, away };
+  }
   return await enterItem(it!, by);
 }
 /** قرار المساعد على طالب جاي بغير وقته: استثناء يدخله، ورفض ما يغير شي وينسجل بسجله */
@@ -274,9 +285,9 @@ async function decideLate(uid: number, item: unknown, allow: boolean) {
   const it = await one("sched_items", { id: Number(item) });
   need(it && LIVE.has(it.status), "الامتحان غير موجود", 404);
   const e = await one("bank_exams", { id: it!.exam_id });
-  if (!allow) { await logActivity(it!.user_id, `⛔ جا لامتحان ${e?.title ?? ""} بغير وقته وانرفض`); return null; }
+  if (!allow) { await logActivity(it!.user_id, `⛔ جا لامتحان ${e?.title ?? ""} وانرفض استثناؤه (بغير وقته لو من مركز ثاني)`); return null; }
   need(await can(uid, EXC_PERM), "ما عندك صلاحية الاستثناء", 403);
-  await logActivity(it!.user_id, `🔓 دخل امتحان ${e?.title ?? ""} باستثناء، جا بغير وقته`);
+  await logActivity(it!.user_id, `🔓 دخل امتحان ${e?.title ?? ""} باستثناء`);
   await update("sched_items", { id: it!.id }, { exc_by: uid });
   return await enterItem((await one("sched_items", { id: it!.id }))!, uid);
 }

@@ -191,7 +191,10 @@ test("🔒 امتحان الجلسة: الكود اللي ما يطابق الم
   const scan = (k: number) => attendAction({ action: "scan", code: studentCode(-k), initData: me }) as Promise<any>;
   const lock: any = await attendAction({ action: "lock", center: c, exam: v.exam_id, initData: me });
   assert.deepEqual(lock.lock, { center: c, exam: v.exam_id });
-  await assert.rejects(scan(away[0].k), /مو من هذا المركز/);
+  // من مركز ثاني ومشتري: ما ينرفض، يطلع كارت استثناء (طلبه 2026-11-28)
+  const aw = (await scan(away[0].k)).card;
+  assert.equal(aw.late, true);
+  assert.match(aw.away, /مركز ثاني/);
   await assert.rejects(scan(set[3].k), /غير مشترك/);
   assert.equal((await scan(set[0].k)).card.late, false);
   assert.equal((await scan(set[2].k)).card.late, true);
@@ -224,9 +227,13 @@ test("🏷 مراكز الليبل: مساعد الليبل يطبع لطلاب 
   await kvSet(labelCentersKey(helper), JSON.stringify([mine]));
   const station = stationToken(helper);
   const scan = (k: number) => attendAction({ station, action: "scan", code: studentCode(-k) }) as Promise<any>;
-  await assert.rejects(scan(away), /مركز غيري/);
+  // من مركز برا مراكزه: كارت استثناء، والمساعد بلا صلاحية الاستثناء ما يطلعله زرّه (exc false)
+  const aw = await scan(away);
+  assert.equal(aw.card.late, true);
+  assert.ok(aw.card.away);
+  assert.equal(aw.exc, false);
+  await assert.rejects(attendAction({ station, action: "except", item: aw.card.item }), /صلاحية الاستثناء/);
   assert.equal((await scan(now)).card.late, false);
-  // كل المراكز: يطبع للكل
   await kvSet(labelCentersKey(helper), "");
   assert.equal((await scan(away)).card.late, false);
 });
@@ -238,7 +245,7 @@ test("📱 طالب حضوري تجريبي يمتحن بالآيباد: يطل�
   const v = (await find("bank_versions", { kind: "mandatory" }))[0];
   const k = await makeInPersonOne(c, v.id, "ipad");
   assert.equal((await inPersonTests(c, v.id)).find((x) => x.k === k)?.kind, "ipad");
-  const card = await markAttendance(-k, 1);
+  const card = await markAttendance(-k, 2);
   assert.equal(card.print, "ipad");
 });
 
@@ -264,7 +271,7 @@ test("📱 الحضوري بالآيباد: بعد الحضور الأسئلة �
   const c = await insert("centers", { area_id: area, name: "مركز بلا قسم", active: 1 });
   const v = (await find("bank_versions", { kind: "mandatory" }))[0];
   const k = await makeInPersonOne(c, v.id, "ipad");
-  const card = await markAttendance(-k, 1);
+  const card = await markAttendance(-k, 2);
   const room: any = await openRoom(-k, card.item, await schedSettings(), true);
   assert.equal(room.sworn, true);
 });
@@ -277,7 +284,7 @@ test("📄 ورقة فارغة: تتسلم وتاخذ صفر بلا ذكاء", a
   const c = await insert("centers", { area_id: area, name: "مركز الفارغة", active: 1 });
   const v = (await find("bank_versions", { kind: "mandatory" }))[0];
   const k = await makeInPersonOne(c, v.id, "ipad");
-  const card = await markAttendance(-k, 1);
+  const card = await markAttendance(-k, 2);
   const s = await schedSettings();
   await openRoom(-k, card.item, s, true);
   await submitRoom(-k, card.item, s);

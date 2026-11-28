@@ -7,7 +7,7 @@ import { openOutside, scanQr } from "../shared";
 import RescanList, { type Rescan } from "./RescanList";
 import { deviceApp } from "../../../lib/deviceApp.ts";
 
-type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper" | "ipad"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean; late?: boolean; printed?: boolean };
+type Card = { item: number; uid: number; name: string; exam: string; at: string; center: string; print: "label" | "paper" | "ipad"; attendedAt: string; label: string; paper: string; already: boolean; queued?: boolean; late?: boolean; printed?: boolean; wrongTime?: boolean; away?: string };
 type Center = { id: number; name: string; print: "label" | "paper"; photos: boolean };
 type Exam = { id: number; title: string; chapter: string; versions: { id: number; pageMap: number[][] | null; model: string; token: string }[] };
 type Cam = { item: number; name: string; uid: number; exam: string; qs: number[]; have: number[]; sent: boolean };
@@ -112,7 +112,8 @@ function Attend({ data, busy, call }: { data: Data; busy: boolean; call: Call })
       {c?.late && (
         <div className="atcard">
           <b>{c.name}</b> <span dir="ltr">#{c.uid}</span>
-          <div className="exhint exbad">⏰ جاي بغير وقته. موعده: <span dir="ltr">{c.at}</span></div>
+          {c.away && <div className="exhint exbad">🏫 من مركز ثاني: {c.away}</div>}
+          {(c.wrongTime || !c.away) && <div className="exhint exbad">⏰ جاي بغير وقته. موعده: <span dir="ltr">{c.at}</span></div>}
           <div className="exhint">{c.exam} · {c.center}</div>
           <div className="atrow">
             <button type="button" className="btn" disabled={busy} onClick={() => void call({ action: "except", item: c.item }).then(afterAttend)}>🔓 استثناء</button>

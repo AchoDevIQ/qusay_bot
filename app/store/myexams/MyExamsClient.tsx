@@ -113,7 +113,10 @@ export default function MyExamsClient() {
   useEffect(() => {
     if (!waitingToday) return;
     const t = setInterval(() => { void call({ action: "info" }); }, 8000);
-    return () => clearInterval(t);
+    // رجع للصفحة (الآيباد چان مطفي لو بتطبيق ثاني): يسأل فوراً بدل ما ينتظر
+    const back = () => { if (document.visibilityState === "visible") void call({ action: "info" }); };
+    document.addEventListener("visibilitychange", back);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", back); };
   }, [waitingToday]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!info || room) return;
@@ -190,7 +193,15 @@ export default function MyExamsClient() {
 type CatchPlan = { phase2: string | null; light: boolean; maxHeavy: number; maxLight: number; week: { d: number; name: string }[];
   center: { name: string; days: { d: number; name: string; times: { t: string; label: string }[] }[] } | null };
 /** الآيباد: الشاشة عريضة (أصغر جهة 600 أو أكثر)، والتلفون ضيق */
-const isTablet = () => { try { return Math.min(window.screen.width, window.screen.height) >= 600; } catch { return false; } };
+// الآيباد: الشاشة عريضة. بعض المتصفحات (وجوه بعض التطبيقات) ترجع عرض الشاشة صفر، فناخذ الأكبر من الشاشة والنافذة،
+// والآيباد الحديث يگول عن نفسه «Macintosh» ويا لمس، فهو آيباد حتى لو القياس غلط (طلبه 2026-11-28: «ما فتح عنده بالآيباد»)
+const isTablet = () => {
+  try {
+    const ipad = /iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    const side = Math.max(Math.min(window.screen.width || 0, window.screen.height || 0), Math.min(window.innerWidth || 0, window.innerHeight || 0));
+    return ipad || side >= 600;
+  } catch { return false; }
+};
 /** «يوم بين يوم»: نفس فحص البوت، حتى يبين الغلط قبل ما يدوس */
 function daysErr(days: number[], per: number) {
   if (days.length !== per) return `اختار ${per === 1 ? "يوم واحد" : `${per} أيام`}`;
