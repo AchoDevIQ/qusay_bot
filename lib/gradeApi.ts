@@ -517,11 +517,13 @@ export async function makeInPersonSet(centerId: number, vid: number) {
 }
 /** 🎫 طالب حضوري تجريبي من النوع اللي يختاره (طلبه 2026-11-28: «أنا أصنع»): كل دوسة طالب جديد.
  *  now: امتحانه هسه، late: جاي بغير وقته (موعده بعد 3 ساعات)، none: غير مشترك بالفصل */
-export async function makeInPersonOne(centerId: number, vid: number, kind: "now" | "late" | "none") {
+export async function makeInPersonOne(centerId: number, vid: number, kind: "now" | "late" | "none" | "ipad") {
   need(await one("centers", { id: centerId }), "اختار المركز");
   const v = await one("bank_versions", { id: vid });
   need(v, "اختار الامتحان");
-  need(["now", "late", "none"].includes(kind), "اختار نوع الطالب");
+  need(["now", "late", "none", "ipad"].includes(kind), "اختار نوع الطالب");
+  // 📱 يمتحن بالآيباد: لازم مركزه ما مفتوحله التصوير بالتلفون (وإلا يصور جوابه بدل الآيباد)
+  if (kind === "ipad") need(!(await (await import("./inPerson.ts")).centerCfg(centerId)).photos, "هذا المركز مفتوحله التصوير بالتلفون، فطلابه ما يمتحنون بالآيباد. اختار مركز ثاني");
   const k = await addTestStudent();
   await update("students", { user_id: -k }, { exam: "حضوري", center_id: centerId, name: `طالب حضوري تجريبي ${k}` });
   const e = await one("bank_exams", { id: v!.exam_id });
@@ -529,18 +531,20 @@ export async function makeInPersonOne(centerId: number, vid: number, kind: "now"
     await put("exam_access", { user_id: -k, chapter: e?.chapter ?? "", order_id: null, created: stamp() });
     await insert("sched_items", { user_id: -k, exam_id: v!.exam_id, at: kind === "late" ? addMinutes(stamp(), 180) : stamp(), status: "waiting", version_id: vid, notified: "test" });
   }
+  if (kind === "ipad") await (await import("./inPerson.ts")).setIpadExam(-k, true);
   return k;
 }
 /** طلاب التجربة الحضوريين بهذا المركز، وحالة كل واحد ويا هذا الامتحان */
 export async function inPersonTests(centerId: number, vid: number) {
   const v = await one("bank_versions", { id: vid });
   const e = v ? await one("bank_exams", { id: v.exam_id }) : null;
-  const out: { k: number; kind: "now" | "late" | "none" | "other" }[] = [];
+  const out: { k: number; kind: "now" | "late" | "none" | "ipad" | "other" }[] = [];
+  const { ipadExam } = await import("./inPerson.ts");
   for (const s of (await find("students")).filter((x) => x.user_id < 0 && x.exam === "حضوري" && x.center_id === centerId)) {
     const sid = Number(s.user_id);
     const access = e ? (await find("exam_access", { user_id: sid })).some((a) => a.chapter === e.chapter) : false;
     const it = v ? (await find("sched_items", { user_id: sid, exam_id: v.exam_id })).find((x) => x.status === "waiting") : null;
-    const kind = !access ? "none" : !it ? "other" : String(it.at) > addMinutes(stamp(), 60) ? "late" : "now";
+    const kind = !access ? "none" : !it ? "other" : String(it.at) > addMinutes(stamp(), 60) ? "late" : await ipadExam(sid) ? "ipad" : "now";
     out.push({ k: -sid, kind });
   }
   return out.sort((a, b) => b.k - a.k);

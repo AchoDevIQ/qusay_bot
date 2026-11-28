@@ -289,9 +289,14 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
     // ✅ / ⏰ / 🚫: طالب جديد من النوع اللي يختاره، وبعدها كل طلاب التجربة بهذا المركز بأكوادهم
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     let made = 0;
-    if (a === "tryInPersonKind") made = await makeInPersonOne(Number(body.center), Number(body.vid), String(body.kind) as "now" | "late" | "none");
+    if (a === "tryInPersonKind") made = await makeInPersonOne(Number(body.center), Number(body.vid), String(body.kind) as "now" | "late" | "none" | "ipad");
     const list = await inPersonTests(Number(body.center), Number(body.vid));
-    tryCodes = await Promise.all(list.map(async (x) => ({ ...x, img: await QRCode.toDataURL(studentCode(-x.k), { margin: 2, width: 480 }) })));
+    const { siteBase } = await import("./keyboards.ts");
+    // 📱 طالب الآيباد: رابط صفحة امتحاناته (كأنه الطالب نفسه) حتى يفتحها صاحب البوت بالآيباد ويشوف الأسئلة تنفتح
+    tryCodes = await Promise.all(list.map(async (x) => {
+      const open = x.kind === "ipad" ? `${siteBase()}/store/myexams?t=${encodeURIComponent(homeToken(-x.k))}&owner=1` : "";
+      return { ...x, img: await QRCode.toDataURL(studentCode(-x.k), { margin: 2, width: 480 }), ...(open ? { open, openImg: await QRCode.toDataURL(open, { margin: 2, width: 480 }) } : {}) };
+    }));
     if (made) notice = `🎫 طالب حضوري تجريبي ${made} جاهز. دوس على اسمه تحت حتى يطلع كوده كبير، ووجه عليه الكاميرا`;
   } else if (a === "tryInPersonSet") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);

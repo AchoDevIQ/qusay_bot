@@ -230,3 +230,14 @@ test("🏷 مراكز الليبل: مساعد الليبل يطبع لطلاب 
   await kvSet(labelCentersKey(helper), "");
   assert.equal((await scan(away)).card.late, false);
 });
+
+test("📱 طالب حضوري تجريبي يمتحن بالآيباد: يطلع نوعه آيباد، وحضوره ما يطبع ليبل", async () => {
+  const { makeInPersonOne, inPersonTests } = await import("../lib/gradeApi.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "آيباد" });
+  const c = await insert("centers", { area_id: area, name: "مركز الآيباد", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const k = await makeInPersonOne(c, v.id, "ipad");
+  assert.equal((await inPersonTests(c, v.id)).find((x) => x.k === k)?.kind, "ipad");
+  const card = await markAttendance(-k, 1);
+  assert.equal(card.print, "ipad");
+});

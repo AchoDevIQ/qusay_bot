@@ -577,10 +577,10 @@ async function shrink(f: File): Promise<Blob> {
 }
 
 /** طالب حضوري تجريبي بمركز، وامتحانه اليوم، حتى تنجرب قراءة الحضور وطباعة الليبل بدون حساب ثاني */
-function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown; code?: { k: number; img: string }; codes?: { k: number; kind: string; img: string }[] }) {
+function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data["areas"]; versions: TestVersion[]; busy: boolean; act: (b: Record<string, unknown>) => unknown; code?: { k: number; img: string }; codes?: { k: number; kind: string; img: string; open?: string; openImg?: string }[] }) {
   const centers = areas.flatMap((a) => a.centers.map((c) => ({ id: c.id, name: `${c.name} (${a.name})` })));
   const [center, setCenter] = useState(0);
-  const [big, setBig] = useState<{ k: number; img: string } | null>(null);
+  const [big, setBig] = useState<{ k: number; img: string; open?: string } | null>(null);
   const [slug, setSlug] = useState("");
   const [exam, setExam] = useState(0);
   const [vid, setVid] = useState(0);
@@ -613,22 +613,28 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
           <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "now" })}>✅ امتحانه هسه</button>
           <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "late" })}>⏰ جاي بغير وقته</button>
           <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "none" })}>🚫 غير مشترك بالفصل</button>
+          <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "ipad" })}>📱 يمتحن بالآيباد</button>
         </div>
         <button type="button" className="exbtn adtop" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonList", center, vid })}>📋 طلاب التجربة اللي سويتهم بهذا المركز</button>
         {!!codes?.length && (
           <div className="adtop" style={{ display: "grid", gap: 8 }}>
             <div className="exhint">دوس على الطالب: يطلع كوده كبير يملي الشاشة، ووجه عليه كاميرا الحضور.</div>
             {codes.map((x) => (
-              <button key={x.k} type="button" className="exbtn" onClick={() => setBig(x)}>
-                🎫 طالب حضوري تجريبي {x.k} · {x.kind === "now" ? "✅ امتحانه هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : x.kind === "none" ? "🚫 غير مشترك بالفصل" : "ما عنده هذا الامتحان"}
-              </button>
+              <div key={x.k} style={{ display: "grid", gap: 6 }}>
+                <button type="button" className="exbtn" onClick={() => setBig({ k: x.k, img: x.img })}>
+                  🎫 طالب حضوري تجريبي {x.k} · {x.kind === "now" ? "✅ امتحانه هسه" : x.kind === "late" ? "⏰ جاي بغير وقته" : x.kind === "none" ? "🚫 غير مشترك بالفصل" : x.kind === "ipad" ? "📱 يمتحن بالآيباد" : "ما عنده هذا الامتحان"}
+                </button>
+                {x.open && x.openImg && <button type="button" className="exbtn" onClick={() => setBig({ k: x.k, img: x.openImg!, open: x.open })}>📱 افتح امتحاناته بالآيباد (صوّر الكود بكاميرا الآيباد)</button>}
+              </div>
             ))}
           </div>
         )}
         {big && (
           <div onClick={() => setBig(null)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 12 }}>
             <b style={{ color: "#141F33", fontSize: 22 }}>طالب حضوري تجريبي {big.k}</b>
-            <img src={big.img} alt={`كود الطالب ${big.k}`} style={{ width: "min(92vw, 80vh)", height: "auto" }} />
+            {big.open && <div style={{ color: "#141F33", fontWeight: 700, textAlign: "center", maxWidth: 520 }}>صوّر هذا الكود بكاميرا الآيباد: تنفتح صفحة امتحاناته كأنك الطالب. بعدها وجه كاميرا الحضور على كود حضوره، وشوف الأسئلة تنفتح بالآيباد</div>}
+            <img src={big.img} alt={`كود الطالب ${big.k}`} style={{ width: "min(92vw, 70vh)", height: "auto" }} />
+            {big.open && <button type="button" className="exbtn" onClick={(e) => { e.stopPropagation(); void navigator.clipboard?.writeText(big.open!); }}>📋 انسخ الرابط</button>}
             <button type="button" className="btn" style={{ width: "auto" }} onClick={() => setBig(null)}>✖ سد</button>
           </div>
         )}
