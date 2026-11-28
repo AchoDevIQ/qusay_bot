@@ -9,6 +9,7 @@ import { drawItems, parseInk, type Ink, type Item, type Paper as GPaper, type Pr
 import { coverImage, loadImage, pageImage, type HeaderInfo } from "../grade/compose";
 import { saveJob, sendJob, type SendJob } from "../grade/reliable";
 import { COLORS } from "../grade/pens";
+import type { PaperMark } from "../myexams/AiCompare";
 
 export type InkTool = "pen" | "eraser" | "ok" | "wrong";
 export type PenSet = { tool: InkTool | null; color: string; width: number };
@@ -121,26 +122,27 @@ async function composePhotos(paper: GPaper, order: (string | null)[], inks: Reco
   return out;
 }
 
-// القلم (Apple Pencil) يكتب دائماً وهو مختار، والإصبع ينزل ويصعد بالصفحة. الجهاز اللي ما بيه قلم: الإصبع يكتب من يختار القلم.
-// (طلبه 2026-11-28: «القلم يقطع») الصفحة ما تتحرك بالمتصفح فوك الورقة أبداً (touch-action: none)، لأن الآيباد چان يحسب
-// حركة القلم سحب للصفحة فيقطع الخط. الإصبع ننزّل بيه الصفحة إحنا، والكف اللي على الشاشة وهو يكتب ما يحركها
-// آيباد (شاشة كبيرة باللمس) أو جهاز كتب بيه قلم قبل: الإصبع ينزّل الصفحة من أول لمسة، حتى قبل ما يكتب بالقلم
+// القلم (Apple Pencil) يكتب دائماً وهو مختار، والإصبع يمرر الصفحة. الجهاز اللي ما بيه قلم: الإصبع يكتب من يختار القلم.
+// (طلبه 2026-11-28، فيديوين: «تخربط وتقطع») بالآيباد الإصبع يمرر بتمرير الآيباد نفسه (ناعم، مثل أي صفحة)، وإحنا نوگف
+// التمرير بس للمسة القلم (الآيباد يگول touchType = stylus) وللكف وهو يكتب. هيچ القلم ما يتقطع، والصفحة ما تتعارك ويا إصبعه
 const PEN_SEEN = "arvPenSeen";
+const IOS = typeof navigator !== "undefined" && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
 let penSeen = typeof window !== "undefined" && (() => {
   try { if (localStorage.getItem(PEN_SEEN) === "1") return true; } catch { /* */ }
   return navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) >= 700;
 })();
 let penDown = 0, penUpAt = 0;
+const markKeyOf = (m: PaperMark) => m.fixed ?? `${m.q}:${m.i ?? -1}:${m.kind}`;
 
-/** طبقة الكتابة فوك صفحة وحدة */
-export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: Ink; pen: PenSet; onChange: (next: Ink) => void; rotated: boolean }) {
+/** طبقة الكتابة فوك صفحة وحدة. marks: علامات الذكاء على هاي الصفحة، والمساحة تمسحها هم (onEraseMark) */
+export function InkLayer({ ink: given, pen, onChange: report, rotated, marks, onEraseMark }: { ink: Ink; pen: PenSet; onChange: (next: Ink) => void; rotated: boolean; marks?: PaperMark[]; onEraseMark?: (m: PaperMark) => void }) {
   const cv = useRef<HTMLCanvasElement>(null);
   // آخر كتابة (حتى المساحة وهي تمشي ما ترجع شي انمسح قبل ما الصفحة تتحدث)
   const cur = useRef(given); cur.current = given;
-  const ink = cur.current;
   const onChange = (next: Ink) => { cur.current = next; report(next); };
   const live = useRef<Item | null>(null);
   const drawing = useRef<number | null>(null);
+  const erasedMarks = useRef(new Set<string>());
   const [, bump] = useState(0);
   const paint = () => {
     const c = cv.current; if (!c) return;
@@ -158,10 +160,22 @@ export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: 
     return () => ro.disconnect();
   });
   const on = !!pen.tool && !rotated;
-  const at = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))] as const; };
+  const onRef = useRef(on); onRef.current = on;
+  // بالآيباد: لمسة القلم ما تمرر الصفحة، والكف (أي لمسة والقلم نازل أو توه رفعه) ما يمررها. الإصبع وحده يمرر عادي
+  useEffect(() => {
+    const c = cv.current; if (!c || !IOS) return;
+    const block = (e: TouchEvent) => {
+      if (!onRef.current) return;
+      const stylus = [...Array.from(e.touches), ...Array.from(e.changedTouches)].some((t) => (t as Touch & { touchType?: string }).touchType === "stylus");
+      if (stylus || penDown > 0 || Date.now() - penUpAt < 400) e.preventDefault();
+    };
+    c.addEventListener("touchstart", block, { passive: false });
+    c.addEventListener("touchmove", block, { passive: false });
+    return () => { c.removeEventListener("touchstart", block); c.removeEventListener("touchmove", block); };
+  }, []);
   // المساحة تشيل الخط إذا مرت على أي مكان بيه (مو بس نقاطه): المسافة لكل قطعة من الخط
+  const R = 0.03;
   const erase = (x: number, y: number, items: Item[]) => {
-    const R = 0.03;
     const seg = (ax: number, ay: number, bx: number, by: number) => {
       const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
       const t = L ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)) : 0;
@@ -170,52 +184,37 @@ export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: 
     const hit = (p: number[]) => (p.length === 2 ? seg(p[0], p[1], p[0], p[1]) : p.some((_, i) => i % 2 === 0 && i + 3 < p.length && seg(p[i], p[i + 1], p[i + 2], p[i + 3])));
     return items.filter((it) => (it.t === "s" ? !hit(it.p) : Math.hypot(it.x - x, it.y - y) >= R));
   };
-  const scroll = useRef<{ id: number; y: number; v: number; t: number } | null>(null);
-  // بعد ما يرفع إصبعه الصفحة تكمل تتزحلق شوية وتوگف، مثل التمرير العادي
-  const glide = useRef(0);
-  const stopGlide = () => { if (glide.current) cancelAnimationFrame(glide.current); glide.current = 0; };
-  const startGlide = (v0: number) => {
-    let v = v0, last = performance.now();
-    const step = (now: number) => {
-      const dt = now - last; last = now;
-      window.scrollBy(0, v * dt);
-      v *= Math.pow(0.995, dt);
-      glide.current = Math.abs(v) > 0.02 ? requestAnimationFrame(step) : 0;
-    };
-    if (Math.abs(v) > 0.05) glide.current = requestAnimationFrame(step);
+  // 🧽 علامات الذكاء نفسها تنمسح بالمساحة (طلبه 2026-11-28): إذا كاتب صح بمكان غلط، يمسحها ويحط علامته
+  const eraseMarks = (x: number, y: number) => {
+    if (!marks?.length || !onEraseMark) return;
+    const px = x * 1000, py = y * 1000;
+    for (const m of marks) {
+      const k = markKeyOf(m) + String(m.added ?? "");
+      if (erasedMarks.current.has(k)) continue;
+      const near = m.big && m.box ? py >= m.box.y0 - 20 && py <= m.box.y1 + 20 : Math.hypot(px - m.x, (py - m.y) * 0.75) < 45;
+      if (near) { erasedMarks.current.add(k); onEraseMark(m); }
+    }
+  };
+  const eraseAt = (x: number, y: number) => {
+    const items = erase(x, y, cur.current.items);
+    if (items.length !== cur.current.items.length) onChange({ ...cur.current, items });
+    eraseMarks(x, y);
   };
   const down = (e: React.PointerEvent) => {
     if (!on) return;
-    if (e.pointerType === "pen") { if (!penSeen) { penSeen = true; try { localStorage.setItem(PEN_SEEN, "1"); } catch { /* */ } bump((n) => n + 1); } penDown++; stopGlide(); }
-    else if (e.pointerType === "touch" && penSeen) {
-      // إصبع بجهاز بيه قلم: ينزّل الصفحة. بس مو كف حاط وهو يكتب (أو بعده بشوية)
-      e.preventDefault();
-      // (الآيباد يعطي لمسة الإصبع عرض كبير، فما نحكم بالعرض: الكف ينعرف لأنه يجي وياه القلم نازل أو توه رفعه)
-      if (penDown > 0 || Date.now() - penUpAt < 400) return;
-      stopGlide();
-      scroll.current = { id: e.pointerId, y: e.clientY, v: 0, t: performance.now() };
-      try { cv.current?.setPointerCapture(e.pointerId); } catch { /* المؤشر انشال قبل: نكمل بدونه */ }
-      return;
-    }
+    if (e.pointerType === "pen") { if (!penSeen) { penSeen = true; try { localStorage.setItem(PEN_SEEN, "1"); } catch { /* */ } bump((n) => n + 1); } penDown++; }
+    else if (e.pointerType === "touch" && penSeen) return; // إصبع بجهاز بيه قلم: الآيباد يمرر الصفحة وحده
     e.preventDefault();
     const [x, y] = at(e);
-    if (pen.tool === "ok" || pen.tool === "wrong") { if (e.pointerType === "pen") { penDown = Math.max(0, penDown - 1); penUpAt = Date.now(); } onChange({ ...cur.current, items: [...cur.current.items, { t: pen.tool === "ok" ? "k" : "w", x, y }] }); return; }
+    if (pen.tool === "ok" || pen.tool === "wrong") { onChange({ ...cur.current, items: [...cur.current.items, { t: pen.tool === "ok" ? "k" : "w", x, y }] }); return; }
     try { cv.current?.setPointerCapture(e.pointerId); } catch { /* المؤشر انشال قبل: نكمل بدونه */ }
     drawing.current = e.pointerId;
-    if (pen.tool === "eraser") { const items = erase(x, y, cur.current.items); if (items.length !== cur.current.items.length) onChange({ ...cur.current, items }); return; }
+    if (pen.tool === "eraser") { eraseAt(x, y); return; }
     live.current = { t: "s", c: pen.color, w: pen.width, p: [+x.toFixed(4), +y.toFixed(4)] };
     paint();
   };
+  const at = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))] as const; };
   const move = (e: React.PointerEvent) => {
-    const sc = scroll.current;
-    if (sc && sc.id === e.pointerId) {
-      if (penDown > 0) { scroll.current = null; return; }
-      const now = performance.now(), dy = sc.y - e.clientY;
-      window.scrollBy(0, dy);
-      if (now > sc.t) sc.v = 0.7 * (dy / (now - sc.t)) + 0.3 * sc.v;
-      sc.y = e.clientY; sc.t = now;
-      return;
-    }
     if (drawing.current !== e.pointerId) return;
     e.preventDefault();
     // كل نقاط الحركة (مو بس آخر وحدة)، حتى الخط يطلع ناعم ومتصل
@@ -223,29 +222,20 @@ export function InkLayer({ ink: given, pen, onChange: report, rotated }: { ink: 
     const pts = evs.length ? evs : [e.nativeEvent as PointerEvent];
     const r = cv.current!.getBoundingClientRect();
     const xy = (ev: PointerEvent) => [Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height))] as const;
-    if (pen.tool === "eraser") {
-      let items = cur.current.items;
-      for (const ev of pts) { const [x, y] = xy(ev); items = erase(x, y, items); }
-      if (items.length !== cur.current.items.length) onChange({ ...cur.current, items });
-      return;
-    }
+    if (pen.tool === "eraser") { for (const ev of pts) { const [x, y] = xy(ev); eraseAt(x, y); } return; }
     const s = live.current; if (!s || s.t !== "s") return;
     for (const ev of pts) { const [x, y] = xy(ev); s.p.push(+x.toFixed(4), +y.toFixed(4)); }
     paint();
   };
   const up = (e: React.PointerEvent) => {
     if (e.pointerType === "pen") { penDown = Math.max(0, penDown - 1); penUpAt = Date.now(); }
-    if (scroll.current?.id === e.pointerId) {
-      const sc = scroll.current; scroll.current = null;
-      if (e.type === "pointerup" && performance.now() - sc.t < 80) startGlide(sc.v);
-      return;
-    }
     if (drawing.current !== e.pointerId) return;
     drawing.current = null;
     const s = live.current; live.current = null;
     if (s) onChange({ ...cur.current, items: [...cur.current.items, s] });
   };
-  return <canvas ref={cv} className={"arv-ink" + (on ? " on" : "")} style={{ pointerEvents: on ? "auto" : "none", touchAction: on ? "none" : "auto" }}
+  // بالآيباد اللمسة تروح للآيباد يمرر بيها (والقلم نوگفه إحنا فوك)، وبغيره (لابتوب، أندرويد) الورقة ما تتمرر وهو يكتب
+  return <canvas ref={cv} className={"arv-ink" + (on ? " on" : "")} style={{ pointerEvents: on ? "auto" : "none", touchAction: on ? (IOS && penSeen ? "pan-y" : "none") : "auto" }}
     onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />;
 }
 

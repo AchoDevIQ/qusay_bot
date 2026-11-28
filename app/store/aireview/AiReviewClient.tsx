@@ -183,6 +183,9 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
   const [adding, setAdding] = useState<string | null>(null);
   const [spot, setSpot] = useState<{ ref: string; x: number; y: number } | null>(null);
   const markCall = async (b: Record<string, unknown>) => { const r = await call({ ...b, item: p.id, key2: gkey }, true); if (r?.paper) setP(r.paper); setTap(null); setSpot(null); setAdding(null); };
+  // 🧽 المساحة على علامة ذكاء تشيلها (طلبه 2026-11-28)، وحدة ورا الثانية حتى ما يتلاگون. «↩️ رجّع علامات الذكاء» يرجعها
+  const eraseQ = useRef<Promise<unknown>>(Promise.resolve());
+  const eraseMark = (m: PaperMark) => { eraseQ.current = eraseQ.current.then(() => markCall(m.added !== undefined ? { action: "markDrop", n: m.added } : { action: "markHide", key: markKey(m) })).catch(() => undefined); };
   const pick = (e: React.MouseEvent<HTMLDivElement>, ref: string) => {
     if (adding !== ref) return;
     const img = e.currentTarget.querySelector("img");
@@ -270,7 +273,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
                   const i = inl.index.get(pg.ref);
                   if (i === undefined) return null;
                   const ink = inl.inks[i] ?? { rot: 0, items: [] };
-                  return <InkLayer ink={ink} pen={pen} rotated={!!ink.rot} onChange={(next) => { lastPage.current[q.n] = i; inl.change(i, next); }} />;
+                  return <InkLayer ink={ink} pen={pen} rotated={!!ink.rot} marks={pg.marks} onEraseMark={eraseMark} onChange={(next) => { lastPage.current[q.n] = i; inl.change(i, next); }} />;
                 })()}
               </div>
               {edit[q.n] && <div className="exline arv-tools">
