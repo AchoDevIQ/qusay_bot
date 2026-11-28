@@ -132,7 +132,8 @@ export async function stationAction(body: Row) {
   if (body.action === "scan") {
     const raw = String(body.code ?? "").trim();
     let sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
-    if (sid && sid > 0 && await isAdmin(uid!) && !await student(sid) && await student(-sid)) sid = -sid;
+    // رقم طالب تجربة («11» = طالب حضوري تجريبي 11): لكل من يجرب المحطة، مو بس صاحب البوت (طلبه 2026-11-28)
+    if (sid && sid > 0 && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     await needLabelCenter(uid!, sid!);
     const card = await markAttendance(sid!, uid!);
@@ -413,7 +414,7 @@ export async function attendAction(body: Row) {
     const raw = String(body.code ?? "").trim();
     let sid = /^\d+$/.test(raw) ? Number(raw) : verifyStudentCode(raw);
     // طالب التجربة رقمه سالب، وصاحب البوت يكتبه بدون ناقص
-    if (sid && sid > 0 && await isAdmin(uid) && !await student(sid) && await student(-sid)) sid = -sid;
+    if (sid && sid > 0 && !await student(sid) && await student(-sid)) sid = -sid;
     need(sid, "هذا مو كود طالب");
     const card = await markAttendance(sid!, uid);
     const queued = card.print === "label" && !card.late && !card.printed && await stationActive(uid);

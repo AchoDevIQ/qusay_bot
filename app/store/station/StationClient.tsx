@@ -183,7 +183,9 @@ export default function StationClient() {
 
   /** كود صحيح لطالب: ينطبع فوراً أول مرة. نفس الكود ما ينقرا مرة ثانية خلال 8 ثواني */
   function found(raw: string) {
-    if (!raw.startsWith("QS:") || waiting.current) return;
+    if (!raw.startsWith("QS:")) return;
+    // طالب قبله ينتظر قرار (بغير وقته): ما يقرا غيره لحد ما يقرر، ويگله بوضوح بدل ما يبقى ساكت (طلبه 2026-11-28)
+    if (waiting.current) { setStatus("⚠️ أول قرر للطالب اللي قبله فوگ: «🔓 استثناء» لو «❌ رفض»، وبعدين وجه على الكود الجديد"); return; }
     const now = Date.now();
     if (seen.current.code === raw && now - seen.current.at < 8000) return;
     seen.current = { code: raw, at: now };
