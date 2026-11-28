@@ -284,6 +284,11 @@ test("المساعد يجرب كطالب، والطالب ما يطلعله زر
   await cb(1, "a:sfp:55555:orders");
   flush();
   await msg(55555, "/admin");
+  // «👁 شوف كطالب» صلاحية لحالها (طلبه 2026-11-28): بدونها ما يطلع الزر
+  assert.ok(!lastBtns().includes("a:asstudent"));
+  await cb(1, "a:sfp:55555:asstudent");
+  flush();
+  await msg(55555, "/admin");
   assert.ok(lastBtns().includes("a:asstudent"));
   flush();
   await cb(55555, "a:asstudent");

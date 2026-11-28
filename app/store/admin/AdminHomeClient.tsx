@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { AdminHeader, StatusBar, useAdminApi } from "../adminPage";
 
 type Tile = { page: string; icon: string; title: string; note?: string; hot?: boolean };
-type Data = { groups: { title: string; tiles: Tile[] }[]; closed?: boolean; owner?: boolean; asGrader?: boolean; asStaff?: string };
+type Data = { groups: { title: string; tiles: Tile[] }[]; closed?: boolean; owner?: boolean; asGrader?: boolean; asStaff?: string; asStudent?: boolean };
 type Size = "small" | "mid" | "big";
 
 const SIZES: { key: Size; label: string }[] = [{ key: "small", label: "صغير" }, { key: "mid", label: "وسط" }, { key: "big", label: "كبير" }];
@@ -64,7 +64,7 @@ export default function AdminHomeClient() {
           </section>
         ))}
         {data?.owner && <button type="button" className="exbtn adstudent" disabled={busy} onClick={() => void call({ action: "asGrader" })}>✍️ شوف كمساعد مصحح</button>}
-        {data && !data.closed && <button type="button" className="exbtn adstudent" disabled={busy} onClick={() => void asStudent()}>👁 شوف البوت كطالب</button>}
+        {data && !data.closed && data.asStudent && <button type="button" className="exbtn adstudent" disabled={busy} onClick={() => void asStudent()}>👁 شوف البوت كطالب</button>}
       </div>
       <StatusBar busy={busy} error={data ? error : ""} />
     </>

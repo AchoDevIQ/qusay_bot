@@ -101,7 +101,7 @@ async function homeData(uid: number) {
   // يشوف مثل مساعد معين: اسمه يطلع بالشريط فوك
   const as = await viewedStaff(uid);
   const asName = as ? String((await staffRow(uid))?.name ?? "").replace(/^صاحب البوت \(يشوف مثل (.*)\)$/, "$1") : "";
-  return { groups, owner: await isAdmin(uid), asGrader: await viewingAsGrader(uid), asStaff: asName };
+  return { groups, owner: await isAdmin(uid), asGrader: await viewingAsGrader(uid), asStaff: asName, asStudent: await can(uid, "asstudent") };
 }
 
 export async function adminHomeAction(body: Row) {
@@ -121,6 +121,7 @@ export async function adminHomeAction(body: Row) {
     return await homeData(uid!);
   }
   if (body.action === "asStudent") {
+    need(await can(uid!, "asstudent"), "ما عندك صلاحية «👁 شوف البوت كطالب»", 403);
     await setGraderView(uid!, false);
     await setStudentView(uid!, true);
     await setSession(uid!, "", {});

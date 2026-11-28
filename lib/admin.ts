@@ -68,7 +68,8 @@ export async function adminMenuFor(uid: number): Promise<View> {
       [btn("👥 المساعدين والصلاحيات", "a:sf")], [btn("🔗 ربط مجموعة الأسئلة", "a:grp")]);
   }
   if (await isAdmin(uid)) kb.push([btn("✍️ شوف كمساعد مصحح", "a:asgrader")]);
-  kb.push([btn("👁 شوف كطالب", "a:asstudent")]);
+  // صلاحية لحالها (طلبه 2026-11-28: مساعد الليبل ليش يشوف البوت كطالب؟). صاحب البوت دائماً
+  if (await can(uid, "asstudent")) kb.push([btn("👁 شوف كطالب", "a:asstudent")]);
   return ["<b>⚙️ لوحة التحكم</b>", kb];
 }
 async function adminCats(): Promise<View> {
