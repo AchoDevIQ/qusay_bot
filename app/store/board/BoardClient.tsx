@@ -16,7 +16,7 @@ import { IC } from "./icons";
 
 type Tool = "pen" | "hl" | "eraser" | "shape" | "move";
 type Step = { add: Item[]; remove: Item[] };
-type Contact = { mode: "ink" | "erase" | "shape" | "ignore" | "select" | "drag" | "resize"; stroke?: InkStroke; start: [number, number]; last: [number, number]; size: number; pen: boolean; anchor?: [number, number] };
+type Contact = { place?: { t: string; s: number }; mode: "ink" | "erase" | "shape" | "ignore" | "select" | "drag" | "resize" | "place"; stroke?: InkStroke; start: [number, number]; last: [number, number]; size: number; pen: boolean; anchor?: [number, number] };
 type Meta = { id: string; title: string; at: string; pages: number; chapter?: number; topic?: string; lecture?: number; lt?: string; app?: string };
 const whereOf = (m: Meta) => [`الفصل ${ORD[m.chapter ?? 0]}`, m.topic, m.lt || (m.lecture ? `المحاضرة ${m.lecture}` : "")].filter(Boolean).join(" · ");
 // محاضرات تطبيق قصي (الشرح ينزل بملحقاتها)
@@ -196,6 +196,20 @@ export default function BoardClient() {
     }
     x.restore();
   };
+  /** كتابة المايك من الدوسة والسحب: السحب يحدد عرضها، والدوسة بس تمشي لطرف السبورة */
+  const placedText = (c: Contact): Extract<Item, { k: "text" }> => {
+    const x = ctxOf(liveC.current)!;
+    const pt = c.place!, [x0, y0] = c.start, x1 = c.last[0];
+    const A = areaOf(lesson.current.frame, geo.current.W);
+    const ar = /[\u0600-\u06FF]/.test(pt.t);
+    const drag = Math.abs(x1 - x0) >= 40;
+    const left = drag ? Math.min(x0, x1) : x0, right = drag ? Math.max(x0, x1) : x0;
+    const ww = drag ? right - left : ar ? undefined : Math.max(200, A.x + A.w - 20 - x0);
+    const lay = textLines(x, pt.t, pt.s, right, ww);
+    // العربي يبدي من اليمين، والإنگليزي من اليسار
+    const ax = ar ? right : left + lay.w;
+    return { k: "text", c: toolRef.current.color, s: pt.s, x: ax, y: y0, t: pt.t, bw: lay.w, bh: lay.h, ...(ww ? { ww } : {}) };
+  };
   const liveQueued = useRef(false);
   const redrawLive = () => {
     if (liveQueued.current) return;
@@ -210,6 +224,14 @@ export default function BoardClient() {
       for (const c of contacts.current.values()) if (c.stroke) drawItem(x, c.stroke);
       for (const c of contacts.current.values()) if (c.mode === "shape") for (const s of shapeStrokes(toolRef.current.shape, c.start, c.last, toolRef.current.color, toolRef.current.set.width)) drawItem(x, s);
       if (ghost.current) for (const it of ghost.current) drawItem(x, it, bgOf);
+      // حدود كتابة المايك وهو يسحب: مربع متقطع والكتابة جواه، حتى يشوف وين تنلف
+      for (const c of contacts.current.values()) if (c.mode === "place" && c.place) {
+        const it = placedText(c);
+        const bw = it.ww ?? it.bw, left = /[\u0600-\u06FF]/.test(it.t) ? it.x - bw : it.x - it.bw;
+        x.save(); x.globalAlpha = 0.85; drawItem(x, it); x.restore();
+        x.save(); x.strokeStyle = "#F6C94A"; x.lineWidth = 3; x.setLineDash([12, 8]);
+        x.strokeRect(left - 8, it.y - 8, bw + 16, it.bh + 16); x.restore();
+      }
       const sb = ghost.current ? unionBox(ghost.current) : unionBox(sel.current);
       if (sb) {
         x.save(); x.strokeStyle = "#F6C94A"; x.lineWidth = 3; x.setLineDash([14, 10]);
@@ -382,13 +404,10 @@ export default function BoardClient() {
     const c: Contact = { mode: "ink", start: p, last: p, size: 0, pen };
     contacts.current.set(e.pointerId, c);
     track(sw, sh, true);
-    // نص المايك: الدوسة الجاية تحطه (فوك يمين = بداية السطر العربي)
+    // نص المايك: يدوس ويسحب، ويشوف حدود الكتابة وهو يسحب (طلبه 2026-11-28)، ومن يرفع تنحط. دوسة بس: العربي من الدوسة لليسار، والإنگليزي لليمين
     if (pendingText.current && !force && !palm) {
-      const x = ctxOf(liveC.current)!;
-      const pt = pendingText.current; pendingText.current = null; setPlacing(false);
-      const lay = textLines(x, pt.t, pt.s, p[0]);
-      const it: Item = { k: "text", c: col, s: pt.s, x: p[0], y: p[1], t: pt.t, bw: lay.w, bh: lay.h };
-      page().items.push(it); noteAdd(it); c.mode = "ignore"; redrawInk();
+      c.mode = "place"; c.place = pendingText.current;
+      redrawLive();
       return;
     }
     if (force || t === "eraser" || palm) { startErase(c, p, palm); return; }
@@ -405,6 +424,7 @@ export default function BoardClient() {
     const [sw, sh] = sizeOf(e);
     track(sw, sh);
     if (c.mode === "ignore") return;
+    if (c.mode === "place") { c.last = toBoard(e); redrawLive(); return; }
     const events = typeof e.nativeEvent.getCoalescedEvents === "function" ? e.nativeEvent.getCoalescedEvents() : [];
     const pts: [number, number][] = events.length ? events.map((ev) => { const r = liveC.current!.getBoundingClientRect(); return [(ev.clientX - r.left) / geo.current.scale, (ev.clientY - r.top) / geo.current.scale] as [number, number]; }) : [toBoard(e)];
     // كف نازل شوية شوية: يبدي صغير ويكبر. الخط اللي بداه ينشال ويصير ممحاة
@@ -427,7 +447,11 @@ export default function BoardClient() {
     if (!c) return;
     contacts.current.delete(e.pointerId);
     setLastTouch(`${Math.round(maxT.current[0])} × ${Math.round(maxT.current[1])}`);
-    if (c.mode === "select" || c.mode === "drag" || c.mode === "resize") endMove(c);
+    if (c.mode === "place" && c.place) {
+      const it = placedText(c);
+      pendingText.current = null; setPlacing(false);
+      page().items.push(it); noteAdd(it);
+    } else if (c.mode === "select" || c.mode === "drag" || c.mode === "resize") endMove(c);
     else if (c.stroke) {
       if (c.stroke.p.length === 2) c.stroke.p.push(c.stroke.p[0] + 0.5, c.stroke.p[1] + 0.5);
       page().items.push(c.stroke); noteAdd(c.stroke);
@@ -913,7 +937,7 @@ export default function BoardClient() {
         <canvas ref={frameC} className="qb-c" />
         <canvas ref={inkC} className="qb-c" />
         <canvas ref={liveC} className="qb-c qb-live" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp} />
-        {placing && <div className="qb-hint">دوس على السبورة بالمكان اللي تريد تبدي منه الكتابة</div>}
+        {placing && <div className="qb-hint">دوس بالمكان اللي تريد تبدي منه، واسحب لليسار لو لليمين: يطلع مربع بحدود الكتابة، ومن ترفع إصبعك تنحط</div>}
         {newVer && <button type="button" className="qb-upd" onClick={() => { if (!solve) keepDraft(); location.reload(); }}>🔄 أكو تحديث جديد للسبورة. دوس هنا حتى يتحدث (كتابتك تبقى)</button>}
         {tool === "move" && !selN && <div className="qb-hint">دوس على كتابة أو صورة، أو اسحب مربع حوالين اللي تريد تحركه. الكتابة تگدر تعدلها بـ«✏️ عدّل الكتابة»</div>}
         {tool === "move" && selN > 0 && <div className="qb-selbar">

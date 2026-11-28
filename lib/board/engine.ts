@@ -7,7 +7,8 @@ export const FRAME = 40;
 
 export type Pt = number[];   // [x0, y0, x1, y1, ...]
 export type InkStroke = { k: "ink" | "hl"; c: string; w: number; p: Pt; fit?: 0 };
-export type TextItem = { k: "text"; c: string; s: number; x: number; y: number; t: string; bw: number; bh: number };
+/** ww: عرض اللف اللي حدده بالسحب (طلبه 2026-11-28: «يكتب شوية وينزل»)، وبدونه يلف لحد طرف السبورة */
+export type TextItem = { k: "text"; c: string; s: number; x: number; y: number; t: string; bw: number; bh: number; ww?: number };
 export type ImageItem = { k: "img"; r: string; x: number; y: number; w: number; h: number };
 export type Item = InkStroke | TextItem | ImageItem;
 export type Page = { items: Item[]; bg?: string | null };
@@ -380,7 +381,7 @@ export function cleanLesson(x: unknown): Lesson | null {
     bg: typeof pg?.bg === "string" && pg.bg.length < 300 ? pg.bg : null,
     items: (Array.isArray(pg?.items) ? pg.items : []).slice(0, 20000).flatMap((it: any): Item[] => {
       if (it?.k === "img" && typeof it.r === "string" && it.r.length < 300) return [{ k: "img", r: it.r, x: num(it.x), y: num(it.y), w: Math.max(10, num(it.w, 100)), h: Math.max(10, num(it.h, 100)) }];
-      if (it?.k === "text") return [{ k: "text", c: col(it.c), s: num(it.s, 56), x: num(it.x), y: num(it.y), t: String(it.t ?? "").slice(0, 4000), bw: num(it.bw), bh: num(it.bh) }];
+      if (it?.k === "text") return [{ k: "text", c: col(it.c), s: num(it.s, 56), x: num(it.x), y: num(it.y), t: String(it.t ?? "").slice(0, 4000), bw: num(it.bw), bh: num(it.bh), ...(num(it.ww) > 0 ? { ww: Math.min(4000, num(it.ww)) } : {}) }];
       if ((it?.k === "ink" || it?.k === "hl") && Array.isArray(it.p) && it.p.length >= 2) return [{ k: it.k, c: col(it.c), w: Math.max(1, Math.min(200, num(it.w, 5))), p: it.p.slice(0, 40000).map((v: unknown) => Math.round(num(v) * 10) / 10), ...(it.fit === 0 ? { fit: 0 as const } : {}) }];
       return [];
     }),

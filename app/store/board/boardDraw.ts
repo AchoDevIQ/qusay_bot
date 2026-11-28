@@ -318,9 +318,9 @@ function paintDeco(ctx: CanvasRenderingContext2D, W: number, F: number, d: { bar
 }
 
 /** النص: يلف على عرض wrapWidth، ويبدي من فوق يمين */
-export function textLines(ctx: CanvasRenderingContext2D, t: string, size: number, right: number): { lines: string[]; w: number; h: number } {
+export function textLines(ctx: CanvasRenderingContext2D, t: string, size: number, right: number, maxW?: number): { lines: string[]; w: number; h: number } {
   ctx.font = `${size}px ${FONT}`;
-  const max = wrapWidth(right);
+  const max = maxW && maxW > 0 ? Math.max(80, maxW) : wrapWidth(right);
   const lines: string[] = [];
   for (const para of t.split("\n")) {
     let cur = "";
@@ -338,7 +338,7 @@ export function textLines(ctx: CanvasRenderingContext2D, t: string, size: number
 const isArLine = (l: string) => /[؀-ۿ]/.test(l);
 /** كل سطر بلغته: السطر العربي يمين المربع، والإنگليزي يسار المربع (من اليسار لليمين) */
 function drawText(ctx: CanvasRenderingContext2D, it: TextItem) {
-  const { lines, w } = textLines(ctx, it.t, it.s, it.x);
+  const { lines, w } = textLines(ctx, it.t, it.s, it.x, it.ww);
   ctx.save();
   ctx.fillStyle = it.c;
   ctx.font = `${it.s}px ${FONT}`;
