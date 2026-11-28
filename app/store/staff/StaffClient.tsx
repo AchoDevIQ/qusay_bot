@@ -103,6 +103,12 @@ function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; per
               {lc !== null && allCenters.map((c) => (
                 <label key={c.id} className="adcheck adflat"><input type="checkbox" checked={lc.includes(c.id)} onChange={() => setLc(lc.includes(c.id) ? lc.filter((x) => x !== c.id) : [...lc, c.id])} /><span>{c.name}</span></label>
               ))}
+              {/* 🔓 الاستثناء (طلبه 2026-11-28): ويا صلاحية الليبل يسأل يعطيه استثناء لو لا */}
+              <span>🔓 تعطيه يسوي استثناء؟ (للمشتري بس: جاي بغير وقته، لو من مركز ثاني)</span>
+              <div className="seg">
+                <button type="button" className={picked.includes("exception") ? "on" : ""} onClick={() => setPicked([...new Set([...picked, "exception"])])}>✅ إي، أعطيه</button>
+                <button type="button" className={!picked.includes("exception") ? "on" : ""} onClick={() => setPicked(picked.filter((x) => x !== "exception"))}>❌ لا</button>
+              </div>
             </div>
           )}
           {p.key === "grade" && picked.includes("grade") && (
