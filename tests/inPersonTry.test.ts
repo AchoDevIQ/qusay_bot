@@ -286,3 +286,26 @@ test("📄 ورقة فارغة: تتسلم وتاخذ صفر بلا ذكاء", a
   assert.ok(it.graded_at, "انصححت وحدها");
   assert.equal(Number(it.total), 0);
 });
+
+test("🔄 امسح القدامى وسوي طلاب جدد: القدامى ينمسحون، وينسوى واحد من كل نوع", async () => {
+  const { createHmac } = await import("node:crypto");
+  const sign = (uid: number) => {
+    const p = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: uid }) });
+    const check = [...p.entries()].map(([k, v]) => `${k}=${v}`).sort().join("\n");
+    p.set("hash", createHmac("sha256", createHmac("sha256", "WebAppData").update("1:test").digest()).update(check).digest("hex"));
+    return p.toString();
+  };
+  const { makeInPersonOne } = await import("../lib/gradeApi.ts");
+  const { studentAction } = await import("../lib/studentApi.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "جدد" });
+  const c = await insert("centers", { area_id: area, name: "مركز الجدد", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const old = await makeInPersonOne(c, v.id, "now");
+  const r = await studentAction({ initData: sign(1), action: "tryInPersonFresh", center: c, vid: v.id }) as any;
+  assert.match(r.notice, /طلاب جدد/);
+  assert.deepEqual(r.tryCodes.map((x: any) => x.kind).sort(), ["ipad", "late", "none", "now"]);
+  assert.ok(old > 0);
+  // القدامى (بكل المراكز) انمسحوا: ما باقي غير الأربعة الجدد
+  assert.equal((await find("students")).filter((x) => x.user_id < 0 && x.exam === "حضوري").length, 4);
+  await assert.rejects(studentAction({ initData: sign(41), action: "tryInPersonFresh", center: c, vid: v.id }), /صلاحية|صاحب البوت/);
+});

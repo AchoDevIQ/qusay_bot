@@ -290,10 +290,21 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
     const n = await clearInPersonTests(Number(body.center) || 0);
     tryCodes = [];
     notice = n ? `🗑 انمسحوا ${n} طلاب حضوري تجريبيين. سوي طلاب جدد وقت ما تريد` : "ماكو طلاب حضوري تجريبيين تنمسح";
-  } else if (a === "tryInPersonKind" || a === "tryInPersonList") {
+  } else if (a === "tryInPersonKind" || a === "tryInPersonList" || a === "tryInPersonFresh") {
     // ✅ / ⏰ / 🚫: طالب جديد من النوع اللي يختاره، وبعدها كل طلاب التجربة بهذا المركز بأكوادهم
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
-    let made = 0;
+    let made = 0, fresh = "";
+    // 🔄 طلاب جدد (طلبه 2026-11-28: «من أمسحها يطلعولي طلاب جديدة وأتست عليهم»): يمسح كل طلاب التجربة الحضوريين،
+    // ويسوي واحد من كل نوع بهذا المركز والامتحان. الآيباد بس إذا المركز ما مفتوحله التصوير بالتلفون
+    if (a === "tryInPersonFresh") {
+      await clearInPersonTests();
+      const names: string[] = [];
+      for (const [kind, label] of [["now", "✅ امتحانه هسه"], ["late", "⏰ جاي بغير وقته"], ["none", "🚫 غير مشترك"], ["ipad", "📱 بالآيباد"]] as const) {
+        try { names.push(`${label}: ${await makeInPersonOne(Number(body.center), Number(body.vid), kind)}`); }
+        catch (e) { if (kind !== "ipad") throw e; names.push("📱 بالآيباد: ما انسوى، هذا المركز مفتوحله التصوير بالتلفون"); }
+      }
+      fresh = `🔄 مسحت القدامى وسويت طلاب جدد: ${names.join(" · ")}. دوس على الطالب تحت حتى يطلع كوده كبير`;
+    }
     if (a === "tryInPersonKind") made = await makeInPersonOne(Number(body.center), Number(body.vid), String(body.kind) as "now" | "late" | "none" | "ipad");
     const list = await inPersonTests(Number(body.center), Number(body.vid));
     const { siteBase } = await import("./keyboards.ts");
@@ -303,6 +314,7 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
       return { ...x, img: await QRCode.toDataURL(studentCode(-x.k), { margin: 2, width: 480 }), ...(open ? { open, openImg: await QRCode.toDataURL(open, { margin: 2, width: 480 }) } : {}) };
     }));
     if (made) notice = `🎫 طالب حضوري تجريبي ${made} جاهز. دوس على اسمه تحت حتى يطلع كوده كبير، ووجه عليه الكاميرا`;
+    if (fresh) notice = fresh;
   } else if (a === "tryInPersonSet") {
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
     const list = await makeInPersonSet(Number(body.center), Number(body.vid));

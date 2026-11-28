@@ -608,7 +608,9 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
         </select>}
         {exam > 0 && models.length > 1 && <div className="seg">{models.map((x) => <button key={x.id} type="button" className={vid === x.id ? "on" : ""} onClick={() => setVid(x.id)}>{x.model}</button>)}</div>}
         {/* كل دوسة طالب جديد من النوع اللي تختاره (طلبه 2026-11-28: «أنا أصنع»)، والطلاب كلهم بقائمة تحت */}
-        <label>سوي طالب</label>
+        {/* 🔄 يمسح القدامى ويسوي واحد من كل نوع بدوسة وحدة (طلبه 2026-11-28) */}
+        <Confirm label="🔄 امسح القدامى وسوي طلاب جدد (واحد من كل نوع)" disabled={busy || !center || !vid} onYes={() => void act({ action: "tryInPersonFresh", center, vid })} />
+        <label>لو سوي طالب وحده</label>
         <div className="atrow">
           <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "now" })}>✅ امتحانه هسه</button>
           <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "late" })}>⏰ جاي بغير وقته</button>
