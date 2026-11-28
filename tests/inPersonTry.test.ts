@@ -341,3 +341,35 @@ test("🏫 طالب الآيباد طلع برا صفحة الامتحان: ال
   try { await examLeft(-k, card.item, s, "left", 0); } finally { globalThis.fetch = old; }
   assert.ok(sent.some((x) => x.chat === 5050 && /طلع برا صفحة الامتحان/.test(x.text) && /بمركزكم/.test(x.text)), "مسؤول المركز وصله");
 });
+
+test("🚪 صفحة «طلعوا من الامتحان»: الطلعة تصير سطر، «✅ تم» ينزله لورا، والطلعة الثانية ترجعه فوگ", async () => {
+  const { createHmac } = await import("node:crypto");
+  const sign = (uid: number) => {
+    const p = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: uid }) });
+    const check = [...p.entries()].map(([k, v]) => `${k}=${v}`).sort().join("\n");
+    p.set("hash", createHmac("sha256", createHmac("sha256", "WebAppData").update("1:test").digest()).update(check).digest("hex"));
+    return p.toString();
+  };
+  const { makeInPersonOne } = await import("../lib/gradeApi.ts");
+  const { openRoom, examLeft } = await import("../lib/examRoom.ts");
+  const { schedSettings } = await import("../lib/schedApi.ts");
+  const { leavesAction } = await import("../lib/examLeaves.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "طلعة" });
+  const c = await insert("centers", { area_id: area, name: "مركز الطلعة", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const k = await makeInPersonOne(c, v.id, "ipad");
+  const card = await markAttendance(-k, 2);
+  const s = await schedSettings();
+  await openRoom(-k, card.item, s, true);
+  await examLeft(-k, card.item, s, "left", 0);
+  await examLeft(-k, card.item, s, "back", 12);
+  let r: any = await leavesAction({ initData: sign(1), action: "list" });
+  const row = r.open.find((x: any) => x.item === card.item);
+  assert.ok(row && row.ipad && row.away === 12 && /مركز الطلعة/.test(row.center));
+  r = await leavesAction({ initData: sign(1), action: "done", item: card.item });
+  assert.ok(!r.open.some((x: any) => x.item === card.item) && r.done.some((x: any) => x.item === card.item));
+  await examLeft(-k, card.item, s, "left", 0);
+  r = await leavesAction({ initData: sign(1), action: "list" });
+  assert.equal(r.open.find((x: any) => x.item === card.item)?.n, 2, "طلع مرة ثانية: رجع فوگ");
+  await assert.rejects(leavesAction({ initData: sign(41), action: "list" }), /صلاحية/);
+});

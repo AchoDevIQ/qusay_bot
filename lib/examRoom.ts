@@ -181,7 +181,15 @@ export async function examLeft(uid: number, id: unknown, s: SchedSettings, phase
   const it = await liveRoom(uid, id, s);
   const e = await one("bank_exams", { id: it.exam_id });
   const title = String(e?.title ?? "الامتحان");
+  const leaveInfo = async () => {
+    const st0 = await student(uid);
+    const ipad0 = await isIpadItem(it);
+    const cn = ipad0 && st0?.center_id ? String((await one("centers", { id: st0.center_id }))?.name ?? "") : "";
+    return { name: String(st0?.name ?? `طالب #${uid}`), exam: title, ipad: ipad0, center: cn };
+  };
+  const { recordLeave } = await import("./examLeaves.ts");
   if (phase === "back") {
+    await recordLeave(it, "back", Number(secs) || 0, await leaveInfo());
     await logActivity(uid, `↩️ رجع لصفحة امتحان ${title} بعد ${Math.max(0, Math.round(Number(secs) || 0))} ثانية`);
     return { ok: true };
   }
@@ -192,6 +200,7 @@ export async function examLeft(uid: number, id: unknown, s: SchedSettings, phase
   const quiet = !!prev.at && now - prev.at < 60_000;
   await kvSet(key, JSON.stringify({ n, at: quiet ? prev.at : now }));
   await logActivity(uid, `🚪 طلع من صفحة امتحان ${title} وهو يمتحن${n > 1 ? ` (المرة ${n})` : ""}`);
+  await recordLeave(it, "left", 0, await leaveInfo());
   if (quiet) return { ok: true, n };
   const st = await student(uid);
   const name = esc(st?.name ?? `طالب #${uid}`), when = ampm(stamp().slice(11, 16)), g = await guardianOf(uid);
@@ -205,7 +214,7 @@ export async function examLeft(uid: number, id: unknown, s: SchedSettings, phase
   const leaveStaff = await staffIds("leave");
   if (watcher && !leaveStaff.includes(watcher)) await tell(watcher, `🚪 <b>${name} طلع من صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nهو يمتحن بالآيباد بالمركز، وإنت سجلت حضوره. شوفه.`);
   for (const m of centerHeads) if (m !== watcher && !leaveStaff.includes(m)) await tell(m, `🚪 <b>${name} طلع برا صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nهو يمتحن بالآيباد بمركزكم. شوفوه.`);
-  for (const a of leaveStaff) await tell(a, `🚪 <b>${name} طلع من صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nطلع من التطبيق وهو يمتحن، وما نعرف السبب.`);
+  // إنت وأصحاب صلاحية «🚪»: بصفحة «🚪 طلعوا من الامتحان» بالتطبيق بدل التليگرام (طلبه 2026-11-28)
   if (g) await tell(Number(g.guardian_id), `السلام عليكم 🌷\nنحب نبلغكم إن <b>${name}</b> طلع من صفحة الامتحان وهو يمتحن (${esc(title)}) الساعة ${when}، وما نعرف السبب.`);
   return { ok: true, n };
 }

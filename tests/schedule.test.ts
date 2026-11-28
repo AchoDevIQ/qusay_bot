@@ -547,9 +547,11 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   // الطالب: وصل تنبيه لأستاذه، بلا كلمة «غش» (طلبه 2026-11-28). الأستاذ: الخبر بس، «ما نعرف السبب»
   assert.match(toStudent, /وصل تنبيه لأستاذك/);
   assert.doesNotMatch(toStudent, /غش/);
-  assert.match(toOwner, /طلع من صفحة الامتحان/);
-  assert.match(toOwner, /ما نعرف السبب/);
-  assert.doesNotMatch(toOwner, /غش/);
+  // الأستاذ: ما توصله بالتليگرام بعد، تطلع بصفحة «🚪 طلعوا من الامتحان» بالتطبيق (طلبه 2026-11-28)
+  assert.equal(toOwner, "");
+  const lv = await one("exam_leaves", { item_id: item });
+  assert.equal(lv?.n, 1);
+  assert.equal(lv?.done_at, null);
   calls.length = 0;
   assert.equal((await act(90, "examLeft", { item, phase: "left" })).n, 2);
   assert.equal(calls.length, 0);

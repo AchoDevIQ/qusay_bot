@@ -44,6 +44,8 @@ export const SCHEMA: Record<string, Table> = {
   student_stops: { key: "id", auto: true, cols: nulls("user_id", "chapter", "block", "score", "max", "need", "absent", "reason", "lectures", "created", "lifted", "lifted_by") },
   checkpoint_done: { key: ["user_id", "chapter", "block"], cols: nulls("passed", "score", "absent", "created", "band", "seen", "image") },
   student_devices: { key: "user_id", cols: nulls("device", "at", "tried") },
+  // 🚪 الطلاب اللي طلعوا برا صفحة الامتحان وهم يمتحنون: سطر لكل امتحان (طلبه 2026-11-28: صفحة بالتطبيق بدل التليگرام)
+  exam_leaves: { key: "item_id", cols: { ...nulls("user_id", "name", "exam", "first_at", "last_at", "ipad", "center", "done_at", "done_by"), n: 0, away_secs: 0, msgs: 0 } },
   // طالب التطبيق: حسابه بالتطبيق (fu) ورقمه بالبوت. chapters: الفصول اللي شاريها بالتطبيق (نص JSON)، تتحدث كل دخول
   app_links: { key: "fu", cols: nulls("uid", "env", "chapters", "created", "updated") },
   // رسائل محادثة البوت لطالب التطبيق (out من البوت، in منه). tg: رقم الرسالة بتليگرام، أو رقمها هنا لطالب التطبيق بس

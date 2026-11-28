@@ -80,6 +80,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS student_stops(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, chapter TEXT, block INTEGER, score INTEGER, max INTEGER, need INTEGER, absent INTEGER, reason TEXT, lectures INTEGER, created TEXT, lifted TEXT, lifted_by INTEGER);
     CREATE TABLE IF NOT EXISTS checkpoint_done(user_id INTEGER, chapter TEXT, block INTEGER, passed INTEGER, score INTEGER, absent INTEGER, created TEXT, PRIMARY KEY(user_id, chapter, block));
     CREATE TABLE IF NOT EXISTS student_devices(user_id INTEGER PRIMARY KEY, device TEXT, at TEXT, tried TEXT);
+    CREATE TABLE IF NOT EXISTS exam_leaves(item_id INTEGER PRIMARY KEY, user_id INTEGER, name TEXT, exam TEXT, first_at TEXT, last_at TEXT, ipad INTEGER, center TEXT, done_at TEXT, done_by INTEGER, n INTEGER DEFAULT 0, away_secs INTEGER DEFAULT 0, msgs INTEGER DEFAULT 0);
     CREATE TABLE IF NOT EXISTS app_links(fu TEXT PRIMARY KEY, uid INTEGER, env TEXT, chapters TEXT, created TEXT, updated TEXT);
     CREATE TABLE IF NOT EXISTS app_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, dir TEXT, text TEXT, html INTEGER, kb TEXT, media TEXT, tg INTEGER, created TEXT, edited TEXT, del INTEGER);
     CREATE TABLE IF NOT EXISTS guardian_pins(user_id INTEGER PRIMARY KEY, hash TEXT, method TEXT, fails INTEGER, locked_until TEXT, created TEXT, face TEXT, face_at TEXT);

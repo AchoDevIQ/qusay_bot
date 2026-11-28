@@ -56,6 +56,8 @@ async function homeData(uid: number) {
   if (await can(uid, "board")) people.push({ page: "board", icon: "📝", title: "السبورة", note: "اكتب واشرح، ودز شرحك لطلاب المحاضرات" });
   if (await can(uid, "qusay")) people.push({ page: "qusay", icon: "🧠", title: "تصحيح قصي", note: "مصححك الثاني الرخيص: جربه بالسر وقارن" });
   if (await can(uid, "competition")) { const n = await pendingGroups(); people.push({ page: "competition", icon: "🏆", title: "المنافسة", note: n ? `${n} مجموعة تنتظر موافقتك` : "المجاميع وترتيب المراكز", hot: n > 0 }); }
+  // 🚪 طلعوا من الامتحان: بالتطبيق بدل التليگرام (طلبه 2026-11-28)
+  if (await can(uid, "leave")) { const n = await (await import("./examLeaves.ts")).openLeaves(); people.push({ page: "leaves", icon: "🚪", title: "طلعوا من الامتحان", note: n ? `${n} ينتظرون` : "ماكو أحد", hot: n > 0 }); }
   if (await can(uid, "birthdays")) { const n = await birthdaysToday(); people.push({ page: "birthdays", icon: "🎂", title: "أعياد الميلاد", note: n ? `اليوم: ${n}` : "ماكو اليوم", hot: n > 0 }); }
   if (await can(uid, POLL_PERM)) { const n = await openPolls(); people.push({ page: "polls", icon: "🗳", title: "التصويت", note: n ? `${n} مفتوح هسه` : "سوي تصويت للطلاب" }); }
   if (await can(uid, "signups")) {
