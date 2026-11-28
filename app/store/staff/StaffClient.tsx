@@ -130,7 +130,8 @@ function Panel({ s, perms, chapters, topics, tree, busy, call }: { s: Staff; per
         </div>
         <button type="button" className="exbtn adtop" disabled={busy} onClick={async () => { if (await call({ action: "viewAs", id: s.id })) location.href = `/store/admin${location.search}`; }}>👁 شوف كمساعد</button>
         <div className="exhint">تشوف لوحة التحكم والبوت مثله بالضبط، بصلاحياته. ترجع من «↩️ ارجع لحسابي».</div>
-        <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void call({ action: "doorMake", id: s.id })}>🔗 {s.door ? "رابط دخول جديد بدون تليگرام" : "رابط دخول بدون تليگرام"}</button>
+        <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void call({ action: "doorMake", id: s.id })}>🔗 رابط دخول بدون تليگرام</button>
+        {s.door && <Confirm label="🔄 رابط جديد (القديم يبطل ويطلب رمز جديد)" disabled={busy} onYes={() => void call({ action: "doorMake", id: s.id, fresh: true })} />}
         {s.door && <Confirm label="⛔ أبطل رابط دخوله" disabled={busy} onYes={() => void call({ action: "doorRevoke", id: s.id })} />}
         <Confirm label="🗑 حذف المساعد" disabled={busy} onYes={() => void call({ action: "del", id: s.id })} />
       </div>
@@ -290,6 +291,8 @@ function NoTg({ busy, call }: { busy: boolean; call: Call }) {
       <input value={name} placeholder="اسمه" onChange={(e) => setName(e.target.value)} />
       <button type="button" className="btn" disabled={busy || !name.trim()} onClick={() => void call({ action: "addNoTg", name }).then((r) => { if (r) setName(""); })}>➕ ضيفه وسويله رابط</button>
       <button type="button" className="exbtn adtop" disabled={busy} onClick={() => void call({ action: "doorMine" })}>🔗 رابطي أنا: لوحة التحكم بدون تليگرام</button>
+      <div className="exhint">رابطك ثابت: كل دوسة تطلع نفس الرابط، وتگدر تستعمله بكل أجهزتك.</div>
+      <Confirm label="🔄 رابطي الجديد (القديم يبطل بكل الأجهزة)" disabled={busy} onYes={() => void call({ action: "doorMine", fresh: true })} />
     </div></div>
   );
 }

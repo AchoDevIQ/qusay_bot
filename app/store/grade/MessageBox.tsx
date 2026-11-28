@@ -4,8 +4,8 @@ import { useState } from "react";
 import { pageAuth } from "../adminPage";
 import VoiceRec from "../VoiceRec";
 
-export default function MessageBox({ paperId, name, onClose, quiet }: { paperId: number; name: string; onClose: (notice?: string) => void; quiet?: boolean }) {
-  const [text, setText] = useState("");
+export default function MessageBox({ paperId, name, onClose, quiet, start = "" }: { paperId: number; name: string; onClose: (notice?: string) => void; quiet?: boolean; start?: string }) {
+  const [text, setText] = useState(start);
   const [btnText, setBtnText] = useState("");
   const [btnUser, setBtnUser] = useState("");
   const [voice, setVoice] = useState<Blob | null>(null);

@@ -120,7 +120,8 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
   const inl = usePaperInk(start.id, start.name, start.pg, file, () => void call({ action: "group", key: gkey }, true));
   const [more, setMore] = useState<Record<number, boolean>>({});
   // 📩 رسالة للطالب (كتابة أو فويس، طلبه 2026-11-28): تنتظر وتوصل ويا «📤 دز للطلاب»
-  const [msgOpen, setMsgOpen] = useState(false);
+  // 0: رسالة عامة (جنب اسمه)، رقم: رسالة من سؤال معين (طلبه 2026-11-28: «وصلت السؤال الخامس ليش أرجع للأول؟»)
+  const [msgOpen, setMsgOpen] = useState<number | false>(false);
   // ✍️ عبارة بالرقعة: يكتبها بخطه وتتبدل بكل مكان
   const [handFor, setHandFor] = useState<string | null>(null);
   const [msgNote, setMsgNote] = useState("");
@@ -231,7 +232,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
   return (
     <div id={`p${p.id}`} className={"card arv-paper " + (n % 2 ? "arv-a" : "arv-b")}>
       <div className="arv-start">👤 الطالب {n} من {of}: <b>{p.name}</b></div>
-      <div className="arv-head"><button type="button" className="arv-msg" onClick={() => setMsgOpen(true)}>📩 رسالة للطالب</button><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
+      <div className="arv-head"><button type="button" className="arv-msg" onClick={() => setMsgOpen(0)}>📩 رسالة للطالب</button><span className="arv-by">{p.by}</span><span className="arv-total">{total} من 100</span>{p.held && <span className="adentag">⏳ بعدها ما وصلت</span>}</div>
       {p.questions.map((q) => (
         <div key={q.n} id={`q${p.id}-${q.n}`} className="arv-q">
           <div className="arv-qline">
@@ -241,6 +242,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
               : <span className="arv-mark">{marks[q.n] ?? q.mark} من {q.max}</span>}
             {/* مجموع الطالب فوگ كل سؤال، ويتغير وياه (طلبه 2026-11-28) */}
             <span className="arv-qtot">المجموع {total} من 100</span>
+            <button type="button" className="arv-msg" onClick={() => setMsgOpen(q.n)}>📩 رسالة</button>
             {/* ورقة PDF أو ورقة كاملة: القلم هنا ما يشتغل عليها، فتنفتح شاشة التصحيح نفسها */}
             {!inl.order && (gq === q.n
               ? <button type="button" className="arv-pen on" onClick={() => leave(null)}>✔ خلصت</button>
@@ -312,7 +314,7 @@ function PaperCard({ p: start, n, of, file, busy, save, gkey, call, report, pen,
         <Pad kind="note" label={handFor} busy={busy} onCancel={() => setHandFor(null)}
           onUpload={(s, c, wd) => void call({ action: "handAdd", text: handFor, s, c, wd, ...BOX.note }, true).then((r) => { if (r) { setHandFor(null); setTap(null); void call({ action: "group", key: gkey }, true); } })} />
       </div></div>}
-      {msgOpen && <MessageBox quiet paperId={p.id} name={p.name} onClose={(note) => { setMsgOpen(false); if (note) { setMsgNote(note); void call({ action: "group", key: gkey }, true); } }} />}
+      {msgOpen !== false && <MessageBox key={msgOpen} quiet start={msgOpen ? `بالسؤال ${msgOpen}: ` : ""} paperId={p.id} name={p.name} onClose={(note) => { setMsgOpen(false); if (note) { setMsgNote(note); void call({ action: "group", key: gkey }, true); } }} />}
       <div className="arv-end">— نهاية أوراق {p.name} —</div>
     </div>
   );

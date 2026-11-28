@@ -121,6 +121,7 @@ function Panel({ o, data, busy, call }: { o: Office; data: Data; busy: boolean; 
           <div key={u.id} className="adsale adsplit">
             <span>{u.name}</span>
             <button type="button" className="exbtn" disabled={busy} onClick={() => void call({ action: "doorUser", user: u.id })}>🔗 بدون تليگرام</button>
+            <Confirm label="🔄" disabled={busy} onYes={() => void call({ action: "doorUser", user: u.id, fresh: true })} />
             <Confirm label="🗑" disabled={busy} onYes={() => void call({ action: "delUser", user: u.id })} />
           </div>
         ))}

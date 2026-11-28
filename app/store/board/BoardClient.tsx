@@ -1147,7 +1147,7 @@ const norm = (t: string) => t.trim().toLowerCase().replace(/[.,!?؟،:;"'«»]/g
 function langCmd(t: string): "ar-IQ" | "en-US" | null {
   const n = norm(t);
   if (/^(ال)?ا?ن[جكگق]ل[ي]?ز[ي]?(ه|ة)?$|^(english|inglizi|ingilizi|engilizi)$/.test(n)) return "en-US";
-  if (/^(ال)?عربي(ه|ة)?$|^(arabic|arabi|araby|arabee|arab)$/.test(n)) return "ar-IQ";
+  if (/^(ال)?عربي(ه|ة)?$|^(arabic|arabi|araby|arabee|arab|in arabic|arabic please|arabic language)$/.test(n)) return "ar-IQ";
   return null;
 }
 function MicPanel({ onCancel, onPlace, teacher, init }: { onCancel: () => void; onPlace: (t: string, size: number) => void; teacher: boolean; init?: { t: string; s: number } }) {
@@ -1199,7 +1199,10 @@ function MicPanel({ onCancel, onPlace, teacher, init }: { onCancel: () => void; 
     const r = make(lg);
     if (!r) return;
     rec.current = r; want.current = true;
-    try { r.start(); setOn(true); } catch { setErr("المايك ما اشتغل"); }
+    try { r.start(); setOn(true); } catch {
+      // المايك اللي قبله بعده يسكت: محاولة ثانية بعد نص ثانية
+      window.setTimeout(() => { if (rec.current !== r) return; try { r.start(); setOn(true); } catch { setErr("المايك ما اشتغل. دوس «🎤 ابدأ الكلام» مرة ثانية"); } }, 500);
+    }
   };
   const stop = () => { want.current = false; const r = rec.current; rec.current = null; try { r?.stop(); } catch { /* */ } setOn(false); };
   // تغيير اللغة: الكلام اللي انكتب يبقى، ينزل سطر، والسماع يبدي من جديد باللغة الثانية
@@ -1216,7 +1219,16 @@ function MicPanel({ onCancel, onPlace, teacher, init }: { onCancel: () => void; 
       }
     }
     setText(done.current);
-    if (want.current) { const r = rec.current; rec.current = null; try { r?.stop(); } catch { /* */ } window.setTimeout(() => start(lg), 250); }
+    // (طلبه 2026-11-28: «من أحولها عربي ما تكتب عربي») المايك الجديد ما يبدي إلا بعد ما يسكت القديم تماماً،
+    // لأن كروم يرفض مايك ثاني والأول بعده شغال، فچان يبقى ساكت. وإذا ما رد، يبدي وحده بعد ثانية
+    if (want.current) {
+      const r = rec.current; rec.current = null;
+      let started = false;
+      const go = () => { if (started || !want.current || langNow.current !== lg) return; started = true; start(lg); };
+      if (r) { r.onresult = null; r.onerror = null; r.onend = () => window.setTimeout(go, 80); try { r.stop(); } catch { go(); } }
+      else go();
+      window.setTimeout(go, 1200);
+    }
   };
   useEffect(() => () => { want.current = false; try { rec.current?.stop(); } catch { /* */ } }, []);
   // المؤشر يبقى ورا آخر كلمة انضافت، حتى الكلام الجاي يكمل من نفس المكان

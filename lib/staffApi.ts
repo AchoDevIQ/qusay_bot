@@ -126,13 +126,14 @@ export async function staffAction(body: Row) {
     const QR = (await import("qrcode")).default;
     return { ...await pageData(), notice: "✅ انضاف المساعد بصلاحية الأسئلة بس. اختار صلاحياته، ودزله الرابط", door: { id: nid, name, link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
   } else if (a === "doorMake" || a === "doorMine") {
-    // رابط دخول بدون تليگرام (يبطل القديم). doorMine: لصاحب البوت نفسه
+    // رابط دخول بدون تليگرام: نفس الرابط الثابت إذا عنده، وجديد (يبطل القديم) بس بـ fresh. doorMine: لصاحب البوت نفسه
     const uid = a === "doorMine" ? me : id;
     if (a === "doorMake") await liveStaff(uid);
     const name = a === "doorMine" ? "صاحب البوت" : String((await one("staff", { user_id: uid }))?.name ?? "");
-    const link = await (await import("./doorLink.ts")).makeDoor(uid, name);
+    const fresh = body.fresh === true;
+    const link = await (await import("./doorLink.ts")).makeDoor(uid, name, fresh);
     const QR = (await import("qrcode")).default;
-    return { ...await pageData(), notice: "🔗 هذا رابط دخوله الجديد. الرابط القديم (إذا أكو) ما يشتغل بعد", door: { id: uid, name, link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
+    return { ...await pageData(), notice: fresh ? "🔄 هذا رابط دخوله الجديد. الرابط القديم ما يشتغل بعد، ويطلب رمز جديد" : "🔗 هذا رابط دخوله الثابت. يبقى يشتغل على طول، لحد ما تدوس «🔄 رابط جديد» أو «⛔ أبطل»", door: { id: uid, name, link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
   } else if (a === "doorRevoke") {
     await (await import("./doorLink.ts")).revokeDoor(id);
     notice = "⛔ انبطل رابط دخوله. ما يگدر يدخل بيه بعد";

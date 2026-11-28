@@ -328,7 +328,7 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
     const { setSos } = await import("./studentVis.ts");
     const st = await student(id);
     need(st, "الطالب غير موجود", 404);
-    const link = await makeDoor(id, String(st!.name ?? ""));
+    const link = await makeDoor(id, String(st!.name ?? ""), body.fresh === true);
     await setSos(id, true);
     await logActivity(id, "🔗 انعمله رابط بالمتصفح");
     return { ...await pageData(String(body.q ?? ""), filtersOf(body.filters), uid), notice: "🔗 انعمل الرابط. انسخه ودزه للطالب (واتساب أو أي طريقة). أول مرة يفتحه يحط رمز سري من 4 أرقام.", doorLink: link, doorFor: id };

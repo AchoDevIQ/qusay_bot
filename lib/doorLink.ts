@@ -23,11 +23,18 @@ function pinOk(pin: string, stored: string) {
 }
 const cleanPin = (v: unknown) => String(v ?? "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).trim();
 
-/** رابط جديد (يبطل أي رابط قبله لنفس الشخص، ويرجع يطلب رمز جديد) */
-export async function makeDoor(uid: number, label: string) {
+const urlOf = (uid: number, ver: string) => `${siteBase()}/store/door?d=k${uid}.${ver}.${sig(uid, ver)}`;
+/** رابط دخوله الثابت (طلبه 2026-11-28: «ليش يومياً رابط جديد؟»): إذا عنده رابط، يرجع نفسه وما ينبطل شي.
+ *  fresh: «🔄 رابط جديد» بس (الرابط انسرب أو نسى رمزه): يسوي واحد جديد ويبطل القديم ويطلب رمز جديد */
+export async function makeDoor(uid: number, label: string, fresh = false) {
+  const had = await one("door_links", { user_id: uid });
+  if (had && !fresh) {
+    if (label && had.label !== label) await put("door_links", { ...had, label });
+    return urlOf(uid, String(had.ver));
+  }
   const ver = `${Date.now()}${randomBytes(3).toString("hex")}`;
   await put("door_links", { user_id: uid, ver, hash: null, fails: 0, locked_until: null, label, created: stamp() });
-  return `${siteBase()}/store/door?d=k${uid}.${ver}.${sig(uid, ver)}`;
+  return urlOf(uid, ver);
 }
 export const revokeDoor = async (uid: number) => { await remove("door_links", { user_id: uid }); };
 export const hasDoor = async (uid: number) => !!await one("door_links", { user_id: uid });

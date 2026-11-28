@@ -38,8 +38,16 @@ export default function DoorClient() {
     try { if (k) localStorage.setItem("qm_door", k); else k = localStorage.getItem("qm_door") ?? ""; } catch { /* */ }
     setD(k);
     if (!k) { setNoLink(true); return; }
+    const fromUrl = !!new URLSearchParams(location.search).get("d");
     void call({ action: "state" }, k).then(async (r) => {
-      if (!r) return;
+      if (!r) {
+        // الرابط المحفوظ بهذا الجهاز انبطل: ينمسح، ويطلب يلصق الرابط الجديد (أو يصوّره) بدل ما يوگف على «انتهى»
+        if (!fromUrl) {
+          try { localStorage.removeItem("qm_door"); localStorage.removeItem(T_KEY); } catch { /* */ }
+          setD(""); setNoLink(true); setError("الرابط المحفوظ بهذا الجهاز ما يشتغل بعد. الصق رابطك (من «🔗 رابطي أنا») أو صوّره");
+        }
+        return;
+      }
       // هذا الجهاز دخل قبل: يكمل بدون رمز (الدخول يتجدد كل ما يفتحها)
       let t = ""; try { t = localStorage.getItem(T_KEY) ?? ""; } catch { /* */ }
       if (r.hasPin && t) {

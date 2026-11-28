@@ -42,11 +42,15 @@ test("مساعد بدون تليگرام: رابط، رمز، جلسة أسبو�
   assert.equal(l.msgs.at(-1).text, "📝 أكو ورقة تنتظرك");
 });
 
-test("رابط جديد يبطل القديم، والإبطال يسد الباب", async () => {
+test("الرابط ثابت، و«🔄 رابط جديد» بس يبطل القديم، والإبطال يسد الباب", async () => {
   const uid = 7_001_234;
   await put("staff", { user_id: uid, name: "مساعد بتليگرام", perms: "q" });
   const d1 = new URL(await makeDoor(uid, "أ")).searchParams.get("d")!;
-  const d2 = new URL(await makeDoor(uid, "أ")).searchParams.get("d")!;
+  // نفس الدوسة مرة ثانية (جهاز ثاني): نفس الرابط، والقديم يبقى يشتغل
+  assert.equal(new URL(await makeDoor(uid, "أ")).searchParams.get("d"), d1);
+  assert.equal((await doorAction({ d: d1, action: "state" })).hasPin, false);
+  const d2 = new URL(await makeDoor(uid, "أ", true)).searchParams.get("d")!;
+  assert.notEqual(d2, d1);
   await assert.rejects(doorAction({ d: d1, action: "state" }), /انتهى/);
   assert.equal((await doorAction({ d: d2, action: "state" })).hasPin, false);
   const { homeToken } = await import("../lib/webAuth.ts");

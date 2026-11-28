@@ -109,9 +109,10 @@ export async function libAction(body: Row) {
     }
     const ou = await one("office_users", { user_id: u });
     need(ou, "الحساب غير موجود");
-    const link = await door.makeDoor(u, String(ou!.name ?? "المكتبة"));
+    const fresh = body.fresh === true;
+    const link = await door.makeDoor(u, String(ou!.name ?? "المكتبة"), fresh);
     const QR = (await import("qrcode")).default;
-    extra = { notice: "✅ طلع رابط دخوله تحت اسمه: دوس «📋 انسخ الرابط» ودزه إله. (كل دوسة تسوي رابط جديد وتلغي اللي قبله، فدز آخر واحد بس)", door: { officeId: ou!.office_id, name: String(ou!.name ?? ""), link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
+    extra = { notice: fresh ? "🔄 طلع رابطه الجديد تحت اسمه، والقديم ما يشتغل بعد. دوس «📋 انسخ الرابط» ودزه إله" : "✅ طلع رابط دخوله الثابت تحت اسمه: دوس «📋 انسخ الرابط» ودزه إله. يبقى نفس الرابط ويشتغل على طول", door: { officeId: ou!.office_id, name: String(ou!.name ?? ""), link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
   } else if (a === "delUser") {
     const u = Number(body.user);
     need(await one("office_users", { user_id: u }), "الحساب غير موجود");

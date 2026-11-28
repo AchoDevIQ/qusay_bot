@@ -266,7 +266,7 @@ function EmergencyBox({ s, busy, call }: { s: S; busy: boolean; call: Call }) {
   const [link, setLink] = useState("");
   const [copied, setCopied] = useState(false);
   async function make() {
-    const r = await call({ action: "doorMake", id: s.id });
+    const r = await call({ action: "doorMake", id: s.id, fresh: true });
     if (r?.doorLink && r.doorFor === s.id) { setLink(r.doorLink); setCopied(false); }
   }
   async function copy() { try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); } }
