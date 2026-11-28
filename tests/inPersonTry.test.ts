@@ -274,6 +274,8 @@ test("📱 الحضوري بالآيباد: بعد الحضور الأسئلة �
   const card = await markAttendance(-k, 2);
   const room: any = await openRoom(-k, card.item, await schedSettings(), true);
   assert.equal(room.sworn, true);
+  // صور الأسئلة كاملة ما توصل للآيباد نهائياً (حتى لا تتسرب)، كل سؤال مكتوب فوگ ورقته
+  assert.deepEqual(room.pages, []);
 });
 
 test("📄 ورقة فارغة: تتسلم وتاخذ صفر بلا ذكاء", async () => {

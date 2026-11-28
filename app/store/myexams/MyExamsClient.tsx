@@ -869,7 +869,7 @@ function List({ info, busy, enter, paper, file, off, cmd }: { info: Info; busy: 
           <Fragment key={i.id}>
           {holAt(n).map((h) => <HolRow key={h.id} h={h} busy={busy} off={off} keep={(ids) => cmd({ action: "holidayKeep", holidays: ids })} />)}
           {(i.lectures ?? []).map((l, k) => (
-            <tr key={l} className="lcrow" id={i.id === now?.id && k === 0 ? "mx-now" : undefined}>
+            <tr key={l} className={"lcrow" + (i.id === now?.id ? " mxnow" : "")} id={i.id === now?.id && k === 0 ? "mx-now" : undefined}>
               <td>{i.id === now?.id && k === 0 && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxlec">📺 محاضرة</span>{l}<small className="pdmode">{info.appLink ? "شوفها بالتطبيق قبل الامتحان" : "ادرسها قبل الامتحان"}</small></td>
               <td className="p">
                 {info.appLink && !info.inExam && <button type="button" className="exbtn" onClick={() => openOutside(info.appLink)}>▶️ افتح</button>}
@@ -877,7 +877,7 @@ function List({ info, busy, enter, paper, file, off, cmd }: { info: Info; busy: 
               </td>
             </tr>
           ))}
-          <tr className={`mxexamrow ${i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}`} id={i.id === now?.id && !(i.lectures ?? []).length ? "mx-now" : undefined}>
+          <tr className={`mxexamrow ${i.state === "open" ? "sel" : i.state === "notbought" ? "mxlocked" : ""}${i.id === now?.id ? " mxnow" : ""}`} id={i.id === now?.id && !(i.lectures ?? []).length ? "mx-now" : undefined}>
             <td>{i.id === now?.id && !(i.lectures ?? []).length && <span className="adentag">📍 وصلت هنا</span>}<span className="mxkind mxexam">📝 امتحان</span><b>{i.optional ? "🧪 " : ""}{i.retake ? "🔁 " : ""}{i.title}</b>{i.optional && <span className="adentag">اختبر نفسك</span>}{i.retake && <span className="adentag">إعادة</span>}{i.total !== null && i.total !== undefined && <span className="adentag">{i.total} من 100</span>}{i.gwait && <span className="adentag">👨‍👧 الدرجة عند ولي أمرك</span>}<small className="pdmode">{i.chapter} · {i.minutes} دقيقة<br />{STATE[i.state]}</small>
               {i.state === "open" && <button type="button" className="btn agbtn adtop" disabled={busy} onClick={() => enter(i.id)}>📝 ادخل الامتحان</button>}
               {i.skippable && (

@@ -95,6 +95,10 @@ export async function takeOath(uid: number, id: unknown, s: SchedSettings, typed
   }
   return await roomView(it, s);
 }
+/** امتحان الحضوري بالآيباد (مو التعويض الإلكتروني، ومو اللي انفتحله من البيت) */
+async function isIpadItem(it: Row) {
+  return it.catch_place === "ipad" || (it.catch_place !== "online" && it.kind !== "catchup" && await ipadExam(Number(it.user_id)));
+}
 async function roomView(it: Row, s: SchedSettings) {
   const e = (await one("bank_exams", { id: it.exam_id }))!;
   const v = (await one("bank_versions", { id: it.version_id }))!;
@@ -106,8 +110,9 @@ async function roomView(it: Row, s: SchedSettings) {
     // 📖 شرح الإرسال: بس بأول امتحان للطالب (طلبه 2026-11-28)، مو كل امتحان لأن وقته محسوب
     penIntro: !await kvGet(`pen_intro_${it.user_id}`),
     id: it.id, sid: it.user_id, title: titleFor(e, st?.curr), model: v.model, oath: oathSentence(st?.name ?? ""), sworn: !!await kvGet(oathKey(it.id)), gallery: s.gallery, closeAt: closeOf(it, e.minutes ?? 75, s), now: stamp(), minutes: e.minutes ?? 75, extra: s.extra, answerOnly: answerOnlyOf(e),
-    // صور الأسئلة ما توصل للصفحة أصلاً قبل القسم
-    pages: await kvGet(oathKey(it.id)) ? await pagesOf(e, v, st?.curr ?? "") : [],
+    // صور الأسئلة ما توصل للصفحة أصلاً قبل القسم. وبالآيباد ما توصل نهائياً (طلبه 2026-11-28: «حتى لا تتسرب»):
+    // كل سؤال مكتوب فوگ ورقته، فصورة الأسئلة كاملة ما يحتاجها
+    pages: await kvGet(oathKey(it.id)) && !await isIpadItem(it) ? await pagesOf(e, v, st?.curr ?? "") : [],
     questions: qs.map((q) => ({ n: q.n, max: q.max_mark ?? 0, answers: answers.filter((a) => a.q === q.n).map((a) => ({ id: a.id, file: a.file })),
       // ورقة الكتابة بالقلم: صورة السؤال (بعد القسم بس)، ونصه إذا انرفع من الوورد
       // مكتوب من الوورد إذا انرفع (بلغة منهجه)، وإلا صورة السؤال
@@ -265,7 +270,9 @@ export async function roomFile(token: unknown, itemId: unknown, ref: unknown, pf
   const st = await student(uid!);
   const vqs = await find("bank_questions", { version_id: v.id });
   const qFiles = [...vqs.map((q) => String(q.q_file ?? "")).filter((f) => f && !f.startsWith("tg:")), ...vqs.filter((q) => typedText(q, st?.curr)).map((q) => typedRef(q.id, st?.curr))];
-  const allowed = [...await pagesOf(e, v, st?.curr ?? ""), ...qFiles, ...(await find("exam_answers", { item_id: it!.id })).map((a) => a.file as string), ...await gradedPages(it!.id), ...(it!.graded_at && v.answer_pdf ? [String(v.answer_pdf)] : [])];
+  // طالب الآيباد وهو يمتحن: صور الأسئلة كاملة ممنوعة حتى لو عنده رابطها
+  const noPages = it!.status !== "done" && await isIpadItem(it!);
+  const allowed = [...(noPages ? [] : await pagesOf(e, v, st?.curr ?? "")), ...qFiles, ...(await find("exam_answers", { item_id: it!.id })).map((a) => a.file as string), ...await gradedPages(it!.id), ...(it!.graded_at && v.answer_pdf ? [String(v.answer_pdf)] : [])];
   need(typeof ref === "string" && allowed.includes(ref), "ما عندك صلاحية", 403);
   if (String(ref).startsWith("qt/")) {
     const q = vqs.find((x) => typedRef(x.id, st?.curr) === ref)!;

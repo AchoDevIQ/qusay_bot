@@ -591,3 +591,6 @@ label.chk{display:inline-flex;align-items:center;gap:6px;margin:4px 0;padding:8p
 .gk-stacked .gk-stage{overflow-x:hidden;touch-action:pan-y;padding-inline:0}
 .gk-auto{font-size:13px;font-weight:800;color:#6ee7a8}
 .pen-guide{max-height:88vh;overflow:auto}.pen-guide h3{margin:14px 0 4px;font-size:17px}
+/* 📍 وين وصلت (طلبه 2026-11-28): صفوف الخطوة الحالية بلون التطبيق الكحلي، حتى تبين */
+tr.mxnow>td{background:#141F33!important;color:#fff!important}tr.mxnow>td small,tr.mxnow>td .pdmode{color:#cfd8e8!important}tr.mxnow .adentag{background:#F9C445;color:#141F33;font-size:13px;padding:2px 9px}
+tr.mxnow .mxkind.mxexam{color:#F9C445!important;border-color:#F9C445!important;background:transparent!important}
