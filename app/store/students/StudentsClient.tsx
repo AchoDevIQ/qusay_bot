@@ -616,6 +616,8 @@ function InPersonTry({ areas, versions, busy, act, code, codes }: { areas: Data[
           <button type="button" className="btn" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonKind", center, vid, kind: "ipad" })}>📱 يمتحن بالآيباد</button>
         </div>
         <button type="button" className="exbtn adtop" disabled={busy || !center || !vid} onClick={() => void act({ action: "tryInPersonList", center, vid })}>📋 طلاب التجربة اللي سويتهم بهذا المركز</button>
+        {/* 🗑 كل مرة يبدي بطلاب جدد (طلبه 2026-11-28) */}
+        <Confirm label="🗑 امسح كل طلاب التجربة الحضوريين (كل المراكز)" disabled={busy} onYes={() => void act({ action: "tryInPersonClear" })} />
         {!!codes?.length && (
           <div className="adtop" style={{ display: "grid", gap: 8 }}>
             <div className="exhint">دوس على الطالب: يطلع كوده كبير يملي الشاشة، ووجه عليه كاميرا الحضور.</div>

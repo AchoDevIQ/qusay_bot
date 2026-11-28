@@ -12,7 +12,7 @@ import { saveStudent, studentFromForm } from "./student.ts";
 import { api } from "./telegram.ts";
 import { esc } from "./util.ts";
 import { openException, startNowForTest } from "./examRoom.ts";
-import { TEST_STUDENTS, addTestPaper, addTestStudent, giveTestChapter, deleteTests, inPersonTests, makeInPersonOne, makeInPersonSet, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
+import { TEST_STUDENTS, addTestPaper, addTestStudent, clearInPersonTests, giveTestChapter, deleteTests, inPersonTests, makeInPersonOne, makeInPersonSet, makeTests, startInPersonTest, startTestExam } from "./gradeApi.ts";
 import { fileToken, homeToken, viewToken } from "./webAuth.ts";
 import { studentPapers } from "./studentPapers.ts";
 import { studentFile } from "./studentFile.ts";
@@ -285,6 +285,11 @@ ${msg.replace("✅ ", "")}. افتح امتحاناتي وشوف المواعي�
     // كود حضوره مثل كود الطالب الحقيقي: يطلع على الشاشة، وكاميرا جهاز الحضور تقراه
     tryCode = { k, img: await QRCode.toDataURL(studentCode(-k), { margin: 2, width: 320 }) };
     notice = `🎫 طالب حضوري تجريبي ${k} جاهز${body.late ? "، وموعده بعد 3 ساعات" : ""}. اكتب الرقم ${k} بالمحطة أو بصفحة 🎫 الحضوري`;
+  } else if (a === "tryInPersonClear") {
+    need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);
+    const n = await clearInPersonTests(Number(body.center) || 0);
+    tryCodes = [];
+    notice = n ? `🗑 انمسحوا ${n} طلاب حضوري تجريبيين. سوي طلاب جدد وقت ما تريد` : "ماكو طلاب حضوري تجريبيين تنمسح";
   } else if (a === "tryInPersonKind" || a === "tryInPersonList") {
     // ✅ / ⏰ / 🚫: طالب جديد من النوع اللي يختاره، وبعدها كل طلاب التجربة بهذا المركز بأكوادهم
     need(await isAdmin(uid), "هذا لصاحب البوت بس", 403);

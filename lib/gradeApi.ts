@@ -534,6 +534,23 @@ export async function makeInPersonOne(centerId: number, vid: number, kind: "now"
   if (kind === "ipad") await (await import("./inPerson.ts")).setIpadExam(-k, true);
   return k;
 }
+/** 🗑 يمسح طلاب التجربة الحضوريين (طلبه 2026-11-28: «كل ما أفوت أصنع طلاب جديدة»): بكل المراكز، لو بمركز وحد.
+ *  طلاب التجربة الإلكترونيين (أوراق مراجعة الذكاء وغيرها) ما ينمسون. يرجع كم طالب انمسح */
+export async function clearInPersonTests(centerId = 0) {
+  let n = 0;
+  for (const s of (await find("students")).filter((x) => x.user_id < 0 && x.exam === "حضوري" && (!centerId || x.center_id === centerId))) {
+    const sid = Number(s.user_id);
+    for (const it of await find("sched_items", { user_id: sid })) {
+      for (const t of ["exam_answers", "question_marks", "paper_ink", "objections"]) await remove(t, { item_id: it.id });
+      await remove("sched_items", { id: it.id });
+    }
+    await remove("exam_access", { user_id: sid });
+    await (await import("./inPerson.ts")).setIpadExam(sid, false).catch(() => undefined);
+    await remove("students", { user_id: sid });
+    n++;
+  }
+  return n;
+}
 /** طلاب التجربة الحضوريين بهذا المركز، وحالة كل واحد ويا هذا الامتحان */
 export async function inPersonTests(centerId: number, vid: number) {
   const v = await one("bank_versions", { id: vid });

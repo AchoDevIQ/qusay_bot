@@ -241,3 +241,17 @@ test("📱 طالب حضوري تجريبي يمتحن بالآيباد: يطل�
   const card = await markAttendance(-k, 1);
   assert.equal(card.print, "ipad");
 });
+
+test("🗑 مسح طلاب التجربة الحضوريين: الحضوريين بس ينمسحون ويا امتحاناتهم", async () => {
+  const { makeInPersonOne, clearInPersonTests, addTestStudent } = await import("../lib/gradeApi.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "مسح" });
+  const c = await insert("centers", { area_id: area, name: "مركز المسح", active: 1 });
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const k = await makeInPersonOne(c, v.id, "now");
+  const online = await addTestStudent();
+  const n = await clearInPersonTests();
+  assert.ok(n >= 1);
+  assert.equal(await one("students", { user_id: -k }), null);
+  assert.equal((await find("sched_items", { user_id: -k })).length, 0);
+  assert.ok(await one("students", { user_id: -online }), "طالب التجربة الإلكتروني يبقى");
+});
