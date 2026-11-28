@@ -99,7 +99,30 @@ export default function StationClient() {
       setCamera(true);
     } catch (e) { setStatus(`⚠️ ما انربطت: ${why(e)}`); }
   }
-  async function write(job: Job) {
+  // الطابعة تاخذ ليبل وحد بالوكت: كل كتابة تنتظر اللي قبلها، حتى لو جت من مكانين
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  function write(job: Job) {
+    const p = chain.current.then(() => writeRaw(job));
+    chain.current = p.catch(() => undefined);
+    return p;
+  }
+  // 🖨 الطباعة بالخلفية (طلبه 2026-11-28: «أكو تأخير بالإرسال، أريد أمشي الطلاب بسرعة»): القراية تگول «انقرا، عبّر على اللي بعده»
+  // فوراً، والليبلات تنطبع وحدة وراء الثانية بطابور، والكاميرا تكمل تقرا
+  const waiting = useRef(0);
+  const [printing, setPrinting] = useState("");
+  function printBg(job: Job, item: number, name: string) {
+    waiting.current++;
+    setPrinting(`🖨 دا يطبع: ${name}${waiting.current > 1 ? ` (وراه ${waiting.current - 1})` : ""}`);
+    void write(job).then(async () => {
+      await api({ action: "printed", id: item }).catch(() => undefined);
+      waiting.current--;
+      setPrinting(waiting.current ? `🖨 باقي ${waiting.current} ليبل ينطبع` : `✅ آخر ليبل انطبع: ${name}`);
+    }, (e) => {
+      waiting.current--;
+      setPrinting(`⚠️ ما انطبع ليبل ${name}: ${why(e)}. دوس «🏷 اطبع ليبل مرة ثانية» على كارته`);
+    });
+  }
+  async function writeRaw(job: Job) {
     if (ch.current?.device) {
       const err = deviceApp()!.printTspl(job.b64);
       if (err) throw new Error(`الطابعة: ${err}`);
@@ -140,10 +163,9 @@ export default function StationClient() {
     setLast(c);
     if (r.job && !ch.current) { noPrinter(c.name); return; }
     if (r.job) {
-      setStatus(`🖨 دا يطبع: ${c.name}`);
-      await write(r.job);
-      await api({ action: "printed", id: c.item });
-      setStatus(`✅ انطبع: ${c.name}`);
+      try { navigator.vibrate?.(80); } catch { /* ما يهتز */ }
+      setStatus(`✅ انقرا: ${c.name}. عبّر على اللي بعده، ليبله دا ينطبع`);
+      printBg(r.job, c.item, c.name);
     } else setStatus(c.print === "ipad" ? `✅ تم تسجيل حضور ${c.name}. 📱 يمتحن بالآيباد: أسئلته تنفتح هسه بالآيباد مالته وحدها، لا تطبعله شي` : c.printed ? `⚠️ ${c.name}: مطبوع له ليبل` : c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
   });
   /** قرار الجاي بغير وقته: لكل طالب لحاله */
@@ -304,6 +326,7 @@ export default function StationClient() {
           </div>
         ))}
         <div className="exhint atok" style={{ fontSize: 17 }}>{status}</div>
+        {printing && <div className="exhint">{printing}</div>}
         {same && camera && <div className="exhint">👀 الكاميرا بعدها على نفس الطالب. وجهها على اللي بعده</div>}
         {/* ⏰ ينتظرون قرار (طلبه 2026-11-28: «منزل هالقد جوه»): فوگ جوه النتيجة. كل كارت باسم طالبه، والقرار لكل واحد لحاله.
             الاستثناء بس للمشتري اللي عنده امتحان: جاي بغير وقته لو من مركز ثاني. غير المشترك ما يطلعله كارت أصلاً */}
