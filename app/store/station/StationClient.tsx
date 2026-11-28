@@ -152,6 +152,14 @@ export default function StationClient() {
     const r = await api({ action: "reprint", item, force });
     if (r.job) { setStatus(`🖨 دا يطبع: ${r.job.name}`); await write(r.job); setStatus(`✅ انطبع: ${r.job.name}`); }
   });
+  // 🎯 معايرة الطابعة (طلبه 2026-11-28: «أول ليبل طلع فارغ، وطلع زاحف»): الطابعة تمشي كم ليبل وتقيس الفراغ بيناتهم،
+  // فتعرف وين يبدي كل ليبل. مرة وحدة بعد ما يحط رول جديد
+  const calibrate = () => once(async () => {
+    if (!ch.current) { setStatus("⚠️ اتصل بالطابعة أول"); return; }
+    setStatus("🎯 دا تعاير: تطلع كم ليبل فارغة، عادي");
+    await write({ id: 0, name: "", b64: btoa("GAPDETECT\r\n") } as Job);
+    setStatus("✅ خلصت المعايرة. اطبع ليبل تجربة وشوف");
+  });
   const testLabel = () => once(async () => {
     if (!ch.current) { setStatus("⚠️ اتصل بالطابعة أول"); return; }
     const r = await api({ action: "test" });
@@ -281,6 +289,8 @@ export default function StationClient() {
               <button type="button" className="exbtn" onClick={() => move(0, -MM)}>⬆️ فوك</button>
               <button type="button" className="exbtn" onClick={() => move(0, MM)}>⬇️ جوة</button>
             </div>
+            <div className="exhint adtop">إذا أول ليبل يطلع فارغ، لو الليبلات تزحف شوية شوية وحدة ورا الثانية: دوس «🎯 عاير الطابعة» مرة وحدة بعد ما تحط رول جديد. تطلع كم ليبل فارغة وهي تقيس، وبعدها كل ليبل ينطبع بمكانه.</div>
+            <button type="button" className="exbtn adtop" onClick={() => void calibrate()}>🎯 عاير الطابعة</button>
             <button type="button" className="btn agbtn adtop" onClick={() => void testLabel()}>🧪 اطبع ليبل تجربة</button>
           </div>
         </details>
