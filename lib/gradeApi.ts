@@ -545,6 +545,8 @@ export async function inPersonTests(centerId: number, vid: number) {
     const access = e ? (await find("exam_access", { user_id: sid })).some((a) => a.chapter === e.chapter) : false;
     const it = v ? (await find("sched_items", { user_id: sid, exam_id: v.exam_id })).find((x) => x.status === "waiting") : null;
     const kind = !access ? "none" : !it ? "other" : String(it.at) > addMinutes(stamp(), 60) ? "late" : await ipadExam(sid) ? "ipad" : "now";
+    // «امتحانه هسه» يبقى هسه: كل ما يفتح القائمة لو يسوي طالب، موعده يتجدد (وإلا الوقت يمر ويصير «بغير وقته»)
+    if (it && kind !== "late" && String(it.at) < stamp()) await update("sched_items", { id: it.id }, { at: stamp() });
     out.push({ k: -sid, kind });
   }
   return out.sort((a, b) => b.k - a.k);

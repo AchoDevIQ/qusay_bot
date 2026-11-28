@@ -21,8 +21,9 @@ export default function StationClient() {
   const [camErr, setCamErr] = useState("");
   const [count, setCount] = useState(0);
   const [last, setLast] = useState<Card | null>(null);
-  const [pending, setPending] = useState<Card | null>(null);
-  const waiting = useRef(false);
+  // الجايين بغير وقتهم: كل واحد قراره لحاله، والكاميرا تبقى تقرا غيرهم (طلبه 2026-11-28: «ما أريد يرتبط قرار الطالب اللي بعده باللي قبله»)
+  const [pendings, setPendings] = useState<Card[]>([]);
+  const drop = (item: number) => setPendings((l) => l.filter((x) => x.item !== item));
   const [num, setNum] = useState("");
   const [pos, setPos] = useState({ dx: 0, dy: 0 });
   const video = useRef<HTMLVideoElement>(null);
@@ -121,7 +122,7 @@ export default function StationClient() {
     setStatus("⏳ دا يسجل الحضور...");
     const r = await api({ action: "scan", code });
     const c = r.card!;
-    if (c.late) { setPending(c); waiting.current = true; setStatus(`⏰ ${c.name}: جاي بغير وقته`); return; }
+    if (c.late) { setPendings((l) => [c, ...l.filter((x) => x.item !== c.item)]); setStatus(`⏰ ${c.name}: جاي بغير وقته. قراره تحت، وكمل باللي بعده`); return; }
     setLast(c);
     if (r.job) {
       setStatus(`🖨 دا يطبع: ${c.name}`);
@@ -130,19 +131,17 @@ export default function StationClient() {
       setStatus(`✅ انطبع: ${c.name}`);
     } else setStatus(c.print === "ipad" ? `📱 ${c.name}: يمتحن بالآيباد، لا تطبعله شي` : c.printed ? `⚠️ ${c.name}: مطبوع له ليبل` : c.already ? `⚠️ ${c.name}: كان مسجل حضوره` : `✅ انسجل ${c.name}. مركزه يطبع ورقة كاملة`);
   });
-  /** قرار الجاي بغير وقته: بعدها الكاميرا ترجع تقرا */
-  const decide = (allow: boolean) => once(async () => {
-    const c = pending;
-    if (!c) return;
+  /** قرار الجاي بغير وقته: لكل طالب لحاله */
+  const decide = (c: Card, allow: boolean) => once(async () => {
     if (!allow) {
       await api({ action: "rejectLate", item: c.item });
-      setPending(null); waiting.current = false;
+      drop(c.item);
       setStatus(`❌ انرفض: ${c.name}`);
       return;
     }
     if (!ch.current) { setStatus("⚠️ اتصل بالطابعة أول"); return; }
     const r = await api({ action: "except", item: c.item });
-    setPending(null); waiting.current = false;
+    drop(c.item);
     setLast(r.card!);
     if (r.job) { setStatus(`🖨 دا يطبع: ${c.name}`); await write(r.job); await api({ action: "printed", id: c.item }); setStatus(`✅ انطبع: ${c.name}`); }
     else setStatus(`✅ انسجل ${c.name} باستثناء`);
@@ -184,10 +183,9 @@ export default function StationClient() {
   /** كود صحيح لطالب: ينطبع فوراً أول مرة. نفس الكود ما ينقرا مرة ثانية خلال 8 ثواني */
   function found(raw: string) {
     if (!raw.startsWith("QS:")) return;
-    // طالب قبله ينتظر قرار (بغير وقته): ما يقرا غيره لحد ما يقرر، ويگله بوضوح بدل ما يبقى ساكت (طلبه 2026-11-28)
-    if (waiting.current) { setStatus("⚠️ أول قرر للطالب اللي قبله فوگ: «🔓 استثناء» لو «❌ رفض»، وبعدين وجه على الكود الجديد"); return; }
     const now = Date.now();
-    if (seen.current.code === raw && now - seen.current.at < 8000) return;
+    // نفس الكود مرة ثانية خلال 8 ثواني: ما ينطبع مرتين، ويگله بدل ما يسكت
+    if (seen.current.code === raw && now - seen.current.at < 8000) { setStatus("⚠️ نفس الطالب توه انقرا. شيل الكاميرا عنه، أو وجهها على طالب ثاني"); return; }
     seen.current = { code: raw, at: now };
     void handle(raw);
   }
@@ -272,18 +270,19 @@ export default function StationClient() {
             <input className="exinput" inputMode="numeric" dir="ltr" aria-label="رقم الطالب" placeholder="رقم الطالب" value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ""))} />
             <button type="button" className="exbtn" disabled={!num} onClick={() => { void handle(num); setNum(""); }}>سجل واطبع</button>
           </div>
-          {pending && (
-            <div className="atcard">
-              <b>{pending.name}</b>
-              <div className="exhint exbad">⏰ جاي بغير وقته. موعده: <span dir="ltr">{pending.at}</span></div>
-              <div className="exhint">{pending.exam}</div>
+          {pendings.map((c) => (
+            <div key={c.item} className="atcard">
+              <b>{c.name}</b>
+              <div className="exhint exbad">⏰ جاي بغير وقته. موعده: <span dir="ltr">{c.at}</span></div>
+              <div className="exhint">{c.exam}</div>
               <div className="atrow adtop">
-                <button type="button" className="btn" onClick={() => void decide(true)}>🔓 استثناء</button>
-                <button type="button" className="exbtn" onClick={() => void decide(false)}>❌ رفض</button>
+                <button type="button" className="btn" onClick={() => void decide(c, true)}>🔓 استثناء</button>
+                <button type="button" className="exbtn" onClick={() => void decide(c, false)}>❌ رفض</button>
+                <button type="button" className="exbtn" onClick={() => drop(c.item)}>✖ عوفه</button>
               </div>
             </div>
-          )}
-          {last && !pending && (
+          ))}
+          {last && (
             <div className="atcard">
               <b>{last.name}</b>
               {last.printed && <div className="exhint exbad">⚠️ هذا الطالب مطبوع له ليبل</div>}
