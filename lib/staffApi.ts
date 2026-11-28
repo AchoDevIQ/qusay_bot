@@ -120,11 +120,12 @@ export async function staffAction(body: Row) {
     const door = await import("./doorLink.ts");
     const nid = await door.newStaffId();
     const name = nameOf(body.name);
-    await put("staff", { user_id: nid, name, perms: "q" });
+    // يبدي بلا أي صلاحية (طلبه 2026-11-28: «شعلي بالأسئلة العلمية؟»): صاحب البوت يختارله صلاحياته
+    await put("staff", { user_id: nid, name, perms: "" });
     await kvSet(`staff_since_${nid}`, stamp());
     const link = await door.makeDoor(nid, name);
     const QR = (await import("qrcode")).default;
-    return { ...await pageData(), notice: "✅ انضاف المساعد بصلاحية الأسئلة بس. اختار صلاحياته، ودزله الرابط", door: { id: nid, name, link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
+    return { ...await pageData(), notice: "✅ انضاف المساعد بلا صلاحيات. افتح اسمه واختار صلاحياته، ودزله الرابط", door: { id: nid, name, link, qr: await QR.toDataURL(link, { margin: 1, width: 360 }) } };
   } else if (a === "doorMake" || a === "doorMine") {
     // رابط دخول بدون تليگرام: نفس الرابط الثابت إذا عنده، وجديد (يبطل القديم) بس بـ fresh. doorMine: لصاحب البوت نفسه
     const uid = a === "doorMine" ? me : id;
