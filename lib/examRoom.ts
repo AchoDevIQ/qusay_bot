@@ -198,9 +198,13 @@ export async function examLeft(uid: number, id: unknown, s: SchedSettings, phase
   const tell = async (to: number, text: string) => { try { await send(to, text); } catch (x) { console.error(x); } };
   // بالمركز (الآيباد): المراقب اللي سجل حضوره يعرف هم
   const watcher = Number(it.attended_by) || 0;
-  await tell(uid, `⚠️ <b>طلعت من صفحة الامتحان</b>\nهاي تنحسب محاولة غش عليك. وصل إشعار ${["لأستاذك", g && "لولي أمرك", watcher && "للمراقب"].filter(Boolean).join(" و")} إنك طلعت من الامتحان وإنت تمتحن. ارجع للامتحان هسه وكمّل.`);
+  // 🏫 مسؤول المركز (طلبه 2026-11-28): الحضوري بالمركز، الخبر يوصل لمدير مركزه هم (نفس المدير اللي توصله تقارير الإيجار)
+  const atCenter = st?.exam === "حضوري" && await isIpadItem(it);
+  const centerHeads = atCenter ? (await (await import("./centerRent.ts")).rentCfg(Number(st!.center_id))).managers : [];
+  await tell(uid, `⚠️ <b>طلعت برا صفحة الامتحان</b>\nوصل تنبيه ${["لأستاذك", g && "لولي أمرك", centerHeads.length && "لمسؤول المركز", watcher && "للمراقب"].filter(Boolean).join(" و")} إنك طلعت برا صفحة الامتحان وإنت تمتحن. ارجع للامتحان هسه وكمّل.`);
   const leaveStaff = await staffIds("leave");
   if (watcher && !leaveStaff.includes(watcher)) await tell(watcher, `🚪 <b>${name} طلع من صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nهو يمتحن بالآيباد بالمركز، وإنت سجلت حضوره. شوفه.`);
+  for (const m of centerHeads) if (m !== watcher && !leaveStaff.includes(m)) await tell(m, `🚪 <b>${name} طلع برا صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nهو يمتحن بالآيباد بمركزكم. شوفوه.`);
   for (const a of leaveStaff) await tell(a, `🚪 <b>${name} طلع من صفحة الامتحان</b>\n${esc(title)} · الساعة ${when}${n > 1 ? ` · المرة ${n}` : ""}\nطلع من التطبيق وهو يمتحن، وما نعرف السبب.`);
   if (g) await tell(Number(g.guardian_id), `السلام عليكم 🌷\nنحب نبلغكم إن <b>${name}</b> طلع من صفحة الامتحان وهو يمتحن (${esc(title)}) الساعة ${when}، وما نعرف السبب.`);
   return { ok: true, n };

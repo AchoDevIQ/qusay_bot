@@ -543,9 +543,10 @@ test("الامتحان: مقفول قبل وقته، يدخل بوقته، نس�
   assert.equal((await act(90, "examLeft", { item, phase: "left" })).n, 1);
   const toStudent = calls.find((c) => c.p.chat_id === 90)?.p.text ?? "";
   const toOwner = calls.find((c) => c.p.chat_id === 1)?.p.text ?? "";
-  assert.match(toStudent, /طلعت من صفحة الامتحان/);
-  // الطالب: تنحسب محاولة غش عليه (طلب الأستاذ 2026-11-17). الأستاذ: الخبر بس، «ما نعرف السبب»
-  assert.match(toStudent, /محاولة غش/);
+  assert.match(toStudent, /طلعت برا صفحة الامتحان/);
+  // الطالب: وصل تنبيه لأستاذه، بلا كلمة «غش» (طلبه 2026-11-28). الأستاذ: الخبر بس، «ما نعرف السبب»
+  assert.match(toStudent, /وصل تنبيه لأستاذك/);
+  assert.doesNotMatch(toStudent, /غش/);
   assert.match(toOwner, /طلع من صفحة الامتحان/);
   assert.match(toOwner, /ما نعرف السبب/);
   assert.doesNotMatch(toOwner, /غش/);

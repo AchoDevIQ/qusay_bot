@@ -1111,7 +1111,18 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
     autoPen.current = true;
     setPen(room.questions.find((q) => !q.answers.length)?.n ?? room.questions[0]?.n ?? 1);
   }, [wide, room.sworn]); // eslint-disable-line react-hooks/exhaustive-deps
-  useLeaveWatch(room.id, room.sworn && !closed);
+  // ⚠️ رجع بعد ما طلع: تنبيه بالشاشة (طلبه 2026-11-28)
+  const [leftMsg, setLeftMsg] = useState(false);
+  useLeaveWatch(room.id, room.sworn && !closed, () => setLeftMsg(true));
+  const leftBox = leftMsg && (
+    <div className="pen-done" role="alertdialog">
+      <div className="card agcard">
+        <h2>⚠️ طلعت برا صفحة الامتحان</h2>
+        <div className="exhint exbad" style={{ fontSize: 16 }}>وصل تنبيه لأستاذك ولولي أمرك إنك طلعت برا صفحة الامتحان وإنت تمتحن. لا تطلع مرة ثانية لحد ما تسلّم.</div>
+        <button type="button" className="btn agbtn" onClick={() => setLeftMsg(false)}>✅ فهمت، أكمّل الامتحان</button>
+      </div>
+    </div>
+  );
   /** يدز صورة جواب سؤال (من الكاميرا أو من ورقة القلم). الجديدة تبدل القديمة */
   async function upload(q: number, file: Blob) {
     setBusy(true); setError("");
@@ -1158,6 +1169,7 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   if (pen !== null && room.sworn) {
     return (
       <>
+        {leftBox}
         {error && <div className="wrap"><div className="err">⚠️ {error}</div></div>}
         <PenPage item={room.id} sid={room.sid} model={room.model} head={room.head} start={pen} busy={busy} left={left} answered={answered} need={need}
           questions={room.questions.map((q) => ({ n: q.n, img: q.img ? fileUrl(room.id, q.img) : null, done: q.answers.length > 0 }))}
@@ -1170,10 +1182,11 @@ function ExamRoom({ room, setRoom, call, leave }: { room: Room; setRoom: (r: Roo
   }
   return (
     <div className="wrap">
+      {leftBox}
       <ExamTimer left={left} minutes={room.minutes} extra={room.extra} />
       <div className="card"><h2>📝 {room.title}</h2></div>
       {/* طلب الأستاذ 2026-11-17: أول ما ينفتح الامتحان نبلغه إن الطلعة من الصفحة تنحسب غش */}
-      <div className="card"><div className="exhint exbad">⚠️ ما يصير تطلع من صفحة الامتحان لأي صفحة أو تطبيق ثاني (غير الكاميرا والاستوديو لصور جوابك). ما دام إنت بالامتحان، أي طلعة من الصفحة تنحسب محاولة غش عليك، ويوصل خبر بوقتها لأستاذك ولولي أمرك وللمراقب.</div></div>
+      <div className="card"><div className="exhint exbad">⚠️ ما يصير تطلع من صفحة الامتحان لأي صفحة أو تطبيق ثاني (غير الكاميرا والاستوديو لصور جوابك). ما دام إنت بالامتحان، أي طلعة برا صفحة الامتحان يوصل تنبيه بيها بوقتها لأستاذك ولولي أمرك وللمراقب.</div></div>
       {/* رقم الطالب فوك كل صفحة: إذا أحد صورها ونشرها نعرف منو */}
       {!room.sworn ? (
         <TileOath key={room.id} sentence={room.oath} busy={busy}
@@ -1256,7 +1269,7 @@ type TgEvents = { onEvent?(e: string, f: () => void): void; offEvent?(e: string,
  * الطالب طلع من صفحة الامتحان وهو يمتحن (تطبيق ثاني، أو صغّر التليجرام): خبر للسيرفر، والسيرفر يبلغه ويبلغ الأستاذ وولي أمره.
  * الكاميرا وقائمة الصور ما تنحسب خروج. الرجوع ينكتب ويا المدة
  */
-function useLeaveWatch(item: number, on: boolean) {
+function useLeaveWatch(item: number, on: boolean, onBack?: () => void) {
   useEffect(() => {
     if (!on) return;
     let away = 0, dev = "", pf = "";
@@ -1273,12 +1286,25 @@ function useLeaveWatch(item: number, on: boolean) {
       setTimeout(donePicking, 1500);
       if (!away) return;
       const secs = Math.round((Date.now() - away) / 1000); away = 0; tell("back", secs);
+      onBack?.();
     };
+    // الآيباد (خصوصاً جوه التطبيق) أحياناً ما يگول إن الصفحة انخفت، بس يوقف الصفحة وهو برا. فكل ثانية نشوف الساعة:
+    // إذا فات أكثر من 6 ثواني بين ثانية وثانية، يعني الصفحة چانت واقفة لأنه طلع برا (طلبه 2026-11-28: «جربت طلعت وما وصل»)
+    let last = Date.now();
+    const tick = setInterval(() => {
+      const now = Date.now(), gap = now - last;
+      last = now;
+      // 6 ثواني: حتى تجهيز الأوراق الثقيلة وقت الإرسال ما ينحسب طلعة
+      if (gap < 6000 || away || pickingNow() || document.visibilityState === "hidden") return;
+      away = now - gap; tell("left");
+      setTimeout(back, 800);
+    }, 1000);
     const vis = () => (document.visibilityState === "hidden" ? gone() : back());
     document.addEventListener("visibilitychange", vis);
     const w = (window as unknown as { Telegram?: { WebApp?: TgEvents } }).Telegram?.WebApp;
     try { w?.onEvent?.("deactivated", gone); w?.onEvent?.("activated", back); } catch { /* نسخة قديمة */ }
     return () => {
+      clearInterval(tick);
       document.removeEventListener("visibilitychange", vis);
       try { w?.offEvent?.("deactivated", gone); w?.offEvent?.("activated", back); } catch { /* نسخة قديمة */ }
     };

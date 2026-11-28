@@ -318,3 +318,26 @@ test("🔄 امسح القدامى وسوي طلاب جدد: القدامى ين
   assert.equal((await find("students")).filter((x) => x.user_id < 0 && x.exam === "حضوري").length, 4);
   await assert.rejects(studentAction({ initData: sign(41), action: "tryInPersonFresh", center: c, vid: v.id }), /صلاحية|صاحب البوت/);
 });
+
+test("🏫 طالب الآيباد طلع برا صفحة الامتحان: الخبر يوصل لمسؤول مركزه، والطالب يشوف «وصل تنبيه لمسؤول المركز» بلا «غش»", async () => {
+  const { makeInPersonOne } = await import("../lib/gradeApi.ts");
+  const { openRoom, examLeft } = await import("../lib/examRoom.ts");
+  const { schedSettings } = await import("../lib/schedApi.ts");
+  const { kvSet } = await import("../lib/db.ts");
+  const area = await insert("areas", { gov: "بغداد", name: "مدير" });
+  const c = await insert("centers", { area_id: area, name: "مركز المدير", active: 1 });
+  await kvSet("center_rent_cfg", JSON.stringify({ [String(c)]: { managers: [5050], price: 0 } }));
+  const v = (await find("bank_versions", { kind: "mandatory" }))[0];
+  const k = await makeInPersonOne(c, v.id, "ipad");
+  const card = await markAttendance(-k, 2);
+  const s = await schedSettings();
+  await openRoom(-k, card.item, s, true);
+  const sent: { chat: number; text: string }[] = [];
+  const old = globalThis.fetch;
+  globalThis.fetch = (async (_u: string, init: any) => {
+    try { const p = JSON.parse(init.body); sent.push({ chat: Number(p.chat_id), text: String(p.text ?? "") }); } catch { /* ملف */ }
+    return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }));
+  }) as typeof fetch;
+  try { await examLeft(-k, card.item, s, "left", 0); } finally { globalThis.fetch = old; }
+  assert.ok(sent.some((x) => x.chat === 5050 && /طلع برا صفحة الامتحان/.test(x.text) && /بمركزكم/.test(x.text)), "مسؤول المركز وصله");
+});
